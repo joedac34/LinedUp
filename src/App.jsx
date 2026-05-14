@@ -190,7 +190,7 @@ export default function App() {
   const [wheelAngle,  setWheelAngle]  = useState(0);
   const [wonPU,       setWonPU]       = useState(null);
   const [showWin,     setShowWin]     = useState(false);
-  const [showTopScorer, setShowTopScorer] = useState(true); // true so you can see it on load
+  const [showTopScorer, setShowTopScorer] = useState(false); // trigger manually, not on load
   const chatRef=useRef(null);
 
   useEffect(()=>{
@@ -649,7 +649,7 @@ export default function App() {
             <div className="ts-line3" style={{
               fontSize:15,fontWeight:500,color:"rgba(255,255,255,0.45)",
               textAlign:"center",lineHeight:1.6,marginBottom:24,letterSpacing:-0.2,
-            }}>You went 4-1 and outscored everyone in The Gaper League. Time to claim your reward.</div>
+            }}>You went 4-1 and outscored everyone in The Boys League. Time to claim your reward.</div>
 
             {/* Score card */}
             <div className="ts-score" style={{
@@ -757,7 +757,7 @@ export default function App() {
             <div className="body">
               <div className="nav-header large" style={{padding:"0 20px 14px"}}>
                 <div className="nav-title-large">LINEDUP</div>
-                <div className="nav-subtitle">Week 6 · The Gaper League</div>
+                <div className="nav-subtitle">Week 6 · The Boys League</div>
               </div>
 
               {/* Stat pills */}
@@ -773,7 +773,7 @@ export default function App() {
               </div>
               <div className="matchup-widget">
                 <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${IOS.blue},${IOS.indigo})`}}/>
-                <div className="mw-top">The Gaper League · WEEK 6</div>
+                <div className="mw-top">THE BOYS LEAGUE · WEEK 6</div>
                 <div className="mw-teams">
                   <div className="mw-player">
                     <div className="mw-name" style={{color:IOS.blue}}>YOU</div>
@@ -1158,7 +1158,7 @@ export default function App() {
                 <div className="prof-av">J</div>
                 <div>
                   <div className="prof-name">Joe</div>
-                  <div className="prof-league">The Gaper League</div>
+                  <div className="prof-league">The Boys League</div>
                   <div className="prof-rank-pill"><span>🥈</span><span className="prof-rank-txt">#2 of 8 · W3 streak</span></div>
                 </div>
               </div>
