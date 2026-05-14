@@ -30,12 +30,179 @@ const IOS = {
   fill3:   "rgba(255,255,255,0.12)",
 };
 
-const SLOTS = [
-  { id:"ml",       label:"Moneyline",  mult:1, icon:"🎯", color:IOS.blue,   bg:`rgba(10,132,255,0.15)`,   desc:"Pick a winner straight up" },
-  { id:"prop",     label:"Prop",       mult:2, icon:"⭐", color:IOS.yellow, bg:`rgba(255,214,10,0.15)`,   desc:"Player or game prop bet" },
-  { id:"ou",       label:"Over/Under", mult:3, icon:"📊", color:IOS.orange, bg:`rgba(255,159,10,0.15)`,   desc:"Total points over or under" },
-  { id:"spread",   label:"Spread",     mult:4, icon:"📐", color:IOS.green,  bg:`rgba(48,209,88,0.15)`,    desc:"Beat the point spread" },
-  { id:"longshot", label:"Parlay",     mult:5, icon:"🚀", color:IOS.pink,   bg:`rgba(255,55,95,0.15)`,    desc:"Build a mini parlay — pick 2+ bets" },
+// ─── SPORT CONFIG ───────────────────────────────────────────────
+const SPORTS = {
+  nfl: {
+    id:"nfl", label:"NFL", icon:"🏈", color:"#0A84FF",
+    season:"2024 NFL Season",
+    slots:[
+      { id:"ml",       label:"Moneyline",  mult:1, icon:"🎯", color:"#0A84FF", bg:"rgba(10,132,255,0.15)",  desc:"Pick a winner straight up" },
+      { id:"prop",     label:"Prop",       mult:2, icon:"⭐", color:"#FFD60A", bg:"rgba(255,214,10,0.15)",  desc:"Player or game prop bet" },
+      { id:"ou",       label:"Over/Under", mult:3, icon:"📊", color:"#FF9F0A", bg:"rgba(255,159,10,0.15)",  desc:"Total points over or under" },
+      { id:"spread",   label:"Spread",     mult:4, icon:"📐", color:"#30D158", bg:"rgba(48,209,88,0.15)",   desc:"Beat the point spread" },
+      { id:"longshot", label:"Parlay",     mult:5, icon:"🚀", color:"#FF375F", bg:"rgba(255,55,95,0.15)",   desc:"Build a mini parlay — pick 2+ bets" },
+    ],
+    bets:{
+      ml:[
+        { id:"ml1", game:"Raiders @ Chiefs",   pick:"KC Chiefs",      odds:"-280", impliedOdds:-280 },
+        { id:"ml2", game:"Cowboys @ Eagles",   pick:"Philadelphia",   odds:"-165", impliedOdds:-165 },
+        { id:"ml3", game:"Dolphins @ Bills",   pick:"Buffalo Bills",  odds:"-210", impliedOdds:-210 },
+        { id:"ml4", game:"Rams @ 49ers",       pick:"San Francisco",  odds:"-195", impliedOdds:-195 },
+        { id:"ml5", game:"Vikings @ Packers",  pick:"Green Bay",      odds:"-125", impliedOdds:-125 },
+      ],
+      prop:[
+        { id:"pr1", game:"Patrick Mahomes",    pick:"300+ Pass Yards",  odds:"-130", impliedOdds:-130 },
+        { id:"pr2", game:"Jalen Hurts",        pick:"2+ Rush TDs",      odds:"+175", impliedOdds:175  },
+        { id:"pr3", game:"Josh Allen",         pick:"35+ Pass Attempts",odds:"-115", impliedOdds:-115 },
+        { id:"pr4", game:"Brock Purdy",        pick:"Over 1.5 TDs",     odds:"-140", impliedOdds:-140 },
+        { id:"pr5", game:"C. McCaffrey",       pick:"90.5+ Rush Yds",   odds:"-110", impliedOdds:-110 },
+      ],
+      ou:[
+        { id:"ou1", game:"Raiders @ Chiefs",   pick:"Over 47.5",   odds:"-110", impliedOdds:-110 },
+        { id:"ou2", game:"Cowboys @ Eagles",   pick:"Under 44",    odds:"-110", impliedOdds:-110 },
+        { id:"ou3", game:"Dolphins @ Bills",   pick:"Over 48",     odds:"-115", impliedOdds:-115 },
+        { id:"ou4", game:"Rams @ 49ers",       pick:"Under 45.5",  odds:"-110", impliedOdds:-110 },
+        { id:"ou5", game:"Vikings @ Packers",  pick:"Over 43",     odds:"-118", impliedOdds:-118 },
+      ],
+      spread:[
+        { id:"sp1", game:"Raiders @ Chiefs",   pick:"KC -6.5",     odds:"-110", impliedOdds:-110 },
+        { id:"sp2", game:"Cowboys @ Eagles",   pick:"Eagles -3",   odds:"-110", impliedOdds:-110 },
+        { id:"sp3", game:"Dolphins @ Bills",   pick:"Bills -5",    odds:"-115", impliedOdds:-115 },
+        { id:"sp4", game:"Rams @ 49ers",       pick:"49ers -4.5",  odds:"-110", impliedOdds:-110 },
+        { id:"sp5", game:"Panthers @ Falcons", pick:"Falcons -6",  odds:"-108", impliedOdds:-108 },
+      ],
+      longshot:[
+        { id:"ls1", game:"Raiders @ Chiefs",    pick:"Raiders ML",   odds:"+240", impliedOdds:240 },
+        { id:"ls2", game:"Cowboys @ Eagles",    pick:"Cowboys ML",   odds:"+350", impliedOdds:350 },
+        { id:"ls3", game:"Panthers @ Falcons",  pick:"Panthers ML",  odds:"+380", impliedOdds:380 },
+        { id:"ls4", game:"Giants @ Commanders", pick:"Giants ML",    odds:"+310", impliedOdds:310 },
+        { id:"ls5", game:"Broncos @ Chargers",  pick:"Broncos ML",   odds:"+420", impliedOdds:420 },
+        { id:"ls6", game:"Bears @ Lions",       pick:"Bears ML",     odds:"+290", impliedOdds:290 },
+        { id:"ls7", game:"Jets @ Patriots",     pick:"Jets ML",      odds:"+265", impliedOdds:265 },
+        { id:"ls8", game:"Raiders @ Chiefs",    pick:"Raiders +6.5", odds:"+105", impliedOdds:105 },
+      ],
+    },
+  },
+  nba: {
+    id:"nba", label:"NBA", icon:"🏀", color:"#FF6B35",
+    season:"2024-25 NBA Season",
+    slots:[
+      { id:"ml",       label:"Moneyline",  mult:1, icon:"🎯", color:"#FF6B35", bg:"rgba(255,107,53,0.15)",  desc:"Pick a team to win straight up" },
+      { id:"prop",     label:"Player Prop",mult:2, icon:"⭐", color:"#FFD60A", bg:"rgba(255,214,10,0.15)",  desc:"Points, assists, rebounds prop" },
+      { id:"ou",       label:"Over/Under", mult:3, icon:"📊", color:"#30D158", bg:"rgba(48,209,88,0.15)",   desc:"Total points scored" },
+      { id:"spread",   label:"Spread",     mult:4, icon:"📐", color:"#BF5AF2", bg:"rgba(191,90,242,0.15)",  desc:"Beat the point spread" },
+      { id:"longshot", label:"Parlay",     mult:5, icon:"🚀", color:"#FF375F", bg:"rgba(255,55,95,0.15)",   desc:"Build a same-game parlay" },
+    ],
+    bets:{
+      ml:[
+        { id:"ml1", game:"Celtics @ Lakers",   pick:"Boston Celtics",   odds:"-145", impliedOdds:-145 },
+        { id:"ml2", game:"Warriors @ Nuggets", pick:"Golden State",     odds:"+125", impliedOdds:125  },
+        { id:"ml3", game:"Heat @ Bucks",       pick:"Milwaukee Bucks",  odds:"-165", impliedOdds:-165 },
+        { id:"ml4", game:"Suns @ Clippers",    pick:"LA Clippers",      odds:"-110", impliedOdds:-110 },
+        { id:"ml5", game:"Knicks @ 76ers",     pick:"New York Knicks",  odds:"+105", impliedOdds:105  },
+      ],
+      prop:[
+        { id:"pr1", game:"LeBron James",       pick:"25+ Points",        odds:"-130", impliedOdds:-130 },
+        { id:"pr2", game:"Steph Curry",        pick:"5+ Three-Pointers", odds:"-115", impliedOdds:-115 },
+        { id:"pr3", game:"Nikola Jokic",       pick:"10+ Assists",       odds:"+145", impliedOdds:145  },
+        { id:"pr4", game:"Jayson Tatum",       pick:"30+ Points",        odds:"+175", impliedOdds:175  },
+        { id:"pr5", game:"Giannis",            pick:"12+ Rebounds",      odds:"-120", impliedOdds:-120 },
+      ],
+      ou:[
+        { id:"ou1", game:"Celtics @ Lakers",   pick:"Over 224.5",  odds:"-110", impliedOdds:-110 },
+        { id:"ou2", game:"Warriors @ Nuggets", pick:"Over 232",    odds:"-115", impliedOdds:-115 },
+        { id:"ou3", game:"Heat @ Bucks",       pick:"Under 218.5", odds:"-110", impliedOdds:-110 },
+        { id:"ou4", game:"Suns @ Clippers",    pick:"Over 228",    odds:"-108", impliedOdds:-108 },
+        { id:"ou5", game:"Knicks @ 76ers",     pick:"Under 215",   odds:"-112", impliedOdds:-112 },
+      ],
+      spread:[
+        { id:"sp1", game:"Celtics @ Lakers",   pick:"Celtics -3.5",  odds:"-110", impliedOdds:-110 },
+        { id:"sp2", game:"Warriors @ Nuggets", pick:"Nuggets -2",    odds:"-110", impliedOdds:-110 },
+        { id:"sp3", game:"Heat @ Bucks",       pick:"Bucks -5.5",    odds:"-115", impliedOdds:-115 },
+        { id:"sp4", game:"Suns @ Clippers",    pick:"Clippers -1.5", odds:"-110", impliedOdds:-110 },
+        { id:"sp5", game:"Knicks @ 76ers",     pick:"76ers -2",      odds:"-108", impliedOdds:-108 },
+      ],
+      longshot:[
+        { id:"ls1", game:"Warriors @ Nuggets", pick:"Warriors ML",     odds:"+125", impliedOdds:125  },
+        { id:"ls2", game:"Knicks @ 76ers",     pick:"Knicks ML",       odds:"+105", impliedOdds:105  },
+        { id:"ls3", game:"Pistons @ Cavs",     pick:"Pistons ML",      odds:"+340", impliedOdds:340  },
+        { id:"ls4", game:"Wizards @ Celtics",  pick:"Wizards ML",      odds:"+520", impliedOdds:520  },
+        { id:"ls5", game:"Spurs @ Thunder",    pick:"Spurs ML",        odds:"+290", impliedOdds:290  },
+        { id:"ls6", game:"Steph Curry",        pick:"8+ Three-Pointers",odds:"+450",impliedOdds:450  },
+      ],
+    },
+  },
+  mlb: {
+    id:"mlb", label:"MLB", icon:"⚾", color:"#30D158",
+    season:"2024 MLB Season",
+    slots:[
+      { id:"ml",       label:"Moneyline",  mult:1, icon:"🎯", color:"#30D158", bg:"rgba(48,209,88,0.15)",   desc:"Pick a team to win" },
+      { id:"prop",     label:"Player Prop",mult:2, icon:"⭐", color:"#FFD60A", bg:"rgba(255,214,10,0.15)",  desc:"Strikeouts, hits, RBI prop" },
+      { id:"ou",       label:"Over/Under", mult:3, icon:"📊", color:"#0A84FF", bg:"rgba(10,132,255,0.15)",  desc:"Total runs scored" },
+      { id:"spread",   label:"Run Line",   mult:4, icon:"📐", color:"#FF9F0A", bg:"rgba(255,159,10,0.15)",  desc:"-1.5 or +1.5 run line" },
+      { id:"longshot", label:"Parlay",     mult:5, icon:"🚀", color:"#FF375F", bg:"rgba(255,55,95,0.15)",   desc:"Build a multi-game parlay" },
+    ],
+    bets:{
+      ml:[
+        { id:"ml1", game:"Yankees @ Red Sox",  pick:"New York Yankees",    odds:"-145", impliedOdds:-145 },
+        { id:"ml2", game:"Dodgers @ Giants",   pick:"LA Dodgers",          odds:"-175", impliedOdds:-175 },
+        { id:"ml3", game:"Cubs @ Cardinals",   pick:"St. Louis Cardinals", odds:"-120", impliedOdds:-120 },
+        { id:"ml4", game:"Astros @ Rangers",   pick:"Houston Astros",      odds:"-130", impliedOdds:-130 },
+        { id:"ml5", game:"Braves @ Mets",      pick:"Atlanta Braves",      odds:"-115", impliedOdds:-115 },
+      ],
+      prop:[
+        { id:"pr1", game:"Shohei Ohtani",      pick:"2+ RBIs",            odds:"+155", impliedOdds:155  },
+        { id:"pr2", game:"Gerrit Cole",        pick:"8+ Strikeouts",      odds:"-125", impliedOdds:-125 },
+        { id:"pr3", game:"Mookie Betts",       pick:"Over 1.5 Hits",      odds:"-140", impliedOdds:-140 },
+        { id:"pr4", game:"Aaron Judge",        pick:"Home Run",           odds:"+280", impliedOdds:280  },
+        { id:"pr5", game:"Freddie Freeman",    pick:"Over 0.5 RBIs",      odds:"-160", impliedOdds:-160 },
+      ],
+      ou:[
+        { id:"ou1", game:"Yankees @ Red Sox",  pick:"Over 8.5",   odds:"-115", impliedOdds:-115 },
+        { id:"ou2", game:"Dodgers @ Giants",   pick:"Under 7.5",  odds:"-110", impliedOdds:-110 },
+        { id:"ou3", game:"Cubs @ Cardinals",   pick:"Over 9",     odds:"-108", impliedOdds:-108 },
+        { id:"ou4", game:"Astros @ Rangers",   pick:"Under 8",    odds:"-112", impliedOdds:-112 },
+        { id:"ou5", game:"Braves @ Mets",      pick:"Over 8.5",   odds:"-110", impliedOdds:-110 },
+      ],
+      spread:[
+        { id:"sp1", game:"Yankees @ Red Sox",  pick:"Yankees -1.5",  odds:"+145", impliedOdds:145  },
+        { id:"sp2", game:"Dodgers @ Giants",   pick:"Dodgers -1.5",  odds:"+125", impliedOdds:125  },
+        { id:"sp3", game:"Cubs @ Cardinals",   pick:"Cardinals -1.5",odds:"+135", impliedOdds:135  },
+        { id:"sp4", game:"Astros @ Rangers",   pick:"Astros -1.5",   odds:"+140", impliedOdds:140  },
+        { id:"sp5", game:"Braves @ Mets",      pick:"Mets +1.5",     odds:"-165", impliedOdds:-165 },
+      ],
+      longshot:[
+        { id:"ls1", game:"Yankees @ Red Sox",  pick:"Red Sox ML",    odds:"+125", impliedOdds:125  },
+        { id:"ls2", game:"Giants @ Dodgers",   pick:"Giants ML",     odds:"+155", impliedOdds:155  },
+        { id:"ls3", game:"Cubs @ Cardinals",   pick:"Cubs ML",       odds:"+105", impliedOdds:105  },
+        { id:"ls4", game:"Aaron Judge",        pick:"2+ Home Runs",  odds:"+450", impliedOdds:450  },
+        { id:"ls5", game:"Reds @ Pirates",     pick:"Reds ML",       odds:"+210", impliedOdds:210  },
+        { id:"ls6", game:"Athletics @ Astros", pick:"Athletics ML",  odds:"+340", impliedOdds:340  },
+      ],
+    },
+  },
+};
+
+// ─── LEAGUES ────────────────────────────────────────────────────
+const LEAGUES_DATA = [
+  {
+    id:"lg1", sport:"nfl", name:"The Boys League", week:6,
+    opponent:"Mike D.", opponentRecord:"6-4",
+    userRecord:"7-3", userUnits:"+12.5", userRoi:"+18.4",
+    members:8,
+  },
+  {
+    id:"lg2", sport:"nba", name:"Hoops League", week:12,
+    opponent:"Dave K.", opponentRecord:"8-4",
+    userRecord:"9-3", userUnits:"+18.2", userRoi:"+22.1",
+    members:6,
+  },
+  {
+    id:"lg3", sport:"mlb", name:"Diamond Dogs", week:8,
+    opponent:"Chris R.", opponentRecord:"5-3",
+    userRecord:"6-2", userUnits:"+9.4", userRoi:"+15.6",
+    members:6,
+  },
 ];
 
 const POWER_UPS = [
@@ -63,48 +230,6 @@ const TROPHIES = [
   { id:"goat",    icon:"🐐", name:"GOAT",           desc:"Season champion",                 holder:"???",      yours:false, color:IOS.yellow },
 ];
 
-const BETS = {
-  ml: [
-    { id:"ml1", game:"Raiders @ Chiefs",    pick:"KC Chiefs",         odds:"-280", impliedOdds:-280 },
-    { id:"ml2", game:"Cowboys @ Eagles",    pick:"Philadelphia",      odds:"-165", impliedOdds:-165 },
-    { id:"ml3", game:"Dolphins @ Bills",    pick:"Buffalo Bills",     odds:"-210", impliedOdds:-210 },
-    { id:"ml4", game:"Rams @ 49ers",        pick:"San Francisco",     odds:"-195", impliedOdds:-195 },
-    { id:"ml5", game:"Vikings @ Packers",   pick:"Green Bay",         odds:"-125", impliedOdds:-125 },
-  ],
-  spread: [
-    { id:"sp1", game:"Raiders @ Chiefs",    pick:"KC Chiefs -6.5",   odds:"-110", impliedOdds:-110 },
-    { id:"sp2", game:"Cowboys @ Eagles",    pick:"Eagles -3",        odds:"-110", impliedOdds:-110 },
-    { id:"sp3", game:"Dolphins @ Bills",    pick:"Bills -5",         odds:"-115", impliedOdds:-115 },
-    { id:"sp4", game:"Rams @ 49ers",        pick:"49ers -4.5",       odds:"-110", impliedOdds:-110 },
-    { id:"sp5", game:"Panthers @ Falcons",  pick:"Falcons -6",       odds:"-108", impliedOdds:-108 },
-  ],
-  prop: [
-    { id:"pr1", game:"Patrick Mahomes",     pick:"300+ Pass Yards",  odds:"-130", impliedOdds:-130 },
-    { id:"pr2", game:"Jalen Hurts",         pick:"2+ Rush TDs",      odds:"+175", impliedOdds:175  },
-    { id:"pr3", game:"Josh Allen",          pick:"35+ Pass Attempts",odds:"-115", impliedOdds:-115 },
-    { id:"pr4", game:"Brock Purdy",         pick:"Over 1.5 TDs",     odds:"-140", impliedOdds:-140 },
-    { id:"pr5", game:"C. McCaffrey",        pick:"Over 90.5 Rush Yds",odds:"-110",impliedOdds:-110 },
-  ],
-  ou: [
-    { id:"ou1", game:"Raiders @ Chiefs",    pick:"Over 47.5",        odds:"-110", impliedOdds:-110 },
-    { id:"ou2", game:"Cowboys @ Eagles",    pick:"Under 44",         odds:"-110", impliedOdds:-110 },
-    { id:"ou3", game:"Dolphins @ Bills",    pick:"Over 48",          odds:"-115", impliedOdds:-115 },
-    { id:"ou4", game:"Rams @ 49ers",        pick:"Under 45.5",       odds:"-110", impliedOdds:-110 },
-    { id:"ou5", game:"Vikings @ Packers",   pick:"Over 43",          odds:"-118", impliedOdds:-118 },
-  ],
-  longshot: [
-    { id:"ls1", game:"Raiders @ Chiefs",    pick:"Raiders ML",        odds:"+240", impliedOdds:240  },
-    { id:"ls2", game:"Cowboys @ Eagles",    pick:"Cowboys ML",        odds:"+350", impliedOdds:350  },
-    { id:"ls3", game:"Panthers @ Falcons",  pick:"Panthers ML",       odds:"+380", impliedOdds:380  },
-    { id:"ls4", game:"Giants @ Commanders", pick:"Giants ML",         odds:"+310", impliedOdds:310  },
-    { id:"ls5", game:"Broncos @ Chargers",  pick:"Broncos ML",        odds:"+420", impliedOdds:420  },
-    { id:"ls6", game:"Bears @ Lions",       pick:"Bears ML",          odds:"+290", impliedOdds:290  },
-    { id:"ls7", game:"Cowboys @ Eagles",    pick:"Cowboys +3 1H",     odds:"+145", impliedOdds:145  },
-    { id:"ls8", game:"Raiders @ Chiefs",    pick:"Raiders cover +6.5",odds:"+105", impliedOdds:105  },
-    { id:"ls9", game:"Jets @ Patriots",     pick:"Jets ML",           odds:"+265", impliedOdds:265  },
-    { id:"ls10",game:"Panthers @ Falcons",  pick:"Panthers +6 cover", odds:"-108", impliedOdds:-108 },
-  ],
-};
 
 const MATCHUP_HISTORY = [
   {
@@ -238,14 +363,14 @@ const WHEEL_ITEMS = [POWER_UPS[0],POWER_UPS[4],POWER_UPS[1],POWER_UPS[9],POWER_U
 function toDecimal(a){return a>=0?(a/100)+1:(100/Math.abs(a))+1;}
 function toAmerican(d){return d>=2?`+${Math.round((d-1)*100)}`:`${Math.round(-100/(d-1))}`;}
 function calcLS(bets){if(!bets||!bets.length)return null;const d=bets.reduce((a,b)=>a*toDecimal(b.impliedOdds),1);return{decimal:d,american:toAmerican(d),payout:Math.round((d-1)*100)};}
-function calcParlay(picks,ls){
-  const singles=SLOTS.filter(s=>s.id!=="longshot").map(s=>([s.id,picks[s.id]])).filter(([,v])=>v);
+function calcParlay(picks,ls,slots){
+  const singles=slots.filter(s=>s.id!=="longshot").map(s=>([s.id,picks[s.id]])).filter(([,v])=>v);
   const lsO=calcLS(ls);
   const all=[...singles,...(lsO?[["ls_compiled",{_d:lsO.decimal}]]:[])];
   if(!all.length)return null;
   const d=all.reduce((acc,[id,bet])=>{
     if(id==="ls_compiled"){return acc*(1+(bet._d-1)*5);}
-    const slot=SLOTS.find(s=>s.id===id);
+    const slot=slots.find(s=>s.id===id);
     return acc*(1+(toDecimal(bet.impliedOdds)-1)*slot.mult);
   },1);
   return{american:toAmerican(d),payout:Math.round((d-1)*100)};
@@ -268,6 +393,12 @@ export default function App() {
   const [sortBy,      setSortBy]      = useState("rank");
   const [chatMsg,     setChatMsg]     = useState("");
   const [messages,    setMessages]    = useState(CHAT);
+  const [activeLeagueId, setActiveLeagueId] = useState("lg1");
+  const activeLeague = LEAGUES_DATA.find(l=>l.id===activeLeagueId) || LEAGUES_DATA[0];
+  const sport = SPORTS[activeLeague.sport];
+  const SLOTS = sport.slots;
+  const BETS = sport.bets;
+
   const [picks,       setPicks]       = useState({ml:null,prop:null,ou:null,spread:null});
   const [lsBets,      setLsBets]      = useState([]);
   const [activeSlot,  setActiveSlot]  = useState(null);
@@ -326,7 +457,7 @@ export default function App() {
   const clearPick=slotId=>{if(slotId==="longshot")setLsBets([]);else setPicks(p=>({...p,[slotId]:null}));};
   const sendMsg=()=>{if(!chatMsg.trim())return;setMessages(p=>[...p,{id:Date.now(),user:"Joe",init:"J",time:"now",text:chatMsg.trim(),me:true}]);setChatMsg("");setTimeout(()=>{if(chatRef.current)chatRef.current.scrollTop=chatRef.current.scrollHeight;},50);};
 
-  const parlay=calcParlay(picks,lsBets);
+  const parlay=calcParlay(picks,lsBets,SLOTS);
   const lsO=calcLS(lsBets);
   const allFilled=Object.values(picks).every(v=>v)&&lsBets.length>=2;
 
@@ -919,46 +1050,62 @@ export default function App() {
             <div className="body">
               <div className="nav-header large" style={{padding:"0 20px 14px"}}>
                 <div className="nav-title-large">LINEDUP</div>
-                <div className="nav-subtitle">Week 6 · The Boys League</div>
+                {/* League toggle */}
+                <div style={{display:"flex",gap:6,marginTop:10,marginBottom:2,overflowX:"auto",paddingBottom:2}}>
+                  {LEAGUES_DATA.map(lg=>{
+                    const sp=SPORTS[lg.sport];
+                    const isActive=activeLeagueId===lg.id;
+                    return (
+                      <div key={lg.id} onClick={()=>{setActiveLeagueId(lg.id);setPicks({ml:null,prop:null,ou:null,spread:null});setLsBets([]);}}
+                        style={{flexShrink:0,display:"flex",alignItems:"center",gap:7,padding:"8px 14px",borderRadius:20,cursor:"pointer",transition:"all .18s",
+                          background:isActive?`${sp.color}20`:"rgba(255,255,255,0.06)",
+                          border:`1px solid ${isActive?sp.color+"50":"rgba(255,255,255,0.08)"}`,
+                        }}>
+                        <span style={{fontSize:15}}>{sp.icon}</span>
+                        <div>
+                          <div style={{fontSize:12,fontWeight:700,color:isActive?sp.color:"rgba(255,255,255,0.6)",letterSpacing:-0.2}}>{lg.name}</div>
+                          <div style={{fontSize:10,color:"rgba(255,255,255,0.35)",marginTop:1}}>Wk {lg.week} · {sp.label}</div>
+                        </div>
+                        {isActive&&<div style={{width:6,height:6,borderRadius:"50%",background:sp.color,marginLeft:2}}/>}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* Stat pills */}
               <div className="stat-pills">
-                <div className="stat-pill"><div className="stat-pill-val" style={{color:IOS.blue}}>7-3</div><div className="stat-pill-lbl">Record</div></div>
-                <div className="stat-pill"><div className="stat-pill-val" style={{color:IOS.green}}>+18.4%</div><div className="stat-pill-lbl">ROI</div></div>
-                <div className="stat-pill"><div className="stat-pill-val" style={{color:IOS.green}}>+12.5u</div><div className="stat-pill-lbl">Units</div></div>
+                <div className="stat-pill"><div className="stat-pill-val" style={{color:sport.color}}>{activeLeague.userRecord}</div><div className="stat-pill-lbl">Record</div></div>
+                <div className="stat-pill"><div className="stat-pill-val" style={{color:IOS.green}}>{activeLeague.userRoi}%</div><div className="stat-pill-lbl">ROI</div></div>
+                <div className="stat-pill"><div className="stat-pill-val" style={{color:IOS.green}}>{activeLeague.userUnits}u</div><div className="stat-pill-lbl">Units</div></div>
               </div>
 
-              {/* Matchup — compact card, tap to view full */}
+              {/* Matchup — compact card */}
               <div className="ios-section" style={{margin:"0 16px 6px"}}>
                 <div className="ios-section-header" style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <span>Week 6 Matchup · Live</span>
-                  <span onClick={()=>setScreen("matchup")} style={{color:IOS.blue,fontSize:13,textTransform:"none",fontWeight:500,letterSpacing:0,cursor:"pointer"}}>View Details</span>
+                  <span>Wk {activeLeague.week} Matchup · Live</span>
+                  <span onClick={()=>setScreen("matchup")} style={{color:sport.color,fontSize:13,textTransform:"none",fontWeight:500,letterSpacing:0,cursor:"pointer"}}>View Details</span>
                 </div>
               </div>
               <div
                 onClick={()=>setScreen("matchup")}
-                style={{margin:"0 16px 10px",background:IOS.bg2,borderRadius:16,padding:"14px 16px",cursor:"pointer",position:"relative",overflow:"hidden",border:`1px solid rgba(10,132,255,0.2)`}}
+                style={{margin:"0 16px 10px",background:IOS.bg2,borderRadius:16,padding:"14px 16px",cursor:"pointer",position:"relative",overflow:"hidden",border:`1px solid ${sport.color}30`}}
               >
-                <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${IOS.blue},${IOS.teal})`}}/>
+                <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${sport.color},${IOS.teal})`}}/>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                  {/* You */}
                   <div>
-                    <div style={{fontSize:18,fontWeight:800,letterSpacing:-0.5,color:IOS.blue}}>YOU</div>
-                    <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>7-3</div>
+                    <div style={{fontSize:18,fontWeight:800,letterSpacing:-0.5,color:sport.color}}>YOU</div>
+                    <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>{activeLeague.userRecord}</div>
                   </div>
-                  {/* Score */}
                   <div style={{textAlign:"center"}}>
                     <div style={{fontSize:28,fontWeight:800,letterSpacing:-1,color:"#fff"}}>3 <span style={{fontSize:16,color:IOS.label3,fontWeight:500}}>–</span> 1</div>
                     <div style={{fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:IOS.green,marginTop:2}}>You're winning</div>
                   </div>
-                  {/* Opponent */}
                   <div style={{textAlign:"right"}}>
-                    <div style={{fontSize:18,fontWeight:800,letterSpacing:-0.5}}>Mike D.</div>
-                    <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>6-4</div>
+                    <div style={{fontSize:18,fontWeight:800,letterSpacing:-0.5}}>{activeLeague.opponent}</div>
+                    <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>{activeLeague.opponentRecord}</div>
                   </div>
                 </div>
-                {/* Mini pick dots */}
                 <div style={{display:"flex",gap:6,marginTop:12,paddingTop:10,borderTop:`0.5px solid ${IOS.sep}`,alignItems:"center",justifyContent:"space-between"}}>
                   <div style={{display:"flex",gap:5}}>
                     {["W","W","L","pending","pending"].map((r,i)=>(
@@ -968,7 +1115,7 @@ export default function App() {
                     ))}
                   </div>
                   <div style={{fontSize:12,color:IOS.label3,display:"flex",alignItems:"center",gap:4}}>
-                    <span style={{color:IOS.blue,fontWeight:600}}>2 pending</span>
+                    <span style={{color:sport.color,fontWeight:600}}>2 pending</span>
                     <span style={{fontSize:16,color:IOS.label3}}>›</span>
                   </div>
                 </div>
@@ -981,7 +1128,7 @@ export default function App() {
               </div>
               {savedPicks
                 ? <button className="ios-btn" style={{background:IOS.green,color:"#000",marginBottom:6}} onClick={()=>setScreen("picks")}>✓ Picks Locked — View or Edit</button>
-                : <button className="ios-btn blue" onClick={()=>setScreen("picks")} style={{marginBottom:6}}>+ Make Your Picks</button>
+                : <button className="ios-btn" style={{background:sport.color,color:"#fff",marginBottom:6}} onClick={()=>setScreen("picks")}>{sport.icon} Make Your {sport.label} Picks</button>
               }
 
               {/* My Locked Picks card */}
@@ -1157,8 +1304,8 @@ export default function App() {
               </div>
 
               <div className="pb-header">
-                <div className="pb-title">Make Your 5 Picks</div>
-                <div className="pb-sub">Week 6 · Moneyline · Prop · O/U · Spread · Parlay</div>
+                <div className="pb-title">{sport.icon} {sport.label} Picks</div>
+                <div className="pb-sub">{activeLeague.name} · Wk {activeLeague.week} · vs {activeLeague.opponent}</div>
               </div>
 
               {/* Parlay odds */}
