@@ -929,74 +929,49 @@ export default function App() {
                 <div className="stat-pill"><div className="stat-pill-val" style={{color:IOS.green}}>+12.5u</div><div className="stat-pill-lbl">Units</div></div>
               </div>
 
-              {/* Matchup */}
-              <div className="ios-section" style={{margin:"0 16px 10px"}}>
-                <div className="ios-section-header">Week 6 Matchup · Live</div>
+              {/* Matchup — compact card, tap to view full */}
+              <div className="ios-section" style={{margin:"0 16px 6px"}}>
+                <div className="ios-section-header" style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <span>Week 6 Matchup · Live</span>
+                  <span onClick={()=>setScreen("matchup")} style={{color:IOS.blue,fontSize:13,textTransform:"none",fontWeight:500,letterSpacing:0,cursor:"pointer"}}>View Details</span>
+                </div>
               </div>
-              <div className="matchup-widget">
-                <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${IOS.blue},${IOS.indigo})`}}/>
-                <div className="mw-top">THE BOYS LEAGUE · WEEK 6</div>
-                <div className="mw-teams">
-                  <div className="mw-player">
-                    <div className="mw-name" style={{color:IOS.blue}}>YOU</div>
-                    <div className="mw-rec">7-3</div>
+              <div
+                onClick={()=>setScreen("matchup")}
+                style={{margin:"0 16px 10px",background:IOS.bg2,borderRadius:16,padding:"14px 16px",cursor:"pointer",position:"relative",overflow:"hidden",border:`1px solid rgba(10,132,255,0.2)`}}
+              >
+                <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${IOS.blue},${IOS.teal})`}}/>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                  {/* You */}
+                  <div>
+                    <div style={{fontSize:18,fontWeight:800,letterSpacing:-0.5,color:IOS.blue}}>YOU</div>
+                    <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>7-3</div>
                   </div>
-                  <div className="mw-vs">VS</div>
-                  <div className="mw-player right">
-                    <div className="mw-name">Mike D.</div>
-                    <div className="mw-rec">6-4</div>
+                  {/* Score */}
+                  <div style={{textAlign:"center"}}>
+                    <div style={{fontSize:28,fontWeight:800,letterSpacing:-1,color:"#fff"}}>3 <span style={{fontSize:16,color:IOS.label3,fontWeight:500}}>–</span> 1</div>
+                    <div style={{fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:IOS.green,marginTop:2}}>You're winning</div>
+                  </div>
+                  {/* Opponent */}
+                  <div style={{textAlign:"right"}}>
+                    <div style={{fontSize:18,fontWeight:800,letterSpacing:-0.5}}>Mike D.</div>
+                    <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>6-4</div>
                   </div>
                 </div>
-                <div className="mw-scores">
-                  <div className="mw-score-item"><div className="mw-score-num" style={{color:IOS.green}}>3</div><div className="mw-score-lbl">Your Wins</div></div>
-                  <div className="mw-score-item"><div className="mw-score-num" style={{color:IOS.label3}}>1</div><div className="mw-score-lbl">Pushes</div></div>
-                  <div className="mw-score-item"><div className="mw-score-num" style={{color:IOS.red}}>1</div><div className="mw-score-lbl">Their Wins</div></div>
-                  <div className="mw-score-item"><div className="mw-score-num" style={{color:IOS.blue}}>2</div><div className="mw-score-lbl">Pending</div></div>
+                {/* Mini pick dots */}
+                <div style={{display:"flex",gap:6,marginTop:12,paddingTop:10,borderTop:`0.5px solid ${IOS.sep}`,alignItems:"center",justifyContent:"space-between"}}>
+                  <div style={{display:"flex",gap:5}}>
+                    {["W","W","L","pending","pending"].map((r,i)=>(
+                      <div key={i} style={{width:28,height:28,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,background:r==="W"?"rgba(48,209,88,0.15)":r==="L"?"rgba(255,69,58,0.12)":"rgba(255,255,255,0.06)",color:r==="W"?IOS.green:r==="L"?IOS.red:IOS.label3}}>
+                        {r==="W"?"W":r==="L"?"L":"·"}
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{fontSize:12,color:IOS.label3,display:"flex",alignItems:"center",gap:4}}>
+                    <span style={{color:IOS.blue,fontWeight:600}}>2 pending</span>
+                    <span style={{fontSize:16,color:IOS.label3}}>›</span>
+                  </div>
                 </div>
-                {/* Live picks with PU slots */}
-                {[
-                  {label:"Moneyline",pick:"KC Chiefs",odds:"-180",result:"W"},
-                  {label:"Prop",pick:"Mahomes 300+ Yds",odds:"-130",result:"W"},
-                  {label:"Over/Under",pick:"Over 47.5",odds:"-110",result:"L"},
-                  {label:"Spread",pick:"Eagles -3",odds:"-110",result:"pending"},
-                  {label:"Parlay",pick:"Raiders + Cowboys",odds:"+420",result:"pending"},
-                ].map((p,i)=>{
-                  const appliedPU=matchupPUs[i];
-                  const resultColor=p.result==="W"?IOS.green:p.result==="L"?IOS.red:IOS.label3;
-                  const resultLabel=p.result==="W"?"✓ Win":p.result==="L"?"✗ Loss":"● Pending";
-                  return (
-                    <div key={i} style={{marginTop:10,paddingTop:10,borderTop:`0.5px solid ${IOS.sep}`}}>
-                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                        <div style={{flex:1}}>
-                          <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3,marginBottom:2}}>{p.label}</div>
-                          <div style={{fontSize:13,fontWeight:600,color:"#fff"}}>{p.pick}</div>
-                        </div>
-                        <div style={{display:"flex",alignItems:"center",gap:8}}>
-                          <div style={{fontSize:15,fontWeight:800,letterSpacing:-0.3,color:p.odds.startsWith("+")?IOS.green:IOS.blue}}>{p.odds}</div>
-                          <div style={{fontSize:11,fontWeight:700,padding:"3px 8px",borderRadius:6,background:`${resultColor}15`,color:resultColor}}>{resultLabel}</div>
-                        </div>
-                      </div>
-                      {/* PU row */}
-                      <div style={{marginTop:6}}>
-                        {appliedPU ? (
-                          <div style={{display:"inline-flex",alignItems:"center",gap:5,padding:"4px 10px",borderRadius:7,background:`${appliedPU.color}15`,border:`1px solid ${appliedPU.color}30`}}>
-                            <span style={{fontSize:12}}>{appliedPU.icon}</span>
-                            <span style={{fontSize:11,fontWeight:700,color:appliedPU.color}}>{appliedPU.name}</span>
-                            <span style={{fontSize:11,color:IOS.label3,cursor:"pointer"}} onClick={()=>{setMyPUs(prev=>[...prev,appliedPU]);setMatchupPUs(prev=>{const n={...prev};delete n[i];return n;})}}>✕</span>
-                          </div>
-                        ) : p.result==="pending" && myPUs.length>0 ? (
-                          <div
-                            onClick={()=>setShowPUModal({context:"matchup",pickIdx:i,slotLabel:p.label})}
-                            style={{display:"inline-flex",alignItems:"center",gap:5,padding:"4px 10px",borderRadius:7,background:"rgba(255,255,255,0.04)",border:"1px dashed rgba(255,255,255,0.1)",cursor:"pointer"}}
-                          >
-                            <span style={{fontSize:12}}>⚡</span>
-                            <span style={{fontSize:11,fontWeight:600,color:IOS.label3}}>Use Power-Up</span>
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-                  );
-                })}
               </div>
 
               {/* Timer */}
@@ -1304,6 +1279,135 @@ export default function App() {
                 : <button className="ios-btn disabled" disabled>{Object.values(picks).filter(v=>v).length+(lsBets.length>=2?1:0)} / 5 Picks Filled</button>
               }
               <div style={{height:20}}/>
+            </div>
+          </>
+        )}
+
+        {/* ══ MATCHUP ══ */}
+        {screen==="matchup"&&(
+          <>
+            <div className="status-bar">
+              <div className="status-time">{pad(new Date().getHours())}:{pad(new Date().getMinutes())}</div>
+              <div className="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div>
+            </div>
+            <div className="body">
+              {/* Header */}
+              <div style={{padding:"6px 20px 16px"}}>
+                <div style={{fontSize:34,fontWeight:800,letterSpacing:-1,color:"#fff",lineHeight:1.05}}>Matchup</div>
+                <div style={{fontSize:14,fontWeight:500,color:IOS.label3,marginTop:3}}>Week 6 · The Boys League · Live</div>
+              </div>
+
+              {/* Big score card */}
+              <div style={{margin:"0 16px 14px",background:IOS.bg2,borderRadius:20,padding:"20px",position:"relative",overflow:"hidden",border:`1px solid rgba(10,132,255,0.25)`}}>
+                <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${IOS.blue},${IOS.teal})`}}/>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+                  <div>
+                    <div style={{fontSize:26,fontWeight:800,letterSpacing:-0.5,color:IOS.blue}}>YOU</div>
+                    <div style={{fontSize:13,color:IOS.label3,marginTop:2}}>7-3 season</div>
+                  </div>
+                  <div style={{textAlign:"center"}}>
+                    <div style={{fontSize:42,fontWeight:800,letterSpacing:-2,lineHeight:1}}>
+                      <span style={{color:IOS.green}}>3</span>
+                      <span style={{fontSize:20,color:IOS.label3,fontWeight:400,margin:"0 6px"}}>–</span>
+                      <span style={{color:IOS.red}}>1</span>
+                    </div>
+                    <div style={{fontSize:10,fontWeight:700,letterSpacing:1.5,textTransform:"uppercase",color:IOS.green,marginTop:4}}>● Live</div>
+                  </div>
+                  <div style={{textAlign:"right"}}>
+                    <div style={{fontSize:26,fontWeight:800,letterSpacing:-0.5}}>Mike D.</div>
+                    <div style={{fontSize:13,color:IOS.label3,marginTop:2}}>6-4 season</div>
+                  </div>
+                </div>
+                {/* Score breakdown */}
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:1,background:"rgba(255,255,255,0.05)",borderRadius:12,overflow:"hidden"}}>
+                  {[{n:3,l:"Wins",c:IOS.green},{n:1,l:"Pushes",c:IOS.label3},{n:1,l:"Their Wins",c:IOS.red},{n:2,l:"Pending",c:IOS.blue}].map((s,i)=>(
+                    <div key={i} style={{background:IOS.bg3,padding:"10px 6px",textAlign:"center"}}>
+                      <div style={{fontSize:20,fontWeight:800,letterSpacing:-0.5,color:s.c}}>{s.n}</div>
+                      <div style={{fontSize:9,fontWeight:600,letterSpacing:0.3,textTransform:"uppercase",color:IOS.label3,marginTop:2}}>{s.l}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Pick by pick head to head */}
+              <div style={{padding:"0 20px 10px"}}>
+                <div style={{fontSize:12,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3}}>Pick by Pick</div>
+              </div>
+
+              {[
+                {slot:"Moneyline", mult:1, col:IOS.blue,   myPick:"KC Chiefs",         myOdds:"-180", myResult:"W",
+                                                            oppPick:"Bills ML",          oppOdds:"-210",oppResult:"W"},
+                {slot:"Prop",      mult:2, col:IOS.yellow, myPick:"Mahomes 300+ Yds",   myOdds:"-130", myResult:"W",
+                                                            oppPick:"Josh Allen 2+ TDs", oppOdds:"-140",oppResult:"L"},
+                {slot:"Over/Under",mult:3, col:IOS.orange, myPick:"Over 47.5",          myOdds:"-110", myResult:"L",
+                                                            oppPick:"Under 44",          oppOdds:"-110",oppResult:"W"},
+                {slot:"Spread",    mult:4, col:IOS.green,  myPick:"Eagles -3",          myOdds:"-110", myResult:"pending",
+                                                            oppPick:"49ers -4.5",        oppOdds:"-110",oppResult:"pending"},
+                {slot:"Parlay",    mult:5, col:IOS.pink,   myPick:"Raiders + Cowboys",  myOdds:"+420", myResult:"pending",
+                                                            oppPick:"Panthers + Bears",  oppOdds:"+380",oppResult:"pending"},
+              ].map((row,i)=>{
+                const appliedPU=matchupPUs[i];
+                const rColor=r=>r==="W"?IOS.green:r==="L"?IOS.red:IOS.label3;
+                const rLabel=r=>r==="W"?"✓ Win":r==="L"?"✗ Loss":"● Pending";
+                return (
+                  <div key={i} style={{margin:"0 16px 10px",background:IOS.bg2,borderRadius:14,overflow:"hidden",border:`1px solid rgba(255,255,255,0.06)`}}>
+                    {/* Slot header */}
+                    <div style={{padding:"10px 14px",borderBottom:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <div style={{width:30,height:30,borderRadius:8,background:`${row.col}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:row.col}}>{row.mult}×</div>
+                        <div style={{fontSize:12,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:row.col}}>{row.slot}</div>
+                      </div>
+                      {/* PU button or active badge */}
+                      {appliedPU ? (
+                        <div style={{display:"inline-flex",alignItems:"center",gap:5,padding:"4px 9px",borderRadius:7,background:`${appliedPU.color}15`,border:`1px solid ${appliedPU.color}30`}}>
+                          <span style={{fontSize:11}}>{appliedPU.icon}</span>
+                          <span style={{fontSize:10,fontWeight:700,color:appliedPU.color}}>{appliedPU.name}</span>
+                          <span style={{fontSize:10,color:IOS.label3,cursor:"pointer"}} onClick={()=>{setMyPUs(prev=>[...prev,appliedPU]);setMatchupPUs(prev=>{const n={...prev};delete n[i];return n;})}}>✕</span>
+                        </div>
+                      ) : (row.myResult==="pending"&&myPUs.length>0) ? (
+                        <div onClick={()=>setShowPUModal({context:"matchup",pickIdx:i,slotLabel:row.slot})}
+                          style={{display:"inline-flex",alignItems:"center",gap:5,padding:"4px 9px",borderRadius:7,background:"rgba(255,255,255,0.04)",border:"1px dashed rgba(255,255,255,0.1)",cursor:"pointer"}}>
+                          <span style={{fontSize:11}}>⚡</span>
+                          <span style={{fontSize:10,fontWeight:600,color:IOS.label3}}>Power-Up</span>
+                        </div>
+                      ) : null}
+                    </div>
+                    {/* Side by side picks */}
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr"}}>
+                      {/* My pick */}
+                      <div style={{padding:"12px 14px",borderRight:`0.5px solid ${IOS.sep}`,background:row.myResult==="W"?"rgba(48,209,88,0.04)":row.myResult==="L"?"rgba(255,69,58,0.04)":"transparent"}}>
+                        <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.blue,marginBottom:5}}>You</div>
+                        <div style={{fontSize:13,fontWeight:600,color:"#fff",lineHeight:1.3,marginBottom:6}}>{row.myPick}</div>
+                        <div style={{display:"flex",alignItems:"center",gap:6}}>
+                          <div style={{fontSize:14,fontWeight:800,letterSpacing:-0.3,color:row.myOdds.startsWith("+")?IOS.green:IOS.blue}}>{row.myOdds}</div>
+                          <div style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:6,background:`${rColor(row.myResult)}15`,color:rColor(row.myResult)}}>{rLabel(row.myResult)}</div>
+                        </div>
+                      </div>
+                      {/* Opp pick */}
+                      <div style={{padding:"12px 14px",background:row.oppResult==="W"?"rgba(48,209,88,0.04)":row.oppResult==="L"?"rgba(255,69,58,0.04)":"transparent"}}>
+                        <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3,marginBottom:5}}>Mike D.</div>
+                        <div style={{fontSize:13,fontWeight:600,color:"#fff",lineHeight:1.3,marginBottom:6}}>{row.oppPick}</div>
+                        <div style={{display:"flex",alignItems:"center",gap:6}}>
+                          <div style={{fontSize:14,fontWeight:800,letterSpacing:-0.3,color:row.oppOdds.startsWith("+")?IOS.green:IOS.blue}}>{row.oppOdds}</div>
+                          <div style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:6,background:`${rColor(row.oppResult)}15`,color:rColor(row.oppResult)}}>{rLabel(row.oppResult)}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Power-ups inventory reminder */}
+              {myPUs.length>0&&(
+                <div style={{margin:"4px 16px 16px",background:IOS.bg2,borderRadius:12,padding:"12px 14px",display:"flex",alignItems:"center",gap:10,border:"1px solid rgba(255,255,255,0.06)"}}>
+                  <span style={{fontSize:16}}>⚡</span>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:13,fontWeight:600,color:"#fff"}}>{myPUs.length} power-up{myPUs.length>1?"s":""} available</div>
+                    <div style={{fontSize:11,color:IOS.label3}}>Use them on pending picks above</div>
+                  </div>
+                  <div onClick={()=>{setProfTab("power-ups");setScreen("profile");}} style={{fontSize:12,fontWeight:600,color:IOS.blue,cursor:"pointer"}}>View</div>
+                </div>
+              )}
             </div>
           </>
         )}
@@ -1630,11 +1734,11 @@ export default function App() {
         {/* ══ TAB BAR ══ */}
         <div className="tab-bar">
           {[
-            {icon:"⚡",label:"Home",   id:"home"},
-            {icon:"🎯",label:"Picks",  id:"picks"},
-            {icon:"📊",label:"League", id:"league"},
-            {icon:"💬",label:"Chat",   id:"chat"},
-            {icon:"👤",label:"Profile",id:"profile"},
+            {icon:"⚡",label:"Home",    id:"home"},
+            {icon:"🎯",label:"Picks",   id:"picks"},
+            {icon:"🏈",label:"Matchup", id:"matchup"},
+            {icon:"📊",label:"League",  id:"league"},
+            {icon:"👤",label:"Profile", id:"profile"},
           ].map(t=>(
             <div key={t.id} className={`tab-item ${screen===t.id?"on":""}`} onClick={()=>setScreen(t.id)}>
               <div className="tab-icon" style={{filter:screen===t.id?"none":"grayscale(1) opacity(0.5)"}}>{t.icon}</div>
