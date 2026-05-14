@@ -190,12 +190,18 @@ export default function App() {
   const [wheelAngle,  setWheelAngle]  = useState(0);
   const [wonPU,       setWonPU]       = useState(null);
   const [showWin,     setShowWin]     = useState(false);
-  const [showTopScorer, setShowTopScorer] = useState(false); // trigger manually, not on load
+  const [showTopScorer, setShowTopScorer] = useState(false);
+  const [savedPicks,  setSavedPicks]  = useState(null); // locked picks for the week
   const chatRef=useRef(null);
 
   useEffect(()=>{
     setTimeout(()=>setAnim(true),80);
     const t=setInterval(()=>setTimeLeft(p=>{let{h,m,s}=p;s--;if(s<0){s=59;m--;}if(m<0){m=59;h--;}if(h<0){h=0;m=0;s=0;}return{h,m,s};}),1000);
+    // Load saved picks from localStorage
+    try {
+      const stored = localStorage.getItem("linedup_picks_wk6");
+      if(stored) setSavedPicks(JSON.parse(stored));
+    } catch(e) {}
     return()=>clearInterval(t);
   },[]);
 
@@ -798,7 +804,62 @@ export default function App() {
                 <div className="cd-label">Lineup locks in</div>
                 <div className="cd-time">{pad(timeLeft.h)}:{pad(timeLeft.m)}:{pad(timeLeft.s)}</div>
               </div>
-              <button className="ios-btn blue" onClick={()=>setScreen("picks")} style={{marginBottom:6}}>+ Make Your Picks</button>
+              {savedPicks
+                ? <button className="ios-btn" style={{background:IOS.green,color:"#000",marginBottom:6}} onClick={()=>setScreen("picks")}>✓ Picks Locked — View or Edit</button>
+                : <button className="ios-btn blue" onClick={()=>setScreen("picks")} style={{marginBottom:6}}>+ Make Your Picks</button>
+              }
+
+              {/* My Locked Picks card */}
+              {savedPicks && (
+                <div style={{margin:"0 16px 10px",background:IOS.bg2,borderRadius:16,overflow:"hidden",border:`1px solid rgba(48,209,88,0.25)`}}>
+                  <div style={{position:"absolute",display:"none"}}/>
+                  <div style={{padding:"12px 16px 8px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:`0.5px solid ${IOS.sep}`}}>
+                    <div style={{fontSize:12,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.green}}>✓ Week 6 Picks Locked</div>
+                    <div style={{fontSize:12,fontWeight:600,color:IOS.blue,cursor:"pointer"}} onClick={()=>setScreen("picks")}>Edit</div>
+                  </div>
+                  {SLOTS.map(slot=>{
+                    const p = slot.id==="longshot" ? null : savedPicks.picks?.[slot.id];
+                    const lsB = slot.id==="longshot" ? savedPicks.lsBets : null;
+                    if(slot.id==="longshot") {
+                      if(!lsB||!lsB.length) return null;
+                      return (
+                        <div key="ls" style={{padding:"11px 16px",borderBottom:`0.5px solid ${IOS.sep}`}}>
+                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                            <div>
+                              <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:slot.color,marginBottom:3}}>{slot.mult}× · {slot.label}</div>
+                              <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>{lsB.length}-leg parlay</div>
+                            </div>
+                            <div style={{fontSize:18,fontWeight:800,letterSpacing:-0.5,color:IOS.pink}}>{calcLS(lsB)?.american}</div>
+                          </div>
+                          {lsB.map(b=>(
+                            <div key={b.id} style={{fontSize:12,color:IOS.label3,marginTop:4,paddingLeft:8}}>· {b.pick} <span style={{color:b.odds.startsWith("+")?IOS.green:IOS.blue,fontWeight:600}}>{b.odds}</span></div>
+                          ))}
+                        </div>
+                      );
+                    }
+                    if(!p) return null;
+                    return (
+                      <div key={slot.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 16px",borderBottom:`0.5px solid ${IOS.sep}`}}>
+                        <div>
+                          <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:slot.color,marginBottom:3}}>{slot.mult}× · {slot.label}</div>
+                          <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>{p.pick}</div>
+                          <div style={{fontSize:11,color:IOS.label3,marginTop:1}}>{p.game}</div>
+                        </div>
+                        <div style={{fontSize:20,fontWeight:800,letterSpacing:-0.5,color:p.odds.startsWith("+")?IOS.green:IOS.blue}}>{p.odds}</div>
+                      </div>
+                    );
+                  })}
+                  {savedPicks.parlay && (
+                    <div style={{padding:"10px 16px",background:"rgba(48,209,88,0.06)",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                      <div style={{fontSize:11,fontWeight:600,color:IOS.label3}}>Combined odds · $10 wins</div>
+                      <div style={{display:"flex",alignItems:"center",gap:10}}>
+                        <div style={{fontSize:12,fontWeight:700,color:IOS.green}}>${((savedPicks.parlay.payout/100)*10).toFixed(2)}</div>
+                        <div style={{fontSize:18,fontWeight:800,color:IOS.green,letterSpacing:-0.5}}>{savedPicks.parlay.american}</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Power-Ups */}
               <div className="ios-section" style={{margin:"12px 16px 6px"}}>
@@ -1009,7 +1070,12 @@ export default function App() {
 
               <div style={{height:12}}/>
               {allFilled
-                ? <button className="ios-btn green" onClick={()=>setSubmitted(true)}>🔒 Lock In My Picks · {parlay?.american}</button>
+                ? <button className="ios-btn green" onClick={()=>{
+                    const locked = { picks, lsBets, parlay, lockedAt: new Date().toISOString() };
+                    try { localStorage.setItem("linedup_picks_wk6", JSON.stringify(locked)); } catch(e) {}
+                    setSavedPicks(locked);
+                    setSubmitted(true);
+                  }}>🔒 Lock In My Picks · {parlay?.american}</button>
                 : <button className="ios-btn disabled" disabled>{Object.values(picks).filter(v=>v).length+(lsBets.length>=2?1:0)} / 5 Picks Filled</button>
               }
               <div style={{height:20}}/>
