@@ -271,7 +271,10 @@ export default function App() {
   const [picks,       setPicks]       = useState({ml:null,prop:null,ou:null,spread:null});
   const [lsBets,      setLsBets]      = useState([]);
   const [activeSlot,  setActiveSlot]  = useState(null);
-  const [myPUs,       setMyPUs]       = useState([POWER_UPS[1],POWER_UPS[4]]);
+  const [myPUs,       setMyPUs]       = useState([POWER_UPS[1],POWER_UPS[4],POWER_UPS[6]]);
+  const [showPUModal, setShowPUModal] = useState(null); // {context:"picks"|"matchup", slotId, pickIdx}
+  const [activatedPUs,setActivatedPUs]= useState({}); // slotId -> pu applied on picks screen
+  const [matchupPUs,  setMatchupPUs]  = useState({}); // pickIdx -> pu applied on live matchup
   const [profTab,     setProfTab]     = useState("stats");
   const [showWheel,   setShowWheel]   = useState(false);
   const [spinning,    setSpinning]    = useState(false);
@@ -307,6 +310,15 @@ export default function App() {
   };
 
   const claimPU=()=>{if(wonPU&&myPUs.length<3)setMyPUs(p=>[...p,{...wonPU}]);setShowWin(false);setShowWheel(false);setWonPU(null);};
+
+  const usePU=(pu, context, key)=>{
+    // Remove from inventory
+    setMyPUs(p=>p.filter(x=>x.id!==pu.id));
+    // Apply to the right context
+    if(context==="picks") setActivatedPUs(p=>({...p,[key]:pu}));
+    if(context==="matchup") setMatchupPUs(p=>({...p,[key]:pu}));
+    setShowPUModal(null);
+  };
   const selectBet=(slotId,bet)=>{
     if(slotId==="longshot"){setLsBets(p=>p.find(b=>b.id===bet.id)?p.filter(b=>b.id!==bet.id):[...p,bet]);}
     else{setPicks(p=>({...p,[slotId]:bet}));setActiveSlot(null);}
@@ -624,6 +636,27 @@ export default function App() {
     .spin-ios-btn:active{opacity:0.8;}
     .spin-ios-btn:disabled{background:${IOS.bg3};color:${IOS.gray};cursor:default;}
     .win-modal{position:absolute;inset:0;background:rgba(0,0,0,0.85);z-index:110;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:40px;}
+
+    /* Power-up modal */
+    .pu-modal-bg{position:absolute;inset:0;background:rgba(0,0,0,0.6);z-index:80;display:flex;flex-direction:column;justify-content:flex-end;backdrop-filter:blur(6px);}
+    .pu-modal-sheet{background:#1C1C1E;border-radius:20px 20px 0 0;padding:0 0 32px;}
+    .pu-modal-handle{width:36px;height:5px;border-radius:3px;background:rgba(255,255,255,0.2);margin:10px auto 0;}
+    .pu-modal-hdr{padding:16px 20px 12px;border-bottom:0.5px solid rgba(255,255,255,0.08);}
+    .pu-modal-title{font-size:17px;font-weight:700;letter-spacing:-0.3px;margin-bottom:3px;}
+    .pu-modal-sub{font-size:13px;color:${IOS.label3};}
+    .pu-opt{display:flex;align-items:center;gap:14px;padding:14px 20px;border-bottom:0.5px solid rgba(255,255,255,0.06);cursor:pointer;transition:background .12s;}
+    .pu-opt:last-child{border-bottom:none;}
+    .pu-opt:active{background:rgba(255,255,255,0.04);}
+    .pu-opt-icon{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;}
+    .pu-opt-name{font-size:15px;font-weight:600;color:#fff;margin-bottom:2px;}
+    .pu-opt-desc{font-size:12px;color:${IOS.label3};}
+    .pu-opt-rarity{font-size:10px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;margin-top:3px;}
+
+    /* Applied PU badge on slot */
+    .pu-active-badge{display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:8px;margin-top:8px;cursor:pointer;}
+    .pu-active-icon{font-size:14px;}
+    .pu-active-name{font-size:11px;font-weight:700;letter-spacing:0.3px;}
+    .pu-active-remove{font-size:11px;opacity:0.5;margin-left:2px;}
     .win-icon{font-size:64px;animation:iosPop .4s cubic-bezier(0.34,1.56,0.64,1);}
     @keyframes iosPop{0%{transform:scale(0.3);opacity:0;}100%{transform:scale(1);opacity:1;}}
     .win-got{font-size:13px;font-weight:600;color:${IOS.label3};letter-spacing:0.5px;text-transform:uppercase;}
@@ -668,6 +701,40 @@ export default function App() {
       <style>{css}</style>
 
       <div className="phone">
+
+        {/* ══ POWER-UP MODAL ══ */}
+        {showPUModal && (
+          <div className="pu-modal-bg" onClick={()=>setShowPUModal(null)}>
+            <div className="pu-modal-sheet" onClick={e=>e.stopPropagation()}>
+              <div className="pu-modal-handle"/>
+              <div className="pu-modal-hdr">
+                <div className="pu-modal-title">Use a Power-Up</div>
+                <div className="pu-modal-sub">
+                  {showPUModal.context==="picks"
+                    ? `Applied to your ${showPUModal.slotLabel} pick`
+                    : `Applied to pick #${(showPUModal.pickIdx||0)+1} in live matchup`}
+                </div>
+              </div>
+              {myPUs.length===0
+                ? <div style={{padding:"28px 20px",textAlign:"center",color:IOS.label3,fontSize:15}}>No power-ups in inventory</div>
+                : myPUs.map((pu,i)=>(
+                  <div key={i} className="pu-opt" onClick={()=>usePU(pu, showPUModal.context, showPUModal.context==="picks"?showPUModal.slotId:showPUModal.pickIdx)}>
+                    <div className="pu-opt-icon" style={{background:`${pu.color}20`}}>{pu.icon}</div>
+                    <div style={{flex:1}}>
+                      <div className="pu-opt-name">{pu.name}</div>
+                      <div className="pu-opt-desc">{pu.desc}</div>
+                      <div className="pu-opt-rarity" style={{color:rarityColor(pu.rarity)}}>{pu.rarity}</div>
+                    </div>
+                    <div style={{fontSize:20,color:IOS.label3}}>›</div>
+                  </div>
+                ))
+              }
+              <div style={{padding:"14px 20px 0"}}>
+                <button onClick={()=>setShowPUModal(null)} style={{width:"100%",background:IOS.bg3,border:"none",borderRadius:12,padding:"14px",fontFamily:"Manrope,sans-serif",fontSize:15,fontWeight:600,color:IOS.label2,cursor:"pointer"}}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ══ TOP SCORER CELEBRATION ══ */}
         {showTopScorer && (
@@ -886,6 +953,50 @@ export default function App() {
                   <div className="mw-score-item"><div className="mw-score-num" style={{color:IOS.red}}>1</div><div className="mw-score-lbl">Their Wins</div></div>
                   <div className="mw-score-item"><div className="mw-score-num" style={{color:IOS.blue}}>2</div><div className="mw-score-lbl">Pending</div></div>
                 </div>
+                {/* Live picks with PU slots */}
+                {[
+                  {label:"Moneyline",pick:"KC Chiefs",odds:"-180",result:"W"},
+                  {label:"Prop",pick:"Mahomes 300+ Yds",odds:"-130",result:"W"},
+                  {label:"Over/Under",pick:"Over 47.5",odds:"-110",result:"L"},
+                  {label:"Spread",pick:"Eagles -3",odds:"-110",result:"pending"},
+                  {label:"Parlay",pick:"Raiders + Cowboys",odds:"+420",result:"pending"},
+                ].map((p,i)=>{
+                  const appliedPU=matchupPUs[i];
+                  const resultColor=p.result==="W"?IOS.green:p.result==="L"?IOS.red:IOS.label3;
+                  const resultLabel=p.result==="W"?"✓ Win":p.result==="L"?"✗ Loss":"● Pending";
+                  return (
+                    <div key={i} style={{marginTop:10,paddingTop:10,borderTop:`0.5px solid ${IOS.sep}`}}>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                        <div style={{flex:1}}>
+                          <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3,marginBottom:2}}>{p.label}</div>
+                          <div style={{fontSize:13,fontWeight:600,color:"#fff"}}>{p.pick}</div>
+                        </div>
+                        <div style={{display:"flex",alignItems:"center",gap:8}}>
+                          <div style={{fontSize:15,fontWeight:800,letterSpacing:-0.3,color:p.odds.startsWith("+")?IOS.green:IOS.blue}}>{p.odds}</div>
+                          <div style={{fontSize:11,fontWeight:700,padding:"3px 8px",borderRadius:6,background:`${resultColor}15`,color:resultColor}}>{resultLabel}</div>
+                        </div>
+                      </div>
+                      {/* PU row */}
+                      <div style={{marginTop:6}}>
+                        {appliedPU ? (
+                          <div style={{display:"inline-flex",alignItems:"center",gap:5,padding:"4px 10px",borderRadius:7,background:`${appliedPU.color}15`,border:`1px solid ${appliedPU.color}30`}}>
+                            <span style={{fontSize:12}}>{appliedPU.icon}</span>
+                            <span style={{fontSize:11,fontWeight:700,color:appliedPU.color}}>{appliedPU.name}</span>
+                            <span style={{fontSize:11,color:IOS.label3,cursor:"pointer"}} onClick={()=>{setMyPUs(prev=>[...prev,appliedPU]);setMatchupPUs(prev=>{const n={...prev};delete n[i];return n;})}}>✕</span>
+                          </div>
+                        ) : p.result==="pending" && myPUs.length>0 ? (
+                          <div
+                            onClick={()=>setShowPUModal({context:"matchup",pickIdx:i,slotLabel:p.label})}
+                            style={{display:"inline-flex",alignItems:"center",gap:5,padding:"4px 10px",borderRadius:7,background:"rgba(255,255,255,0.04)",border:"1px dashed rgba(255,255,255,0.1)",cursor:"pointer"}}
+                          >
+                            <span style={{fontSize:12}}>⚡</span>
+                            <span style={{fontSize:11,fontWeight:600,color:IOS.label3}}>Use Power-Up</span>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
 
               {/* Timer */}
@@ -1112,6 +1223,7 @@ export default function App() {
                 const pick=slot.id==="longshot"?null:picks[slot.id];
                 const lsFilled=slot.id==="longshot"&&lsBets.length>=2;
                 const filled=pick||lsFilled;
+                const appliedPU=activatedPUs[slot.id];
                 return (
                   <div key={slot.id} className="slot-card" style={filled?{borderWidth:1,borderStyle:"solid",borderColor:`${slot.color}40`}:{borderWidth:1,borderStyle:"solid",borderColor:"transparent"}}>
                     <div className="slot-top-row" onClick={()=>setActiveSlot(slot.id)}>
@@ -1151,6 +1263,30 @@ export default function App() {
                           <div className="ls-total-lbl">{lsBets.length}-leg mini-parlay</div>
                           <div className="ls-total-odds">{lsO?.american}</div>
                         </div>
+                      </div>
+                    )}
+                    {/* Power-up section — show when pick is filled */}
+                    {filled && (
+                      <div style={{padding:"10px 14px",borderTop:`0.5px solid rgba(255,255,255,0.06)`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                        {appliedPU ? (
+                          <div className="pu-active-badge" style={{background:`${appliedPU.color}15`,border:`1px solid ${appliedPU.color}30`}}>
+                            <span className="pu-active-icon">{appliedPU.icon}</span>
+                            <span className="pu-active-name" style={{color:appliedPU.color}}>{appliedPU.name} active</span>
+                            <span className="pu-active-remove" onClick={e=>{e.stopPropagation();setMyPUs(p=>[...p,appliedPU]);setActivatedPUs(p=>{const n={...p};delete n[slot.id];return n;});}}>✕</span>
+                          </div>
+                        ) : (
+                          myPUs.length>0 ? (
+                            <div
+                              onClick={e=>{e.stopPropagation();setShowPUModal({context:"picks",slotId:slot.id,slotLabel:slot.label});}}
+                              style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",background:"rgba(255,255,255,0.05)",border:"1px dashed rgba(255,255,255,0.12)",borderRadius:8,cursor:"pointer"}}
+                            >
+                              <span style={{fontSize:14}}>⚡</span>
+                              <span style={{fontSize:12,fontWeight:600,color:IOS.label3}}>Use a Power-Up</span>
+                            </div>
+                          ) : (
+                            <div style={{fontSize:12,color:IOS.label3}}>No power-ups in inventory</div>
+                          )
+                        )}
                       </div>
                     )}
                   </div>
