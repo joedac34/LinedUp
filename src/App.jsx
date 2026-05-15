@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { supabase } from './supabase';
 
 // iOS System Colors
 const IOS = {
@@ -44,42 +45,96 @@ const SPORTS = {
     ],
     bets:{
       ml:[
-        { id:"ml1", game:"Raiders @ Chiefs",   pick:"KC Chiefs",      odds:"-280", impliedOdds:-280 },
-        { id:"ml2", game:"Cowboys @ Eagles",   pick:"Philadelphia",   odds:"-165", impliedOdds:-165 },
-        { id:"ml3", game:"Dolphins @ Bills",   pick:"Buffalo Bills",  odds:"-210", impliedOdds:-210 },
-        { id:"ml4", game:"Rams @ 49ers",       pick:"San Francisco",  odds:"-195", impliedOdds:-195 },
-        { id:"ml5", game:"Vikings @ Packers",  pick:"Green Bay",      odds:"-125", impliedOdds:-125 },
+        { id:"ml1",  game:"Raiders @ Chiefs",      pick:"KC Chiefs",          odds:"-280", impliedOdds:-280 },
+        { id:"ml2",  game:"Cowboys @ Eagles",      pick:"Philadelphia Eagles",odds:"-165", impliedOdds:-165 },
+        { id:"ml3",  game:"Dolphins @ Bills",      pick:"Buffalo Bills",      odds:"-210", impliedOdds:-210 },
+        { id:"ml4",  game:"Rams @ 49ers",          pick:"San Francisco 49ers",odds:"-195", impliedOdds:-195 },
+        { id:"ml5",  game:"Vikings @ Packers",     pick:"Green Bay Packers",  odds:"-125", impliedOdds:-125 },
+        { id:"ml6",  game:"Panthers @ Falcons",    pick:"Atlanta Falcons",    odds:"-245", impliedOdds:-245 },
+        { id:"ml7",  game:"Broncos @ Chargers",    pick:"LA Chargers",        odds:"-165", impliedOdds:-165 },
+        { id:"ml8",  game:"Giants @ Commanders",   pick:"Washington Commanders",odds:"-170",impliedOdds:-170},
+        { id:"ml9",  game:"Bears @ Lions",         pick:"Detroit Lions",      odds:"-300", impliedOdds:-300 },
+        { id:"ml10", game:"Bengals @ Ravens",       pick:"Baltimore Ravens",   odds:"-155", impliedOdds:-155 },
+        { id:"ml11", game:"Seahawks @ Cardinals",  pick:"Seattle Seahawks",   odds:"-130", impliedOdds:-130 },
+        { id:"ml12", game:"Saints @ Buccaneers",   pick:"Tampa Bay Buccaneers",odds:"-120",impliedOdds:-120 },
+        { id:"ml13", game:"Jets @ Patriots",       pick:"NY Jets",            odds:"-140", impliedOdds:-140 },
+        { id:"ml14", game:"Steelers @ Browns",     pick:"Pittsburgh Steelers",odds:"+110", impliedOdds:110  },
+        { id:"ml15", game:"Colts @ Titans",        pick:"Indianapolis Colts", odds:"-105", impliedOdds:-105 },
+        { id:"ml16", game:"Raiders @ Chiefs",      pick:"Las Vegas Raiders",  odds:"+240", impliedOdds:240  },
+        { id:"ml17", game:"Cowboys @ Eagles",      pick:"Dallas Cowboys",     odds:"+145", impliedOdds:145  },
       ],
       prop:[
-        { id:"pr1", game:"Patrick Mahomes",    pick:"300+ Pass Yards",  odds:"-130", impliedOdds:-130 },
-        { id:"pr2", game:"Jalen Hurts",        pick:"2+ Rush TDs",      odds:"+175", impliedOdds:175  },
-        { id:"pr3", game:"Josh Allen",         pick:"35+ Pass Attempts",odds:"-115", impliedOdds:-115 },
-        { id:"pr4", game:"Brock Purdy",        pick:"Over 1.5 TDs",     odds:"-140", impliedOdds:-140 },
-        { id:"pr5", game:"C. McCaffrey",       pick:"90.5+ Rush Yds",   odds:"-110", impliedOdds:-110 },
+        { id:"pr1",  game:"Patrick Mahomes",       pick:"300+ Pass Yards",    odds:"-130", impliedOdds:-130 },
+        { id:"pr2",  game:"Jalen Hurts",           pick:"2+ Rush TDs",        odds:"+175", impliedOdds:175  },
+        { id:"pr3",  game:"Josh Allen",            pick:"35+ Pass Attempts",  odds:"-115", impliedOdds:-115 },
+        { id:"pr4",  game:"Brock Purdy",           pick:"Over 1.5 TDs",       odds:"-140", impliedOdds:-140 },
+        { id:"pr5",  game:"Christian McCaffrey",   pick:"90.5+ Rush Yds",     odds:"-110", impliedOdds:-110 },
+        { id:"pr6",  game:"Tyreek Hill",           pick:"Over 85.5 Rec Yds",  odds:"-125", impliedOdds:-125 },
+        { id:"pr7",  game:"Davante Adams",         pick:"Over 65.5 Rec Yds",  odds:"-118", impliedOdds:-118 },
+        { id:"pr8",  game:"Travis Kelce",          pick:"Over 55.5 Rec Yds",  odds:"-130", impliedOdds:-130 },
+        { id:"pr9",  game:"Stefon Diggs",          pick:"Over 70.5 Rec Yds",  odds:"-115", impliedOdds:-115 },
+        { id:"pr10", game:"Justin Jefferson",      pick:"Over 80.5 Rec Yds",  odds:"-120", impliedOdds:-120 },
+        { id:"pr11", game:"Lamar Jackson",         pick:"50+ Rush Yards",     odds:"-135", impliedOdds:-135 },
+        { id:"pr12", game:"CeeDee Lamb",           pick:"Over 75.5 Rec Yds",  odds:"-118", impliedOdds:-118 },
+        { id:"pr13", game:"Ja'Marr Chase",         pick:"Over 70.5 Rec Yds",  odds:"-115", impliedOdds:-115 },
+        { id:"pr14", game:"Deebo Samuel",          pick:"Over 60.5 Rec Yds",  odds:"-108", impliedOdds:-108 },
+        { id:"pr15", game:"Derrick Henry",         pick:"Over 85.5 Rush Yds", odds:"-120", impliedOdds:-120 },
+        { id:"pr16", game:"Patrick Mahomes",       pick:"2+ TD Passes",       odds:"-150", impliedOdds:-150 },
+        { id:"pr17", game:"Josh Allen",            pick:"1+ Rush TD",         odds:"-130", impliedOdds:-130 },
+        { id:"pr18", game:"Jalen Hurts",           pick:"Over 240.5 Pass Yds",odds:"-115", impliedOdds:-115 },
       ],
       ou:[
-        { id:"ou1", game:"Raiders @ Chiefs",   pick:"Over 47.5",   odds:"-110", impliedOdds:-110 },
-        { id:"ou2", game:"Cowboys @ Eagles",   pick:"Under 44",    odds:"-110", impliedOdds:-110 },
-        { id:"ou3", game:"Dolphins @ Bills",   pick:"Over 48",     odds:"-115", impliedOdds:-115 },
-        { id:"ou4", game:"Rams @ 49ers",       pick:"Under 45.5",  odds:"-110", impliedOdds:-110 },
-        { id:"ou5", game:"Vikings @ Packers",  pick:"Over 43",     odds:"-118", impliedOdds:-118 },
+        { id:"ou1",  game:"Raiders @ Chiefs",      pick:"Over 47.5",          odds:"-110", impliedOdds:-110 },
+        { id:"ou2",  game:"Cowboys @ Eagles",      pick:"Under 44",           odds:"-110", impliedOdds:-110 },
+        { id:"ou3",  game:"Dolphins @ Bills",      pick:"Over 48",            odds:"-115", impliedOdds:-115 },
+        { id:"ou4",  game:"Rams @ 49ers",          pick:"Under 45.5",         odds:"-110", impliedOdds:-110 },
+        { id:"ou5",  game:"Vikings @ Packers",     pick:"Over 43",            odds:"-118", impliedOdds:-118 },
+        { id:"ou6",  game:"Panthers @ Falcons",    pick:"Over 41",            odds:"-112", impliedOdds:-112 },
+        { id:"ou7",  game:"Broncos @ Chargers",    pick:"Under 44",           odds:"-110", impliedOdds:-110 },
+        { id:"ou8",  game:"Giants @ Commanders",   pick:"Under 40.5",         odds:"-108", impliedOdds:-108 },
+        { id:"ou9",  game:"Bears @ Lions",         pick:"Over 50.5",          odds:"-115", impliedOdds:-115 },
+        { id:"ou10", game:"Bengals @ Ravens",      pick:"Over 46",            odds:"-112", impliedOdds:-112 },
+        { id:"ou11", game:"Seahawks @ Cardinals",  pick:"Over 44.5",          odds:"-110", impliedOdds:-110 },
+        { id:"ou12", game:"Saints @ Buccaneers",   pick:"Under 43",           odds:"-110", impliedOdds:-110 },
+        { id:"ou13", game:"Jets @ Patriots",       pick:"Under 38.5",         odds:"-115", impliedOdds:-115 },
+        { id:"ou14", game:"Steelers @ Browns",     pick:"Under 36.5",         odds:"-110", impliedOdds:-110 },
+        { id:"ou15", game:"Colts @ Titans",        pick:"Over 42.5",          odds:"-108", impliedOdds:-108 },
       ],
       spread:[
-        { id:"sp1", game:"Raiders @ Chiefs",   pick:"KC -6.5",     odds:"-110", impliedOdds:-110 },
-        { id:"sp2", game:"Cowboys @ Eagles",   pick:"Eagles -3",   odds:"-110", impliedOdds:-110 },
-        { id:"sp3", game:"Dolphins @ Bills",   pick:"Bills -5",    odds:"-115", impliedOdds:-115 },
-        { id:"sp4", game:"Rams @ 49ers",       pick:"49ers -4.5",  odds:"-110", impliedOdds:-110 },
-        { id:"sp5", game:"Panthers @ Falcons", pick:"Falcons -6",  odds:"-108", impliedOdds:-108 },
+        { id:"sp1",  game:"Raiders @ Chiefs",      pick:"KC Chiefs -6.5",     odds:"-110", impliedOdds:-110 },
+        { id:"sp2",  game:"Cowboys @ Eagles",      pick:"Eagles -3",          odds:"-110", impliedOdds:-110 },
+        { id:"sp3",  game:"Dolphins @ Bills",      pick:"Bills -5",           odds:"-115", impliedOdds:-115 },
+        { id:"sp4",  game:"Rams @ 49ers",          pick:"49ers -4.5",         odds:"-110", impliedOdds:-110 },
+        { id:"sp5",  game:"Panthers @ Falcons",    pick:"Falcons -6",         odds:"-108", impliedOdds:-108 },
+        { id:"sp6",  game:"Broncos @ Chargers",    pick:"Chargers -3.5",      odds:"-110", impliedOdds:-110 },
+        { id:"sp7",  game:"Giants @ Commanders",   pick:"Commanders -3",      odds:"-112", impliedOdds:-112 },
+        { id:"sp8",  game:"Bears @ Lions",         pick:"Lions -8.5",         odds:"-110", impliedOdds:-110 },
+        { id:"sp9",  game:"Bengals @ Ravens",      pick:"Ravens -4",          odds:"-115", impliedOdds:-115 },
+        { id:"sp10", game:"Seahawks @ Cardinals",  pick:"Seahawks -3",        odds:"-110", impliedOdds:-110 },
+        { id:"sp11", game:"Saints @ Buccaneers",   pick:"Buccaneers -2.5",    odds:"-110", impliedOdds:-110 },
+        { id:"sp12", game:"Jets @ Patriots",       pick:"Jets -3",            odds:"-112", impliedOdds:-112 },
+        { id:"sp13", game:"Steelers @ Browns",     pick:"Browns +2.5",        odds:"-110", impliedOdds:-110 },
+        { id:"sp14", game:"Colts @ Titans",        pick:"Colts -1",           odds:"-110", impliedOdds:-110 },
+        { id:"sp15", game:"Vikings @ Packers",     pick:"Packers -2",         odds:"-112", impliedOdds:-112 },
+        { id:"sp16", game:"Raiders @ Chiefs",      pick:"Raiders +6.5",       odds:"-110", impliedOdds:-110 },
+        { id:"sp17", game:"Cowboys @ Eagles",      pick:"Cowboys +3",         odds:"-110", impliedOdds:-110 },
       ],
       longshot:[
-        { id:"ls1", game:"Raiders @ Chiefs",    pick:"Raiders ML",   odds:"+240", impliedOdds:240 },
-        { id:"ls2", game:"Cowboys @ Eagles",    pick:"Cowboys ML",   odds:"+350", impliedOdds:350 },
-        { id:"ls3", game:"Panthers @ Falcons",  pick:"Panthers ML",  odds:"+380", impliedOdds:380 },
-        { id:"ls4", game:"Giants @ Commanders", pick:"Giants ML",    odds:"+310", impliedOdds:310 },
-        { id:"ls5", game:"Broncos @ Chargers",  pick:"Broncos ML",   odds:"+420", impliedOdds:420 },
-        { id:"ls6", game:"Bears @ Lions",       pick:"Bears ML",     odds:"+290", impliedOdds:290 },
-        { id:"ls7", game:"Jets @ Patriots",     pick:"Jets ML",      odds:"+265", impliedOdds:265 },
-        { id:"ls8", game:"Raiders @ Chiefs",    pick:"Raiders +6.5", odds:"+105", impliedOdds:105 },
+        { id:"ls1",  game:"Raiders @ Chiefs",      pick:"Raiders ML",         odds:"+240", impliedOdds:240 },
+        { id:"ls2",  game:"Cowboys @ Eagles",      pick:"Cowboys ML",         odds:"+350", impliedOdds:350 },
+        { id:"ls3",  game:"Panthers @ Falcons",    pick:"Panthers ML",        odds:"+380", impliedOdds:380 },
+        { id:"ls4",  game:"Giants @ Commanders",   pick:"Giants ML",          odds:"+310", impliedOdds:310 },
+        { id:"ls5",  game:"Broncos @ Chargers",    pick:"Broncos ML",         odds:"+420", impliedOdds:420 },
+        { id:"ls6",  game:"Bears @ Lions",         pick:"Bears ML",           odds:"+460", impliedOdds:460 },
+        { id:"ls7",  game:"Jets @ Patriots",       pick:"Patriots ML",        odds:"+265", impliedOdds:265 },
+        { id:"ls8",  game:"Steelers @ Browns",     pick:"Steelers ML",        odds:"+185", impliedOdds:185 },
+        { id:"ls9",  game:"Seahawks @ Cardinals",  pick:"Cardinals ML",       odds:"+290", impliedOdds:290 },
+        { id:"ls10", game:"Saints @ Buccaneers",   pick:"Saints ML",          odds:"+175", impliedOdds:175 },
+        { id:"ls11", game:"Vikings @ Packers",     pick:"Vikings +2 1H",      odds:"+140", impliedOdds:140 },
+        { id:"ls12", game:"Colts @ Titans",        pick:"Titans ML",          odds:"+195", impliedOdds:195 },
+        { id:"ls13", game:"Patrick Mahomes",       pick:"4+ TD Passes",       odds:"+280", impliedOdds:280 },
+        { id:"ls14", game:"Bengals @ Ravens",      pick:"Bengals ML",         odds:"+210", impliedOdds:210 },
+        { id:"ls15", game:"Josh Allen",            pick:"2+ Rush TDs",        odds:"+340", impliedOdds:340 },
       ],
     },
   },
@@ -187,21 +242,123 @@ const SPORTS = {
 const LEAGUES_DATA = [
   {
     id:"lg1", sport:"nfl", name:"The Boys League", week:6,
+    inviteCode:"BOYS24", commissioner:"Joe",
+    isCommissioner:true,
     opponent:"Mike D.", opponentRecord:"6-4",
     userRecord:"7-3", userUnits:"+12.5", userRoi:"+18.4",
-    members:8,
+    settings:{
+      maxMembers:8, pickDeadline:"Sun 1PM ET", seasonWeeks:18,
+      privacy:"private", scoringType:"multiplier_odds",
+    },
+    members:[
+      { name:"Joe",      record:"7-3", units:"+12.5", roi:"+18%", streak:"W3", isYou:true,  isCommissioner:true  },
+      { name:"Dave K.",  record:"9-1", units:"+22.0", roi:"+32%", streak:"W5", isYou:false, isCommissioner:false },
+      { name:"Mike D.",  record:"6-4", units:"+4.2",  roi:"+6%",  streak:"L1", isYou:false, isCommissioner:false },
+      { name:"Chris R.", record:"5-5", units:"-1.8",  roi:"-3%",  streak:"W1", isYou:false, isCommissioner:false },
+      { name:"Tom B.",   record:"3-7", units:"-9.4",  roi:"-14%", streak:"L3", isYou:false, isCommissioner:false },
+      { name:"Alex M.",  record:"4-6", units:"-5.1",  roi:"-8%",  streak:"L2", isYou:false, isCommissioner:false },
+      { name:"Ryan S.",  record:"3-7", units:"-11.2", roi:"-17%", streak:"L4", isYou:false, isCommissioner:false },
+      { name:"Jake P.",  record:"2-8", units:"-15.8", roi:"-24%", streak:"L5", isYou:false, isCommissioner:false },
+    ],
+    // Week 6 picks awaiting grading
+    weekPicks:[
+      { member:"Joe",      picks:[
+        { slot:"Moneyline", mult:1, pick:"KC Chiefs",       odds:"-280", result:"pending" },
+        { slot:"Prop",      mult:2, pick:"Mahomes 300+ Yds",odds:"-130", result:"pending" },
+        { slot:"Over/Under",mult:3, pick:"Over 47.5",       odds:"-110", result:"W"       },
+        { slot:"Spread",    mult:4, pick:"Eagles -3",       odds:"-110", result:"W"       },
+        { slot:"Parlay",    mult:5, pick:"Raiders + Bears", odds:"+420", result:"pending" },
+      ]},
+      { member:"Mike D.",  picks:[
+        { slot:"Moneyline", mult:1, pick:"Bills ML",        odds:"-210", result:"pending" },
+        { slot:"Prop",      mult:2, pick:"Allen 2+ TDs",    odds:"-140", result:"L"       },
+        { slot:"Over/Under",mult:3, pick:"Under 44",        odds:"-110", result:"L"       },
+        { slot:"Spread",    mult:4, pick:"49ers -4.5",      odds:"-110", result:"pending" },
+        { slot:"Parlay",    mult:5, pick:"Panthers + Bears",odds:"+380", result:"pending" },
+      ]},
+      { member:"Dave K.",  picks:[
+        { slot:"Moneyline", mult:1, pick:"Eagles ML",       odds:"-165", result:"W"       },
+        { slot:"Prop",      mult:2, pick:"Hurts 2+ TDs",    odds:"+175", result:"pending" },
+        { slot:"Over/Under",mult:3, pick:"Over 48",         odds:"-115", result:"W"       },
+        { slot:"Spread",    mult:4, pick:"Bills -5",        odds:"-115", result:"W"       },
+        { slot:"Parlay",    mult:5, pick:"Cowboys + Giants",odds:"+510", result:"pending" },
+      ]},
+      { member:"Chris R.", picks:[
+        { slot:"Moneyline", mult:1, pick:"Packers ML",      odds:"-125", result:"L"       },
+        { slot:"Prop",      mult:2, pick:"Love 250+ Yds",   odds:"-115", result:"pending" },
+        { slot:"Over/Under",mult:3, pick:"Over 43",         odds:"-118", result:"L"       },
+        { slot:"Spread",    mult:4, pick:"Falcons -6",      odds:"-108", result:"W"       },
+        { slot:"Parlay",    mult:5, pick:"Raiders + Jets",  odds:"+580", result:"pending" },
+      ]},
+      { member:"Tom B.",   picks:[
+        { slot:"Moneyline", mult:1, pick:"Raiders ML",      odds:"+240", result:"L"       },
+        { slot:"Prop",      mult:2, pick:"CMC 90+ Yds",     odds:"-110", result:"pending" },
+        { slot:"Over/Under",mult:3, pick:"Under 45.5",      odds:"-110", result:"W"       },
+        { slot:"Spread",    mult:4, pick:"Chiefs -6.5",     odds:"-110", result:"pending" },
+        { slot:"Parlay",    mult:5, pick:"Browns + Cards",  odds:"+460", result:"L"       },
+      ]},
+      { member:"Alex M.",  picks:[
+        { slot:"Moneyline", mult:1, pick:"Cowboys ML",      odds:"+350", result:"L"       },
+        { slot:"Prop",      mult:2, pick:"Dak 300+ Yds",    odds:"-120", result:"L"       },
+        { slot:"Over/Under",mult:3, pick:"Over 44",         odds:"-110", result:"W"       },
+        { slot:"Spread",    mult:4, pick:"Cowboys +3",      odds:"-110", result:"L"       },
+        { slot:"Parlay",    mult:5, pick:"Panthers + Bears",odds:"+420", result:"pending" },
+      ]},
+      { member:"Ryan S.",  picks:[
+        { slot:"Moneyline", mult:1, pick:"Chargers ML",     odds:"-165", result:"W"       },
+        { slot:"Prop",      mult:2, pick:"Herbert 280+ Yds",odds:"-115", result:"pending" },
+        { slot:"Over/Under",mult:3, pick:"Under 44",        odds:"-108", result:"L"       },
+        { slot:"Spread",    mult:4, pick:"Chargers -3.5",   odds:"-110", result:"W"       },
+        { slot:"Parlay",    mult:5, pick:"Colts + Saints",  odds:"+390", result:"L"       },
+      ]},
+      { member:"Jake P.",  picks:[
+        { slot:"Moneyline", mult:1, pick:"Giants ML",       odds:"+310", result:"L"       },
+        { slot:"Prop",      mult:2, pick:"Jones 220+ Yds",  odds:"-110", result:"L"       },
+        { slot:"Over/Under",mult:3, pick:"Over 40.5",       odds:"-112", result:"pending" },
+        { slot:"Spread",    mult:4, pick:"Giants +3.5",     odds:"-110", result:"L"       },
+        { slot:"Parlay",    mult:5, pick:"Giants + Raiders",odds:"+650", result:"L"       },
+      ]},
+    ],
   },
   {
     id:"lg2", sport:"nba", name:"Hoops League", week:12,
+    inviteCode:"HOOP24", commissioner:"Dave K.",
+    isCommissioner:false,
     opponent:"Dave K.", opponentRecord:"8-4",
     userRecord:"9-3", userUnits:"+18.2", userRoi:"+22.1",
-    members:6,
+    settings:{
+      maxMembers:6, pickDeadline:"Daily 7PM ET", seasonWeeks:24,
+      privacy:"private", scoringType:"multiplier_odds",
+    },
+    members:[
+      { name:"Joe",      record:"9-3",  units:"+18.2", roi:"+22%", streak:"W4", isYou:true,  isCommissioner:false },
+      { name:"Dave K.",  record:"8-4",  units:"+15.1", roi:"+18%", streak:"W2", isYou:false, isCommissioner:true  },
+      { name:"Mike D.",  record:"7-5",  units:"+8.4",  roi:"+10%", streak:"L1", isYou:false, isCommissioner:false },
+      { name:"Chris R.", record:"6-6",  units:"+2.1",  roi:"+3%",  streak:"W1", isYou:false, isCommissioner:false },
+      { name:"Tom B.",   record:"4-8",  units:"-6.2",  roi:"-8%",  streak:"L3", isYou:false, isCommissioner:false },
+      { name:"Alex M.",  record:"3-9",  units:"-12.4", roi:"-15%", streak:"L4", isYou:false, isCommissioner:false },
+    ],
+    weekPicks:[],
   },
   {
     id:"lg3", sport:"mlb", name:"Diamond Dogs", week:8,
+    inviteCode:"DIAM24", commissioner:"Joe",
+    isCommissioner:true,
     opponent:"Chris R.", opponentRecord:"5-3",
     userRecord:"6-2", userUnits:"+9.4", userRoi:"+15.6",
-    members:6,
+    settings:{
+      maxMembers:6, pickDeadline:"Daily 12PM ET", seasonWeeks:20,
+      privacy:"invite", scoringType:"multiplier_odds",
+    },
+    members:[
+      { name:"Joe",      record:"6-2", units:"+9.4",  roi:"+16%", streak:"W2", isYou:true,  isCommissioner:true  },
+      { name:"Chris R.", record:"5-3", units:"+6.8",  roi:"+12%", streak:"W1", isYou:false, isCommissioner:false },
+      { name:"Ryan S.",  record:"4-4", units:"+1.2",  roi:"+2%",  streak:"L1", isYou:false, isCommissioner:false },
+      { name:"Jake P.",  record:"3-5", units:"-3.4",  roi:"-6%",  streak:"L2", isYou:false, isCommissioner:false },
+      { name:"Tom B.",   record:"2-6", units:"-7.8",  roi:"-13%", streak:"L4", isYou:false, isCommissioner:false },
+      { name:"Alex M.",  record:"1-7", units:"-11.2", roi:"-18%", streak:"L5", isYou:false, isCommissioner:false },
+    ],
+    weekPicks:[],
   },
 ];
 
@@ -235,86 +392,86 @@ const MATCHUP_HISTORY = [
   {
     week:1, opp:"Jake P.", result:"W", myScore:3, oppScore:2,
     myPicks:[
-      { slot:"Moneyline", mult:1, pick:"KC Chiefs", odds:"-180", result:"W" },
-      { slot:"Prop",      mult:2, pick:"Mahomes 300+ Yds", odds:"-130", result:"W" },
-      { slot:"Over/Under",mult:3, pick:"Over 47.5", odds:"-110", result:"L" },
-      { slot:"Spread",    mult:4, pick:"Eagles -3", odds:"-110", result:"W" },
-      { slot:"Parlay",    mult:5, pick:"Raiders ML + Cowboys +7", odds:"+420", result:"L" },
+      { slot:"Moneyline", mult:1, pick:"KC Chiefs", odds:"-180", impliedOdds:-180, result:"W" },
+      { slot:"Prop",      mult:2, pick:"Mahomes 300+ Yds", odds:"-130", impliedOdds:-130, result:"W" },
+      { slot:"Over/Under",mult:3, pick:"Over 47.5", odds:"-110", impliedOdds:-110, result:"L" },
+      { slot:"Spread",    mult:4, pick:"Eagles -3", odds:"-110", impliedOdds:-110, result:"W" },
+      { slot:"Parlay",    mult:5, pick:"Raiders ML + Cowboys +7", odds:"+420", impliedOdds:420, result:"L" },
     ],
     oppPicks:[
-      { slot:"Moneyline", mult:1, pick:"Bills ML", odds:"-210", result:"W" },
-      { slot:"Prop",      mult:2, pick:"Josh Allen 2+ TDs", odds:"-140", result:"L" },
-      { slot:"Over/Under",mult:3, pick:"Under 44", odds:"-110", result:"W" },
-      { slot:"Spread",    mult:4, pick:"49ers -4.5", odds:"-110", result:"L" },
-      { slot:"Parlay",    mult:5, pick:"Bears ML + Panthers ML", odds:"+380", result:"L" },
+      { slot:"Moneyline", mult:1, pick:"Bills ML", odds:"-210", impliedOdds:-210, result:"W" },
+      { slot:"Prop",      mult:2, pick:"Josh Allen 2+ TDs", odds:"-140", impliedOdds:-140, result:"L" },
+      { slot:"Over/Under",mult:3, pick:"Under 44", odds:"-110", impliedOdds:-110, result:"W" },
+      { slot:"Spread",    mult:4, pick:"49ers -4.5", odds:"-110", impliedOdds:-110, result:"L" },
+      { slot:"Parlay",    mult:5, pick:"Bears ML + Panthers ML", odds:"+380", impliedOdds:380, result:"L" },
     ],
   },
   {
     week:2, opp:"Ryan S.", result:"W", myScore:4, oppScore:1,
     myPicks:[
-      { slot:"Moneyline", mult:1, pick:"Eagles ML", odds:"-165", result:"W" },
-      { slot:"Prop",      mult:2, pick:"Jalen Hurts 2+ Rush TDs", odds:"+175", result:"W" },
-      { slot:"Over/Under",mult:3, pick:"Over 48", odds:"-115", result:"W" },
-      { slot:"Spread",    mult:4, pick:"Bills -5", odds:"-115", result:"W" },
-      { slot:"Parlay",    mult:5, pick:"Cowboys ML + Giants ML", odds:"+510", result:"L" },
+      { slot:"Moneyline", mult:1, pick:"Eagles ML", odds:"-165", impliedOdds:-165, result:"W" },
+      { slot:"Prop",      mult:2, pick:"Jalen Hurts 2+ Rush TDs", odds:"+175", impliedOdds:175, result:"W" },
+      { slot:"Over/Under",mult:3, pick:"Over 48", odds:"-115", impliedOdds:-115, result:"W" },
+      { slot:"Spread",    mult:4, pick:"Bills -5", odds:"-115", impliedOdds:-115, result:"W" },
+      { slot:"Parlay",    mult:5, pick:"Cowboys ML + Giants ML", odds:"+510", impliedOdds:510, result:"L" },
     ],
     oppPicks:[
-      { slot:"Moneyline", mult:1, pick:"Cowboys ML", odds:"+350", result:"L" },
-      { slot:"Prop",      mult:2, pick:"Dak 300+ Yds", odds:"-120", result:"L" },
-      { slot:"Over/Under",mult:3, pick:"Under 45.5", odds:"-110", result:"W" },
-      { slot:"Spread",    mult:4, pick:"Cowboys +3", odds:"-110", result:"L" },
-      { slot:"Parlay",    mult:5, pick:"Panthers ML + Broncos ML", odds:"+640", result:"L" },
+      { slot:"Moneyline", mult:1, pick:"Cowboys ML", odds:"+350", impliedOdds:350, result:"L" },
+      { slot:"Prop",      mult:2, pick:"Dak 300+ Yds", odds:"-120", impliedOdds:-120, result:"L" },
+      { slot:"Over/Under",mult:3, pick:"Under 45.5", odds:"-110", impliedOdds:-110, result:"W" },
+      { slot:"Spread",    mult:4, pick:"Cowboys +3", odds:"-110", impliedOdds:-110, result:"L" },
+      { slot:"Parlay",    mult:5, pick:"Panthers ML + Broncos ML", odds:"+640", impliedOdds:640, result:"L" },
     ],
   },
   {
     week:3, opp:"Alex M.", result:"L", myScore:2, oppScore:3,
     myPicks:[
-      { slot:"Moneyline", mult:1, pick:"Packers ML", odds:"-125", result:"L" },
-      { slot:"Prop",      mult:2, pick:"Jordan Love 250+ Yds", odds:"-115", result:"W" },
-      { slot:"Over/Under",mult:3, pick:"Over 43", odds:"-118", result:"L" },
-      { slot:"Spread",    mult:4, pick:"49ers -4.5", odds:"-110", result:"W" },
-      { slot:"Parlay",    mult:5, pick:"Jets ML + Raiders ML", odds:"+580", result:"L" },
+      { slot:"Moneyline", mult:1, pick:"Packers ML", odds:"-125", impliedOdds:-125, result:"L" },
+      { slot:"Prop",      mult:2, pick:"Jordan Love 250+ Yds", odds:"-115", impliedOdds:-115, result:"W" },
+      { slot:"Over/Under",mult:3, pick:"Over 43", odds:"-118", impliedOdds:-118, result:"L" },
+      { slot:"Spread",    mult:4, pick:"49ers -4.5", odds:"-110", impliedOdds:-110, result:"W" },
+      { slot:"Parlay",    mult:5, pick:"Jets ML + Raiders ML", odds:"+580", impliedOdds:580, result:"L" },
     ],
     oppPicks:[
-      { slot:"Moneyline", mult:1, pick:"Vikings ML", odds:"+105", result:"W" },
-      { slot:"Prop",      mult:2, pick:"Jefferson 100+ Yds", odds:"-130", result:"W" },
-      { slot:"Over/Under",mult:3, pick:"Under 44", odds:"-110", result:"W" },
-      { slot:"Spread",    mult:4, pick:"Vikings +2", odds:"-110", result:"W" },
-      { slot:"Parlay",    mult:5, pick:"Bears ML + Panthers ML", odds:"+420", result:"L" },
+      { slot:"Moneyline", mult:1, pick:"Vikings ML", odds:"+105", impliedOdds:105, result:"W" },
+      { slot:"Prop",      mult:2, pick:"Jefferson 100+ Yds", odds:"-130", impliedOdds:-130, result:"W" },
+      { slot:"Over/Under",mult:3, pick:"Under 44", odds:"-110", impliedOdds:-110, result:"W" },
+      { slot:"Spread",    mult:4, pick:"Vikings +2", odds:"-110", impliedOdds:-110, result:"W" },
+      { slot:"Parlay",    mult:5, pick:"Bears ML + Panthers ML", odds:"+420", impliedOdds:420, result:"L" },
     ],
   },
   {
     week:4, opp:"Chris R.", result:"W", myScore:3, oppScore:2,
     myPicks:[
-      { slot:"Moneyline", mult:1, pick:"Bills ML", odds:"-210", result:"W" },
-      { slot:"Prop",      mult:2, pick:"Josh Allen 35+ Attempts", odds:"-115", result:"L" },
-      { slot:"Over/Under",mult:3, pick:"Over 48", odds:"-115", result:"W" },
-      { slot:"Spread",    mult:4, pick:"KC Chiefs -6.5", odds:"-110", result:"W" },
-      { slot:"Parlay",    mult:5, pick:"Raiders ML + Giants ML", odds:"+490", result:"L" },
+      { slot:"Moneyline", mult:1, pick:"Bills ML", odds:"-210", impliedOdds:-210, result:"W" },
+      { slot:"Prop",      mult:2, pick:"Josh Allen 35+ Attempts", odds:"-115", impliedOdds:-115, result:"L" },
+      { slot:"Over/Under",mult:3, pick:"Over 48", odds:"-115", impliedOdds:-115, result:"W" },
+      { slot:"Spread",    mult:4, pick:"KC Chiefs -6.5", odds:"-110", impliedOdds:-110, result:"W" },
+      { slot:"Parlay",    mult:5, pick:"Raiders ML + Giants ML", odds:"+490", impliedOdds:490, result:"L" },
     ],
     oppPicks:[
-      { slot:"Moneyline", mult:1, pick:"Rams ML", odds:"+115", result:"L" },
-      { slot:"Prop",      mult:2, pick:"Kupp 80+ Yds", odds:"-125", result:"W" },
-      { slot:"Over/Under",mult:3, pick:"Under 45.5", odds:"-110", result:"W" },
-      { slot:"Spread",    mult:4, pick:"Rams +4.5", odds:"-110", result:"L" },
-      { slot:"Parlay",    mult:5, pick:"Panthers ML + Bears ML", odds:"+520", result:"L" },
+      { slot:"Moneyline", mult:1, pick:"Rams ML", odds:"+115", impliedOdds:115, result:"L" },
+      { slot:"Prop",      mult:2, pick:"Kupp 80+ Yds", odds:"-125", impliedOdds:-125, result:"W" },
+      { slot:"Over/Under",mult:3, pick:"Under 45.5", odds:"-110", impliedOdds:-110, result:"W" },
+      { slot:"Spread",    mult:4, pick:"Rams +4.5", odds:"-110", impliedOdds:-110, result:"L" },
+      { slot:"Parlay",    mult:5, pick:"Panthers ML + Bears ML", odds:"+520", impliedOdds:520, result:"L" },
     ],
   },
   {
     week:5, opp:"Tom B.", result:"L", myScore:2, oppScore:3,
     myPicks:[
-      { slot:"Moneyline", mult:1, pick:"Eagles ML", odds:"-155", result:"W" },
-      { slot:"Prop",      mult:2, pick:"Hurts Over 1.5 TDs", odds:"-140", result:"L" },
-      { slot:"Over/Under",mult:3, pick:"Over 44", odds:"-110", result:"L" },
-      { slot:"Spread",    mult:4, pick:"Cowboys +7", odds:"-110", result:"W" },
-      { slot:"Parlay",    mult:5, pick:"Jets ML + Broncos ML", odds:"+610", result:"L" },
+      { slot:"Moneyline", mult:1, pick:"Eagles ML", odds:"-155", impliedOdds:-155, result:"W" },
+      { slot:"Prop",      mult:2, pick:"Hurts Over 1.5 TDs", odds:"-140", impliedOdds:-140, result:"L" },
+      { slot:"Over/Under",mult:3, pick:"Over 44", odds:"-110", impliedOdds:-110, result:"L" },
+      { slot:"Spread",    mult:4, pick:"Cowboys +7", odds:"-110", impliedOdds:-110, result:"W" },
+      { slot:"Parlay",    mult:5, pick:"Jets ML + Broncos ML", odds:"+610", impliedOdds:610, result:"L" },
     ],
     oppPicks:[
-      { slot:"Moneyline", mult:1, pick:"49ers ML", odds:"-195", result:"W" },
-      { slot:"Prop",      mult:2, pick:"CMC 90+ Rush Yds", odds:"-110", result:"W" },
-      { slot:"Over/Under",mult:3, pick:"Over 45.5", odds:"-115", result:"W" },
-      { slot:"Spread",    mult:4, pick:"49ers -4.5", odds:"-110", result:"L" },
-      { slot:"Parlay",    mult:5, pick:"Raiders ML + Panthers ML", odds:"+540", result:"L" },
+      { slot:"Moneyline", mult:1, pick:"49ers ML", odds:"-195", impliedOdds:-195, result:"W" },
+      { slot:"Prop",      mult:2, pick:"CMC 90+ Rush Yds", odds:"-110", impliedOdds:-110, result:"W" },
+      { slot:"Over/Under",mult:3, pick:"Over 45.5", odds:"-115", impliedOdds:-115, result:"W" },
+      { slot:"Spread",    mult:4, pick:"49ers -4.5", odds:"-110", impliedOdds:-110, result:"L" },
+      { slot:"Parlay",    mult:5, pick:"Raiders ML + Panthers ML", odds:"+540", impliedOdds:540, result:"L" },
     ],
   },
 ];
@@ -376,6 +533,22 @@ function calcParlay(picks,ls,slots){
   return{american:toAmerican(d),payout:Math.round((d-1)*100)};
 }
 
+// ─── SCORING ────────────────────────────────────────────────────
+// Points = Slot Multiplier × Odds Decimal (if win), 0 if loss
+function oddsDecimal(impliedOdds) {
+  // For negative odds: 100/abs. For positive: odds/100
+  if(impliedOdds < 0) return parseFloat((100/Math.abs(impliedOdds)).toFixed(2));
+  return parseFloat((impliedOdds/100).toFixed(2));
+}
+function calcPickPoints(mult, impliedOdds, result) {
+  if(result !== "W") return 0;
+  return parseFloat((mult * oddsDecimal(impliedOdds) * 10).toFixed(1));
+}
+function calcMatchupScore(picks) {
+  // picks = array of {mult, impliedOdds, result}
+  return picks.reduce((sum,p) => sum + calcPickPoints(p.mult, p.impliedOdds, p.result), 0).toFixed(1);
+}
+
 const pad=n=>String(n).padStart(2,"0");
 const acColor=i=>({D:"#5E5CE6",M:"#0A84FF",T:"#FF453A",C:"#30D158",A:"#FF9F0A",R:"#FF375F"}[i]||IOS.purple);
 const rarityColor=r=>r==="legendary"?IOS.pink:r==="rare"?IOS.purple:IOS.green;
@@ -385,6 +558,8 @@ const polarToCart=(cx,cy,r,deg)=>{const rad=(deg-90)*Math.PI/180;return{x:cx+r*M
 
 export default function App() {
   const [screen,      setScreen]      = useState("home");
+  const [user,        setUser]        = useState(null);
+  const [authScreen,  setAuthScreen]  = useState("login");
   const [anim,        setAnim]        = useState(false);
   const [timeLeft,    setTimeLeft]    = useState({h:1,m:47,s:32});
   const [submitted,   setSubmitted]   = useState(false);
@@ -399,8 +574,16 @@ export default function App() {
   const SLOTS = sport.slots;
   const BETS = sport.bets;
 
-  const [picks,       setPicks]       = useState({ml:null,prop:null,ou:null,spread:null});
-  const [lsBets,      setLsBets]      = useState([]);
+  const [picks,        setPicks]        = useState({ml:null,prop:null,ou:null,spread:null});
+  const [lsBets,       setLsBets]       = useState([]);
+
+  // Grading state — weekPicks per league, stored locally
+  const [gradingData,  setGradingData]  = useState(() => {
+    const init = {};
+    LEAGUES_DATA.forEach(lg => { init[lg.id] = JSON.parse(JSON.stringify(lg.weekPicks||[])); });
+    return init;
+  });
+  const currentWeekPicks = gradingData[activeLeagueId] || [];
   const [activeSlot,  setActiveSlot]  = useState(null);
   const [myPUs,       setMyPUs]       = useState([POWER_UPS[1],POWER_UPS[4],POWER_UPS[6]]);
   const [showPUModal, setShowPUModal] = useState(null); // {context:"picks"|"matchup", slotId, pickIdx}
@@ -413,11 +596,26 @@ export default function App() {
   const [wonPU,       setWonPU]       = useState(null);
   const [showWin,     setShowWin]     = useState(false);
   const [showTopScorer, setShowTopScorer] = useState(false);
+  const [pickSearch,   setPickSearch]   = useState("");
+  const [commishTab,   setCommishTab]   = useState("grade"); // grade | members | settings
+  const [showLeaguesList, setShowLeaguesList] = useState(false);
+
+  const gradePickResult = (leagueId, memberIdx, pickIdx, result) => {
+    setGradingData(prev => {
+      const updated = JSON.parse(JSON.stringify(prev));
+      if(updated[leagueId]?.[memberIdx]?.picks?.[pickIdx]) {
+        updated[leagueId][memberIdx].picks[pickIdx].result = result;
+      }
+      return updated;
+    });
+  };
   const [savedPicks,  setSavedPicks]  = useState(null);
   const [selectedMatchup, setSelectedMatchup] = useState(null); // week number of selected past matchup // locked picks for the week
   const chatRef=useRef(null);
 
   useEffect(()=>{
+    supabase.auth.getSession().then(({data:{session}})=>setUser(session?.user??null));
+    supabase.auth.onAuthStateChange((_e,session)=>setUser(session?.user??null));
     setTimeout(()=>setAnim(true),80);
     const t=setInterval(()=>setTimeLeft(p=>{let{h,m,s}=p;s--;if(s<0){s=59;m--;}if(m<0){m=59;h--;}if(h<0){h=0;m=0;s=0;}return{h,m,s};}),1000);
     // Load saved picks from localStorage
@@ -632,6 +830,11 @@ export default function App() {
     .sheet-hdr-title{font-size:17px;font-weight:600;letter-spacing:-0.3px;}
     .sheet-hdr-sub{font-size:13px;color:${IOS.label3};margin-top:2px;}
     .sheet-done{font-size:17px;font-weight:600;color:${IOS.blue};cursor:pointer;padding:4px 0;}
+    .sheet-search-wrap{padding:10px 16px;background:#1C1C1E;border-bottom:0.5px solid ${IOS.sep};position:sticky;top:60px;z-index:1;}
+    .sheet-search{width:100%;background:rgba(255,255,255,0.08);border:none;border-radius:10px;padding:9px 14px 9px 36px;font-family:'Manrope',sans-serif;font-size:15px;color:#fff;outline:none;}
+    .sheet-search::placeholder{color:rgba(255,255,255,0.3);}
+    .sheet-search-icon{position:absolute;left:28px;top:50%;transform:translateY(-50%);font-size:14px;color:rgba(255,255,255,0.3);pointer-events:none;}
+    .sheet-count{font-size:11px;color:${IOS.label3};padding:8px 20px 4px;}
     .sheet-ls-bar{display:flex;align-items:center;justify-content:space-between;padding:10px 20px;background:rgba(255,55,95,0.08);border-bottom:0.5px solid rgba(255,55,95,0.15);}
     .bet-row{display:flex;align-items:center;padding:14px 20px;border-bottom:0.5px solid ${IOS.sep};cursor:pointer;min-height:64px;}
     .bet-row:last-child{border-bottom:none;}
@@ -831,7 +1034,38 @@ export default function App() {
     <div style={{minHeight:"100vh",background:"#111",display:"flex",justifyContent:"center",alignItems:"flex-start"}}>
       <style>{css}</style>
 
-      <div className="phone">
+      {/* ══ AUTH SCREEN ══ */}
+      {!user && (
+        <div style={{width:390,minHeight:"100vh",background:"#09090f",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"40px 32px",fontFamily:"'Manrope',sans-serif"}}>
+          <div style={{fontSize:38,fontWeight:800,letterSpacing:-1,color:"#60a5fa",marginBottom:6}}>LINEDUP</div>
+          <div style={{fontSize:14,color:"rgba(255,255,255,0.4)",marginBottom:48}}>Fantasy football for sports bettors</div>
+          <div style={{display:"flex",background:"#1C1C1E",borderRadius:12,padding:2,marginBottom:28,width:"100%"}}>
+            {["login","signup"].map(t=>(
+              <div key={t} onClick={()=>setAuthScreen(t)} style={{flex:1,textAlign:"center",padding:"10px",borderRadius:10,fontSize:14,fontWeight:700,cursor:"pointer",background:authScreen===t?"#2C2C2E":"transparent",color:authScreen===t?"#fff":"rgba(255,255,255,0.4)",transition:"all .2s"}}>{t==="login"?"Sign In":"Sign Up"}</div>
+            ))}
+          </div>
+          <input id="auth-email" type="email" placeholder="Email" style={{width:"100%",background:"#1C1C1E",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"14px 16px",color:"#fff",fontSize:15,fontFamily:"'Manrope',sans-serif",outline:"none",marginBottom:12}}/>
+          <input id="auth-password" type="password" placeholder="Password" style={{width:"100%",background:"#1C1C1E",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"14px 16px",color:"#fff",fontSize:15,fontFamily:"'Manrope',sans-serif",outline:"none",marginBottom:24}}/>
+          <button onClick={async()=>{
+            const email=document.getElementById("auth-email").value;
+            const password=document.getElementById("auth-password").value;
+            if(authScreen==="login"){
+              const {error}=await supabase.auth.signInWithPassword({email,password});
+              if(error)alert(error.message);
+            } else {
+              const {error}=await supabase.auth.signUp({email,password});
+              if(error)alert(error.message);
+              else alert("Account created! Check your email to confirm.");
+            }
+          }} style={{width:"100%",background:"#0A84FF",color:"#fff",border:"none",borderRadius:12,padding:"16px",fontSize:16,fontWeight:700,cursor:"pointer",fontFamily:"'Manrope',sans-serif",marginBottom:16}}>
+            {authScreen==="login"?"Sign In":"Create Account"}
+          </button>
+          {authScreen==="login"&&<div style={{fontSize:13,color:"rgba(255,255,255,0.35)",cursor:"pointer"}} onClick={()=>setAuthScreen("signup")}>No account? Sign up</div>}
+          {authScreen==="signup"&&<div style={{fontSize:13,color:"rgba(255,255,255,0.35)",cursor:"pointer"}} onClick={()=>setAuthScreen("login")}>Already have an account? Sign in</div>}
+        </div>
+      )}
+
+      {user && <div className="phone">
 
         {/* ══ POWER-UP MODAL ══ */}
         {showPUModal && (
@@ -1049,7 +1283,10 @@ export default function App() {
             </div>
             <div className="body">
               <div className="nav-header large" style={{padding:"0 20px 14px"}}>
-                <div className="nav-title-large">LINEDUP</div>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+                  <div className="nav-title-large">LINEDUP</div>
+                  <div onClick={()=>setScreen("leagues")} style={{fontSize:13,fontWeight:600,color:IOS.blue,cursor:"pointer"}}>All Leagues</div>
+                </div>
                 {/* League toggle */}
                 <div style={{display:"flex",gap:6,marginTop:10,marginBottom:2,overflowX:"auto",paddingBottom:2}}>
                   {LEAGUES_DATA.map(lg=>{
@@ -1243,7 +1480,7 @@ export default function App() {
                       <div className="sheet-hdr-title">{SLOTS.find(s=>s.id===activeSlot)?.label}</div>
                       <div className="sheet-hdr-sub">{activeSlot==="longshot"?`${lsBets.length} selected · compounds into your 5× Parlay leg`:`${SLOTS.find(s=>s.id===activeSlot)?.mult}× multiplier`}</div>
                     </div>
-                    <div className="sheet-done" onClick={()=>setActiveSlot(null)}>Done</div>
+                    <div className="sheet-done" onClick={()=>{setActiveSlot(null);setPickSearch("");}}>Done</div>
                   </div>
                   {activeSlot==="longshot"&&lsBets.length>=2&&(
                     <div className="sheet-ls-bar">
@@ -1251,14 +1488,43 @@ export default function App() {
                       <span style={{fontSize:20,fontWeight:700,color:IOS.pink,letterSpacing:-0.5}}>{lsO?.american}</span>
                     </div>
                   )}
+                  {/* Search bar */}
+                  <div className="sheet-search-wrap" style={{top:activeSlot==="longshot"&&lsBets.length>=2?104:60}}>
+                    <div style={{position:"relative"}}>
+                      <span className="sheet-search-icon">🔍</span>
+                      <input
+                        className="sheet-search"
+                        placeholder={`Search teams, players, matchups...`}
+                        value={pickSearch}
+                        onChange={e=>setPickSearch(e.target.value)}
+                        autoFocus={false}
+                      />
+                      {pickSearch&&<span onClick={()=>setPickSearch("")} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",fontSize:14,color:"rgba(255,255,255,0.4)",cursor:"pointer"}}>✕</span>}
+                    </div>
+                  </div>
+                  {/* Result count */}
+                  {pickSearch&&(
+                    <div className="sheet-count">
+                      {(BETS[activeSlot]||[]).filter(b=>{const q=pickSearch.toLowerCase();return b.game.toLowerCase().includes(q)||b.pick.toLowerCase().includes(q)||b.odds.includes(q);}).length} results for "{pickSearch}"
+                    </div>
+                  )}
                   {BETS[activeSlot]?.map(bet=>{
                     const pos=!bet.odds.startsWith("-");
                     const cur=activeSlot==="longshot"?lsBets.find(b=>b.id===bet.id):picks[activeSlot]?.id===bet.id;
+                    const slot=SLOTS.find(s=>s.id===activeSlot);
+                    const pts=slot ? calcPickPoints(slot.mult, bet.impliedOdds, "W") : 0;
+                    // Filter by search
+                    const q=pickSearch.toLowerCase().trim();
+                    if(q&&!bet.game.toLowerCase().includes(q)&&!bet.pick.toLowerCase().includes(q)&&!bet.odds.includes(q)) return null;
                     return (
                       <div key={bet.id} className="bet-row" style={cur?{background:"rgba(10,132,255,0.06)"}:{}} onClick={()=>selectBet(activeSlot,bet)}>
                         <div className="bet-row-left">
                           <div className="bet-row-game">{bet.game}</div>
                           <div className="bet-row-pick">{bet.pick}</div>
+                          <div style={{marginTop:5,display:"inline-flex",alignItems:"center",gap:4,background:"rgba(48,209,88,0.1)",border:"1px solid rgba(48,209,88,0.2)",borderRadius:6,padding:"2px 8px"}}>
+                            <span style={{fontSize:10,fontWeight:700,color:IOS.green}}>+{pts} pts if win</span>
+                            <span style={{fontSize:9,color:"rgba(48,209,88,0.5)"}}>({slot?.mult}× · {bet.odds})</span>
+                          </div>
                         </div>
                         <div className="bet-row-right">
                           <div className="bet-row-odds" style={{color:pos?IOS.green:IOS.blue}}>{bet.odds}</div>
@@ -1559,6 +1825,286 @@ export default function App() {
           </>
         )}
 
+        {/* ══ LEAGUES LIST ══ */}
+        {screen==="leagues"&&(
+          <>
+            <div className="status-bar">
+              <div className="status-time">{pad(new Date().getHours())}:{pad(new Date().getMinutes())}</div>
+              <div className="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div>
+            </div>
+            <div className="body">
+              <div style={{padding:"6px 20px 18px",display:"flex",alignItems:"flex-end",justifyContent:"space-between"}}>
+                <div>
+                  <div style={{fontSize:34,fontWeight:800,letterSpacing:-1,color:"#fff",lineHeight:1.05}}>My Leagues</div>
+                  <div style={{fontSize:14,fontWeight:500,color:IOS.label3,marginTop:3}}>{LEAGUES_DATA.length} active leagues</div>
+                </div>
+                <div style={{background:IOS.blue,borderRadius:10,padding:"8px 14px",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>+ New</div>
+              </div>
+
+              {/* League cards */}
+              {LEAGUES_DATA.map(lg=>{
+                const sp = SPORTS[lg.sport];
+                const isActive = activeLeagueId === lg.id;
+                const myMember = lg.members.find(m=>m.isYou);
+                const pendingPicks = (gradingData[lg.id]||[]).reduce((acc,m)=>acc+m.picks.filter(p=>p.result==="pending").length,0);
+                return (
+                  <div key={lg.id} style={{margin:"0 16px 12px",background:IOS.bg2,borderRadius:20,overflow:"hidden",border:`1px solid ${isActive?sp.color+"50":"rgba(255,255,255,0.07)"}`,cursor:"pointer"}}
+                    onClick={()=>{setActiveLeagueId(lg.id);setPicks({ml:null,prop:null,ou:null,spread:null});setLsBets([]);}}>
+                    {/* Sport accent bar */}
+                    <div style={{height:3,background:`linear-gradient(90deg,${sp.color},${sp.color}80)`}}/>
+                    <div style={{padding:"16px 18px"}}>
+                      {/* Top row */}
+                      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:12}}>
+                        <div>
+                          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                            <span style={{fontSize:18}}>{sp.icon}</span>
+                            <div style={{fontSize:18,fontWeight:800,letterSpacing:-0.5,color:"#fff"}}>{lg.name}</div>
+                          </div>
+                          <div style={{fontSize:12,color:IOS.label3}}>{sp.label} · Wk {lg.week} · {lg.members.length} members</div>
+                        </div>
+                        <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
+                          {lg.isCommissioner&&<div style={{background:"rgba(255,214,10,0.15)",border:"1px solid rgba(255,214,10,0.3)",borderRadius:6,padding:"2px 8px",fontSize:10,fontWeight:700,color:IOS.yellow}}>⚙️ COMMISH</div>}
+                          {isActive&&<div style={{background:`${sp.color}20`,border:`1px solid ${sp.color}40`,borderRadius:6,padding:"2px 8px",fontSize:10,fontWeight:700,color:sp.color}}>● ACTIVE</div>}
+                        </div>
+                      </div>
+                      {/* Stats row */}
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:1,background:"rgba(255,255,255,0.05)",borderRadius:10,overflow:"hidden",marginBottom:12}}>
+                        {[{l:"Record",v:myMember?.record,c:sp.color},{l:"ROI",v:myMember?.roi,c:IOS.green},{l:"Streak",v:myMember?.streak,c:myMember?.streak?.startsWith("W")?IOS.green:IOS.red}].map((s,i)=>(
+                          <div key={i} style={{background:IOS.bg3,padding:"10px 8px",textAlign:"center"}}>
+                            <div style={{fontSize:16,fontWeight:800,letterSpacing:-0.3,color:s.c,marginBottom:2}}>{s.v}</div>
+                            <div style={{fontSize:9,fontWeight:600,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3}}>{s.l}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {/* Bottom row */}
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                        <div style={{fontSize:12,color:IOS.label3}}>vs {lg.opponent} this week</div>
+                        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                          {pendingPicks>0&&lg.isCommissioner&&(
+                            <div style={{background:"rgba(255,159,10,0.15)",border:"1px solid rgba(255,159,10,0.3)",borderRadius:6,padding:"3px 8px",fontSize:10,fontWeight:700,color:IOS.orange}}>{pendingPicks} to grade</div>
+                          )}
+                          <div onClick={e=>{e.stopPropagation();setActiveLeagueId(lg.id);setScreen(lg.isCommissioner?"commissioner":"league");}} style={{background:IOS.fill2,borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:600,color:IOS.blue,cursor:"pointer"}}>
+                            {lg.isCommissioner?"Commish ⚙️":"View →"}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Join league */}
+              <div style={{margin:"4px 16px 16px",background:IOS.bg2,borderRadius:16,padding:"16px 18px",border:"1.5px dashed rgba(255,255,255,0.1)",cursor:"pointer",display:"flex",alignItems:"center",gap:14}}>
+                <div style={{width:44,height:44,borderRadius:12,background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>🔗</div>
+                <div>
+                  <div style={{fontSize:15,fontWeight:700,color:"#fff",marginBottom:2}}>Join a League</div>
+                  <div style={{fontSize:12,color:IOS.label3}}>Enter an invite code from a friend</div>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* ══ COMMISSIONER ══ */}
+        {screen==="commissioner"&&(
+          <>
+            <div className="status-bar">
+              <div className="status-time">{pad(new Date().getHours())}:{pad(new Date().getMinutes())}</div>
+              <div className="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div>
+            </div>
+            <div className="body">
+              {/* Header */}
+              <div style={{padding:"6px 20px 0",display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
+                <button onClick={()=>setScreen("leagues")} style={{background:IOS.fill2,border:"none",borderRadius:10,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:17,flexShrink:0}}>‹</button>
+                <div>
+                  <div style={{fontSize:17,fontWeight:700,letterSpacing:-0.3,color:"#fff"}}>{activeLeague.name}</div>
+                  <div style={{fontSize:12,color:IOS.yellow}}>⚙️ Commissioner Panel</div>
+                </div>
+              </div>
+
+              {/* Commish tabs */}
+              <div style={{display:"flex",background:IOS.bg3,borderRadius:12,padding:2,margin:"0 16px 16px",gap:2}}>
+                {[{id:"grade",l:"Grade Picks"},{id:"members",l:"Members"},{id:"settings",l:"Settings"}].map(t=>(
+                  <div key={t.id} onClick={()=>setCommishTab(t.id)} style={{flex:1,textAlign:"center",padding:"8px 4px",borderRadius:10,fontSize:12,fontWeight:700,cursor:"pointer",transition:"all .15s",background:commishTab===t.id?IOS.bg2:"transparent",color:commishTab===t.id?"#fff":IOS.label3,boxShadow:commishTab===t.id?"0 1px 3px rgba(0,0,0,0.4)":"none"}}>{t.l}</div>
+                ))}
+              </div>
+
+              {/* GRADE PICKS tab */}
+              {commishTab==="grade"&&(
+                <>
+                  <div style={{padding:"0 20px 10px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                    <div style={{fontSize:13,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3}}>Week {activeLeague.week} · All Picks</div>
+                    <div style={{fontSize:12,color:IOS.orange,fontWeight:600}}>{(gradingData[activeLeagueId]||[]).reduce((a,m)=>a+m.picks.filter(p=>p.result==="pending").length,0)} pending</div>
+                  </div>
+
+                  {(gradingData[activeLeagueId]||[]).map((memberData, mIdx)=>{
+                    const slotColors={Moneyline:IOS.blue,Prop:IOS.yellow,"Over/Under":IOS.orange,Spread:IOS.green,Parlay:IOS.pink};
+                    const memberTotal = memberData.picks.filter(p=>p.result!=="pending").reduce((sum,p)=>{
+                      if(p.result!=="W") return sum;
+                      const dec = p.impliedOdds ? (p.impliedOdds>0?p.impliedOdds/100:100/Math.abs(p.impliedOdds)) : 0.91;
+                      return sum + parseFloat((p.mult*dec*10).toFixed(1));
+                    },0).toFixed(1);
+                    return (
+                      <div key={mIdx} style={{margin:"0 16px 12px",background:IOS.bg2,borderRadius:14,overflow:"hidden",border:"1px solid rgba(255,255,255,0.07)"}}>
+                        {/* Member header */}
+                        <div style={{padding:"12px 14px",borderBottom:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.02)"}}>
+                          <div>
+                            <div style={{fontSize:15,fontWeight:700,color:memberData.member==="Joe"?IOS.blue:"#fff"}}>{memberData.member}{memberData.member==="Joe"?" (You)":""}</div>
+                            <div style={{fontSize:11,color:IOS.label3,marginTop:1}}>Wk {activeLeague.week} · {memberData.picks.filter(p=>p.result!=="pending").length}/5 graded</div>
+                          </div>
+                          <div style={{textAlign:"right"}}>
+                            <div style={{fontSize:16,fontWeight:800,color:IOS.green,letterSpacing:-0.3}}>{memberTotal}pts</div>
+                            <div style={{fontSize:10,color:IOS.label3}}>so far</div>
+                          </div>
+                        </div>
+
+                        {/* Pick rows */}
+                        {memberData.picks.map((pick, pIdx)=>{
+                          const col=slotColors[pick.slot]||IOS.blue;
+                          const isPending=pick.result==="pending";
+                          return (
+                            <div key={pIdx} style={{padding:"11px 14px",borderBottom:pIdx<memberData.picks.length-1?`0.5px solid ${IOS.sep}`:"none",background:isPending?"rgba(255,159,10,0.03)":"transparent"}}>
+                              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                                <div style={{flex:1,minWidth:0}}>
+                                  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}>
+                                    <div style={{fontSize:10,fontWeight:700,color:col,background:`${col}15`,padding:"1px 6px",borderRadius:4}}>{pick.mult}× {pick.slot}</div>
+                                    {isPending&&<div style={{fontSize:9,fontWeight:700,color:IOS.orange,background:"rgba(255,159,10,0.12)",padding:"1px 6px",borderRadius:4}}>PENDING</div>}
+                                  </div>
+                                  <div style={{fontSize:13,fontWeight:600,color:"#fff",marginBottom:2}}>{pick.pick}</div>
+                                  <div style={{fontSize:11,color:IOS.label3}}>{pick.odds}</div>
+                                </div>
+                                {/* Grade buttons */}
+                                <div style={{display:"flex",gap:6,flexShrink:0,marginLeft:10}}>
+                                  <button
+                                    onClick={()=>gradePickResult(activeLeagueId,mIdx,pIdx,"W")}
+                                    style={{padding:"7px 14px",borderRadius:8,border:"none",background:pick.result==="W"?IOS.green:"rgba(48,209,88,0.12)",color:pick.result==="W"?"#000":IOS.green,fontSize:12,fontWeight:700,cursor:"pointer",transition:"all .15s"}}
+                                  >✓ Win</button>
+                                  <button
+                                    onClick={()=>gradePickResult(activeLeagueId,mIdx,pIdx,"L")}
+                                    style={{padding:"7px 14px",borderRadius:8,border:"none",background:pick.result==="L"?IOS.red:"rgba(255,69,58,0.12)",color:pick.result==="L"?"#fff":IOS.red,fontSize:12,fontWeight:700,cursor:"pointer",transition:"all .15s"}}
+                                  >✗ Loss</button>
+                                  {pick.result!=="pending"&&(
+                                    <button
+                                      onClick={()=>gradePickResult(activeLeagueId,mIdx,pIdx,"pending")}
+                                      style={{padding:"7px 10px",borderRadius:8,border:"1px solid rgba(255,255,255,0.1)",background:"transparent",color:IOS.label3,fontSize:12,fontWeight:700,cursor:"pointer"}}
+                                    >↩</button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+
+              {/* MEMBERS tab */}
+              {commishTab==="members"&&(
+                <>
+                  <div style={{padding:"0 20px 10px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                    <div style={{fontSize:13,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3}}>{activeLeague.members.length} / {activeLeague.settings.maxMembers} members</div>
+                    <div style={{fontSize:12,fontWeight:600,color:IOS.blue,cursor:"pointer"}}>+ Invite</div>
+                  </div>
+                  <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:14,overflow:"hidden"}}>
+                    {activeLeague.members.map((m,i)=>(
+                      <div key={i} style={{display:"flex",alignItems:"center",padding:"13px 16px",borderBottom:i<activeLeague.members.length-1?`0.5px solid ${IOS.sep}`:"none"}}>
+                        <div style={{width:36,height:36,borderRadius:50,background:m.isYou?`linear-gradient(135deg,${IOS.blue},${IOS.indigo})`:`linear-gradient(135deg,${IOS.bg3},${IOS.gray3})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#fff",marginRight:12,flexShrink:0}}>{m.name[0]}</div>
+                        <div style={{flex:1}}>
+                          <div style={{display:"flex",alignItems:"center",gap:6}}>
+                            <div style={{fontSize:15,fontWeight:600,color:m.isYou?IOS.blue:"#fff"}}>{m.name}{m.isYou?" (You)":""}</div>
+                            {m.isCommissioner&&<div style={{fontSize:9,fontWeight:700,color:IOS.yellow,background:"rgba(255,214,10,0.12)",padding:"1px 6px",borderRadius:4}}>COMMISH</div>}
+                          </div>
+                          <div style={{fontSize:12,color:IOS.label3,marginTop:1}}>{m.record} · {m.streak} streak</div>
+                        </div>
+                        <div style={{textAlign:"right"}}>
+                          <div style={{fontSize:14,fontWeight:700,color:m.units.startsWith("+")?IOS.green:IOS.red,letterSpacing:-0.3}}>{m.units}u</div>
+                          <div style={{fontSize:11,color:IOS.label3}}>{m.roi} ROI</div>
+                        </div>
+                        {!m.isYou&&!m.isCommissioner&&(
+                          <div style={{marginLeft:10,fontSize:18,color:IOS.label3}}>⋯</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {/* Invite code */}
+                  <div style={{margin:"12px 16px",background:"rgba(10,132,255,0.08)",borderRadius:14,padding:"14px 16px",border:`1px solid ${IOS.blue}30`}}>
+                    <div style={{fontSize:11,fontWeight:600,letterSpacing:1,textTransform:"uppercase",color:IOS.blue,marginBottom:6}}>Invite Code</div>
+                    <div style={{fontSize:28,fontWeight:800,letterSpacing:4,color:"#fff",marginBottom:6}}>{activeLeague.inviteCode}</div>
+                    <div style={{fontSize:12,color:IOS.label3}}>Share this code with friends to join</div>
+                  </div>
+                </>
+              )}
+
+              {/* SETTINGS tab */}
+              {commishTab==="settings"&&(
+                <>
+                  <div style={{padding:"0 20px 10px"}}>
+                    <div style={{fontSize:13,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3}}>League Settings</div>
+                  </div>
+
+                  {/* Changeable settings */}
+                  <div style={{margin:"0 16px 10px"}}>
+                    <div style={{fontSize:11,fontWeight:600,letterSpacing:1,textTransform:"uppercase",color:IOS.green,padding:"0 4px",marginBottom:6}}>✓ Can Change Mid-Season</div>
+                    <div style={{background:IOS.bg2,borderRadius:14,overflow:"hidden"}}>
+                      {[
+                        {l:"League Name",     v:activeLeague.name,                   editable:true  },
+                        {l:"Pick Deadline",   v:activeLeague.settings.pickDeadline,  editable:true  },
+                        {l:"Privacy",         v:activeLeague.settings.privacy,       editable:true  },
+                      ].map((s,i,arr)=>(
+                        <div key={i} style={{display:"flex",alignItems:"center",padding:"14px 16px",borderBottom:i<arr.length-1?`0.5px solid ${IOS.sep}`:"none"}}>
+                          <div style={{flex:1}}>
+                            <div style={{fontSize:12,color:IOS.label3,marginBottom:2}}>{s.l}</div>
+                            <div style={{fontSize:15,fontWeight:600,color:"#fff"}}>{s.v}</div>
+                          </div>
+                          <div style={{fontSize:13,fontWeight:600,color:IOS.blue,cursor:"pointer"}}>Edit</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Locked settings */}
+                  <div style={{margin:"0 16px 10px"}}>
+                    <div style={{fontSize:11,fontWeight:600,letterSpacing:1,textTransform:"uppercase",color:IOS.red,padding:"0 4px",marginBottom:6}}>🔒 Locked for Season</div>
+                    <div style={{background:IOS.bg2,borderRadius:14,overflow:"hidden"}}>
+                      {[
+                        {l:"Sport",         v:`${SPORTS[activeLeague.sport].icon} ${SPORTS[activeLeague.sport].label}`},
+                        {l:"Scoring System",v:"Multiplier × Odds"},
+                        {l:"Season Length", v:`${activeLeague.settings.seasonWeeks} weeks`},
+                        {l:"Max Members",   v:activeLeague.settings.maxMembers},
+                      ].map((s,i,arr)=>(
+                        <div key={i} style={{display:"flex",alignItems:"center",padding:"14px 16px",borderBottom:i<arr.length-1?`0.5px solid ${IOS.sep}`:"none",opacity:0.6}}>
+                          <div style={{flex:1}}>
+                            <div style={{fontSize:12,color:IOS.label3,marginBottom:2}}>{s.l}</div>
+                            <div style={{fontSize:15,fontWeight:600,color:"#fff"}}>{s.v}</div>
+                          </div>
+                          <div style={{fontSize:16}}>🔒</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Danger zone */}
+                  <div style={{margin:"4px 16px 24px"}}>
+                    <div style={{fontSize:11,fontWeight:600,letterSpacing:1,textTransform:"uppercase",color:IOS.red,padding:"0 4px",marginBottom:6}}>Danger Zone</div>
+                    <div style={{background:IOS.bg2,borderRadius:14,overflow:"hidden"}}>
+                      <div style={{padding:"14px 16px",borderBottom:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}}>
+                        <div style={{fontSize:15,fontWeight:600,color:IOS.orange}}>Pause Season</div>
+                        <div style={{fontSize:16,color:IOS.label3}}>›</div>
+                      </div>
+                      <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}}>
+                        <div style={{fontSize:15,fontWeight:600,color:IOS.red}}>End League</div>
+                        <div style={{fontSize:16,color:IOS.label3}}>›</div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </>
+        )}
+
         {/* ══ LEAGUE ══ */}
         {screen==="league"&&(
           <>
@@ -1641,15 +2187,17 @@ export default function App() {
                   const m = MATCHUP_HISTORY.find(x=>x.week===selectedMatchup);
                   if(!m) return null;
                   const slotColors = {Moneyline:IOS.blue, Prop:IOS.yellow, "Over/Under":IOS.orange, Spread:IOS.green, Parlay:IOS.pink};
+                  const myTotal = parseFloat(calcMatchupScore(m.myPicks));
+                  const oppTotal = parseFloat(calcMatchupScore(m.oppPicks));
                   return (
                     <div style={{position:"absolute",inset:0,background:IOS.bg,zIndex:30,overflowY:"auto",paddingBottom:40}}>
                       {/* Header */}
                       <div style={{padding:"52px 20px 16px",borderBottom:`0.5px solid ${IOS.sep}`}}>
                         <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
                           <button onClick={()=>setSelectedMatchup(null)} style={{background:IOS.fill2,border:"none",borderRadius:10,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:17,flexShrink:0}}>‹</button>
-                          <div style={{fontSize:17,fontWeight:600,letterSpacing:-0.3}}>Week {m.week} Matchup</div>
+                          <div style={{fontSize:17,fontWeight:600,letterSpacing:-0.3}}>Week {m.week} · {m.opp}</div>
                         </div>
-                        {/* Score card */}
+                        {/* Score card with POINTS */}
                         <div style={{background:IOS.bg2,borderRadius:16,padding:"16px 20px",position:"relative",overflow:"hidden"}}>
                           <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:m.result==="W"?`linear-gradient(90deg,${IOS.green},${IOS.teal})`:`linear-gradient(90deg,${IOS.red},${IOS.orange})`}}/>
                           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
@@ -1658,56 +2206,95 @@ export default function App() {
                               <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>Week {m.week}</div>
                             </div>
                             <div style={{textAlign:"center"}}>
-                              <div style={{fontSize:32,fontWeight:800,letterSpacing:-1,color:m.result==="W"?IOS.green:IOS.red}}>{m.myScore}–{m.oppScore}</div>
-                              <div style={{fontSize:11,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:m.result==="W"?IOS.green:IOS.red,marginTop:2}}>{m.result==="W"?"Victory":"Defeat"}</div>
+                              <div style={{fontSize:32,fontWeight:800,letterSpacing:-1,color:m.result==="W"?IOS.green:IOS.red}}>{myTotal} <span style={{fontSize:18,color:IOS.label3,fontWeight:400}}>–</span> {oppTotal}</div>
+                              <div style={{fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:m.result==="W"?IOS.green:IOS.red,marginTop:2}}>{m.result==="W"?"Victory":"Defeat"}</div>
+                              <div style={{fontSize:10,color:IOS.label3,marginTop:2}}>pts</div>
                             </div>
                             <div style={{textAlign:"right"}}>
                               <div style={{fontSize:22,fontWeight:800,letterSpacing:-0.5}}>{m.opp}</div>
                               <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>Week {m.week}</div>
                             </div>
                           </div>
+                          {/* Scoring formula note */}
+                          <div style={{background:"rgba(255,255,255,0.04)",borderRadius:8,padding:"8px 10px",fontSize:11,color:IOS.label3}}>
+                            Points = Slot Multiplier × Odds Decimal · 0 for losses
+                          </div>
                         </div>
                       </div>
 
-                      {/* Head to head picks */}
-                      <div style={{padding:"16px 20px 8px"}}>
-                        <div style={{fontSize:12,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3,marginBottom:12}}>Head to Head Picks</div>
+                      {/* Pick by pick */}
+                      <div style={{padding:"16px 20px 8px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                        <div style={{fontSize:12,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3}}>Pick by Pick</div>
+                        <div style={{display:"flex",gap:16}}>
+                          <div style={{fontSize:11,fontWeight:700,color:IOS.blue}}>You: {myTotal}pts</div>
+                          <div style={{fontSize:11,color:IOS.label3}}>{m.opp}: {oppTotal}pts</div>
+                        </div>
                       </div>
 
                       {m.myPicks.map((myP, i)=>{
                         const oppP = m.oppPicks[i];
                         const col = slotColors[myP.slot]||IOS.blue;
+                        const myPts = calcPickPoints(myP.mult, myP.impliedOdds||0, myP.result);
+                        const oppPts = calcPickPoints(oppP.mult, oppP.impliedOdds||0, oppP.result);
+                        const maxPts = (myP.mult * (myP.impliedOdds > 0 ? myP.impliedOdds/100 : 100/Math.abs(myP.impliedOdds||110))).toFixed(2);
                         return (
                           <div key={i} style={{margin:"0 16px 10px",background:IOS.bg2,borderRadius:14,overflow:"hidden",border:`1px solid rgba(255,255,255,0.06)`}}>
-                            {/* Slot label */}
-                            <div style={{padding:"10px 14px",borderBottom:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",gap:8}}>
-                              <div style={{width:28,height:28,borderRadius:8,background:`${col}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>{myP.mult}×</div>
-                              <div style={{fontSize:12,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:col}}>{myP.slot}</div>
+                            {/* Slot header */}
+                            <div style={{padding:"10px 14px",borderBottom:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                                <div style={{width:28,height:28,borderRadius:8,background:`${col}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:col}}>{myP.mult}×</div>
+                                <div style={{fontSize:12,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:col}}>{myP.slot}</div>
+                              </div>
+                              <div style={{fontSize:10,color:IOS.label3}}>Max {maxPts} pts available</div>
                             </div>
-                            {/* Your pick vs their pick */}
-                            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:0}}>
+                            {/* Side by side */}
+                            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr"}}>
                               {/* Your pick */}
                               <div style={{padding:"12px 14px",borderRight:`0.5px solid ${IOS.sep}`,background:myP.result==="W"?"rgba(48,209,88,0.05)":"rgba(255,69,58,0.04)"}}>
-                                <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.blue,marginBottom:6}}>You</div>
-                                <div style={{fontSize:13,fontWeight:600,color:"#fff",marginBottom:4,lineHeight:1.3}}>{myP.pick}</div>
-                                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                                  <div style={{fontSize:14,fontWeight:800,letterSpacing:-0.3,color:myP.odds.startsWith("+")?IOS.green:IOS.blue}}>{myP.odds}</div>
-                                  <div style={{fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:6,background:myP.result==="W"?"rgba(48,209,88,0.15)":"rgba(255,69,58,0.15)",color:myP.result==="W"?IOS.green:IOS.red}}>{myP.result==="W"?"✓ Win":"✗ Loss"}</div>
+                                <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.blue,marginBottom:5}}>You</div>
+                                <div style={{fontSize:13,fontWeight:600,color:"#fff",marginBottom:6,lineHeight:1.3}}>{myP.pick}</div>
+                                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:4}}>
+                                  <div style={{fontSize:13,fontWeight:800,letterSpacing:-0.3,color:myP.odds.startsWith("+")?IOS.green:IOS.blue}}>{myP.odds}</div>
+                                  <div style={{display:"flex",alignItems:"center",gap:4}}>
+                                    <div style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:6,background:myP.result==="W"?"rgba(48,209,88,0.15)":"rgba(255,69,58,0.15)",color:myP.result==="W"?IOS.green:IOS.red}}>{myP.result==="W"?"✓ Win":"✗ Loss"}</div>
+                                    {myPts>0&&<div style={{fontSize:11,fontWeight:800,color:IOS.green}}>+{myPts}pt</div>}
+                                    {myPts===0&&myP.result==="L"&&<div style={{fontSize:11,fontWeight:700,color:IOS.red}}>0pt</div>}
+                                  </div>
                                 </div>
                               </div>
                               {/* Opp pick */}
                               <div style={{padding:"12px 14px",background:oppP.result==="W"?"rgba(48,209,88,0.05)":"rgba(255,69,58,0.04)"}}>
-                                <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3,marginBottom:6}}>{m.opp}</div>
-                                <div style={{fontSize:13,fontWeight:600,color:"#fff",marginBottom:4,lineHeight:1.3}}>{oppP.pick}</div>
-                                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                                  <div style={{fontSize:14,fontWeight:800,letterSpacing:-0.3,color:oppP.odds.startsWith("+")?IOS.green:IOS.blue}}>{oppP.odds}</div>
-                                  <div style={{fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:6,background:oppP.result==="W"?"rgba(48,209,88,0.15)":"rgba(255,69,58,0.15)",color:oppP.result==="W"?IOS.green:IOS.red}}>{oppP.result==="W"?"✓ Win":"✗ Loss"}</div>
+                                <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3,marginBottom:5}}>{m.opp}</div>
+                                <div style={{fontSize:13,fontWeight:600,color:"#fff",marginBottom:6,lineHeight:1.3}}>{oppP.pick}</div>
+                                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:4}}>
+                                  <div style={{fontSize:13,fontWeight:800,letterSpacing:-0.3,color:oppP.odds.startsWith("+")?IOS.green:IOS.blue}}>{oppP.odds}</div>
+                                  <div style={{display:"flex",alignItems:"center",gap:4}}>
+                                    <div style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:6,background:oppP.result==="W"?"rgba(48,209,88,0.15)":"rgba(255,69,58,0.15)",color:oppP.result==="W"?IOS.green:IOS.red}}>{oppP.result==="W"?"✓ Win":"✗ Loss"}</div>
+                                    {oppPts>0&&<div style={{fontSize:11,fontWeight:800,color:IOS.green}}>+{oppPts}pt</div>}
+                                    {oppPts===0&&oppP.result==="L"&&<div style={{fontSize:11,fontWeight:700,color:IOS.red}}>0pt</div>}
+                                  </div>
                                 </div>
                               </div>
                             </div>
                           </div>
                         );
                       })}
+
+                      {/* Final score summary */}
+                      <div style={{margin:"4px 16px 16px",background:m.result==="W"?"rgba(48,209,88,0.08)":"rgba(255,69,58,0.08)",borderRadius:12,padding:"14px 16px",border:`1px solid ${m.result==="W"?"rgba(48,209,88,0.25)":"rgba(255,69,58,0.25)"}`}}>
+                        <div style={{fontSize:12,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:m.result==="W"?IOS.green:IOS.red,marginBottom:8}}>{m.result==="W"?"You Won This Week":"You Lost This Week"}</div>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                          <div>
+                            <div style={{fontSize:28,fontWeight:800,letterSpacing:-1,color:IOS.blue}}>{myTotal} pts</div>
+                            <div style={{fontSize:11,color:IOS.label3}}>Your score</div>
+                          </div>
+                          <div style={{fontSize:24,color:IOS.label3}}>vs</div>
+                          <div style={{textAlign:"right"}}>
+                            <div style={{fontSize:28,fontWeight:800,letterSpacing:-1,color:IOS.label2}}>{oppTotal} pts</div>
+                            <div style={{fontSize:11,color:IOS.label3}}>{m.opp}'s score</div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   );
                 })()}
@@ -1716,14 +2303,18 @@ export default function App() {
                   {SCHEDULE.map(wk=>{
                     const live=wk.result==="live";const done=wk.result==="W"||wk.result==="L";
                     const hasMH = MATCHUP_HISTORY.find(x=>x.week===wk.week);
+                    const myPts = hasMH ? parseFloat(calcMatchupScore(hasMH.myPicks)) : null;
+                    const oppPts = hasMH ? parseFloat(calcMatchupScore(hasMH.oppPicks)) : null;
                     return (
                       <div key={wk.week} className="sch-item"
-                        style={{...( live?{background:"rgba(10,132,255,0.06)"}:{}), ...(done?{cursor:"pointer"}:{})}}
+                        style={{...(live?{background:"rgba(10,132,255,0.06)"}:{}), ...(done?{cursor:"pointer"}:{})}}
                         onClick={()=>done&&hasMH&&setSelectedMatchup(wk.week)}
                       >
                         <div className={`sch-wk ${live?"live":""}`}>W{wk.week}</div>
                         <div className={`sch-opp ${live?"live":done?"done":"up"}`}>{live&&<span style={{color:IOS.blue,marginRight:6}}>●</span>}vs {wk.opp}</div>
-                        <div className="sch-score">{done?`${wk.ms}-${wk.os}`:live?"Live":"—"}</div>
+                        <div className="sch-score" style={{width:60,fontSize:12}}>
+                          {done&&myPts!==null?<span style={{color:wk.result==="W"?IOS.green:IOS.red,fontWeight:700}}>{myPts}–{oppPts}</span>:live?"Live":"—"}
+                        </div>
                         <div style={{display:"flex",alignItems:"center",gap:6}}>
                           <div className={`sch-badge ${wk.result==="live"?"live":wk.result==="upcoming"?"up":wk.result}`}>{wk.result==="live"?"LIVE":wk.result==="upcoming"?"—":wk.result}</div>
                           {done&&hasMH&&<div style={{fontSize:16,color:IOS.label3}}>›</div>}
@@ -1884,7 +2475,7 @@ export default function App() {
             {icon:"⚡",label:"Home",    id:"home"},
             {icon:"🎯",label:"Picks",   id:"picks"},
             {icon:"🏈",label:"Matchup", id:"matchup"},
-            {icon:"📊",label:"League",  id:"league"},
+            {icon:"🏆",label:"Leagues", id:"leagues"},
             {icon:"👤",label:"Profile", id:"profile"},
           ].map(t=>(
             <div key={t.id} className={`tab-item ${screen===t.id?"on":""}`} onClick={()=>setScreen(t.id)}>
@@ -1893,7 +2484,7 @@ export default function App() {
             </div>
           ))}
         </div>
-      </div>
+      </div>}
     </div>
   );
 }
