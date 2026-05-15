@@ -600,6 +600,19 @@ export default function App() {
   const [commishTab,   setCommishTab]   = useState("grade"); // grade | members | settings
   const [showLeaguesList, setShowLeaguesList] = useState(false);
 
+  const createLeague = async (name, sport) => {
+    if(!user) return;
+    const inviteCode = Math.random().toString(36).substring(2,8).toUpperCase();
+    const {data,error} = await supabase.from("leagues").insert({
+      name, sport, commissioner_id:user.id, invite_code:inviteCode,
+      max_members:8, pick_deadline:"Sun 1PM ET", season_weeks:18,
+      current_week:1, privacy:"private", scoring_type:"multiplier_odds",
+    }).select().single();
+    if(error){alert(error.message);return;}
+    await supabase.from("league_members").insert({league_id:data.id,user_id:user.id,is_commissioner:true});
+    alert(`League created! Invite code: ${data.invite_code}`);
+  };
+
   const gradePickResult = (leagueId, memberIdx, pickIdx, result) => {
     setGradingData(prev => {
       const updated = JSON.parse(JSON.stringify(prev));
@@ -1894,7 +1907,15 @@ export default function App() {
               })}
 
               {/* Join league */}
-              <div style={{margin:"4px 16px 16px",background:IOS.bg2,borderRadius:16,padding:"16px 18px",border:"1.5px dashed rgba(255,255,255,0.1)",cursor:"pointer",display:"flex",alignItems:"center",gap:14}}>
+              <div onClick={async()=>{
+                const code=prompt("Enter invite code:");
+                if(!code) return;
+                const {data:league,error}=await supabase.from("leagues").select().eq("invite_code",code.toUpperCase().trim()).single();
+                if(error||!league){alert("League not found. Check the code and try again.");return;}
+                const {error:joinError}=await supabase.from("league_members").insert({league_id:league.id,user_id:user.id,is_commissioner:false});
+                if(joinError){alert("Error joining. You may already be a member.");return;}
+                alert(`Joined ${league.name}! Welcome.`);
+              }} style={{margin:"4px 16px 16px",background:IOS.bg2,borderRadius:16,padding:"16px 18px",border:"1.5px dashed rgba(255,255,255,0.1)",cursor:"pointer",display:"flex",alignItems:"center",gap:14}}>
                 <div style={{width:44,height:44,borderRadius:12,background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>🔗</div>
                 <div>
                   <div style={{fontSize:15,fontWeight:700,color:"#fff",marginBottom:2}}>Join a League</div>
