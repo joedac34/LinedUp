@@ -569,7 +569,8 @@ export default function App() {
   const [chatMsg,     setChatMsg]     = useState("");
   const [messages,    setMessages]    = useState(CHAT);
   const [activeLeagueId, setActiveLeagueId] = useState("lg1");
-  const activeLeague = LEAGUES_DATA.find(l=>l.id===activeLeagueId) || LEAGUES_DATA[0];
+  const [realLeagues,    setRealLeagues]    = useState([]);
+  const activeLeague = [...realLeagues, ...LEAGUES_DATA].find(l=>l.id===activeLeagueId) || LEAGUES_DATA[0];
   const sport = SPORTS[activeLeague.sport];
   const SLOTS = sport.slots;
   const BETS = sport.bets;
@@ -600,17 +601,31 @@ export default function App() {
   const [commishTab,   setCommishTab]   = useState("grade"); // grade | members | settings
   const [showLeaguesList, setShowLeaguesList] = useState(false);
 
-  const createLeague = async (name, sport) => {
+  const createLeague = async (name, sportId) => {
     if(!user) return;
     const inviteCode = Math.random().toString(36).substring(2,8).toUpperCase();
     const {data,error} = await supabase.from("leagues").insert({
-      name, sport, commissioner_id:user.id, invite_code:inviteCode,
+      name, sport:sportId, commissioner_id:user.id, invite_code:inviteCode,
       max_members:8, pick_deadline:"Sun 1PM ET", season_weeks:18,
       current_week:1, privacy:"private", scoring_type:"multiplier_odds",
     }).select().single();
     if(error){alert(error.message);return;}
     await supabase.from("league_members").insert({league_id:data.id,user_id:user.id,is_commissioner:true});
     alert(`League created! Invite code: ${data.invite_code}`);
+    fetchLeagues(user.id);
+  };
+
+  const fetchLeagues = async (uid) => {
+    const {data:members} = await supabase.from("league_members").select("league_id, is_commissioner").eq("user_id", uid);
+    if(!members || members.length===0) return;
+    const ids = [...new Set(members.map(m=>m.league_id))];
+    const {data:leagues} = await supabase.from("leagues").select("*").in("id", ids);
+    if(leagues) {
+      setRealLeagues(leagues.map(lg=>({
+        ...lg,
+        isCommissioner: members.find(m=>m.league_id===lg.id)?.is_commissioner||false
+      })));
+    }
   };
 
   const gradePickResult = (leagueId, memberIdx, pickIdx, result) => {
@@ -627,11 +642,18 @@ export default function App() {
   const chatRef=useRef(null);
 
   useEffect(()=>{
-    supabase.auth.getSession().then(({data:{session}})=>setUser(session?.user??null));
-    supabase.auth.onAuthStateChange((_e,session)=>setUser(session?.user??null));
+    supabase.auth.getSession().then(({data:{session}})=>{
+      const u = session?.user??null;
+      setUser(u);
+      if(u) fetchLeagues(u.id);
+    });
+    supabase.auth.onAuthStateChange((_e,session)=>{
+      const u = session?.user??null;
+      setUser(u);
+      if(u) fetchLeagues(u.id);
+    });
     setTimeout(()=>setAnim(true),80);
     const t=setInterval(()=>setTimeLeft(p=>{let{h,m,s}=p;s--;if(s<0){s=59;m--;}if(m<0){m=59;h--;}if(h<0){h=0;m=0;s=0;}return{h,m,s};}),1000);
-    // Load saved picks from localStorage
     try {
       const stored = localStorage.getItem("linedup_picks_wk6");
       if(stored) setSavedPicks(JSON.parse(stored));
@@ -1302,7 +1324,7 @@ export default function App() {
                 </div>
                 {/* League toggle */}
                 <div style={{display:"flex",gap:6,marginTop:10,marginBottom:2,overflowX:"auto",paddingBottom:2}}>
-                  {LEAGUES_DATA.map(lg=>{
+                  {(realLeagues.length>0?realLeagues:LEAGUES_DATA).map(lg=>{
                     const sp=SPORTS[lg.sport];
                     const isActive=activeLeagueId===lg.id;
                     return (
@@ -1314,7 +1336,7 @@ export default function App() {
                         <span style={{fontSize:15}}>{sp.icon}</span>
                         <div>
                           <div style={{fontSize:12,fontWeight:700,color:isActive?sp.color:"rgba(255,255,255,0.6)",letterSpacing:-0.2}}>{lg.name}</div>
-                          <div style={{fontSize:10,color:"rgba(255,255,255,0.35)",marginTop:1}}>Wk {lg.week} · {sp.label}</div>
+                          <div style={{fontSize:10,color:"rgba(255,255,255,0.35)",marginTop:1}}>Wk {lg.current_week||lg.week||1} · {sp.label}</div>
                         </div>
                         {isActive&&<div style={{width:6,height:6,borderRadius:"50%",background:sp.color,marginLeft:2}}/>}
                       </div>
@@ -1855,10 +1877,10 @@ export default function App() {
               </div>
 
               {/* League cards */}
-              {LEAGUES_DATA.map(lg=>{
+              {(realLeagues.length>0?realLeagues:LEAGUES_DATA).map(lg=>{
                 const sp = SPORTS[lg.sport];
                 const isActive = activeLeagueId === lg.id;
-                const myMember = lg.members.find(m=>m.isYou);
+                const myMember = lg.members?.find(m=>m.isYou) || {record: lg.userRecord||"—", roi: lg.userRoi||"—", streak: "—"};
                 const pendingPicks = (gradingData[lg.id]||[]).reduce((acc,m)=>acc+m.picks.filter(p=>p.result==="pending").length,0);
                 return (
                   <div key={lg.id} style={{margin:"0 16px 12px",background:IOS.bg2,borderRadius:20,overflow:"hidden",border:`1px solid ${isActive?sp.color+"50":"rgba(255,255,255,0.07)"}`,cursor:"pointer"}}
@@ -1873,7 +1895,7 @@ export default function App() {
                             <span style={{fontSize:18}}>{sp.icon}</span>
                             <div style={{fontSize:18,fontWeight:800,letterSpacing:-0.5,color:"#fff"}}>{lg.name}</div>
                           </div>
-                          <div style={{fontSize:12,color:IOS.label3}}>{sp.label} · Wk {lg.week} · {lg.members.length} members</div>
+                          <div style={{fontSize:12,color:IOS.label3}}>{sp.label} · Wk {lg.current_week||lg.week||1} · {lg.members?.length||lg.max_members||"?"} members</div>
                         </div>
                         <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
                           {lg.isCommissioner&&<div style={{background:"rgba(255,214,10,0.15)",border:"1px solid rgba(255,214,10,0.3)",borderRadius:6,padding:"2px 8px",fontSize:10,fontWeight:700,color:IOS.yellow}}>⚙️ COMMISH</div>}
@@ -1891,7 +1913,7 @@ export default function App() {
                       </div>
                       {/* Bottom row */}
                       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                        <div style={{fontSize:12,color:IOS.label3}}>vs {lg.opponent} this week</div>
+                        <div style={{fontSize:12,color:IOS.label3}}>vs {lg.opponent||"TBD"} this week</div>
                         <div style={{display:"flex",gap:8,alignItems:"center"}}>
                           {pendingPicks>0&&lg.isCommissioner&&(
                             <div style={{background:"rgba(255,159,10,0.15)",border:"1px solid rgba(255,159,10,0.3)",borderRadius:6,padding:"3px 8px",fontSize:10,fontWeight:700,color:IOS.orange}}>{pendingPicks} to grade</div>
@@ -1915,6 +1937,7 @@ export default function App() {
                 const {error:joinError}=await supabase.from("league_members").insert({league_id:league.id,user_id:user.id,is_commissioner:false});
                 if(joinError){alert("Error joining. You may already be a member.");return;}
                 alert(`Joined ${league.name}! Welcome.`);
+                fetchLeagues(user.id);
               }} style={{margin:"4px 16px 16px",background:IOS.bg2,borderRadius:16,padding:"16px 18px",border:"1.5px dashed rgba(255,255,255,0.1)",cursor:"pointer",display:"flex",alignItems:"center",gap:14}}>
                 <div style={{width:44,height:44,borderRadius:12,background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>🔗</div>
                 <div>
