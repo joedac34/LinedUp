@@ -570,6 +570,7 @@ export default function App() {
   const [messages,    setMessages]    = useState(CHAT);
   const [activeLeagueId, setActiveLeagueId] = useState("lg1");
   const [realLeagues,    setRealLeagues]    = useState([]);
+  const [leagueMembers,  setLeagueMembers]  = useState([]);
   const activeLeague = [...realLeagues, ...LEAGUES_DATA].find(l=>l.id===activeLeagueId) || LEAGUES_DATA[0];
   const sport = SPORTS[activeLeague.sport];
   const SLOTS = sport.slots;
@@ -613,6 +614,29 @@ export default function App() {
     await supabase.from("league_members").insert({league_id:data.id,user_id:user.id,is_commissioner:true});
     alert(`League created! Invite code: ${data.invite_code}`);
     fetchLeagues(user.id);
+  };
+
+  const fetchLeagueMembers = async (leagueId, uid) => {
+    const {data:members} = await supabase
+      .from("league_members")
+      .select("user_id, is_commissioner")
+      .eq("league_id", leagueId);
+    if(!members||!members.length) return;
+    const userIds = members.map(m=>m.user_id);
+    const {data:users} = await supabase
+      .from("users")
+      .select("id, email, username")
+      .in("id", userIds);
+    setLeagueMembers(members.map(m=>{
+      const u = users?.find(u=>u.id===m.user_id);
+      return {
+        userId: m.user_id,
+        isCommissioner: m.is_commissioner,
+        name: u?.username || u?.email?.split("@")[0] || "Unknown",
+        email: u?.email,
+        isYou: m.user_id === uid,
+      };
+    }));
   };
 
   const fetchLeagues = async (uid) => {
@@ -660,6 +684,11 @@ export default function App() {
     } catch(e) {}
     return()=>clearInterval(t);
   },[]);
+
+  useEffect(()=>{
+    if(!activeLeagueId||!user) return;
+    fetchLeagueMembers(activeLeagueId, user.id);
+  },[activeLeagueId, user]);
 
   useEffect(()=>{if(screen==="chat"&&chatRef.current)chatRef.current.scrollTop=chatRef.current.scrollHeight;},[screen,messages]);
 
@@ -2048,23 +2077,23 @@ export default function App() {
               {commishTab==="members"&&(
                 <>
                   <div style={{padding:"0 20px 10px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                    <div style={{fontSize:13,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3}}>{activeLeague.members.length} / {activeLeague.settings.maxMembers} members</div>
+                    <div style={{fontSize:13,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3}}>{leagueMembers.length || activeLeague.members?.length || "?"} / {activeLeague.settings?.maxMembers||activeLeague.max_members||"?"} members</div>
                     <div style={{fontSize:12,fontWeight:600,color:IOS.blue,cursor:"pointer"}}>+ Invite</div>
                   </div>
                   <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:14,overflow:"hidden"}}>
-                    {activeLeague.members.map((m,i)=>(
-                      <div key={i} style={{display:"flex",alignItems:"center",padding:"13px 16px",borderBottom:i<activeLeague.members.length-1?`0.5px solid ${IOS.sep}`:"none"}}>
-                        <div style={{width:36,height:36,borderRadius:50,background:m.isYou?`linear-gradient(135deg,${IOS.blue},${IOS.indigo})`:`linear-gradient(135deg,${IOS.bg3},${IOS.gray3})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#fff",marginRight:12,flexShrink:0}}>{m.name[0]}</div>
+                    {(leagueMembers.length ? leagueMembers : activeLeague.members||[]).map((m,i,arr)=>(
+                      <div key={i} style={{display:"flex",alignItems:"center",padding:"13px 16px",borderBottom:i<arr.length-1?`0.5px solid ${IOS.sep}`:"none"}}>
+                        <div style={{width:36,height:36,borderRadius:50,background:m.isYou?`linear-gradient(135deg,${IOS.blue},${IOS.indigo})`:`linear-gradient(135deg,${IOS.bg3},${IOS.gray3})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#fff",marginRight:12,flexShrink:0}}>{(m.name||"?")[0]}</div>
                         <div style={{flex:1}}>
                           <div style={{display:"flex",alignItems:"center",gap:6}}>
-                            <div style={{fontSize:15,fontWeight:600,color:m.isYou?IOS.blue:"#fff"}}>{m.name}{m.isYou?" (You)":""}</div>
+                            <div style={{fontSize:15,fontWeight:600,color:m.isYou?IOS.blue:"#fff"}}>{m.name||m.email||"Unknown"}{m.isYou?" (You)":""}</div>
                             {m.isCommissioner&&<div style={{fontSize:9,fontWeight:700,color:IOS.yellow,background:"rgba(255,214,10,0.12)",padding:"1px 6px",borderRadius:4}}>COMMISH</div>}
                           </div>
-                          <div style={{fontSize:12,color:IOS.label3,marginTop:1}}>{m.record} · {m.streak} streak</div>
+                          <div style={{fontSize:12,color:IOS.label3,marginTop:1}}>{m.record||m.email||""}</div>
                         </div>
                         <div style={{textAlign:"right"}}>
-                          <div style={{fontSize:14,fontWeight:700,color:m.units.startsWith("+")?IOS.green:IOS.red,letterSpacing:-0.3}}>{m.units}u</div>
-                          <div style={{fontSize:11,color:IOS.label3}}>{m.roi} ROI</div>
+                          <div style={{fontSize:14,fontWeight:700,color:IOS.label2,letterSpacing:-0.3}}>{m.units||"—"}</div>
+                          <div style={{fontSize:11,color:IOS.label3}}>{m.roi||""}</div>
                         </div>
                         {!m.isYou&&!m.isCommissioner&&(
                           <div style={{marginLeft:10,fontSize:18,color:IOS.label3}}>⋯</div>
@@ -2075,7 +2104,7 @@ export default function App() {
                   {/* Invite code */}
                   <div style={{margin:"12px 16px",background:"rgba(10,132,255,0.08)",borderRadius:14,padding:"14px 16px",border:`1px solid ${IOS.blue}30`}}>
                     <div style={{fontSize:11,fontWeight:600,letterSpacing:1,textTransform:"uppercase",color:IOS.blue,marginBottom:6}}>Invite Code</div>
-                    <div style={{fontSize:28,fontWeight:800,letterSpacing:4,color:"#fff",marginBottom:6}}>{activeLeague.inviteCode}</div>
+                    <div style={{fontSize:28,fontWeight:800,letterSpacing:4,color:"#fff",marginBottom:6}}>{activeLeague.inviteCode||activeLeague.invite_code}</div>
                     <div style={{fontSize:12,color:IOS.label3}}>Share this code with friends to join</div>
                   </div>
                 </>
