@@ -617,26 +617,17 @@ export default function App() {
   };
 
   const fetchLeagueMembers = async (leagueId, uid) => {
-    const {data:members} = await supabase
+    const {data} = await supabase
       .from("league_members")
-      .select("user_id, is_commissioner")
+      .select("user_id, is_commissioner, users(id, email, username)")
       .eq("league_id", leagueId);
-    if(!members||!members.length) return;
-    const userIds = members.map(m=>m.user_id);
-    const {data:users} = await supabase
-      .from("users")
-      .select("id, email, username")
-      .in("id", userIds);
-    setLeagueMembers(members.map(m=>{
-      const u = users?.find(u=>u.id===m.user_id);
-      return {
-        userId: m.user_id,
-        isCommissioner: m.is_commissioner,
-        name: u?.username || u?.email?.split("@")[0] || "Unknown",
-        email: u?.email,
-        isYou: m.user_id === uid,
-      };
-    }));
+    if(data) setLeagueMembers(data.map(m=>({
+      userId: m.user_id,
+      isCommissioner: m.is_commissioner,
+      name: m.users?.username || m.users?.email?.split("@")[0] || "Unknown",
+      email: m.users?.email,
+      isYou: m.user_id === uid,
+    })));
   };
 
   const fetchLeagues = async (uid) => {
@@ -1747,10 +1738,43 @@ export default function App() {
 
               <div style={{height:12}}/>
               {allFilled
-                ? <button className="ios-btn green" onClick={()=>{
+                ? <button className="ios-btn green" onClick={async ()=>{
                     const locked = { picks, lsBets, parlay, lockedAt: new Date().toISOString() };
                     try { localStorage.setItem("linedup_picks_wk6", JSON.stringify(locked)); } catch(e) {}
                     setSavedPicks(locked);
+                    if(user) {
+                      const picksToSave = SLOTS.filter(s=>s.id!=="longshot").map(s=>{
+                        const p = picks[s.id];
+                        if(!p) return null;
+                        return {
+                          league_id: activeLeague.id,
+                          user_id: user.id,
+                          week: activeLeague.current_week||activeLeague.week||1,
+                          slot: s.id,
+                          multiplier: s.mult,
+                          pick_name: p.pick,
+                          odds: p.odds,
+                          implied_odds: p.impliedOdds,
+                          result: "pending",
+                          points_earned: 0,
+                        };
+                      }).filter(Boolean);
+                      if(lsBets.length) {
+                        lsBets.forEach(b=>picksToSave.push({
+                          league_id: activeLeague.id,
+                          user_id: user.id,
+                          week: activeLeague.current_week||activeLeague.week||1,
+                          slot: "longshot",
+                          multiplier: 5,
+                          pick_name: b.pick,
+                          odds: b.odds,
+                          implied_odds: b.impliedOdds,
+                          result: "pending",
+                          points_earned: 0,
+                        }));
+                      }
+                      if(picksToSave.length) await supabase.from("picks").insert(picksToSave);
+                    }
                     setSubmitted(true);
                   }}>🔒 Lock In My Picks · {parlay?.american}</button>
                 : <button className="ios-btn disabled" disabled>{Object.values(picks).filter(v=>v).length+(lsBets.length>=2?1:0)} / 5 Picks Filled</button>
