@@ -571,6 +571,7 @@ export default function App() {
   const [activeLeagueId, setActiveLeagueId] = useState("lg1");
   const [realLeagues,    setRealLeagues]    = useState([]);
   const [leagueMembers,  setLeagueMembers]  = useState([]);
+  const [weekPicks,      setWeekPicks]      = useState([]);
   const activeLeague = [...realLeagues, ...LEAGUES_DATA].find(l=>l.id===activeLeagueId) || LEAGUES_DATA[0];
   const sport = SPORTS[activeLeague.sport];
   const SLOTS = sport.slots;
@@ -615,6 +616,24 @@ export default function App() {
     alert(`League created! Invite code: ${data.invite_code}`);
     fetchLeagues(user.id);
   };
+
+const fetchWeekPicks = async (leagueId, week) => {
+  const {data:picks} = await supabase
+    .from("picks")
+    .select("*")
+    .eq("league_id", leagueId)
+    .eq("week", week);
+  if(!picks||!picks.length) return;
+  const userIds = [...new Set(picks.map(p=>p.user_id))];
+  const {data:users} = await supabase
+    .from("users")
+    .select("id, username, email")
+    .in("id", userIds);
+  setWeekPicks(picks.map(p=>({
+    ...p,
+    users: users?.find(u=>u.id===p.user_id)||null
+  })));
+};
 
   const fetchLeagueMembers = async (leagueId, uid) => {
     const {data} = await supabase
@@ -680,6 +699,12 @@ export default function App() {
     if(!activeLeagueId||!user) return;
     fetchLeagueMembers(activeLeagueId, user.id);
   },[activeLeagueId, user]);
+
+  useEffect(()=>{
+    if(!activeLeagueId||!user) return;
+    const lg = [...realLeagues, ...LEAGUES_DATA].find(l=>l.id===activeLeagueId);
+    if(lg) fetchWeekPicks(activeLeagueId, lg.current_week||lg.week||1);
+  },[activeLeagueId, user, screen]);
 
   useEffect(()=>{if(screen==="chat"&&chatRef.current)chatRef.current.scrollTop=chatRef.current.scrollHeight;},[screen,messages]);
 
@@ -2030,61 +2055,70 @@ export default function App() {
               {commishTab==="grade"&&(
                 <>
                   <div style={{padding:"0 20px 10px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                    <div style={{fontSize:13,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3}}>Week {activeLeague.week} · All Picks</div>
-                    <div style={{fontSize:12,color:IOS.orange,fontWeight:600}}>{(gradingData[activeLeagueId]||[]).reduce((a,m)=>a+m.picks.filter(p=>p.result==="pending").length,0)} pending</div>
+                    <div style={{fontSize:13,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3}}>Week {activeLeague.current_week||activeLeague.week||1} · All Picks</div>
+                    <div style={{fontSize:12,color:IOS.orange,fontWeight:600}}>{weekPicks.filter(p=>p.result==="pending").length} pending</div>
                   </div>
 
-                  {(gradingData[activeLeagueId]||[]).map((memberData, mIdx)=>{
-                    const slotColors={Moneyline:IOS.blue,Prop:IOS.yellow,"Over/Under":IOS.orange,Spread:IOS.green,Parlay:IOS.pink};
-                    const memberTotal = memberData.picks.filter(p=>p.result!=="pending").reduce((sum,p)=>{
-                      if(p.result!=="W") return sum;
-                      const dec = p.impliedOdds ? (p.impliedOdds>0?p.impliedOdds/100:100/Math.abs(p.impliedOdds)) : 0.91;
-                      return sum + parseFloat((p.mult*dec*10).toFixed(1));
+                  {weekPicks.length===0&&(
+                    <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:14,padding:"24px 16px",textAlign:"center",color:IOS.label3,fontSize:15}}>
+                      No picks submitted yet this week
+                    </div>
+                  )}
+
+                  {/* Group picks by user */}
+                  {Object.entries(weekPicks.reduce((acc,p)=>{
+                    const uid = p.user_id;
+                    if(!acc[uid]) acc[uid]={userId:uid, name:p.users?.username||p.users?.email?.split("@")[0]||"Unknown", picks:[]};
+                    acc[uid].picks.push(p);
+                    return acc;
+                  },{})).map(([uid, memberData])=>{
+                    const slotColors={ml:IOS.blue,prop:IOS.yellow,ou:IOS.orange,spread:IOS.green,longshot:IOS.pink};
+                    const memberTotal = memberData.picks.filter(p=>p.result==="W").reduce((sum,p)=>{
+                      const dec = p.implied_odds ? (p.implied_odds>0?p.implied_odds/100:100/Math.abs(p.implied_odds)) : 0.91;
+                      return sum + parseFloat((p.multiplier*dec*10).toFixed(1));
                     },0).toFixed(1);
+                    const isYou = uid === user?.id;
                     return (
-                      <div key={mIdx} style={{margin:"0 16px 12px",background:IOS.bg2,borderRadius:14,overflow:"hidden",border:"1px solid rgba(255,255,255,0.07)"}}>
-                        {/* Member header */}
+                      <div key={uid} style={{margin:"0 16px 12px",background:IOS.bg2,borderRadius:14,overflow:"hidden",border:"1px solid rgba(255,255,255,0.07)"}}>
                         <div style={{padding:"12px 14px",borderBottom:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.02)"}}>
                           <div>
-                            <div style={{fontSize:15,fontWeight:700,color:memberData.member==="Joe"?IOS.blue:"#fff"}}>{memberData.member}{memberData.member==="Joe"?" (You)":""}</div>
-                            <div style={{fontSize:11,color:IOS.label3,marginTop:1}}>Wk {activeLeague.week} · {memberData.picks.filter(p=>p.result!=="pending").length}/5 graded</div>
+                            <div style={{fontSize:15,fontWeight:700,color:isYou?IOS.blue:"#fff"}}>{memberData.name}{isYou?" (You)":""}</div>
+                            <div style={{fontSize:11,color:IOS.label3,marginTop:1}}>Wk {activeLeague.current_week||1} · {memberData.picks.filter(p=>p.result!=="pending").length}/{memberData.picks.length} graded</div>
                           </div>
                           <div style={{textAlign:"right"}}>
                             <div style={{fontSize:16,fontWeight:800,color:IOS.green,letterSpacing:-0.3}}>{memberTotal}pts</div>
                             <div style={{fontSize:10,color:IOS.label3}}>so far</div>
                           </div>
                         </div>
-
-                        {/* Pick rows */}
-                        {memberData.picks.map((pick, pIdx)=>{
+                        {memberData.picks.map((pick,pIdx)=>{
                           const col=slotColors[pick.slot]||IOS.blue;
                           const isPending=pick.result==="pending";
                           return (
-                            <div key={pIdx} style={{padding:"11px 14px",borderBottom:pIdx<memberData.picks.length-1?`0.5px solid ${IOS.sep}`:"none",background:isPending?"rgba(255,159,10,0.03)":"transparent"}}>
+                            <div key={pick.id} style={{padding:"11px 14px",borderBottom:pIdx<memberData.picks.length-1?`0.5px solid ${IOS.sep}`:"none",background:isPending?"rgba(255,159,10,0.03)":"transparent"}}>
                               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                                 <div style={{flex:1,minWidth:0}}>
                                   <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}>
-                                    <div style={{fontSize:10,fontWeight:700,color:col,background:`${col}15`,padding:"1px 6px",borderRadius:4}}>{pick.mult}× {pick.slot}</div>
+                                    <div style={{fontSize:10,fontWeight:700,color:col,background:`${col}15`,padding:"1px 6px",borderRadius:4}}>{pick.multiplier}× {pick.slot}</div>
                                     {isPending&&<div style={{fontSize:9,fontWeight:700,color:IOS.orange,background:"rgba(255,159,10,0.12)",padding:"1px 6px",borderRadius:4}}>PENDING</div>}
                                   </div>
-                                  <div style={{fontSize:13,fontWeight:600,color:"#fff",marginBottom:2}}>{pick.pick}</div>
+                                  <div style={{fontSize:13,fontWeight:600,color:"#fff",marginBottom:2}}>{pick.pick_name}</div>
                                   <div style={{fontSize:11,color:IOS.label3}}>{pick.odds}</div>
                                 </div>
-                                {/* Grade buttons */}
                                 <div style={{display:"flex",gap:6,flexShrink:0,marginLeft:10}}>
-                                  <button
-                                    onClick={()=>gradePickResult(activeLeagueId,mIdx,pIdx,"W")}
-                                    style={{padding:"7px 14px",borderRadius:8,border:"none",background:pick.result==="W"?IOS.green:"rgba(48,209,88,0.12)",color:pick.result==="W"?"#000":IOS.green,fontSize:12,fontWeight:700,cursor:"pointer",transition:"all .15s"}}
-                                  >✓ Win</button>
-                                  <button
-                                    onClick={()=>gradePickResult(activeLeagueId,mIdx,pIdx,"L")}
-                                    style={{padding:"7px 14px",borderRadius:8,border:"none",background:pick.result==="L"?IOS.red:"rgba(255,69,58,0.12)",color:pick.result==="L"?"#fff":IOS.red,fontSize:12,fontWeight:700,cursor:"pointer",transition:"all .15s"}}
-                                  >✗ Loss</button>
+                                  <button onClick={async()=>{
+                                    const pts = parseFloat((pick.multiplier*(pick.implied_odds>0?pick.implied_odds/100:100/Math.abs(pick.implied_odds||110))*10).toFixed(1));
+                                    await supabase.from("picks").update({result:"W",points_earned:pts}).eq("id",pick.id);
+                                    setWeekPicks(prev=>prev.map(p=>p.id===pick.id?{...p,result:"W",points_earned:pts}:p));
+                                  }} style={{padding:"7px 14px",borderRadius:8,border:"none",background:pick.result==="W"?IOS.green:"rgba(48,209,88,0.12)",color:pick.result==="W"?"#000":IOS.green,fontSize:12,fontWeight:700,cursor:"pointer"}}>✓ Win</button>
+                                  <button onClick={async()=>{
+                                    await supabase.from("picks").update({result:"L",points_earned:0}).eq("id",pick.id);
+                                    setWeekPicks(prev=>prev.map(p=>p.id===pick.id?{...p,result:"L",points_earned:0}:p));
+                                  }} style={{padding:"7px 14px",borderRadius:8,border:"none",background:pick.result==="L"?IOS.red:"rgba(255,69,58,0.12)",color:pick.result==="L"?"#fff":IOS.red,fontSize:12,fontWeight:700,cursor:"pointer"}}>✗ Loss</button>
                                   {pick.result!=="pending"&&(
-                                    <button
-                                      onClick={()=>gradePickResult(activeLeagueId,mIdx,pIdx,"pending")}
-                                      style={{padding:"7px 10px",borderRadius:8,border:"1px solid rgba(255,255,255,0.1)",background:"transparent",color:IOS.label3,fontSize:12,fontWeight:700,cursor:"pointer"}}
-                                    >↩</button>
+                                    <button onClick={async()=>{
+                                      await supabase.from("picks").update({result:"pending",points_earned:0}).eq("id",pick.id);
+                                      setWeekPicks(prev=>prev.map(p=>p.id===pick.id?{...p,result:"pending",points_earned:0}:p));
+                                    }} style={{padding:"7px 10px",borderRadius:8,border:"1px solid rgba(255,255,255,0.1)",background:"transparent",color:IOS.label3,fontSize:12,fontWeight:700,cursor:"pointer"}}>↩</button>
                                   )}
                                 </div>
                               </div>
