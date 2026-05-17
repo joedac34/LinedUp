@@ -698,7 +698,7 @@ const fetchWeekPicks = async (leagueId, week) => {
   useEffect(()=>{
     if(!activeLeagueId||!user) return;
     fetchLeagueMembers(activeLeagueId, user.id);
-  },[activeLeagueId, user]);
+  },[activeLeagueId, user, screen]);
 
   useEffect(()=>{
     if(!activeLeagueId||!user) return;
@@ -2135,7 +2135,7 @@ const fetchWeekPicks = async (leagueId, week) => {
               {commishTab==="members"&&(
                 <>
                   <div style={{padding:"0 20px 10px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                    <div style={{fontSize:13,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3}}>{leagueMembers.length || activeLeague.members?.length || "?"} / {activeLeague.settings?.maxMembers||activeLeague.max_members||"?"} members</div>
+                    <div style={{fontSize:13,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3}}>{leagueMembers.length} / {activeLeague.max_members||activeLeague.settings?.maxMembers||8} members</div>
                     <div style={{fontSize:12,fontWeight:600,color:IOS.blue,cursor:"pointer"}}>+ Invite</div>
                   </div>
                   <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:14,overflow:"hidden"}}>
