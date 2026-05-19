@@ -572,6 +572,7 @@ export default function App() {
   const [realLeagues,    setRealLeagues]    = useState([]);
   const [leagueMembers,  setLeagueMembers]  = useState([]);
   const [weekPicks,      setWeekPicks]      = useState([]);
+  const [realStandings,  setRealStandings]  = useState([]);
   const activeLeague = [...realLeagues, ...LEAGUES_DATA].find(l=>l.id===activeLeagueId) || LEAGUES_DATA[0];
   const sport = SPORTS[activeLeague.sport];
   const SLOTS = sport.slots;
@@ -640,7 +641,61 @@ export default function App() {
     fetchLeagues(user.id);
   };
 
-const fetchWeekPicks = async (leagueId, week) => {
+  const fetchStandings = async (leagueId) => {
+    // Get all graded picks for this league
+    const {data:picks} = await supabase
+      .from("picks")
+      .select("*")
+      .eq("league_id", leagueId)
+      .neq("result", "pending");
+    if(!picks||!picks.length) return;
+
+    // Get all members
+    const {data:members} = await supabase
+      .from("league_members")
+      .select("user_id, is_commissioner")
+      .eq("league_id", leagueId);
+    if(!members) return;
+
+    const userIds = members.map(m=>m.user_id);
+    const {data:users} = await supabase
+      .from("users")
+      .select("id, username, email")
+      .in("id", userIds);
+
+    // Group picks by user and calculate stats
+    const statsByUser = {};
+    picks.forEach(p=>{
+      if(!statsByUser[p.user_id]) statsByUser[p.user_id] = {wins:0, losses:0, points:0};
+      if(p.result==="W") {
+        statsByUser[p.user_id].wins++;
+        statsByUser[p.user_id].points += parseFloat(p.points_earned||0);
+      } else if(p.result==="L") {
+        statsByUser[p.user_id].losses++;
+      }
+    });
+
+    const standings = userIds.map(uid=>{
+      const u = users?.find(x=>x.id===uid);
+      const s = statsByUser[uid]||{wins:0,losses:0,points:0};
+      const total = s.wins + s.losses;
+      return {
+        userId: uid,
+        name: u?.username || u?.email?.split("@")[0] || "Unknown",
+        wins: s.wins,
+        losses: s.losses,
+        points: parseFloat(s.points.toFixed(1)),
+        record: `${s.wins}-${s.losses}`,
+        wpct: total > 0 ? `${Math.round(s.wins/total*100)}%` : "0%",
+        isYou: uid === user?.id,
+      };
+    }).sort((a,b)=>b.points-a.points)
+      .map((s,i)=>({...s, rank:i+1}));
+
+    setRealStandings(standings);
+  };
+
+  const fetchWeekPicks = async (leagueId, week) => {
   const {data:picks} = await supabase
     .from("picks")
     .select("*")
@@ -721,6 +776,7 @@ const fetchWeekPicks = async (leagueId, week) => {
   useEffect(()=>{
     if(!activeLeagueId||!user) return;
     fetchLeagueMembers(activeLeagueId, user.id);
+    fetchStandings(activeLeagueId);
   },[activeLeagueId, user, screen]);
 
   useEffect(()=>{
@@ -762,7 +818,19 @@ const fetchWeekPicks = async (leagueId, week) => {
   const lsO=calcLS(lsBets);
   const allFilled=Object.values(picks).every(v=>v)&&lsBets.length>=2;
 
-  const sorted=[...STANDINGS].sort((a,b)=>{
+  const baseStandings = realStandings.length > 0 ? realStandings.map(s=>({
+    rank: s.rank,
+    name: s.isYou ? "Joe" : s.name,
+    record: s.record,
+    units: `+${s.points}`,
+    roi: s.wpct,
+    streak: "—",
+    wpct: s.wpct,
+    wr: [],
+    points: s.points,
+  })) : STANDINGS;
+
+  const sorted=[...baseStandings].sort((a,b)=>{
     if(sortBy==="roi")   return parseFloat(b.roi)-parseFloat(a.roi);
     if(sortBy==="units") return parseFloat(b.units)-parseFloat(a.units);
     if(sortBy==="wpct")  return parseFloat(b.wpct)-parseFloat(a.wpct);
@@ -1537,12 +1605,12 @@ const fetchWeekPicks = async (leagueId, week) => {
                 </div>
               </div>
               <div style={{background:IOS.bg2,borderRadius:16,margin:"0 16px",overflow:"hidden"}}>
-                {STANDINGS.slice(0,5).map(r=>(
+                {baseStandings.slice(0,5).map(r=>(
                   <div key={r.rank} className="mini-stand" style={r.name==="Joe"?{background:"rgba(10,132,255,0.08)"}:{}}>
                     <div className={`ms-rank ${r.rank===1?"top":""}`}>{r.rank}</div>
                     <div className={`ms-name ${r.name==="Joe"?"me":""}`}>{r.name==="Joe"?"You":r.name}</div>
                     <div className="ms-rec">{r.record}</div>
-                    <div className={`ms-units ${r.units.startsWith("+")?"pos":"neg"}`}>{r.units}u</div>
+                    <div className={`ms-units ${String(r.units).startsWith("+")?"pos":"neg"}`}>{r.points!==undefined?`${r.points}pts`:r.units}</div>
                   </div>
                 ))}
               </div>
@@ -2243,15 +2311,18 @@ const fetchWeekPicks = async (leagueId, week) => {
                                     const pts = parseFloat((pick.multiplier*(pick.implied_odds>0?pick.implied_odds/100:100/Math.abs(pick.implied_odds||110))*10).toFixed(1));
                                     await supabase.from("picks").update({result:"W",points_earned:pts}).eq("id",pick.id);
                                     setWeekPicks(prev=>prev.map(p=>p.id===pick.id?{...p,result:"W",points_earned:pts}:p));
+                                    fetchStandings(activeLeagueId);
                                   }} style={{padding:"7px 14px",borderRadius:8,border:"none",background:pick.result==="W"?IOS.green:"rgba(48,209,88,0.12)",color:pick.result==="W"?"#000":IOS.green,fontSize:12,fontWeight:700,cursor:"pointer"}}>✓ Win</button>
                                   <button onClick={async()=>{
                                     await supabase.from("picks").update({result:"L",points_earned:0}).eq("id",pick.id);
                                     setWeekPicks(prev=>prev.map(p=>p.id===pick.id?{...p,result:"L",points_earned:0}:p));
+                                    fetchStandings(activeLeagueId);
                                   }} style={{padding:"7px 14px",borderRadius:8,border:"none",background:pick.result==="L"?IOS.red:"rgba(255,69,58,0.12)",color:pick.result==="L"?"#fff":IOS.red,fontSize:12,fontWeight:700,cursor:"pointer"}}>✗ Loss</button>
                                   {pick.result!=="pending"&&(
                                     <button onClick={async()=>{
                                       await supabase.from("picks").update({result:"pending",points_earned:0}).eq("id",pick.id);
                                       setWeekPicks(prev=>prev.map(p=>p.id===pick.id?{...p,result:"pending",points_earned:0}:p));
+                                      fetchStandings(activeLeagueId);
                                     }} style={{padding:"7px 10px",borderRadius:8,border:"1px solid rgba(255,255,255,0.1)",background:"transparent",color:IOS.label3,fontSize:12,fontWeight:700,cursor:"pointer"}}>↩</button>
                                   )}
                                 </div>
@@ -2390,50 +2461,94 @@ const fetchWeekPicks = async (leagueId, week) => {
 
               {leagueTab==="standings"&&(
                 <>
-                  {/* Hero */}
+                  {/* Hero — your stats */}
                   <div className="league-hero">
                     <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${IOS.blue},${IOS.indigo})`}}/>
-                    <div className="lh-rank">🏆 Your Rank — #2 of 8</div>
+                    <div className="lh-rank">🏆 Your Rank — #{realStandings.find(s=>s.isYou)?.rank||"?"} of {leagueMembers.length||"?"}</div>
                     <div className="lh-name">You</div>
                     <div className="lh-stats">
-                      <div className="lh-stat"><div className="lh-stat-val" style={{color:IOS.blue}}>7-3</div><div className="lh-stat-lbl">Record</div></div>
-                      <div className="lh-stat"><div className="lh-stat-val" style={{color:IOS.green}}>+18%</div><div className="lh-stat-lbl">ROI</div></div>
-                      <div className="lh-stat"><div className="lh-stat-val" style={{color:IOS.green}}>+12.5u</div><div className="lh-stat-lbl">Units</div></div>
-                      <div className="lh-stat"><div className="lh-stat-val" style={{color:IOS.green}}>W3</div><div className="lh-stat-lbl">Streak</div></div>
+                      <div className="lh-stat"><div className="lh-stat-val" style={{color:IOS.blue}}>{realStandings.find(s=>s.isYou)?.record||"0-0"}</div><div className="lh-stat-lbl">Record</div></div>
+                      <div className="lh-stat"><div className="lh-stat-val" style={{color:IOS.green}}>{realStandings.find(s=>s.isYou)?.wpct||"0%"}</div><div className="lh-stat-lbl">Win %</div></div>
+                      <div className="lh-stat"><div className="lh-stat-val" style={{color:IOS.green}}>{realStandings.find(s=>s.isYou)?.points||0}pts</div><div className="lh-stat-lbl">Points</div></div>
+                      <div className="lh-stat"><div className="lh-stat-val" style={{color:IOS.green}}>Wk {activeLeague.current_week||activeLeague.week||1}</div><div className="lh-stat-lbl">Current</div></div>
                     </div>
                   </div>
 
-                  {/* Sort */}
-                  <div style={{margin:"10px 0 6px"}}>
-                    <div className="sort-scroll">
-                      {[{id:"rank",l:"Rank"},{id:"units",l:"Units"},{id:"roi",l:"ROI"},{id:"wpct",l:"Win %"}].map(s=><div key={s.id} className={`sort-pill ${sortBy===s.id?"on":""}`} onClick={()=>setSortBy(s.id)}>{s.l}</div>)}
+                  {/* 🔥 This Week section */}
+                  <div style={{padding:"16px 20px 8px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <div style={{fontSize:18}}>🔥</div>
+                      <div style={{fontSize:17,fontWeight:700,letterSpacing:-0.3,color:"#fff"}}>This Week</div>
+                    </div>
+                    <div style={{fontSize:12,fontWeight:600,color:IOS.orange,background:"rgba(255,159,10,0.12)",padding:"3px 10px",borderRadius:20}}>
+                      Wk {activeLeague.current_week||activeLeague.week||1} · Live
+                    </div>
+                  </div>
+
+                  {/* Weekly scores */}
+                  <div style={{background:IOS.bg2,borderRadius:16,margin:"0 16px 16px",overflow:"hidden"}}>
+                    {realStandings.length===0 ? (
+                      <div style={{padding:"20px 16px",textAlign:"center",color:IOS.label3,fontSize:14}}>No graded picks yet this week</div>
+                    ) : (
+                      [...realStandings].sort((a,b)=>b.points-a.points).map((row,i)=>{
+                        const isMe = row.isYou;
+                        return (
+                          <div key={row.userId} style={{display:"flex",alignItems:"center",padding:"13px 16px",background:isMe?"rgba(10,132,255,0.08)":"transparent",borderBottom:i<realStandings.length-1?`0.5px solid ${IOS.sep}`:"none"}}>
+                            <div style={{width:28,fontSize:15,fontWeight:700,color:i===0?IOS.yellow:i===1?IOS.gray:i===2?IOS.orange:IOS.label3,flexShrink:0}}>
+                              {i===0?"🥇":i===1?"🥈":i===2?"🥉":`${i+1}`}
+                            </div>
+                            <div style={{flex:1}}>
+                              <div style={{fontSize:15,fontWeight:600,color:isMe?IOS.blue:"#fff"}}>{isMe?"You ✦":row.name}</div>
+                              <div style={{fontSize:12,color:IOS.label3,marginTop:1}}>{row.wins}W · {row.losses}L this week</div>
+                            </div>
+                            <div style={{textAlign:"right"}}>
+                              <div style={{fontSize:20,fontWeight:800,letterSpacing:-0.5,color:row.points>0?IOS.green:IOS.label3}}>{row.points}pts</div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* Season Standings section */}
+                  <div style={{padding:"4px 20px 8px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <div style={{fontSize:18}}>🏆</div>
+                      <div style={{fontSize:17,fontWeight:700,letterSpacing:-0.3,color:"#fff"}}>Season Standings</div>
                     </div>
                   </div>
 
                   <div className="standings-card">
+                    {/* Column headers */}
+                    <div style={{display:"flex",alignItems:"center",padding:"8px 16px",borderBottom:`0.5px solid ${IOS.sep}`}}>
+                      <div style={{width:28,flexShrink:0}}/>
+                      <div style={{flex:1}}/>
+                      <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3,width:38,textAlign:"center"}}>W/L</div>
+                      <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3,width:52,textAlign:"right"}}>pts</div>
+                    </div>
                     {sorted.map((row,i)=>{
-                      const isMe=row.name==="Joe";const isExp=expanded===row.rank;const dr=sortBy==="rank"?row.rank:i+1;
+                      const isMe=row.name==="Joe"||row.isYou;
+                      const isExp=expanded===row.rank;
+                      const dr=sortBy==="rank"?row.rank:i+1;
                       return (
-                        <div key={row.rank}>
+                        <div key={row.rank||i}>
                           <div className={`st-row ${isMe?"me":""}`} onClick={()=>setExpanded(isExp?null:row.rank)}>
                             <div className="st-rank">{dr<=3?rankMedal(dr):dr}</div>
                             <div className="st-info">
                               <div className={`st-name ${isMe?"me":""}`}>{isMe?"You ✦":row.name}</div>
-                              <div className="st-streak" style={{color:row.streak.startsWith("W")?IOS.green:IOS.red}}>{row.streak.startsWith("W")?"↑":"↓"} {row.streak} · {row.wpct} win rate</div>
+                              <div className="st-streak" style={{color:IOS.label3}}>{row.wpct} win rate</div>
                             </div>
                             <div className="st-rec">{row.record}</div>
-                            <div className={`st-units ${row.units.startsWith("+")?"pos":"neg"}`}>{row.units}u</div>
+                            <div className={`st-units ${(row.points||0)>0?"pos":"neg"}`}>{row.points!==undefined?`${row.points}`:row.units}</div>
                           </div>
                           {isExp&&(
                             <div className="expand-row">
                               <div className="expand-inner">
                                 <div className="exp-stat-row">
-                                  <div className="exp-stat"><div className="exp-stat-val" style={{color:row.roi.startsWith("+")?IOS.green:IOS.red}}>{row.roi}</div><div className="exp-stat-lbl">ROI</div></div>
-                                  <div className="exp-stat"><div className="exp-stat-val" style={{color:IOS.blue}}>{row.wpct}</div><div className="exp-stat-lbl">Win %</div></div>
-                                  <div className="exp-stat"><div className="exp-stat-val" style={{color:row.units.startsWith("+")?IOS.green:IOS.red}}>{row.units}u</div><div className="exp-stat-lbl">Units</div></div>
+                                  <div className="exp-stat"><div className="exp-stat-val" style={{color:IOS.blue}}>{row.record}</div><div className="exp-stat-lbl">W/L</div></div>
+                                  <div className="exp-stat"><div className="exp-stat-val" style={{color:IOS.green}}>{row.wpct}</div><div className="exp-stat-lbl">Win %</div></div>
+                                  <div className="exp-stat"><div className="exp-stat-val" style={{color:IOS.green}}>{row.points!==undefined?`${row.points}pts`:row.units}</div><div className="exp-stat-lbl">Points</div></div>
                                 </div>
-                                <div style={{fontSize:12,color:IOS.label3,fontWeight:500,marginBottom:6,textTransform:"uppercase",letterSpacing:0.5}}>Weekly Results</div>
-                                <div className="wk-row">{row.wr.map((r,i)=><div key={i} className={`wk-dot ${r==="-"?"d":r}`}>{r==="-"?"·":r}</div>)}</div>
                               </div>
                             </div>
                           )}
