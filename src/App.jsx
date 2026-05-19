@@ -2538,14 +2538,14 @@ export default function App() {
                               <div className={`st-name ${isMe?"me":""}`}>{isMe?"You ✦":row.name}</div>
                               <div className="st-streak" style={{color:IOS.label3}}>{row.wpct} win rate</div>
                             </div>
-                            <div className="st-rec">{row.record}</div>
+                            <div className="st-rec" style={{color:IOS.label3}}>0-0</div>
                             <div className={`st-units ${(row.points||0)>0?"pos":"neg"}`}>{row.points!==undefined?`${row.points}`:row.units}</div>
                           </div>
                           {isExp&&(
                             <div className="expand-row">
                               <div className="expand-inner">
                                 <div className="exp-stat-row">
-                                  <div className="exp-stat"><div className="exp-stat-val" style={{color:IOS.blue}}>{row.record}</div><div className="exp-stat-lbl">W/L</div></div>
+                                  <div className="exp-stat"><div className="exp-stat-val" style={{color:IOS.blue}}>0-0</div><div className="exp-stat-lbl">W/L</div></div>
                                   <div className="exp-stat"><div className="exp-stat-val" style={{color:IOS.green}}>{row.wpct}</div><div className="exp-stat-lbl">Win %</div></div>
                                   <div className="exp-stat"><div className="exp-stat-val" style={{color:IOS.green}}>{row.points!==undefined?`${row.points}pts`:row.units}</div><div className="exp-stat-lbl">Points</div></div>
                                 </div>
