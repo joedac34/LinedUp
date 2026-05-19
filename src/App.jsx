@@ -487,17 +487,27 @@ const STANDINGS = [
   { rank:8, name:"Jake P.",  record:"2-8", units:"-15.8", roi:"-24%", streak:"L5", wpct:"20%", wr:["L","L","L","W","L","L","-","-","-","-"] },
 ];
 
+const GAPER_MEMBERS = ["joe", "mlaforte", "esoumekhian", "dyaffe", "aweinstock", "Player6"];
+
 const SCHEDULE = [
-  { week:1, opp:"Jake P.",  ms:3, os:2, result:"W" },
-  { week:2, opp:"Ryan S.",  ms:4, os:1, result:"W" },
-  { week:3, opp:"Alex M.",  ms:2, os:3, result:"L" },
-  { week:4, opp:"Chris R.", ms:3, os:2, result:"W" },
-  { week:5, opp:"Tom B.",   ms:2, os:3, result:"L" },
-  { week:6, opp:"Mike D.",  ms:null, os:null, result:"live" },
-  { week:7, opp:"Dave K.",  ms:null, os:null, result:"upcoming" },
-  { week:8, opp:"Jake P.",  ms:null, os:null, result:"upcoming" },
-  { week:9, opp:"Ryan S.",  ms:null, os:null, result:"upcoming" },
-  { week:10,opp:"Alex M.",  ms:null, os:null, result:"upcoming" },
+  { week:1,  opp:"mlaforte",    ms:null, os:null, result:"live" },
+  { week:2,  opp:"esoumekhian", ms:null, os:null, result:"upcoming" },
+  { week:3,  opp:"dyaffe",      ms:null, os:null, result:"upcoming" },
+  { week:4,  opp:"aweinstock",  ms:null, os:null, result:"upcoming" },
+  { week:5,  opp:"Player6",     ms:null, os:null, result:"upcoming" },
+  { week:6,  opp:"mlaforte",    ms:null, os:null, result:"upcoming" },
+  { week:7,  opp:"esoumekhian", ms:null, os:null, result:"upcoming" },
+  { week:8,  opp:"dyaffe",      ms:null, os:null, result:"upcoming" },
+  { week:9,  opp:"aweinstock",  ms:null, os:null, result:"upcoming" },
+  { week:10, opp:"Player6",     ms:null, os:null, result:"upcoming" },
+  { week:11, opp:"mlaforte",    ms:null, os:null, result:"upcoming" },
+  { week:12, opp:"esoumekhian", ms:null, os:null, result:"upcoming" },
+  { week:13, opp:"dyaffe",      ms:null, os:null, result:"upcoming" },
+  { week:14, opp:"aweinstock",  ms:null, os:null, result:"upcoming" },
+  { week:15, opp:"Player6",     ms:null, os:null, result:"upcoming" },
+  { week:16, opp:"mlaforte",    ms:null, os:null, result:"upcoming" },
+  { week:17, opp:"esoumekhian", ms:null, os:null, result:"upcoming" },
+  { week:18, opp:"dyaffe",      ms:null, os:null, result:"upcoming" },
 ];
 
 const CHAT = [
@@ -732,11 +742,13 @@ export default function App() {
     if(!members || members.length===0) return;
     const ids = [...new Set(members.map(m=>m.league_id))];
     const {data:leagues} = await supabase.from("leagues").select("*").in("id", ids);
-    if(leagues) {
-      setRealLeagues(leagues.map(lg=>({
+    if(leagues && leagues.length > 0) {
+      const mapped = leagues.map(lg=>({
         ...lg,
         isCommissioner: members.find(m=>m.league_id===lg.id)?.is_commissioner||false
-      })));
+      }));
+      setRealLeagues(mapped);
+      setActiveLeagueId(mapped[0].id);
     }
   };
 
@@ -820,7 +832,7 @@ export default function App() {
 
   const baseStandings = realStandings.length > 0 ? realStandings.map(s=>({
     rank: s.rank,
-    name: s.isYou ? "Joe" : s.name,
+    name: s.isYou ? "You" : s.name,
     record: s.record,
     units: `+${s.points}`,
     roi: s.wpct,
@@ -828,7 +840,19 @@ export default function App() {
     wpct: s.wpct,
     wr: [],
     points: s.points,
-  })) : STANDINGS;
+    isYou: s.isYou,
+  })) : leagueMembers.length > 0 ? leagueMembers.map((m,i)=>({
+    rank: i+1,
+    name: m.isYou ? "You" : m.name,
+    record: "0-0",
+    units: "0",
+    roi: "0%",
+    streak: "—",
+    wpct: "0%",
+    wr: [],
+    points: 0,
+    isYou: m.isYou,
+  })) : [];
 
   const sorted=[...baseStandings].sort((a,b)=>{
     if(sortBy==="roi")   return parseFloat(b.roi)-parseFloat(a.roi);
@@ -1456,7 +1480,12 @@ export default function App() {
               <div className="nav-header large" style={{padding:"0 20px 14px"}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
                   <div className="nav-title-large">LINEDUP</div>
-                  <div onClick={()=>setScreen("leagues")} style={{fontSize:13,fontWeight:600,color:IOS.blue,cursor:"pointer"}}>All Leagues</div>
+                  <div style={{display:"flex",alignItems:"center",gap:12}}>
+                    <div onClick={()=>setScreen("leagues")} style={{fontSize:13,fontWeight:600,color:IOS.blue,cursor:"pointer"}}>All Leagues</div>
+                    <div onClick={()=>setScreen("profile")} style={{width:34,height:34,borderRadius:50,background:`linear-gradient(135deg,${IOS.blue},${IOS.indigo})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer"}}>
+                      {user?.email?.[0]?.toUpperCase()||"J"}
+                    </div>
+                  </div>
                 </div>
                 {/* League toggle */}
                 <div style={{display:"flex",gap:6,marginTop:10,marginBottom:2,overflowX:"auto",paddingBottom:2}}>
@@ -1606,11 +1635,11 @@ export default function App() {
               </div>
               <div style={{background:IOS.bg2,borderRadius:16,margin:"0 16px",overflow:"hidden"}}>
                 {baseStandings.slice(0,5).map(r=>(
-                  <div key={r.rank} className="mini-stand" style={r.name==="Joe"?{background:"rgba(10,132,255,0.08)"}:{}}>
+                  <div key={r.rank} className="mini-stand" style={r.isYou||r.name==="You"?{background:"rgba(10,132,255,0.08)"}:{}}>
                     <div className={`ms-rank ${r.rank===1?"top":""}`}>{r.rank}</div>
-                    <div className={`ms-name ${r.name==="Joe"?"me":""}`}>{r.name==="Joe"?"You":r.name}</div>
+                    <div className={`ms-name ${r.isYou||r.name==="You"?"me":""}`}>{r.isYou||r.name==="You"?"You":r.name}</div>
                     <div className="ms-rec">{r.record}</div>
-                    <div className={`ms-units ${String(r.units).startsWith("+")?"pos":"neg"}`}>{r.points!==undefined?`${r.points}pts`:r.units}</div>
+                    <div className={`ms-units ${String(r.units).startsWith("+")&&r.units!=="0"?"pos":"neg"}`}>{r.points!==undefined?`${r.points}pts`:r.units}</div>
                   </div>
                 ))}
               </div>
@@ -1962,6 +1991,22 @@ export default function App() {
               {allFlexFilled && hasParlay
                 ? <button className="ios-btn green" onClick={async()=>{
                     if(user) {
+                      const week = activeLeague.current_week||activeLeague.week||1;
+                      // Delete any existing picks for this user/league/week first
+                      const {data:existing} = await supabase
+                        .from("picks")
+                        .select("id")
+                        .eq("league_id", activeLeague.id)
+                        .eq("user_id", user.id)
+                        .eq("week", week);
+                      if(existing && existing.length > 0) {
+                        const confirmed = window.confirm(`You already have ${existing.length} picks this week. Replace them?`);
+                        if(!confirmed) return;
+                        await supabase.from("picks").delete()
+                          .eq("league_id", activeLeague.id)
+                          .eq("user_id", user.id)
+                          .eq("week", week);
+                      }
                       const picksToSave = [];
                       flexPicks.forEach(slot=>{
                         if(!slot.mult) return;
@@ -1969,7 +2014,7 @@ export default function App() {
                           slot.parlayLegs.forEach(b=>picksToSave.push({
                             league_id: activeLeague.id,
                             user_id: user.id,
-                            week: activeLeague.current_week||activeLeague.week||1,
+                            week,
                             slot: "longshot",
                             multiplier: slot.mult,
                             pick_name: b.pick,
@@ -1982,7 +2027,7 @@ export default function App() {
                           picksToSave.push({
                             league_id: activeLeague.id,
                             user_id: user.id,
-                            week: activeLeague.current_week||activeLeague.week||1,
+                            week,
                             slot: slot.category||"ml",
                             multiplier: slot.mult,
                             pick_name: slot.bet.pick,
@@ -2022,120 +2067,203 @@ export default function App() {
               {/* Header */}
               <div style={{padding:"6px 20px 16px"}}>
                 <div style={{fontSize:34,fontWeight:800,letterSpacing:-1,color:"#fff",lineHeight:1.05}}>Matchup</div>
-                <div style={{fontSize:14,fontWeight:500,color:IOS.label3,marginTop:3}}>Week 6 · The Boys League · Live</div>
-              </div>
-
-              {/* Big score card */}
-              <div style={{margin:"0 16px 14px",background:IOS.bg2,borderRadius:20,padding:"20px",position:"relative",overflow:"hidden",border:`1px solid rgba(10,132,255,0.25)`}}>
-                <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${IOS.blue},${IOS.teal})`}}/>
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
-                  <div>
-                    <div style={{fontSize:26,fontWeight:800,letterSpacing:-0.5,color:IOS.blue}}>YOU</div>
-                    <div style={{fontSize:13,color:IOS.label3,marginTop:2}}>7-3 season</div>
-                  </div>
-                  <div style={{textAlign:"center"}}>
-                    <div style={{fontSize:42,fontWeight:800,letterSpacing:-2,lineHeight:1}}>
-                      <span style={{color:IOS.green}}>3</span>
-                      <span style={{fontSize:20,color:IOS.label3,fontWeight:400,margin:"0 6px"}}>–</span>
-                      <span style={{color:IOS.red}}>1</span>
-                    </div>
-                    <div style={{fontSize:10,fontWeight:700,letterSpacing:1.5,textTransform:"uppercase",color:IOS.green,marginTop:4}}>● Live</div>
-                  </div>
-                  <div style={{textAlign:"right"}}>
-                    <div style={{fontSize:26,fontWeight:800,letterSpacing:-0.5}}>Mike D.</div>
-                    <div style={{fontSize:13,color:IOS.label3,marginTop:2}}>6-4 season</div>
-                  </div>
-                </div>
-                {/* Score breakdown */}
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:1,background:"rgba(255,255,255,0.05)",borderRadius:12,overflow:"hidden"}}>
-                  {[{n:3,l:"Wins",c:IOS.green},{n:1,l:"Pushes",c:IOS.label3},{n:1,l:"Their Wins",c:IOS.red},{n:2,l:"Pending",c:IOS.blue}].map((s,i)=>(
-                    <div key={i} style={{background:IOS.bg3,padding:"10px 6px",textAlign:"center"}}>
-                      <div style={{fontSize:20,fontWeight:800,letterSpacing:-0.5,color:s.c}}>{s.n}</div>
-                      <div style={{fontSize:9,fontWeight:600,letterSpacing:0.3,textTransform:"uppercase",color:IOS.label3,marginTop:2}}>{s.l}</div>
-                    </div>
-                  ))}
+                <div style={{fontSize:14,fontWeight:500,color:IOS.label3,marginTop:3}}>
+                  Week {activeLeague.current_week||activeLeague.week||1} · {activeLeague.name} · Live
                 </div>
               </div>
 
-              {/* Pick by pick head to head */}
-              <div style={{padding:"0 20px 10px"}}>
-                <div style={{fontSize:12,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3}}>Pick by Pick</div>
-              </div>
+              {(()=>{
+                // Get my picks and opponent's picks from weekPicks
+                const myPicks = weekPicks.filter(p=>p.user_id===user?.id);
+                const oppPicks = weekPicks.filter(p=>p.user_id!==user?.id);
+                const currentOpp = SCHEDULE.find(w=>w.result==="live")?.opp || "Opponent";
 
-              {[
-                {slot:"Moneyline", mult:1, col:IOS.blue,   myPick:"KC Chiefs",         myOdds:"-180", myResult:"W",
-                                                            oppPick:"Bills ML",          oppOdds:"-210",oppResult:"W"},
-                {slot:"Prop",      mult:2, col:IOS.yellow, myPick:"Mahomes 300+ Yds",   myOdds:"-130", myResult:"W",
-                                                            oppPick:"Josh Allen 2+ TDs", oppOdds:"-140",oppResult:"L"},
-                {slot:"Over/Under",mult:3, col:IOS.orange, myPick:"Over 47.5",          myOdds:"-110", myResult:"L",
-                                                            oppPick:"Under 44",          oppOdds:"-110",oppResult:"W"},
-                {slot:"Spread",    mult:4, col:IOS.green,  myPick:"Eagles -3",          myOdds:"-110", myResult:"pending",
-                                                            oppPick:"49ers -4.5",        oppOdds:"-110",oppResult:"pending"},
-                {slot:"Parlay",    mult:5, col:IOS.pink,   myPick:"Raiders + Cowboys",  myOdds:"+420", myResult:"pending",
-                                                            oppPick:"Panthers + Bears",  oppOdds:"+380",oppResult:"pending"},
-              ].map((row,i)=>{
-                const appliedPU=matchupPUs[i];
-                const rColor=r=>r==="W"?IOS.green:r==="L"?IOS.red:IOS.label3;
-                const rLabel=r=>r==="W"?"✓ Win":r==="L"?"✗ Loss":"● Pending";
+                // Get opponent's user picks (first non-me user who has picks)
+                const oppUserIds = [...new Set(oppPicks.map(p=>p.user_id))];
+                const oppUserId = oppUserIds[0];
+                const oppUserPicks = oppUserId ? oppPicks.filter(p=>p.user_id===oppUserId) : [];
+                const oppName = oppUserPicks[0]?.users?.username || oppUserPicks[0]?.users?.email?.split("@")[0] || currentOpp;
+
+                // Calculate scores
+                const myTotal = myPicks.filter(p=>p.result==="W").reduce((sum,p)=>sum+parseFloat(p.points_earned||0),0).toFixed(1);
+                const oppTotal = oppUserPicks.filter(p=>p.result==="W").reduce((sum,p)=>sum+parseFloat(p.points_earned||0),0).toFixed(1);
+                const myWins = myPicks.filter(p=>p.result==="W").length;
+                const myLosses = myPicks.filter(p=>p.result==="L").length;
+                const myPending = myPicks.filter(p=>p.result==="pending").length;
+                const oppWins = oppUserPicks.filter(p=>p.result==="W").length;
+                const oppLosses = oppUserPicks.filter(p=>p.result==="L").length;
+                const isWinning = parseFloat(myTotal) >= parseFloat(oppTotal);
+
+                // Group my picks by multiplier
+                const myPicksByMult = {};
+                myPicks.forEach(p=>{
+                  const key = p.multiplier;
+                  if(!myPicksByMult[key]) myPicksByMult[key]=[];
+                  myPicksByMult[key].push(p);
+                });
+
+                const multColors = {1:IOS.blue, 2:IOS.yellow, 3:IOS.orange, 4:IOS.green, 5:IOS.pink};
+                const slotLabels = {ml:"Moneyline", prop:"Prop", ou:"Over/Under", spread:"Spread", longshot:"Parlay"};
+                const rColor = r=>r==="W"?IOS.green:r==="L"?IOS.red:IOS.label3;
+                const rLabel = r=>r==="W"?"✓ Win":r==="L"?"✗ Loss":"● Pending";
+
                 return (
-                  <div key={i} style={{margin:"0 16px 10px",background:IOS.bg2,borderRadius:14,overflow:"hidden",border:`1px solid rgba(255,255,255,0.06)`}}>
-                    {/* Slot header */}
-                    <div style={{padding:"10px 14px",borderBottom:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                      <div style={{display:"flex",alignItems:"center",gap:8}}>
-                        <div style={{width:30,height:30,borderRadius:8,background:`${row.col}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:row.col}}>{row.mult}×</div>
-                        <div style={{fontSize:12,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:row.col}}>{row.slot}</div>
-                      </div>
-                      {/* PU button or active badge */}
-                      {appliedPU ? (
-                        <div style={{display:"inline-flex",alignItems:"center",gap:5,padding:"4px 9px",borderRadius:7,background:`${appliedPU.color}15`,border:`1px solid ${appliedPU.color}30`}}>
-                          <span style={{fontSize:11}}>{appliedPU.icon}</span>
-                          <span style={{fontSize:10,fontWeight:700,color:appliedPU.color}}>{appliedPU.name}</span>
-                          <span style={{fontSize:10,color:IOS.label3,cursor:"pointer"}} onClick={()=>{setMyPUs(prev=>[...prev,appliedPU]);setMatchupPUs(prev=>{const n={...prev};delete n[i];return n;})}}>✕</span>
-                        </div>
-                      ) : (row.myResult==="pending"&&myPUs.length>0) ? (
-                        <div onClick={()=>setShowPUModal({context:"matchup",pickIdx:i,slotLabel:row.slot})}
-                          style={{display:"inline-flex",alignItems:"center",gap:5,padding:"4px 9px",borderRadius:7,background:"rgba(255,255,255,0.04)",border:"1px dashed rgba(255,255,255,0.1)",cursor:"pointer"}}>
-                          <span style={{fontSize:11}}>⚡</span>
-                          <span style={{fontSize:10,fontWeight:600,color:IOS.label3}}>Power-Up</span>
-                        </div>
-                      ) : null}
-                    </div>
-                    {/* Side by side picks */}
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr"}}>
-                      {/* My pick */}
-                      <div style={{padding:"12px 14px",borderRight:`0.5px solid ${IOS.sep}`,background:row.myResult==="W"?"rgba(48,209,88,0.04)":row.myResult==="L"?"rgba(255,69,58,0.04)":"transparent"}}>
-                        <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.blue,marginBottom:5}}>You</div>
-                        <div style={{fontSize:13,fontWeight:600,color:"#fff",lineHeight:1.3,marginBottom:6}}>{row.myPick}</div>
-                        <div style={{display:"flex",alignItems:"center",gap:6}}>
-                          <div style={{fontSize:14,fontWeight:800,letterSpacing:-0.3,color:row.myOdds.startsWith("+")?IOS.green:IOS.blue}}>{row.myOdds}</div>
-                          <div style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:6,background:`${rColor(row.myResult)}15`,color:rColor(row.myResult)}}>{rLabel(row.myResult)}</div>
+                  <>
+                    {/* Big score card */}
+                    <div style={{margin:"0 16px 14px",background:IOS.bg2,borderRadius:20,padding:"20px",position:"relative",overflow:"hidden",border:`1px solid rgba(10,132,255,0.25)`}}>
+                      <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${IOS.blue},${IOS.teal})`}}/>
+                      
+                      {/* Live badge */}
+                      <div style={{textAlign:"center",marginBottom:14}}>
+                        <div style={{display:"inline-flex",alignItems:"center",gap:6,background:"rgba(10,132,255,0.12)",border:"1px solid rgba(10,132,255,0.25)",borderRadius:20,padding:"4px 14px"}}>
+                          <div style={{width:6,height:6,borderRadius:"50%",background:IOS.blue}}/>
+                          <div style={{fontSize:11,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:IOS.blue}}>{isWinning?"You're Leading":"You're Trailing"}</div>
                         </div>
                       </div>
-                      {/* Opp pick */}
-                      <div style={{padding:"12px 14px",background:row.oppResult==="W"?"rgba(48,209,88,0.04)":row.oppResult==="L"?"rgba(255,69,58,0.04)":"transparent"}}>
-                        <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3,marginBottom:5}}>Mike D.</div>
-                        <div style={{fontSize:13,fontWeight:600,color:"#fff",lineHeight:1.3,marginBottom:6}}>{row.oppPick}</div>
-                        <div style={{display:"flex",alignItems:"center",gap:6}}>
-                          <div style={{fontSize:14,fontWeight:800,letterSpacing:-0.3,color:row.oppOdds.startsWith("+")?IOS.green:IOS.blue}}>{row.oppOdds}</div>
-                          <div style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:6,background:`${rColor(row.oppResult)}15`,color:rColor(row.oppResult)}}>{rLabel(row.oppResult)}</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
 
-              {/* Power-ups inventory reminder */}
-              {myPUs.length>0&&(
-                <div style={{margin:"4px 16px 16px",background:IOS.bg2,borderRadius:12,padding:"12px 14px",display:"flex",alignItems:"center",gap:10,border:"1px solid rgba(255,255,255,0.06)"}}>
-                  <span style={{fontSize:16}}>⚡</span>
-                  <div style={{flex:1}}>
-                    <div style={{fontSize:13,fontWeight:600,color:"#fff"}}>{myPUs.length} power-up{myPUs.length>1?"s":""} available</div>
-                    <div style={{fontSize:11,color:IOS.label3}}>Use them on pending picks above</div>
-                  </div>
-                  <div onClick={()=>{setProfTab("power-ups");setScreen("profile");}} style={{fontSize:12,fontWeight:600,color:IOS.blue,cursor:"pointer"}}>View</div>
-                </div>
-              )}
+                      {/* Two scorecards side by side */}
+                      <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:12,alignItems:"center"}}>
+                        
+                        {/* My scorecard */}
+                        <div style={{background:`linear-gradient(135deg,rgba(10,132,255,0.12),rgba(10,132,255,0.06))`,borderRadius:16,padding:"16px 12px",border:"1px solid rgba(10,132,255,0.2)"}}>
+                          <div style={{fontSize:11,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.blue,marginBottom:6}}>You</div>
+                          <div style={{fontSize:34,fontWeight:800,letterSpacing:-1.5,color:IOS.green,lineHeight:1}}>{myTotal}</div>
+                          <div style={{fontSize:10,color:IOS.label3,marginBottom:12}}>points</div>
+                          <div style={{display:"flex",gap:6}}>
+                            {[{n:myWins,l:"W",c:IOS.green},{n:myLosses,l:"L",c:IOS.red},{n:myPending,l:"P",c:IOS.blue}].map((s,i)=>(
+                              <div key={i} style={{flex:1,background:"rgba(0,0,0,0.2)",borderRadius:8,padding:"6px 4px",textAlign:"center"}}>
+                                <div style={{fontSize:16,fontWeight:800,color:s.c,letterSpacing:-0.5}}>{s.n}</div>
+                                <div style={{fontSize:9,fontWeight:600,color:IOS.label3,marginTop:1}}>{s.l}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* VS divider */}
+                        <div style={{textAlign:"center"}}>
+                          <div style={{fontSize:13,fontWeight:600,color:IOS.label3}}>vs</div>
+                        </div>
+
+                        {/* Opp scorecard */}
+                        <div style={{background:`linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))`,borderRadius:16,padding:"16px 12px",border:"1px solid rgba(255,255,255,0.08)"}}>
+                          <div style={{fontSize:11,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label2,marginBottom:6}}>{oppName}</div>
+                          <div style={{fontSize:34,fontWeight:800,letterSpacing:-1.5,color:IOS.label2,lineHeight:1}}>{oppTotal}</div>
+                          <div style={{fontSize:10,color:IOS.label3,marginBottom:12}}>points</div>
+                          <div style={{display:"flex",gap:6}}>
+                            {[{n:oppWins,l:"W",c:IOS.green},{n:oppLosses,l:"L",c:IOS.red},{n:oppUserPicks.filter(p=>p.result==="pending").length,l:"P",c:IOS.blue}].map((s,i)=>(
+                              <div key={i} style={{flex:1,background:"rgba(0,0,0,0.2)",borderRadius:8,padding:"6px 4px",textAlign:"center"}}>
+                                <div style={{fontSize:16,fontWeight:800,color:s.c,letterSpacing:-0.5}}>{s.n}</div>
+                                <div style={{fontSize:9,fontWeight:600,color:IOS.label3,marginTop:1}}>{s.l}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* My picks */}
+                    <div style={{padding:"0 20px 10px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                      <div style={{fontSize:12,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3}}>Your Picks</div>
+                      <div style={{fontSize:12,color:IOS.label3}}>{myPicks.length} picks · {myPending} pending</div>
+                    </div>
+
+                    {myPicks.length===0 ? (
+                      <div style={{margin:"0 16px 10px",background:IOS.bg2,borderRadius:14,padding:"20px 16px",textAlign:"center",color:IOS.label3,fontSize:14}}>
+                        No picks submitted yet
+                      </div>
+                    ) : (
+                      // Group by multiplier and show each slot
+                      Object.entries(myPicksByMult).sort((a,b)=>a[0]-b[0]).map(([mult, picks])=>{
+                        const col = multColors[parseInt(mult)] || IOS.blue;
+                        const isParlay = picks[0]?.slot==="longshot";
+                        return (
+                          <div key={mult} style={{margin:"0 16px 8px",background:IOS.bg2,borderRadius:14,overflow:"hidden",border:`1px solid rgba(255,255,255,0.06)`}}>
+                            {/* Slot header */}
+                            <div style={{padding:"10px 14px",borderBottom:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                                <div style={{width:30,height:30,borderRadius:8,background:`${col}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:col}}>{mult}×</div>
+                                <div style={{fontSize:12,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:col}}>
+                                  {isParlay ? `🚀 Parlay · ${picks.length} legs` : slotLabels[picks[0]?.slot]||picks[0]?.slot}
+                                </div>
+                              </div>
+                              <div style={{fontSize:12,fontWeight:700,color:picks[0]?.result==="W"?IOS.green:picks[0]?.result==="L"?IOS.red:IOS.orange}}>
+                                {isParlay ? `${picks.filter(p=>p.result==="W").length}/${picks.length} hit` : rLabel(picks[0]?.result)}
+                              </div>
+                            </div>
+                            {/* Pick rows */}
+                            {picks.map((pick,j)=>(
+                              <div key={j} style={{padding:"12px 14px",borderBottom:j<picks.length-1?`0.5px solid ${IOS.sep}`:"none",background:pick.result==="W"?"rgba(48,209,88,0.04)":pick.result==="L"?"rgba(255,69,58,0.04)":"transparent"}}>
+                                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                                  <div>
+                                    <div style={{fontSize:14,fontWeight:600,color:"#fff",marginBottom:4}}>{pick.pick_name}</div>
+                                    <div style={{fontSize:10,color:IOS.label3,textTransform:"uppercase",letterSpacing:0.3}}>{slotLabels[pick.slot]||pick.slot}</div>
+                                  </div>
+                                  <div style={{textAlign:"right"}}>
+                                    <div style={{fontSize:16,fontWeight:800,color:pick.odds?.startsWith("+")?IOS.green:IOS.blue}}>{pick.odds}</div>
+                                    {pick.result!=="pending"&&<div style={{fontSize:11,fontWeight:700,color:rColor(pick.result),marginTop:2}}>{pick.result==="W"?`+${pick.points_earned}pts`:"0pts"}</div>}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })
+                    )}
+
+                    {/* Opponent picks */}
+                    <div style={{padding:"8px 20px 10px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                      <div style={{fontSize:12,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3}}>{oppName}'s Picks</div>
+                      <div style={{fontSize:12,color:IOS.label3}}>{oppUserPicks.length} picks</div>
+                    </div>
+
+                    {oppUserPicks.length===0 ? (
+                      <div style={{margin:"0 16px 16px",background:IOS.bg2,borderRadius:14,padding:"20px 16px",textAlign:"center",color:IOS.label3,fontSize:14}}>
+                        {oppName} hasn't submitted picks yet
+                      </div>
+                    ) : (
+                      Object.entries(oppUserPicks.reduce((acc,p)=>{
+                        if(!acc[p.multiplier]) acc[p.multiplier]=[];
+                        acc[p.multiplier].push(p);
+                        return acc;
+                      },{})).sort((a,b)=>a[0]-b[0]).map(([mult, picks])=>{
+                        const col = multColors[parseInt(mult)] || IOS.blue;
+                        const isParlay = picks[0]?.slot==="longshot";
+                        return (
+                          <div key={mult} style={{margin:"0 16px 8px",background:IOS.bg2,borderRadius:14,overflow:"hidden",border:`1px solid rgba(255,255,255,0.06)`}}>
+                            <div style={{padding:"10px 14px",borderBottom:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                                <div style={{width:30,height:30,borderRadius:8,background:`${col}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:col}}>{mult}×</div>
+                                <div style={{fontSize:12,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:col}}>
+                                  {isParlay ? `🚀 Parlay · ${picks.length} legs` : slotLabels[picks[0]?.slot]||picks[0]?.slot}
+                                </div>
+                              </div>
+                              <div style={{fontSize:12,fontWeight:700,color:picks[0]?.result==="W"?IOS.green:picks[0]?.result==="L"?IOS.red:IOS.orange}}>
+                                {rLabel(picks[0]?.result)}
+                              </div>
+                            </div>
+                            {picks.map((pick,j)=>(
+                              <div key={j} style={{padding:"12px 14px",borderBottom:j<picks.length-1?`0.5px solid ${IOS.sep}`:"none",background:pick.result==="W"?"rgba(48,209,88,0.04)":pick.result==="L"?"rgba(255,69,58,0.04)":"transparent"}}>
+                                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                                  <div>
+                                    <div style={{fontSize:14,fontWeight:600,color:"#fff",marginBottom:4}}>{pick.pick_name}</div>
+                                    <div style={{fontSize:10,color:IOS.label3,textTransform:"uppercase",letterSpacing:0.3}}>{slotLabels[pick.slot]||pick.slot}</div>
+                                  </div>
+                                  <div style={{textAlign:"right"}}>
+                                    <div style={{fontSize:16,fontWeight:800,color:pick.odds?.startsWith("+")?IOS.green:IOS.blue}}>{pick.odds}</div>
+                                    {pick.result!=="pending"&&<div style={{fontSize:11,fontWeight:700,color:rColor(pick.result),marginTop:2}}>{pick.result==="W"?`+${pick.points_earned}pts`:"0pts"}</div>}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })
+                    )}
+
+                    <div style={{height:16}}/>
+                  </>
+                );
+              })()}
             </div>
           </>
         )}
@@ -2248,7 +2376,7 @@ export default function App() {
 
               {/* Commish tabs */}
               <div style={{display:"flex",background:IOS.bg3,borderRadius:12,padding:2,margin:"0 16px 16px",gap:2}}>
-                {[{id:"grade",l:"Grade Picks"},{id:"members",l:"Members"},{id:"settings",l:"Settings"}].map(t=>(
+                {[{id:"grade",l:"Grade Picks"},{id:"members",l:"Members"}].map(t=>(
                   <div key={t.id} onClick={()=>setCommishTab(t.id)} style={{flex:1,textAlign:"center",padding:"8px 4px",borderRadius:10,fontSize:12,fontWeight:700,cursor:"pointer",transition:"all .15s",background:commishTab===t.id?IOS.bg2:"transparent",color:commishTab===t.id?"#fff":IOS.label3,boxShadow:commishTab===t.id?"0 1px 3px rgba(0,0,0,0.4)":"none"}}>{t.l}</div>
                 ))}
               </div>
@@ -2450,8 +2578,8 @@ export default function App() {
             </div>
             <div className="body">
               <div style={{padding:"0 20px 12px"}}>
-                <div className="nav-title-large">The Boys</div>
-                <div className="nav-subtitle">2024 NFL · 8 members · Week 6</div>
+                <div className="nav-title-large">{activeLeague.name||"My League"}</div>
+                <div className="nav-subtitle">{SPORTS[activeLeague.sport]?.label||"NFL"} · {leagueMembers.length||"?"} members · Week {activeLeague.current_week||activeLeague.week||1}</div>
               </div>
 
               {/* Tabs */}
@@ -2524,10 +2652,10 @@ export default function App() {
                       <div style={{width:28,flexShrink:0}}/>
                       <div style={{flex:1}}/>
                       <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3,width:38,textAlign:"center"}}>W/L</div>
-                      <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3,width:52,textAlign:"right"}}>pts</div>
+                      <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3,width:52,textAlign:"right"}}>total pts</div>
                     </div>
                     {sorted.map((row,i)=>{
-                      const isMe=row.name==="Joe"||row.isYou;
+                      const isMe=row.isYou||row.name==="You";
                       const isExp=expanded===row.rank;
                       const dr=sortBy==="rank"?row.rank:i+1;
                       return (
@@ -2685,6 +2813,15 @@ export default function App() {
                     const hasMH = MATCHUP_HISTORY.find(x=>x.week===wk.week);
                     const myPts = hasMH ? parseFloat(calcMatchupScore(hasMH.myPicks)) : null;
                     const oppPts = hasMH ? parseFloat(calcMatchupScore(hasMH.oppPicks)) : null;
+
+                    // Calculate live score from real weekPicks
+                    const myLivePts = live ? parseFloat(weekPicks
+                      .filter(p=>p.user_id===user?.id&&p.result==="W")
+                      .reduce((sum,p)=>sum+parseFloat(p.points_earned||0),0).toFixed(1)) : null;
+                    const oppLivePts = live ? parseFloat(weekPicks
+                      .filter(p=>p.user_id!==user?.id&&p.result==="W")
+                      .reduce((sum,p)=>sum+parseFloat(p.points_earned||0),0).toFixed(1)) : null;
+
                     return (
                       <div key={wk.week} className="sch-item"
                         style={{...(live?{background:"rgba(10,132,255,0.06)"}:{}), ...(done?{cursor:"pointer"}:{})}}
@@ -2692,8 +2829,12 @@ export default function App() {
                       >
                         <div className={`sch-wk ${live?"live":""}`}>W{wk.week}</div>
                         <div className={`sch-opp ${live?"live":done?"done":"up"}`}>{live&&<span style={{color:IOS.blue,marginRight:6}}>●</span>}vs {wk.opp}</div>
-                        <div className="sch-score" style={{width:60,fontSize:12}}>
-                          {done&&myPts!==null?<span style={{color:wk.result==="W"?IOS.green:IOS.red,fontWeight:700}}>{myPts}–{oppPts}</span>:live?"Live":"—"}
+                        <div className="sch-score" style={{width:70,fontSize:12}}>
+                          {done&&myPts!==null
+                            ? <span style={{color:wk.result==="W"?IOS.green:IOS.red,fontWeight:700}}>{myPts}–{oppPts}</span>
+                            : live&&myLivePts!==null
+                            ? <span style={{color:IOS.blue,fontWeight:700}}>{myLivePts}–{oppLivePts}</span>
+                            : "—"}
                         </div>
                         <div style={{display:"flex",alignItems:"center",gap:6}}>
                           <div className={`sch-badge ${wk.result==="live"?"live":wk.result==="upcoming"?"up":wk.result}`}>{wk.result==="live"?"LIVE":wk.result==="upcoming"?"—":wk.result}</div>
@@ -2852,11 +2993,11 @@ export default function App() {
         {/* ══ TAB BAR ══ */}
         <div className="tab-bar">
           {[
-            {icon:"⚡",label:"Home",    id:"home"},
-            {icon:"🎯",label:"Picks",   id:"picks"},
-            {icon:"🏈",label:"Matchup", id:"matchup"},
-            {icon:"🏆",label:"Leagues", id:"leagues"},
-            {icon:"👤",label:"Profile", id:"profile"},
+            {icon:"⚡",label:"Home",      id:"home"},
+            {icon:"🎯",label:"Picks",     id:"picks"},
+            {icon:"🏈",label:"Matchup",   id:"matchup"},
+            {icon:"🏆",label:"Leagues",   id:"leagues"},
+            {icon:"📊",label:"Standings", id:"league"},
           ].map(t=>(
             <div key={t.id} className={`tab-item ${screen===t.id?"on":""}`} onClick={()=>setScreen(t.id)}>
               <div className="tab-icon" style={{filter:screen===t.id?"none":"grayscale(1) opacity(0.5)"}}>{t.icon}</div>
