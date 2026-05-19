@@ -580,6 +580,29 @@ export default function App() {
   const [picks,        setPicks]        = useState({ml:null,prop:null,ou:null,spread:null});
   const [lsBets,       setLsBets]       = useState([]);
 
+  // Flex multiplier system — 5 picks, user assigns mult 1-5, one must be parlay
+  const EMPTY_FLEX = [
+    {id:0, bet:null, mult:null, isParlay:false, parlayLegs:[]},
+    {id:1, bet:null, mult:null, isParlay:false, parlayLegs:[]},
+    {id:2, bet:null, mult:null, isParlay:false, parlayLegs:[]},
+    {id:3, bet:null, mult:null, isParlay:false, parlayLegs:[]},
+    {id:4, bet:null, mult:null, isParlay:false, parlayLegs:[]},
+  ];
+  const [flexPicks, setFlexPicks] = useState(EMPTY_FLEX);
+  const [activeFlexSlot, setActiveFlexSlot] = useState(null); // index of slot being edited
+  const [flexCategory, setFlexCategory] = useState(null); // category being browsed
+  const usedMults = flexPicks.filter(p=>p.mult!==null).map(p=>p.mult);
+  const availableMults = [1,2,3,4,5].filter(m=>!usedMults.includes(m));
+  const hasParlay = flexPicks.some(p=>p.isParlay&&p.parlayLegs.length>=2);
+  const allFlexFilled = flexPicks.every(p=>p.mult!==null&&(p.isParlay?p.parlayLegs.length>=2:p.bet!==null));
+  const ALL_BETS = [
+    ...BETS.ml.map(b=>({...b, category:"ml", categoryLabel:"Moneyline", categoryColor:IOS.blue})),
+    ...BETS.prop.map(b=>({...b, category:"prop", categoryLabel:"Prop", categoryColor:IOS.yellow})),
+    ...BETS.ou.map(b=>({...b, category:"ou", categoryLabel:"Over/Under", categoryColor:IOS.orange})),
+    ...BETS.spread.map(b=>({...b, category:"spread", categoryLabel:"Spread", categoryColor:IOS.green})),
+    ...BETS.longshot.map(b=>({...b, category:"longshot", categoryLabel:"Parlay Leg", categoryColor:IOS.pink})),
+  ];
+
   // Grading state — weekPicks per league, stored locally
   const [gradingData,  setGradingData]  = useState(() => {
     const init = {};
@@ -1449,54 +1472,40 @@ const fetchWeekPicks = async (leagueId, week) => {
               }
 
               {/* My Locked Picks card */}
-              {savedPicks && (
+              {savedPicks && savedPicks.flexPicks && (
                 <div style={{margin:"0 16px 10px",background:IOS.bg2,borderRadius:16,overflow:"hidden",border:`1px solid rgba(48,209,88,0.25)`}}>
-                  <div style={{position:"absolute",display:"none"}}/>
                   <div style={{padding:"12px 16px 8px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:`0.5px solid ${IOS.sep}`}}>
-                    <div style={{fontSize:12,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.green}}>✓ Week 6 Picks Locked</div>
+                    <div style={{fontSize:12,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.green}}>✓ Week {activeLeague.current_week||activeLeague.week||1} Picks Locked</div>
                     <div style={{fontSize:12,fontWeight:600,color:IOS.blue,cursor:"pointer"}} onClick={()=>setScreen("picks")}>Edit</div>
                   </div>
-                  {SLOTS.map(slot=>{
-                    const p = slot.id==="longshot" ? null : savedPicks.picks?.[slot.id];
-                    const lsB = slot.id==="longshot" ? savedPicks.lsBets : null;
-                    if(slot.id==="longshot") {
-                      if(!lsB||!lsB.length) return null;
+                  {[...savedPicks.flexPicks].sort((a,b)=>a.mult-b.mult).map((slot,i)=>{
+                    if(!slot.mult) return null;
+                    const multColors = {1:IOS.blue, 2:IOS.yellow, 3:IOS.orange, 4:IOS.green, 5:IOS.pink};
+                    if(slot.isParlay) {
+                      const ls = calcLS(slot.parlayLegs);
                       return (
-                        <div key="ls" style={{padding:"11px 16px",borderBottom:`0.5px solid ${IOS.sep}`}}>
+                        <div key={i} style={{padding:"11px 16px",borderBottom:`0.5px solid ${IOS.sep}`}}>
                           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                             <div>
-                              <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:slot.color,marginBottom:3}}>{slot.mult}× · {slot.label}</div>
-                              <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>{lsB.length}-leg parlay</div>
+                              <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:multColors[slot.mult],marginBottom:3}}>{slot.mult}× · Parlay · {slot.parlayLegs.length} legs</div>
+                              <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>{slot.parlayLegs.map(b=>b.pick).join(" + ")}</div>
                             </div>
-                            <div style={{fontSize:18,fontWeight:800,letterSpacing:-0.5,color:IOS.pink}}>{calcLS(lsB)?.american}</div>
+                            <div style={{fontSize:18,fontWeight:800,color:IOS.pink}}>{ls?.american}</div>
                           </div>
-                          {lsB.map(b=>(
-                            <div key={b.id} style={{fontSize:12,color:IOS.label3,marginTop:4,paddingLeft:8}}>· {b.pick} <span style={{color:b.odds.startsWith("+")?IOS.green:IOS.blue,fontWeight:600}}>{b.odds}</span></div>
-                          ))}
                         </div>
                       );
                     }
-                    if(!p) return null;
+                    if(!slot.bet) return null;
                     return (
-                      <div key={slot.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 16px",borderBottom:`0.5px solid ${IOS.sep}`}}>
+                      <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 16px",borderBottom:`0.5px solid ${IOS.sep}`}}>
                         <div>
-                          <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:slot.color,marginBottom:3}}>{slot.mult}× · {slot.label}</div>
-                          <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>{p.pick}</div>
-                          <div style={{fontSize:11,color:IOS.label3,marginTop:1}}>{p.game}</div>
+                          <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:multColors[slot.mult],marginBottom:3}}>{slot.mult}× · {slot.bet.game}</div>
+                          <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>{slot.bet.pick}</div>
                         </div>
-                        <div style={{fontSize:20,fontWeight:800,letterSpacing:-0.5,color:p.odds.startsWith("+")?IOS.green:IOS.blue}}>{p.odds}</div>
+                        <div style={{fontSize:20,fontWeight:800,letterSpacing:-0.5,color:slot.bet.odds.startsWith("+")?IOS.green:IOS.blue}}>{slot.bet.odds}</div>
                       </div>
                     );
                   })}
-                  {savedPicks.parlay && (
-                    <div style={{padding:"10px 16px",background:"rgba(48,209,88,0.06)",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                      <div style={{fontSize:11,fontWeight:600,color:IOS.label3}}>Combined odds · $10 wins</div>
-                      <div style={{display:"flex",alignItems:"center",gap:10}}>
-                        <div style={{fontSize:12,fontWeight:700,color:IOS.green}}>${((savedPicks.parlay.payout/100)*10).toFixed(2)}</div>
-                        <div style={{fontSize:18,fontWeight:800,color:IOS.green,letterSpacing:-0.5}}>{savedPicks.parlay.american}</div>
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
 
@@ -1551,68 +1560,116 @@ const fetchWeekPicks = async (leagueId, week) => {
             </div>
 
             {/* Bet picker sheet */}
-            {activeSlot&&(
-              <div className="sheet-bg" onClick={()=>setActiveSlot(null)}>
+            {activeFlexSlot!==null&&(
+              <div className="sheet-bg" onClick={()=>{setActiveFlexSlot(null);setFlexCategory(null);setPickSearch("");}}>
                 <div className="sheet" onClick={e=>e.stopPropagation()}>
                   <div className="sheet-handle"/>
                   <div className="sheet-hdr">
                     <div>
-                      <div className="sheet-hdr-title">{SLOTS.find(s=>s.id===activeSlot)?.label}</div>
-                      <div className="sheet-hdr-sub">{activeSlot==="longshot"?`${lsBets.length} selected · compounds into your 5× Parlay leg`:`${SLOTS.find(s=>s.id===activeSlot)?.mult}× multiplier`}</div>
+                      <div className="sheet-hdr-title">
+                        {flexPicks[activeFlexSlot]?.isParlay ? "Parlay Legs" : flexCategory ? ["Moneyline","Prop","Over/Under","Spread","Longshot"][["ml","prop","ou","spread","longshot"].indexOf(flexCategory)] : "Choose a Bet"}
+                      </div>
+                      <div className="sheet-hdr-sub">
+                        {flexPicks[activeFlexSlot]?.isParlay
+                          ? `${flexPicks[activeFlexSlot]?.parlayLegs.length} legs selected — need 2+`
+                          : flexCategory ? "Tap to select" : "Pick a category first"}
+                      </div>
                     </div>
-                    <div className="sheet-done" onClick={()=>{setActiveSlot(null);setPickSearch("");}}>Done</div>
+                    <div className="sheet-done" onClick={()=>{setActiveFlexSlot(null);setFlexCategory(null);setPickSearch("");}}>Done</div>
                   </div>
-                  {activeSlot==="longshot"&&lsBets.length>=2&&(
+
+                  {/* Category selector — show if not parlay and no category chosen yet */}
+                  {!flexPicks[activeFlexSlot]?.isParlay && !flexCategory && (
+                    <div style={{padding:"12px 16px"}}>
+                      {[
+                        {id:"ml",      label:"Moneyline",  icon:"🎯", color:IOS.blue,   desc:"Pick a team to win"},
+                        {id:"prop",    label:"Prop",       icon:"⭐", color:IOS.yellow, desc:"Player or game prop"},
+                        {id:"ou",      label:"Over/Under", icon:"📊", color:IOS.orange, desc:"Total points scored"},
+                        {id:"spread",  label:"Spread",     icon:"📐", color:IOS.green,  desc:"Beat the point spread"},
+                        {id:"longshot",label:"Longshot",   icon:"🚀", color:IOS.pink,   desc:"High odds single bet"},
+                      ].map(cat=>(
+                        <div key={cat.id} onClick={()=>setFlexCategory(cat.id)}
+                          style={{display:"flex",alignItems:"center",gap:14,padding:"14px 4px",borderBottom:`0.5px solid ${IOS.sep}`,cursor:"pointer"}}>
+                          <div style={{width:40,height:40,borderRadius:12,background:`${cat.color}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{cat.icon}</div>
+                          <div style={{flex:1}}>
+                            <div style={{fontSize:16,fontWeight:600,color:"#fff"}}>{cat.label}</div>
+                            <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>{cat.desc}</div>
+                          </div>
+                          <div style={{fontSize:18,color:IOS.label3}}>›</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Back button when category chosen */}
+                  {!flexPicks[activeFlexSlot]?.isParlay && flexCategory && (
+                    <div onClick={()=>setFlexCategory(null)} style={{padding:"10px 16px",display:"flex",alignItems:"center",gap:6,cursor:"pointer",borderBottom:`0.5px solid ${IOS.sep}`}}>
+                      <span style={{color:IOS.blue,fontSize:14}}>‹</span>
+                      <span style={{color:IOS.blue,fontSize:14,fontWeight:600}}>Categories</span>
+                    </div>
+                  )}
+
+                  {/* Search */}
+                  {(flexCategory || flexPicks[activeFlexSlot]?.isParlay) && (
+                    <div className="sheet-search-wrap" style={{top:60,position:"relative"}}>
+                      <div style={{position:"relative"}}>
+                        <span className="sheet-search-icon">🔍</span>
+                        <input className="sheet-search" placeholder="Search..." value={pickSearch} onChange={e=>setPickSearch(e.target.value)} autoFocus={false}/>
+                        {pickSearch&&<span onClick={()=>setPickSearch("")} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",fontSize:14,color:"rgba(255,255,255,0.4)",cursor:"pointer"}}>✕</span>}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Parlay legs selected bar */}
+                  {flexPicks[activeFlexSlot]?.isParlay && flexPicks[activeFlexSlot]?.parlayLegs.length >= 2 && (
                     <div className="sheet-ls-bar">
-                      <span style={{fontSize:12,fontWeight:600,color:IOS.pink}}>🚀 Mini-parlay odds</span>
-                      <span style={{fontSize:20,fontWeight:700,color:IOS.pink,letterSpacing:-0.5}}>{lsO?.american}</span>
+                      <span style={{fontSize:12,fontWeight:600,color:IOS.pink}}>🚀 Parlay odds</span>
+                      <span style={{fontSize:20,fontWeight:700,color:IOS.pink}}>{calcLS(flexPicks[activeFlexSlot].parlayLegs)?.american}</span>
                     </div>
                   )}
-                  {/* Search bar */}
-                  <div className="sheet-search-wrap" style={{top:activeSlot==="longshot"&&lsBets.length>=2?104:60}}>
-                    <div style={{position:"relative"}}>
-                      <span className="sheet-search-icon">🔍</span>
-                      <input
-                        className="sheet-search"
-                        placeholder={`Search teams, players, matchups...`}
-                        value={pickSearch}
-                        onChange={e=>setPickSearch(e.target.value)}
-                        autoFocus={false}
-                      />
-                      {pickSearch&&<span onClick={()=>setPickSearch("")} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",fontSize:14,color:"rgba(255,255,255,0.4)",cursor:"pointer"}}>✕</span>}
-                    </div>
-                  </div>
-                  {/* Result count */}
-                  {pickSearch&&(
-                    <div className="sheet-count">
-                      {(BETS[activeSlot]||[]).filter(b=>{const q=pickSearch.toLowerCase();return b.game.toLowerCase().includes(q)||b.pick.toLowerCase().includes(q)||b.odds.includes(q);}).length} results for "{pickSearch}"
-                    </div>
-                  )}
-                  {BETS[activeSlot]?.map(bet=>{
-                    const pos=!bet.odds.startsWith("-");
-                    const cur=activeSlot==="longshot"?lsBets.find(b=>b.id===bet.id):picks[activeSlot]?.id===bet.id;
-                    const slot=SLOTS.find(s=>s.id===activeSlot);
-                    const pts=slot ? calcPickPoints(slot.mult, bet.impliedOdds, "W") : 0;
-                    // Filter by search
-                    const q=pickSearch.toLowerCase().trim();
-                    if(q&&!bet.game.toLowerCase().includes(q)&&!bet.pick.toLowerCase().includes(q)&&!bet.odds.includes(q)) return null;
-                    return (
-                      <div key={bet.id} className="bet-row" style={cur?{background:"rgba(10,132,255,0.06)"}:{}} onClick={()=>selectBet(activeSlot,bet)}>
-                        <div className="bet-row-left">
-                          <div className="bet-row-game">{bet.game}</div>
-                          <div className="bet-row-pick">{bet.pick}</div>
-                          <div style={{marginTop:5,display:"inline-flex",alignItems:"center",gap:4,background:"rgba(48,209,88,0.1)",border:"1px solid rgba(48,209,88,0.2)",borderRadius:6,padding:"2px 8px"}}>
-                            <span style={{fontSize:10,fontWeight:700,color:IOS.green}}>+{pts} pts if win</span>
-                            <span style={{fontSize:9,color:"rgba(48,209,88,0.5)"}}>({slot?.mult}× · {bet.odds})</span>
+
+                  {/* Bet list */}
+                  {(flexCategory || flexPicks[activeFlexSlot]?.isParlay) && (
+                    (flexPicks[activeFlexSlot]?.isParlay ? ALL_BETS : (BETS[flexCategory]||[])).filter(bet=>{
+                      const q = pickSearch.toLowerCase().trim();
+                      return !q || bet.game.toLowerCase().includes(q) || bet.pick.toLowerCase().includes(q);
+                    }).map(bet=>{
+                      const slot = flexPicks[activeFlexSlot];
+                      const isCur = slot?.isParlay
+                        ? slot.parlayLegs.find(b=>b.id===bet.id)
+                        : slot?.bet?.id===bet.id;
+                      const pts = slot?.mult ? calcPickPoints(slot.mult, bet.impliedOdds, "W") : 0;
+                      return (
+                        <div key={bet.id} className="bet-row" style={isCur?{background:"rgba(10,132,255,0.06)"}:{}}
+                          onClick={()=>{
+                            if(slot?.isParlay) {
+                              setFlexPicks(prev=>prev.map((p,i)=>i===activeFlexSlot?{
+                                ...p,
+                                parlayLegs: p.parlayLegs.find(b=>b.id===bet.id)
+                                  ? p.parlayLegs.filter(b=>b.id!==bet.id)
+                                  : [...p.parlayLegs, bet]
+                              }:p));
+                            } else {
+                              setFlexPicks(prev=>prev.map((p,i)=>i===activeFlexSlot?{...p,bet,category:flexCategory}:p));
+                              setActiveFlexSlot(null);
+                              setFlexCategory(null);
+                            }
+                          }}>
+                          <div className="bet-row-left">
+                            <div className="bet-row-game">{bet.game}</div>
+                            <div className="bet-row-pick">{bet.pick}</div>
+                            {slot?.mult&&<div style={{marginTop:5,display:"inline-flex",alignItems:"center",gap:4,background:"rgba(48,209,88,0.1)",border:"1px solid rgba(48,209,88,0.2)",borderRadius:6,padding:"2px 8px"}}>
+                              <span style={{fontSize:10,fontWeight:700,color:IOS.green}}>+{pts} pts if win</span>
+                            </div>}
+                          </div>
+                          <div className="bet-row-right">
+                            <div className="bet-row-odds" style={{color:bet.odds.startsWith("+")?IOS.green:IOS.blue}}>{bet.odds}</div>
+                            <div className={`bet-check ${isCur?"on":"off"}`}>{isCur&&<span style={{color:"#fff",fontSize:13,fontWeight:700}}>✓</span>}</div>
                           </div>
                         </div>
-                        <div className="bet-row-right">
-                          <div className="bet-row-odds" style={{color:pos?IOS.green:IOS.blue}}>{bet.odds}</div>
-                          <div className={`bet-check ${cur?"on":"off"}`}>{cur&&<span style={{color:"#fff",fontSize:13,fontWeight:700}}>✓</span>}</div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })
+                  )}
                 </div>
               </div>
             )}
@@ -1622,139 +1679,211 @@ const fetchWeekPicks = async (leagueId, week) => {
               <div className="done-screen">
                 <div className="done-checkmark">✓</div>
                 <div className="done-title">Picks Locked In</div>
-                <div className="done-odds">{parlay?.american}</div>
-                <div className="done-payout">$100 to win ${parlay?.payout} · Week 6</div>
+                <div style={{fontSize:13,color:IOS.label3,textAlign:"center"}}>Week {activeLeague.current_week||activeLeague.week||1} · {activeLeague.name}</div>
                 <div className="done-legs-card">
-                  {SLOTS.map(slot=>{
-                    if(slot.id==="longshot"){
-                      if(!lsBets.length)return null;
+                  {[...flexPicks].sort((a,b)=>a.mult-b.mult).map((slot,i)=>{
+                    if(!slot.mult) return null;
+                    if(slot.isParlay) {
+                      const ls = calcLS(slot.parlayLegs);
                       return (
-                        <div key="ls">
-                          <div className="done-leg-row"><div><div className="done-leg-lbl">🚀 Parlay · 5× · {lsBets.length} legs</div></div><div className="done-leg-odds" style={{color:IOS.pink}}>{lsO?.american}</div></div>
-                          {lsBets.map(b=><div key={b.id} style={{display:"flex",justifyContent:"space-between",padding:"8px 16px 8px 28px",borderBottom:`0.5px solid ${IOS.sep}`}}><span style={{fontSize:13,color:IOS.label3}}>{b.pick}</span><span style={{fontSize:14,fontWeight:700,letterSpacing:-0.3,color:b.odds.startsWith("+")?IOS.green:IOS.blue}}>{b.odds}</span></div>)}
+                        <div key={i}>
+                          <div className="done-leg-row">
+                            <div><div className="done-leg-lbl">🚀 {slot.mult}× Parlay · {slot.parlayLegs.length} legs</div></div>
+                            <div className="done-leg-odds" style={{color:IOS.pink}}>{ls?.american}</div>
+                          </div>
+                          {slot.parlayLegs.map(b=>(
+                            <div key={b.id} style={{display:"flex",justifyContent:"space-between",padding:"8px 16px 8px 28px",borderBottom:`0.5px solid ${IOS.sep}`}}>
+                              <span style={{fontSize:13,color:IOS.label3}}>{b.pick}</span>
+                              <span style={{fontSize:14,fontWeight:700,color:b.odds.startsWith("+")?IOS.green:IOS.blue}}>{b.odds}</span>
+                            </div>
+                          ))}
                         </div>
                       );
                     }
-                    const p=picks[slot.id];if(!p)return null;
-                    return <div key={slot.id} className="done-leg-row"><div><div className="done-leg-lbl">{slot.icon} {slot.label} · {slot.mult}×</div><div className="done-leg-pick">{p.pick}</div></div><div className="done-leg-odds" style={{color:p.odds.startsWith("+")?IOS.green:IOS.blue}}>{p.odds}</div></div>;
+                    return (
+                      <div key={i} className="done-leg-row">
+                        <div>
+                          <div className="done-leg-lbl">{slot.mult}× · {slot.bet?.pick}</div>
+                          <div style={{fontSize:11,color:IOS.label3}}>{slot.bet?.game}</div>
+                        </div>
+                        <div className="done-leg-odds" style={{color:slot.bet?.odds.startsWith("+")?IOS.green:IOS.blue}}>{slot.bet?.odds}</div>
+                      </div>
+                    );
                   })}
                 </div>
-                <button className="ios-btn blue" onClick={()=>{setSubmitted(false);setPicks({ml:null,prop:null,ou:null,spread:null});setLsBets([]);setScreen("home");}}>Back to Home</button>
+                <button className="ios-btn blue" onClick={()=>{setSubmitted(false);setFlexPicks(EMPTY_FLEX);setScreen("home");}}>Back to Home</button>
               </div>
             )}
 
             <div className="body">
               <div style={{padding:"8px 16px 14px",display:"flex",alignItems:"center",gap:12}}>
                 <button onClick={()=>setScreen("home")} style={{background:IOS.fill2,border:"none",borderRadius:10,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:17,flexShrink:0}}>‹</button>
-                <div style={{fontSize:17,fontWeight:600,letterSpacing:-0.3}}>Pick Builder</div>
+                <div style={{fontSize:17,fontWeight:600,letterSpacing:-0.3}}>{savedPicks?"My Picks":"Pick Builder"}</div>
+                {savedPicks&&<div onClick={()=>setSavedPicks(null)} style={{marginLeft:"auto",fontSize:13,fontWeight:600,color:IOS.blue,cursor:"pointer"}}>Edit</div>}
               </div>
 
+              {/* Locked picks view */}
+              {savedPicks && savedPicks.flexPicks ? (
+                <div>
+                  <div style={{padding:"0 16px 12px"}}>
+                    <div style={{fontSize:34,fontWeight:800,letterSpacing:-1,color:"#fff",lineHeight:1.05}}>Your Lineup</div>
+                    <div style={{fontSize:14,color:IOS.label3,marginTop:4}}>{activeLeague.name} · Wk {activeLeague.current_week||activeLeague.week||1} · Locked ✓</div>
+                  </div>
+                  {[...savedPicks.flexPicks].sort((a,b)=>a.mult-b.mult).map((slot,i)=>{
+                    if(!slot.mult) return null;
+                    const multColors = {1:IOS.blue, 2:IOS.yellow, 3:IOS.orange, 4:IOS.green, 5:IOS.pink};
+                    const col = multColors[slot.mult];
+                    if(slot.isParlay) {
+                      const ls = calcLS(slot.parlayLegs);
+                      return (
+                        <div key={i} style={{margin:"0 16px 8px",background:IOS.bg2,borderRadius:14,overflow:"hidden",border:`1px solid ${col}30`}}>
+                          <div style={{padding:"12px 14px",borderBottom:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                            <div style={{display:"flex",alignItems:"center",gap:8}}>
+                              <div style={{width:32,height:32,borderRadius:8,background:`${col}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:col}}>{slot.mult}×</div>
+                              <div style={{fontSize:13,fontWeight:700,color:col}}>🚀 Parlay · {slot.parlayLegs.length} legs</div>
+                            </div>
+                            <div style={{fontSize:20,fontWeight:800,color:IOS.pink}}>{ls?.american}</div>
+                          </div>
+                          {slot.parlayLegs.map((b,j)=>(
+                            <div key={j} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px",borderBottom:j<slot.parlayLegs.length-1?`0.5px solid ${IOS.sep}`:"none"}}>
+                              <div>
+                                <div style={{fontSize:11,color:IOS.label3,marginBottom:2}}>{b.game}</div>
+                                <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>{b.pick}</div>
+                              </div>
+                              <div style={{fontSize:16,fontWeight:800,color:b.odds.startsWith("+")?IOS.green:IOS.blue}}>{b.odds}</div>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    }
+                    if(!slot.bet) return null;
+                    const pts = calcPickPoints(slot.mult, slot.bet.impliedOdds, "W");
+                    return (
+                      <div key={i} style={{margin:"0 16px 8px",background:IOS.bg2,borderRadius:14,padding:"14px",border:`1px solid ${col}30`}}>
+                        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                          <div style={{display:"flex",alignItems:"center",gap:10}}>
+                            <div style={{width:32,height:32,borderRadius:8,background:`${col}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:col}}>{slot.mult}×</div>
+                            <div>
+                              <div style={{fontSize:11,color:IOS.label3,marginBottom:2}}>{slot.bet.game}</div>
+                              <div style={{fontSize:15,fontWeight:600,color:"#fff"}}>{slot.bet.pick}</div>
+                            </div>
+                          </div>
+                          <div style={{textAlign:"right"}}>
+                            <div style={{fontSize:20,fontWeight:800,color:slot.bet.odds.startsWith("+")?IOS.green:IOS.blue}}>{slot.bet.odds}</div>
+                            <div style={{fontSize:10,color:IOS.green,marginTop:2}}>+{pts} pts</div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div style={{height:20}}/>
+                </div>
+              ) : (
+                <>
               <div className="pb-header">
                 <div className="pb-title">{sport.icon} {sport.label} Picks</div>
-                <div className="pb-sub">{activeLeague.name} · Wk {activeLeague.week} · vs {activeLeague.opponent}</div>
+                <div className="pb-sub">{activeLeague.name} · Wk {activeLeague.current_week||activeLeague.week||1}</div>
               </div>
 
-              {/* Parlay odds */}
-              {(()=>{
-                const sf=Object.values(picks).filter(v=>v).length;
-                const lf=lsBets.length>=2;
-                const tf=sf+(lf?1:0);
-                const oddsColor=tf===0?IOS.label3:tf===5?IOS.green:IOS.blue;
-                const payout10=parlay?((parlay.payout/100)*10).toFixed(2):null;
-                return (
-                  <div className="parlay-odds-card" style={{borderWidth:1,borderStyle:"solid",borderColor:tf===0?IOS.bg3:tf===5?"rgba(48,209,88,0.3)":"rgba(10,132,255,0.2)"}}>
-                    <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:tf===0?"rgba(255,255,255,0.06)":tf===5?`linear-gradient(90deg,${IOS.green},${IOS.teal})`:`linear-gradient(90deg,${IOS.blue},${IOS.teal})`}}/>
-                    <div className="poc-top">
-                      <div>
-                        <div className="poc-label">Combined Odds</div>
-                        <div className="poc-odds" style={{color:oddsColor}}>{tf===0?"—":parlay?.american}</div>
-                        {parlay&&tf>0&&<div style={{fontSize:11,color:IOS.label3,marginTop:4}}>$10 wins <span style={{color:IOS.label2,fontWeight:600}}>${payout10}</span></div>}
-                      </div>
-                      <div style={{textAlign:"right"}}>
-                        <div className="poc-label" style={{marginBottom:8}}>Picks</div>
-                        <div className="poc-leg-dots">
-                          {SLOTS.map(s=>{const f=s.id==="longshot"?lsBets.length>=2:picks[s.id];return <div key={s.id} className="poc-dot" style={{background:f?s.color:"rgba(255,255,255,0.12)"}}/>;} )}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="poc-status">
-                      {tf===0&&<span>Fill all 5 picks to see your combined odds</span>}
-                      {tf>0&&tf<5&&<span>{tf}/5 picks · Combined: <span className="poc-hi">{parlay?.american||"—"}</span></span>}
-                      {tf===5&&<span className="poc-ok">✓ All picks in — ready to lock</span>}
-                    </div>
+              {/* Status bar */}
+              <div style={{margin:"0 16px 12px",background:IOS.bg2,borderRadius:14,padding:"14px 16px"}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                  <div style={{fontSize:13,fontWeight:600,color:IOS.label3}}>Your Lineup</div>
+                  <div style={{fontSize:13,fontWeight:600,color:allFlexFilled?IOS.green:IOS.blue}}>
+                    {flexPicks.filter(p=>p.mult!==null&&(p.isParlay?p.parlayLegs.length>=2:p.bet!==null)).length}/5 picks
                   </div>
-                );
-              })()}
+                </div>
+                <div style={{display:"flex",gap:6}}>
+                  {[1,2,3,4,5].map(m=>{
+                    const slot = flexPicks.find(p=>p.mult===m);
+                    const filled = slot && (slot.isParlay ? slot.parlayLegs.length>=2 : slot.bet!==null);
+                    return (
+                      <div key={m} style={{flex:1,height:6,borderRadius:3,background:filled?IOS.green:slot?"rgba(10,132,255,0.4)":"rgba(255,255,255,0.1)"}}/>
+                    );
+                  })}
+                </div>
+                {!hasParlay&&<div style={{fontSize:11,color:IOS.orange,marginTop:8}}>⚠ One pick must be a Parlay (toggle below)</div>}
+              </div>
 
-              {/* Slot cards */}
-              {SLOTS.map(slot=>{
-                const pick=slot.id==="longshot"?null:picks[slot.id];
-                const lsFilled=slot.id==="longshot"&&lsBets.length>=2;
-                const filled=pick||lsFilled;
-                const appliedPU=activatedPUs[slot.id];
+              {/* Flex pick slots */}
+              {flexPicks.map((slot, idx)=>{
+                const filled = slot.isParlay ? slot.parlayLegs.length>=2 : slot.bet!==null;
+                const parlayOdds = slot.isParlay && slot.parlayLegs.length>=2 ? calcLS(slot.parlayLegs) : null;
+                const multColors = {1:IOS.blue, 2:IOS.yellow, 3:IOS.orange, 4:IOS.green, 5:IOS.pink};
+                const chosenColor = slot.mult ? multColors[slot.mult] : IOS.label3;
                 return (
-                  <div key={slot.id} className="slot-card" style={filled?{borderWidth:1,borderStyle:"solid",borderColor:`${slot.color}40`}:{borderWidth:1,borderStyle:"solid",borderColor:"transparent"}}>
-                    <div className="slot-top-row" onClick={()=>setActiveSlot(slot.id)}>
-                      <div className="slot-mult-badge" style={{background:slot.bg}}>
-                        <div className="slot-mult-n" style={{color:slot.color}}>{slot.mult}</div>
-                        <div className="slot-mult-x" style={{color:slot.color}}>×</div>
-                      </div>
-                      <div style={{flex:1}}>
-                        <div className="slot-label">{slot.label}</div>
-                        <div className="slot-desc-txt">{slot.id==="longshot"?(lsBets.length===0?"Pick 2+ bets — builds your parlay":`${lsBets.length} bet${lsBets.length>1?"s":""} selected`):slot.desc}</div>
-                      </div>
-                      <div className="slot-add-btn" style={filled?{color:slot.color}:{}}>{slot.id==="longshot"?(lsBets.length?"+ Add":"+ Pick"):pick?"Change":"+ Pick"}</div>
-                    </div>
-                    {pick&&slot.id!=="longshot"&&(
-                      <div className="slot-pick-row" onClick={()=>setActiveSlot(slot.id)}>
-                        <div className="spr-left">
-                          <div className="spr-game" style={{color:slot.color}}>{pick.game}</div>
-                          <div className="spr-pick">{pick.pick}</div>
-                        </div>
-                        <div className="spr-odds" style={{color:pick.odds.startsWith("+")?IOS.green:IOS.blue}}>{pick.odds}</div>
-                        <button className="spr-clear" onClick={e=>{e.stopPropagation();clearPick(slot.id);}}>✕</button>
-                      </div>
-                    )}
-                    {slot.id==="longshot"&&lsBets.length>0&&(
-                      <div>
-                        {lsBets.map((b,i)=>(
-                          <div key={b.id} className="ls-pick-item" onClick={()=>setActiveSlot("longshot")}>
-                            <div className="ls-pick-info">
-                              <div className="ls-pick-game">{b.game}</div>
-                              <div className="ls-pick-name">{b.pick}</div>
+                  <div key={idx} style={{margin:"0 16px 8px",background:IOS.bg2,borderRadius:16,overflow:"hidden",border:`1px solid ${filled&&slot.mult?"rgba(255,255,255,0.1)":"transparent"}`}}>
+                    {/* Top row — multiplier selector + pick button */}
+                    <div style={{display:"flex",alignItems:"center",padding:"12px 14px",gap:12}}>
+                      {/* Multiplier selector */}
+                      <div style={{display:"flex",gap:4,flexShrink:0}}>
+                        {[1,2,3,4,5].map(m=>{
+                          const taken = usedMults.includes(m) && slot.mult!==m;
+                          const active = slot.mult===m;
+                          return (
+                            <div key={m} onClick={()=>{
+                              if(taken) return;
+                              setFlexPicks(prev=>prev.map((p,i)=>i===idx?{...p,mult:active?null:m}:p));
+                            }} style={{
+                              width:28,height:28,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",
+                              fontSize:13,fontWeight:800,cursor:taken?"not-allowed":"pointer",
+                              background:active?`${multColors[m]}`:"rgba(255,255,255,0.06)",
+                              color:active?"#fff":taken?"rgba(255,255,255,0.15)":"rgba(255,255,255,0.5)",
+                              transition:"all .15s",
+                            }}>
+                              {m}×
                             </div>
-                            <div className="ls-pick-odds" style={{color:b.odds.startsWith("+")?IOS.green:IOS.blue}}>{b.odds}</div>
-                            <button className="spr-clear" onClick={e=>{e.stopPropagation();setLsBets(p=>p.filter(x=>x.id!==b.id));}}><span style={{fontSize:11}}>✕</span></button>
-                          </div>
-                        ))}
-                        <div className="ls-total-bar">
-                          <div className="ls-total-lbl">{lsBets.length}-leg mini-parlay</div>
-                          <div className="ls-total-odds">{lsO?.american}</div>
-                        </div>
+                          );
+                        })}
                       </div>
-                    )}
-                    {/* Power-up section — show when pick is filled */}
-                    {filled && (
-                      <div style={{padding:"10px 14px",borderTop:`0.5px solid rgba(255,255,255,0.06)`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                        {appliedPU ? (
-                          <div className="pu-active-badge" style={{background:`${appliedPU.color}15`,border:`1px solid ${appliedPU.color}30`}}>
-                            <span className="pu-active-icon">{appliedPU.icon}</span>
-                            <span className="pu-active-name" style={{color:appliedPU.color}}>{appliedPU.name} active</span>
-                            <span className="pu-active-remove" onClick={e=>{e.stopPropagation();setMyPUs(p=>[...p,appliedPU]);setActivatedPUs(p=>{const n={...p};delete n[slot.id];return n;});}}>✕</span>
+                      {/* Pick info */}
+                      <div style={{flex:1,minWidth:0}} onClick={()=>setActiveFlexSlot(idx)}>
+                        {slot.isParlay ? (
+                          <div>
+                            <div style={{fontSize:12,fontWeight:700,color:IOS.pink,marginBottom:2}}>🚀 Parlay · {slot.parlayLegs.length} legs</div>
+                            {slot.parlayLegs.length===0
+                              ? <div style={{fontSize:13,color:IOS.label3}}>Tap to add legs</div>
+                              : <div style={{fontSize:13,color:"#fff"}}>{slot.parlayLegs.map(b=>b.pick).join(" + ")}</div>
+                            }
+                          </div>
+                        ) : slot.bet ? (
+                          <div>
+                            <div style={{fontSize:10,fontWeight:700,letterSpacing:0.3,textTransform:"uppercase",color:IOS.label3,marginBottom:2}}>{slot.bet.game}</div>
+                            <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>{slot.bet.pick}</div>
                           </div>
                         ) : (
-                          myPUs.length>0 ? (
-                            <div
-                              onClick={e=>{e.stopPropagation();setShowPUModal({context:"picks",slotId:slot.id,slotLabel:slot.label});}}
-                              style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",background:"rgba(255,255,255,0.05)",border:"1px dashed rgba(255,255,255,0.12)",borderRadius:8,cursor:"pointer"}}
-                            >
-                              <span style={{fontSize:14}}>⚡</span>
-                              <span style={{fontSize:12,fontWeight:600,color:IOS.label3}}>Use a Power-Up</span>
-                            </div>
-                          ) : (
-                            <div style={{fontSize:12,color:IOS.label3}}>No power-ups in inventory</div>
-                          )
+                          <div style={{fontSize:14,color:IOS.label3}}>+ Add a pick</div>
                         )}
+                      </div>
+                      {/* Odds + action */}
+                      <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                        {slot.bet&&!slot.isParlay&&<div style={{fontSize:18,fontWeight:800,letterSpacing:-0.5,color:slot.bet.odds.startsWith("+")?IOS.green:IOS.blue}}>{slot.bet.odds}</div>}
+                        {parlayOdds&&<div style={{fontSize:18,fontWeight:800,color:IOS.pink}}>{parlayOdds.american}</div>}
+                        <div onClick={()=>setActiveFlexSlot(idx)} style={{background:filled?"rgba(255,255,255,0.08)":"rgba(10,132,255,0.15)",borderRadius:20,padding:"6px 12px",fontSize:12,fontWeight:600,color:filled?"rgba(255,255,255,0.6)":IOS.blue,cursor:"pointer"}}>
+                          {filled?"Edit":"+ Pick"}
+                        </div>
+                        {filled&&<button onClick={e=>{e.stopPropagation();setFlexPicks(prev=>prev.map((p,i)=>i===idx?{...p,bet:null,parlayLegs:[]}:p));}} style={{width:24,height:24,borderRadius:50,background:"rgba(255,255,255,0.08)",border:"none",color:IOS.label3,fontSize:11,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>}
+                      </div>
+                    </div>
+
+                    {/* Parlay toggle */}
+                    <div style={{padding:"8px 14px 10px",borderTop:`0.5px solid rgba(255,255,255,0.05)`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                      <div style={{fontSize:11,color:IOS.label3}}>Make this a Parlay</div>
+                      <div onClick={()=>setFlexPicks(prev=>prev.map((p,i)=>i===idx?{...p,isParlay:!p.isParlay,bet:null,parlayLegs:[]}:p))}
+                        style={{width:40,height:24,borderRadius:12,background:slot.isParlay?IOS.pink:"rgba(255,255,255,0.1)",position:"relative",cursor:"pointer",transition:"background .2s"}}>
+                        <div style={{position:"absolute",top:2,left:slot.isParlay?18:2,width:20,height:20,borderRadius:50,background:"#fff",transition:"left .2s"}}/>
+                      </div>
+                    </div>
+
+                    {/* Points preview */}
+                    {slot.mult && filled && (
+                      <div style={{padding:"8px 14px",background:"rgba(48,209,88,0.05)",borderTop:`0.5px solid rgba(48,209,88,0.1)`}}>
+                        <div style={{fontSize:11,fontWeight:600,color:IOS.green}}>
+                          {slot.isParlay && parlayOdds
+                            ? `+${calcPickPoints(slot.mult, parlayOdds.decimal>1?(parlayOdds.decimal-1)*100:0, "W")} pts if parlay hits`
+                            : slot.bet ? `+${calcPickPoints(slot.mult, slot.bet.impliedOdds, "W")} pts if win` : ""
+                          }
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1762,49 +1891,54 @@ const fetchWeekPicks = async (leagueId, week) => {
               })}
 
               <div style={{height:12}}/>
-              {allFilled
-                ? <button className="ios-btn green" onClick={async ()=>{
-                    const locked = { picks, lsBets, parlay, lockedAt: new Date().toISOString() };
-                    try { localStorage.setItem("linedup_picks_wk6", JSON.stringify(locked)); } catch(e) {}
-                    setSavedPicks(locked);
+              {allFlexFilled && hasParlay
+                ? <button className="ios-btn green" onClick={async()=>{
                     if(user) {
-                      const picksToSave = SLOTS.filter(s=>s.id!=="longshot").map(s=>{
-                        const p = picks[s.id];
-                        if(!p) return null;
-                        return {
-                          league_id: activeLeague.id,
-                          user_id: user.id,
-                          week: activeLeague.current_week||activeLeague.week||1,
-                          slot: s.id,
-                          multiplier: s.mult,
-                          pick_name: p.pick,
-                          odds: p.odds,
-                          implied_odds: p.impliedOdds,
-                          result: "pending",
-                          points_earned: 0,
-                        };
-                      }).filter(Boolean);
-                      if(lsBets.length) {
-                        lsBets.forEach(b=>picksToSave.push({
-                          league_id: activeLeague.id,
-                          user_id: user.id,
-                          week: activeLeague.current_week||activeLeague.week||1,
-                          slot: "longshot",
-                          multiplier: 5,
-                          pick_name: b.pick,
-                          odds: b.odds,
-                          implied_odds: b.impliedOdds,
-                          result: "pending",
-                          points_earned: 0,
-                        }));
-                      }
+                      const picksToSave = [];
+                      flexPicks.forEach(slot=>{
+                        if(!slot.mult) return;
+                        if(slot.isParlay) {
+                          slot.parlayLegs.forEach(b=>picksToSave.push({
+                            league_id: activeLeague.id,
+                            user_id: user.id,
+                            week: activeLeague.current_week||activeLeague.week||1,
+                            slot: "longshot",
+                            multiplier: slot.mult,
+                            pick_name: b.pick,
+                            odds: b.odds,
+                            implied_odds: b.impliedOdds,
+                            result: "pending",
+                            points_earned: 0,
+                          }));
+                        } else {
+                          picksToSave.push({
+                            league_id: activeLeague.id,
+                            user_id: user.id,
+                            week: activeLeague.current_week||activeLeague.week||1,
+                            slot: slot.category||"ml",
+                            multiplier: slot.mult,
+                            pick_name: slot.bet.pick,
+                            odds: slot.bet.odds,
+                            implied_odds: slot.bet.impliedOdds,
+                            result: "pending",
+                            points_earned: 0,
+                          });
+                        }
+                      });
                       if(picksToSave.length) await supabase.from("picks").insert(picksToSave);
                     }
+                    const locked = {flexPicks, lockedAt: new Date().toISOString()};
+                    try { localStorage.setItem("linedup_picks_wk6", JSON.stringify(locked)); } catch(e) {}
+                    setSavedPicks(locked);
                     setSubmitted(true);
-                  }}>🔒 Lock In My Picks · {parlay?.american}</button>
-                : <button className="ios-btn disabled" disabled>{Object.values(picks).filter(v=>v).length+(lsBets.length>=2?1:0)} / 5 Picks Filled</button>
+                  }}>🔒 Lock In My Picks</button>
+                : <button className="ios-btn disabled" disabled>
+                    {!hasParlay ? "⚠ Need one Parlay pick" : `${flexPicks.filter(p=>p.mult!==null&&(p.isParlay?p.parlayLegs.length>=2:p.bet!==null)).length} / 5 Picks Filled`}
+                  </button>
               }
               <div style={{height:20}}/>
+            </>
+            )}
             </div>
           </>
         )}
