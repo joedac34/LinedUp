@@ -363,16 +363,15 @@ const LEAGUES_DATA = [
 ];
 
 const POWER_UPS = [
-  { id:"steal",    icon:"🔀", name:"Pick Steal",      desc:"See one opponent's locked lineup",       rarity:"rare",      color:IOS.purple },
-  { id:"enhance",  icon:"📈", name:"Spread Enhancer", desc:"Move any spread 1.5pts in your favor",   rarity:"rare",      color:IOS.blue   },
-  { id:"insurance",icon:"🛡️", name:"Insurance",       desc:"Lose by 1 leg? Counts as a push",        rarity:"common",    color:IOS.green  },
-  { id:"lock",     icon:"🔒", name:"Lock It In",      desc:"Force opponent — no lineup changes",      rarity:"rare",      color:IOS.orange },
-  { id:"double",   icon:"2️⃣", name:"Double Down",     desc:"One pick counts double this week",        rarity:"common",    color:IOS.yellow },
-  { id:"peek",     icon:"👁️", name:"Peek",            desc:"See what % of league took each bet",      rarity:"common",    color:IOS.teal   },
-  { id:"bomb",     icon:"💣", name:"Bomb",            desc:"Nullify one of opponent's winning picks", rarity:"legendary", color:IOS.red    },
-  { id:"swap",     icon:"🔄", name:"Hot Swap",        desc:"Swap a losing pick after games start",    rarity:"legendary", color:IOS.pink   },
-  { id:"wildcard", icon:"⭐", name:"Wildcard",        desc:"Play any bet — no slot rules",            rarity:"rare",      color:IOS.purple },
-  { id:"spin2",    icon:"🎰", name:"Spin Again",      desc:"Spin the wheel a second time",            rarity:"common",    color:IOS.green  },
+  { id:"steal",    icon:"🔀", name:"Pick Steal",      desc:"See one opponent's locked lineup",       rarity:"rare",      color:IOS.purple, type:"defensive" },
+  { id:"enhance",  icon:"📈", name:"Spread Enhancer", desc:"Move any spread 1.5pts in your favor",   rarity:"rare",      color:IOS.blue,   type:"offensive" },
+  { id:"insurance",icon:"🛡️", name:"Insurance",       desc:"Lose by 1 leg? Counts as a push",        rarity:"common",    color:IOS.green,  type:"offensive" },
+  { id:"lock",     icon:"🔒", name:"Lock It In",      desc:"Force opponent — no lineup changes",      rarity:"rare",      color:IOS.orange, type:"defensive" },
+  { id:"double",   icon:"2️⃣", name:"Double Down",     desc:"One pick counts double this week",        rarity:"common",    color:IOS.yellow, type:"offensive" },
+  { id:"peek",     icon:"👁️", name:"Peek",            desc:"See what % of league took each bet",      rarity:"common",    color:IOS.teal,   type:"defensive" },
+  { id:"bomb",     icon:"💣", name:"Bomb",            desc:"Nullify one of opponent's winning picks", rarity:"legendary", color:IOS.red,    type:"defensive" },
+  { id:"swap",     icon:"🔄", name:"Hot Swap",        desc:"Swap a losing pick after games start",    rarity:"legendary", color:IOS.pink,   type:"offensive" },
+  { id:"wildcard", icon:"⭐", name:"Wildcard",        desc:"Play any bet — no slot rules",            rarity:"rare",      color:IOS.purple, type:"offensive" },
 ];
 
 const TROPHIES = [
@@ -583,6 +582,8 @@ export default function App() {
   const [leagueMembers,  setLeagueMembers]  = useState([]);
   const [weekPicks,      setWeekPicks]      = useState([]);
   const [realStandings,  setRealStandings]  = useState([]);
+  const [allMyStats,     setAllMyStats]     = useState(null);
+  const [leagueTrophies, setLeagueTrophies] = useState([]);
   const activeLeague = [...realLeagues, ...LEAGUES_DATA].find(l=>l.id===activeLeagueId) || LEAGUES_DATA[0];
   const sport = SPORTS[activeLeague.sport];
   const SLOTS = sport.slots;
@@ -636,19 +637,101 @@ export default function App() {
   const [pickSearch,   setPickSearch]   = useState("");
   const [commishTab,   setCommishTab]   = useState("grade"); // grade | members | settings
   const [showLeaguesList, setShowLeaguesList] = useState(false);
+  const [showNewLeague,   setShowNewLeague]   = useState(false);
+  const [newLeagueSport,  setNewLeagueSport]  = useState(null);
+  const [newLeagueName,   setNewLeagueName]   = useState("");
+  const [newLeagueCreated, setNewLeagueCreated] = useState(null); // holds created league data for invite code screen
+  const [creatingLeague,  setCreatingLeague]  = useState(false);
 
   const createLeague = async (name, sportId) => {
-    if(!user) return;
+    if(!user||!name||!sportId) return;
+    setCreatingLeague(true);
     const inviteCode = Math.random().toString(36).substring(2,8).toUpperCase();
     const {data,error} = await supabase.from("leagues").insert({
       name, sport:sportId, commissioner_id:user.id, invite_code:inviteCode,
       max_members:8, pick_deadline:"Sun 1PM ET", season_weeks:18,
       current_week:1, privacy:"private", scoring_type:"multiplier_odds",
     }).select().single();
-    if(error){alert(error.message);return;}
+    if(error){alert(error.message);setCreatingLeague(false);return;}
     await supabase.from("league_members").insert({league_id:data.id,user_id:user.id,is_commissioner:true});
-    alert(`League created! Invite code: ${data.invite_code}`);
-    fetchLeagues(user.id);
+    await fetchLeagues(user.id);
+    setNewLeagueCreated(data);
+    setCreatingLeague(false);
+  };
+
+  const fetchLeagueTrophies = async (leagueId) => {
+    const {data:picks} = await supabase
+      .from("picks")
+      .select("*")
+      .eq("league_id", leagueId)
+      .neq("result", "pending");
+    if(!picks||!picks.length) { setLeagueTrophies([]); return; }
+
+    const {data:members} = await supabase.from("league_members").select("user_id").eq("league_id", leagueId);
+    if(!members||!members.length) { setLeagueTrophies([]); return; }
+    const userIds = members.map(m=>m.user_id);
+    const {data:users} = await supabase.from("users").select("id,username,email").in("id",userIds);
+
+    const getName = (uid) => {
+      const u = users?.find(x=>x.id===uid);
+      return u?.username || u?.email?.split("@")[0] || "Unknown";
+    };
+    const isMe = (uid) => uid === user?.id;
+
+    // Stats per user
+    const stats = {};
+    picks.forEach(p=>{
+      if(!stats[p.user_id]) stats[p.user_id]={wins:0,losses:0,points:0,longshotPts:0,streak:0,maxStreak:0,lastResult:null};
+      const s = stats[p.user_id];
+      if(p.result==="W") {
+        s.wins++;
+        s.points += parseFloat(p.points_earned||0);
+        if(p.slot==="longshot") s.longshotPts += parseFloat(p.points_earned||0);
+        s.streak = s.lastResult==="W" ? s.streak+1 : 1;
+      } else {
+        s.losses++;
+        s.streak = 0;
+      }
+      s.maxStreak = Math.max(s.maxStreak, s.streak);
+      s.lastResult = p.result;
+    });
+
+    const uids = Object.keys(stats);
+    if(!uids.length) { setLeagueTrophies([]); return; }
+
+    const byPoints = [...uids].sort((a,b)=>stats[b].points-stats[a].points);
+    const byWinRate = [...uids].sort((a,b)=>{
+      const ra = stats[a].wins/(stats[a].wins+stats[a].losses||1);
+      const rb = stats[b].wins/(stats[b].wins+stats[b].losses||1);
+      return rb-ra;
+    });
+    const byStreak = [...uids].sort((a,b)=>stats[b].maxStreak-stats[a].maxStreak);
+    const byLongshot = [...uids].sort((a,b)=>stats[b].longshotPts-stats[a].longshotPts);
+
+    const trophies = [
+      { id:"whale",    icon:"💰", name:"The Whale",      desc:"Most total points",        holder:getName(byPoints[0]),    isYou:isMe(byPoints[0]),    color:IOS.green  },
+      { id:"sharp",    icon:"🎯", name:"Sharpshooter",   desc:"Highest win rate",         holder:getName(byWinRate[0]),   isYou:isMe(byWinRate[0]),   color:IOS.yellow },
+      { id:"hot",      icon:"🔥", name:"Hot Hand",       desc:"Longest win streak",       holder:getName(byStreak[0]),    isYou:isMe(byStreak[0]),    color:IOS.orange },
+      { id:"longshot", icon:"🚀", name:"Longshot King",  desc:"Most points from longshots",holder:getName(byLongshot[0]), isYou:isMe(byLongshot[0]),  color:IOS.pink   },
+    ];
+    setLeagueTrophies(trophies);
+  };
+
+  const fetchAllMyStats = async (uid) => {
+    const {data:picks} = await supabase
+      .from("picks")
+      .select("*")
+      .eq("user_id", uid)
+      .neq("result", "pending");
+    if(!picks||!picks.length) { setAllMyStats({wins:0,losses:0,points:0,total:0,winRate:"0%",bestBet:null,worstBet:null}); return; }
+    const wins = picks.filter(p=>p.result==="W").length;
+    const losses = picks.filter(p=>p.result==="L").length;
+    const points = parseFloat(picks.filter(p=>p.result==="W").reduce((sum,p)=>sum+parseFloat(p.points_earned||0),0).toFixed(1));
+    const total = wins + losses;
+    const winRate = total > 0 ? `${Math.round(wins/total*100)}%` : "0%";
+    const bestBet = picks.filter(p=>p.result==="W").sort((a,b)=>parseFloat(b.points_earned||0)-parseFloat(a.points_earned||0))[0];
+    const worstBet = picks.filter(p=>p.result==="L")[0];
+    setAllMyStats({wins, losses, points, total, winRate, bestBet, worstBet});
   };
 
   const fetchStandings = async (leagueId) => {
@@ -704,7 +787,38 @@ export default function App() {
 
     setRealStandings(standings);
   };
-
+  const fetchMyPicks = async (leagueId, week, uid) => {
+    const {data} = await supabase
+      .from("picks")
+      .select("*")
+      .eq("league_id", leagueId)
+      .eq("user_id", uid)
+      .eq("week", week);
+    if(data && data.length > 0) {
+      // Convert DB picks back into flexPicks format for the locked view
+      const multGroups = {};
+      data.forEach(p=>{
+        if(!multGroups[p.multiplier]) multGroups[p.multiplier] = [];
+        multGroups[p.multiplier].push(p);
+      });
+      const flexPicks = Object.entries(multGroups).map(([mult, picks])=>{
+        const isParlay = picks[0].slot === "longshot";
+        return {
+          id: parseInt(mult)-1,
+          mult: parseInt(mult),
+          isParlay,
+          parlayLegs: isParlay ? picks.map(p=>({id:p.id, pick:p.pick_name, game:"", odds:p.odds, impliedOdds:p.implied_odds})) : [],
+          bet: isParlay ? null : {pick:picks[0].pick_name, game:"", odds:picks[0].odds, impliedOdds:picks[0].implied_odds},
+          category: picks[0].slot,
+        };
+      });
+      // Fill missing slots
+      while(flexPicks.length < 5) flexPicks.push({id:flexPicks.length, bet:null, mult:null, isParlay:false, parlayLegs:[]});
+      setSavedPicks({fromDB: true, flexPicks, dbPicks: data});
+    } else {
+      setSavedPicks(null);
+    }
+  };
   const fetchWeekPicks = async (leagueId, week) => {
   const {data:picks} = await supabase
     .from("picks")
@@ -749,6 +863,8 @@ export default function App() {
       }));
       setRealLeagues(mapped);
       setActiveLeagueId(mapped[0].id);
+      const week = mapped[0].current_week||mapped[0].week||1;
+      fetchMyPicks(mapped[0].id, week, uid);
     }
   };
 
@@ -769,12 +885,12 @@ export default function App() {
     supabase.auth.getSession().then(({data:{session}})=>{
       const u = session?.user??null;
       setUser(u);
-      if(u) fetchLeagues(u.id);
+      if(u) { fetchLeagues(u.id); fetchAllMyStats(u.id); }
     });
     supabase.auth.onAuthStateChange((_e,session)=>{
       const u = session?.user??null;
       setUser(u);
-      if(u) fetchLeagues(u.id);
+      if(u) { fetchLeagues(u.id); fetchAllMyStats(u.id); }
     });
     setTimeout(()=>setAnim(true),80);
     const t=setInterval(()=>setTimeLeft(p=>{let{h,m,s}=p;s--;if(s<0){s=59;m--;}if(m<0){m=59;h--;}if(h<0){h=0;m=0;s=0;}return{h,m,s};}),1000);
@@ -787,8 +903,17 @@ export default function App() {
 
   useEffect(()=>{
     if(!activeLeagueId||!user) return;
+    // Clear stale data immediately when league switches
+    setWeekPicks([]);
+    setLeagueMembers([]);
+    setRealStandings([]);
+    setLeagueTrophies([]);
+    setSavedPicks(null);
     fetchLeagueMembers(activeLeagueId, user.id);
     fetchStandings(activeLeagueId);
+    fetchLeagueTrophies(activeLeagueId);
+    const lg2 = [...realLeagues, ...LEAGUES_DATA].find(l=>l.id===activeLeagueId);
+    if(lg2) fetchMyPicks(activeLeagueId, lg2.current_week||lg2.week||1, user.id);
   },[activeLeagueId, user, screen]);
 
   useEffect(()=>{
@@ -1275,20 +1400,24 @@ export default function App() {
                     : `Applied to pick #${(showPUModal.pickIdx||0)+1} in live matchup`}
                 </div>
               </div>
-              {myPUs.length===0
-                ? <div style={{padding:"28px 20px",textAlign:"center",color:IOS.label3,fontSize:15}}>No power-ups in inventory</div>
-                : myPUs.map((pu,i)=>(
-                  <div key={i} className="pu-opt" onClick={()=>usePU(pu, showPUModal.context, showPUModal.context==="picks"?showPUModal.slotId:showPUModal.pickIdx)}>
-                    <div className="pu-opt-icon" style={{background:`${pu.color}20`}}>{pu.icon}</div>
-                    <div style={{flex:1}}>
-                      <div className="pu-opt-name">{pu.name}</div>
-                      <div className="pu-opt-desc">{pu.desc}</div>
-                      <div className="pu-opt-rarity" style={{color:rarityColor(pu.rarity)}}>{pu.rarity}</div>
+              {(()=>{
+                const filteredPUs = showPUModal?.context==="picks"
+                  ? myPUs.filter(pu=>pu.type==="offensive")
+                  : myPUs;
+                return filteredPUs.length===0
+                  ? <div style={{padding:"28px 20px",textAlign:"center",color:IOS.label3,fontSize:15}}>No offensive power-ups in inventory</div>
+                  : filteredPUs.map((pu,i)=>(
+                    <div key={i} className="pu-opt" onClick={()=>usePU(pu, showPUModal.context, showPUModal.context==="picks"?showPUModal.slotId:showPUModal.pickIdx)}>
+                      <div className="pu-opt-icon" style={{background:`${pu.color}20`}}>{pu.icon}</div>
+                      <div style={{flex:1}}>
+                        <div className="pu-opt-name">{pu.name}</div>
+                        <div className="pu-opt-desc">{pu.desc}</div>
+                        <div className="pu-opt-rarity" style={{color:rarityColor(pu.rarity)}}>{pu.rarity}</div>
+                      </div>
+                      <div style={{fontSize:20,color:IOS.label3}}>›</div>
                     </div>
-                    <div style={{fontSize:20,color:IOS.label3}}>›</div>
-                  </div>
-                ))
-              }
+                  ));
+              })()}
               <div style={{padding:"14px 20px 0"}}>
                 <button onClick={()=>setShowPUModal(null)} style={{width:"100%",background:IOS.bg3,border:"none",borderRadius:12,padding:"14px",fontFamily:"Manrope,sans-serif",fontSize:15,fontWeight:600,color:IOS.label2,cursor:"pointer"}}>Cancel</button>
               </div>
@@ -1512,51 +1641,72 @@ export default function App() {
 
               {/* Stat pills */}
               <div className="stat-pills">
-                <div className="stat-pill"><div className="stat-pill-val" style={{color:sport.color}}>{activeLeague.userRecord}</div><div className="stat-pill-lbl">Record</div></div>
-                <div className="stat-pill"><div className="stat-pill-val" style={{color:IOS.green}}>{activeLeague.userRoi}%</div><div className="stat-pill-lbl">ROI</div></div>
-                <div className="stat-pill"><div className="stat-pill-val" style={{color:IOS.green}}>{activeLeague.userUnits}u</div><div className="stat-pill-lbl">Units</div></div>
+                <div className="stat-pill"><div className="stat-pill-val" style={{color:sport.color}}>{realStandings.find(s=>s.isYou)?.record||"0-0"}</div><div className="stat-pill-lbl">Record</div></div>
+                <div className="stat-pill"><div className="stat-pill-val" style={{color:IOS.green}}>{realStandings.find(s=>s.isYou)?.wpct||"0%"}</div><div className="stat-pill-lbl">Win %</div></div>
+                <div className="stat-pill"><div className="stat-pill-val" style={{color:IOS.green}}>{realStandings.find(s=>s.isYou)?.points||0}pts</div><div className="stat-pill-lbl">Points</div></div>
               </div>
 
-              {/* Matchup — compact card */}
-              <div className="ios-section" style={{margin:"0 16px 6px"}}>
-                <div className="ios-section-header" style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <span>Wk {activeLeague.week} Matchup · Live</span>
-                  <span onClick={()=>setScreen("matchup")} style={{color:sport.color,fontSize:13,textTransform:"none",fontWeight:500,letterSpacing:0,cursor:"pointer"}}>View Details</span>
-                </div>
-              </div>
-              <div
-                onClick={()=>setScreen("matchup")}
-                style={{margin:"0 16px 10px",background:IOS.bg2,borderRadius:16,padding:"14px 16px",cursor:"pointer",position:"relative",overflow:"hidden",border:`1px solid ${sport.color}30`}}
-              >
-                <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${sport.color},${IOS.teal})`}}/>
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                  <div>
-                    <div style={{fontSize:18,fontWeight:800,letterSpacing:-0.5,color:sport.color}}>YOU</div>
-                    <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>{activeLeague.userRecord}</div>
-                  </div>
-                  <div style={{textAlign:"center"}}>
-                    <div style={{fontSize:28,fontWeight:800,letterSpacing:-1,color:"#fff"}}>3 <span style={{fontSize:16,color:IOS.label3,fontWeight:500}}>–</span> 1</div>
-                    <div style={{fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:IOS.green,marginTop:2}}>You're winning</div>
-                  </div>
-                  <div style={{textAlign:"right"}}>
-                    <div style={{fontSize:18,fontWeight:800,letterSpacing:-0.5}}>{activeLeague.opponent}</div>
-                    <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>{activeLeague.opponentRecord}</div>
-                  </div>
-                </div>
-                <div style={{display:"flex",gap:6,marginTop:12,paddingTop:10,borderTop:`0.5px solid ${IOS.sep}`,alignItems:"center",justifyContent:"space-between"}}>
-                  <div style={{display:"flex",gap:5}}>
-                    {["W","W","L","pending","pending"].map((r,i)=>(
-                      <div key={i} style={{width:28,height:28,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,background:r==="W"?"rgba(48,209,88,0.15)":r==="L"?"rgba(255,69,58,0.12)":"rgba(255,255,255,0.06)",color:r==="W"?IOS.green:r==="L"?IOS.red:IOS.label3}}>
-                        {r==="W"?"W":r==="L"?"L":"·"}
+              {/* Matchup — compact card — only show if there's a real opponent */}
+              {(()=>{
+                const myPicks = weekPicks.filter(p=>p.user_id===user?.id);
+                const oppPicks = weekPicks.filter(p=>p.user_id!==user?.id);
+                const oppUserIds = [...new Set(oppPicks.map(p=>p.user_id))];
+                const oppUserId = oppUserIds[0];
+                const currentOpp = SCHEDULE.find(w=>w.result==="live")?.opp;
+                const hasOpponent = leagueMembers.filter(m=>!m.isYou).length > 0;
+
+                if(!hasOpponent) return null;
+
+                const oppUserPicks = oppUserId ? oppPicks.filter(p=>p.user_id===oppUserId) : [];
+                const oppName = oppUserPicks[0]?.users?.username || oppUserPicks[0]?.users?.email?.split("@")[0] || currentOpp || "Opponent";
+                const myTotal = parseFloat(myPicks.filter(p=>p.result==="W").reduce((sum,p)=>sum+parseFloat(p.points_earned||0),0).toFixed(1));
+                const oppTotal = parseFloat(oppUserPicks.filter(p=>p.result==="W").reduce((sum,p)=>sum+parseFloat(p.points_earned||0),0).toFixed(1));
+                const myWins = myPicks.filter(p=>p.result==="W").length;
+                const myLosses = myPicks.filter(p=>p.result==="L").length;
+                const myPending = myPicks.filter(p=>p.result==="pending").length;
+                const isWinning = myTotal >= oppTotal;
+
+                return (
+                  <>
+                    <div className="ios-section" style={{margin:"0 16px 6px"}}>
+                      <div className="ios-section-header" style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                        <span>Wk {activeLeague.current_week||activeLeague.week||1} Matchup · Live</span>
+                        <span onClick={()=>setScreen("matchup")} style={{color:sport.color,fontSize:13,textTransform:"none",fontWeight:500,letterSpacing:0,cursor:"pointer"}}>View Details</span>
                       </div>
-                    ))}
-                  </div>
-                  <div style={{fontSize:12,color:IOS.label3,display:"flex",alignItems:"center",gap:4}}>
-                    <span style={{color:sport.color,fontWeight:600}}>2 pending</span>
-                    <span style={{fontSize:16,color:IOS.label3}}>›</span>
-                  </div>
-                </div>
-              </div>
+                    </div>
+                    <div onClick={()=>setScreen("matchup")} style={{margin:"0 16px 10px",background:IOS.bg2,borderRadius:16,padding:"14px 16px",cursor:"pointer",position:"relative",overflow:"hidden",border:`1px solid ${sport.color}30`}}>
+                      <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${sport.color},${IOS.teal})`}}/>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                        <div>
+                          <div style={{fontSize:18,fontWeight:800,letterSpacing:-0.5,color:sport.color}}>YOU</div>
+                          <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>{myTotal}pts</div>
+                        </div>
+                        <div style={{textAlign:"center"}}>
+                          <div style={{fontSize:28,fontWeight:800,letterSpacing:-1,color:"#fff"}}>{myTotal} <span style={{fontSize:16,color:IOS.label3,fontWeight:500}}>–</span> {oppTotal}</div>
+                          <div style={{fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:isWinning?IOS.green:IOS.red,marginTop:2}}>{isWinning?"You're Leading":"You're Trailing"}</div>
+                        </div>
+                        <div style={{textAlign:"right"}}>
+                          <div style={{fontSize:18,fontWeight:800,letterSpacing:-0.5}}>{oppName}</div>
+                          <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>{oppTotal}pts</div>
+                        </div>
+                      </div>
+                      <div style={{display:"flex",gap:6,marginTop:12,paddingTop:10,borderTop:`0.5px solid ${IOS.sep}`,alignItems:"center",justifyContent:"space-between"}}>
+                        <div style={{display:"flex",gap:5}}>
+                          {myPicks.map((p,i)=>(
+                            <div key={i} style={{width:28,height:28,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,background:p.result==="W"?"rgba(48,209,88,0.15)":p.result==="L"?"rgba(255,69,58,0.12)":"rgba(255,255,255,0.06)",color:p.result==="W"?IOS.green:p.result==="L"?IOS.red:IOS.label3}}>
+                              {p.result==="W"?"W":p.result==="L"?"L":"·"}
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{fontSize:12,color:IOS.label3,display:"flex",alignItems:"center",gap:4}}>
+                          {myPending>0&&<span style={{color:sport.color,fontWeight:600}}>{myPending} pending</span>}
+                          <span style={{fontSize:16,color:IOS.label3}}>›</span>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
 
               {/* Timer */}
               <div className="countdown-bar">
@@ -1564,15 +1714,15 @@ export default function App() {
                 <div className="cd-time">{pad(timeLeft.h)}:{pad(timeLeft.m)}:{pad(timeLeft.s)}</div>
               </div>
               {savedPicks
-                ? <button className="ios-btn" style={{background:IOS.green,color:"#000",marginBottom:6}} onClick={()=>setScreen("picks")}>✓ Picks Locked — View or Edit</button>
-                : <button className="ios-btn" style={{background:sport.color,color:"#fff",marginBottom:6}} onClick={()=>setScreen("picks")}>{sport.icon} Make Your {sport.label} Picks</button>
+                ? <button className="ios-btn" style={{background:IOS.green,color:"#000",marginBottom:6}} onClick={()=>setScreen("picks")}>✓ Slip Locked — View or Edit</button>
+                : <button className="ios-btn" style={{background:sport.color,color:"#fff",marginBottom:6}} onClick={()=>setScreen("picks")}>{sport.icon} Build Your {sport.label} Slip</button>
               }
 
               {/* My Locked Picks card */}
               {savedPicks && savedPicks.flexPicks && (
                 <div style={{margin:"0 16px 10px",background:IOS.bg2,borderRadius:16,overflow:"hidden",border:`1px solid rgba(48,209,88,0.25)`}}>
                   <div style={{padding:"12px 16px 8px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:`0.5px solid ${IOS.sep}`}}>
-                    <div style={{fontSize:12,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.green}}>✓ Week {activeLeague.current_week||activeLeague.week||1} Picks Locked</div>
+                    <div style={{fontSize:12,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.green}}>✓ Week {activeLeague.current_week||activeLeague.week||1} Slip Locked</div>
                     <div style={{fontSize:12,fontWeight:600,color:IOS.blue,cursor:"pointer"}} onClick={()=>setScreen("picks")}>Edit</div>
                   </div>
                   {[...savedPicks.flexPicks].sort((a,b)=>a.mult-b.mult).map((slot,i)=>{
@@ -1775,7 +1925,7 @@ export default function App() {
             {submitted&&(
               <div className="done-screen">
                 <div className="done-checkmark">✓</div>
-                <div className="done-title">Picks Locked In</div>
+                <div className="done-title">Slip Locked 🔒</div>
                 <div style={{fontSize:13,color:IOS.label3,textAlign:"center"}}>Week {activeLeague.current_week||activeLeague.week||1} · {activeLeague.name}</div>
                 <div className="done-legs-card">
                   {[...flexPicks].sort((a,b)=>a.mult-b.mult).map((slot,i)=>{
@@ -1815,7 +1965,7 @@ export default function App() {
             <div className="body">
               <div style={{padding:"8px 16px 14px",display:"flex",alignItems:"center",gap:12}}>
                 <button onClick={()=>setScreen("home")} style={{background:IOS.fill2,border:"none",borderRadius:10,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:17,flexShrink:0}}>‹</button>
-                <div style={{fontSize:17,fontWeight:600,letterSpacing:-0.3}}>{savedPicks?"My Picks":"Pick Builder"}</div>
+                <div style={{fontSize:17,fontWeight:600,letterSpacing:-0.3}}>{savedPicks?"My Slip":"Build Your Slip"}</div>
                 {savedPicks&&<div onClick={()=>setSavedPicks(null)} style={{marginLeft:"auto",fontSize:13,fontWeight:600,color:IOS.blue,cursor:"pointer"}}>Edit</div>}
               </div>
 
@@ -1823,7 +1973,7 @@ export default function App() {
               {savedPicks && savedPicks.flexPicks ? (
                 <div>
                   <div style={{padding:"0 16px 12px"}}>
-                    <div style={{fontSize:34,fontWeight:800,letterSpacing:-1,color:"#fff",lineHeight:1.05}}>Your Lineup</div>
+                    <div style={{fontSize:34,fontWeight:800,letterSpacing:-1,color:"#fff",lineHeight:1.05}}>Your Slip</div>
                     <div style={{fontSize:14,color:IOS.label3,marginTop:4}}>{activeLeague.name} · Wk {activeLeague.current_week||activeLeague.week||1} · Locked ✓</div>
                   </div>
                   {[...savedPicks.flexPicks].sort((a,b)=>a.mult-b.mult).map((slot,i)=>{
@@ -1878,14 +2028,14 @@ export default function App() {
               ) : (
                 <>
               <div className="pb-header">
-                <div className="pb-title">{sport.icon} {sport.label} Picks</div>
+                <div className="pb-title">{sport.icon} {sport.label} Slip</div>
                 <div className="pb-sub">{activeLeague.name} · Wk {activeLeague.current_week||activeLeague.week||1}</div>
               </div>
 
               {/* Status bar */}
               <div style={{margin:"0 16px 12px",background:IOS.bg2,borderRadius:14,padding:"14px 16px"}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-                  <div style={{fontSize:13,fontWeight:600,color:IOS.label3}}>Your Lineup</div>
+                  <div style={{fontSize:13,fontWeight:600,color:IOS.label3}}>Your Slip</div>
                   <div style={{fontSize:13,fontWeight:600,color:allFlexFilled?IOS.green:IOS.blue}}>
                     {flexPicks.filter(p=>p.mult!==null&&(p.isParlay?p.parlayLegs.length>=2:p.bet!==null)).length}/5 picks
                   </div>
@@ -1946,7 +2096,25 @@ export default function App() {
                         ) : slot.bet ? (
                           <div>
                             <div style={{fontSize:10,fontWeight:700,letterSpacing:0.3,textTransform:"uppercase",color:IOS.label3,marginBottom:2}}>{slot.bet.game}</div>
-                            <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>{slot.bet.pick}</div>
+                            {(()=>{
+                              const isEnhance = activatedPUs[idx]?.id==="enhance";
+                              if(isEnhance) {
+                                const match = slot.bet.pick.match(/([+-]?\d+\.?\d*)\s*$/);
+                                if(match) {
+                                  const orig = parseFloat(match[1]);
+                                  const enhanced = orig + 1.5;
+                                  const enhancedStr = enhanced > 0 ? `+${enhanced.toFixed(1)}` : enhanced.toFixed(1);
+                                  const teamName = slot.bet.pick.replace(/([+-]?\d+\.?\d*)\s*$/, "").trim();
+                                  return (
+                                    <div>
+                                      <div style={{fontSize:13,fontWeight:600,textDecoration:"line-through",color:IOS.label3}}>{slot.bet.pick}</div>
+                                      <div style={{fontSize:13,fontWeight:700,color:IOS.blue}}>{teamName} {enhancedStr} 📈</div>
+                                    </div>
+                                  );
+                                }
+                              }
+                              return <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>{slot.bet.pick}</div>;
+                            })()}
                           </div>
                         ) : (
                           <div style={{fontSize:14,color:IOS.label3}}>+ Add a pick</div>
@@ -1974,13 +2142,42 @@ export default function App() {
 
                     {/* Points preview */}
                     {slot.mult && filled && (
-                      <div style={{padding:"8px 14px",background:"rgba(48,209,88,0.05)",borderTop:`0.5px solid rgba(48,209,88,0.1)`}}>
+                      <div style={{padding:"8px 14px",background:"rgba(48,209,88,0.05)",borderTop:`0.5px solid rgba(48,209,88,0.1)`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                         <div style={{fontSize:11,fontWeight:600,color:IOS.green}}>
-                          {slot.isParlay && parlayOdds
-                            ? `+${calcPickPoints(slot.mult, parlayOdds.decimal>1?(parlayOdds.decimal-1)*100:0, "W")} pts if parlay hits`
-                            : slot.bet ? `+${calcPickPoints(slot.mult, slot.bet.impliedOdds, "W")} pts if win` : ""
-                          }
+                          {(()=>{
+                            const appliedPU = activatedPUs[idx];
+                            const isDouble = appliedPU?.id==="double";
+                            const isEnhance = appliedPU?.id==="enhance";
+                            const mult = isDouble ? slot.mult * 2 : slot.mult;
+                            const basePts = slot.isParlay && parlayOdds
+                              ? calcPickPoints(mult, parlayOdds.decimal>1?(parlayOdds.decimal-1)*100:0, "W")
+                              : slot.bet ? calcPickPoints(mult, slot.bet.impliedOdds, "W") : 0;
+                            if(isDouble) return `+${basePts} pts if win (2️⃣ doubled!)`;
+                            if(isEnhance && slot.bet) return `+${basePts} pts if win · 📈 Spread moved 1.5pts in your favor`;
+                            return `+${basePts} pts if win`;
+                          })()}
                         </div>
+                        {/* Power-up button — show if has offensive PUs in inventory OR one already applied */}
+                        {(myPUs.filter(p=>p.type==="offensive").length > 0 || activatedPUs[idx]) && (
+                          activatedPUs[idx] ? (
+                            <div style={{display:"inline-flex",alignItems:"center",gap:5,padding:"3px 9px",borderRadius:7,background:`${activatedPUs[idx].color}15`,border:`1px solid ${activatedPUs[idx].color}30`,cursor:"pointer"}}
+                              onClick={e=>{
+                                e.stopPropagation();
+                                setMyPUs(p=>[...p,activatedPUs[idx]]);
+                                setActivatedPUs(p=>{const n={...p};delete n[idx];return n;});
+                              }}>
+                              <span style={{fontSize:11}}>{activatedPUs[idx].icon}</span>
+                              <span style={{fontSize:10,fontWeight:700,color:activatedPUs[idx].color}}>{activatedPUs[idx].name}</span>
+                              <span style={{fontSize:10,color:IOS.label3,marginLeft:3}}>✕ remove</span>
+                            </div>
+                          ) : (
+                            <div onClick={e=>{e.stopPropagation();setShowPUModal({context:"picks",slotId:idx,slotLabel:slot.isParlay?"Parlay":slot.bet?.pick||"Pick"});}}
+                              style={{display:"inline-flex",alignItems:"center",gap:5,padding:"3px 9px",borderRadius:7,background:"rgba(255,255,255,0.05)",border:"1px dashed rgba(255,255,255,0.12)",cursor:"pointer"}}>
+                              <span style={{fontSize:11}}>⚡</span>
+                              <span style={{fontSize:10,fontWeight:600,color:IOS.label3}}>Power-Up</span>
+                            </div>
+                          )
+                        )}
                       </div>
                     )}
                   </div>
@@ -2010,13 +2207,14 @@ export default function App() {
                       const picksToSave = [];
                       flexPicks.forEach(slot=>{
                         if(!slot.mult) return;
+                        const effectiveMult = activatedPUs[idx]?.id==="double" ? slot.mult * 2 : slot.mult;
                         if(slot.isParlay) {
                           slot.parlayLegs.forEach(b=>picksToSave.push({
                             league_id: activeLeague.id,
                             user_id: user.id,
                             week,
                             slot: "longshot",
-                            multiplier: slot.mult,
+                            multiplier: effectiveMult,
                             pick_name: b.pick,
                             odds: b.odds,
                             implied_odds: b.impliedOdds,
@@ -2029,7 +2227,7 @@ export default function App() {
                             user_id: user.id,
                             week,
                             slot: slot.category||"ml",
-                            multiplier: slot.mult,
+                            multiplier: effectiveMult,
                             pick_name: slot.bet.pick,
                             odds: slot.bet.odds,
                             implied_odds: slot.bet.impliedOdds,
@@ -2044,9 +2242,9 @@ export default function App() {
                     try { localStorage.setItem("linedup_picks_wk6", JSON.stringify(locked)); } catch(e) {}
                     setSavedPicks(locked);
                     setSubmitted(true);
-                  }}>🔒 Lock In My Picks</button>
+                  }}>🔒 Lock Your Slip 🔒</button>
                 : <button className="ios-btn disabled" disabled>
-                    {!hasParlay ? "⚠ Need one Parlay pick" : `${flexPicks.filter(p=>p.mult!==null&&(p.isParlay?p.parlayLegs.length>=2:p.bet!==null)).length} / 5 Picks Filled`}
+                    {!hasParlay ? "⚠ Need one Parlay in your Slip" : `${flexPicks.filter(p=>p.mult!==null&&(p.isParlay?p.parlayLegs.length>=2:p.bet!==null)).length} / 5 Slots Filled`}
                   </button>
               }
               <div style={{height:20}}/>
@@ -2073,6 +2271,20 @@ export default function App() {
               </div>
 
               {(()=>{
+                const hasOpponent = leagueMembers.filter(m=>!m.isYou).length > 0;
+
+                // No opponent — show empty state
+                if(!hasOpponent) return (
+                  <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"60px 32px",textAlign:"center",gap:16}}>
+                    <div style={{fontSize:56}}>🏟️</div>
+                    <div style={{fontSize:22,fontWeight:700,letterSpacing:-0.5,color:"#fff"}}>No Matchup Yet</div>
+                    <div style={{fontSize:15,color:IOS.label3,lineHeight:1.6}}>You need at least one other member in {activeLeague.name} to have a matchup.</div>
+                    <div onClick={()=>setScreen("commissioner")} style={{marginTop:8,background:IOS.blue,borderRadius:12,padding:"12px 24px",fontSize:15,fontWeight:600,color:"#fff",cursor:"pointer"}}>
+                      Invite Members →
+                    </div>
+                  </div>
+                );
+
                 // Get my picks and opponent's picks from weekPicks
                 const myPicks = weekPicks.filter(p=>p.user_id===user?.id);
                 const oppPicks = weekPicks.filter(p=>p.user_id!==user?.id);
@@ -2163,7 +2375,7 @@ export default function App() {
 
                     {/* My picks */}
                     <div style={{padding:"0 20px 10px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                      <div style={{fontSize:12,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3}}>Your Picks</div>
+                      <div style={{fontSize:12,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3}}>Your Slip</div>
                       <div style={{fontSize:12,color:IOS.label3}}>{myPicks.length} picks · {myPending} pending</div>
                     </div>
 
@@ -2212,7 +2424,7 @@ export default function App() {
 
                     {/* Opponent picks */}
                     <div style={{padding:"8px 20px 10px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                      <div style={{fontSize:12,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3}}>{oppName}'s Picks</div>
+                      <div style={{fontSize:12,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3}}>{oppName}'s Slip</div>
                       <div style={{fontSize:12,color:IOS.label3}}>{oppUserPicks.length} picks</div>
                     </div>
 
@@ -2276,12 +2488,89 @@ export default function App() {
               <div className="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div>
             </div>
             <div className="body">
+
+              {/* ── NEW LEAGUE MODAL ── */}
+              {showNewLeague && (
+                <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.7)",zIndex:50,display:"flex",flexDirection:"column",justifyContent:"flex-end",backdropFilter:"blur(8px)"}}
+                  onClick={()=>{if(!newLeagueCreated){setShowNewLeague(false);setNewLeagueSport(null);setNewLeagueName("");}}}>
+                  <div style={{background:IOS.bg2,borderRadius:"20px 20px 0 0",padding:"0 0 40px"}} onClick={e=>e.stopPropagation()}>
+                    <div style={{width:36,height:5,borderRadius:3,background:"rgba(255,255,255,0.2)",margin:"10px auto 0"}}/>
+
+                    {/* Success screen — league created */}
+                    {newLeagueCreated ? (
+                      <div style={{padding:"24px 24px 8px",textAlign:"center"}}>
+                        <div style={{fontSize:48,marginBottom:12}}>🎉</div>
+                        <div style={{fontSize:22,fontWeight:800,letterSpacing:-0.5,color:"#fff",marginBottom:6}}>{newLeagueCreated.name}</div>
+                        <div style={{fontSize:14,color:IOS.label3,marginBottom:28}}>Your league is live. Share the invite code.</div>
+                        <div style={{background:IOS.bg3,borderRadius:16,padding:"20px 24px",marginBottom:20,border:`1px solid ${IOS.blue}30`}}>
+                          <div style={{fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:IOS.blue,marginBottom:8}}>Invite Code</div>
+                          <div style={{fontSize:40,fontWeight:800,letterSpacing:6,color:"#fff"}}>{newLeagueCreated.invite_code}</div>
+                          <div style={{fontSize:12,color:IOS.label3,marginTop:6}}>Share with friends to join</div>
+                        </div>
+                        <button onClick={()=>{
+                          setActiveLeagueId(newLeagueCreated.id);
+                          setShowNewLeague(false);
+                          setNewLeagueCreated(null);
+                          setNewLeagueSport(null);
+                          setNewLeagueName("");
+                        }} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:14,padding:"16px",fontFamily:"Manrope,sans-serif",fontSize:17,fontWeight:600,color:"#fff",cursor:"pointer"}}>
+                          Go to My League →
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{padding:"20px 20px 0"}}>
+                        <div style={{fontSize:22,fontWeight:800,letterSpacing:-0.5,color:"#fff",marginBottom:4}}>New League</div>
+                        <div style={{fontSize:14,color:IOS.label3,marginBottom:20}}>Pick a sport and name your league</div>
+
+                        {/* Sport selector */}
+                        <div style={{fontSize:11,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:IOS.label3,marginBottom:10}}>Sport</div>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:20}}>
+                          {[
+                            {id:"nfl", icon:"🏈", label:"NFL",   color:IOS.blue},
+                            {id:"nba", icon:"🏀", label:"NBA",   color:"#FF6B35"},
+                            {id:"mlb", icon:"⚾", label:"MLB",   color:IOS.green},
+                          ].map(sp=>(
+                            <div key={sp.id} onClick={()=>setNewLeagueSport(sp.id)}
+                              style={{borderRadius:14,padding:"14px 8px",textAlign:"center",cursor:"pointer",transition:"all .15s",
+                                background:newLeagueSport===sp.id?`${sp.color}20`:"rgba(255,255,255,0.05)",
+                                border:`1.5px solid ${newLeagueSport===sp.id?sp.color:"rgba(255,255,255,0.08)"}`,
+                              }}>
+                              <div style={{fontSize:26,marginBottom:6}}>{sp.icon}</div>
+                              <div style={{fontSize:13,fontWeight:700,color:newLeagueSport===sp.id?sp.color:"rgba(255,255,255,0.6)"}}>{sp.label}</div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* League name input */}
+                        <div style={{fontSize:11,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:IOS.label3,marginBottom:10}}>League Name</div>
+                        <input
+                          value={newLeagueName}
+                          onChange={e=>setNewLeagueName(e.target.value)}
+                          placeholder="e.g. The Boys League"
+                          style={{width:"100%",background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"14px 16px",color:"#fff",fontSize:16,fontFamily:"Manrope,sans-serif",outline:"none",marginBottom:24,boxSizing:"border-box"}}
+                        />
+
+                        {/* Create button */}
+                        <button
+                          disabled={!newLeagueSport||!newLeagueName.trim()||creatingLeague}
+                          onClick={()=>createLeague(newLeagueName.trim(), newLeagueSport)}
+                          style={{width:"100%",background:newLeagueSport&&newLeagueName.trim()?IOS.blue:"rgba(255,255,255,0.1)",border:"none",borderRadius:14,padding:"16px",fontFamily:"Manrope,sans-serif",fontSize:17,fontWeight:600,color:newLeagueSport&&newLeagueName.trim()?"#fff":"rgba(255,255,255,0.3)",cursor:newLeagueSport&&newLeagueName.trim()?"pointer":"default",transition:"all .2s"}}
+                        >
+                          {creatingLeague ? "Creating..." : "Create League"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div style={{padding:"6px 20px 18px",display:"flex",alignItems:"flex-end",justifyContent:"space-between"}}>
                 <div>
                   <div style={{fontSize:34,fontWeight:800,letterSpacing:-1,color:"#fff",lineHeight:1.05}}>My Leagues</div>
-                  <div style={{fontSize:14,fontWeight:500,color:IOS.label3,marginTop:3}}>{LEAGUES_DATA.length} active leagues</div>
+                  <div style={{fontSize:14,fontWeight:500,color:IOS.label3,marginTop:3}}>{realLeagues.length} active league{realLeagues.length!==1?"s":""}</div>
                 </div>
-                <div style={{background:IOS.blue,borderRadius:10,padding:"8px 14px",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>+ New</div>
+                <div onClick={()=>{setShowNewLeague(true);setNewLeagueCreated(null);setNewLeagueSport(null);setNewLeagueName("");}}
+                  style={{background:IOS.blue,borderRadius:10,padding:"8px 14px",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>+ New</div>
               </div>
 
               {/* League cards */}
@@ -2376,7 +2665,7 @@ export default function App() {
 
               {/* Commish tabs */}
               <div style={{display:"flex",background:IOS.bg3,borderRadius:12,padding:2,margin:"0 16px 16px",gap:2}}>
-                {[{id:"grade",l:"Grade Picks"},{id:"members",l:"Members"}].map(t=>(
+                {[{id:"grade",l:"Grade Slips"},{id:"members",l:"Members"}].map(t=>(
                   <div key={t.id} onClick={()=>setCommishTab(t.id)} style={{flex:1,textAlign:"center",padding:"8px 4px",borderRadius:10,fontSize:12,fontWeight:700,cursor:"pointer",transition:"all .15s",background:commishTab===t.id?IOS.bg2:"transparent",color:commishTab===t.id?"#fff":IOS.label3,boxShadow:commishTab===t.id?"0 1px 3px rgba(0,0,0,0.4)":"none"}}>{t.l}</div>
                 ))}
               </div>
@@ -2385,7 +2674,7 @@ export default function App() {
               {commishTab==="grade"&&(
                 <>
                   <div style={{padding:"0 20px 10px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                    <div style={{fontSize:13,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3}}>Week {activeLeague.current_week||activeLeague.week||1} · All Picks</div>
+                    <div style={{fontSize:13,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3}}>Week {activeLeague.current_week||activeLeague.week||1} · All Slips</div>
                     <div style={{fontSize:12,color:IOS.orange,fontWeight:600}}>{weekPicks.filter(p=>p.result==="pending").length} pending</div>
                   </div>
 
@@ -2438,12 +2727,40 @@ export default function App() {
                                   <button onClick={async()=>{
                                     const pts = parseFloat((pick.multiplier*(pick.implied_odds>0?pick.implied_odds/100:100/Math.abs(pick.implied_odds||110))*10).toFixed(1));
                                     await supabase.from("picks").update({result:"W",points_earned:pts}).eq("id",pick.id);
-                                    setWeekPicks(prev=>prev.map(p=>p.id===pick.id?{...p,result:"W",points_earned:pts}:p));
+                                    // If this is a parlay leg, check if all legs won — if not, zero out points on all legs
+                                    const updatedPicks = weekPicks.map(p=>p.id===pick.id?{...p,result:"W",points_earned:pts}:p);
+                                    if(pick.slot==="longshot") {
+                                      const parlayLegs = updatedPicks.filter(p=>p.user_id===pick.user_id&&p.multiplier===pick.multiplier&&p.slot==="longshot");
+                                      const allWon = parlayLegs.every(p=>p.result==="W");
+                                      const anyLost = parlayLegs.some(p=>p.result==="L");
+                                      if(anyLost) {
+                                        // Zero out all legs since parlay is busted
+                                        for(const leg of parlayLegs) {
+                                          await supabase.from("picks").update({points_earned:0}).eq("id",leg.id);
+                                        }
+                                        setWeekPicks(prev=>prev.map(p=>p.user_id===pick.user_id&&p.multiplier===pick.multiplier&&p.slot==="longshot"?{...p,points_earned:0}:p.id===pick.id?{...p,result:"W"}:p));
+                                      } else if(allWon) {
+                                        setWeekPicks(updatedPicks);
+                                      } else {
+                                        setWeekPicks(updatedPicks);
+                                      }
+                                    } else {
+                                      setWeekPicks(updatedPicks);
+                                    }
                                     fetchStandings(activeLeagueId);
                                   }} style={{padding:"7px 14px",borderRadius:8,border:"none",background:pick.result==="W"?IOS.green:"rgba(48,209,88,0.12)",color:pick.result==="W"?"#000":IOS.green,fontSize:12,fontWeight:700,cursor:"pointer"}}>✓ Win</button>
                                   <button onClick={async()=>{
                                     await supabase.from("picks").update({result:"L",points_earned:0}).eq("id",pick.id);
-                                    setWeekPicks(prev=>prev.map(p=>p.id===pick.id?{...p,result:"L",points_earned:0}:p));
+                                    // If parlay leg loses, zero out ALL legs of this parlay in one query
+                                    if(pick.slot==="longshot") {
+                                      await supabase.from("picks").update({points_earned:0})
+                                        .eq("user_id", pick.user_id)
+                                        .eq("multiplier", pick.multiplier)
+                                        .eq("slot", "longshot");
+                                      setWeekPicks(prev=>prev.map(p=>p.user_id===pick.user_id&&p.multiplier===pick.multiplier&&p.slot==="longshot"?{...p,points_earned:0}:p.id===pick.id?{...p,result:"L",points_earned:0}:p));
+                                    } else {
+                                      setWeekPicks(prev=>prev.map(p=>p.id===pick.id?{...p,result:"L",points_earned:0}:p));
+                                    }
                                     fetchStandings(activeLeagueId);
                                   }} style={{padding:"7px 14px",borderRadius:8,border:"none",background:pick.result==="L"?IOS.red:"rgba(255,69,58,0.12)",color:pick.result==="L"?"#fff":IOS.red,fontSize:12,fontWeight:700,cursor:"pointer"}}>✗ Loss</button>
                                   {pick.result!=="pending"&&(
@@ -2584,7 +2901,7 @@ export default function App() {
 
               {/* Tabs */}
               <div className="seg-control" style={{marginBottom:14}}>
-                {["standings","schedule"].map(t=><div key={t} className={`seg-item ${leagueTab===t?"on":""}`} onClick={()=>setLeagueTab(t)}>{t.charAt(0).toUpperCase()+t.slice(1)}</div>)}
+                {["standings","trophies","schedule"].map(t=><div key={t} className={`seg-item ${leagueTab===t?"on":""}`} onClick={()=>setLeagueTab(t)}>{t.charAt(0).toUpperCase()+t.slice(1)}</div>)}
               </div>
 
               {leagueTab==="standings"&&(
@@ -2688,8 +3005,51 @@ export default function App() {
                 </>
               )}
 
+              {/* TROPHIES TAB */}
+              {leagueTab==="trophies"&&(
+                <div style={{paddingBottom:24}}>
+                  {leagueMembers.filter(m=>!m.isYou).length===0 ? (
+                    <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:16,padding:"40px 24px",textAlign:"center"}}>
+                      <div style={{fontSize:48,marginBottom:12}}>🏆</div>
+                      <div style={{fontSize:18,fontWeight:700,color:"#fff",marginBottom:8}}>No Trophies Yet</div>
+                      <div style={{fontSize:14,color:IOS.label3,lineHeight:1.6}}>Trophies are awarded once members start competing. Invite friends to get started.</div>
+                    </div>
+                  ) : leagueTrophies.length===0 ? (
+                    <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:16,padding:"40px 24px",textAlign:"center"}}>
+                      <div style={{fontSize:48,marginBottom:12}}>⏳</div>
+                      <div style={{fontSize:18,fontWeight:700,color:"#fff",marginBottom:8}}>No Graded Picks Yet</div>
+                      <div style={{fontSize:14,color:IOS.label3,lineHeight:1.6}}>Trophies will appear once picks are graded this week.</div>
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{padding:"0 20px 14px",fontSize:14,color:IOS.label3}}>Based on graded picks this season</div>
+                      {leagueTrophies.map(t=>(
+                        <div key={t.id} style={{margin:"0 16px 10px",background:IOS.bg2,borderRadius:16,padding:"16px",display:"flex",alignItems:"center",gap:14,position:"relative",overflow:"hidden",border:t.isYou?`1px solid ${t.color}30`:"1px solid rgba(255,255,255,0.06)"}}>
+                          {t.isYou&&<div style={{position:"absolute",left:0,top:0,bottom:0,width:4,background:t.color,borderRadius:"16px 0 0 16px"}}/>}
+                          <div style={{width:48,height:48,borderRadius:14,background:`${t.color}18`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,flexShrink:0}}>{t.icon}</div>
+                          <div style={{flex:1}}>
+                            <div style={{fontSize:16,fontWeight:700,color:t.isYou?t.color:"#fff",marginBottom:3}}>{t.name}</div>
+                            <div style={{fontSize:12,color:IOS.label3,marginBottom:4}}>{t.desc}</div>
+                            <div style={{fontSize:12,fontWeight:600,color:t.isYou?t.color:IOS.label2}}>{t.isYou?"✦ Currently yours":`Held by ${t.holder}`}</div>
+                          </div>
+                          {t.isYou&&<div style={{background:`${t.color}18`,border:`1px solid ${t.color}40`,borderRadius:8,padding:"4px 10px",fontSize:11,fontWeight:700,color:t.color,flexShrink:0}}>YOURS</div>}
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </div>
+              )}
+
               {leagueTab==="schedule"&&(
                 <>
+                {leagueMembers.filter(m=>!m.isYou).length===0 ? (
+                  <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:16,padding:"40px 24px",textAlign:"center"}}>
+                    <div style={{fontSize:48,marginBottom:12}}>📅</div>
+                    <div style={{fontSize:18,fontWeight:700,color:"#fff",marginBottom:8}}>No Schedule Yet</div>
+                    <div style={{fontSize:14,color:IOS.label3,lineHeight:1.6}}>Invite members to generate matchups and see your schedule.</div>
+                  </div>
+                ) : (
+                  <>
                 {/* Matchup detail overlay */}
                 {selectedMatchup && (()=>{
                   const m = MATCHUP_HISTORY.find(x=>x.week===selectedMatchup);
@@ -2845,6 +3205,8 @@ export default function App() {
                   })}
                 </div>
                 </>
+                )}
+                </>
               )}
             </div>
           </>
@@ -2894,37 +3256,44 @@ export default function App() {
             </div>
             <div className="body">
               <div className="prof-av-wrap">
-                <div className="prof-av">J</div>
+                <div className="prof-av">{(user?.email?.[0]||"J").toUpperCase()}</div>
                 <div>
-                  <div className="prof-name">Joe</div>
-                  <div className="prof-league">The Boys League</div>
-                  <div className="prof-rank-pill"><span>🥈</span><span className="prof-rank-txt">#2 of 8 · W3 streak</span></div>
+                  <div className="prof-name">{user?.email?.split("@")[0]||"You"}</div>
+                  <div className="prof-league">{realLeagues.length} active league{realLeagues.length!==1?"s":""}</div>
+                  <div className="prof-rank-pill"><span>📊</span><span className="prof-rank-txt">All-league stats</span></div>
                 </div>
               </div>
 
               <div className="seg-control">
-                {["stats","trophies","power-ups"].map(t=><div key={t} className={`seg-item ${profTab===t?"on":""}`} onClick={()=>setProfTab(t)}>{t.charAt(0).toUpperCase()+t.slice(1)}</div>)}
+                {["stats","power-ups"].map(t=><div key={t} className={`seg-item ${profTab===t?"on":""}`} onClick={()=>setProfTab(t)}>{t.charAt(0).toUpperCase()+t.slice(1)}</div>)}
               </div>
 
               {profTab==="stats"&&(
                 <>
                   <div className="stat-pills" style={{marginBottom:10}}>
-                    <div className="stat-pill"><div className="stat-pill-val" style={{color:IOS.blue}}>7-3</div><div className="stat-pill-lbl">Record</div></div>
-                    <div className="stat-pill"><div className="stat-pill-val" style={{color:IOS.green}}>+18.4%</div><div className="stat-pill-lbl">ROI</div></div>
-                    <div className="stat-pill"><div className="stat-pill-val" style={{color:IOS.green}}>+12.5u</div><div className="stat-pill-lbl">Units</div></div>
-                  </div>
-                  <div className="unit-chart-card">
-                    <div className="uc-header"><span className="uc-title">Units by Week</span><span className="uc-total">+12.5u total</span></div>
-                    <div className="uc-bars">
-                      {[3.5,2.0,-1.5,4.0,-2.0,6.5].map((u,i)=>{const h=Math.max(8,Math.abs(u)/6.5*56);return(<div key={i} className="uc-bar-wrap"><div className="uc-bar" style={{height:h,background:u>=0?IOS.green:IOS.red,opacity:0.7}}/><div className="uc-bar-lbl">W{i+1}</div></div>);})}
-                    </div>
+                    <div className="stat-pill"><div className="stat-pill-val" style={{color:IOS.blue}}>{allMyStats?.wins||0}-{allMyStats?.losses||0}</div><div className="stat-pill-lbl">Record</div></div>
+                    <div className="stat-pill"><div className="stat-pill-val" style={{color:IOS.green}}>{allMyStats?.winRate||"0%"}</div><div className="stat-pill-lbl">Win Rate</div></div>
+                    <div className="stat-pill"><div className="stat-pill-val" style={{color:IOS.green}}>{allMyStats?.points||0}pts</div><div className="stat-pill-lbl">Total Pts</div></div>
                   </div>
                   <div className="perf-grid">
-                    <div className="perf-card"><div className="perf-lbl">Best Bet</div><div className="perf-val" style={{color:IOS.green}}>Eagles ML</div></div>
-                    <div className="perf-card"><div className="perf-lbl">Worst Bet</div><div className="perf-val" style={{color:IOS.red}}>Cowboys +7</div></div>
+                    <div className="perf-card">
+                      <div className="perf-lbl">Best Pick</div>
+                      <div className="perf-val" style={{color:IOS.green,fontSize:14}}>{allMyStats?.bestBet?.pick_name||"—"}</div>
+                    </div>
+                    <div className="perf-card">
+                      <div className="perf-lbl">Last Loss</div>
+                      <div className="perf-val" style={{color:IOS.red,fontSize:14}}>{allMyStats?.worstBet?.pick_name||"—"}</div>
+                    </div>
                   </div>
                   <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:16,overflow:"hidden"}}>
-                    {[["Total Bets","50"],["Wins","7",IOS.green],["Losses","3",IOS.red],["Pushes","3",""],["Win Rate","70%",IOS.blue],["Best Streak","W5",IOS.green]].map(([l,v,c],i,arr)=>(
+                    {[
+                      ["Total Picks", allMyStats?.total||0, ""],
+                      ["Wins", allMyStats?.wins||0, IOS.green],
+                      ["Losses", allMyStats?.losses||0, IOS.red],
+                      ["Win Rate", allMyStats?.winRate||"0%", IOS.blue],
+                      ["Total Points", allMyStats?.points||0, IOS.green],
+                      ["Active Leagues", realLeagues.length, IOS.blue],
+                    ].map(([l,v,c],i,arr)=>(
                       <div key={l} className="ios-row" style={i===arr.length-1?{paddingBottom:13}:{}}>
                         <div className="ios-row-content"><div className="ios-row-title" style={{fontSize:15}}>{l}</div></div>
                         <div className="ios-row-value" style={{fontSize:15,fontWeight:600,color:c||"#fff"}}>{v}</div>
