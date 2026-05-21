@@ -1306,9 +1306,7 @@ export default function App() {
     .phone{width:390px;min-height:844px;background:#000;position:relative;overflow:hidden;display:flex;flex-direction:column;font-family:'Manrope',system-ui,-apple-system,sans-serif;color:#fff;-webkit-font-smoothing:antialiased;}
 
     /* iOS Status Bar */
-    .status-bar{height:54px;padding:14px 20px 0;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;position:relative;z-index:10;}
-    .status-time{font-size:15px;font-weight:600;letter-spacing:-0.3px;}
-    .status-icons{display:flex;align-items:center;gap:6px;font-size:12px;}
+
 
     /* Large Title Navigation (iOS style) */
     .nav-header{padding:0 20px 12px;position:relative;z-index:5;}
@@ -1929,10 +1927,6 @@ export default function App() {
         {/* ══ HOME ══ */}
         {screen==="home"&&(
           <>
-            <div className="status-bar">
-              <div className="status-time">{pad(new Date().getHours())}:{pad(new Date().getMinutes())}</div>
-              <div className="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div>
-            </div>
             <div className="body">
               <div className="nav-header large" style={{padding:"0 20px 14px"}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
@@ -2154,10 +2148,6 @@ export default function App() {
         {/* ══ PICKS ══ */}
         {screen==="picks"&&(
           <>
-            <div className="status-bar">
-              <div className="status-time">{pad(new Date().getHours())}:{pad(new Date().getMinutes())}</div>
-              <div className="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div>
-            </div>
 
             {/* Bet picker sheet */}
             {activeFlexSlot!==null&&(
@@ -2783,10 +2773,6 @@ export default function App() {
         {/* ══ MATCHUP ══ */}
         {screen==="matchup"&&(
           <>
-            <div className="status-bar">
-              <div className="status-time">{pad(new Date().getHours())}:{pad(new Date().getMinutes())}</div>
-              <div className="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div>
-            </div>
             <div className="body">
               {/* Header */}
               <div style={{padding:"6px 20px 16px"}}>
@@ -3040,10 +3026,6 @@ export default function App() {
         {/* ══ LEAGUES LIST ══ */}
         {screen==="leagues"&&(
           <>
-            <div className="status-bar">
-              <div className="status-time">{pad(new Date().getHours())}:{pad(new Date().getMinutes())}</div>
-              <div className="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div>
-            </div>
             <div className="body">
 
               {/* ── NEW LEAGUE MODAL ── */}
@@ -3264,10 +3246,6 @@ export default function App() {
         {/* ══ COMMISSIONER ══ */}
         {screen==="commissioner"&&(
           <>
-            <div className="status-bar">
-              <div className="status-time">{pad(new Date().getHours())}:{pad(new Date().getMinutes())}</div>
-              <div className="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div>
-            </div>
             <div className="body">
               {/* Header */}
               <div style={{padding:"6px 20px 0",display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
@@ -3546,10 +3524,6 @@ export default function App() {
         {/* ══ LEAGUE ══ */}
         {screen==="league"&&(
           <>
-            <div className="status-bar">
-              <div className="status-time">{pad(new Date().getHours())}:{pad(new Date().getMinutes())}</div>
-              <div className="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div>
-            </div>
             <div className="body">
               <div style={{padding:"0 20px 12px"}}>
                 <div className="nav-title-large">{activeLeague.name||"My League"}</div>
@@ -3900,10 +3874,6 @@ export default function App() {
         {/* ══ CHAT ══ */}
         {screen==="chat"&&(
           <>
-            <div className="status-bar">
-              <div className="status-time">{pad(new Date().getHours())}:{pad(new Date().getMinutes())}</div>
-              <div className="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div>
-            </div>
             <div style={{padding:"0 20px 12px"}}>
               <div className="nav-title-large">The Boys</div>
               <div className="nav-subtitle">8 members · 6 online</div>
@@ -3935,10 +3905,6 @@ export default function App() {
         {/* ══ PROFILE ══ */}
         {screen==="profile"&&(
           <>
-            <div className="status-bar">
-              <div className="status-time">{pad(new Date().getHours())}:{pad(new Date().getMinutes())}</div>
-              <div className="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div>
-            </div>
             <div className="body">
               <div className="prof-av-wrap">
                 <div className="prof-av">{(userProfile?.username?.[0]||user?.email?.[0]||"J").toUpperCase()}</div>
