@@ -876,8 +876,9 @@ export default function App() {
       max_members:newLeagueSize, target_size:newLeagueSize, pick_deadline:"Sun 1PM ET", season_weeks:18,
       current_week:1, privacy:"private", scoring_type:"multiplier_odds",
     }).select().single();
-    if(error){alert(error.message);setCreatingLeague(false);return;}
-    await supabase.from("league_members").insert({league_id:data.id,user_id:user.id,is_commissioner:true});
+    if(error){alert(`leagues error: ${error.message} | code: ${error.code} | details: ${error.details}`);setCreatingLeague(false);return;}
+    const {error:memberError} = await supabase.from("league_members").insert({league_id:data.id,user_id:user.id,is_commissioner:true});
+    if(memberError){alert(`league_members error: ${memberError.message} | code: ${memberError.code}`);setCreatingLeague(false);return;}
     await fetchLeagues(user.id);
     setNewLeagueCreated(data);
     setCreatingLeague(false);
