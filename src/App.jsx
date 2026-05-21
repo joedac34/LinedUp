@@ -603,11 +603,9 @@ export default function App() {
   const [oddsError,   setOddsError]   = useState(false);
   // oddsLastFetched persisted in localStorage so cache survives page refreshes
 
-  const ODDS_API_KEY = import.meta.env.VITE_ODDS_API_KEY;
   const SPORT_KEYS = { nfl:"americanfootball_nfl", nba:"basketball_nba", mlb:"baseball_mlb" };
 
   const fetchLiveOdds = async (sportId) => {
-    if(!ODDS_API_KEY) return;
     // Cache for 10 minutes
     try {
       const stored = localStorage.getItem(`odds_fetched_${sportId}`);
@@ -621,9 +619,7 @@ export default function App() {
       if(!sportKey) { setOddsLoading(false); return; }
 
       // Fetch h2h + spreads + totals in one call
-      const res = await fetch(
-        `https://api.the-odds-api.com/v4/sports/${sportKey}/odds/?apiKey=${ODDS_API_KEY}&regions=us&markets=h2h,spreads,totals&bookmakers=draftkings&dateFormat=iso&oddsFormat=american`
-      );
+      const res = await fetch(`/api/odds?sport=${sportKey}`);
       if(!res.ok) throw new Error(`API error ${res.status}`);
       const games = await res.json();
 
