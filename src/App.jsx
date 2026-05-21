@@ -728,6 +728,88 @@ export default function App() {
   const usedMults = flexPicks.filter(p=>p.mult!==null).map(p=>p.mult);
   const availableMults = [1,2,3,4,5].filter(m=>!usedMults.includes(m));
   // Valid longshot = straight +400 bet, OR parlay with 2+ legs AND combined odds +400 or better
+  // ─── TEAM ACRONYM HELPER ─────────────────────────────────────────
+  const getAcronym = (name, isProp=false) => {
+    if(!name) return "?";
+
+    // For props — show first name only (e.g. "LeBron James" → "LEBRON", "Patrick Mahomes" → "PAT")
+    if(isProp) {
+      const first = name.split(" ")[0];
+      return first.substring(0,5).toUpperCase();
+    }
+
+    // Full name map
+    const known = {
+      // NFL
+      "Kansas City Chiefs":"KC","Philadelphia Eagles":"PHI","San Francisco 49ers":"SF",
+      "Dallas Cowboys":"DAL","Buffalo Bills":"BUF","Miami Dolphins":"MIA",
+      "New England Patriots":"NE","New York Jets":"NYJ","New York Giants":"NYG",
+      "Los Angeles Rams":"LAR","Los Angeles Chargers":"LAC","Las Vegas Raiders":"LV",
+      "Seattle Seahawks":"SEA","Arizona Cardinals":"ARI","Green Bay Packers":"GB",
+      "Chicago Bears":"CHI","Minnesota Vikings":"MIN","Detroit Lions":"DET",
+      "Atlanta Falcons":"ATL","New Orleans Saints":"NO","Carolina Panthers":"CAR",
+      "Tampa Bay Buccaneers":"TB","Pittsburgh Steelers":"PIT","Baltimore Ravens":"BAL",
+      "Cleveland Browns":"CLE","Cincinnati Bengals":"CIN","Tennessee Titans":"TEN",
+      "Indianapolis Colts":"IND","Houston Texans":"HOU","Jacksonville Jaguars":"JAX",
+      "Denver Broncos":"DEN","Washington Commanders":"WAS","New York Giants":"NYG",
+      // MLB
+      "Los Angeles Dodgers":"LAD","New York Yankees":"NYY","Boston Red Sox":"BOS",
+      "Chicago Cubs":"CHC","St. Louis Cardinals":"STL","Atlanta Braves":"ATL",
+      "Houston Astros":"HOU","Toronto Blue Jays":"TOR","San Francisco Giants":"SFG",
+      "New York Mets":"NYM","Philadelphia Phillies":"PHI","San Diego Padres":"SD",
+      "Milwaukee Brewers":"MIL","Cincinnati Reds":"CIN","Chicago White Sox":"CWS",
+      "Cleveland Guardians":"CLE","Detroit Tigers":"DET","Minnesota Twins":"MIN",
+      "Seattle Mariners":"SEA","Oakland Athletics":"OAK","Texas Rangers":"TEX",
+      "Baltimore Orioles":"BAL","Tampa Bay Rays":"TB","Miami Marlins":"MIA",
+      "Washington Nationals":"WSH","Pittsburgh Pirates":"PIT","Colorado Rockies":"COL",
+      "Arizona Diamondbacks":"ARI","Los Angeles Angels":"LAA","Kansas City Royals":"KC",
+      // NBA
+      "Los Angeles Lakers":"LAL","Golden State Warriors":"GS","Boston Celtics":"BOS",
+      "Milwaukee Bucks":"MIL","Phoenix Suns":"PHX","Miami Heat":"MIA",
+      "Brooklyn Nets":"BKN","Chicago Bulls":"CHI","Denver Nuggets":"DEN",
+      "Memphis Grizzlies":"MEM","Dallas Mavericks":"DAL","Los Angeles Clippers":"LAC",
+      "Atlanta Hawks":"ATL","Cleveland Cavaliers":"CLE","Philadelphia 76ers":"PHI",
+      "Toronto Raptors":"TOR","New York Knicks":"NYK","Indiana Pacers":"IND",
+      "Minnesota Timberwolves":"MIN","Oklahoma City Thunder":"OKC","Sacramento Kings":"SAC",
+      "Portland Trail Blazers":"POR","Utah Jazz":"UTA","New Orleans Pelicans":"NO",
+      "San Antonio Spurs":"SA","Charlotte Hornets":"CHA","Washington Wizards":"WAS",
+      "Orlando Magic":"ORL","Detroit Pistons":"DET",
+    };
+    if(known[name]) return known[name];
+
+    // Partial name match — check if name contains a known nickname
+    const partialMap = {
+      "Chiefs":"KC","Eagles":"PHI","49ers":"SF","Cowboys":"DAL","Bills":"BUF",
+      "Dolphins":"MIA","Patriots":"NE","Jets":"NYJ","Giants":"NYG","Rams":"LAR",
+      "Chargers":"LAC","Raiders":"LV","Seahawks":"SEA","Cardinals":"ARI",
+      "Packers":"GB","Bears":"CHI","Vikings":"MIN","Lions":"DET","Falcons":"ATL",
+      "Saints":"NO","Panthers":"CAR","Buccaneers":"TB","Steelers":"PIT",
+      "Ravens":"BAL","Browns":"CLE","Bengals":"CIN","Titans":"TEN","Colts":"IND",
+      "Texans":"HOU","Jaguars":"JAX","Broncos":"DEN","Commanders":"WAS",
+      "Dodgers":"LAD","Yankees":"NYY","Red Sox":"BOS","Cubs":"CHC",
+      "Braves":"ATL","Astros":"HOU","Blue Jays":"TOR","Mets":"NYM",
+      "Phillies":"PHI","Padres":"SD","Brewers":"MIL","Reds":"CIN",
+      "Mariners":"SEA","Athletics":"OAK","Rangers":"TEX","Orioles":"BAL",
+      "Rays":"TB","Marlins":"MIA","Nationals":"WSH","Pirates":"PIT",
+      "Rockies":"COL","Diamondbacks":"ARI","Angels":"LAA","Royals":"KC",
+      "Lakers":"LAL","Warriors":"GS","Celtics":"BOS","Bucks":"MIL",
+      "Suns":"PHX","Heat":"MIA","Nets":"BKN","Bulls":"CHI","Nuggets":"DEN",
+      "Grizzlies":"MEM","Mavericks":"DAL","Clippers":"LAC","Hawks":"ATL",
+      "Cavaliers":"CLE","76ers":"PHI","Raptors":"TOR","Knicks":"NYK",
+      "Pacers":"IND","Timberwolves":"MIN","Thunder":"OKC","Kings":"SAC",
+      "Trail Blazers":"POR","Jazz":"UTA","Pelicans":"NO","Spurs":"SA",
+      "Hornets":"CHA","Wizards":"WAS","Magic":"ORL","Pistons":"DET",
+    };
+    for(const [nickname, abbr] of Object.entries(partialMap)) {
+      if(name.includes(nickname)) return abbr;
+    }
+
+    // Fallback: first letters of words
+    const words = name.split(" ").filter(w=>w.length>2);
+    if(words.length===1) return name.substring(0,3).toUpperCase();
+    return words.map(w=>w[0]).join("").substring(0,3).toUpperCase();
+  };
+
   const calcParlayOddsDecimal = (legs) => legs.reduce((acc,b)=>{
     const dec = b.impliedOdds > 0 ? (b.impliedOdds/100)+1 : (100/Math.abs(b.impliedOdds))+1;
     return acc * dec;
@@ -1312,8 +1394,8 @@ export default function App() {
     .nav-subtitle{font-size:13px;color:${IOS.label3};margin-top:2px;}
 
     /* Scrollable body */
-    .body{flex:1;overflow-y:auto;position:relative;z-index:1;}
-    .body-pad{padding-bottom:100px;}
+    .body{flex:1;overflow-y:auto;position:relative;z-index:1;padding-top:env(safe-area-inset-top,0px);}
+    .body-pad{padding-bottom:calc(100px + env(safe-area-inset-bottom,0px));}
 
     /* iOS grouped sections */
     .ios-section{margin:0 16px 10px;}
@@ -1649,7 +1731,7 @@ export default function App() {
     @keyframes spin{to{transform:rotate(360deg);}}
 
     /* iOS Tab Bar */
-    .tab-bar{background:rgba(28,28,30,0.92);backdrop-filter:blur(20px) saturate(180%);border-top:0.5px solid rgba(255,255,255,0.08);display:flex;padding:8px 0 28px;position:sticky;bottom:0;z-index:20;}
+    .tab-bar{background:rgba(28,28,30,0.92);backdrop-filter:blur(20px) saturate(180%);border-top:0.5px solid rgba(255,255,255,0.08);display:flex;padding:8px 0;padding-bottom:calc(8px + env(safe-area-inset-bottom,0px));position:sticky;bottom:0;z-index:20;}
     .tab-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:4px 0;transition:opacity .15s;}
     .tab-item:active{opacity:0.6;}
     .tab-icon{font-size:22px;line-height:1;}
@@ -2501,7 +2583,7 @@ export default function App() {
                 {!hasParlay&&<div style={{fontSize:11,color:IOS.orange,marginTop:8}}>⚠ One pick must be a Longshot (+400 or better — straight bet or parlay)</div>}
               </div>
 
-              {/* Flex pick slots */}
+              {/* Flex pick slots — compact card design */}
               {flexPicks.map((slot, idx)=>{
                 const parlayDec = slot.isParlay && slot.parlayLegs.length>=2 ? calcParlayOddsDecimal(slot.parlayLegs) : 1;
                 const parlayAmerican = slot.isParlay && slot.parlayLegs.length>=2 ? parlayAmericanOdds(parlayDec) : 0;
@@ -2509,95 +2591,141 @@ export default function App() {
                 const filled = slot.isParlay ? parlayValid : slot.bet!==null;
                 const parlayOdds = slot.isParlay && slot.parlayLegs.length>=2 ? calcLS(slot.parlayLegs) : null;
                 const multColors = {1:IOS.blue, 2:IOS.yellow, 3:IOS.orange, 4:IOS.green, 5:IOS.pink};
-                const chosenColor = slot.mult ? multColors[slot.mult] : IOS.label3;
+                const catColors = {ml:IOS.blue, prop:IOS.yellow, ou:IOS.orange, spread:IOS.green, longshot:IOS.pink};
+                const catLabels = {ml:"MONEYLINE", prop:"PROP", ou:"OVER/UNDER", spread:"SPREAD", longshot:"LONGSHOT"};
+                const appliedPU = activatedPUs[idx];
+                const isDouble = appliedPU?.id==="double";
+                const isEnhance = appliedPU?.id==="enhance";
+                const mult = isDouble ? (slot.mult||1)*2 : (slot.mult||1);
+                const pts = slot.isParlay && parlayOdds
+                  ? calcPickPoints(mult, parlayOdds.decimal>1?(parlayOdds.decimal-1)*100:0, "W")
+                  : slot.bet ? calcPickPoints(mult, slot.bet.impliedOdds, "W") : 0;
+
+                // Build leg rows for display
+                const legRows = slot.isParlay ? slot.parlayLegs : slot.bet ? [slot.bet] : [];
+
                 return (
-                  <div key={idx} style={{margin:"0 16px 8px",background:IOS.bg2,borderRadius:16,overflow:"hidden",border:`1px solid ${filled&&slot.mult?"rgba(255,255,255,0.1)":"transparent"}`}}>
-                    {/* Top row — multiplier selector + pick button */}
-                    <div style={{display:"flex",alignItems:"center",padding:"12px 14px",gap:12}}>
-                      {/* Multiplier selector */}
-                      <div style={{display:"flex",gap:4,flexShrink:0}}>
-                        {[1,2,3,4,5].map(m=>{
-                          const taken = usedMults.includes(m) && slot.mult!==m;
-                          const active = slot.mult===m;
+                  <div key={idx} style={{margin:"0 12px 8px",background:"#1a1a1a",border:"1px solid #2a2a2a",borderRadius:14,overflow:"hidden"}}>
+
+                    {/* Main content row */}
+                    <div style={{display:"flex",alignItems:"flex-start",gap:10,padding:"11px 14px 10px"}}>
+
+                      {/* Left: type label + legs */}
+                      <div style={{flex:1,minWidth:0}} onClick={()=>setActiveFlexSlot(idx)}>
+                        {/* Type row */}
+                        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:7}}>
+                          {slot.category ? (
+                            <span style={{fontSize:10,fontWeight:700,letterSpacing:"0.08em",color:catColors[slot.category]||IOS.label3}}>
+                              {catLabels[slot.category]||slot.category.toUpperCase()}
+                            </span>
+                          ) : (
+                            <span style={{fontSize:10,fontWeight:700,letterSpacing:"0.08em",color:IOS.label3}}>PICK {idx+1}</span>
+                          )}
+                          {slot.isParlay && slot.parlayLegs.length>0 && (
+                            <span style={{fontSize:10,color:"#444"}}>· {slot.parlayLegs.length} legs</span>
+                          )}
+                          {slot.isParlay && parlayValid && (
+                            <span style={{fontSize:10,color:IOS.green,fontWeight:600}}>⚡ Longshot</span>
+                          )}
+                        </div>
+
+                        {/* Leg rows */}
+                        {legRows.length===0 ? (
+                          <div style={{fontSize:13,color:IOS.label3}}>+ Add a pick</div>
+                        ) : legRows.map((leg, li)=>{
+                          const isLast = li===legRows.length-1;
+                          // Extract team name and detail (spread/total/ML)
+                          const pickStr = leg.pick||"";
+                          const isPropSlot = slot.category==="prop";
+
+                          // Stat type abbreviations for props
+                          const statAbbr = (str) => {
+                            if(!str) return "";
+                            const s = str.toLowerCase();
+                            if(s.includes("strikeout")||s.includes("k")) return "SO";
+                            if(s.includes("rbi")) return "RBI";
+                            if(s.includes("home run")||s.includes("hr")) return "HR";
+                            if(s.includes("hit")&&!s.includes("pitcher")) return "H";
+                            if(s.includes("walk")) return "BB";
+                            if(s.includes("point")) return "PTS";
+                            if(s.includes("rebound")) return "REB";
+                            if(s.includes("assist")) return "AST";
+                            if(s.includes("three")||s.includes("3-pointer")||s.includes("3pt")) return "3PT";
+                            if(s.includes("block")) return "BLK";
+                            if(s.includes("steal")) return "STL";
+                            if(s.includes("rush yard")) return "RYD";
+                            if(s.includes("pass yard")) return "PYD";
+                            if(s.includes("rec yard")||s.includes("receiving yard")) return "RYD";
+                            if(s.includes("td")||s.includes("touchdown")) return "TD";
+                            if(s.includes("reception")||s.includes("catch")) return "REC";
+                            if(s.includes("attempt")) return "ATT";
+                            if(s.includes("carry")||s.includes("rush att")) return "CAR";
+                            return "";
+                          };
+
+                          // For props: parse "8+ Strikeouts" → threshold="8+", stat="SO", player from leg.game
+                          let acronym, detail;
+                          if(isPropSlot) {
+                            const threshMatch = pickStr.match(/^((?:Over|Under)?\s*[\d.]+[+\-]?)/i);
+                            const threshold = threshMatch ? threshMatch[0].trim() : "";
+                            const statPart = pickStr.replace(threshMatch?.[0]||"","").trim();
+                            const abbr = statAbbr(statPart)||statAbbr(pickStr)||"PROP";
+                            acronym = abbr;
+                            detail = threshold || pickStr;
+                          } else {
+                            const detailMatch = pickStr.match(/([+-]?\d+\.?\d*)(\s*pts)?\s*$/);
+                            detail = detailMatch ? detailMatch[0].trim() : (leg.category==="ml"||slot.category==="ml"?"ML":"");
+                            const teamRaw = detailMatch ? pickStr.replace(detailMatch[0],"").trim() : pickStr;
+                            acronym = getAcronym(teamRaw||pickStr, false);
+                          }
+                          const game = leg.game||"";
+                          const isEnhancedLeg = isEnhance && !slot.isParlay && li===0;
+
                           return (
-                            <div key={m} onClick={()=>{
-                              if(taken) return;
-                              setFlexPicks(prev=>prev.map((p,i)=>i===idx?{...p,mult:active?null:m}:p));
-                            }} style={{
-                              width:28,height:28,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",
-                              fontSize:13,fontWeight:800,cursor:taken?"not-allowed":"pointer",
-                              background:active?`${multColors[m]}`:"rgba(255,255,255,0.06)",
-                              color:active?"#fff":taken?"rgba(255,255,255,0.15)":"rgba(255,255,255,0.5)",
-                              transition:"all .15s",
+                            <div key={li} style={{
+                              display:"flex",alignItems:"center",gap:8,
+                              paddingBottom:isLast?0:5,
+                              marginBottom:isLast?0:5,
+                              borderBottom:isLast?"none":"1px solid #222",
                             }}>
-                              {m}×
+                              {/* Stat/Team badge */}
+                              <div style={{background:"#2a2a2a",borderRadius:5,padding:"2px 6px",fontSize:11,fontWeight:800,color:"#e0e0e0",letterSpacing:"0.04em",flexShrink:0,minWidth:28,textAlign:"center"}}>
+                                {acronym}
+                              </div>
+                              {/* Threshold / detail */}
+                              {detail&&<div style={{fontSize:12,fontWeight:600,color:isEnhancedLeg?IOS.blue:"#d0d0d0",flexShrink:0}}>
+                                {detail}
+                              </div>}
+                              {/* For props: show player name; for teams: show matchup */}
+                              <div style={{fontSize:11,color:"#888",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                                {isPropSlot ? (leg.game||"") : game}
+                              </div>
                             </div>
                           );
                         })}
                       </div>
-                      {/* Pick info */}
-                      <div style={{flex:1,minWidth:0}} onClick={()=>setActiveFlexSlot(idx)}>
-                        {slot.isParlay ? (
-                          <div>
-                            <div style={{fontSize:12,fontWeight:700,color:IOS.pink,marginBottom:2}}>🚀 Parlay · {slot.parlayLegs.length} legs</div>
-                            {slot.parlayLegs.length===0
-                              ? <div style={{fontSize:13,color:IOS.label3}}>Tap to add legs</div>
-                              : <div style={{fontSize:13,color:"#fff"}}>{slot.parlayLegs.map(b=>b.pick).join(" + ")}</div>
-                            }
-                          </div>
-                        ) : slot.bet ? (
-                          <div>
-                            {slot.category && (()=>{
-                              const catColors = {ml:IOS.blue, prop:IOS.yellow, ou:IOS.orange, spread:IOS.green, longshot:IOS.pink};
-                              const catLabels = {ml:"Moneyline", prop:"Prop", ou:"Over/Under", spread:"Spread", longshot:"Longshot"};
-                              const col = catColors[slot.category]||IOS.label3;
-                              return <div style={{display:"inline-flex",alignItems:"center",background:`${col}18`,borderRadius:5,padding:"1px 7px",marginBottom:4}}>
-                                <span style={{fontSize:10,fontWeight:700,letterSpacing:0.4,textTransform:"uppercase",color:col}}>{catLabels[slot.category]||slot.category}</span>
-                              </div>;
-                            })()}
-                            <div style={{fontSize:10,fontWeight:700,letterSpacing:0.3,textTransform:"uppercase",color:IOS.label3,marginBottom:2}}>{slot.bet.game}</div>
-                            {(()=>{
-                              const isEnhance = activatedPUs[idx]?.id==="enhance";
-                              if(isEnhance) {
-                                const match = slot.bet.pick.match(/([+-]?\d+\.?\d*)\s*$/);
-                                if(match) {
-                                  const orig = parseFloat(match[1]);
-                                  const enhanced = orig + 1.5;
-                                  const enhancedStr = enhanced > 0 ? `+${enhanced.toFixed(1)}` : enhanced.toFixed(1);
-                                  const teamName = slot.bet.pick.replace(/([+-]?\d+\.?\d*)\s*$/, "").trim();
-                                  return (
-                                    <div>
-                                      <div style={{fontSize:13,fontWeight:600,textDecoration:"line-through",color:IOS.label3}}>{slot.bet.pick}</div>
-                                      <div style={{fontSize:13,fontWeight:700,color:IOS.blue}}>{teamName} {enhancedStr} 📈</div>
-                                    </div>
-                                  );
-                                }
-                              }
-                              return <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>{slot.bet.pick}</div>;
-                            })()}
-                          </div>
-                        ) : (
-                          <div style={{fontSize:14,color:IOS.label3}}>+ Add a pick</div>
-                        )}
-                      </div>
-                      {/* Odds + action */}
-                      <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-                        {slot.bet&&!slot.isParlay&&<div style={{fontSize:18,fontWeight:800,letterSpacing:-0.5,color:slot.bet.odds.startsWith("+")?IOS.green:IOS.blue}}>{slot.bet.odds}</div>}
-                        {parlayOdds&&<div style={{fontSize:18,fontWeight:800,color:IOS.pink}}>{parlayOdds.american}</div>}
-                        <div onClick={()=>setActiveFlexSlot(idx)} style={{background:filled?"rgba(255,255,255,0.08)":"rgba(10,132,255,0.15)",borderRadius:20,padding:"6px 12px",fontSize:12,fontWeight:600,color:filled?"rgba(255,255,255,0.6)":IOS.blue,cursor:"pointer"}}>
-                          {filled?"Edit":"+ Pick"}
+
+                      {/* Right: odds + actions */}
+                      <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6,flexShrink:0}}>
+                        <div style={{fontSize:22,fontWeight:800,color:slot.isParlay?IOS.pink:slot.bet?.odds?.startsWith("+")?IOS.green:IOS.blue,letterSpacing:"-0.5px",lineHeight:1}}>
+                          {slot.isParlay&&parlayOdds?parlayOdds.american:slot.bet?.odds||""}
                         </div>
-                        {filled&&<button onClick={e=>{e.stopPropagation();setFlexPicks(prev=>prev.map((p,i)=>i===idx?{...p,bet:null,parlayLegs:[]}:p));}} style={{width:24,height:24,borderRadius:50,background:"rgba(255,255,255,0.08)",border:"none",color:IOS.label3,fontSize:11,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>}
+                        <div style={{display:"flex",gap:5}}>
+                          <div onClick={()=>setActiveFlexSlot(idx)} style={{background:"#2a2a2a",borderRadius:7,color:"#bbb",fontSize:11,fontWeight:600,padding:"4px 10px",cursor:"pointer"}}>
+                            {filled?"Edit":"+ Pick"}
+                          </div>
+                          {filled&&<button onClick={e=>{e.stopPropagation();setFlexPicks(prev=>prev.map((p,i)=>i===idx?{...EMPTY_FLEX[0],id:i}:p));}} style={{background:"#2a2a2a",border:"none",borderRadius:7,color:"#555",fontSize:14,width:26,height:26,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>}
+                        </div>
                       </div>
                     </div>
 
-                    {/* Parlay toggle — only on longshot slots */}
+                    {/* Parlay toggle — longshot only */}
                     {slot.category==="longshot" && (
                       <>
-                      <div style={{padding:"8px 14px 10px",borderTop:`0.5px solid rgba(255,255,255,0.05)`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                      <div style={{padding:"7px 14px 8px",borderTop:"1px solid #222",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                         <div>
                           <div style={{fontSize:11,color:IOS.label3}}>Make this a Parlay</div>
-                          <div style={{fontSize:10,color:IOS.label3,marginTop:1}}>Pick 2+ legs instead of one straight bet</div>
+                          <div style={{fontSize:10,color:"#444",marginTop:1}}>Pick 2+ legs instead of one straight bet</div>
                         </div>
                         <div onClick={()=>setFlexPicks(prev=>prev.map((p,i)=>i===idx?{...p,isParlay:!p.isParlay,bet:null,parlayLegs:[]}:p))}
                           style={{width:40,height:24,borderRadius:12,background:slot.isParlay?IOS.pink:"rgba(255,255,255,0.1)",position:"relative",cursor:"pointer",transition:"background .2s",flexShrink:0}}>
@@ -2605,74 +2733,59 @@ export default function App() {
                         </div>
                       </div>
                       {slot.isParlay && slot.parlayLegs.length>=2 && parlayAmerican < 400 && (
-                        <div style={{padding:"6px 14px 10px"}}>
-                          <span style={{fontSize:11,color:IOS.orange}}>⚠ Parlay must be +400 or better · Currently {parlayAmerican>0?`+${parlayAmerican}`:parlayAmerican}</span>
+                        <div style={{padding:"4px 14px 8px"}}>
+                          <span style={{fontSize:11,color:IOS.orange}}>⚠ Need +400 combined · Currently {parlayAmerican>0?`+${parlayAmerican}`:parlayAmerican}</span>
                         </div>
                       )}
                       {slot.isParlay && slot.parlayLegs.length>=2 && parlayAmerican >= 400 && (
-                        <div style={{padding:"6px 14px 10px"}}>
+                        <div style={{padding:"4px 14px 8px"}}>
                           <span style={{fontSize:11,color:IOS.green}}>✓ Qualifies as Longshot · +{parlayAmerican}</span>
                         </div>
                       )}
                       </>
                     )}
-                    {/* Parlay odds warning outside longshot toggle — for isParlay slots already set */}
-                    {!slot.category && slot.isParlay && slot.parlayLegs.length>=2 && (() => {
-                      const pd = calcParlayOddsDecimal(slot.parlayLegs);
-                      const pa = parlayAmericanOdds(pd);
-                      return pa < 400 ? (
-                        <div style={{padding:"6px 14px 10px",borderTop:`0.5px solid rgba(255,255,255,0.05)`}}>
-                          <span style={{fontSize:11,color:IOS.orange}}>⚠ Parlay must be +400 or better · Currently {pa>0?`+${pa}`:pa}</span>
-                        </div>
-                      ) : (
-                        <div style={{padding:"6px 14px 10px",borderTop:`0.5px solid rgba(255,255,255,0.05)`}}>
-                          <span style={{fontSize:11,color:IOS.green}}>✓ Qualifies as Longshot · +{pa}</span>
-                        </div>
-                      );
-                    })()}
 
-                    {/* Points preview */}
-                    {slot.mult && filled && (
-                      <div style={{padding:"8px 14px",background:"rgba(48,209,88,0.05)",borderTop:`0.5px solid rgba(48,209,88,0.1)`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                        <div style={{fontSize:11,fontWeight:600,color:IOS.green}}>
-                          {(()=>{
-                            const appliedPU = activatedPUs[idx];
-                            const isDouble = appliedPU?.id==="double";
-                            const isEnhance = appliedPU?.id==="enhance";
-                            const mult = isDouble ? slot.mult * 2 : slot.mult;
-                            const basePts = slot.isParlay && parlayOdds
-                              ? calcPickPoints(mult, parlayOdds.decimal>1?(parlayOdds.decimal-1)*100:0, "W")
-                              : slot.bet ? calcPickPoints(mult, slot.bet.impliedOdds, "W") : 0;
-                            if(isDouble) return `+${basePts} pts if win (2️⃣ doubled!)`;
-                            if(isEnhance && slot.bet) return `+${basePts} pts if win · 📈 Spread moved 1.5pts in your favor`;
-                            return `+${basePts} pts if win`;
-                          })()}
-                        </div>
-                        {/* Power-up button — show if has offensive PUs in inventory OR one already applied */}
-                        {(myPUs.filter(p=>p.type==="offensive").length > 0 || activatedPUs[idx]) && (
-                          activatedPUs[idx] ? (
-                            <div style={{display:"inline-flex",alignItems:"center",gap:5,padding:"3px 9px",borderRadius:7,background:`${activatedPUs[idx].color}15`,border:`1px solid ${activatedPUs[idx].color}30`,cursor:"pointer"}}
-                              onClick={e=>{
-                                e.stopPropagation();
-                                const returnedPU = activatedPUs[idx];
-                                if(returnedPU?.dbId) supabase.from("league_power_ups").update({used:false}).eq("id",returnedPU.dbId);
-                                setMyPUs(p=>[...p,returnedPU]);
-                                setActivatedPUs(p=>{const n={...p};delete n[idx];return n;});
+                    {/* Bottom bar: multipliers + pts if win */}
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"#141414",borderTop:"1px solid #222",padding:"7px 14px",gap:8}}>
+                      <div style={{display:"flex",gap:5}}>
+                        {[1,2,3,4,5].map(m=>{
+                          const taken = usedMults.includes(m) && slot.mult!==m;
+                          const active = slot.mult===m;
+                          return (
+                            <div key={m} onClick={()=>{if(taken)return;setFlexPicks(prev=>prev.map((p,i)=>i===idx?{...p,mult:active?null:m}:p));}}
+                              style={{width:34,height:26,borderRadius:7,border:"none",display:"flex",alignItems:"center",justifyContent:"center",
+                                background:active?multColors[m]:"#2a2a2a",
+                                color:active?"#fff":taken?"rgba(255,255,255,0.1)":"#555",
+                                fontSize:11,fontWeight:700,cursor:taken?"not-allowed":"pointer",transition:"background 0.15s,color 0.15s",
                               }}>
-                              <span style={{fontSize:11}}>{activatedPUs[idx].icon}</span>
-                              <span style={{fontSize:10,fontWeight:700,color:activatedPUs[idx].color}}>{activatedPUs[idx].name}</span>
-                              <span style={{fontSize:10,color:IOS.label3,marginLeft:3}}>✕ remove</span>
+                              {m}×
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {/* Pts + power-up */}
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        {slot.mult&&filled&&<div style={{fontSize:12,fontWeight:700,color:IOS.green,flexShrink:0}}>
+                          {isDouble?`+${pts} pts (2️⃣ doubled!)`:isEnhance&&slot.bet?`+${pts} pts 📈`:`+${pts} pts if win`}
+                        </div>}
+                        {(myPUs.filter(p=>p.type==="offensive").length>0||appliedPU)&&slot.mult&&filled&&(
+                          appliedPU ? (
+                            <div style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:7,background:`${appliedPU.color}15`,border:`1px solid ${appliedPU.color}30`,cursor:"pointer"}}
+                              onClick={e=>{e.stopPropagation();const r=appliedPU;if(r?.dbId)supabase.from("league_power_ups").update({used:false}).eq("id",r.dbId);setMyPUs(p=>[...p,r]);setActivatedPUs(p=>{const n={...p};delete n[idx];return n;});}}>
+                              <span style={{fontSize:10}}>{appliedPU.icon}</span>
+                              <span style={{fontSize:10,fontWeight:700,color:appliedPU.color}}>{appliedPU.name}</span>
+                              <span style={{fontSize:9,color:IOS.label3,marginLeft:2}}>✕</span>
                             </div>
                           ) : (
                             <div onClick={e=>{e.stopPropagation();setShowPUModal({context:"picks",slotId:idx,slotLabel:slot.isParlay?"Parlay":slot.bet?.pick||"Pick"});}}
-                              style={{display:"inline-flex",alignItems:"center",gap:5,padding:"3px 9px",borderRadius:7,background:"rgba(255,255,255,0.05)",border:"1px dashed rgba(255,255,255,0.12)",cursor:"pointer"}}>
-                              <span style={{fontSize:11}}>⚡</span>
+                              style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:7,background:"rgba(255,255,255,0.05)",border:"1px dashed rgba(255,255,255,0.12)",cursor:"pointer"}}>
+                              <span style={{fontSize:10}}>⚡</span>
                               <span style={{fontSize:10,fontWeight:600,color:IOS.label3}}>Power-Up</span>
                             </div>
                           )
                         )}
                       </div>
-                    )}
+                    </div>
                   </div>
                 );
               })}
