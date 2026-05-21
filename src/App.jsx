@@ -387,7 +387,8 @@ const TROPHIES = [
 ];
 
 
-const MATCHUP_HISTORY = [
+const MATCHUP_HISTORY = []; // replaced by real Supabase data
+const _UNUSED_MH = [
   {
     week:1, opp:"Jake P.", result:"W", myScore:3, oppScore:2,
     myPicks:[
@@ -488,7 +489,8 @@ const STANDINGS = [
 
 const GAPER_MEMBERS = ["joe", "mlaforte", "esoumekhian", "dyaffe", "aweinstock", "Player6"];
 
-const SCHEDULE = [
+const SCHEDULE = []; // replaced by real Supabase data
+const _UNUSED_SCHEDULE = [
   { week:1,  opp:"mlaforte",    ms:null, os:null, result:"live" },
   { week:2,  opp:"esoumekhian", ms:null, os:null, result:"upcoming" },
   { week:3,  opp:"dyaffe",      ms:null, os:null, result:"upcoming" },
@@ -568,9 +570,14 @@ const polarToCart=(cx,cy,r,deg)=>{const rad=(deg-90)*Math.PI/180;return{x:cx+r*M
 export default function App() {
   const [screen,      setScreen]      = useState("home");
   const [user,        setUser]        = useState(null);
+  const [userProfile, setUserProfile] = useState(null); // { username, email }
+  const [editingUsername, setEditingUsername] = useState(false);
+  const [usernameInput,   setUsernameInput]   = useState("");
+  const [usernameSaving,  setUsernameSaving]  = useState(false);
+  const [usernameError,   setUsernameError]   = useState("");
   const [authScreen,  setAuthScreen]  = useState("login");
   const [anim,        setAnim]        = useState(false);
-  const [timeLeft,    setTimeLeft]    = useState({h:1,m:47,s:32});
+  const [timeLeft,    setTimeLeft]    = useState({h:0,m:0,s:0});
   const [submitted,   setSubmitted]   = useState(false);
   const [leagueTab,   setLeagueTab]   = useState("standings");
   const [expanded,    setExpanded]    = useState(null);
@@ -579,15 +586,133 @@ export default function App() {
   const [messages,    setMessages]    = useState(CHAT);
   const [activeLeagueId, setActiveLeagueId] = useState("lg1");
   const [realLeagues,    setRealLeagues]    = useState([]);
+  const [leaguesLoading, setLeaguesLoading] = useState(true);
   const [leagueMembers,  setLeagueMembers]  = useState([]);
   const [weekPicks,      setWeekPicks]      = useState([]);
+  const [liveSchedule,   setLiveSchedule]   = useState([]);
   const [realStandings,  setRealStandings]  = useState([]);
   const [allMyStats,     setAllMyStats]     = useState(null);
   const [leagueTrophies, setLeagueTrophies] = useState([]);
-  const activeLeague = [...realLeagues, ...LEAGUES_DATA].find(l=>l.id===activeLeagueId) || LEAGUES_DATA[0];
-  const sport = SPORTS[activeLeague.sport];
+  const activeLeague = [...realLeagues].find(l=>l.id===activeLeagueId) || realLeagues[0] || {id:"",name:"",sport:"nfl",current_week:1,season_weeks:18,max_members:8,target_size:8,isCommissioner:false};
+  const sport = SPORTS[activeLeague?.sport] || SPORTS["nfl"];
   const SLOTS = sport.slots;
-  const BETS = sport.bets;
+
+  // ─── LIVE ODDS STATE ─────────────────────────────────────────────
+  const [liveOdds,    setLiveOdds]    = useState({}); // { sportId: {ml,prop,ou,spread,longshot} }
+  const [oddsLoading, setOddsLoading] = useState(false);
+  const [oddsError,   setOddsError]   = useState(false);
+  // oddsLastFetched persisted in localStorage so cache survives page refreshes
+
+  const ODDS_API_KEY = import.meta.env.VITE_ODDS_API_KEY;
+  const SPORT_KEYS = { nfl:"americanfootball_nfl", nba:"basketball_nba", mlb:"baseball_mlb" };
+
+  const fetchLiveOdds = async (sportId) => {
+    if(!ODDS_API_KEY) return;
+    // Cache for 10 minutes
+    try {
+      const stored = localStorage.getItem(`odds_fetched_${sportId}`);
+      if(stored && Date.now() - parseInt(stored) < 10 * 60 * 1000) return;
+    } catch(e) {}
+
+    setOddsLoading(true);
+    setOddsError(false);
+    try {
+      const sportKey = SPORT_KEYS[sportId];
+      if(!sportKey) { setOddsLoading(false); return; }
+
+      // Fetch h2h + spreads + totals in one call
+      const res = await fetch(
+        `https://api.the-odds-api.com/v4/sports/${sportKey}/odds/?apiKey=${ODDS_API_KEY}&regions=us&markets=h2h,spreads,totals&bookmakers=draftkings&dateFormat=iso&oddsFormat=american`
+      );
+      if(!res.ok) throw new Error(`API error ${res.status}`);
+      const games = await res.json();
+
+      const ml = [], spread = [], ou = [], longshot = [];
+
+      games.forEach((game, gi) => {
+        const home = game.home_team;
+        const away = game.away_team;
+        const gameLabel = `${away} @ ${home}`;
+        const dk = game.bookmakers?.[0];
+        if(!dk) return;
+
+        const h2h     = dk.markets?.find(m=>m.key==="h2h");
+        const spreads = dk.markets?.find(m=>m.key==="spreads");
+        const totals  = dk.markets?.find(m=>m.key==="totals");
+
+        // Moneyline — both sides
+        h2h?.outcomes?.forEach((o, oi) => {
+          const american = o.price >= 0 ? `+${o.price}` : `${o.price}`;
+          ml.push({
+            id: `live_ml_${gi}_${oi}`,
+            game: gameLabel,
+            pick: o.name,
+            odds: american,
+            impliedOdds: o.price,
+          });
+          // Longshots: +400 or better
+          if(o.price >= 400) {
+            longshot.push({
+              id: `live_ls_${gi}_${oi}`,
+              game: gameLabel,
+              pick: `${o.name} ML`,
+              odds: american,
+              impliedOdds: o.price,
+            });
+          }
+        });
+
+        // Spreads — both sides
+        spreads?.outcomes?.forEach((o, oi) => {
+          const american = o.price >= 0 ? `+${o.price}` : `${o.price}`;
+          const sign = o.point >= 0 ? `+${o.point}` : `${o.point}`;
+          spread.push({
+            id: `live_sp_${gi}_${oi}`,
+            game: gameLabel,
+            pick: `${o.name} ${sign}`,
+            odds: american,
+            impliedOdds: o.price,
+          });
+        });
+
+        // Totals — over/under
+        totals?.outcomes?.forEach((o, oi) => {
+          const american = o.price >= 0 ? `+${o.price}` : `${o.price}`;
+          ou.push({
+            id: `live_ou_${gi}_${oi}`,
+            game: gameLabel,
+            pick: `${o.name} ${o.point}`,
+            odds: american,
+            impliedOdds: o.price,
+          });
+        });
+      });
+
+      // Keep hardcoded props (API doesn't return player props on free tier)
+      const staticProps = sport.bets.prop;
+
+      setLiveOdds(prev => ({
+        ...prev,
+        [sportId]: {
+          ml:       ml.length > 0       ? ml       : sport.bets.ml,
+          spread:   spread.length > 0   ? spread   : sport.bets.spread,
+          ou:       ou.length > 0       ? ou        : sport.bets.ou,
+          longshot: longshot.length > 0 ? longshot  : sport.bets.longshot,
+          prop:     staticProps,
+        }
+      }));
+      try { localStorage.setItem(`odds_fetched_${sportId}`, Date.now().toString()); } catch(e) {}
+    } catch(e) {
+      console.error("Odds API error:", e);
+      setOddsError(true);
+    } finally {
+      setOddsLoading(false);
+    }
+  };
+
+  // Use live odds if available, else fall back to hardcoded
+  const BETS = liveOdds[activeLeague.sport] || sport.bets;
+  const isLiveOdds = !!liveOdds[activeLeague.sport];
 
   const [picks,        setPicks]        = useState({ml:null,prop:null,ou:null,spread:null});
   const [lsBets,       setLsBets]       = useState([]);
@@ -603,9 +728,24 @@ export default function App() {
   const [flexPicks, setFlexPicks] = useState(EMPTY_FLEX);
   const [activeFlexSlot, setActiveFlexSlot] = useState(null); // index of slot being edited
   const [flexCategory, setFlexCategory] = useState(null); // category being browsed
+  const [longshotMode, setLongshotMode] = useState("straight"); // "straight" | "parlay" — for longshot sheet
   const usedMults = flexPicks.filter(p=>p.mult!==null).map(p=>p.mult);
   const availableMults = [1,2,3,4,5].filter(m=>!usedMults.includes(m));
-  const hasParlay = flexPicks.some(p=>p.isParlay&&p.parlayLegs.length>=2);
+  // Valid longshot = straight +400 bet, OR parlay with 2+ legs AND combined odds +400 or better
+  const calcParlayOddsDecimal = (legs) => legs.reduce((acc,b)=>{
+    const dec = b.impliedOdds > 0 ? (b.impliedOdds/100)+1 : (100/Math.abs(b.impliedOdds))+1;
+    return acc * dec;
+  }, 1);
+  const parlayAmericanOdds = (decimal) => decimal >= 2 ? Math.round((decimal-1)*100) : Math.round(-100/(decimal-1));
+  const hasLongshot = flexPicks.some(p=> {
+    if(p.category==="longshot" && p.bet && p.bet.impliedOdds >= 400) return true;
+    if(p.isParlay && p.parlayLegs.length>=2) {
+      const dec = calcParlayOddsDecimal(p.parlayLegs);
+      return parlayAmericanOdds(dec) >= 400;
+    }
+    return false;
+  });
+  const hasParlay = hasLongshot; // keep hasParlay name so nothing else breaks
   const allFlexFilled = flexPicks.every(p=>p.mult!==null&&(p.isParlay?p.parlayLegs.length>=2:p.bet!==null));
   const ALL_BETS = [
     ...BETS.ml.map(b=>({...b, category:"ml", categoryLabel:"Moneyline", categoryColor:IOS.blue})),
@@ -623,13 +763,17 @@ export default function App() {
   });
   const currentWeekPicks = gradingData[activeLeagueId] || [];
   const [activeSlot,  setActiveSlot]  = useState(null);
-  const [myPUs,       setMyPUs]       = useState([POWER_UPS[1],POWER_UPS[4],POWER_UPS[6]]);
+  const [myPUs,       setMyPUs]       = useState([]); // loaded from league_power_ups table
   const [showPUModal, setShowPUModal] = useState(null); // {context:"picks"|"matchup", slotId, pickIdx}
   const [activatedPUs,setActivatedPUs]= useState({}); // slotId -> pu applied on picks screen
   const [matchupPUs,  setMatchupPUs]  = useState({}); // pickIdx -> pu applied on live matchup
   const [profTab,     setProfTab]     = useState("stats");
+  const [puLeagueId,  setPuLeagueId]  = useState(null); // which league to view PUs for on profile
+  const [puLeaguePUs, setPuLeaguePUs] = useState([]); // PUs for the viewed league
+  const [puLeagueSpins, setPuLeagueSpins] = useState(0); // wheel spins for viewed league
   const [showWheel,   setShowWheel]   = useState(false);
   const [spinning,    setSpinning]    = useState(false);
+  const [wheelSpins,  setWheelSpins]  = useState(0); // earned by winning a week
   const [wheelAngle,  setWheelAngle]  = useState(0);
   const [wonPU,       setWonPU]       = useState(null);
   const [showWin,     setShowWin]     = useState(false);
@@ -641,6 +785,8 @@ export default function App() {
   const [newLeagueSport,  setNewLeagueSport]  = useState(null);
   const [newLeagueName,   setNewLeagueName]   = useState("");
   const [newLeagueCreated, setNewLeagueCreated] = useState(null); // holds created league data for invite code screen
+  const [newLeagueSize,    setNewLeagueSize]    = useState(8);
+  const [advancingWeek,    setAdvancingWeek]    = useState(false);
   const [creatingLeague,  setCreatingLeague]  = useState(false);
 
   const createLeague = async (name, sportId) => {
@@ -649,7 +795,7 @@ export default function App() {
     const inviteCode = Math.random().toString(36).substring(2,8).toUpperCase();
     const {data,error} = await supabase.from("leagues").insert({
       name, sport:sportId, commissioner_id:user.id, invite_code:inviteCode,
-      max_members:8, pick_deadline:"Sun 1PM ET", season_weeks:18,
+      max_members:newLeagueSize, target_size:newLeagueSize, pick_deadline:"Sun 1PM ET", season_weeks:18,
       current_week:1, privacy:"private", scoring_type:"multiplier_odds",
     }).select().single();
     if(error){alert(error.message);setCreatingLeague(false);return;}
@@ -657,6 +803,131 @@ export default function App() {
     await fetchLeagues(user.id);
     setNewLeagueCreated(data);
     setCreatingLeague(false);
+  };
+
+  const fetchSchedule = async (leagueId, userId) => {
+    const {data} = await supabase
+      .from("matchups")
+      .select("*")
+      .eq("league_id", leagueId)
+      .order("week", {ascending: true});
+    if(!data || !data.length) { setLiveSchedule([]); return; }
+    const userIds = [...new Set([...data.map(m=>m.user1_id), ...data.map(m=>m.user2_id)])];
+    const {data:users} = await supabase.from("users").select("id,username,email").in("id",userIds);
+    const getName = uid => {
+      const u = users?.find(x=>x.id===uid);
+      return u?.username || u?.email?.split("@")[0] || "Unknown";
+    };
+    const schedule = data.map(m => {
+      const isUser1 = m.user1_id === userId;
+      const myPts = isUser1 ? (m.user1_points||0) : (m.user2_points||0);
+      const oppPts = isUser1 ? (m.user2_points||0) : (m.user1_points||0);
+      const result = m.winner_id === userId ? "W"
+        : m.winner_id !== null ? "L"
+        : myPts > 0 || oppPts > 0 ? "live"
+        : "upcoming";
+      return {
+        week: m.week,
+        opp: getName(isUser1 ? m.user2_id : m.user1_id),
+        oppId: isUser1 ? m.user2_id : m.user1_id,
+        myPts, oppPts, result, matchupId: m.id,
+      };
+    });
+    setLiveSchedule(schedule);
+  };
+
+  // ─── SCHEDULE GENERATION ────────────────────────────────────────
+  const generateSchedule = async (leagueId, memberIds, seasonWeeks) => {
+    // Round-robin algorithm: generates matchups so everyone plays everyone else
+    // before repeating. For N players, each round has N/2 matchups.
+    const n = memberIds.length;
+    if(n < 2 || n % 2 !== 0) return; // need even number
+
+    // Wipe any existing matchups first
+    await supabase.from("matchups").delete().eq("league_id", leagueId);
+
+    const rounds = [];
+    const ids = [...memberIds];
+    const numRounds = n - 1; // one full round-robin
+
+    for(let r = 0; r < numRounds; r++) {
+      const round = [];
+      for(let i = 0; i < n / 2; i++) {
+        round.push([ids[i], ids[n - 1 - i]]);
+      }
+      rounds.push(round);
+      // Rotate: fix first element, rotate rest
+      ids.splice(1, 0, ids.pop());
+    }
+
+    // Fill season weeks by repeating round-robin
+    const matchupsToInsert = [];
+    for(let week = 1; week <= seasonWeeks; week++) {
+      const roundIdx = (week - 1) % rounds.length;
+      const round = rounds[roundIdx];
+      // Shuffle sides for variety each time we repeat
+      round.forEach(([a, b]) => {
+        const flip = week > rounds.length && Math.random() > 0.5;
+        matchupsToInsert.push({
+          league_id: leagueId,
+          week,
+          user1_id: flip ? b : a,
+          user2_id: flip ? a : b,
+          user1_points: 0,
+          user2_points: 0,
+          winner_id: null,
+        });
+      });
+    }
+
+    await supabase.from("matchups").insert(matchupsToInsert);
+  };
+
+  const fetchPuLeagueData = async (leagueId, userId) => {
+    const {data} = await supabase
+      .from("league_power_ups")
+      .select("*")
+      .eq("league_id", leagueId)
+      .eq("user_id", userId)
+      .eq("used", false);
+    setPuLeaguePUs(data ? data.map(row => {
+      const pu = POWER_UPS.find(p=>p.id===row.power_up_id)||POWER_UPS[0];
+      return {...pu, dbId: row.id};
+    }) : []);
+    const {data:member} = await supabase
+      .from("league_members")
+      .select("wheel_spins")
+      .eq("league_id", leagueId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    setPuLeagueSpins(member?.wheel_spins||0);
+  };
+
+  const fetchLeaguePowerUps = async (leagueId, userId) => {
+    // Fetch unused power-ups for this user in this league
+    const {data} = await supabase
+      .from("league_power_ups")
+      .select("*")
+      .eq("league_id", leagueId)
+      .eq("user_id", userId)
+      .eq("used", false);
+    if(data) {
+      setMyPUs(data.map(row => {
+        const pu = POWER_UPS.find(p=>p.id===row.power_up_id) || POWER_UPS[0];
+        return {...pu, dbId: row.id};
+      }));
+    } else {
+      setMyPUs([]);
+    }
+    // Fetch wheel spins for this user in this league
+    const {data:member} = await supabase
+      .from("league_members")
+      .select("wheel_spins")
+      .eq("league_id", leagueId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if(member) setWheelSpins(member.wheel_spins||0);
+    else setWheelSpins(0);
   };
 
   const fetchLeagueTrophies = async (leagueId) => {
@@ -715,6 +986,11 @@ export default function App() {
       { id:"longshot", icon:"🚀", name:"Longshot King",  desc:"Most points from longshots",holder:getName(byLongshot[0]), isYou:isMe(byLongshot[0]),  color:IOS.pink   },
     ];
     setLeagueTrophies(trophies);
+  };
+
+  const fetchUserProfile = async (uid) => {
+    const {data} = await supabase.from("users").select("id,username,email").eq("id",uid).maybeSingle();
+    if(data) setUserProfile(data);
   };
 
   const fetchAllMyStats = async (uid) => {
@@ -852,8 +1128,9 @@ export default function App() {
   };
 
   const fetchLeagues = async (uid) => {
+    setLeaguesLoading(true);
     const {data:members} = await supabase.from("league_members").select("league_id, is_commissioner").eq("user_id", uid);
-    if(!members || members.length===0) return;
+    if(!members || members.length===0) { setLeaguesLoading(false); return; }
     const ids = [...new Set(members.map(m=>m.league_id))];
     const {data:leagues} = await supabase.from("leagues").select("*").in("id", ids);
     if(leagues && leagues.length > 0) {
@@ -866,6 +1143,7 @@ export default function App() {
       const week = mapped[0].current_week||mapped[0].week||1;
       fetchMyPicks(mapped[0].id, week, uid);
     }
+    setLeaguesLoading(false);
   };
 
   const gradePickResult = (leagueId, memberIdx, pickIdx, result) => {
@@ -885,19 +1163,15 @@ export default function App() {
     supabase.auth.getSession().then(({data:{session}})=>{
       const u = session?.user??null;
       setUser(u);
-      if(u) { fetchLeagues(u.id); fetchAllMyStats(u.id); }
+      if(u) { fetchLeagues(u.id); fetchAllMyStats(u.id); fetchUserProfile(u.id); }
     });
     supabase.auth.onAuthStateChange((_e,session)=>{
       const u = session?.user??null;
       setUser(u);
-      if(u) { fetchLeagues(u.id); fetchAllMyStats(u.id); }
+      if(u) { fetchLeagues(u.id); fetchAllMyStats(u.id); fetchUserProfile(u.id); }
     });
     setTimeout(()=>setAnim(true),80);
     const t=setInterval(()=>setTimeLeft(p=>{let{h,m,s}=p;s--;if(s<0){s=59;m--;}if(m<0){m=59;h--;}if(h<0){h=0;m=0;s=0;}return{h,m,s};}),1000);
-    try {
-      const stored = localStorage.getItem("linedup_picks_wk6");
-      if(stored) setSavedPicks(JSON.parse(stored));
-    } catch(e) {}
     return()=>clearInterval(t);
   },[]);
 
@@ -912,13 +1186,24 @@ export default function App() {
     fetchLeagueMembers(activeLeagueId, user.id);
     fetchStandings(activeLeagueId);
     fetchLeagueTrophies(activeLeagueId);
-    const lg2 = [...realLeagues, ...LEAGUES_DATA].find(l=>l.id===activeLeagueId);
-    if(lg2) fetchMyPicks(activeLeagueId, lg2.current_week||lg2.week||1, user.id);
+    const lg2 = realLeagues.find(l=>l.id===activeLeagueId);
+    if(lg2) {
+      const week = lg2.current_week||lg2.week||1;
+      fetchMyPicks(activeLeagueId, week, user.id);
+      fetchLiveOdds(lg2.sport||"nfl");
+      fetchSchedule(activeLeagueId, user.id);
+      fetchLeaguePowerUps(activeLeagueId, user.id);
+      // Restore saved picks from localStorage for this specific league+week
+      try {
+        const stored = localStorage.getItem(`linedup_picks_${activeLeagueId}_wk${week}`);
+        if(stored) setSavedPicks(JSON.parse(stored));
+      } catch(e) {}
+    }
   },[activeLeagueId, user, screen]);
 
   useEffect(()=>{
     if(!activeLeagueId||!user) return;
-    const lg = [...realLeagues, ...LEAGUES_DATA].find(l=>l.id===activeLeagueId);
+    const lg = realLeagues.find(l=>l.id===activeLeagueId);
     if(lg) fetchWeekPicks(activeLeagueId, lg.current_week||lg.week||1);
   },[activeLeagueId, user, screen]);
 
@@ -934,11 +1219,36 @@ export default function App() {
     setTimeout(()=>{setWonPU(WHEEL_ITEMS[winIdx]);setSpinning(false);setTimeout(()=>setShowWin(true),400);},4000);
   };
 
-  const claimPU=()=>{if(wonPU&&myPUs.length<3)setMyPUs(p=>[...p,{...wonPU}]);setShowWin(false);setShowWheel(false);setWonPU(null);};
+  const claimPU=async()=>{
+    if(wonPU && user && activeLeague?.id) {
+      const week = activeLeague.current_week||activeLeague.week||1;
+      // Save power-up to DB
+      const {data:newPU} = await supabase.from("league_power_ups").insert({
+        league_id: activeLeague.id,
+        user_id: user.id,
+        power_up_id: wonPU.id,
+        week_earned: week,
+        used: false,
+      }).select().single();
+      setMyPUs(p=>[...p, {...wonPU, dbId: newPU?.id}]);
+      // Decrement wheel_spins in DB
+      const newSpins = Math.max(0, wheelSpins-1);
+      await supabase.from("league_members")
+        .update({wheel_spins: newSpins})
+        .eq("league_id", activeLeague.id)
+        .eq("user_id", user.id);
+      setWheelSpins(newSpins);
+    }
+    setShowWin(false);setShowWheel(false);setWonPU(null);
+  };
 
-  const usePU=(pu, context, key)=>{
-    // Remove from inventory
-    setMyPUs(p=>p.filter(x=>x.id!==pu.id));
+  const usePU=async(pu, context, key)=>{
+    // Mark as used in DB
+    if(pu.dbId) {
+      await supabase.from("league_power_ups").update({used:true}).eq("id",pu.dbId);
+    }
+    // Remove from local inventory
+    setMyPUs(p=>p.filter(x=>x.dbId!==pu.dbId));
     // Apply to the right context
     if(context==="picks") setActivatedPUs(p=>({...p,[key]:pu}));
     if(context==="matchup") setMatchupPUs(p=>({...p,[key]:pu}));
@@ -1341,6 +1651,9 @@ export default function App() {
     .chat-send:active{opacity:0.8;}
     .chat-send:disabled{background:${IOS.bg3};cursor:default;}
 
+    @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}
+    @keyframes spin{to{transform:rotate(360deg);}}
+
     /* iOS Tab Bar */
     .tab-bar{background:rgba(28,28,30,0.92);backdrop-filter:blur(20px) saturate(180%);border-top:0.5px solid rgba(255,255,255,0.08);display:flex;padding:8px 0 28px;position:sticky;bottom:0;z-index:20;}
     .tab-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:4px 0;transition:opacity .15s;}
@@ -1365,17 +1678,32 @@ export default function App() {
             ))}
           </div>
           <input id="auth-email" type="email" placeholder="Email" style={{width:"100%",background:"#1C1C1E",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"14px 16px",color:"#fff",fontSize:15,fontFamily:"'Manrope',sans-serif",outline:"none",marginBottom:12}}/>
-          <input id="auth-password" type="password" placeholder="Password" style={{width:"100%",background:"#1C1C1E",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"14px 16px",color:"#fff",fontSize:15,fontFamily:"'Manrope',sans-serif",outline:"none",marginBottom:24}}/>
+          <input id="auth-password" type="password" placeholder="Password" style={{width:"100%",background:"#1C1C1E",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"14px 16px",color:"#fff",fontSize:15,fontFamily:"'Manrope',sans-serif",outline:"none",marginBottom:12}}/>
+          {authScreen==="signup"&&<input id="auth-username" type="text" placeholder="Username (e.g. sharpshooter99)" style={{width:"100%",background:"#1C1C1E",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"14px 16px",color:"#fff",fontSize:15,fontFamily:"'Manrope',sans-serif",outline:"none",marginBottom:8}}/>}
+          {authScreen==="signup"&&<div style={{fontSize:11,color:"rgba(255,255,255,0.3)",marginBottom:16,alignSelf:"flex-start",paddingLeft:4}}>This is how you'll appear to other players</div>}
+          {authScreen==="login"&&<div style={{height:24}}/>}
           <button onClick={async()=>{
-            const email=document.getElementById("auth-email").value;
+            const email=document.getElementById("auth-email").value.trim();
             const password=document.getElementById("auth-password").value;
             if(authScreen==="login"){
               const {error}=await supabase.auth.signInWithPassword({email,password});
               if(error)alert(error.message);
             } else {
-              const {error}=await supabase.auth.signUp({email,password});
-              if(error)alert(error.message);
-              else alert("Account created! Check your email to confirm.");
+              const username=(document.getElementById("auth-username")?.value||"").trim();
+              if(!username){ alert("Please enter a username."); return; }
+              if(username.length<3){ alert("Username must be at least 3 characters."); return; }
+              if(!/^[a-zA-Z0-9_]+$/.test(username)){ alert("Username can only contain letters, numbers, and underscores."); return; }
+              // Check username not taken
+              const {data:existing}=await supabase.from("users").select("id").eq("username",username).maybeSingle();
+              if(existing){ alert("That username is taken. Try another."); return; }
+              const {data,error}=await supabase.auth.signUp({email,password});
+              if(error){ alert(error.message); return; }
+              // Save username to users table
+              const uid = data?.user?.id;
+              if(uid){
+                await supabase.from("users").upsert({id:uid, email, username}, {onConflict:"id"});
+              }
+              alert("Account created! Check your email to confirm, then sign in.");
             }
           }} style={{width:"100%",background:"#0A84FF",color:"#fff",border:"none",borderRadius:12,padding:"16px",fontSize:16,fontWeight:700,cursor:"pointer",fontFamily:"'Manrope',sans-serif",marginBottom:16}}>
             {authScreen==="login"?"Sign In":"Create Account"}
@@ -1563,7 +1891,7 @@ export default function App() {
                 </div>
                 <div className="win-desc">{wonPU.desc}</div>
                 <button className="ios-btn blue" style={{width:"auto",padding:"14px 40px",marginTop:8}} onClick={claimPU}>
-                  {myPUs.length<3?"Add to Inventory":"Inventory Full"}
+                  "Add to Inventory"
                 </button>
                 <div onClick={()=>{setShowWin(false);setShowWheel(false);setWonPU(null);}} style={{fontSize:15,color:IOS.label3,cursor:"pointer",marginTop:4}}>Dismiss</div>
               </div>
@@ -1612,13 +1940,13 @@ export default function App() {
                   <div style={{display:"flex",alignItems:"center",gap:12}}>
                     <div onClick={()=>setScreen("leagues")} style={{fontSize:13,fontWeight:600,color:IOS.blue,cursor:"pointer"}}>All Leagues</div>
                     <div onClick={()=>setScreen("profile")} style={{width:34,height:34,borderRadius:50,background:`linear-gradient(135deg,${IOS.blue},${IOS.indigo})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer"}}>
-                      {user?.email?.[0]?.toUpperCase()||"J"}
+                      {(userProfile?.username?.[0]||user?.email?.[0]||"J").toUpperCase()}
                     </div>
                   </div>
                 </div>
                 {/* League toggle */}
                 <div style={{display:"flex",gap:6,marginTop:10,marginBottom:2,overflowX:"auto",paddingBottom:2}}>
-                  {(realLeagues.length>0?realLeagues:LEAGUES_DATA).map(lg=>{
+                  {realLeagues.map(lg=>{
                     const sp=SPORTS[lg.sport];
                     const isActive=activeLeagueId===lg.id;
                     return (
@@ -1652,10 +1980,12 @@ export default function App() {
                 const oppPicks = weekPicks.filter(p=>p.user_id!==user?.id);
                 const oppUserIds = [...new Set(oppPicks.map(p=>p.user_id))];
                 const oppUserId = oppUserIds[0];
-                const currentOpp = SCHEDULE.find(w=>w.result==="live")?.opp;
+                const currentOpp = liveSchedule.find(w=>w.result==="live")?.opp;
+                const targetSize = activeLeague.target_size||activeLeague.max_members||8;
+                const leagueIsFull = leagueMembers.length >= targetSize;
                 const hasOpponent = leagueMembers.filter(m=>!m.isYou).length > 0;
 
-                if(!hasOpponent) return null;
+                if(!leagueIsFull || !hasOpponent) return null;
 
                 const oppUserPicks = oppUserId ? oppPicks.filter(p=>p.user_id===oppUserId) : [];
                 const oppName = oppUserPicks[0]?.users?.username || oppUserPicks[0]?.users?.email?.split("@")[0] || currentOpp || "Opponent";
@@ -1664,7 +1994,8 @@ export default function App() {
                 const myWins = myPicks.filter(p=>p.result==="W").length;
                 const myLosses = myPicks.filter(p=>p.result==="L").length;
                 const myPending = myPicks.filter(p=>p.result==="pending").length;
-                const isWinning = myTotal >= oppTotal;
+                const isWinning = myTotal > oppTotal;
+                const isTied = myTotal === oppTotal;
 
                 return (
                   <>
@@ -1683,7 +2014,7 @@ export default function App() {
                         </div>
                         <div style={{textAlign:"center"}}>
                           <div style={{fontSize:28,fontWeight:800,letterSpacing:-1,color:"#fff"}}>{myTotal} <span style={{fontSize:16,color:IOS.label3,fontWeight:500}}>–</span> {oppTotal}</div>
-                          <div style={{fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:isWinning?IOS.green:IOS.red,marginTop:2}}>{isWinning?"You're Leading":"You're Trailing"}</div>
+                          <div style={{fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:isTied?IOS.blue:isWinning?IOS.green:IOS.red,marginTop:2}}>{isTied?"You're Tied":isWinning?"You're Leading":"You're Trailing"}</div>
                         </div>
                         <div style={{textAlign:"right"}}>
                           <div style={{fontSize:18,fontWeight:800,letterSpacing:-0.5}}>{oppName}</div>
@@ -1723,7 +2054,24 @@ export default function App() {
                 <div style={{margin:"0 16px 10px",background:IOS.bg2,borderRadius:16,overflow:"hidden",border:`1px solid rgba(48,209,88,0.25)`}}>
                   <div style={{padding:"12px 16px 8px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:`0.5px solid ${IOS.sep}`}}>
                     <div style={{fontSize:12,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.green}}>✓ Week {activeLeague.current_week||activeLeague.week||1} Slip Locked</div>
-                    <div style={{fontSize:12,fontWeight:600,color:IOS.blue,cursor:"pointer"}} onClick={()=>setScreen("picks")}>Edit</div>
+                    <div style={{display:"flex",gap:12,alignItems:"center"}}>
+                      <div style={{fontSize:12,fontWeight:600,color:IOS.blue,cursor:"pointer"}} onClick={()=>setScreen("picks")}>Edit</div>
+                      <div style={{fontSize:12,fontWeight:600,color:IOS.red,cursor:"pointer"}} onClick={async()=>{
+                        if(window.confirm("Clear your slip? This cannot be undone.")){
+                          if(user){
+                            const week = activeLeague.current_week||activeLeague.week||1;
+                            await supabase.from("picks").delete()
+                              .eq("league_id",activeLeague.id)
+                              .eq("user_id",user.id)
+                              .eq("week",week);
+                          }
+                          setSavedPicks(null);
+                          setFlexPicks(EMPTY_FLEX);
+                          setWeekPicks(prev=>prev.filter(p=>p.user_id!==user?.id));
+                          try { localStorage.removeItem(`linedup_picks_${activeLeague.id}_wk${activeLeague.current_week||activeLeague.week||1}`); } catch(e) {}
+                        }
+                      }}>Clear</div>
+                    </div>
                   </div>
                   {[...savedPicks.flexPicks].sort((a,b)=>a.mult-b.mult).map((slot,i)=>{
                     if(!slot.mult) return null;
@@ -1770,10 +2118,15 @@ export default function App() {
                     <div><div className="pu-chip-name">{pu.name}</div><div className="pu-chip-rarity" style={{color:rarityColor(pu.rarity)}}>{pu.rarity}</div></div>
                   </div>
                 ))}
-                <div className="pu-spin-chip" onClick={()=>setShowWheel(true)}>
-                  <div style={{fontSize:20}}>🎰</div>
-                  <div><div style={{fontSize:13,fontWeight:600,color:"#fff"}}>Spin Wheel</div><div style={{fontSize:11,color:IOS.purple,fontWeight:500}}>Wk 6 Reward</div></div>
-                </div>
+                {wheelSpins > 0 && (
+                  <div className="pu-spin-chip" onClick={()=>setShowWheel(true)}>
+                    <div style={{fontSize:20}}>🎰</div>
+                    <div>
+                      <div style={{fontSize:13,fontWeight:600,color:"#fff"}}>Spin Wheel</div>
+                      <div style={{fontSize:11,color:IOS.purple,fontWeight:500}}>{wheelSpins} spin{wheelSpins!==1?"s":""} available</div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Standings preview */}
@@ -1808,7 +2161,7 @@ export default function App() {
 
             {/* Bet picker sheet */}
             {activeFlexSlot!==null&&(
-              <div className="sheet-bg" onClick={()=>{setActiveFlexSlot(null);setFlexCategory(null);setPickSearch("");}}>
+              <div className="sheet-bg" onClick={()=>{setActiveFlexSlot(null);setFlexCategory(null);setPickSearch("");setLongshotMode("straight");}}>
                 <div className="sheet" onClick={e=>e.stopPropagation()}>
                   <div className="sheet-handle"/>
                   <div className="sheet-hdr">
@@ -1822,29 +2175,42 @@ export default function App() {
                           : flexCategory ? "Tap to select" : "Pick a category first"}
                       </div>
                     </div>
-                    <div className="sheet-done" onClick={()=>{setActiveFlexSlot(null);setFlexCategory(null);setPickSearch("");}}>Done</div>
+                    <div className="sheet-done" onClick={()=>{setActiveFlexSlot(null);setFlexCategory(null);setPickSearch("");setLongshotMode("straight");}}>Done</div>
                   </div>
 
                   {/* Category selector — show if not parlay and no category chosen yet */}
                   {!flexPicks[activeFlexSlot]?.isParlay && !flexCategory && (
                     <div style={{padding:"12px 16px"}}>
-                      {[
-                        {id:"ml",      label:"Moneyline",  icon:"🎯", color:IOS.blue,   desc:"Pick a team to win"},
-                        {id:"prop",    label:"Prop",       icon:"⭐", color:IOS.yellow, desc:"Player or game prop"},
-                        {id:"ou",      label:"Over/Under", icon:"📊", color:IOS.orange, desc:"Total points scored"},
-                        {id:"spread",  label:"Spread",     icon:"📐", color:IOS.green,  desc:"Beat the point spread"},
-                        {id:"longshot",label:"Longshot",   icon:"🚀", color:IOS.pink,   desc:"High odds single bet"},
-                      ].map(cat=>(
-                        <div key={cat.id} onClick={()=>setFlexCategory(cat.id)}
-                          style={{display:"flex",alignItems:"center",gap:14,padding:"14px 4px",borderBottom:`0.5px solid ${IOS.sep}`,cursor:"pointer"}}>
-                          <div style={{width:40,height:40,borderRadius:12,background:`${cat.color}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{cat.icon}</div>
-                          <div style={{flex:1}}>
-                            <div style={{fontSize:16,fontWeight:600,color:"#fff"}}>{cat.label}</div>
-                            <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>{cat.desc}</div>
-                          </div>
-                          <div style={{fontSize:18,color:IOS.label3}}>›</div>
-                        </div>
-                      ))}
+                      {(()=>{
+                        // Find categories already used by OTHER slots (not the current one being edited)
+                        const usedCats = flexPicks
+                          .filter((_,i)=>i!==activeFlexSlot)
+                          .filter(p=>p.bet&&p.category&&!p.isParlay)
+                          .map(p=>p.category);
+                        return [
+                          {id:"ml",      label:"Moneyline",  icon:"🎯", color:IOS.blue,   desc:"Pick a team to win"},
+                          {id:"prop",    label:"Prop",       icon:"⭐", color:IOS.yellow, desc:"Player or game prop"},
+                          {id:"ou",      label:"Over/Under", icon:"📊", color:IOS.orange, desc:"Total points scored"},
+                          {id:"spread",  label:"Spread",     icon:"📐", color:IOS.green,  desc:"Beat the point spread"},
+                          {id:"longshot",label:"Longshot",   icon:"🚀", color:IOS.pink,   desc:"High odds single bet"},
+                        ].map(cat=>{
+                          const taken = usedCats.includes(cat.id);
+                          return (
+                            <div key={cat.id} onClick={()=>{ if(!taken) setFlexCategory(cat.id); }}
+                              style={{display:"flex",alignItems:"center",gap:14,padding:"14px 4px",borderBottom:`0.5px solid ${IOS.sep}`,cursor:taken?"not-allowed":"pointer",opacity:taken?0.35:1}}>
+                              <div style={{width:40,height:40,borderRadius:12,background:`${cat.color}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{cat.icon}</div>
+                              <div style={{flex:1}}>
+                                <div style={{fontSize:16,fontWeight:600,color:taken?IOS.label3:"#fff"}}>{cat.label}</div>
+                                <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>{taken?"Already in your slip":cat.desc}</div>
+                              </div>
+                              {taken
+                                ? <div style={{fontSize:12,fontWeight:700,color:IOS.label3}}>✓ Used</div>
+                                : <div style={{fontSize:18,color:IOS.label3}}>›</div>
+                              }
+                            </div>
+                          );
+                        });
+                      })()}
                     </div>
                   )}
 
@@ -1857,8 +2223,27 @@ export default function App() {
                   )}
 
                   {/* Search */}
+                  {/* Straight / Parlay toggle — longshot only */}
+                  {flexCategory==="longshot" && (
+                    <div style={{display:"flex",background:"rgba(255,255,255,0.06)",borderRadius:10,padding:2,margin:"8px 16px 4px",gap:2}}>
+                      {["straight","parlay"].map(mode=>(
+                        <div key={mode} onClick={()=>{
+                          setLongshotMode(mode);
+                          // sync isParlay on the active slot
+                          if(activeFlexSlot!==null) {
+                            setFlexPicks(prev=>prev.map((p,i)=>i===activeFlexSlot?{...p,isParlay:mode==="parlay",bet:null,parlayLegs:[]}:p));
+                          }
+                        }} style={{flex:1,textAlign:"center",padding:"8px 4px",borderRadius:8,fontSize:13,fontWeight:700,cursor:"pointer",transition:"all .15s",
+                          background:longshotMode===mode?(mode==="parlay"?IOS.pink:IOS.green):"transparent",
+                          color:longshotMode===mode?"#fff":"rgba(255,255,255,0.4)"}}>
+                          {mode==="straight"?"🎯 Straight Bet (+400 only)":"🚀 Parlay (build legs)"}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   {(flexCategory || flexPicks[activeFlexSlot]?.isParlay) && (
-                    <div className="sheet-search-wrap" style={{top:60,position:"relative"}}>
+                    <div className="sheet-search-wrap" style={{top:0,position:"relative"}}>
                       <div style={{position:"relative"}}>
                         <span className="sheet-search-icon">🔍</span>
                         <input className="sheet-search" placeholder="Search..." value={pickSearch} onChange={e=>setPickSearch(e.target.value)} autoFocus={false}/>
@@ -1879,7 +2264,10 @@ export default function App() {
                   {(flexCategory || flexPicks[activeFlexSlot]?.isParlay) && (
                     (flexPicks[activeFlexSlot]?.isParlay ? ALL_BETS : (BETS[flexCategory]||[])).filter(bet=>{
                       const q = pickSearch.toLowerCase().trim();
-                      return !q || bet.game.toLowerCase().includes(q) || bet.pick.toLowerCase().includes(q);
+                      const textMatch = !q || bet.game.toLowerCase().includes(q) || bet.pick.toLowerCase().includes(q);
+                      // Longshot straight mode: only show +400 or better
+                      if(flexCategory==="longshot" && longshotMode==="straight") return textMatch && bet.impliedOdds >= 400;
+                      return textMatch;
                     }).map(bet=>{
                       const slot = flexPicks[activeFlexSlot];
                       const isCur = slot?.isParlay
@@ -1964,9 +2352,49 @@ export default function App() {
 
             <div className="body">
               <div style={{padding:"8px 16px 14px",display:"flex",alignItems:"center",gap:12}}>
-                <button onClick={()=>setScreen("home")} style={{background:IOS.fill2,border:"none",borderRadius:10,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:17,flexShrink:0}}>‹</button>
+                <button onClick={()=>{
+                  // If editing (no savedPicks) but localStorage has a locked slip, restore it
+                  if(!savedPicks) {
+                    try {
+                      const stored = localStorage.getItem(`linedup_picks_${activeLeague.id}_wk${activeLeague.current_week||activeLeague.week||1}`);
+                      if(stored) setSavedPicks(JSON.parse(stored));
+                    } catch(e) {}
+                  }
+                  setScreen("home");
+                }} style={{background:IOS.fill2,border:"none",borderRadius:10,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:17,flexShrink:0}}>‹</button>
                 <div style={{fontSize:17,fontWeight:600,letterSpacing:-0.3}}>{savedPicks?"My Slip":"Build Your Slip"}</div>
-                {savedPicks&&<div onClick={()=>setSavedPicks(null)} style={{marginLeft:"auto",fontSize:13,fontWeight:600,color:IOS.blue,cursor:"pointer"}}>Edit</div>}
+                {oddsLoading && <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:5,background:"rgba(10,132,255,0.1)",borderRadius:8,padding:"3px 8px"}}>
+                  <div style={{width:6,height:6,borderRadius:"50%",background:IOS.blue,animation:"pulse 1s infinite"}}/>
+                  <span style={{fontSize:11,fontWeight:600,color:IOS.blue}}>Loading odds</span>
+                </div>}
+                {!oddsLoading && isLiveOdds && <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:5,background:"rgba(255,69,58,0.12)",borderRadius:8,padding:"3px 8px",border:"1px solid rgba(255,69,58,0.25)"}}>
+                  <div style={{width:6,height:6,borderRadius:"50%",background:IOS.red}}/>
+                  <span style={{fontSize:11,fontWeight:700,color:IOS.red,letterSpacing:0.5}}>LIVE DK</span>
+                </div>}
+                {!oddsLoading && oddsError && <div style={{marginLeft:"auto",fontSize:11,color:IOS.orange}}>⚠ Static odds</div>}
+                {savedPicks&&!oddsLoading&&<div style={{marginLeft:"auto",display:"flex",gap:14,alignItems:"center"}}>
+                  <div onClick={()=>{
+                    if(savedPicks?.flexPicks) setFlexPicks(savedPicks.flexPicks);
+                    setSavedPicks(null);
+                  }} style={{fontSize:13,fontWeight:600,color:IOS.blue,cursor:"pointer"}}>Edit</div>
+                  <div onClick={async()=>{
+                    if(window.confirm("Clear your slip? This cannot be undone.")){
+                      // Wipe from Supabase
+                      if(user) {
+                        const week = activeLeague.current_week||activeLeague.week||1;
+                        await supabase.from("picks").delete()
+                          .eq("league_id", activeLeague.id)
+                          .eq("user_id", user.id)
+                          .eq("week", week);
+                      }
+                      // Wipe local state + localStorage
+                      setSavedPicks(null);
+                      setFlexPicks(EMPTY_FLEX);
+                      setWeekPicks(prev=>prev.filter(p=>p.user_id!==user?.id));
+                      try { localStorage.removeItem(`linedup_picks_${activeLeague.id}_wk${activeLeague.current_week||activeLeague.week||1}`); } catch(e) {}
+                    }
+                  }} style={{fontSize:13,fontWeight:600,color:IOS.red,cursor:"pointer"}}>Clear</div>
+                </div>}
               </div>
 
               {/* Locked picks view */}
@@ -2032,6 +2460,17 @@ export default function App() {
                 <div className="pb-sub">{activeLeague.name} · Wk {activeLeague.current_week||activeLeague.week||1}</div>
               </div>
 
+              {/* League filling banner */}
+              {leagueMembers.length < (activeLeague.target_size||activeLeague.max_members||8) && (
+                <div style={{margin:"0 16px 14px",background:"rgba(255,159,10,0.08)",borderRadius:12,padding:"10px 14px",border:"1px solid rgba(255,159,10,0.2)",display:"flex",alignItems:"center",gap:10}}>
+                  <div style={{fontSize:16,flexShrink:0}}>⚠️</div>
+                  <div>
+                    <div style={{fontSize:13,fontWeight:600,color:IOS.orange}}>League still filling up</div>
+                    <div style={{fontSize:11,color:IOS.label3,marginTop:2}}>Matchups start when {activeLeague.target_size||activeLeague.max_members||8} members join · {leagueMembers.length}/{activeLeague.target_size||activeLeague.max_members||8} so far</div>
+                  </div>
+                </div>
+              )}
+
               {/* Status bar */}
               <div style={{margin:"0 16px 12px",background:IOS.bg2,borderRadius:14,padding:"14px 16px"}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
@@ -2049,12 +2488,15 @@ export default function App() {
                     );
                   })}
                 </div>
-                {!hasParlay&&<div style={{fontSize:11,color:IOS.orange,marginTop:8}}>⚠ One pick must be a Parlay (toggle below)</div>}
+                {!hasParlay&&<div style={{fontSize:11,color:IOS.orange,marginTop:8}}>⚠ One pick must be a Longshot (+400 or better — straight bet or parlay)</div>}
               </div>
 
               {/* Flex pick slots */}
               {flexPicks.map((slot, idx)=>{
-                const filled = slot.isParlay ? slot.parlayLegs.length>=2 : slot.bet!==null;
+                const parlayDec = slot.isParlay && slot.parlayLegs.length>=2 ? calcParlayOddsDecimal(slot.parlayLegs) : 1;
+                const parlayAmerican = slot.isParlay && slot.parlayLegs.length>=2 ? parlayAmericanOdds(parlayDec) : 0;
+                const parlayValid = slot.isParlay && slot.parlayLegs.length>=2 && parlayAmerican >= 400;
+                const filled = slot.isParlay ? parlayValid : slot.bet!==null;
                 const parlayOdds = slot.isParlay && slot.parlayLegs.length>=2 ? calcLS(slot.parlayLegs) : null;
                 const multColors = {1:IOS.blue, 2:IOS.yellow, 3:IOS.orange, 4:IOS.green, 5:IOS.pink};
                 const chosenColor = slot.mult ? multColors[slot.mult] : IOS.label3;
@@ -2095,6 +2537,14 @@ export default function App() {
                           </div>
                         ) : slot.bet ? (
                           <div>
+                            {slot.category && (()=>{
+                              const catColors = {ml:IOS.blue, prop:IOS.yellow, ou:IOS.orange, spread:IOS.green, longshot:IOS.pink};
+                              const catLabels = {ml:"Moneyline", prop:"Prop", ou:"Over/Under", spread:"Spread", longshot:"Longshot"};
+                              const col = catColors[slot.category]||IOS.label3;
+                              return <div style={{display:"inline-flex",alignItems:"center",background:`${col}18`,borderRadius:5,padding:"1px 7px",marginBottom:4}}>
+                                <span style={{fontSize:10,fontWeight:700,letterSpacing:0.4,textTransform:"uppercase",color:col}}>{catLabels[slot.category]||slot.category}</span>
+                              </div>;
+                            })()}
                             <div style={{fontSize:10,fontWeight:700,letterSpacing:0.3,textTransform:"uppercase",color:IOS.label3,marginBottom:2}}>{slot.bet.game}</div>
                             {(()=>{
                               const isEnhance = activatedPUs[idx]?.id==="enhance";
@@ -2131,14 +2581,45 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Parlay toggle */}
-                    <div style={{padding:"8px 14px 10px",borderTop:`0.5px solid rgba(255,255,255,0.05)`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                      <div style={{fontSize:11,color:IOS.label3}}>Make this a Parlay</div>
-                      <div onClick={()=>setFlexPicks(prev=>prev.map((p,i)=>i===idx?{...p,isParlay:!p.isParlay,bet:null,parlayLegs:[]}:p))}
-                        style={{width:40,height:24,borderRadius:12,background:slot.isParlay?IOS.pink:"rgba(255,255,255,0.1)",position:"relative",cursor:"pointer",transition:"background .2s"}}>
-                        <div style={{position:"absolute",top:2,left:slot.isParlay?18:2,width:20,height:20,borderRadius:50,background:"#fff",transition:"left .2s"}}/>
+                    {/* Parlay toggle — only on longshot slots */}
+                    {slot.category==="longshot" && (
+                      <>
+                      <div style={{padding:"8px 14px 10px",borderTop:`0.5px solid rgba(255,255,255,0.05)`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                        <div>
+                          <div style={{fontSize:11,color:IOS.label3}}>Make this a Parlay</div>
+                          <div style={{fontSize:10,color:IOS.label3,marginTop:1}}>Pick 2+ legs instead of one straight bet</div>
+                        </div>
+                        <div onClick={()=>setFlexPicks(prev=>prev.map((p,i)=>i===idx?{...p,isParlay:!p.isParlay,bet:null,parlayLegs:[]}:p))}
+                          style={{width:40,height:24,borderRadius:12,background:slot.isParlay?IOS.pink:"rgba(255,255,255,0.1)",position:"relative",cursor:"pointer",transition:"background .2s",flexShrink:0}}>
+                          <div style={{position:"absolute",top:2,left:slot.isParlay?18:2,width:20,height:20,borderRadius:50,background:"#fff",transition:"left .2s"}}/>
+                        </div>
                       </div>
-                    </div>
+                      {slot.isParlay && slot.parlayLegs.length>=2 && parlayAmerican < 400 && (
+                        <div style={{padding:"6px 14px 10px"}}>
+                          <span style={{fontSize:11,color:IOS.orange}}>⚠ Parlay must be +400 or better · Currently {parlayAmerican>0?`+${parlayAmerican}`:parlayAmerican}</span>
+                        </div>
+                      )}
+                      {slot.isParlay && slot.parlayLegs.length>=2 && parlayAmerican >= 400 && (
+                        <div style={{padding:"6px 14px 10px"}}>
+                          <span style={{fontSize:11,color:IOS.green}}>✓ Qualifies as Longshot · +{parlayAmerican}</span>
+                        </div>
+                      )}
+                      </>
+                    )}
+                    {/* Parlay odds warning outside longshot toggle — for isParlay slots already set */}
+                    {!slot.category && slot.isParlay && slot.parlayLegs.length>=2 && (() => {
+                      const pd = calcParlayOddsDecimal(slot.parlayLegs);
+                      const pa = parlayAmericanOdds(pd);
+                      return pa < 400 ? (
+                        <div style={{padding:"6px 14px 10px",borderTop:`0.5px solid rgba(255,255,255,0.05)`}}>
+                          <span style={{fontSize:11,color:IOS.orange}}>⚠ Parlay must be +400 or better · Currently {pa>0?`+${pa}`:pa}</span>
+                        </div>
+                      ) : (
+                        <div style={{padding:"6px 14px 10px",borderTop:`0.5px solid rgba(255,255,255,0.05)`}}>
+                          <span style={{fontSize:11,color:IOS.green}}>✓ Qualifies as Longshot · +{pa}</span>
+                        </div>
+                      );
+                    })()}
 
                     {/* Points preview */}
                     {slot.mult && filled && (
@@ -2163,7 +2644,9 @@ export default function App() {
                             <div style={{display:"inline-flex",alignItems:"center",gap:5,padding:"3px 9px",borderRadius:7,background:`${activatedPUs[idx].color}15`,border:`1px solid ${activatedPUs[idx].color}30`,cursor:"pointer"}}
                               onClick={e=>{
                                 e.stopPropagation();
-                                setMyPUs(p=>[...p,activatedPUs[idx]]);
+                                const returnedPU = activatedPUs[idx];
+                                if(returnedPU?.dbId) supabase.from("league_power_ups").update({used:false}).eq("id",returnedPU.dbId);
+                                setMyPUs(p=>[...p,returnedPU]);
                                 setActivatedPUs(p=>{const n={...p};delete n[idx];return n;});
                               }}>
                               <span style={{fontSize:11}}>{activatedPUs[idx].icon}</span>
@@ -2197,8 +2680,7 @@ export default function App() {
                         .eq("user_id", user.id)
                         .eq("week", week);
                       if(existing && existing.length > 0) {
-                        const confirmed = window.confirm(`You already have ${existing.length} picks this week. Replace them?`);
-                        if(!confirmed) return;
+                        // Always delete old picks silently when re-locking (user chose to lock, that's confirmation enough)
                         await supabase.from("picks").delete()
                           .eq("league_id", activeLeague.id)
                           .eq("user_id", user.id)
@@ -2239,12 +2721,12 @@ export default function App() {
                       if(picksToSave.length) await supabase.from("picks").insert(picksToSave);
                     }
                     const locked = {flexPicks, lockedAt: new Date().toISOString()};
-                    try { localStorage.setItem("linedup_picks_wk6", JSON.stringify(locked)); } catch(e) {}
+                    try { localStorage.setItem(`linedup_picks_${activeLeague.id}_wk${week}`, JSON.stringify(locked)); } catch(e) {}
                     setSavedPicks(locked);
                     setSubmitted(true);
                   }}>🔒 Lock Your Slip 🔒</button>
                 : <button className="ios-btn disabled" disabled>
-                    {!hasParlay ? "⚠ Need one Parlay in your Slip" : `${flexPicks.filter(p=>p.mult!==null&&(p.isParlay?p.parlayLegs.length>=2:p.bet!==null)).length} / 5 Slots Filled`}
+                    {!hasParlay ? "⚠ Need a Longshot (+400 straight or +400 parlay)" : `${flexPicks.filter(p=>p.mult!==null&&(p.isParlay?p.parlayLegs.length>=2:p.bet!==null)).length} / 5 Slots Filled`}
                   </button>
               }
               <div style={{height:20}}/>
@@ -2271,7 +2753,37 @@ export default function App() {
               </div>
 
               {(()=>{
+                const targetSize = activeLeague.target_size||activeLeague.max_members||8;
+                const leagueIsFull = leagueMembers.length >= targetSize;
                 const hasOpponent = leagueMembers.filter(m=>!m.isYou).length > 0;
+
+                // League not full yet — no schedule, no matchup
+                if(!leagueIsFull) return (
+                  <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"60px 24px",textAlign:"center",gap:12}}>
+                    <div style={{fontSize:56,marginBottom:4}}>🔒</div>
+                    <div style={{fontSize:24,fontWeight:800,letterSpacing:-0.5,color:"#fff",lineHeight:1.2}}>Matchups Locked Until League is Full</div>
+                    <div style={{fontSize:14,color:IOS.label3,lineHeight:1.6,maxWidth:280,marginTop:4}}>
+                      Once {targetSize} members join, the schedule auto-generates and your Week 1 matchup goes live.
+                    </div>
+                    {/* Progress */}
+                    <div style={{width:"100%",maxWidth:280,marginTop:12}}>
+                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+                        <div style={{fontSize:13,fontWeight:600,color:IOS.label3}}>Members joined</div>
+                        <div style={{fontSize:13,fontWeight:700,color:IOS.blue}}>{leagueMembers.length} / {targetSize}</div>
+                      </div>
+                      <div style={{background:"rgba(255,255,255,0.08)",borderRadius:8,height:8,overflow:"hidden"}}>
+                        <div style={{height:"100%",borderRadius:8,background:`linear-gradient(90deg,${IOS.blue},${IOS.teal})`,width:`${(leagueMembers.length/targetSize)*100}%`,transition:"width .4s"}}/>
+                      </div>
+                      <div style={{fontSize:12,color:IOS.label3,marginTop:8,textAlign:"center"}}>{targetSize-leagueMembers.length} more player{targetSize-leagueMembers.length!==1?"s":""} needed</div>
+                    </div>
+                    {activeLeague.isCommissioner && (
+                      <div style={{marginTop:8,background:"rgba(10,132,255,0.1)",borderRadius:14,padding:"14px 20px",border:`1px solid ${IOS.blue}30`,width:"100%",maxWidth:280}}>
+                        <div style={{fontSize:11,fontWeight:700,letterSpacing:1.5,textTransform:"uppercase",color:IOS.blue,marginBottom:6}}>Invite Code</div>
+                        <div style={{fontSize:28,fontWeight:800,letterSpacing:5,color:"#fff"}}>{activeLeague.invite_code||activeLeague.inviteCode}</div>
+                      </div>
+                    )}
+                  </div>
+                );
 
                 // No opponent — show empty state
                 if(!hasOpponent) return (
@@ -2288,7 +2800,7 @@ export default function App() {
                 // Get my picks and opponent's picks from weekPicks
                 const myPicks = weekPicks.filter(p=>p.user_id===user?.id);
                 const oppPicks = weekPicks.filter(p=>p.user_id!==user?.id);
-                const currentOpp = SCHEDULE.find(w=>w.result==="live")?.opp || "Opponent";
+                const currentOpp = liveSchedule.find(w=>w.result==="live")?.opp || "Opponent";
 
                 // Get opponent's user picks (first non-me user who has picks)
                 const oppUserIds = [...new Set(oppPicks.map(p=>p.user_id))];
@@ -2304,7 +2816,8 @@ export default function App() {
                 const myPending = myPicks.filter(p=>p.result==="pending").length;
                 const oppWins = oppUserPicks.filter(p=>p.result==="W").length;
                 const oppLosses = oppUserPicks.filter(p=>p.result==="L").length;
-                const isWinning = parseFloat(myTotal) >= parseFloat(oppTotal);
+                const isWinning = parseFloat(myTotal) > parseFloat(oppTotal);
+                const isTied = parseFloat(myTotal) === parseFloat(oppTotal);
 
                 // Group my picks by multiplier
                 const myPicksByMult = {};
@@ -2329,7 +2842,7 @@ export default function App() {
                       <div style={{textAlign:"center",marginBottom:14}}>
                         <div style={{display:"inline-flex",alignItems:"center",gap:6,background:"rgba(10,132,255,0.12)",border:"1px solid rgba(10,132,255,0.25)",borderRadius:20,padding:"4px 14px"}}>
                           <div style={{width:6,height:6,borderRadius:"50%",background:IOS.blue}}/>
-                          <div style={{fontSize:11,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:IOS.blue}}>{isWinning?"You're Leading":"You're Trailing"}</div>
+                          <div style={{fontSize:11,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:isTied?IOS.blue:isWinning?IOS.green:IOS.red}}>{isTied?"You're Tied":isWinning?"You're Leading":"You're Trailing"}</div>
                         </div>
                       </div>
 
@@ -2492,7 +3005,7 @@ export default function App() {
               {/* ── NEW LEAGUE MODAL ── */}
               {showNewLeague && (
                 <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.7)",zIndex:50,display:"flex",flexDirection:"column",justifyContent:"flex-end",backdropFilter:"blur(8px)"}}
-                  onClick={()=>{if(!newLeagueCreated){setShowNewLeague(false);setNewLeagueSport(null);setNewLeagueName("");}}}>
+                  onClick={()=>{if(!newLeagueCreated){setShowNewLeague(false);setNewLeagueSport(null);setNewLeagueName("");setNewLeagueSize(8);}}}>
                   <div style={{background:IOS.bg2,borderRadius:"20px 20px 0 0",padding:"0 0 40px"}} onClick={e=>e.stopPropagation()}>
                     <div style={{width:36,height:5,borderRadius:3,background:"rgba(255,255,255,0.2)",margin:"10px auto 0"}}/>
 
@@ -2513,6 +3026,7 @@ export default function App() {
                           setNewLeagueCreated(null);
                           setNewLeagueSport(null);
                           setNewLeagueName("");
+                          setNewLeagueSize(8);
                         }} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:14,padding:"16px",fontFamily:"Manrope,sans-serif",fontSize:17,fontWeight:600,color:"#fff",cursor:"pointer"}}>
                           Go to My League →
                         </button>
@@ -2550,6 +3064,21 @@ export default function App() {
                           style={{width:"100%",background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"14px 16px",color:"#fff",fontSize:16,fontFamily:"Manrope,sans-serif",outline:"none",marginBottom:24,boxSizing:"border-box"}}
                         />
 
+                        {/* League size picker */}
+                        <div style={{fontSize:11,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:IOS.label3,marginBottom:10}}>League Size</div>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8,marginBottom:24}}>
+                          {[6,8,10,12].map(sz=>(
+                            <div key={sz} onClick={()=>setNewLeagueSize(sz)}
+                              style={{borderRadius:12,padding:"12px 4px",textAlign:"center",cursor:"pointer",transition:"all .15s",
+                                background:newLeagueSize===sz?`${IOS.blue}20`:"rgba(255,255,255,0.05)",
+                                border:`1.5px solid ${newLeagueSize===sz?IOS.blue:"rgba(255,255,255,0.08)"}`,
+                              }}>
+                              <div style={{fontSize:20,fontWeight:800,color:newLeagueSize===sz?IOS.blue:"rgba(255,255,255,0.6)"}}>{sz}</div>
+                              <div style={{fontSize:10,color:IOS.label3,marginTop:2}}>players</div>
+                            </div>
+                          ))}
+                        </div>
+
                         {/* Create button */}
                         <button
                           disabled={!newLeagueSport||!newLeagueName.trim()||creatingLeague}
@@ -2574,7 +3103,40 @@ export default function App() {
               </div>
 
               {/* League cards */}
-              {(realLeagues.length>0?realLeagues:LEAGUES_DATA).map(lg=>{
+              {leaguesLoading ? (
+                <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"60px 24px",textAlign:"center",gap:10}}>
+                  <div style={{width:32,height:32,borderRadius:"50%",border:`3px solid ${IOS.blue}`,borderTopColor:"transparent",animation:"spin 0.8s linear infinite"}}/>
+                  <div style={{fontSize:14,color:IOS.label3}}>Loading your leagues...</div>
+                </div>
+              ) : realLeagues.length === 0 ? (
+                <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"48px 32px",textAlign:"center",gap:12}}>
+                  <div style={{fontSize:56,marginBottom:4}}>🏆</div>
+                  <div style={{fontSize:22,fontWeight:800,letterSpacing:-0.5,color:"#fff"}}>No Leagues Yet</div>
+                  <div style={{fontSize:14,color:IOS.label3,lineHeight:1.6,maxWidth:260}}>Create your first league and invite your friends to get started.</div>
+                  <button onClick={()=>{setShowNewLeague(true);setNewLeagueCreated(null);setNewLeagueSport(null);setNewLeagueName("");setNewLeagueSize(8);}}
+                    style={{marginTop:8,background:IOS.blue,border:"none",borderRadius:14,padding:"14px 32px",fontFamily:"Manrope,sans-serif",fontSize:16,fontWeight:700,color:"#fff",cursor:"pointer"}}>
+                    + Create a League
+                  </button>
+                  <div style={{fontSize:13,color:IOS.label3}}>or</div>
+                  <div onClick={async()=>{
+                    const code=prompt("Enter invite code:");
+                    if(!code) return;
+                    const {data:league,error}=await supabase.from("leagues").select().eq("invite_code",code.toUpperCase().trim()).single();
+                    if(error||!league){alert("League not found.");return;}
+                    const {error:joinError}=await supabase.from("league_members").insert({league_id:league.id,user_id:user.id,is_commissioner:false});
+                    if(joinError){alert("Error joining. You may already be a member.");return;}
+                    const {data:allMembers}=await supabase.from("league_members").select("user_id").eq("league_id",league.id);
+                    const targetSize = league.target_size||league.max_members||8;
+                    if(allMembers && allMembers.length === targetSize) {
+                      await generateSchedule(league.id, allMembers.map(m=>m.user_id), league.season_weeks||18);
+                      alert(`Joined ${league.name}! 🎉 League is full — schedule generated!`);
+                    } else {
+                      alert(`Joined ${league.name}! Welcome.`);
+                    }
+                    fetchLeagues(user.id);
+                  }} style={{fontSize:14,fontWeight:600,color:IOS.blue,cursor:"pointer"}}>Join with Invite Code</div>
+                </div>
+              ) : realLeagues.map(lg=>{
                 const sp = SPORTS[lg.sport];
                 const isActive = activeLeagueId === lg.id;
                 const myMember = lg.members?.find(m=>m.isYou) || {record: lg.userRecord||"—", roi: lg.userRoi||"—", streak: "—"};
@@ -2633,7 +3195,16 @@ export default function App() {
                 if(error||!league){alert("League not found. Check the code and try again.");return;}
                 const {error:joinError}=await supabase.from("league_members").insert({league_id:league.id,user_id:user.id,is_commissioner:false});
                 if(joinError){alert("Error joining. You may already be a member.");return;}
-                alert(`Joined ${league.name}! Welcome.`);
+                // Check if league is now full — if so, auto-generate schedule
+                const {data:allMembers}=await supabase.from("league_members").select("user_id").eq("league_id",league.id);
+                const targetSize = league.target_size||league.max_members||8;
+                if(allMembers && allMembers.length === targetSize) {
+                  const memberIds = allMembers.map(m=>m.user_id);
+                  await generateSchedule(league.id, memberIds, league.season_weeks||18);
+                  alert(`Joined ${league.name}! 🎉 League is full — schedule has been generated!`);
+                } else {
+                  alert(`Joined ${league.name}! Welcome. ${targetSize - allMembers.length} more player${targetSize-allMembers.length!==1?"s":""} needed to start the season.`);
+                }
                 fetchLeagues(user.id);
               }} style={{margin:"4px 16px 16px",background:IOS.bg2,borderRadius:16,padding:"16px 18px",border:"1.5px dashed rgba(255,255,255,0.1)",cursor:"pointer",display:"flex",alignItems:"center",gap:14}}>
                 <div style={{width:44,height:44,borderRadius:12,background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>🔗</div>
@@ -2665,7 +3236,7 @@ export default function App() {
 
               {/* Commish tabs */}
               <div style={{display:"flex",background:IOS.bg3,borderRadius:12,padding:2,margin:"0 16px 16px",gap:2}}>
-                {[{id:"grade",l:"Grade Slips"},{id:"members",l:"Members"}].map(t=>(
+                {[{id:"grade",l:"Grade Slips"},{id:"members",l:"Members"},{id:"settings",l:"Settings"}].map(t=>(
                   <div key={t.id} onClick={()=>setCommishTab(t.id)} style={{flex:1,textAlign:"center",padding:"8px 4px",borderRadius:10,fontSize:12,fontWeight:700,cursor:"pointer",transition:"all .15s",background:commishTab===t.id?IOS.bg2:"transparent",color:commishTab===t.id?"#fff":IOS.label3,boxShadow:commishTab===t.id?"0 1px 3px rgba(0,0,0,0.4)":"none"}}>{t.l}</div>
                 ))}
               </div>
@@ -2821,59 +3392,101 @@ export default function App() {
               {/* SETTINGS tab */}
               {commishTab==="settings"&&(
                 <>
-                  <div style={{padding:"0 20px 10px"}}>
-                    <div style={{fontSize:13,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3}}>League Settings</div>
-                  </div>
-
-                  {/* Changeable settings */}
-                  <div style={{margin:"0 16px 10px"}}>
-                    <div style={{fontSize:11,fontWeight:600,letterSpacing:1,textTransform:"uppercase",color:IOS.green,padding:"0 4px",marginBottom:6}}>✓ Can Change Mid-Season</div>
-                    <div style={{background:IOS.bg2,borderRadius:14,overflow:"hidden"}}>
-                      {[
-                        {l:"League Name",     v:activeLeague.name,                   editable:true  },
-                        {l:"Pick Deadline",   v:activeLeague.settings.pickDeadline,  editable:true  },
-                        {l:"Privacy",         v:activeLeague.settings.privacy,       editable:true  },
-                      ].map((s,i,arr)=>(
-                        <div key={i} style={{display:"flex",alignItems:"center",padding:"14px 16px",borderBottom:i<arr.length-1?`0.5px solid ${IOS.sep}`:"none"}}>
-                          <div style={{flex:1}}>
-                            <div style={{fontSize:12,color:IOS.label3,marginBottom:2}}>{s.l}</div>
-                            <div style={{fontSize:15,fontWeight:600,color:"#fff"}}>{s.v}</div>
-                          </div>
-                          <div style={{fontSize:13,fontWeight:600,color:IOS.blue,cursor:"pointer"}}>Edit</div>
-                        </div>
-                      ))}
+                  {/* ── Week Management ── */}
+                  <div style={{margin:"0 16px 12px",background:IOS.bg2,borderRadius:16,overflow:"hidden",border:"1px solid rgba(255,255,255,0.07)"}}>
+                    <div style={{padding:"12px 16px",borderBottom:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                      <div style={{fontSize:13,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3}}>Week Management</div>
+                      <div style={{fontSize:22,fontWeight:800,color:IOS.blue}}>Wk {activeLeague.current_week||1}</div>
+                    </div>
+                    <div style={{padding:"14px 16px"}}>
+                      <div style={{fontSize:14,color:"#fff",marginBottom:4}}>Week {activeLeague.current_week||1} of {activeLeague.season_weeks||18}</div>
+                      <div style={{fontSize:12,color:IOS.orange,marginBottom:14}}>⚠ Grade all slips before advancing</div>
+                      <button onClick={async()=>{
+                        if(!window.confirm(`End Week ${activeLeague.current_week||1} and start Week ${(activeLeague.current_week||1)+1}? Make sure all slips are graded first.`)) return;
+                        setAdvancingWeek(true);
+                        const nextWeek = (activeLeague.current_week||1) + 1;
+                        await supabase.from("leagues").update({current_week: nextWeek}).eq("id", activeLeague.id);
+                        // Find week winner — highest scorer gets a wheel spin
+                        const {data:weekPicksAll} = await supabase
+                          .from("picks")
+                          .select("user_id, points_earned")
+                          .eq("league_id", activeLeague.id)
+                          .eq("week", activeLeague.current_week||1)
+                          .eq("result","W");
+                        if(weekPicksAll && weekPicksAll.length > 0) {
+                          const totals = {};
+                          weekPicksAll.forEach(p=>{ totals[p.user_id]=(totals[p.user_id]||0)+parseFloat(p.points_earned||0); });
+                          const winnerId = Object.entries(totals).sort((a,b)=>b[1]-a[1])[0]?.[0];
+                          if(winnerId === user.id) {
+                            setWheelSpins(s=>s+1);
+                            // Save to DB
+                            const curSpins = wheelSpins+1;
+                            await supabase.from("league_members")
+                              .update({wheel_spins: curSpins})
+                              .eq("league_id", activeLeague.id)
+                              .eq("user_id", user.id);
+                            alert(`✅ Advanced to Week ${nextWeek}! You were the top scorer — you earned a 🎰 Wheel Spin!`);
+                          } else {
+                            alert(`✅ Advanced to Week ${nextWeek}! Slips have been reset.`);
+                          }
+                        } else {
+                          alert(`✅ Advanced to Week ${nextWeek}! Slips have been reset.`);
+                        }
+                        await fetchLeagues(user.id);
+                        setSavedPicks(null);
+                        setFlexPicks(EMPTY_FLEX);
+                        try { localStorage.removeItem(`linedup_picks_${activeLeague.id}_wk${activeLeague.current_week||activeLeague.week||1}`); } catch(e) {}
+                        setAdvancingWeek(false);
+                      }} style={{width:"100%",background:advancingWeek?"rgba(255,255,255,0.08)":IOS.green,border:"none",borderRadius:12,padding:"14px",fontFamily:"Manrope,sans-serif",fontSize:15,fontWeight:700,color:advancingWeek?"rgba(255,255,255,0.3)":"#000",cursor:advancingWeek?"default":"pointer"}}>
+                        {advancingWeek ? "Advancing..." : `⏭ End Week ${activeLeague.current_week||1} · Start Week ${(activeLeague.current_week||1)+1}`}
+                      </button>
                     </div>
                   </div>
 
-                  {/* Locked settings */}
-                  <div style={{margin:"0 16px 10px"}}>
-                    <div style={{fontSize:11,fontWeight:600,letterSpacing:1,textTransform:"uppercase",color:IOS.red,padding:"0 4px",marginBottom:6}}>🔒 Locked for Season</div>
-                    <div style={{background:IOS.bg2,borderRadius:14,overflow:"hidden"}}>
-                      {[
-                        {l:"Sport",         v:`${SPORTS[activeLeague.sport].icon} ${SPORTS[activeLeague.sport].label}`},
-                        {l:"Scoring System",v:"Multiplier × Odds"},
-                        {l:"Season Length", v:`${activeLeague.settings.seasonWeeks} weeks`},
-                        {l:"Max Members",   v:activeLeague.settings.maxMembers},
-                      ].map((s,i,arr)=>(
-                        <div key={i} style={{display:"flex",alignItems:"center",padding:"14px 16px",borderBottom:i<arr.length-1?`0.5px solid ${IOS.sep}`:"none",opacity:0.6}}>
-                          <div style={{flex:1}}>
-                            <div style={{fontSize:12,color:IOS.label3,marginBottom:2}}>{s.l}</div>
-                            <div style={{fontSize:15,fontWeight:600,color:"#fff"}}>{s.v}</div>
-                          </div>
-                          <div style={{fontSize:16}}>🔒</div>
-                        </div>
-                      ))}
+                  {/* ── League Size ── */}
+                  <div style={{margin:"0 16px 12px",background:IOS.bg2,borderRadius:16,overflow:"hidden",border:"1px solid rgba(255,255,255,0.07)"}}>
+                    <div style={{padding:"12px 16px",borderBottom:`0.5px solid ${IOS.sep}`}}>
+                      <div style={{fontSize:13,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3}}>League Size</div>
+                      <div style={{fontSize:12,color:IOS.label3,marginTop:4}}>
+                        {leagueMembers.length} / {activeLeague.target_size||activeLeague.max_members||8} members
+                        {leagueMembers.length >= (activeLeague.target_size||activeLeague.max_members||8)
+                          ? <span style={{color:IOS.green,fontWeight:700}}> · Full ✓</span>
+                          : <span style={{color:IOS.orange}}> · {(activeLeague.target_size||activeLeague.max_members||8)-leagueMembers.length} spots left</span>
+                        }
+                      </div>
+                    </div>
+                    <div style={{padding:"14px 16px"}}>
+                      <div style={{fontSize:11,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:IOS.label3,marginBottom:10}}>Change Target Size</div>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8,marginBottom:10}}>
+                        {[6,8,10,12].map(sz=>{
+                          const cur = activeLeague.target_size||activeLeague.max_members||8;
+                          return (
+                            <div key={sz} onClick={async()=>{
+                              if(sz===cur) return;
+                              if(!window.confirm(`Change league size to ${sz}? This will wipe the current schedule and regenerate it when the league fills.`)) return;
+                              await supabase.from("leagues").update({target_size:sz, max_members:sz}).eq("id", activeLeague.id);
+                              await supabase.from("matchups").delete().eq("league_id", activeLeague.id);
+                              await fetchLeagues(user.id);
+                              alert(`League size updated to ${sz}. Schedule will auto-generate when you reach ${sz} members.`);
+                            }}
+                              style={{borderRadius:12,padding:"12px 4px",textAlign:"center",cursor:sz===cur?"default":"pointer",transition:"all .15s",
+                                background:sz===cur?`${IOS.blue}20`:"rgba(255,255,255,0.05)",
+                                border:`1.5px solid ${sz===cur?IOS.blue:"rgba(255,255,255,0.08)"}`,
+                              }}>
+                              <div style={{fontSize:20,fontWeight:800,color:sz===cur?IOS.blue:"rgba(255,255,255,0.5)"}}>{sz}</div>
+                              <div style={{fontSize:10,color:IOS.label3,marginTop:2}}>players</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div style={{fontSize:11,color:IOS.label3}}>Changing size wipes the current schedule. It regenerates automatically when the league fills.</div>
                     </div>
                   </div>
 
-                  {/* Danger zone */}
-                  <div style={{margin:"4px 16px 24px"}}>
+                  {/* ── Danger Zone ── */}
+                  <div style={{margin:"0 16px 24px"}}>
                     <div style={{fontSize:11,fontWeight:600,letterSpacing:1,textTransform:"uppercase",color:IOS.red,padding:"0 4px",marginBottom:6}}>Danger Zone</div>
                     <div style={{background:IOS.bg2,borderRadius:14,overflow:"hidden"}}>
-                      <div style={{padding:"14px 16px",borderBottom:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}}>
-                        <div style={{fontSize:15,fontWeight:600,color:IOS.orange}}>Pause Season</div>
-                        <div style={{fontSize:16,color:IOS.label3}}>›</div>
-                      </div>
                       <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}}>
                         <div style={{fontSize:15,fontWeight:600,color:IOS.red}}>End League</div>
                         <div style={{fontSize:16,color:IOS.label3}}>›</div>
@@ -2896,7 +3509,7 @@ export default function App() {
             <div className="body">
               <div style={{padding:"0 20px 12px"}}>
                 <div className="nav-title-large">{activeLeague.name||"My League"}</div>
-                <div className="nav-subtitle">{SPORTS[activeLeague.sport]?.label||"NFL"} · {leagueMembers.length||"?"} members · Week {activeLeague.current_week||activeLeague.week||1}</div>
+                <div className="nav-subtitle">{SPORTS[activeLeague.sport]?.label||sport.label} · {leagueMembers.length||"?"} members · Week {activeLeague.current_week||activeLeague.week||1}</div>
               </div>
 
               {/* Tabs */}
@@ -2909,7 +3522,7 @@ export default function App() {
                   {/* Hero — your stats */}
                   <div className="league-hero">
                     <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${IOS.blue},${IOS.indigo})`}}/>
-                    <div className="lh-rank">🏆 Your Rank — #{realStandings.find(s=>s.isYou)?.rank||"?"} of {leagueMembers.length||"?"}</div>
+                    <div className="lh-rank">🏆 Your Rank — #{realStandings.find(s=>s.isYou)?.rank||"?"} of {activeLeague.target_size||activeLeague.max_members||8}</div>
                     <div className="lh-name">You</div>
                     <div className="lh-stats">
                       <div className="lh-stat"><div className="lh-stat-val" style={{color:IOS.blue}}>{realStandings.find(s=>s.isYou)?.record||"0-0"}</div><div className="lh-stat-lbl">Record</div></div>
@@ -3042,18 +3655,41 @@ export default function App() {
 
               {leagueTab==="schedule"&&(
                 <>
-                {leagueMembers.filter(m=>!m.isYou).length===0 ? (
-                  <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:16,padding:"40px 24px",textAlign:"center"}}>
-                    <div style={{fontSize:48,marginBottom:12}}>📅</div>
-                    <div style={{fontSize:18,fontWeight:700,color:"#fff",marginBottom:8}}>No Schedule Yet</div>
-                    <div style={{fontSize:14,color:IOS.label3,lineHeight:1.6}}>Invite members to generate matchups and see your schedule.</div>
-                  </div>
-                ) : (
+                {(()=>{
+                  const targetSize = activeLeague.target_size||activeLeague.max_members||8;
+                  const currentSize = leagueMembers.length;
+                  const isFull = currentSize >= targetSize;
+                  if(!isFull) return (
+                    <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:16,padding:"36px 24px",textAlign:"center"}}>
+                      <div style={{fontSize:44,marginBottom:12}}>📅</div>
+                      <div style={{fontSize:18,fontWeight:700,color:"#fff",marginBottom:8}}>Fill the League to See Your Schedule!</div>
+                      <div style={{fontSize:14,color:IOS.label3,lineHeight:1.6,marginBottom:20}}>
+                        Schedule auto-generates when you reach {targetSize} members.
+                      </div>
+                      {/* Progress bar */}
+                      <div style={{background:"rgba(255,255,255,0.08)",borderRadius:8,height:8,overflow:"hidden",marginBottom:10}}>
+                        <div style={{height:"100%",borderRadius:8,background:`linear-gradient(90deg,${IOS.blue},${IOS.teal})`,width:`${(currentSize/targetSize)*100}%`,transition:"width .4s"}}/>
+                      </div>
+                      <div style={{fontSize:13,fontWeight:700,color:IOS.blue}}>{currentSize} / {targetSize} members</div>
+                      {activeLeague.isCommissioner && (
+                        <div style={{marginTop:14,fontSize:12,color:IOS.label3}}>Share invite code: <span style={{fontWeight:700,color:"#fff",letterSpacing:2}}>{activeLeague.invite_code||activeLeague.inviteCode}</span></div>
+                      )}
+                    </div>
+                  );
+                  return null;
+                })()}
+                {leagueMembers.length >= (activeLeague.target_size||activeLeague.max_members||8) && (
                   <>
                 {/* Matchup detail overlay */}
                 {selectedMatchup && (()=>{
-                  const m = MATCHUP_HISTORY.find(x=>x.week===selectedMatchup);
+                  const m = liveSchedule.find(x=>x.week===selectedMatchup);
                   if(!m) return null;
+                  // Map liveSchedule format to what the overlay expects
+                  const mDisplay = {
+                    week: m.week, opp: m.opp,
+                    result: m.result,
+                    myPicks: [], oppPicks: [], // real pick detail not available yet
+                  };
                   const slotColors = {Moneyline:IOS.blue, Prop:IOS.yellow, "Over/Under":IOS.orange, Spread:IOS.green, Parlay:IOS.pink};
                   const myTotal = parseFloat(calcMatchupScore(m.myPicks));
                   const oppTotal = parseFloat(calcMatchupScore(m.oppPicks));
@@ -3063,24 +3699,24 @@ export default function App() {
                       <div style={{padding:"52px 20px 16px",borderBottom:`0.5px solid ${IOS.sep}`}}>
                         <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
                           <button onClick={()=>setSelectedMatchup(null)} style={{background:IOS.fill2,border:"none",borderRadius:10,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:17,flexShrink:0}}>‹</button>
-                          <div style={{fontSize:17,fontWeight:600,letterSpacing:-0.3}}>Week {m.week} · {m.opp}</div>
+                          <div style={{fontSize:17,fontWeight:600,letterSpacing:-0.3}}>Week {mDisplay.week} · {mDisplay.opp}</div>
                         </div>
                         {/* Score card with POINTS */}
                         <div style={{background:IOS.bg2,borderRadius:16,padding:"16px 20px",position:"relative",overflow:"hidden"}}>
-                          <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:m.result==="W"?`linear-gradient(90deg,${IOS.green},${IOS.teal})`:`linear-gradient(90deg,${IOS.red},${IOS.orange})`}}/>
+                          <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:mDisplay.result==="W"?`linear-gradient(90deg,${IOS.green},${IOS.teal})`:`linear-gradient(90deg,${IOS.red},${IOS.orange})`}}/>
                           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
                             <div>
                               <div style={{fontSize:22,fontWeight:800,letterSpacing:-0.5,color:IOS.blue}}>You</div>
-                              <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>Week {m.week}</div>
+                              <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>Week {mDisplay.week}</div>
                             </div>
                             <div style={{textAlign:"center"}}>
-                              <div style={{fontSize:32,fontWeight:800,letterSpacing:-1,color:m.result==="W"?IOS.green:IOS.red}}>{myTotal} <span style={{fontSize:18,color:IOS.label3,fontWeight:400}}>–</span> {oppTotal}</div>
-                              <div style={{fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:m.result==="W"?IOS.green:IOS.red,marginTop:2}}>{m.result==="W"?"Victory":"Defeat"}</div>
+                              <div style={{fontSize:32,fontWeight:800,letterSpacing:-1,color:m.result==="W"?IOS.green:IOS.red}}>{m.myPts} <span style={{fontSize:18,color:IOS.label3,fontWeight:400}}>–</span> {m.oppPts}</div>
+                              <div style={{fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:mDisplay.result==="W"?IOS.green:IOS.red,marginTop:2}}>{mDisplay.result==="W"?"Victory":"Defeat"}</div>
                               <div style={{fontSize:10,color:IOS.label3,marginTop:2}}>pts</div>
                             </div>
                             <div style={{textAlign:"right"}}>
-                              <div style={{fontSize:22,fontWeight:800,letterSpacing:-0.5}}>{m.opp}</div>
-                              <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>Week {m.week}</div>
+                              <div style={{fontSize:22,fontWeight:800,letterSpacing:-0.5}}>{mDisplay.opp}</div>
+                              <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>Week {mDisplay.week}</div>
                             </div>
                           </div>
                           {/* Scoring formula note */}
@@ -3132,7 +3768,7 @@ export default function App() {
                               </div>
                               {/* Opp pick */}
                               <div style={{padding:"12px 14px",background:oppP.result==="W"?"rgba(48,209,88,0.05)":"rgba(255,69,58,0.04)"}}>
-                                <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3,marginBottom:5}}>{m.opp}</div>
+                                <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3,marginBottom:5}}>{mDisplay.opp}</div>
                                 <div style={{fontSize:13,fontWeight:600,color:"#fff",marginBottom:6,lineHeight:1.3}}>{oppP.pick}</div>
                                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:4}}>
                                   <div style={{fontSize:13,fontWeight:800,letterSpacing:-0.3,color:oppP.odds.startsWith("+")?IOS.green:IOS.blue}}>{oppP.odds}</div>
@@ -3168,11 +3804,16 @@ export default function App() {
                 })()}
 
                 <div style={{background:IOS.bg2,borderRadius:16,margin:"0 16px",overflow:"hidden"}}>
-                  {SCHEDULE.map(wk=>{
+                  {liveSchedule.length === 0 ? (
+                    <div style={{padding:"32px 24px",textAlign:"center",color:IOS.label3}}>
+                      <div style={{fontSize:32,marginBottom:10}}>📅</div>
+                      <div style={{fontSize:15,fontWeight:600,color:"#fff",marginBottom:6}}>Schedule Coming Soon</div>
+                      <div style={{fontSize:13}}>Join a full league to auto-generate your schedule.</div>
+                    </div>
+                  ) : liveSchedule.map(wk=>{
                     const live=wk.result==="live";const done=wk.result==="W"||wk.result==="L";
-                    const hasMH = MATCHUP_HISTORY.find(x=>x.week===wk.week);
-                    const myPts = hasMH ? parseFloat(calcMatchupScore(hasMH.myPicks)) : null;
-                    const oppPts = hasMH ? parseFloat(calcMatchupScore(hasMH.oppPicks)) : null;
+                    const myPts = wk.myPts > 0 ? wk.myPts : null;
+                    const oppPts = wk.oppPts > 0 ? wk.oppPts : null;
 
                     // Calculate live score from real weekPicks
                     const myLivePts = live ? parseFloat(weekPicks
@@ -3185,7 +3826,7 @@ export default function App() {
                     return (
                       <div key={wk.week} className="sch-item"
                         style={{...(live?{background:"rgba(10,132,255,0.06)"}:{}), ...(done?{cursor:"pointer"}:{})}}
-                        onClick={()=>done&&hasMH&&setSelectedMatchup(wk.week)}
+                        onClick={()=>done&&setSelectedMatchup(wk.week)}
                       >
                         <div className={`sch-wk ${live?"live":""}`}>W{wk.week}</div>
                         <div className={`sch-opp ${live?"live":done?"done":"up"}`}>{live&&<span style={{color:IOS.blue,marginRight:6}}>●</span>}vs {wk.opp}</div>
@@ -3198,7 +3839,7 @@ export default function App() {
                         </div>
                         <div style={{display:"flex",alignItems:"center",gap:6}}>
                           <div className={`sch-badge ${wk.result==="live"?"live":wk.result==="upcoming"?"up":wk.result}`}>{wk.result==="live"?"LIVE":wk.result==="upcoming"?"—":wk.result}</div>
-                          {done&&hasMH&&<div style={{fontSize:16,color:IOS.label3}}>›</div>}
+                          {done&&<div style={{fontSize:16,color:IOS.label3}}>›</div>}
                         </div>
                       </div>
                     );
@@ -3256,10 +3897,48 @@ export default function App() {
             </div>
             <div className="body">
               <div className="prof-av-wrap">
-                <div className="prof-av">{(user?.email?.[0]||"J").toUpperCase()}</div>
+                <div className="prof-av">{(userProfile?.username?.[0]||user?.email?.[0]||"J").toUpperCase()}</div>
                 <div>
-                  <div className="prof-name">{user?.email?.split("@")[0]||"You"}</div>
+                  {editingUsername ? (
+                    <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                      <input
+                        value={usernameInput}
+                        onChange={e=>{setUsernameInput(e.target.value);setUsernameError("");}}
+                        placeholder="Enter username"
+                        autoFocus
+                        style={{background:"#2C2C2E",border:`1px solid ${usernameError?IOS.red:IOS.blue}`,borderRadius:10,padding:"8px 12px",color:"#fff",fontSize:15,fontFamily:"'Manrope',sans-serif",outline:"none",width:180}}
+                      />
+                      {usernameError&&<div style={{fontSize:11,color:IOS.red}}>{usernameError}</div>}
+                      <div style={{display:"flex",gap:10}}>
+                        <div onClick={async()=>{
+                          const val = usernameInput.trim();
+                          if(!val){ setUsernameError("Can't be empty"); return; }
+                          if(val.length<3){ setUsernameError("Min 3 characters"); return; }
+                          if(!/^[a-zA-Z0-9_]+$/.test(val)){ setUsernameError("Letters, numbers, _ only"); return; }
+                          setUsernameSaving(true);
+                          const {data:existing}=await supabase.from("users").select("id").eq("username",val).maybeSingle();
+                          if(existing && existing.id!==user.id){ setUsernameError("Already taken"); setUsernameSaving(false); return; }
+                          await supabase.from("users").upsert({id:user.id, email:user.email, username:val},{onConflict:"id"});
+                          setUserProfile(prev=>({...prev, username:val}));
+                          setEditingUsername(false);
+                          setUsernameSaving(false);
+                        }} style={{fontSize:13,fontWeight:700,color:usernameSaving?IOS.label3:IOS.green,cursor:"pointer"}}>
+                          {usernameSaving?"Saving...":"Save"}
+                        </div>
+                        <div onClick={()=>{setEditingUsername(false);setUsernameError("");}} style={{fontSize:13,fontWeight:600,color:IOS.label3,cursor:"pointer"}}>Cancel</div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <div className="prof-name">{userProfile?.username||user?.email?.split("@")[0]||"You"}</div>
+                      <div onClick={()=>{setUsernameInput(userProfile?.username||"");setEditingUsername(true);}}
+                        style={{fontSize:12,fontWeight:600,color:IOS.blue,cursor:"pointer",background:"rgba(10,132,255,0.12)",borderRadius:6,padding:"2px 8px"}}>
+                        {userProfile?.username?"Edit":"Set"}
+                      </div>
+                    </div>
+                  )}
                   <div className="prof-league">{realLeagues.length} active league{realLeagues.length!==1?"s":""}</div>
+                  {!userProfile?.username&&<div style={{fontSize:11,color:IOS.orange,marginTop:2}}>⚠ Set a username so friends can find you</div>}
                   <div className="prof-rank-pill"><span>📊</span><span className="prof-rank-txt">All-league stats</span></div>
                 </div>
               </div>
@@ -3326,25 +4005,65 @@ export default function App() {
 
               {profTab==="power-ups"&&(
                 <div style={{paddingBottom:24}}>
-                  <div style={{padding:"14px 20px 10px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                    <div style={{fontSize:15,color:IOS.label3}}>{myPUs.length}/3 slots used</div>
-                    <button onClick={()=>setShowWheel(true)} style={{background:`linear-gradient(135deg,${IOS.indigo},${IOS.purple})`,border:"none",borderRadius:10,padding:"8px 16px",fontFamily:"Manrope,sans-serif",fontSize:13,fontWeight:600,color:"#fff",cursor:"pointer"}}>🎰 Spin Wheel</button>
-                  </div>
-                  {myPUs.length===0
-                    ? <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:14,padding:24,textAlign:"center",color:IOS.label3,fontSize:15}}>No power-ups yet. Win a week to spin.</div>
-                    : myPUs.map((pu,i)=>(
-                        <div key={i} className="pu-card" style={{borderWidth:1,borderStyle:"solid",borderColor:`${pu.color}30`}}>
-                          <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:pu.color}}/>
-                          <div className="pu-card-icon" style={{background:`${pu.color}15`}}>{pu.icon}</div>
-                          <div style={{flex:1}}>
-                            <div className="pu-card-rarity" style={{color:rarityColor(pu.rarity)}}>{pu.rarity}</div>
-                            <div className="pu-card-name">{pu.name}</div>
-                            <div className="pu-card-desc">{pu.desc}</div>
+                  {/* League toggle */}
+                  {realLeagues.length > 1 && (
+                    <div style={{overflowX:"auto",display:"flex",gap:8,padding:"10px 16px 4px",scrollbarWidth:"none"}}>
+                      {realLeagues.map(lg=>{
+                        const sp = SPORTS[lg.sport];
+                        const isSelected = (puLeagueId||activeLeagueId)===lg.id;
+                        return (
+                          <div key={lg.id} onClick={()=>{
+                            setPuLeagueId(lg.id);
+                            if(user) fetchPuLeagueData(lg.id, user.id);
+                          }} style={{flexShrink:0,display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:20,cursor:"pointer",transition:"all .15s",
+                            background:isSelected?`${sp.color}20`:"rgba(255,255,255,0.06)",
+                            border:`1px solid ${isSelected?sp.color+"60":"rgba(255,255,255,0.08)"}`,
+                          }}>
+                            <span style={{fontSize:14}}>{sp.icon}</span>
+                            <span style={{fontSize:12,fontWeight:700,color:isSelected?sp.color:"rgba(255,255,255,0.6)"}}>{lg.name}</span>
                           </div>
-                          <button className="pu-use-btn">Use</button>
-                        </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {(()=>{
+                    const viewLeagueId = puLeagueId||activeLeagueId;
+                    const isActiveLeague = viewLeagueId===activeLeagueId;
+                    const displayPUs = isActiveLeague ? myPUs : puLeaguePUs;
+                    const displaySpins = isActiveLeague ? wheelSpins : puLeagueSpins;
+                    return (
+                      <>
+                      <div style={{padding:"14px 20px 10px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                        <div style={{fontSize:15,color:IOS.label3}}>{displayPUs.length} power-up{displayPUs.length!==1?"s":""} in inventory</div>
+                        {displaySpins > 0 && isActiveLeague
+                          ? <button onClick={()=>setShowWheel(true)} style={{background:`linear-gradient(135deg,${IOS.indigo},${IOS.purple})`,border:"none",borderRadius:10,padding:"8px 16px",fontFamily:"Manrope,sans-serif",fontSize:13,fontWeight:600,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
+                              🎰 Spin Wheel
+                              <span style={{background:"rgba(255,255,255,0.25)",borderRadius:20,padding:"1px 8px",fontSize:12,fontWeight:800}}>{displaySpins}</span>
+                            </button>
+                          : <button disabled style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 16px",fontFamily:"Manrope,sans-serif",fontSize:13,fontWeight:600,color:"rgba(255,255,255,0.25)",cursor:"not-allowed",display:"flex",alignItems:"center",gap:8}}>
+                              🎰 Spin Wheel
+                              <span style={{background:"rgba(255,255,255,0.08)",borderRadius:20,padding:"1px 8px",fontSize:12,fontWeight:800,color:"rgba(255,255,255,0.25)"}}>{displaySpins}</span>
+                            </button>
+                        }
+                      </div>
+                      {displayPUs.length===0
+                        ? <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:14,padding:24,textAlign:"center",color:IOS.label3,fontSize:15}}>No power-ups yet. Win a week to spin.</div>
+                        : displayPUs.map((pu,i)=>(
+                            <div key={i} className="pu-card" style={{borderWidth:1,borderStyle:"solid",borderColor:`${pu.color}30`}}>
+                              <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:pu.color}}/>
+                              <div className="pu-card-icon" style={{background:`${pu.color}15`}}>{pu.icon}</div>
+                              <div style={{flex:1}}>
+                                <div className="pu-card-rarity" style={{color:rarityColor(pu.rarity)}}>{pu.rarity}</div>
+                                <div className="pu-card-name">{pu.name}</div>
+                                <div className="pu-card-desc">{pu.desc}</div>
+                              </div>
+                              <button className="pu-use-btn">Use</button>
+                            </div>
                       ))
-                  }
+                      }
+                      </>
+                    );
+                  })()}
                   <div style={{padding:"14px 20px 8px"}}><div style={{fontSize:13,fontWeight:600,color:IOS.label3,textTransform:"uppercase",letterSpacing:0.5}}>All Power-Ups</div></div>
                   {POWER_UPS.map(pu=>(
                     <div key={pu.id} style={{display:"flex",alignItems:"center",padding:"12px 16px",margin:"0 16px 6px",background:IOS.bg2,borderRadius:12,gap:12}}>
