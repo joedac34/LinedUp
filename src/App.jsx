@@ -1670,8 +1670,8 @@ export default function App() {
       {/* ══ AUTH SCREEN ══ */}
       {!user && (
         <div style={{width:390,minHeight:"100vh",background:"#09090f",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"40px 32px",fontFamily:"'Manrope',sans-serif"}}>
-          <div style={{fontSize:38,fontWeight:800,letterSpacing:-1,color:"#60a5fa",marginBottom:6}}>LINEDUP</div>
-          <div style={{fontSize:14,color:"rgba(255,255,255,0.4)",marginBottom:48}}>Fantasy football for sports bettors</div>
+          <div style={{fontSize:38,fontWeight:800,letterSpacing:-1,color:"#60a5fa",marginBottom:6}}>PICKLOCK</div>
+          <div style={{fontSize:14,color:"rgba(255,255,255,0.4)",marginBottom:48}}>Fantasy sports betting, built different</div>
           <div style={{display:"flex",background:"#1C1C1E",borderRadius:12,padding:2,marginBottom:28,width:"100%"}}>
             {["login","signup"].map(t=>(
               <div key={t} onClick={()=>setAuthScreen(t)} style={{flex:1,textAlign:"center",padding:"10px",borderRadius:10,fontSize:14,fontWeight:700,cursor:"pointer",background:authScreen===t?"#2C2C2E":"transparent",color:authScreen===t?"#fff":"rgba(255,255,255,0.4)",transition:"all .2s"}}>{t==="login"?"Sign In":"Sign Up"}</div>
@@ -1936,7 +1936,7 @@ export default function App() {
             <div className="body">
               <div className="nav-header large" style={{padding:"0 20px 14px"}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
-                  <div className="nav-title-large">LINEDUP</div>
+                  <div className="nav-title-large">PICKLOCK</div>
                   <div style={{display:"flex",alignItems:"center",gap:12}}>
                     <div onClick={()=>setScreen("leagues")} style={{fontSize:13,fontWeight:600,color:IOS.blue,cursor:"pointer"}}>All Leagues</div>
                     <div onClick={()=>setScreen("profile")} style={{width:34,height:34,borderRadius:50,background:`linear-gradient(135deg,${IOS.blue},${IOS.indigo})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer"}}>
@@ -2175,7 +2175,31 @@ export default function App() {
                           : flexCategory ? "Tap to select" : "Pick a category first"}
                       </div>
                     </div>
-                    <div className="sheet-done" onClick={()=>{setActiveFlexSlot(null);setFlexCategory(null);setPickSearch("");setLongshotMode("straight");}}>Done</div>
+                    {(()=>{
+                      const slot = activeFlexSlot!==null ? flexPicks[activeFlexSlot] : null;
+                      const isLongshotParlay = flexCategory==="longshot" && slot?.isParlay;
+                      const legs = slot?.parlayLegs||[];
+                      const parlayDec = legs.length>=2 ? legs.reduce((acc,b)=>{
+                        const dec = b.impliedOdds>0?(b.impliedOdds/100)+1:(100/Math.abs(b.impliedOdds))+1;
+                        return acc*dec;
+                      },1) : 1;
+                      const parlayAm = legs.length>=2 ? (parlayDec>=2?Math.round((parlayDec-1)*100):Math.round(-100/(parlayDec-1))) : 0;
+                      const parlayBlocked = isLongshotParlay && legs.length>=2 && parlayAm < 400;
+                      const parlayNeedsLegs = isLongshotParlay && legs.length < 2;
+                      const blocked = parlayBlocked || parlayNeedsLegs;
+                      return (
+                        <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3}}>
+                          <div className="sheet-done"
+                            style={{color:blocked?"rgba(255,255,255,0.25)":"",cursor:blocked?"not-allowed":""}}
+                            onClick={()=>{
+                              if(blocked) return;
+                              setActiveFlexSlot(null);setFlexCategory(null);setPickSearch("");setLongshotMode("straight");
+                            }}>Done</div>
+                          {parlayBlocked && <div style={{fontSize:10,color:IOS.orange,textAlign:"right"}}>Need +400 odds</div>}
+                          {parlayNeedsLegs && <div style={{fontSize:10,color:IOS.orange,textAlign:"right"}}>Add 2+ legs</div>}
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Category selector — show if not parlay and no category chosen yet */}
@@ -2185,8 +2209,8 @@ export default function App() {
                         // Find categories already used by OTHER slots (not the current one being edited)
                         const usedCats = flexPicks
                           .filter((_,i)=>i!==activeFlexSlot)
-                          .filter(p=>p.bet&&p.category&&!p.isParlay)
-                          .map(p=>p.category);
+                          .filter(p=>(p.bet&&p.category&&!p.isParlay)||(p.isParlay&&p.parlayLegs.length>=2))
+                          .map(p=>p.isParlay?"longshot":p.category);
                         return [
                           {id:"ml",      label:"Moneyline",  icon:"🎯", color:IOS.blue,   desc:"Pick a team to win"},
                           {id:"prop",    label:"Prop",       icon:"⭐", color:IOS.yellow, desc:"Player or game prop"},
@@ -2668,7 +2692,27 @@ export default function App() {
               })}
 
               <div style={{height:12}}/>
-              {allFlexFilled && hasParlay
+              {(()=>{
+                const targetSize = activeLeague.target_size||activeLeague.max_members||8;
+                const leagueIsFull = leagueMembers.length >= targetSize;
+                if(!leagueIsFull) return (
+                  <div style={{margin:"0 16px",background:"rgba(255,159,10,0.08)",borderRadius:14,padding:"16px",textAlign:"center",border:"1px solid rgba(255,159,10,0.2)"}}>
+                    <div style={{fontSize:18,marginBottom:6}}>⏳</div>
+                    <div style={{fontSize:14,fontWeight:700,color:IOS.orange,marginBottom:4}}>League Not Full Yet</div>
+                    <div style={{fontSize:13,color:IOS.label3,marginBottom:10}}>You can lock your slip once the league is full and your schedule is set</div>
+                    <div style={{background:"rgba(255,255,255,0.06)",borderRadius:8,height:6,overflow:"hidden",marginBottom:6}}>
+                      <div style={{height:"100%",borderRadius:8,background:`linear-gradient(90deg,${IOS.orange},${IOS.yellow})`,width:`${(leagueMembers.length/targetSize)*100}%`}}/>
+                    </div>
+                    <div style={{fontSize:12,fontWeight:700,color:IOS.orange}}>Fill League: {leagueMembers.length}/{targetSize} members</div>
+                  </div>
+                );
+                return null;
+              })()}
+              {(()=>{
+                const targetSize = activeLeague.target_size||activeLeague.max_members||8;
+                const leagueIsFull = leagueMembers.length >= targetSize;
+                if(!leagueIsFull) return null;
+                return allFlexFilled && hasParlay
                 ? <button className="ios-btn green" onClick={async()=>{
                     if(user) {
                       const week = activeLeague.current_week||activeLeague.week||1;
@@ -2727,8 +2771,8 @@ export default function App() {
                   }}>🔒 Lock Your Slip 🔒</button>
                 : <button className="ios-btn disabled" disabled>
                     {!hasParlay ? "⚠ Need a Longshot (+400 straight or +400 parlay)" : `${flexPicks.filter(p=>p.mult!==null&&(p.isParlay?p.parlayLegs.length>=2:p.bet!==null)).length} / 5 Slots Filled`}
-                  </button>
-              }
+                  </button>;
+              })()}
               <div style={{height:20}}/>
             </>
             )}
