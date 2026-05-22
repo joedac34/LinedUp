@@ -587,7 +587,8 @@ export default function App() {
   const [expanded,    setExpanded]    = useState(null);
   const [sortBy,      setSortBy]      = useState("rank");
   const [chatMsg,     setChatMsg]     = useState("");
-  const [messages,    setMessages]    = useState(CHAT);
+  const [messages,    setMessages]    = useState([]);
+  const [chatLoading, setChatLoading] = useState(false);
   const [activeLeagueId, setActiveLeagueId] = useState("lg1");
   const [realLeagues,    setRealLeagues]    = useState([]);
   const [leaguesLoading, setLeaguesLoading] = useState(true);
@@ -1265,6 +1266,33 @@ export default function App() {
   const [selectedMatchup, setSelectedMatchup] = useState(null); // week number of selected past matchup // locked picks for the week
   const chatRef=useRef(null);
 
+  const fetchMessages = async (leagueId) => {
+    setChatLoading(true);
+    const {data} = await supabase
+      .from("league_messages")
+      .select("*")
+      .eq("league_id", leagueId)
+      .order("created_at", {ascending: true})
+      .limit(100);
+    if(data) setMessages(data);
+    setChatLoading(false);
+  };
+
+  const subscribeToMessages = (leagueId) => {
+    return supabase
+      .channel(`chat:${leagueId}`)
+      .on("postgres_changes", {
+        event: "INSERT",
+        schema: "public",
+        table: "league_messages",
+        filter: `league_id=eq.${leagueId}`,
+      }, payload => {
+        setMessages(prev => [...prev, payload.new]);
+        setTimeout(()=>{if(chatRef.current)chatRef.current.scrollTop=chatRef.current.scrollHeight;},50);
+      })
+      .subscribe();
+  };
+
   useEffect(()=>{
     supabase.auth.getSession().then(({data:{session}})=>{
       const u = session?.user??null;
@@ -1313,7 +1341,15 @@ export default function App() {
     if(lg) fetchWeekPicks(activeLeagueId, lg.current_week||lg.week||1);
   },[activeLeagueId, user, screen]);
 
-  useEffect(()=>{if(screen==="chat"&&chatRef.current)chatRef.current.scrollTop=chatRef.current.scrollHeight;},[screen,messages]);
+  useEffect(()=>{if(chatRef.current)chatRef.current.scrollTop=chatRef.current.scrollHeight;},[messages]);
+
+  useEffect(()=>{
+    if(screen==="chat"&&activeLeague?.id) {
+      fetchMessages(activeLeague.id);
+      const sub = subscribeToMessages(activeLeague.id);
+      return ()=>{ supabase.removeChannel(sub); };
+    }
+  },[screen, activeLeague?.id]);
 
   const spinWheel=()=>{
     if(spinning)return;
@@ -1365,7 +1401,18 @@ export default function App() {
     else{setPicks(p=>({...p,[slotId]:bet}));setActiveSlot(null);}
   };
   const clearPick=slotId=>{if(slotId==="longshot")setLsBets([]);else setPicks(p=>({...p,[slotId]:null}));};
-  const sendMsg=()=>{if(!chatMsg.trim())return;setMessages(p=>[...p,{id:Date.now(),user:"Joe",init:"J",time:"now",text:chatMsg.trim(),me:true}]);setChatMsg("");setTimeout(()=>{if(chatRef.current)chatRef.current.scrollTop=chatRef.current.scrollHeight;},50);};
+  const sendMsg=async()=>{
+    if(!chatMsg.trim()||!user||!activeLeague?.id) return;
+    const msg = chatMsg.trim();
+    setChatMsg("");
+    await supabase.from("league_messages").insert({
+      league_id: activeLeague.id,
+      user_id: user.id,
+      username: userProfile?.username || user.email?.split("@")[0] || "Unknown",
+      message: msg,
+    });
+    setTimeout(()=>{if(chatRef.current)chatRef.current.scrollTop=chatRef.current.scrollHeight;},50);
+  };
 
   const parlay=calcParlay(picks,lsBets,SLOTS);
   const lsO=calcLS(lsBets);
@@ -3627,7 +3674,7 @@ export default function App() {
                 <>
                   <div style={{padding:"0 20px 10px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                     <div style={{fontSize:13,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3}}>{leagueMembers.length} / {activeLeague.max_members||activeLeague.settings?.maxMembers||8} members</div>
-                    <div style={{fontSize:12,fontWeight:600,color:IOS.blue,cursor:"pointer"}}>+ Invite</div>
+                    
                   </div>
                   <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:14,overflow:"hidden"}}>
                     {(leagueMembers.length ? leagueMembers : activeLeague.members||[]).map((m,i,arr)=>(
@@ -4148,22 +4195,34 @@ export default function App() {
         {screen==="chat"&&(
           <>
             <div style={{padding:"0 20px 12px"}}>
-              <div className="nav-title-large">The Boys</div>
-              <div className="nav-subtitle">8 members · 6 online</div>
+              <div className="nav-title-large">{activeLeague.name}</div>
+              <div className="nav-subtitle">{leagueMembers.length} members · League Chat</div>
             </div>
             <div className="chat-bg">
               <div className="chat-msgs" ref={chatRef} style={{paddingBottom:12}}>
-                <div className="date-sep"><span>Today</span></div>
-                {messages.map(msg=>(
-                  <div key={msg.id} className={`msg-group ${msg.me?"me":""}`}>
-                    {!msg.me&&<div className="msg-av" style={{background:acColor(msg.init)}}>{msg.init}</div>}
-                    <div className="msg-col">
-                      {!msg.me&&<div className="msg-sender">{msg.user}</div>}
-                      <div className={`bubble ${msg.me?"me":"them"}`}>{msg.text}</div>
-                      <div className="msg-time">{msg.time}</div>
-                    </div>
+                {chatLoading && <div style={{textAlign:"center",color:IOS.label3,fontSize:13,padding:20}}>Loading messages...</div>}
+                {!chatLoading && messages.length===0 && (
+                  <div style={{textAlign:"center",color:IOS.label3,fontSize:13,padding:40}}>
+                    <div style={{fontSize:32,marginBottom:8}}>💬</div>
+                    <div>No messages yet. Start the conversation!</div>
                   </div>
-                ))}
+                )}
+                <div className="date-sep"><span>Today</span></div>
+                {messages.map(msg=>{
+                  const isMe = msg.user_id === user?.id;
+                  const initial = (msg.username?.[0]||"?").toUpperCase();
+                  const timeStr = new Date(msg.created_at).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
+                  return (
+                    <div key={msg.id} className={`msg-group ${isMe?"me":""}`}>
+                      {!isMe&&<div className="msg-av" style={{background:acColor(initial)}}>{initial}</div>}
+                      <div className="msg-col">
+                        {!isMe&&<div className="msg-sender">{msg.username||"Unknown"}</div>}
+                        <div className={`bubble ${isMe?"me":"them"}`}>{msg.message}</div>
+                        <div className="msg-time">{timeStr}</div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
               <div className="chat-input-bar">
                 <input className="chat-field" placeholder="Message..." value={chatMsg} onChange={e=>setChatMsg(e.target.value)} onKeyDown={e=>e.key==="Enter"&&sendMsg()}/>
