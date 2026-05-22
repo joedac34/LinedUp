@@ -2910,9 +2910,9 @@ export default function App() {
                           .eq("week", week);
                       }
                       const picksToSave = [];
-                      flexPicks.forEach(slot=>{
+                      flexPicks.forEach((slot, slotIdx)=>{
                         if(!slot.mult) return;
-                        const effectiveMult = activatedPUs[idx]?.id==="double" ? slot.mult * 2 : slot.mult;
+                        const effectiveMult = activatedPUs[slotIdx]?.id==="double" ? slot.mult * 2 : slot.mult;
                         if(slot.isParlay) {
                           slot.parlayLegs.forEach(b=>picksToSave.push({
                             league_id: activeLeague.id,
@@ -2941,10 +2941,14 @@ export default function App() {
                           });
                         }
                       });
-                      if(picksToSave.length) await supabase.from("picks").insert(picksToSave);
+                      if(picksToSave.length) {
+                        const {error:insertError} = await supabase.from("picks").insert(picksToSave);
+                        if(insertError) { alert("Error saving picks: " + insertError.message); return; }
+                      }
                     }
+                    const weekNum = activeLeague.current_week||activeLeague.week||1;
                     const locked = {flexPicks, lockedAt: new Date().toISOString()};
-                    try { localStorage.setItem(`linedup_picks_${activeLeague.id}_wk${week}`, JSON.stringify(locked)); } catch(e) {}
+                    try { localStorage.setItem(`linedup_picks_${activeLeague.id}_wk${weekNum}`, JSON.stringify(locked)); } catch(e) {}
                     setSavedPicks(locked);
                     setSubmitted(true);
                   }}>🔒 Lock Your Slip 🔒</button>
