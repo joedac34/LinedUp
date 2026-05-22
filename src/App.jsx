@@ -731,6 +731,7 @@ export default function App() {
   const [activeFlexSlot, setActiveFlexSlot] = useState(null); // index of slot being edited
   const [flexCategory, setFlexCategory] = useState(null); // category being browsed
   const [longshotMode, setLongshotMode] = useState("straight"); // "straight" | "parlay" — for longshot sheet
+  const [betTypeFilter, setBetTypeFilter] = useState("all"); // "all" | "ml" | "spread" | "ou"
   const usedMults = flexPicks.filter(p=>p.mult!==null).map(p=>p.mult);
   const availableMults = [1,2,3,4,5].filter(m=>!usedMults.includes(m));
   // Valid longshot = straight +400 bet, OR parlay with 2+ legs AND combined odds +400 or better
@@ -2394,7 +2395,7 @@ export default function App() {
 
             {/* Bet picker sheet */}
             {activeFlexSlot!==null&&(
-              <div className="sheet-bg" onClick={()=>{setActiveFlexSlot(null);setFlexCategory(null);setPickSearch("");setLongshotMode("straight");}}>
+              <div className="sheet-bg" onClick={()=>{setActiveFlexSlot(null);setFlexCategory(null);setPickSearch("");setLongshotMode("straight");setBetTypeFilter("all");}}>
                 <div className="sheet" onClick={e=>e.stopPropagation()}>
                   <div className="sheet-handle"/>
                   <div className="sheet-hdr">
@@ -2486,6 +2487,7 @@ export default function App() {
                       {["straight","parlay"].map(mode=>(
                         <div key={mode} onClick={()=>{
                           setLongshotMode(mode);
+                          setBetTypeFilter("all");
                           // sync isParlay on the active slot
                           if(activeFlexSlot!==null) {
                             setFlexPicks(prev=>prev.map((p,i)=>i===activeFlexSlot?{...p,isParlay:mode==="parlay",bet:null,parlayLegs:[]}:p));
@@ -2494,6 +2496,47 @@ export default function App() {
                           background:longshotMode===mode?(mode==="parlay"?IOS.pink:IOS.green):"transparent",
                           color:longshotMode===mode?"#fff":"rgba(255,255,255,0.4)"}}>
                           {mode==="straight"?"🎯 Straight Bet (+400 only)":"🚀 Parlay (build legs)"}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Bet type filter pills — show on all categories */}
+                  {flexCategory && flexCategory !== "longshot" && (
+                    <div style={{display:"flex",gap:6,padding:"6px 16px 4px",overflowX:"auto",scrollbarWidth:"none"}}>
+                      {[
+                        {id:"all",label:"All"},
+                        {id:"ml",label:"Moneyline"},
+                        {id:"spread",label:"Spread"},
+                        {id:"ou",label:"Over/Under"},
+                      ].map(f=>(
+                        <div key={f.id} onClick={()=>setBetTypeFilter(f.id)}
+                          style={{flexShrink:0,padding:"5px 12px",borderRadius:16,fontSize:12,fontWeight:600,cursor:"pointer",transition:"all .15s",
+                            background:betTypeFilter===f.id?"rgba(10,132,255,0.2)":"rgba(255,255,255,0.06)",
+                            color:betTypeFilter===f.id?IOS.blue:"rgba(255,255,255,0.5)",
+                            border:`1px solid ${betTypeFilter===f.id?IOS.blue+"60":"rgba(255,255,255,0.08)"}`,
+                          }}>
+                          {f.label}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {/* Parlay mode — bet type pills for filtering legs */}
+                  {(flexCategory==="longshot" && longshotMode==="parlay") && (
+                    <div style={{display:"flex",gap:6,padding:"6px 16px 4px",overflowX:"auto",scrollbarWidth:"none"}}>
+                      {[
+                        {id:"all",label:"All"},
+                        {id:"ml",label:"Moneyline"},
+                        {id:"spread",label:"Spread"},
+                        {id:"ou",label:"Over/Under"},
+                      ].map(f=>(
+                        <div key={f.id} onClick={()=>setBetTypeFilter(f.id)}
+                          style={{flexShrink:0,padding:"5px 12px",borderRadius:16,fontSize:12,fontWeight:600,cursor:"pointer",transition:"all .15s",
+                            background:betTypeFilter===f.id?"rgba(255,55,95,0.2)":"rgba(255,255,255,0.06)",
+                            color:betTypeFilter===f.id?IOS.pink:"rgba(255,255,255,0.5)",
+                            border:`1px solid ${betTypeFilter===f.id?IOS.pink+"60":"rgba(255,255,255,0.08)"}`,
+                          }}>
+                          {f.label}
                         </div>
                       ))}
                     </div>
@@ -2523,6 +2566,11 @@ export default function App() {
                       const textMatch = !q || bet.game.toLowerCase().includes(q) || bet.pick.toLowerCase().includes(q);
                       // Longshot straight mode: only show +400 or better
                       if(flexCategory==="longshot" && longshotMode==="straight") return textMatch && bet.impliedOdds >= 400;
+                      // Apply bet type filter
+                      if(betTypeFilter!=="all") {
+                        const catMap = {ml:"ml",spread:"spread",ou:"ou"};
+                        if(bet.category !== catMap[betTypeFilter]) return false;
+                      }
                       return textMatch;
                     }).map(bet=>{
                       const slot = flexPicks[activeFlexSlot];

@@ -11,8 +11,14 @@ export default async function handler(req, res) {
   }
 
   // Format: YYYY-MM-DDTHH:MM:SSZ (no milliseconds)
-  const now = new Date().toISOString().split(".")[0] + "Z";
-  const url = `https://api.the-odds-api.com/v4/sports/${sport}/odds/?apiKey=${apiKey}&regions=us&markets=h2h,spreads,totals&bookmakers=draftkings&dateFormat=iso&oddsFormat=american&commenceTimeFrom=${now}`;
+  const now = new Date();
+  const commenceFrom = now.toISOString().split(".")[0] + "Z";
+
+  // Only show games within the next 7 days (this week's games only)
+  const weekOut = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const commenceTo = weekOut.toISOString().split(".")[0] + "Z";
+
+  const url = `https://api.the-odds-api.com/v4/sports/${sport}/odds/?apiKey=${apiKey}&regions=us&markets=h2h,spreads,totals&bookmakers=draftkings&dateFormat=iso&oddsFormat=american&commenceTimeFrom=${commenceFrom}&commenceTimeTo=${commenceTo}`;
 
   try {
     const response = await fetch(url);
