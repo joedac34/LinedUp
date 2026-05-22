@@ -2134,6 +2134,9 @@ export default function App() {
                   <div className="nav-title-large">PICKLOCK</div>
                   <div style={{display:"flex",alignItems:"center",gap:12}}>
                     <div onClick={()=>setScreen("leagues")} style={{fontSize:13,fontWeight:600,color:IOS.blue,cursor:"pointer"}}>All Leagues</div>
+                    <div onClick={()=>setScreen("chat")} style={{width:34,height:34,borderRadius:50,background:"rgba(255,255,255,0.08)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,cursor:"pointer"}}>
+                      💬
+                    </div>
                     <div onClick={()=>setScreen("profile")} style={{width:34,height:34,borderRadius:50,background:`linear-gradient(135deg,${IOS.blue},${IOS.indigo})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer"}}>
                       {(userProfile?.username?.[0]||user?.email?.[0]||"J").toUpperCase()}
                     </div>
