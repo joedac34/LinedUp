@@ -872,6 +872,16 @@ export default function App() {
   const [advancingWeek,    setAdvancingWeek]    = useState(false);
   const [creatingLeague,  setCreatingLeague]  = useState(false);
 
+  const shareInvite = async (code, leagueName) => {
+    const text = `Join my PickLock league "${leagueName}"! Use invite code: ${code} 🔒`;
+    if(navigator.share) {
+      try { await navigator.share({ title: "Join my PickLock League", text }); return; } catch(e) {}
+    }
+    try { await navigator.clipboard.writeText(code); alert("Invite code copied! ✓"); } catch(e) {
+      alert(`Invite code: ${code}`);
+    }
+  };
+
   const createLeague = async (name, sportId) => {
     if(!user||!name||!sportId) return;
     setCreatingLeague(true);
@@ -3004,7 +3014,17 @@ export default function App() {
                     {activeLeague.isCommissioner && (
                       <div style={{marginTop:8,background:"rgba(10,132,255,0.1)",borderRadius:14,padding:"14px 20px",border:`1px solid ${IOS.blue}30`,width:"100%",maxWidth:280}}>
                         <div style={{fontSize:11,fontWeight:700,letterSpacing:1.5,textTransform:"uppercase",color:IOS.blue,marginBottom:6}}>Invite Code</div>
-                        <div style={{fontSize:28,fontWeight:800,letterSpacing:5,color:"#fff"}}>{activeLeague.invite_code||activeLeague.inviteCode}</div>
+                        <div style={{fontSize:28,fontWeight:800,letterSpacing:5,color:"#fff",marginBottom:12}}>{activeLeague.invite_code||activeLeague.inviteCode}</div>
+                        <div style={{display:"flex",gap:8}}>
+                          <button onClick={()=>shareInvite(activeLeague.invite_code||activeLeague.inviteCode, activeLeague.name)}
+                            style={{flex:1,background:IOS.blue,border:"none",borderRadius:10,padding:"10px",fontFamily:"Manrope,sans-serif",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>
+                            📤 Share
+                          </button>
+                          <button onClick={async()=>{const c=activeLeague.invite_code||activeLeague.inviteCode;try{await navigator.clipboard.writeText(c);alert("Copied! ✓");}catch(e){alert(c);}}}
+                            style={{flex:1,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:10,padding:"10px",fontFamily:"Manrope,sans-serif",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>
+                            📋 Copy
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -3256,6 +3276,16 @@ export default function App() {
                         <div style={{background:IOS.bg3,borderRadius:16,padding:"20px 24px",marginBottom:20,border:`1px solid ${IOS.blue}30`}}>
                           <div style={{fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:IOS.blue,marginBottom:8}}>Invite Code</div>
                           <div style={{fontSize:40,fontWeight:800,letterSpacing:6,color:"#fff"}}>{newLeagueCreated.invite_code}</div>
+                          <div style={{display:"flex",gap:10,marginTop:16}}>
+                            <button onClick={()=>shareInvite(newLeagueCreated.invite_code, newLeagueCreated.name)}
+                              style={{flex:1,background:IOS.blue,border:"none",borderRadius:12,padding:"12px",fontFamily:"Manrope,sans-serif",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer"}}>
+                              📤 Share Invite
+                            </button>
+                            <button onClick={async()=>{try{await navigator.clipboard.writeText(newLeagueCreated.invite_code);alert("Copied! ✓");}catch(e){alert(newLeagueCreated.invite_code);}}}
+                              style={{flex:1,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:12,padding:"12px",fontFamily:"Manrope,sans-serif",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer"}}>
+                              📋 Copy Code
+                            </button>
+                          </div>
                           <div style={{fontSize:12,color:IOS.label3,marginTop:6}}>Share with friends to join</div>
                         </div>
                         <button onClick={()=>{
