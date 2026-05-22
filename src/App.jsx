@@ -2247,7 +2247,9 @@ export default function App() {
                     return (
                       <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 16px",borderBottom:`0.5px solid ${IOS.sep}`}}>
                         <div>
-                          <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:multColors[slot.mult],marginBottom:3}}>{slot.mult}× · {slot.bet.game}</div>
+                          <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:multColors[slot.mult],marginBottom:3}}>
+                            {slot.mult}× · {slot.category?{ml:"Moneyline",prop:"Prop",ou:"Over/Under",spread:"Spread",longshot:"Longshot"}[slot.category]||slot.category:"Pick"}
+                          </div>
                           <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>{slot.bet.pick}</div>
                         </div>
                         <div style={{fontSize:20,fontWeight:800,letterSpacing:-0.5,color:slot.bet.odds.startsWith("+")?IOS.green:IOS.blue}}>{slot.bet.odds}</div>
@@ -3523,40 +3525,46 @@ export default function App() {
                                 </div>
                                 <div style={{display:"flex",gap:6,flexShrink:0,marginLeft:10}}>
                                   <button onClick={async()=>{
-                                    const pts = parseFloat((pick.multiplier*(pick.implied_odds>0?pick.implied_odds/100:100/Math.abs(pick.implied_odds||110))*10).toFixed(1));
-                                    await supabase.from("picks").update({result:"W",points_earned:pts}).eq("id",pick.id);
-                                    // If this is a parlay leg, check if all legs won — if not, zero out points on all legs
-                                    const updatedPicks = weekPicks.map(p=>p.id===pick.id?{...p,result:"W",points_earned:pts}:p);
                                     if(pick.slot==="longshot") {
+                                      // Mark this leg as Win (no points yet)
+                                      await supabase.from("picks").update({result:"W",points_earned:0}).eq("id",pick.id);
+                                      const updatedPicks = weekPicks.map(p=>p.id===pick.id?{...p,result:"W",points_earned:0}:p);
+                                      // Check if ALL legs now won
                                       const parlayLegs = updatedPicks.filter(p=>p.user_id===pick.user_id&&p.multiplier===pick.multiplier&&p.slot==="longshot");
                                       const allWon = parlayLegs.every(p=>p.result==="W");
-                                      const anyLost = parlayLegs.some(p=>p.result==="L");
-                                      if(anyLost) {
-                                        // Zero out all legs since parlay is busted
-                                        for(const leg of parlayLegs) {
-                                          await supabase.from("picks").update({points_earned:0}).eq("id",leg.id);
-                                        }
-                                        setWeekPicks(prev=>prev.map(p=>p.user_id===pick.user_id&&p.multiplier===pick.multiplier&&p.slot==="longshot"?{...p,points_earned:0}:p.id===pick.id?{...p,result:"W"}:p));
-                                      } else if(allWon) {
-                                        setWeekPicks(updatedPicks);
+                                      if(allWon) {
+                                        // Calculate parlay combined odds decimal
+                                        const dec = parlayLegs.reduce((acc,p)=>{
+                                          const d = p.implied_odds>0?(p.implied_odds/100)+1:(100/Math.abs(p.implied_odds||110))+1;
+                                          return acc*d;
+                                        },1);
+                                        const totalPts = parseFloat((pick.multiplier*(dec-1)*10).toFixed(1));
+                                        // Award points to FIRST leg only (represents whole parlay)
+                                        await supabase.from("picks").update({points_earned:totalPts}).eq("id",parlayLegs[0].id);
+                                        setWeekPicks(updatedPicks.map(p=>p.id===parlayLegs[0].id?{...p,points_earned:totalPts}:p));
                                       } else {
                                         setWeekPicks(updatedPicks);
                                       }
                                     } else {
-                                      setWeekPicks(updatedPicks);
+                                      const pts = parseFloat((pick.multiplier*(pick.implied_odds>0?pick.implied_odds/100:100/Math.abs(pick.implied_odds||110))*10).toFixed(1));
+                                      await supabase.from("picks").update({result:"W",points_earned:pts}).eq("id",pick.id);
+                                      setWeekPicks(prev=>prev.map(p=>p.id===pick.id?{...p,result:"W",points_earned:pts}:p));
                                     }
                                     fetchStandings(activeLeagueId);
                                   }} style={{padding:"7px 14px",borderRadius:8,border:"none",background:pick.result==="W"?IOS.green:"rgba(48,209,88,0.12)",color:pick.result==="W"?"#000":IOS.green,fontSize:12,fontWeight:700,cursor:"pointer"}}>✓ Win</button>
                                   <button onClick={async()=>{
-                                    await supabase.from("picks").update({result:"L",points_earned:0}).eq("id",pick.id);
-                                    // If parlay leg loses, zero out ALL legs of this parlay in one query
                                     if(pick.slot==="longshot") {
-                                      await supabase.from("picks").update({points_earned:0})
+                                      // Mark ALL parlay legs as Loss and zero points
+                                      await supabase.from("picks").update({result:"L",points_earned:0})
                                         .eq("user_id", pick.user_id)
                                         .eq("multiplier", pick.multiplier)
                                         .eq("slot", "longshot");
-                                      setWeekPicks(prev=>prev.map(p=>p.user_id===pick.user_id&&p.multiplier===pick.multiplier&&p.slot==="longshot"?{...p,points_earned:0}:p.id===pick.id?{...p,result:"L",points_earned:0}:p));
+                                      setWeekPicks(prev=>prev.map(p=>
+                                        p.user_id===pick.user_id&&p.multiplier===pick.multiplier&&p.slot==="longshot"
+                                          ? {...p,result:"L",points_earned:0} : p
+                                      ));
                                     } else {
+                                      await supabase.from("picks").update({result:"L",points_earned:0}).eq("id",pick.id);
                                       setWeekPicks(prev=>prev.map(p=>p.id===pick.id?{...p,result:"L",points_earned:0}:p));
                                     }
                                     fetchStandings(activeLeagueId);
