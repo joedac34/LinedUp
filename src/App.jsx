@@ -1382,13 +1382,13 @@ export default function App() {
     *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
     ::-webkit-scrollbar{display:none;}
 
-    .phone{width:390px;min-height:844px;background:#000;position:relative;overflow:hidden;display:flex;flex-direction:column;font-family:'Manrope',system-ui,-apple-system,sans-serif;color:#fff;-webkit-font-smoothing:antialiased;}
+    .phone{width:390px;min-height:844px;background:#000;position:relative;overflow:hidden;display:flex;flex-direction:column;font-family:'Manrope',system-ui,-apple-system,sans-serif;color:#fff;-webkit-font-smoothing:antialiased;padding-top:env(safe-area-inset-top,0px);box-sizing:border-box;}
 
     /* iOS Status Bar */
 
 
     /* Large Title Navigation (iOS style) */
-    .nav-header{padding:0 20px 12px;position:relative;z-index:5;}
+    .nav-header{padding:env(safe-area-inset-top,44px) 20px 12px;position:relative;z-index:5;background:#000;}
     .nav-header.large{padding-bottom:8px;}
     .nav-title-small{font-size:17px;font-weight:600;letter-spacing:-0.4px;color:#fff;text-align:center;padding:12px 0 8px;}
     .nav-title-large{font-size:34px;font-weight:700;letter-spacing:-0.5px;color:#fff;line-height:1.1;}
@@ -1791,6 +1791,18 @@ export default function App() {
       )}
 
       {user && <div className="phone">
+        {/* Status bar safe area cover — blends iPhone time/battery into app */}
+        <div style={{
+          position:"fixed",
+          top:0,
+          left:"50%",
+          transform:"translateX(-50%)",
+          width:390,
+          height:"env(safe-area-inset-top, 44px)",
+          background:"#000",
+          zIndex:999,
+          pointerEvents:"none",
+        }}/>
 
         {/* ══ POWER-UP MODAL ══ */}
         {showPUModal && (
