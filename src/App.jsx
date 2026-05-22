@@ -3698,25 +3698,6 @@ export default function App() {
                           </div>
                         </div>
                         {memberData.picks.map((pick,pIdx)=>{
-                    const slotColors={ml:IOS.blue,prop:IOS.yellow,ou:IOS.orange,spread:IOS.green,longshot:IOS.pink};
-                    const memberTotal = memberData.picks.filter(p=>p.result==="W").reduce((sum,p)=>{
-                      const dec = p.implied_odds ? (p.implied_odds>0?p.implied_odds/100:100/Math.abs(p.implied_odds)) : 0.91;
-                      return sum + parseFloat((p.multiplier*dec*10).toFixed(1));
-                    },0).toFixed(1);
-                    const isYou = uid === user?.id;
-                    return (
-                      <div key={uid} style={{margin:"0 16px 12px",background:IOS.bg2,borderRadius:14,overflow:"hidden",border:"1px solid rgba(255,255,255,0.07)"}}>
-                        <div style={{padding:"12px 14px",borderBottom:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.02)"}}>
-                          <div>
-                            <div style={{fontSize:15,fontWeight:700,color:isYou?IOS.blue:"#fff"}}>{memberData.name}{isYou?" (You)":""}</div>
-                            <div style={{fontSize:11,color:IOS.label3,marginTop:1}}>Wk {activeLeague.current_week||1} · {memberData.picks.filter(p=>p.result!=="pending").length}/{memberData.picks.length} graded</div>
-                          </div>
-                          <div style={{textAlign:"right"}}>
-                            <div style={{fontSize:16,fontWeight:800,color:IOS.green,letterSpacing:-0.3}}>{memberTotal}pts</div>
-                            <div style={{fontSize:10,color:IOS.label3}}>so far</div>
-                          </div>
-                        </div>
-                        {memberData.picks.map((pick,pIdx)=>{
                           const col=slotColors[pick.slot]||IOS.blue;
                           const isPending=pick.result==="pending";
                           return (
@@ -3733,20 +3714,16 @@ export default function App() {
                                 <div style={{display:"flex",gap:6,flexShrink:0,marginLeft:10}}>
                                   <button onClick={async()=>{
                                     if(pick.slot==="longshot"||pick.slot?.startsWith("longshot_")) {
-                                      // Mark this leg as Win (no points yet)
                                       await supabase.from("picks").update({result:"W",points_earned:0}).eq("id",pick.id);
                                       const updatedPicks = weekPicks.map(p=>p.id===pick.id?{...p,result:"W",points_earned:0}:p);
-                                      // Check if ALL legs now won
-                                      const parlayLegs = updatedPicks.filter(p=>p.user_id===pick.user_id&&p.multiplier===pick.multiplier&&p.slot==="longshot"||p.slot?.startsWith("longshot_"));
+                                      const parlayLegs = updatedPicks.filter(p=>p.user_id===pick.user_id&&p.multiplier===pick.multiplier&&(p.slot==="longshot"||p.slot?.startsWith("longshot_")));
                                       const allWon = parlayLegs.every(p=>p.result==="W");
                                       if(allWon) {
-                                        // Calculate parlay combined odds decimal
                                         const dec = parlayLegs.reduce((acc,p)=>{
                                           const d = p.implied_odds>0?(p.implied_odds/100)+1:(100/Math.abs(p.implied_odds||110))+1;
                                           return acc*d;
                                         },1);
                                         const totalPts = parseFloat((pick.multiplier*(dec-1)*10).toFixed(1));
-                                        // Award points to FIRST leg only (represents whole parlay)
                                         await supabase.from("picks").update({points_earned:totalPts}).eq("id",parlayLegs[0].id);
                                         setWeekPicks(updatedPicks.map(p=>p.id===parlayLegs[0].id?{...p,points_earned:totalPts}:p));
                                       } else {
@@ -3761,13 +3738,10 @@ export default function App() {
                                   }} style={{padding:"7px 14px",borderRadius:8,border:"none",background:pick.result==="W"?IOS.green:"rgba(48,209,88,0.12)",color:pick.result==="W"?"#000":IOS.green,fontSize:12,fontWeight:700,cursor:"pointer"}}>✓ Win</button>
                                   <button onClick={async()=>{
                                     if(pick.slot==="longshot"||pick.slot?.startsWith("longshot_")) {
-                                      // Mark ALL parlay legs as Loss and zero points
                                       await supabase.from("picks").update({result:"L",points_earned:0})
-                                        .eq("user_id", pick.user_id)
-                                        .eq("multiplier", pick.multiplier)
-                                        .eq("slot", "longshot");
+                                        .eq("user_id", pick.user_id).eq("multiplier", pick.multiplier).eq("slot", "longshot");
                                       setWeekPicks(prev=>prev.map(p=>
-                                        p.user_id===pick.user_id&&p.multiplier===pick.multiplier&&p.slot==="longshot"||p.slot?.startsWith("longshot_")
+                                        p.user_id===pick.user_id&&p.multiplier===pick.multiplier&&(p.slot==="longshot"||p.slot?.startsWith("longshot_"))
                                           ? {...p,result:"L",points_earned:0} : p
                                       ));
                                     } else {
@@ -3787,9 +3761,6 @@ export default function App() {
                               </div>
                             </div>
                           );
-                        })}
-                      </div>
-                    );
                         })}
                         {/* Mark remaining as Loss button */}
                         {pendingCount>0&&(
