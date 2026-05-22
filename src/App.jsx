@@ -687,18 +687,23 @@ export default function App() {
         });
       });
 
-      // Keep hardcoded props (API doesn't return player props on free tier)
-      const staticProps = sport.bets.prop;
+      // Fetch live player props from separate endpoint
+      let prop = sport.bets.prop; // fallback to hardcoded
+      try {
+        const propsRes = await fetch(`/api/props?sport=${sportKey}`);
+        if(propsRes.ok) {
+          const propsPayload = await propsRes.json();
+          if(propsPayload.props && propsPayload.props.length > 0) {
+            prop = propsPayload.props;
+          }
+        }
+      } catch(e) {
+        console.warn("Props fetch failed, using hardcoded:", e);
+      }
 
       setLiveOdds(prev => ({
         ...prev,
-        [sportId]: {
-          ml,
-          spread,
-          ou,
-          longshot,
-          prop: staticProps,
-        }
+        [sportId]: { ml, spread, ou, longshot, prop }
       }));
 
     } catch(e) {
