@@ -3799,14 +3799,15 @@ export default function App() {
                       {/* Submit Picks button */}
                       <div style={{padding:"10px 14px",borderTop:`0.5px solid ${IOS.sep}`}}>
                         <button onClick={async()=>{
-                          // Recalculate points_earned for all graded picks for this user and push to DB
-                          const userPicks = memberData.picks;
-                          // Handle parlay legs grouped by multiplier
+                          // Use current weekPicks state (already updated by Win/Loss button clicks)
+                          const userPicks = weekPicks.filter(p=>p.user_id===uid);
+                          // Group by multiplier
                           const multGroups = {};
                           userPicks.forEach(p=>{
                             if(!multGroups[p.multiplier]) multGroups[p.multiplier]=[];
                             multGroups[p.multiplier].push(p);
                           });
+                          // Write all results + points to DB sequentially (await each one)
                           for(const [mult, picks] of Object.entries(multGroups)){
                             const isParlay = picks[0]?.slot?.startsWith("longshot_");
                             if(isParlay){
@@ -3818,23 +3819,26 @@ export default function App() {
                                   return acc*d;
                                 },1);
                                 const totalPts = parseFloat((parseInt(mult)*(dec-1)*10).toFixed(1));
-                                await supabase.from("picks").update({points_earned:totalPts}).eq("id",picks[0].id);
-                                picks.slice(1).forEach(async p=>await supabase.from("picks").update({points_earned:0}).eq("id",p.id));
+                                for(const p of picks){
+                                  await supabase.from("picks").update({result:"W", points_earned:p.id===picks[0].id?totalPts:0}).eq("id",p.id);
+                                }
                               } else if(anyLost){
-                                picks.forEach(async p=>await supabase.from("picks").update({points_earned:0}).eq("id",p.id));
+                                for(const p of picks){
+                                  await supabase.from("picks").update({result:p.result==="W"?"W":"L", points_earned:0}).eq("id",p.id);
+                                }
                               }
                             } else {
                               for(const pick of picks){
                                 if(pick.result==="W"){
                                   const pts = parseFloat((pick.multiplier*(pick.implied_odds>0?pick.implied_odds/100:100/Math.abs(pick.implied_odds||110))*10).toFixed(1));
-                                  await supabase.from("picks").update({points_earned:pts}).eq("id",pick.id);
+                                  await supabase.from("picks").update({result:"W", points_earned:pts}).eq("id",pick.id);
                                 } else if(pick.result==="L"){
-                                  await supabase.from("picks").update({points_earned:0}).eq("id",pick.id);
+                                  await supabase.from("picks").update({result:"L", points_earned:0}).eq("id",pick.id);
                                 }
                               }
                             }
                           }
-                          // Refresh all dependent data so matchup + home update live
+                          // All writes done — now refresh
                           const week = activeLeague.current_week||activeLeague.week||1;
                           await fetchWeekPicks(activeLeague.id, week);
                           await fetchStandings(activeLeagueId);
