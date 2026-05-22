@@ -572,6 +572,10 @@ export default function App() {
   const [user,        setUser]        = useState(null);
   const [userProfile, setUserProfile] = useState(null); // { username, email }
   const [editingUsername, setEditingUsername] = useState(false);
+  const [showUsernamePrompt, setShowUsernamePrompt] = useState(false);
+  const [usernamePromptInput, setUsernamePromptInput] = useState("");
+  const [usernamePromptError, setUsernamePromptError] = useState("");
+  const [usernamePromptSaving, setUsernamePromptSaving] = useState(false);
   const [usernameInput,   setUsernameInput]   = useState("");
   const [usernameSaving,  setUsernameSaving]  = useState(false);
   const [usernameError,   setUsernameError]   = useState("");
@@ -1070,7 +1074,14 @@ export default function App() {
 
   const fetchUserProfile = async (uid) => {
     const {data} = await supabase.from("users").select("id,username,email").eq("id",uid).maybeSingle();
-    if(data) setUserProfile(data);
+    if(data) {
+      setUserProfile(data);
+      // Show username prompt if no username set yet
+      if(!data.username) setShowUsernamePrompt(true);
+    } else {
+      // No user record yet — show prompt
+      setShowUsernamePrompt(true);
+    }
   };
 
   const fetchAllMyStats = async (uid) => {
@@ -2013,6 +2024,42 @@ export default function App() {
                 {!spinning&&<div onClick={()=>setShowWheel(false)} style={{marginTop:16,fontSize:15,color:IOS.label3,cursor:"pointer"}}>Cancel</div>}
               </>
             )}
+          </div>
+        )}
+
+        {/* ══ USERNAME PROMPT MODAL ══ */}
+        {showUsernamePrompt && (
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
+            <div style={{background:IOS.bg2,borderRadius:24,padding:28,width:"100%",maxWidth:340,boxShadow:"0 20px 60px rgba(0,0,0,0.5)"}}>
+              <div style={{fontSize:32,textAlign:"center",marginBottom:8}}>👋</div>
+              <div style={{fontSize:22,fontWeight:800,color:"#fff",textAlign:"center",marginBottom:6}}>Welcome to PickLock</div>
+              <div style={{fontSize:14,color:IOS.label3,textAlign:"center",marginBottom:24,lineHeight:1.5}}>Set a username so your league mates can find you and see your picks.</div>
+              <input
+                value={usernamePromptInput}
+                onChange={e=>{setUsernamePromptInput(e.target.value);setUsernamePromptError("");}}
+                placeholder="Choose a username..."
+                autoFocus
+                style={{width:"100%",background:"#1C1C1E",border:`1.5px solid ${usernamePromptError?IOS.red:IOS.blue}`,borderRadius:12,padding:"12px 14px",color:"#fff",fontSize:16,fontFamily:"Manrope,sans-serif",outline:"none",marginBottom:8,boxSizing:"border-box"}}
+              />
+              {usernamePromptError && <div style={{fontSize:12,color:IOS.red,marginBottom:8}}>{usernamePromptError}</div>}
+              <div style={{fontSize:11,color:IOS.label3,marginBottom:20}}>Letters, numbers, and underscores only. Min 3 characters.</div>
+              <button onClick={async()=>{
+                const val = usernamePromptInput.trim();
+                if(!val){setUsernamePromptError("Please enter a username");return;}
+                if(val.length<3){setUsernamePromptError("Min 3 characters");return;}
+                if(!/^[a-zA-Z0-9_]+$/.test(val)){setUsernamePromptError("Letters, numbers, and _ only");return;}
+                setUsernamePromptSaving(true);
+                const {data:existing} = await supabase.from("users").select("id").eq("username",val).maybeSingle();
+                if(existing && existing.id!==user.id){setUsernamePromptError("That username is taken");setUsernamePromptSaving(false);return;}
+                await supabase.from("users").upsert({id:user.id,email:user.email,username:val},{onConflict:"id"});
+                setUserProfile(prev=>({...prev,username:val}));
+                setShowUsernamePrompt(false);
+                setUsernamePromptSaving(false);
+              }} style={{width:"100%",background:usernamePromptSaving?"rgba(255,255,255,0.1)":IOS.blue,border:"none",borderRadius:12,padding:"14px",fontSize:16,fontWeight:700,color:usernamePromptSaving?"rgba(255,255,255,0.3)":"#fff",cursor:usernamePromptSaving?"default":"pointer",fontFamily:"Manrope,sans-serif",marginBottom:10}}>
+                {usernamePromptSaving?"Saving...":"Set Username"}
+              </button>
+              <div onClick={()=>setShowUsernamePrompt(false)} style={{textAlign:"center",fontSize:13,color:IOS.label3,cursor:"pointer"}}>Skip for now</div>
+            </div>
           </div>
         )}
 
