@@ -4287,6 +4287,23 @@ export default function App() {
                   ))}
                 </div>
               )}
+
+              {/* Sign Out */}
+              <div style={{padding:"8px 16px 32px"}}>
+                <button onClick={async()=>{
+                  await supabase.auth.signOut();
+                  setUser(null);
+                  setUserProfile(null);
+                  setRealLeagues([]);
+                  setActiveLeagueId(null);
+                  setSavedPicks(null);
+                  setFlexPicks(EMPTY_FLEX);
+                  setScreen("home");
+                }} style={{width:"100%",background:"rgba(255,59,48,0.1)",border:"1px solid rgba(255,59,48,0.2)",borderRadius:12,padding:"14px",fontSize:15,fontWeight:600,color:IOS.red,cursor:"pointer",fontFamily:"Manrope,sans-serif"}}>
+                  Sign Out
+                </button>
+              </div>
+
             </div>
           </>
         )}
