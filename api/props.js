@@ -19,9 +19,41 @@ const PROP_MARKETS = {
     "batter_hits",
     "batter_home_runs",
     "batter_rbis",
+    "batter_runs_scored",
+    "batter_stolen_bases",
+    "batter_walks",
     "pitcher_strikeouts",
     "pitcher_hits_allowed",
+    "pitcher_walks",
   ],
+};
+
+// Human-readable market labels
+const MARKET_LABELS = {
+  // NFL
+  player_pass_yds:            "Pass Yds",
+  player_pass_tds:            "Pass TDs",
+  player_rush_yds:            "Rush Yds",
+  player_receptions:          "Receptions",
+  player_reception_yds:       "Rec Yds",
+  player_rush_tds:            "Rush TDs",
+  player_reception_tds:       "Rec TDs",
+  // NBA
+  player_points:              "Points",
+  player_rebounds:            "Rebounds",
+  player_assists:             "Assists",
+  player_threes:              "3-Pointers",
+  player_points_rebounds_assists: "Pts+Reb+Ast",
+  // MLB
+  batter_hits:                "Hits",
+  batter_home_runs:           "Home Runs",
+  batter_rbis:                "RBIs",
+  batter_runs_scored:         "Runs Scored",
+  batter_stolen_bases:        "Stolen Bases",
+  batter_walks:               "Walks",
+  pitcher_strikeouts:         "Strikeouts",
+  pitcher_hits_allowed:       "Hits Allowed",
+  pitcher_walks:              "Walks Allowed",
 };
 
 export default async function handler(req, res) {
@@ -69,12 +101,14 @@ export default async function handler(req, res) {
         if (!dk) continue;
 
         dk.markets?.forEach(market => {
+          const marketLabel = MARKET_LABELS[market.key] || market.key;
           market.outcomes?.forEach((outcome, oi) => {
-            // outcome.name = player name, outcome.description = over/under label
             const american = outcome.price >= 0 ? `+${outcome.price}` : `${outcome.price}`;
-            const label = outcome.description
-              ? `${outcome.name} ${outcome.description} ${outcome.point}`
-              : `${outcome.name} ${outcome.point ?? ""}`.trim();
+            // outcome.description = "Over" | "Under", outcome.name = player name, outcome.point = line
+            const direction = outcome.description || "";
+            const line = outcome.point != null ? outcome.point : "";
+            // e.g. "Trea Turner Over 1.5 Hits" or "Bryce Harper Under 0.5 Home Runs"
+            const label = `${outcome.name} ${direction} ${line} ${marketLabel}`.replace(/\s+/g, " ").trim();
 
             props.push({
               id: `prop_${event.id}_${market.key}_${oi}`,
@@ -87,7 +121,6 @@ export default async function handler(req, res) {
           });
         });
       } catch (e) {
-        // skip failed event, continue
         continue;
       }
     }
