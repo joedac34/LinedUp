@@ -1328,10 +1328,11 @@ export default function App() {
     fetchStandings(activeLeagueId);
     fetchLeagueTrophies(activeLeagueId);
     const lg2 = realLeagues.find(l=>l.id===activeLeagueId);
+    // Always fetch odds even if lg2 not loaded yet — use activeLeague sport
+    fetchLiveOdds((lg2?.sport || activeLeague?.sport || "nfl"));
     if(lg2) {
       const week = lg2.current_week||lg2.week||1;
       fetchMyPicks(activeLeagueId, week, user.id);
-      fetchLiveOdds(lg2.sport||"nfl");
       fetchSchedule(activeLeagueId, user.id);
       fetchLeaguePowerUps(activeLeagueId, user.id);
       // Restore saved picks from localStorage for this specific league+week
