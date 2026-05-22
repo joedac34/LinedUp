@@ -3796,6 +3796,54 @@ export default function App() {
                             </button>
                           </div>
                         )}
+                      {/* Submit Picks button */}
+                      <div style={{padding:"10px 14px",borderTop:`0.5px solid ${IOS.sep}`}}>
+                        <button onClick={async()=>{
+                          // Recalculate points_earned for all graded picks for this user and push to DB
+                          const userPicks = memberData.picks;
+                          // Handle parlay legs grouped by multiplier
+                          const multGroups = {};
+                          userPicks.forEach(p=>{
+                            if(!multGroups[p.multiplier]) multGroups[p.multiplier]=[];
+                            multGroups[p.multiplier].push(p);
+                          });
+                          for(const [mult, picks] of Object.entries(multGroups)){
+                            const isParlay = picks[0]?.slot?.startsWith("longshot_");
+                            if(isParlay){
+                              const allWon = picks.every(p=>p.result==="W");
+                              const anyLost = picks.some(p=>p.result==="L");
+                              if(allWon){
+                                const dec = picks.reduce((acc,p)=>{
+                                  const d = p.implied_odds>0?(p.implied_odds/100)+1:(100/Math.abs(p.implied_odds||110))+1;
+                                  return acc*d;
+                                },1);
+                                const totalPts = parseFloat((parseInt(mult)*(dec-1)*10).toFixed(1));
+                                await supabase.from("picks").update({points_earned:totalPts}).eq("id",picks[0].id);
+                                picks.slice(1).forEach(async p=>await supabase.from("picks").update({points_earned:0}).eq("id",p.id));
+                              } else if(anyLost){
+                                picks.forEach(async p=>await supabase.from("picks").update({points_earned:0}).eq("id",p.id));
+                              }
+                            } else {
+                              for(const pick of picks){
+                                if(pick.result==="W"){
+                                  const pts = parseFloat((pick.multiplier*(pick.implied_odds>0?pick.implied_odds/100:100/Math.abs(pick.implied_odds||110))*10).toFixed(1));
+                                  await supabase.from("picks").update({points_earned:pts}).eq("id",pick.id);
+                                } else if(pick.result==="L"){
+                                  await supabase.from("picks").update({points_earned:0}).eq("id",pick.id);
+                                }
+                              }
+                            }
+                          }
+                          // Refresh all dependent data so matchup + home update live
+                          await fetchStandings(activeLeagueId);
+                          const week = activeLeague.current_week||activeLeague.week||1;
+                          const {data:fresh}=await supabase.from("picks").select("*").eq("league_id",activeLeague.id).eq("week",week);
+                          if(fresh) setWeekPicks(fresh);
+                          alert(memberData.name+"'s picks submitted!");
+                        }} style={{width:"100%",background:"linear-gradient(135deg,"+IOS.blue+","+IOS.indigo+")",border:"none",borderRadius:10,padding:"12px",fontFamily:"Manrope,sans-serif",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer",letterSpacing:-0.2}}>
+                          ✓ Submit Picks for {memberData.name}
+                        </button>
+                      </div>
                       </div>
                         );
                       })()}
