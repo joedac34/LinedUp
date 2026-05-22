@@ -3835,10 +3835,9 @@ export default function App() {
                             }
                           }
                           // Refresh all dependent data so matchup + home update live
-                          await fetchStandings(activeLeagueId);
                           const week = activeLeague.current_week||activeLeague.week||1;
-                          const {data:fresh}=await supabase.from("picks").select("*").eq("league_id",activeLeague.id).eq("week",week);
-                          if(fresh) setWeekPicks(fresh);
+                          await fetchWeekPicks(activeLeague.id, week);
+                          await fetchStandings(activeLeagueId);
                           alert(memberData.name+"'s picks submitted!");
                         }} style={{width:"100%",background:"linear-gradient(135deg,"+IOS.blue+","+IOS.indigo+")",border:"none",borderRadius:10,padding:"12px",fontFamily:"Manrope,sans-serif",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer",letterSpacing:-0.2}}>
                           ✓ Submit Picks for {memberData.name}
