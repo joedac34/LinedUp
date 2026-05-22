@@ -693,11 +693,11 @@ export default function App() {
       setLiveOdds(prev => ({
         ...prev,
         [sportId]: {
-          ml:       ml.length > 0       ? ml       : sport.bets.ml,
-          spread:   spread.length > 0   ? spread   : sport.bets.spread,
-          ou:       ou.length > 0       ? ou        : sport.bets.ou,
-          longshot: longshot.length > 0 ? longshot  : sport.bets.longshot,
-          prop:     staticProps,
+          ml,
+          spread,
+          ou,
+          longshot,
+          prop: staticProps,
         }
       }));
 
@@ -710,7 +710,7 @@ export default function App() {
   };
 
   // Use live odds if available, else fall back to hardcoded
-  const BETS = liveOdds[activeLeague.sport] || sport.bets;
+  const BETS = liveOdds[activeLeague.sport] || {ml:[],spread:[],ou:[],prop:sport.bets.prop||[],longshot:[]};
   const isLiveOdds = !!liveOdds[activeLeague.sport];
 
   const [picks,        setPicks]        = useState({ml:null,prop:null,ou:null,spread:null});
@@ -1052,7 +1052,7 @@ export default function App() {
       if(p.result==="W") {
         s.wins++;
         s.points += parseFloat(p.points_earned||0);
-        if(p.slot==="longshot") s.longshotPts += parseFloat(p.points_earned||0);
+        if(p.slot==="longshot"||p.slot?.startsWith("longshot_")) s.longshotPts += parseFloat(p.points_earned||0);
         s.streak = s.lastResult==="W" ? s.streak+1 : 1;
       } else {
         s.losses++;
@@ -1328,10 +1328,11 @@ export default function App() {
     fetchStandings(activeLeagueId);
     fetchLeagueTrophies(activeLeagueId);
     const lg2 = realLeagues.find(l=>l.id===activeLeagueId);
+    // Always fetch odds even if lg2 not loaded yet — use activeLeague sport
+    fetchLiveOdds((lg2?.sport || activeLeague?.sport || "nfl"));
     if(lg2) {
       const week = lg2.current_week||lg2.week||1;
       fetchMyPicks(activeLeagueId, week, user.id);
-      fetchLiveOdds(lg2.sport||"nfl");
       fetchSchedule(activeLeagueId, user.id);
       fetchLeaguePowerUps(activeLeagueId, user.id);
       // Restore saved picks from localStorage for this specific league+week
@@ -2540,8 +2541,16 @@ export default function App() {
                     </div>
                   )}
 
+                  {/* Loading state when odds not yet loaded */}
+                  {oddsLoading && flexCategory && (
+                    <div style={{padding:"32px 16px",textAlign:"center",color:IOS.label3}}>
+                      <div style={{width:24,height:24,borderRadius:"50%",border:`2px solid ${IOS.blue}`,borderTopColor:"transparent",animation:"spin 0.8s linear infinite",margin:"0 auto 10px"}}/>
+                      <div style={{fontSize:13}}>Loading live odds...</div>
+                    </div>
+                  )}
+
                   {/* Bet list */}
-                  {(flexCategory || flexPicks[activeFlexSlot]?.isParlay) && (
+                  {!oddsLoading && (flexCategory || flexPicks[activeFlexSlot]?.isParlay) && (
                     (flexPicks[activeFlexSlot]?.isParlay ? ALL_BETS : (BETS[flexCategory]||[])).filter(bet=>{
                       const q = pickSearch.toLowerCase().trim();
                       const textMatch = !q || bet.game.toLowerCase().includes(q) || bet.pick.toLowerCase().includes(q);
@@ -3020,23 +3029,23 @@ export default function App() {
                         .eq("league_id", activeLeague.id)
                         .eq("user_id", user.id)
                         .eq("week", week);
-                      if(existing && existing.length > 0) {
-                        // Always delete old picks silently when re-locking (user chose to lock, that's confirmation enough)
-                        await supabase.from("picks").delete()
-                          .eq("league_id", activeLeague.id)
-                          .eq("user_id", user.id)
-                          .eq("week", week);
-                      }
+                      // Always delete existing picks first to avoid unique constraint violations
+                      await supabase.from("picks").delete()
+                        .eq("league_id", activeLeague.id)
+                        .eq("user_id", user.id)
+                        .eq("week", week);
+
                       const picksToSave = [];
                       flexPicks.forEach((slot, slotIdx)=>{
                         if(!slot.mult) return;
                         const effectiveMult = activatedPUs[slotIdx]?.id==="double" ? slot.mult * 2 : slot.mult;
                         if(slot.isParlay) {
-                          slot.parlayLegs.forEach(b=>picksToSave.push({
+                          // Give each parlay leg a unique slot name to avoid constraint violations
+                          slot.parlayLegs.forEach((b, legIdx)=>picksToSave.push({
                             league_id: activeLeague.id,
                             user_id: user.id,
                             week,
-                            slot: "longshot",
+                            slot: `longshot_${legIdx}`,
                             multiplier: effectiveMult,
                             pick_name: b.pick,
                             odds: b.odds,
@@ -3723,12 +3732,12 @@ export default function App() {
                                 </div>
                                 <div style={{display:"flex",gap:6,flexShrink:0,marginLeft:10}}>
                                   <button onClick={async()=>{
-                                    if(pick.slot==="longshot") {
+                                    if(pick.slot==="longshot"||pick.slot?.startsWith("longshot_")) {
                                       // Mark this leg as Win (no points yet)
                                       await supabase.from("picks").update({result:"W",points_earned:0}).eq("id",pick.id);
                                       const updatedPicks = weekPicks.map(p=>p.id===pick.id?{...p,result:"W",points_earned:0}:p);
                                       // Check if ALL legs now won
-                                      const parlayLegs = updatedPicks.filter(p=>p.user_id===pick.user_id&&p.multiplier===pick.multiplier&&p.slot==="longshot");
+                                      const parlayLegs = updatedPicks.filter(p=>p.user_id===pick.user_id&&p.multiplier===pick.multiplier&&p.slot==="longshot"||p.slot?.startsWith("longshot_"));
                                       const allWon = parlayLegs.every(p=>p.result==="W");
                                       if(allWon) {
                                         // Calculate parlay combined odds decimal
@@ -3751,14 +3760,14 @@ export default function App() {
                                     fetchStandings(activeLeagueId);
                                   }} style={{padding:"7px 14px",borderRadius:8,border:"none",background:pick.result==="W"?IOS.green:"rgba(48,209,88,0.12)",color:pick.result==="W"?"#000":IOS.green,fontSize:12,fontWeight:700,cursor:"pointer"}}>✓ Win</button>
                                   <button onClick={async()=>{
-                                    if(pick.slot==="longshot") {
+                                    if(pick.slot==="longshot"||pick.slot?.startsWith("longshot_")) {
                                       // Mark ALL parlay legs as Loss and zero points
                                       await supabase.from("picks").update({result:"L",points_earned:0})
                                         .eq("user_id", pick.user_id)
                                         .eq("multiplier", pick.multiplier)
                                         .eq("slot", "longshot");
                                       setWeekPicks(prev=>prev.map(p=>
-                                        p.user_id===pick.user_id&&p.multiplier===pick.multiplier&&p.slot==="longshot"
+                                        p.user_id===pick.user_id&&p.multiplier===pick.multiplier&&p.slot==="longshot"||p.slot?.startsWith("longshot_")
                                           ? {...p,result:"L",points_earned:0} : p
                                       ));
                                     } else {
@@ -3789,10 +3798,10 @@ export default function App() {
                               if(!window.confirm(`Mark all ${pendingCount} pending picks as Loss?`)) return;
                               const pendingPicks = memberData.picks.filter(p=>p.result==="pending");
                               for(const pick of pendingPicks) {
-                                if(pick.slot==="longshot") {
+                                if(pick.slot==="longshot"||pick.slot?.startsWith("longshot_")) {
                                   await supabase.from("picks").update({result:"L",points_earned:0})
                                     .eq("user_id",pick.user_id).eq("multiplier",pick.multiplier).eq("slot","longshot");
-                                  setWeekPicks(prev=>prev.map(p=>p.user_id===pick.user_id&&p.multiplier===pick.multiplier&&p.slot==="longshot"?{...p,result:"L",points_earned:0}:p));
+                                  setWeekPicks(prev=>prev.map(p=>p.user_id===pick.user_id&&p.multiplier===pick.multiplier&&p.slot==="longshot"||p.slot?.startsWith("longshot_")?{...p,result:"L",points_earned:0}:p));
                                 } else {
                                   await supabase.from("picks").update({result:"L",points_earned:0}).eq("id",pick.id);
                                   setWeekPicks(prev=>prev.map(p=>p.id===pick.id?{...p,result:"L",points_earned:0}:p));
