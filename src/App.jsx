@@ -3807,7 +3807,8 @@ export default function App() {
                             if(!multGroups[p.multiplier]) multGroups[p.multiplier]=[];
                             multGroups[p.multiplier].push(p);
                           });
-                          // Write all results + points to DB sequentially (await each one)
+                          // Write all results + points to DB sequentially with error logging
+                          let errors = [];
                           for(const [mult, picks] of Object.entries(multGroups)){
                             const isParlay = picks[0]?.slot?.startsWith("longshot_");
                             if(isParlay){
@@ -3820,24 +3821,29 @@ export default function App() {
                                 },1);
                                 const totalPts = parseFloat((parseInt(mult)*(dec-1)*10).toFixed(1));
                                 for(const p of picks){
-                                  await supabase.from("picks").update({result:"W", points_earned:p.id===picks[0].id?totalPts:0}).eq("id",p.id);
+                                  const {error} = await supabase.from("picks").update({result:"W", points_earned:p.id===picks[0].id?totalPts:0}).eq("id",p.id);
+                                  if(error) errors.push(`id:${p.id} ${error.message}`);
                                 }
                               } else if(anyLost){
                                 for(const p of picks){
-                                  await supabase.from("picks").update({result:p.result==="W"?"W":"L", points_earned:0}).eq("id",p.id);
+                                  const {error} = await supabase.from("picks").update({result:p.result==="W"?"W":"L", points_earned:0}).eq("id",p.id);
+                                  if(error) errors.push(`id:${p.id} ${error.message}`);
                                 }
                               }
                             } else {
                               for(const pick of picks){
                                 if(pick.result==="W"){
                                   const pts = parseFloat((pick.multiplier*(pick.implied_odds>0?pick.implied_odds/100:100/Math.abs(pick.implied_odds||110))*10).toFixed(1));
-                                  await supabase.from("picks").update({result:"W", points_earned:pts}).eq("id",pick.id);
+                                  const {error} = await supabase.from("picks").update({result:"W", points_earned:pts}).eq("id",pick.id);
+                                  if(error) errors.push(`id:${pick.id} ${error.message}`);
                                 } else if(pick.result==="L"){
-                                  await supabase.from("picks").update({result:"L", points_earned:0}).eq("id",pick.id);
+                                  const {error} = await supabase.from("picks").update({result:"L", points_earned:0}).eq("id",pick.id);
+                                  if(error) errors.push(`id:${pick.id} ${error.message}`);
                                 }
                               }
                             }
                           }
+
                           // All writes done — now refresh
                           const week = activeLeague.current_week||activeLeague.week||1;
                           await fetchWeekPicks(activeLeague.id, week);
