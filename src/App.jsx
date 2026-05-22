@@ -609,7 +609,7 @@ export default function App() {
     // Cache for 10 minutes
     try {
       const stored = localStorage.getItem(`odds_fetched_${sportId}`);
-      if(stored && Date.now() - parseInt(stored) < 10 * 60 * 1000) return;
+      if(stored && Date.now() - parseInt(stored) < 5 * 60 * 1000) return;
     } catch(e) {}
 
     setOddsLoading(true);
@@ -621,7 +621,8 @@ export default function App() {
       // Fetch h2h + spreads + totals in one call
       const res = await fetch(`/api/odds?sport=${sportKey}`);
       if(!res.ok) throw new Error(`API error ${res.status}`);
-      const games = await res.json();
+      const payload = await res.json();
+      const games = payload.games || payload; // handle both formats
 
       const ml = [], spread = [], ou = [], longshot = [];
 
@@ -2124,11 +2125,26 @@ export default function App() {
                 );
               })()}
 
-              {/* Timer */}
-              <div className="countdown-bar">
-                <div className="cd-label">Lineup locks in</div>
-                <div className="cd-time">{pad(timeLeft.h)}:{pad(timeLeft.m)}:{pad(timeLeft.s)}</div>
-              </div>
+              {/* Games available widget — replaces countdown timer */}
+              {(()=>{
+                const sportBets = liveOdds[activeLeague.sport];
+                const gameCount = sportBets ? [...new Set([
+                  ...(sportBets.ml||[]).map(b=>b.game),
+                  ...(sportBets.spread||[]).map(b=>b.game),
+                ])].length : 0;
+                const isLive = !!sportBets;
+                return (
+                  <div className="countdown-bar" style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                    <div>
+                      <div className="cd-label">Pregame bets available</div>
+                      <div style={{fontSize:10,color:IOS.label3,marginTop:2}}>{isLive?"🔴 Live DK · refreshes every 5 min":"Static odds"}</div>
+                    </div>
+                    <div className="cd-time" style={{fontSize:isLive?28:18,color:isLive?IOS.green:IOS.label3}}>
+                      {isLive?gameCount:"—"}
+                    </div>
+                  </div>
+                );
+              })()}
               {savedPicks
                 ? <button className="ios-btn" style={{background:IOS.green,color:"#000",marginBottom:6}} onClick={()=>setScreen("picks")}>✓ Slip Locked — View or Edit</button>
                 : <button className="ios-btn" style={{background:sport.color,color:"#fff",marginBottom:6}} onClick={()=>setScreen("picks")}>{sport.icon} Build Your {sport.label} Slip</button>
