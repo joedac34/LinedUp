@@ -609,7 +609,7 @@ export default function App() {
     // Cache for 10 minutes
     try {
       const stored = localStorage.getItem(`odds_fetched_${sportId}`);
-      if(stored && Date.now() - parseInt(stored) < 5 * 60 * 1000) return;
+      if(stored && Date.now() - parseInt(stored) < 15 * 60 * 1000) return;
     } catch(e) {}
 
     setOddsLoading(true);
