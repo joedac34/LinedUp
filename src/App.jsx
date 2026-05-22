@@ -1538,9 +1538,9 @@ export default function App() {
     .sheet-hdr-sub{font-size:13px;color:${IOS.label3};margin-top:2px;}
     .sheet-done{font-size:17px;font-weight:600;color:${IOS.blue};cursor:pointer;padding:4px 0;}
     .sheet-search-wrap{padding:10px 16px;background:#1C1C1E;border-bottom:0.5px solid ${IOS.sep};position:sticky;top:60px;z-index:1;}
-    .sheet-search{width:100%;background:rgba(255,255,255,0.08);border:none;border-radius:10px;padding:9px 14px 9px 36px;font-family:'Manrope',sans-serif;font-size:15px;color:#fff;outline:none;}
+    .sheet-search{width:100%;background:rgba(255,255,255,0.08);border:none;border-radius:10px;padding:9px 14px 9px 40px;font-family:'Manrope',sans-serif;font-size:15px;color:#fff;outline:none;}
     .sheet-search::placeholder{color:rgba(255,255,255,0.3);}
-    .sheet-search-icon{position:absolute;left:28px;top:50%;transform:translateY(-50%);font-size:14px;color:rgba(255,255,255,0.3);pointer-events:none;}
+    .sheet-search-icon{position:absolute;left:30px;top:50%;transform:translateY(-50%);font-size:13px;color:rgba(255,255,255,0.3);pointer-events:none;}
     .sheet-count{font-size:11px;color:${IOS.label3};padding:8px 20px 4px;}
     .sheet-ls-bar{display:flex;align-items:center;justify-content:space-between;padding:10px 20px;background:rgba(255,55,95,0.08);border-bottom:0.5px solid rgba(255,55,95,0.15);}
     .bet-row{display:flex;align-items:center;padding:14px 20px;border-bottom:0.5px solid ${IOS.sep};cursor:pointer;min-height:64px;}
@@ -3619,7 +3619,22 @@ export default function App() {
                   <div style={{margin:"0 16px 24px"}}>
                     <div style={{fontSize:11,fontWeight:600,letterSpacing:1,textTransform:"uppercase",color:IOS.red,padding:"0 4px",marginBottom:6}}>Danger Zone</div>
                     <div style={{background:IOS.bg2,borderRadius:14,overflow:"hidden"}}>
-                      <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}}>
+                      <div onClick={async()=>{
+                        if(!window.confirm(`Delete "${activeLeague.name}" permanently? This cannot be undone. All picks, matchups and members will be removed.`)) return;
+                        // Delete all related data first
+                        await supabase.from("picks").delete().eq("league_id", activeLeague.id);
+                        await supabase.from("matchups").delete().eq("league_id", activeLeague.id);
+                        await supabase.from("league_members").delete().eq("league_id", activeLeague.id);
+                        await supabase.from("league_power_ups").delete().eq("league_id", activeLeague.id);
+                        // Delete the league itself
+                        const {error} = await supabase.from("leagues").delete().eq("id", activeLeague.id);
+                        if(error){ alert("Error deleting league: " + error.message); return; }
+                        // Reset local state
+                        setRealLeagues(prev => prev.filter(l => l.id !== activeLeague.id));
+                        setActiveLeagueId(null);
+                        setScreen("home");
+                        alert(`"${activeLeague.name}" has been deleted.`);
+                      }} style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}}>
                         <div style={{fontSize:15,fontWeight:600,color:IOS.red}}>End League</div>
                         <div style={{fontSize:16,color:IOS.label3}}>›</div>
                       </div>
