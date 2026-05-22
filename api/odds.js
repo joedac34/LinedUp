@@ -20,21 +20,21 @@ export default async function handler(req, res) {
     const remaining = response.headers.get("x-requests-remaining");
     const used = response.headers.get("x-requests-used");
 
-    // Deduplicate — only keep each team's NEXT game (earliest commence_time)
-    // Sort by commence_time first
+    // Only show next round of games (within 7 days of earliest game)
     if(Array.isArray(data)) {
       data.sort((a, b) => new Date(a.commence_time) - new Date(b.commence_time));
-      
-      // Find the earliest game date and only return games within 4 days of it
-      // This effectively returns just the next round of games
       if(data.length > 0) {
         const earliestTime = new Date(data[0].commence_time);
         const cutoff = new Date(earliestTime.getTime() + 7 * 24 * 60 * 60 * 1000);
         const filtered = data.filter(g => new Date(g.commence_time) <= cutoff);
+
+        // Server-side cache for 15 minutes — all users share the same cache
+        res.setHeader('Cache-Control', 's-maxage=900, stale-while-revalidate=60');
         return res.status(200).json({ games: filtered, remaining, used });
       }
     }
 
+    res.setHeader('Cache-Control', 's-maxage=900, stale-while-revalidate=60');
     res.status(200).json({ games: data, remaining, used });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch odds" });

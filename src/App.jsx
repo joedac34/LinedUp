@@ -612,10 +612,7 @@ export default function App() {
 
   const fetchLiveOdds = async (sportId) => {
     // Cache for 10 minutes
-    try {
-      const stored = localStorage.getItem(`odds_fetched_${sportId}`);
-      if(stored && Date.now() - parseInt(stored) < 15 * 60 * 1000) return;
-    } catch(e) {}
+
 
     setOddsLoading(true);
     setOddsError(false);
@@ -703,7 +700,7 @@ export default function App() {
           prop:     staticProps,
         }
       }));
-      try { localStorage.setItem(`odds_fetched_${sportId}`, Date.now().toString()); } catch(e) {}
+
     } catch(e) {
       console.error("Odds API error:", e);
       setOddsError(true);
@@ -2272,7 +2269,7 @@ export default function App() {
                   <div className="countdown-bar" style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                     <div>
                       <div className="cd-label">Pregame bets available</div>
-                      <div style={{fontSize:10,color:IOS.label3,marginTop:2}}>{isLive?"🔴 Live DK · refreshes every 5 min":"Static odds"}</div>
+                      <div style={{fontSize:10,color:IOS.label3,marginTop:2}}>{isLive?"🔴 Live DK · refreshes every 15 min":"Static odds"}</div>
                     </div>
                     <div className="cd-time" style={{fontSize:isLive?28:18,color:isLive?IOS.green:IOS.label3}}>
                       {isLive?gameCount:"—"}
