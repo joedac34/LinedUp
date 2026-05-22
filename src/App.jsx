@@ -1287,7 +1287,15 @@ export default function App() {
         table: "league_messages",
         filter: `league_id=eq.${leagueId}`,
       }, payload => {
-        setMessages(prev => [...prev, payload.new]);
+        setMessages(prev => {
+          // Avoid duplicates — remove any temp optimistic message with same content/user
+          const filtered = prev.filter(m => 
+            !(m.id?.toString().startsWith("temp_") && 
+              m.user_id===payload.new.user_id && 
+              m.message===payload.new.message)
+          );
+          return [...filtered, payload.new];
+        });
         setTimeout(()=>{if(chatRef.current)chatRef.current.scrollTop=chatRef.current.scrollHeight;},50);
       })
       .subscribe();
@@ -1404,14 +1412,26 @@ export default function App() {
   const sendMsg=async()=>{
     if(!chatMsg.trim()||!user||!activeLeague?.id) return;
     const msg = chatMsg.trim();
+    const username = userProfile?.username || user.email?.split("@")[0] || "Unknown";
     setChatMsg("");
+    // Optimistically add message to local state immediately
+    const optimistic = {
+      id: `temp_${Date.now()}`,
+      league_id: activeLeague.id,
+      user_id: user.id,
+      username,
+      message: msg,
+      created_at: new Date().toISOString(),
+    };
+    setMessages(prev=>[...prev, optimistic]);
+    setTimeout(()=>{if(chatRef.current)chatRef.current.scrollTop=chatRef.current.scrollHeight;},50);
+    // Then save to Supabase
     await supabase.from("league_messages").insert({
       league_id: activeLeague.id,
       user_id: user.id,
-      username: userProfile?.username || user.email?.split("@")[0] || "Unknown",
+      username,
       message: msg,
     });
-    setTimeout(()=>{if(chatRef.current)chatRef.current.scrollTop=chatRef.current.scrollHeight;},50);
   };
 
   const parlay=calcParlay(picks,lsBets,SLOTS);
