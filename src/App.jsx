@@ -3189,7 +3189,7 @@ export default function App() {
                 });
 
                 const multColors = {1:IOS.blue, 2:IOS.yellow, 3:IOS.orange, 4:IOS.green, 5:IOS.pink};
-                const slotLabels = {ml:"Moneyline", prop:"Prop", ou:"Over/Under", spread:"Spread", longshot:"Parlay"};
+                const slotLabels = {ml:"Moneyline", prop:"Prop", ou:"Over/Under", spread:"Spread", longshot:"Longshot"};
                 const rColor = r=>r==="W"?IOS.green:r==="L"?IOS.red:IOS.label3;
                 const rLabel = r=>r==="W"?"✓ Win":r==="L"?"✗ Loss":"● Pending";
 
@@ -3261,7 +3261,7 @@ export default function App() {
                       // Group by multiplier and show each slot
                       Object.entries(myPicksByMult).sort((a,b)=>a[0]-b[0]).map(([mult, picks])=>{
                         const col = multColors[parseInt(mult)] || IOS.blue;
-                        const isParlay = picks[0]?.slot==="longshot";
+                        const isParlay = picks[0]?.slot?.startsWith("longshot_");
                         const parlayLost = isParlay && picks.some(p=>p.result==="L");
                         const parlayWon = isParlay && picks.every(p=>p.result==="W");
                         const parlayPending = isParlay && !parlayLost && !parlayWon;
@@ -3326,7 +3326,7 @@ export default function App() {
                         return acc;
                       },{})).sort((a,b)=>a[0]-b[0]).map(([mult, picks])=>{
                         const col = multColors[parseInt(mult)] || IOS.blue;
-                        const isParlay = picks[0]?.slot==="longshot";
+                        const isParlay = picks[0]?.slot?.startsWith("longshot_");
                         return (
                           <div key={mult} style={{margin:"0 16px 8px",background:IOS.bg2,borderRadius:14,overflow:"hidden",border:`1px solid rgba(255,255,255,0.06)`}}>
                             <div style={{padding:"10px 14px",borderBottom:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
@@ -3713,10 +3713,11 @@ export default function App() {
                                 </div>
                                 <div style={{display:"flex",gap:6,flexShrink:0,marginLeft:10}}>
                                   <button onClick={async()=>{
-                                    if(pick.slot==="longshot"||pick.slot?.startsWith("longshot_")) {
+                                    if(pick.slot?.startsWith("longshot_")) {
+                                      // Parlay leg win
                                       await supabase.from("picks").update({result:"W",points_earned:0}).eq("id",pick.id);
                                       const updatedPicks = weekPicks.map(p=>p.id===pick.id?{...p,result:"W",points_earned:0}:p);
-                                      const parlayLegs = updatedPicks.filter(p=>p.user_id===pick.user_id&&p.multiplier===pick.multiplier&&(p.slot==="longshot"||p.slot?.startsWith("longshot_")));
+                                      const parlayLegs = updatedPicks.filter(p=>p.user_id===pick.user_id&&p.multiplier===pick.multiplier&&p.slot?.startsWith("longshot_"));
                                       const allWon = parlayLegs.every(p=>p.result==="W");
                                       if(allWon) {
                                         const dec = parlayLegs.reduce((acc,p)=>{
@@ -3730,6 +3731,7 @@ export default function App() {
                                         setWeekPicks(updatedPicks);
                                       }
                                     } else {
+                                      // Straight bet win (including straight longshot)
                                       const pts = parseFloat((pick.multiplier*(pick.implied_odds>0?pick.implied_odds/100:100/Math.abs(pick.implied_odds||110))*10).toFixed(1));
                                       await supabase.from("picks").update({result:"W",points_earned:pts}).eq("id",pick.id);
                                       setWeekPicks(prev=>prev.map(p=>p.id===pick.id?{...p,result:"W",points_earned:pts}:p));
@@ -3737,14 +3739,16 @@ export default function App() {
                                     fetchStandings(activeLeagueId);
                                   }} style={{padding:"7px 14px",borderRadius:8,border:"none",background:pick.result==="W"?IOS.green:"rgba(48,209,88,0.12)",color:pick.result==="W"?"#000":IOS.green,fontSize:12,fontWeight:700,cursor:"pointer"}}>✓ Win</button>
                                   <button onClick={async()=>{
-                                    if(pick.slot==="longshot"||pick.slot?.startsWith("longshot_")) {
+                                    if(pick.slot?.startsWith("longshot_")) {
+                                      // Parlay — mark ALL legs as loss
                                       await supabase.from("picks").update({result:"L",points_earned:0})
-                                        .eq("user_id", pick.user_id).eq("multiplier", pick.multiplier).eq("slot", "longshot");
+                                        .eq("user_id", pick.user_id).eq("multiplier", pick.multiplier);
                                       setWeekPicks(prev=>prev.map(p=>
-                                        p.user_id===pick.user_id&&p.multiplier===pick.multiplier&&(p.slot==="longshot"||p.slot?.startsWith("longshot_"))
+                                        p.user_id===pick.user_id&&p.multiplier===pick.multiplier&&p.slot?.startsWith("longshot_")
                                           ? {...p,result:"L",points_earned:0} : p
                                       ));
                                     } else {
+                                      // Straight bet (including straight longshot)
                                       await supabase.from("picks").update({result:"L",points_earned:0}).eq("id",pick.id);
                                       setWeekPicks(prev=>prev.map(p=>p.id===pick.id?{...p,result:"L",points_earned:0}:p));
                                     }
