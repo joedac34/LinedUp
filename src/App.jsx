@@ -2338,8 +2338,7 @@ export default function App() {
                   {(flexCategory || flexPicks[activeFlexSlot]?.isParlay) && (
                     <div className="sheet-search-wrap" style={{top:0,position:"relative"}}>
                       <div style={{position:"relative"}}>
-                        <span className="sheet-search-icon">🔍</span>
-                        <input className="sheet-search" placeholder="Search..." value={pickSearch} onChange={e=>setPickSearch(e.target.value)} autoFocus={false}/>
+                        <input className="sheet-search" placeholder="Search..." value={pickSearch} onChange={e=>setPickSearch(e.target.value)} autoFocus={false} style={{paddingLeft:14}}/>
                         {pickSearch&&<span onClick={()=>setPickSearch("")} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",fontSize:14,color:"rgba(255,255,255,0.4)",cursor:"pointer"}}>✕</span>}
                       </div>
                     </div>
