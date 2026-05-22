@@ -3654,7 +3654,17 @@ export default function App() {
                   <div style={{margin:"12px 16px",background:"rgba(10,132,255,0.08)",borderRadius:14,padding:"14px 16px",border:`1px solid ${IOS.blue}30`}}>
                     <div style={{fontSize:11,fontWeight:600,letterSpacing:1,textTransform:"uppercase",color:IOS.blue,marginBottom:6}}>Invite Code</div>
                     <div style={{fontSize:28,fontWeight:800,letterSpacing:4,color:"#fff",marginBottom:6}}>{activeLeague.inviteCode||activeLeague.invite_code}</div>
-                    <div style={{fontSize:12,color:IOS.label3}}>Share this code with friends to join</div>
+                    <div style={{fontSize:12,color:IOS.label3,marginBottom:12}}>Share this code with friends to join</div>
+                    <div style={{display:"flex",gap:8}}>
+                      <button onClick={()=>shareInvite(activeLeague.invite_code||activeLeague.inviteCode, activeLeague.name)}
+                        style={{flex:1,background:IOS.blue,border:"none",borderRadius:10,padding:"10px",fontFamily:"Manrope,sans-serif",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>
+                        📤 Share
+                      </button>
+                      <button onClick={async()=>{const c=activeLeague.invite_code||activeLeague.inviteCode;try{await navigator.clipboard.writeText(c);alert("Copied! ✓");}catch(e){alert(c);}}}
+                        style={{flex:1,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:10,padding:"10px",fontFamily:"Manrope,sans-serif",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>
+                        📋 Copy
+                      </button>
+                    </div>
                   </div>
                 </>
               )}
