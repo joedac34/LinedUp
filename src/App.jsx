@@ -1076,11 +1076,15 @@ export default function App() {
     const {data} = await supabase.from("users").select("id,username,email").eq("id",uid).maybeSingle();
     if(data) {
       setUserProfile(data);
-      // Show username prompt if no username set yet
-      if(!data.username) setShowUsernamePrompt(true);
+      // Only show prompt if no username AND account is older than 30 seconds
+      // This prevents the prompt from showing immediately after signup
+      if(!data.username) {
+        const createdAt = data.created_at ? new Date(data.created_at).getTime() : 0;
+        const ageSeconds = (Date.now() - createdAt) / 1000;
+        if(ageSeconds > 30) setShowUsernamePrompt(true);
+      }
     } else {
-      // No user record yet — show prompt
-      setShowUsernamePrompt(true);
+      // No user record yet — they just signed up, skip prompt
     }
   };
 
