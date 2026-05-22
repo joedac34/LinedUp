@@ -894,6 +894,7 @@ export default function App() {
       .from("matchups")
       .select("*")
       .eq("league_id", leagueId)
+      .or(`user1_id.eq.${userId},user2_id.eq.${userId}`)
       .order("week", {ascending: true});
     if(!data || !data.length) { setLiveSchedule([]); return; }
     const userIds = [...new Set([...data.map(m=>m.user1_id), ...data.map(m=>m.user2_id)])];
@@ -3133,21 +3134,29 @@ export default function App() {
                                 {isParlay ? `${picks.filter(p=>p.result==="W").length}/${picks.length} hit` : rLabel(picks[0]?.result)}
                               </div>
                             </div>
-                            {/* Pick rows */}
-                            {picks.map((pick,j)=>(
-                              <div key={j} style={{padding:"12px 14px",borderBottom:j<picks.length-1?`0.5px solid ${IOS.sep}`:"none",background:pick.result==="W"?"rgba(48,209,88,0.04)":pick.result==="L"?"rgba(255,69,58,0.04)":"transparent"}}>
-                                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                                  <div>
-                                    <div style={{fontSize:14,fontWeight:600,color:"#fff",marginBottom:4}}>{pick.pick_name}</div>
-                                    <div style={{fontSize:10,color:IOS.label3,textTransform:"uppercase",letterSpacing:0.3}}>{slotLabels[pick.slot]||pick.slot}</div>
+                            {/* Pick rows — compact breakdown */}
+                            {picks.map((pick,j)=>{
+                              const won = pick.result==="W";
+                              const lost = pick.result==="L";
+                              const pending = pick.result==="pending";
+                              return (
+                                <div key={j} style={{padding:"9px 14px",borderBottom:j<picks.length-1?`0.5px solid ${IOS.sep}`:"none",background:won?"rgba(48,209,88,0.04)":lost?"rgba(255,69,58,0.04)":"transparent",display:"flex",alignItems:"center",gap:10}}>
+                                  {/* Result dot */}
+                                  <div style={{width:8,height:8,borderRadius:"50%",flexShrink:0,background:won?IOS.green:lost?IOS.red:IOS.label3,opacity:pending?0.4:1}}/>
+                                  {/* Pick name */}
+                                  <div style={{flex:1,minWidth:0}}>
+                                    <div style={{fontSize:13,fontWeight:600,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{pick.pick_name}</div>
                                   </div>
-                                  <div style={{textAlign:"right"}}>
-                                    <div style={{fontSize:16,fontWeight:800,color:pick.odds?.startsWith("+")?IOS.green:IOS.blue}}>{pick.odds}</div>
-                                    {pick.result!=="pending"&&<div style={{fontSize:11,fontWeight:700,color:rColor(pick.result),marginTop:2}}>{pick.result==="W"?`+${pick.points_earned}pts`:"0pts"}</div>}
+                                  {/* Odds */}
+                                  <div style={{fontSize:13,fontWeight:700,color:pick.odds?.startsWith("+")?IOS.green:IOS.blue,flexShrink:0}}>{pick.odds}</div>
+                                  {/* Points */}
+                                  <div style={{fontSize:13,fontWeight:800,color:won?IOS.green:lost?"rgba(255,255,255,0.2)":IOS.label3,flexShrink:0,minWidth:52,textAlign:"right"}}>
+                                    {pending?"—":won?`+${parseFloat(pick.points_earned||0).toFixed(1)}`:"0"}
+                                    <span style={{fontSize:10,fontWeight:500}}> pts</span>
                                   </div>
                                 </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         );
                       })
@@ -3184,20 +3193,24 @@ export default function App() {
                                 {rLabel(picks[0]?.result)}
                               </div>
                             </div>
-                            {picks.map((pick,j)=>(
-                              <div key={j} style={{padding:"12px 14px",borderBottom:j<picks.length-1?`0.5px solid ${IOS.sep}`:"none",background:pick.result==="W"?"rgba(48,209,88,0.04)":pick.result==="L"?"rgba(255,69,58,0.04)":"transparent"}}>
-                                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                                  <div>
-                                    <div style={{fontSize:14,fontWeight:600,color:"#fff",marginBottom:4}}>{pick.pick_name}</div>
-                                    <div style={{fontSize:10,color:IOS.label3,textTransform:"uppercase",letterSpacing:0.3}}>{slotLabels[pick.slot]||pick.slot}</div>
+                            {picks.map((pick,j)=>{
+                              const won = pick.result==="W";
+                              const lost = pick.result==="L";
+                              const pending = pick.result==="pending";
+                              return (
+                                <div key={j} style={{padding:"9px 14px",borderBottom:j<picks.length-1?`0.5px solid ${IOS.sep}`:"none",background:won?"rgba(48,209,88,0.04)":lost?"rgba(255,69,58,0.04)":"transparent",display:"flex",alignItems:"center",gap:10}}>
+                                  <div style={{width:8,height:8,borderRadius:"50%",flexShrink:0,background:won?IOS.green:lost?IOS.red:IOS.label3,opacity:pending?0.4:1}}/>
+                                  <div style={{flex:1,minWidth:0}}>
+                                    <div style={{fontSize:13,fontWeight:600,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{pick.pick_name}</div>
                                   </div>
-                                  <div style={{textAlign:"right"}}>
-                                    <div style={{fontSize:16,fontWeight:800,color:pick.odds?.startsWith("+")?IOS.green:IOS.blue}}>{pick.odds}</div>
-                                    {pick.result!=="pending"&&<div style={{fontSize:11,fontWeight:700,color:rColor(pick.result),marginTop:2}}>{pick.result==="W"?`+${pick.points_earned}pts`:"0pts"}</div>}
+                                  <div style={{fontSize:13,fontWeight:700,color:pick.odds?.startsWith("+")?IOS.green:IOS.blue,flexShrink:0}}>{pick.odds}</div>
+                                  <div style={{fontSize:13,fontWeight:800,color:won?IOS.green:lost?"rgba(255,255,255,0.2)":IOS.label3,flexShrink:0,minWidth:52,textAlign:"right"}}>
+                                    {pending?"—":won?`+${parseFloat(pick.points_earned||0).toFixed(1)}`:"0"}
+                                    <span style={{fontSize:10,fontWeight:500}}> pts</span>
                                   </div>
                                 </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         );
                       })
