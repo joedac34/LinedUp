@@ -2316,7 +2316,7 @@ export default function App() {
                         <div key={i} style={{padding:"11px 16px",borderBottom:`0.5px solid ${IOS.sep}`}}>
                           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                             <div>
-                              <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:multColors[slot.mult],marginBottom:3}}>{slot.mult}× · Parlay · {slot.parlayLegs.length} legs</div>
+                              <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:multColors[slot.mult],marginBottom:3}}>{slot.mult}× · Longshot · {slot.parlayLegs.length} legs</div>
                               <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>{slot.parlayLegs.map(b=>b.pick).join(" + ")}</div>
                             </div>
                             <div style={{fontSize:18,fontWeight:800,color:IOS.pink}}>{ls?.american}</div>
@@ -3266,6 +3266,7 @@ export default function App() {
                         const parlayWon = isParlay && picks.every(p=>p.result==="W");
                         const parlayPending = isParlay && !parlayLost && !parlayWon;
                         const parlayStatusColor = parlayLost?IOS.red:parlayWon?IOS.green:IOS.orange;
+                        const parlayPts = isParlay ? parseFloat(picks.reduce((s,p)=>s+parseFloat(p.points_earned||0),0).toFixed(1)) : 0;
                         return (
                           <div key={mult} style={{margin:"0 16px 8px",background:parlayLost?"rgba(255,69,58,0.06)":IOS.bg2,borderRadius:14,overflow:"hidden",border:`1px solid ${parlayLost?"rgba(255,69,58,0.25)":parlayWon?"rgba(48,209,88,0.2)":"rgba(255,255,255,0.06)"}`}}>
                             {/* Slot header */}
@@ -3273,12 +3274,17 @@ export default function App() {
                               <div style={{display:"flex",alignItems:"center",gap:8}}>
                                 <div style={{width:30,height:30,borderRadius:8,background:isParlay?`${parlayStatusColor}20`:`${col}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:isParlay?parlayStatusColor:col}}>{mult}×</div>
                                 <div style={{fontSize:12,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:isParlay?parlayStatusColor:col}}>
-                                  {isParlay ? `🚀 Parlay · ${picks.length} legs` : slotLabels[picks[0]?.slot]||picks[0]?.slot}
+                                  {isParlay ? `🚀 Longshot · ${picks.length} legs` : slotLabels[picks[0]?.slot]||picks[0]?.slot}
                                 </div>
                               </div>
-                              <div style={{fontSize:12,fontWeight:700,color:isParlay?parlayStatusColor:picks[0]?.result==="W"?IOS.green:picks[0]?.result==="L"?IOS.red:IOS.orange}}>
-                                {isParlay ? (parlayLost?"❌ Busted":parlayWon?"✓ Hit!":
-                                  `${picks.filter(p=>p.result==="W").length}/${picks.length} hit`) : rLabel(picks[0]?.result)}
+                              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                                {isParlay && parlayWon && parlayPts>0 && (
+                                  <div style={{fontSize:13,fontWeight:800,color:IOS.green}}>{'+'+parlayPts.toFixed(1)+' pts'}</div>
+                                )}
+                                <div style={{fontSize:12,fontWeight:700,color:isParlay?parlayStatusColor:picks[0]?.result==="W"?IOS.green:picks[0]?.result==="L"?IOS.red:IOS.orange}}>
+                                  {isParlay ? (parlayLost?"❌ Busted":parlayWon?"✓ Hit!":
+                                    `${picks.filter(p=>p.result==="W").length}/${picks.length} hit`) : rLabel(picks[0]?.result)}
+                                </div>
                               </div>
                             </div>
                             {/* Pick rows — compact breakdown */}
@@ -3296,11 +3302,13 @@ export default function App() {
                                   </div>
                                   {/* Odds */}
                                   <div style={{fontSize:13,fontWeight:700,color:pick.odds?.startsWith("+")?IOS.green:IOS.blue,flexShrink:0}}>{pick.odds}</div>
-                                  {/* Points */}
-                                  <div style={{fontSize:13,fontWeight:800,color:won?IOS.green:lost?"rgba(255,255,255,0.2)":IOS.label3,flexShrink:0,minWidth:52,textAlign:"right"}}>
-                                    {pending?"—":won?`+${parseFloat(pick.points_earned||0).toFixed(1)}`:"0"}
-                                    <span style={{fontSize:10,fontWeight:500}}> pts</span>
-                                  </div>
+                                  {/* Points — hide per-leg for parlay */}
+                                  {!isParlay && (
+                                    <div style={{fontSize:13,fontWeight:800,color:won?IOS.green:lost?"rgba(255,255,255,0.2)":IOS.label3,flexShrink:0,minWidth:52,textAlign:"right"}}>
+                                      {pending?"—":won?`+${parseFloat(pick.points_earned||0).toFixed(1)}`:"0"}
+                                      <span style={{fontSize:10,fontWeight:500}}> pts</span>
+                                    </div>
+                                  )}
                                 </div>
                               );
                             })}
@@ -3333,7 +3341,7 @@ export default function App() {
                               <div style={{display:"flex",alignItems:"center",gap:8}}>
                                 <div style={{width:30,height:30,borderRadius:8,background:`${col}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:col}}>{mult}×</div>
                                 <div style={{fontSize:12,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:col}}>
-                                  {isParlay ? `🚀 Parlay · ${picks.length} legs` : slotLabels[picks[0]?.slot]||picks[0]?.slot}
+                                  {isParlay ? `🚀 Longshot · ${picks.length} legs` : slotLabels[picks[0]?.slot]||picks[0]?.slot}
                                 </div>
                               </div>
                               <div style={{fontSize:12,fontWeight:700,color:picks[0]?.result==="W"?IOS.green:picks[0]?.result==="L"?IOS.red:IOS.orange}}>
