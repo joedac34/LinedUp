@@ -29,7 +29,7 @@ export default async function handler(req, res) {
       // This effectively returns just the next round of games
       if(data.length > 0) {
         const earliestTime = new Date(data[0].commence_time);
-        const cutoff = new Date(earliestTime.getTime() + 4 * 24 * 60 * 60 * 1000);
+        const cutoff = new Date(earliestTime.getTime() + 7 * 24 * 60 * 60 * 1000);
         const filtered = data.filter(g => new Date(g.commence_time) <= cutoff);
         return res.status(200).json({ games: filtered, remaining, used });
       }
