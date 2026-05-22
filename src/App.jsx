@@ -3501,15 +3501,18 @@ export default function App() {
                     if(!code) return;
                     const {data:league,error}=await supabase.from("leagues").select().eq("invite_code",code.toUpperCase().trim()).single();
                     if(error||!league){alert("League not found.");return;}
+                    // Check capacity before joining
+                    const {data:currentMembers}=await supabase.from("league_members").select("user_id").eq("league_id",league.id);
+                    const targetSize = league.target_size||league.max_members||8;
+                    if(currentMembers && currentMembers.length >= targetSize){alert(`This league is already full (${targetSize}/${targetSize} members).`);return;}
                     const {error:joinError}=await supabase.from("league_members").insert({league_id:league.id,user_id:user.id,is_commissioner:false});
                     if(joinError){alert("Error joining. You may already be a member.");return;}
                     const {data:allMembers}=await supabase.from("league_members").select("user_id").eq("league_id",league.id);
-                    const targetSize = league.target_size||league.max_members||8;
                     if(allMembers && allMembers.length === targetSize) {
                       await generateSchedule(league.id, allMembers.map(m=>m.user_id), league.season_weeks||18);
                       alert(`Joined ${league.name}! 🎉 League is full — schedule generated!`);
                     } else {
-                      alert(`Joined ${league.name}! Welcome.`);
+                      alert(`Joined ${league.name}! Welcome. ${targetSize-allMembers.length} more player${targetSize-allMembers.length!==1?"s":""} needed.`);
                     }
                     fetchLeagues(user.id);
                   }} style={{fontSize:14,fontWeight:600,color:IOS.blue,cursor:"pointer"}}>Join with Invite Code</div>
@@ -3571,11 +3574,13 @@ export default function App() {
                 if(!code) return;
                 const {data:league,error}=await supabase.from("leagues").select().eq("invite_code",code.toUpperCase().trim()).single();
                 if(error||!league){alert("League not found. Check the code and try again.");return;}
+                // Check capacity before joining
+                const {data:currentMems}=await supabase.from("league_members").select("user_id").eq("league_id",league.id);
+                const targetSize = league.target_size||league.max_members||8;
+                if(currentMems && currentMems.length >= targetSize){alert(`This league is already full (${targetSize}/${targetSize} members).`);return;}
                 const {error:joinError}=await supabase.from("league_members").insert({league_id:league.id,user_id:user.id,is_commissioner:false});
                 if(joinError){alert("Error joining. You may already be a member.");return;}
-                // Check if league is now full — if so, auto-generate schedule
                 const {data:allMembers}=await supabase.from("league_members").select("user_id").eq("league_id",league.id);
-                const targetSize = league.target_size||league.max_members||8;
                 if(allMembers && allMembers.length === targetSize) {
                   const memberIds = allMembers.map(m=>m.user_id);
                   await generateSchedule(league.id, memberIds, league.season_weeks||18);
@@ -3934,9 +3939,10 @@ export default function App() {
                               if(sz===cur) return;
                               if(!window.confirm(`Change league size to ${sz}? This will wipe the current schedule and regenerate it when the league fills.`)) return;
                               await supabase.from("leagues").update({target_size:sz, max_members:sz}).eq("id", activeLeague.id);
+                              // Only wipe matchups/schedule — keep picks intact
                               await supabase.from("matchups").delete().eq("league_id", activeLeague.id);
                               await fetchLeagues(user.id);
-                              alert(`League size updated to ${sz}. Schedule will auto-generate when you reach ${sz} members.`);
+                              alert(`League size updated to ${sz}. Schedule will regenerate when the league is full. Existing picks are preserved.`);
                             }}
                               style={{borderRadius:12,padding:"12px 4px",textAlign:"center",cursor:sz===cur?"default":"pointer",transition:"all .15s",
                                 background:sz===cur?`${IOS.blue}20`:"rgba(255,255,255,0.05)",
