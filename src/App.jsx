@@ -4136,7 +4136,7 @@ export default function App() {
                     </div>
                     <div style={{padding:"14px 16px"}}>
                       <div style={{fontSize:14,color:"#fff",marginBottom:4}}>Week {activeLeague.current_week||1} of {activeLeague.season_weeks||18}</div>
-                      <div style={{fontSize:12,color:IOS.orange,marginBottom:14}}>⚠ Auto-grade runs hourly. You can also trigger it manually below.</div>
+                      <div style={{fontSize:12,color:IOS.orange,marginBottom:14}}>⚠ Auto-grade runs daily at 10am. You can also trigger it manually below.</div>
                       {/* Auto-grade button */}
                       <button onClick={async()=>{
                         try {
