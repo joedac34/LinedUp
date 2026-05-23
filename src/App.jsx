@@ -4143,7 +4143,7 @@ export default function App() {
                           const r = await fetch("/api/grade", {
                             method:"POST",
                             headers:{"Content-Type":"application/json"},
-                            body: JSON.stringify({secret: import.meta.env.VITE_CRON_SECRET||""})
+                            body: JSON.stringify({leagueId: activeLeague.id})
                           });
                           const d = await r.json();
                           if(d.ok) {

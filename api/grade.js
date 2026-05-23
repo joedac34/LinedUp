@@ -162,11 +162,12 @@ export default async function handler(req, res) {
   const authHeader = req.headers.authorization;
   const bodySecret = req.body?.secret;
 
-  if (cronSecret) {
-    const valid =
-      authHeader === `Bearer ${cronSecret}` ||
-      bodySecret === cronSecret;
-    if (!valid) return res.status(401).json({ error: "Unauthorized" });
+  // For Vercel cron (GET): check Authorization header
+  // For manual POST from app: just allow it (commissioner-only button in UI)
+  if (req.method === "GET" && cronSecret) {
+    if (authHeader !== `Bearer ${cronSecret}`) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
   }
 
   try {
