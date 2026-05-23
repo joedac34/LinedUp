@@ -1170,9 +1170,25 @@ export default function App() {
       }
     });
 
+    // Fetch matchup W/L records for season record
+    const {data:matchups} = await supabase
+      .from("matchups")
+      .select("user1_id,user2_id,winner_id")
+      .eq("league_id", leagueId)
+      .not("winner_id", "is", null);
+
+    const matchupRecord = {};
+    (matchups||[]).forEach(m=>{
+      if(!matchupRecord[m.user1_id]) matchupRecord[m.user1_id]={mw:0,ml:0};
+      if(!matchupRecord[m.user2_id]) matchupRecord[m.user2_id]={mw:0,ml:0};
+      if(m.winner_id===m.user1_id){ matchupRecord[m.user1_id].mw++; matchupRecord[m.user2_id].ml++; }
+      else { matchupRecord[m.user2_id].mw++; matchupRecord[m.user1_id].ml++; }
+    });
+
     const standings = userIds.map(uid=>{
       const u = users?.find(x=>x.id===uid);
       const s = statsByUser[uid]||{wins:0,losses:0,points:0};
+      const mr = matchupRecord[uid]||{mw:0,ml:0};
       const total = s.wins + s.losses;
       return {
         userId: uid,
@@ -1180,7 +1196,7 @@ export default function App() {
         wins: s.wins,
         losses: s.losses,
         points: parseFloat(s.points.toFixed(1)),
-        record: `${s.wins}-${s.losses}`,
+        record: `${mr.mw}-${mr.ml}`,
         wpct: total > 0 ? `${Math.round(s.wins/total*100)}%` : "0%",
         isYou: uid === user?.id,
       };
@@ -1687,10 +1703,10 @@ export default function App() {
     .lh-rank{font-size:13px;font-weight:500;color:${IOS.blue};margin-bottom:6px;}
     .lh-name{font-size:30px;font-weight:700;letter-spacing:-0.5px;margin-bottom:12px;}
     @keyframes ticker-scroll{0%{transform:translateX(0%)}100%{transform:translateX(-50%)}}
-    .ticker-wrap{overflow:hidden;background:#0a0a0a;border-top:0.5px solid rgba(255,255,255,0.06);border-bottom:0.5px solid rgba(255,255,255,0.06);height:32px;display:flex;align-items:center;margin:0 0 10px;}
+    .ticker-wrap{overflow:hidden;background:#0a0a0a;border-top:0.5px solid rgba(255,255,255,0.06);border-bottom:0.5px solid rgba(255,255,255,0.06);height:42px;display:flex;align-items:center;margin:0 0 10px;}
     .ticker-track{display:flex;align-items:center;white-space:nowrap;animation:ticker-scroll 40s linear infinite;will-change:transform;}
     .ticker-track:hover{animation-play-state:paused;}
-    .ticker-item{display:inline-flex;align-items:center;gap:6px;padding:0 20px;font-size:11px;font-weight:600;color:rgba(255,255,255,0.5);letter-spacing:0.02em;font-family:'Manrope',sans-serif;}
+    .ticker-item{display:inline-flex;align-items:center;gap:7px;padding:0 22px;font-size:13px;font-weight:600;color:rgba(255,255,255,0.5);letter-spacing:0.02em;font-family:'Manrope',sans-serif;}
     .ticker-item .ti-teams{color:rgba(255,255,255,0.85);font-weight:700;}
     .ticker-item .ti-live{color:#30D158;font-weight:800;letter-spacing:0.05em;}
     .ticker-item .ti-time{color:rgba(255,255,255,0.35);}
