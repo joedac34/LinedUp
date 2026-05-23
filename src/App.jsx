@@ -569,9 +569,7 @@ const polarToCart=(cx,cy,r,deg)=>{const rad=(deg-90)*Math.PI/180;return{x:cx+r*M
 
 export default function App() {
   const [screen,      setScreen]      = useState("home");
-  const [tutorialStep, setTutorialStep] = useState(()=>{
-    try { return localStorage.getItem('picklock_tutorial_done') ? -1 : 0; } catch { return 0; }
-  });
+  const [tutorialStep, setTutorialStep] = useState(-1); // -1 = hidden; only shown on fresh signup
   const dismissTutorial = () => {
     try { localStorage.setItem('picklock_tutorial_done','1'); } catch {}
     setTutorialStep(-1);
@@ -612,6 +610,9 @@ export default function App() {
   // ─── LIVE ODDS STATE ─────────────────────────────────────────────
   const [liveOdds,    setLiveOdds]    = useState({}); // { sportId: {ml,prop,ou,spread,longshot} }
   const [tickerGames, setTickerGames] = useState([]); // raw games for the ticker
+  const [espnGames,   setEspnGames]   = useState([]); // ESPN scoreboard with IDs
+  const [gameSheet,   setGameSheet]   = useState(null); // { tickerGame, espnGame, detail }
+  const [gameLoading, setGameLoading] = useState(false);
   const [oddsLoading, setOddsLoading] = useState(false);
   const [oddsError,   setOddsError]   = useState(false);
   // oddsLastFetched persisted in localStorage so cache survives page refreshes
@@ -708,6 +709,15 @@ export default function App() {
       } catch(e) {
         console.warn("Props fetch failed, using hardcoded:", e);
       }
+
+      // Fetch ESPN scoreboard to get event IDs for game detail sheet
+      try {
+        const espnRes = await fetch(`/api/espn?sport=${sportKey}`);
+        if(espnRes.ok) {
+          const espnPayload = await espnRes.json();
+          if(espnPayload.games) setEspnGames(espnPayload.games);
+        }
+      } catch(e) { console.warn("ESPN scoreboard fetch failed:", e); }
 
       // Store raw games for the ticker
       setTickerGames(games.map(g => ({
@@ -1705,7 +1715,7 @@ export default function App() {
     @keyframes ticker-scroll{0%{transform:translateX(0%)}100%{transform:translateX(-50%)}}
     .ticker-wrap{overflow:hidden;background:#0a0a0a;border-top:0.5px solid rgba(255,255,255,0.06);border-bottom:0.5px solid rgba(255,255,255,0.06);height:42px;display:flex;align-items:center;margin:0 0 10px;}
     .ticker-track{display:flex;align-items:center;white-space:nowrap;animation:ticker-scroll 40s linear infinite;will-change:transform;}
-    .ticker-track:hover{animation-play-state:paused;}
+    .ticker-track:hover,.ticker-track:active{animation-play-state:paused;}
     .ticker-item{display:inline-flex;align-items:center;gap:7px;padding:0 22px;font-size:13px;font-weight:600;color:rgba(255,255,255,0.5);letter-spacing:0.02em;font-family:'Manrope',sans-serif;}
     .ticker-item .ti-teams{color:rgba(255,255,255,0.85);font-weight:700;}
     .ticker-item .ti-live{color:#30D158;font-weight:800;letter-spacing:0.05em;}
@@ -2008,6 +2018,7 @@ export default function App() {
               if(uid){
                 await supabase.from("users").upsert({id:uid, email, username}, {onConflict:"id"});
               }
+              setTutorialStep(0); // show tutorial for new signups only
               alert("Account created! Check your email to confirm, then sign in.");
             }
           }} style={{width:"100%",background:"#0A84FF",color:"#fff",border:"none",borderRadius:12,padding:"16px",fontSize:16,fontWeight:700,cursor:"pointer",fontFamily:"'Manrope',sans-serif",marginBottom:16}}>
@@ -2333,15 +2344,47 @@ export default function App() {
                 });
                 // Duplicate for seamless loop
                 const doubled = [...items, ...items];
+                const openGame = async (g) => {
+                  // Match ticker game to ESPN game by team name
+                  const espn = espnGames.find(e =>
+                    e.awayTeam?.toLowerCase().includes(g.away.toLowerCase()) ||
+                    e.homeTeam?.toLowerCase().includes(g.home.toLowerCase()) ||
+                    e.awayAbbr?.toLowerCase() === g.away.toLowerCase() ||
+                    e.homeAbbr?.toLowerCase() === g.home.toLowerCase()
+                  );
+                  // Find odds for this game from liveOdds
+                  const sport = SPORT_KEYS[activeLeague?.sport];
+                  const gameOdds = {
+                    ml: (liveOdds[activeLeague?.sport]?.ml||[]).filter(o=>o.game?.includes(g.away)||o.game?.includes(g.home)),
+                    spread: (liveOdds[activeLeague?.sport]?.spread||[]).filter(o=>o.game?.includes(g.away)||o.game?.includes(g.home)),
+                    ou: (liveOdds[activeLeague?.sport]?.ou||[]).filter(o=>o.game?.includes(g.away)||o.game?.includes(g.home)),
+                  };
+                  setGameSheet({ tickerGame: g, espnGame: espn, detail: null, odds: gameOdds });
+                  if(espn?.id) {
+                    setGameLoading(true);
+                    try {
+                      const sportKey = SPORT_KEYS[activeLeague?.sport];
+                      const r = await fetch(`/api/espn?sport=${sportKey}&gameId=${espn.id}`);
+                      if(r.ok) {
+                        const d = await r.json();
+                        setGameSheet(prev => ({...prev, detail: d}));
+                      }
+                    } catch(e) { console.warn('Game detail fetch failed:', e); }
+                    finally { setGameLoading(false); }
+                  }
+                };
                 return (
                   <div className='ticker-wrap'>
                     <div className='ticker-track' style={{animationDuration: Math.max(20, items.length * 8) + 's'}}>
                       {doubled.map((g, i) => (
-                        <span key={i} className='ticker-item'>
+                        <span key={i} className='ticker-item'
+                          onClick={e=>{e.stopPropagation();if(i<items.length)openGame(g);}}
+                          onTouchEnd={e=>{e.preventDefault();e.stopPropagation();if(i<items.length)openGame(g);}}
+                          style={{cursor:"pointer",WebkitTapHighlightColor:"rgba(255,255,255,0.1)",userSelect:"none"}}>
                           <span className='ti-teams'>{g.away} @ {g.home}</span>
                           {g.isLive
                             ? <span className='ti-live'>● LIVE</span>
-                            : <span className='ti-time'>{g.isToday ? g.timeStr : g.timeStr}</span>
+                            : <span className='ti-time'>{g.timeStr}</span>
                           }
                           <span className='ticker-sep'>|</span>
                         </span>
@@ -4817,6 +4860,134 @@ export default function App() {
 
             </div>
           </>
+        )}
+
+        {/* ══ GAME DETAIL SHEET ══ */}
+        {gameSheet && (
+          <div style={{position:"fixed",inset:0,zIndex:8000,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>setGameSheet(null)}>
+            <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.6)",backdropFilter:"blur(4px)"}}/>
+            <div onClick={e=>e.stopPropagation()} style={{position:"relative",background:"#1C1C1E",borderRadius:"24px 24px 0 0",maxHeight:"85vh",overflowY:"auto",paddingBottom:40}}>
+              {/* Handle */}
+              <div style={{display:"flex",justifyContent:"center",padding:"12px 0 0"}}>
+                <div style={{width:36,height:4,borderRadius:2,background:"rgba(255,255,255,0.2)"}}/>
+              </div>
+
+              {/* Teams header */}
+              {(() => {
+                const eg = gameSheet.espnGame;
+                const tg = gameSheet.tickerGame;
+                const away = eg?.awayTeam || tg?.away;
+                const home = eg?.homeTeam || tg?.home;
+                const awayRec = eg?.awayRecord;
+                const homeRec = eg?.homeRecord;
+                const awayLogo = eg?.awayLogo;
+                const homeLogo = eg?.homeLogo;
+                const gameTime = new Date(tg?.time).toLocaleTimeString([],{hour:"numeric",minute:"2-digit",timeZoneName:"short"});
+                return (
+                  <div style={{padding:"16px 20px 12px"}}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+                      {/* Away */}
+                      <div style={{flex:1,textAlign:"center"}}>
+                        {awayLogo && <img src={awayLogo} style={{width:52,height:52,objectFit:"contain",marginBottom:6}} onError={e=>e.target.style.display="none"}/>}
+                        <div style={{fontSize:14,fontWeight:800,color:"#fff"}}>{away}</div>
+                        {awayRec && <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>{awayRec}</div>}
+                      </div>
+                      {/* VS */}
+                      <div style={{textAlign:"center"}}>
+                        <div style={{fontSize:13,fontWeight:700,color:IOS.label3}}>VS</div>
+                        <div style={{fontSize:11,color:IOS.label3,marginTop:4}}>{gameSheet.tickerGame.isLive ? <span style={{color:IOS.green,fontWeight:700}}>● LIVE</span> : gameTime}</div>
+                      </div>
+                      {/* Home */}
+                      <div style={{flex:1,textAlign:"center"}}>
+                        {homeLogo && <img src={homeLogo} style={{width:52,height:52,objectFit:"contain",marginBottom:6}} onError={e=>e.target.style.display="none"}/>}
+                        <div style={{fontSize:14,fontWeight:800,color:"#fff"}}>{home}</div>
+                        {homeRec && <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>{homeRec}</div>}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Odds */}
+              {gameSheet.odds && (gameSheet.odds.ml?.length > 0 || gameSheet.odds.spread?.length > 0 || gameSheet.odds.ou?.length > 0) && (
+                <div style={{margin:"0 16px 16px",background:"#2C2C2E",borderRadius:14,overflow:"hidden"}}>
+                  <div style={{padding:"10px 14px",borderBottom:"0.5px solid rgba(255,255,255,0.06)",fontSize:11,fontWeight:700,color:IOS.label3,letterSpacing:1,textTransform:"uppercase"}}>DraftKings Odds</div>
+                  <div style={{display:"flex",gap:0}}>
+                    {[
+                      {label:"Moneyline", items: gameSheet.odds.ml.slice(0,2)},
+                      {label:"Spread",    items: gameSheet.odds.spread.slice(0,2)},
+                      {label:"Total",     items: gameSheet.odds.ou.slice(0,2)},
+                    ].map((col,ci) => (
+                      <div key={ci} style={{flex:1,borderRight:ci<2?"0.5px solid rgba(255,255,255,0.06)":"none"}}>
+                        <div style={{fontSize:10,fontWeight:700,color:IOS.label3,textAlign:"center",padding:"6px 4px 4px",letterSpacing:0.5}}>{col.label}</div>
+                        {col.items.map((item,ii) => (
+                          <div key={ii} style={{textAlign:"center",padding:"4px 4px 8px"}}>
+                            <div style={{fontSize:11,color:"rgba(255,255,255,0.7)",marginBottom:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",padding:"0 4px"}}>{item.pick}</div>
+                            <div style={{fontSize:14,fontWeight:800,color:item.odds?.startsWith("+")?IOS.green:IOS.blue}}>{item.odds}</div>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Loading */}
+              {gameLoading && (
+                <div style={{textAlign:"center",padding:"24px",color:IOS.label3,fontSize:13}}>Loading stats...</div>
+              )}
+
+              {/* Stat leaders */}
+              {gameSheet.detail?.statLeaders?.length > 0 && (
+                <div style={{margin:"0 16px 16px"}}>
+                  <div style={{fontSize:11,fontWeight:700,color:IOS.label3,letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Key Players</div>
+                  {gameSheet.detail.statLeaders.slice(0,4).map((cat,ci) => (
+                    <div key={ci} style={{background:"#2C2C2E",borderRadius:12,padding:"10px 14px",marginBottom:8}}>
+                      <div style={{fontSize:10,fontWeight:700,color:IOS.blue,letterSpacing:0.5,textTransform:"uppercase",marginBottom:8}}>{cat.category}</div>
+                      {cat.leaders.map((l,li) => (
+                        <div key={li} style={{display:"flex",alignItems:"center",gap:10,marginBottom:li<cat.leaders.length-1?8:0}}>
+                          {l.photo && <img src={l.photo} style={{width:32,height:32,borderRadius:"50%",objectFit:"cover",background:"#3A3A3C"}} onError={e=>e.target.style.display="none"}/>}
+                          <div style={{flex:1}}>
+                            <div style={{fontSize:13,fontWeight:600,color:"#fff"}}>{l.name}</div>
+                            <div style={{fontSize:11,color:IOS.label3}}>{l.team}</div>
+                          </div>
+                          <div style={{fontSize:14,fontWeight:800,color:IOS.green}}>{l.stat}</div>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Team stats */}
+              {gameSheet.detail?.teams?.length > 0 && (
+                <div style={{margin:"0 16px 16px"}}>
+                  <div style={{fontSize:11,fontWeight:700,color:IOS.label3,letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Team Stats</div>
+                  <div style={{background:"#2C2C2E",borderRadius:12,overflow:"hidden"}}>
+                    <div style={{display:"flex",borderBottom:"0.5px solid rgba(255,255,255,0.06)"}}>
+                      {gameSheet.detail.teams.map((t,ti)=>(
+                        <div key={ti} style={{flex:1,textAlign:"center",padding:"8px 4px",fontSize:12,fontWeight:700,color:"#fff",borderRight:ti===0?"0.5px solid rgba(255,255,255,0.06)":"none"}}>{t.abbrev}</div>
+                      ))}
+                    </div>
+                    {(gameSheet.detail.teams[0]?.stats||[]).map((stat,si)=>(
+                      <div key={si} style={{display:"flex",borderBottom:si<gameSheet.detail.teams[0].stats.length-1?"0.5px solid rgba(255,255,255,0.04)":"none"}}>
+                        <div style={{flex:1,textAlign:"center",padding:"7px 4px",fontSize:13,fontWeight:600,color:"#fff"}}>{gameSheet.detail.teams[0]?.stats[si]?.value||"—"}</div>
+                        <div style={{flex:1,textAlign:"center",padding:"7px 4px",fontSize:11,color:IOS.label3,borderLeft:"0.5px solid rgba(255,255,255,0.06)",borderRight:"0.5px solid rgba(255,255,255,0.06)"}}>{stat.label}</div>
+                        <div style={{flex:1,textAlign:"center",padding:"7px 4px",fontSize:13,fontWeight:600,color:"#fff"}}>{gameSheet.detail.teams[1]?.stats[si]?.value||"—"}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* No detail fallback */}
+              {!gameLoading && !gameSheet.detail && !gameSheet.espnGame && (
+                <div style={{textAlign:"center",padding:"16px 24px",color:IOS.label3,fontSize:13,lineHeight:1.6}}>
+                  Detailed stats not available yet — check back closer to game time.
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
         {/* ══ TAB BAR ══ */}
