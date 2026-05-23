@@ -569,6 +569,13 @@ const polarToCart=(cx,cy,r,deg)=>{const rad=(deg-90)*Math.PI/180;return{x:cx+r*M
 
 export default function App() {
   const [screen,      setScreen]      = useState("home");
+  const [tutorialStep, setTutorialStep] = useState(()=>{
+    try { return localStorage.getItem('picklock_tutorial_done') ? -1 : 0; } catch { return 0; }
+  });
+  const dismissTutorial = () => {
+    try { localStorage.setItem('picklock_tutorial_done','1'); } catch {}
+    setTutorialStep(-1);
+  };
   const [user,        setUser]        = useState(null);
   const [userProfile, setUserProfile] = useState(null); // { username, email }
   const [editingUsername, setEditingUsername] = useState(false);
@@ -1842,6 +1849,107 @@ export default function App() {
   return (
     <div style={{minHeight:"100vh",background:"#111",display:"flex",justifyContent:"center",alignItems:"flex-start"}}>
       <style>{css}</style>
+
+      {/* ══ TUTORIAL OVERLAY ══ */}
+      {user && tutorialStep >= 0 && (() => {
+        const steps = [
+          {
+            icon: "🏆",
+            title: "Welcome to PickLock",
+            body: "Fantasy sports betting with your friends. Each week you build a pick slip, lock it in, and compete head-to-head for points.",
+            highlight: null,
+            pos: "center",
+          },
+          {
+            icon: "🏈",
+            title: "Create or Join a League",
+            body: "Tap 'All Leagues' to create your own league or join one with an invite code. Leagues are 4–8 players and run for a full season.",
+            highlight: "All Leagues",
+            pos: "top",
+          },
+          {
+            icon: "🎯",
+            title: "Build Your Pick Slip",
+            body: "Each week you get 5 pick slots — Moneyline, Prop, Over/Under, Spread, and a Longshot. For each pick, choose your bet AND set a multiplier (1x–5x). No multiplier = no points, even if you win.",
+            highlight: null,
+            pos: "center",
+          },
+          {
+            icon: "🚀",
+            title: "The Longshot Slot",
+            body: "The Longshot is a 5x multiplier parlay. Chain multiple underdogs together — if they all hit, you score massive points. High risk, huge reward.",
+            highlight: null,
+            pos: "center",
+          },
+          {
+            icon: "⚡",
+            title: "Multipliers",
+            body: "Each pick slot has a multiplier (1x–5x). Higher multiplier = more points if you win, but your league may have rules on how many you can use.",
+            highlight: null,
+            pos: "center",
+          },
+          {
+            icon: "📊",
+            title: "Matchups & Scoring",
+            body: "Every week you're matched against one league member. Your points from winning picks add up — whoever scores more wins the week. Check live scores on the Matchup tab.",
+            highlight: null,
+            pos: "center",
+          },
+          {
+            icon: "🔒",
+            title: "Lock It In",
+            body: "Once you're happy with your slip, lock it before the first game kicks off. Locked slips can't be changed. Good luck!",
+            highlight: null,
+            pos: "bottom",
+          },
+        ];
+        const step = steps[tutorialStep];
+        const isLast = tutorialStep === steps.length - 1;
+        const isFirst = tutorialStep === 0;
+        return (
+          <div style={{position:"fixed",inset:0,zIndex:9000,pointerEvents:"all"}}>
+            {/* Dim overlay */}
+            <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.75)",backdropFilter:"blur(2px)"}} onClick={dismissTutorial}/>
+            {/* Card */}
+            <div style={{
+              position:"absolute",
+              left:"50%",
+              transform:"translateX(-50%)",
+              ...(step.pos==="bottom" ? {bottom:100} : step.pos==="top" ? {top:120} : {top:"50%",transform:"translate(-50%,-50%)"}),
+              width:"calc(100% - 48px)",
+              maxWidth:360,
+              background:"#1C1C1E",
+              borderRadius:24,
+              padding:"28px 24px 22px",
+              boxShadow:"0 24px 80px rgba(0,0,0,0.7)",
+              border:"1px solid rgba(255,255,255,0.08)",
+              zIndex:9001,
+            }}>
+              {/* Skip */}
+              <div onClick={dismissTutorial} style={{position:"absolute",top:16,right:16,fontSize:12,fontWeight:600,color:"rgba(255,255,255,0.35)",cursor:"pointer",padding:"4px 8px",background:"rgba(255,255,255,0.06)",borderRadius:8}}>Skip</div>
+              {/* Step dots */}
+              <div style={{display:"flex",gap:5,justifyContent:"center",marginBottom:20}}>
+                {steps.map((_,i)=>(
+                  <div key={i} onClick={()=>setTutorialStep(i)} style={{width:i===tutorialStep?20:6,height:6,borderRadius:3,background:i===tutorialStep?IOS.blue:"rgba(255,255,255,0.2)",transition:"all 0.25s",cursor:"pointer"}}/>
+                ))}
+              </div>
+              {/* Icon */}
+              <div style={{fontSize:44,textAlign:"center",marginBottom:12}}>{step.icon}</div>
+              {/* Title */}
+              <div style={{fontSize:20,fontWeight:800,color:"#fff",textAlign:"center",marginBottom:10,letterSpacing:-0.3}}>{step.title}</div>
+              {/* Body */}
+              <div style={{fontSize:14,color:"rgba(255,255,255,0.6)",textAlign:"center",lineHeight:1.6,marginBottom:24}}>{step.body}</div>
+              {/* Buttons */}
+              <div style={{display:"flex",gap:10}}>
+                {!isFirst && (
+                  <button onClick={()=>setTutorialStep(s=>s-1)} style={{flex:1,background:"rgba(255,255,255,0.08)",border:"none",borderRadius:14,padding:"13px",fontSize:15,fontWeight:700,color:"rgba(255,255,255,0.7)",cursor:"pointer",fontFamily:"Manrope,sans-serif"}}>Back</button>
+                )}
+                <button onClick={()=>isLast?dismissTutorial():setTutorialStep(s=>s+1)} style={{flex:2,background:IOS.blue,border:"none",borderRadius:14,padding:"13px",fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Manrope,sans-serif"}}>{isLast?"Let's Go! 🏆":"Next"}</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ══ AUTH SCREEN ══ */}
       {!user && (
