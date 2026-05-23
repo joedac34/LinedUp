@@ -4347,12 +4347,14 @@ export default function App() {
                     const myPts = wk.myPts > 0 ? wk.myPts : null;
                     const oppPts = wk.oppPts > 0 ? wk.oppPts : null;
 
-                    // Calculate live score from real weekPicks
-                    const myLivePts = live ? parseFloat(weekPicks
+                    // Calculate live/current score from weekPicks using scheduled opponent
+                    const isCurrentWeek = wk.week === (activeLeague.current_week||activeLeague.week||1);
+                    const showLive = live || (isCurrentWeek && !done);
+                    const myLivePts = showLive ? parseFloat(weekPicks
                       .filter(p=>p.user_id===user?.id&&p.result==="W")
                       .reduce((sum,p)=>sum+parseFloat(p.points_earned||0),0).toFixed(1)) : null;
-                    const oppLivePts = live ? parseFloat(weekPicks
-                      .filter(p=>p.user_id!==user?.id&&p.result==="W")
+                    const oppLivePts = showLive ? parseFloat(weekPicks
+                      .filter(p=>p.user_id===wk.oppId&&p.result==="W")
                       .reduce((sum,p)=>sum+parseFloat(p.points_earned||0),0).toFixed(1)) : null;
 
                     return (
@@ -4365,12 +4367,12 @@ export default function App() {
                         <div className="sch-score" style={{width:70,fontSize:12}}>
                           {done&&myPts!==null
                             ? <span style={{color:wk.result==="W"?IOS.green:IOS.red,fontWeight:700}}>{myPts}–{oppPts}</span>
-                            : live&&myLivePts!==null
+                            : showLive&&myLivePts!==null
                             ? <span style={{color:IOS.blue,fontWeight:700}}>{myLivePts}–{oppLivePts}</span>
                             : "—"}
                         </div>
                         <div style={{display:"flex",alignItems:"center",gap:6}}>
-                          <div className={`sch-badge ${wk.result==="live"?"live":wk.result==="upcoming"?"up":wk.result}`}>{wk.result==="live"?"LIVE":wk.result==="upcoming"?"—":wk.result}</div>
+                          <div className={`sch-badge ${showLive&&!done?"live":wk.result==="upcoming"?"up":wk.result}`}>{showLive&&!done?"LIVE":wk.result==="upcoming"?"—":wk.result}</div>
                           {done&&<div style={{fontSize:16,color:IOS.label3}}>›</div>}
                         </div>
                       </div>
