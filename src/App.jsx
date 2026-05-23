@@ -2319,13 +2319,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Stat pills */}
-              <div className="stat-pills">
-                <div className="stat-pill"><div className="stat-pill-val" style={{color:sport.color}}>{realStandings.find(s=>s.isYou)?.record||"0-0"}</div><div className="stat-pill-lbl">Record</div></div>
-                <div className="stat-pill"><div className="stat-pill-val" style={{color:IOS.green}}>{realStandings.find(s=>s.isYou)?.wpct||"0%"}</div><div className="stat-pill-lbl">Win %</div></div>
-                <div className="stat-pill"><div className="stat-pill-val" style={{color:IOS.green}}>{realStandings.find(s=>s.isYou)?.points||0}pts</div><div className="stat-pill-lbl">Points</div></div>
-              </div>
-
               {/* Games Ticker */}
               {tickerGames.length > 0 && (() => {
                 const now = new Date();
