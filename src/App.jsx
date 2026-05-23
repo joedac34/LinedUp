@@ -611,6 +611,7 @@ export default function App() {
 
   // ─── LIVE ODDS STATE ─────────────────────────────────────────────
   const [liveOdds,    setLiveOdds]    = useState({}); // { sportId: {ml,prop,ou,spread,longshot} }
+  const [tickerGames, setTickerGames] = useState([]); // raw games for the ticker
   const [oddsLoading, setOddsLoading] = useState(false);
   const [oddsError,   setOddsError]   = useState(false);
   // oddsLastFetched persisted in localStorage so cache survives page refreshes
@@ -707,6 +708,13 @@ export default function App() {
       } catch(e) {
         console.warn("Props fetch failed, using hardcoded:", e);
       }
+
+      // Store raw games for the ticker
+      setTickerGames(games.map(g => ({
+        away: g.away_team,
+        home: g.home_team,
+        time: g.commence_time,
+      })));
 
       setLiveOdds(prev => ({
         ...prev,
@@ -1678,6 +1686,15 @@ export default function App() {
     .league-hero{background:${IOS.bg2};border-radius:20px;margin:0 16px 10px;padding:18px;position:relative;overflow:hidden;}
     .lh-rank{font-size:13px;font-weight:500;color:${IOS.blue};margin-bottom:6px;}
     .lh-name{font-size:30px;font-weight:700;letter-spacing:-0.5px;margin-bottom:12px;}
+    @keyframes ticker-scroll{0%{transform:translateX(0%)}100%{transform:translateX(-50%)}}
+    .ticker-wrap{overflow:hidden;background:#0a0a0a;border-top:0.5px solid rgba(255,255,255,0.06);border-bottom:0.5px solid rgba(255,255,255,0.06);height:32px;display:flex;align-items:center;margin:0 0 10px;}
+    .ticker-track{display:flex;align-items:center;white-space:nowrap;animation:ticker-scroll 40s linear infinite;will-change:transform;}
+    .ticker-track:hover{animation-play-state:paused;}
+    .ticker-item{display:inline-flex;align-items:center;gap:6px;padding:0 20px;font-size:11px;font-weight:600;color:rgba(255,255,255,0.5);letter-spacing:0.02em;font-family:'Manrope',sans-serif;}
+    .ticker-item .ti-teams{color:rgba(255,255,255,0.85);font-weight:700;}
+    .ticker-item .ti-live{color:#30D158;font-weight:800;letter-spacing:0.05em;}
+    .ticker-item .ti-time{color:rgba(255,255,255,0.35);}
+    .ticker-sep{color:rgba(255,255,255,0.15);padding:0 4px;font-size:10px;}
     .lh-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:rgba(255,255,255,0.06);border-radius:12px;overflow:hidden;}
     .lh-stat{background:#2C2C2E;padding:10px 6px;text-align:center;}
     .lh-stat-val{font-size:16px;font-weight:700;letter-spacing:-0.3px;line-height:1;margin-bottom:2px;}
@@ -2292,6 +2309,38 @@ export default function App() {
                 <div className="stat-pill"><div className="stat-pill-val" style={{color:IOS.green}}>{realStandings.find(s=>s.isYou)?.wpct||"0%"}</div><div className="stat-pill-lbl">Win %</div></div>
                 <div className="stat-pill"><div className="stat-pill-val" style={{color:IOS.green}}>{realStandings.find(s=>s.isYou)?.points||0}pts</div><div className="stat-pill-lbl">Points</div></div>
               </div>
+
+              {/* Games Ticker */}
+              {tickerGames.length > 0 && (() => {
+                const now = new Date();
+                const items = tickerGames.map(g => {
+                  const t = new Date(g.time);
+                  const isLive = now >= t && now < new Date(t.getTime() + 4*60*60*1000);
+                  const isToday = t.toDateString() === now.toDateString();
+                  const timeStr = t.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+                  const away = g.away.split(' ').pop(); // last word = team name
+                  const home = g.home.split(' ').pop();
+                  return {away, home, isLive, isToday, timeStr};
+                });
+                // Duplicate for seamless loop
+                const doubled = [...items, ...items];
+                return (
+                  <div className='ticker-wrap'>
+                    <div className='ticker-track' style={{animationDuration: Math.max(20, items.length * 8) + 's'}}>
+                      {doubled.map((g, i) => (
+                        <span key={i} className='ticker-item'>
+                          <span className='ti-teams'>{g.away} @ {g.home}</span>
+                          {g.isLive
+                            ? <span className='ti-live'>● LIVE</span>
+                            : <span className='ti-time'>{g.isToday ? g.timeStr : g.timeStr}</span>
+                          }
+                          <span className='ticker-sep'>|</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Matchup — compact card — only show if there's a real opponent */}
               {(()=>{
