@@ -2200,18 +2200,16 @@ export default function App() {
               {/* Matchup — compact card — only show if there's a real opponent */}
               {(()=>{
                 const myPicks = weekPicks.filter(p=>p.user_id===user?.id);
-                const oppPicks = weekPicks.filter(p=>p.user_id!==user?.id);
-                const oppUserIds = [...new Set(oppPicks.map(p=>p.user_id))];
-                const oppUserId = oppUserIds[0];
                 const currentWeekNum = activeLeague.current_week||activeLeague.week||1;
                 const currentOpp = liveSchedule.find(w=>w.week===currentWeekNum)?.opp;
+                const oppId = liveSchedule.find(w=>w.week===currentWeekNum)?.oppId;
                 const targetSize = activeLeague.target_size||activeLeague.max_members||8;
                 const leagueIsFull = leagueMembers.length >= targetSize;
                 const hasOpponent = leagueMembers.filter(m=>!m.isYou).length > 0;
 
                 if(!leagueIsFull || !hasOpponent) return null;
 
-                const oppUserPicks = oppUserId ? oppPicks.filter(p=>p.user_id===oppUserId) : [];
+                const oppUserPicks = oppId ? weekPicks.filter(p=>p.user_id===oppId) : [];
                 const oppName = oppUserPicks[0]?.users?.username || oppUserPicks[0]?.users?.email?.split("@")[0] || currentOpp || "Opponent";
                 const myTotal = parseFloat(myPicks.filter(p=>p.result==="W").reduce((sum,p)=>sum+parseFloat(p.points_earned||0),0).toFixed(1));
                 const oppTotal = parseFloat(oppUserPicks.filter(p=>p.result==="W").reduce((sum,p)=>sum+parseFloat(p.points_earned||0),0).toFixed(1));
@@ -3162,16 +3160,13 @@ export default function App() {
                   </div>
                 );
 
-                // Get my picks and opponent's picks from weekPicks
+                // Get my picks and opponent's picks from weekPicks — use schedule to find correct opponent
                 const myPicks = weekPicks.filter(p=>p.user_id===user?.id);
-                const oppPicks = weekPicks.filter(p=>p.user_id!==user?.id);
                 const currentWeekNum = activeLeague.current_week||activeLeague.week||1;
                 const currentOpp = liveSchedule.find(w=>w.week===currentWeekNum)?.opp || "Opponent";
+                const oppId = liveSchedule.find(w=>w.week===currentWeekNum)?.oppId;
 
-                // Get opponent's user picks (first non-me user who has picks)
-                const oppUserIds = [...new Set(oppPicks.map(p=>p.user_id))];
-                const oppUserId = oppUserIds[0];
-                const oppUserPicks = oppUserId ? oppPicks.filter(p=>p.user_id===oppUserId) : [];
+                const oppUserPicks = oppId ? weekPicks.filter(p=>p.user_id===oppId) : [];
                 const oppName = oppUserPicks[0]?.users?.username || oppUserPicks[0]?.users?.email?.split("@")[0] || currentOpp;
 
                 // Calculate scores
