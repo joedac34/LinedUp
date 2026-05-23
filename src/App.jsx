@@ -1863,31 +1863,19 @@ export default function App() {
           {
             icon: "🏈",
             title: "Create or Join a League",
-            body: "Tap 'All Leagues' to create your own league or join one with an invite code. Leagues are 4–8 players and run for a full season.",
+            body: "Tap 'All Leagues' to create your own league or join one with an invite code. Leagues are 6–12 players.",
             highlight: "All Leagues",
             pos: "top",
           },
           {
             icon: "🎯",
             title: "Build Your Pick Slip",
-            body: "Each week you get 5 pick slots — Moneyline, Prop, Over/Under, Spread, and a Longshot. For each pick, choose your bet AND set a multiplier (1x–5x). No multiplier = no points, even if you win.",
+            body: "Each week you get 5 pick slots — Moneyline, Prop, Over/Under, Spread, and a Longshot (straight or parlay). For each pick, choose your bet and set a multiplier (1x–5x).",
             highlight: null,
             pos: "center",
           },
-          {
-            icon: "🚀",
-            title: "The Longshot Slot",
-            body: "The Longshot is a 5x multiplier parlay. Chain multiple underdogs together — if they all hit, you score massive points. High risk, huge reward.",
-            highlight: null,
-            pos: "center",
-          },
-          {
-            icon: "⚡",
-            title: "Multipliers",
-            body: "Each pick slot has a multiplier (1x–5x). Higher multiplier = more points if you win, but your league may have rules on how many you can use.",
-            highlight: null,
-            pos: "center",
-          },
+
+
           {
             icon: "📊",
             title: "Matchups & Scoring",
@@ -1898,7 +1886,7 @@ export default function App() {
           {
             icon: "🔒",
             title: "Lock It In",
-            body: "Once you're happy with your slip, lock it before the first game kicks off. Locked slips can't be changed. Good luck!",
+            body: "Once you're happy with your slip, lock it in. You can still make changes up until the first event actually starts. Good luck!",
             highlight: null,
             pos: "bottom",
           },
