@@ -1115,7 +1115,7 @@ export default function App() {
   };
 
   const fetchUserProfile = async (uid) => {
-    const {data} = await supabase.from("users").select("id,username,email").eq("id",uid).maybeSingle();
+    const {data} = await supabase.from("users").select("id,username,email,push_enabled,notif_results,notif_grades,notif_reminder,notif_league").eq("id",uid).maybeSingle();
     if(data) {
       setUserProfile(data);
       // Only show prompt if no username AND account is older than 30 seconds
@@ -4046,6 +4046,11 @@ export default function App() {
                           const week = activeLeague.current_week||activeLeague.week||1;
                           await fetchWeekPicks(activeLeague.id, week);
                           await fetchStandings(activeLeagueId);
+                          // 🔔 PUSH TRIGGER: notif_grades — notify user their picks were graded
+                          // await fetch('/api/notify', {method:'POST',headers:{'Content-Type':'application/json'},
+                          //   body:JSON.stringify({userId:uid, title:'Picks Graded!',
+                          //     body:`Your Week ${week} picks have been graded. Check your results!`,
+                          //     data:{screen:'matchup'}})});
                           alert(memberData.name+"'s picks submitted!");
                         }} style={{width:"100%",background:"linear-gradient(135deg,"+IOS.blue+","+IOS.indigo+")",border:"none",borderRadius:10,padding:"12px",fontFamily:"Manrope,sans-serif",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer",letterSpacing:-0.2}}>
                           ✓ Submit Picks for {memberData.name}
@@ -4199,6 +4204,18 @@ export default function App() {
                           alert(`✅ Advanced to Week ${nextWeek}! Slips have been reset.`);
                         }
 
+                        // 🔔 PUSH TRIGGER: notif_results — notify all users of weekly result
+                        // for(const m of (weekMatchups||[])) {
+                        //   for(const uid of [m.user1_id, m.user2_id]) {
+                        //     const won = (totals[uid]||0) >= (totals[uid===m.user1_id?m.user2_id:m.user1_id]||0);
+                        //     await fetch('/api/notify', {method:'POST',headers:{'Content-Type':'application/json'},
+                        //       body:JSON.stringify({userId:uid,
+                        //         title: won ? 'You Won This Week! 🏆' : 'Week Result',
+                        //         body: won ? `You won Week ${currentWeek}! Check your standings.`
+                        //                   : `Week ${currentWeek} is over. Better luck next week!`,
+                        //         data:{screen:'matchup'}})});
+                        //   }
+                        // }
                         await fetchLeagues(user.id);
                         await fetchStandings(activeLeague.id);
                         await fetchSchedule(activeLeague.id, user.id);
@@ -4864,6 +4881,49 @@ export default function App() {
                   ))}
                 </div>
               )}
+
+              {/* Notification Preferences */}
+              <div style={{margin:"0 16px 12px"}}>
+                <div style={{fontSize:11,fontWeight:700,color:IOS.label3,letterSpacing:1,textTransform:"uppercase",marginBottom:8,paddingLeft:4}}>Notifications</div>
+                <div style={{background:IOS.bg2,borderRadius:14,overflow:"hidden",border:"1px solid rgba(255,255,255,0.06)"}}>
+                  {[
+                    {key:"notif_results",    label:"Weekly Results",      sub:"When your week is graded",         icon:"🏆"},
+                    {key:"notif_grades",     label:"Picks Graded",        sub:"When a pick result comes in",      icon:"✅"},
+                    {key:"notif_reminder",   label:"Pick Reminder",       sub:"Reminder before slip locks",       icon:"⏰"},
+                    {key:"notif_league",     label:"League Activity",     sub:"New members, chat messages",       icon:"👥"},
+                  ].map((pref,i,arr)=>{
+                    const val = userProfile?.[pref.key] !== false; // default true
+                    return (
+                      <div key={pref.key} style={{display:"flex",alignItems:"center",padding:"12px 16px",borderBottom:i<arr.length-1?`0.5px solid ${IOS.sep}`:"none"}}>
+                        <div style={{fontSize:18,marginRight:12}}>{pref.icon}</div>
+                        <div style={{flex:1}}>
+                          <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>{pref.label}</div>
+                          <div style={{fontSize:12,color:IOS.label3,marginTop:1}}>{pref.sub}</div>
+                        </div>
+                        {/* Toggle */}
+                        <div onClick={async()=>{
+                          const newVal = !val;
+                          setUserProfile(prev=>({...prev,[pref.key]:newVal}));
+                          await supabase.from("users").update({[pref.key]:newVal}).eq("id",user.id);
+                        }} style={{width:44,height:26,borderRadius:13,background:val?IOS.green:"rgba(255,255,255,0.15)",cursor:"pointer",position:"relative",transition:"background 0.2s",flexShrink:0}}>
+                          <div style={{position:"absolute",top:3,left:val?21:3,width:20,height:20,borderRadius:"50%",background:"#fff",transition:"left 0.2s",boxShadow:"0 1px 4px rgba(0,0,0,0.3)"}}/>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {/* Master push toggle */}
+                  <div style={{display:"flex",alignItems:"center",padding:"12px 16px",borderTop:`1px solid ${IOS.sep}`,background:"rgba(255,255,255,0.03)"}}>
+                    <div style={{fontSize:18,marginRight:12}}>🔔</div>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>Push Notifications</div>
+                      <div style={{fontSize:12,color:IOS.orange,marginTop:1}}>Coming soon — iOS App Store</div>
+                    </div>
+                    <div style={{width:44,height:26,borderRadius:13,background:"rgba(255,255,255,0.1)",position:"relative",opacity:0.4}}>
+                      <div style={{position:"absolute",top:3,left:3,width:20,height:20,borderRadius:"50%",background:"#fff"}}/>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
               {/* How to Play */}
               <div style={{padding:"0 16px 4px"}}>
