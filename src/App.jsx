@@ -611,6 +611,7 @@ export default function App() {
   const [liveOdds,    setLiveOdds]    = useState({}); // { sportId: {ml,prop,ou,spread,longshot} }
   const [tickerGames, setTickerGames] = useState([]); // raw games for the ticker
   const [espnGames,   setEspnGames]   = useState([]); // ESPN scoreboard with IDs
+  const [weekResult,  setWeekResult]  = useState(null); // {won, myPts, oppPts, oppName, week}
   const [gameSheet,   setGameSheet]   = useState(null); // { tickerGame, espnGame, detail }
   const [gameLoading, setGameLoading] = useState(false);
   const [oddsLoading, setOddsLoading] = useState(false);
@@ -2375,7 +2376,7 @@ export default function App() {
                 };
                 return (
                   <div className='ticker-wrap'>
-                    <div className='ticker-track' style={{animationDuration: Math.max(20, items.length * 8) + 's'}}>
+                    <div className='ticker-track' style={{animationDuration: Math.max(12, items.length * 5) + 's'}}>
                       {doubled.map((g, i) => (
                         <span key={i} className='ticker-item'
                           onClick={e=>{e.stopPropagation();if(i<items.length)openGame(g);}}
@@ -4121,25 +4122,73 @@ export default function App() {
                       <button onClick={async()=>{
                         if(!window.confirm(`End Week ${activeLeague.current_week||1} and start Week ${(activeLeague.current_week||1)+1}? Make sure all slips are graded first.`)) return;
                         setAdvancingWeek(true);
-                        const nextWeek = (activeLeague.current_week||1) + 1;
-                        await supabase.from("leagues").update({current_week: nextWeek}).eq("id", activeLeague.id);
-                        // Find week winner — highest scorer gets a wheel spin
+                        const currentWeek = activeLeague.current_week||1;
+                        const nextWeek = currentWeek + 1;
+
+                        // Tally points per user for this week
                         const {data:weekPicksAll} = await supabase
                           .from("picks")
                           .select("user_id, points_earned")
                           .eq("league_id", activeLeague.id)
-                          .eq("week", activeLeague.current_week||1)
+                          .eq("week", currentWeek)
                           .eq("result","W");
+
+                        const totals = {};
+                        (weekPicksAll||[]).forEach(p=>{
+                          totals[p.user_id]=(totals[p.user_id]||0)+parseFloat(p.points_earned||0);
+                        });
+
+                        // Fetch this week's matchups and write winner_id for each
+                        const {data:weekMatchups} = await supabase
+                          .from("matchups")
+                          .select("id, user1_id, user2_id")
+                          .eq("league_id", activeLeague.id)
+                          .eq("week", currentWeek)
+                          .is("winner_id", null);
+
+                        for(const m of (weekMatchups||[])) {
+                          const p1 = totals[m.user1_id]||0;
+                          const p2 = totals[m.user2_id]||0;
+                          const winnerId = p1 >= p2 ? m.user1_id : m.user2_id;
+                          const u1pts = parseFloat(p1.toFixed(1));
+                          const u2pts = parseFloat(p2.toFixed(1));
+                          await supabase.from("matchups").update({
+                            winner_id: winnerId,
+                            user1_points: u1pts,
+                            user2_points: u2pts,
+                          }).eq("id", m.id);
+                        }
+
+                        // Advance week
+                        await supabase.from("leagues").update({current_week: nextWeek}).eq("id", activeLeague.id);
+
+                        // Store week result in DB for each user to see on next login
+                        for(const m of (weekMatchups||[])) {
+                          const p1 = totals[m.user1_id]||0;
+                          const p2 = totals[m.user2_id]||0;
+                          const winnerId = p1 >= p2 ? m.user1_id : m.user2_id;
+                          for(const [uid, myPts, oppId, oppPts] of [
+                            [m.user1_id, p1, m.user2_id, p2],
+                            [m.user2_id, p2, m.user1_id, p1],
+                          ]) {
+                            await supabase.from("users").update({
+                              pending_result: JSON.stringify({
+                                won: winnerId===uid,
+                                myPts: parseFloat(myPts.toFixed(1)),
+                                oppPts: parseFloat(oppPts.toFixed(1)),
+                                week: currentWeek,
+                              })
+                            }).eq("id", uid);
+                          }
+                        }
+
+                        // Wheel spin for top scorer
                         if(weekPicksAll && weekPicksAll.length > 0) {
-                          const totals = {};
-                          weekPicksAll.forEach(p=>{ totals[p.user_id]=(totals[p.user_id]||0)+parseFloat(p.points_earned||0); });
-                          const winnerId = Object.entries(totals).sort((a,b)=>b[1]-a[1])[0]?.[0];
-                          if(winnerId === user.id) {
+                          const topScorerId = Object.entries(totals).sort((a,b)=>b[1]-a[1])[0]?.[0];
+                          if(topScorerId === user.id) {
                             setWheelSpins(s=>s+1);
-                            // Save to DB
-                            const curSpins = wheelSpins+1;
                             await supabase.from("league_members")
-                              .update({wheel_spins: curSpins})
+                              .update({wheel_spins: wheelSpins+1})
                               .eq("league_id", activeLeague.id)
                               .eq("user_id", user.id);
                             alert(`✅ Advanced to Week ${nextWeek}! You were the top scorer — you earned a 🎰 Wheel Spin!`);
@@ -4149,10 +4198,13 @@ export default function App() {
                         } else {
                           alert(`✅ Advanced to Week ${nextWeek}! Slips have been reset.`);
                         }
+
                         await fetchLeagues(user.id);
+                        await fetchStandings(activeLeague.id);
+                        await fetchSchedule(activeLeague.id, user.id);
                         setSavedPicks(null);
                         setFlexPicks(EMPTY_FLEX);
-                        try { localStorage.removeItem(`linedup_picks_${activeLeague.id}_wk${activeLeague.current_week||activeLeague.week||1}`); } catch(e) {}
+                        try { localStorage.removeItem(`linedup_picks_${activeLeague.id}_wk${currentWeek}`); } catch(e) {}
                         setAdvancingWeek(false);
                       }} style={{width:"100%",background:advancingWeek?"rgba(255,255,255,0.08)":IOS.green,border:"none",borderRadius:12,padding:"14px",fontFamily:"Manrope,sans-serif",fontSize:15,fontWeight:700,color:advancingWeek?"rgba(255,255,255,0.3)":"#000",cursor:advancingWeek?"default":"pointer"}}>
                         {advancingWeek ? "Advancing..." : `⏭ End Week ${activeLeague.current_week||1} · Start Week ${(activeLeague.current_week||1)+1}`}
@@ -4860,6 +4912,39 @@ export default function App() {
 
             </div>
           </>
+        )}
+
+        {/* ══ WEEK RESULT MODAL ══ */}
+        {weekResult && (
+          <div style={{position:"fixed",inset:0,zIndex:9500,display:"flex",alignItems:"center",justifyContent:"center",padding:24}} onClick={()=>setWeekResult(null)}>
+            <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.85)",backdropFilter:"blur(6px)"}}/>
+            <div onClick={e=>e.stopPropagation()} style={{position:"relative",background:"#1C1C1E",borderRadius:28,padding:"36px 28px 28px",width:"100%",maxWidth:340,textAlign:"center",border:`1px solid ${weekResult.won?"rgba(48,209,88,0.3)":"rgba(255,69,58,0.3)"}`,boxShadow:`0 0 60px ${weekResult.won?"rgba(48,209,88,0.15)":"rgba(255,69,58,0.1)"}`}}>
+              {/* Icon */}
+              <div style={{fontSize:56,marginBottom:8}}>{weekResult.won ? "🏆" : "💀"}</div>
+              {/* Result */}
+              <div style={{fontSize:26,fontWeight:800,letterSpacing:-0.5,color:weekResult.won?IOS.green:IOS.red,marginBottom:6}}>
+                {weekResult.won ? "You Won!" : "You Lost"}
+              </div>
+              <div style={{fontSize:14,color:"rgba(255,255,255,0.5)",marginBottom:24}}>
+                Week {weekResult.week} Matchup Result
+              </div>
+              {/* Score */}
+              <div style={{background:"rgba(255,255,255,0.06)",borderRadius:16,padding:"16px 20px",marginBottom:24}}>
+                <div style={{fontSize:36,fontWeight:800,letterSpacing:-1,color:"#fff",marginBottom:4}}>
+                  <span style={{color:weekResult.won?IOS.green:"#fff"}}>{weekResult.myPts}</span>
+                  <span style={{fontSize:20,color:"rgba(255,255,255,0.3)",margin:"0 10px"}}>–</span>
+                  <span style={{color:weekResult.won?"#fff":IOS.red}}>{weekResult.oppPts}</span>
+                </div>
+                <div style={{fontSize:12,color:"rgba(255,255,255,0.35)"}}>
+                  You vs Opponent · Wk {weekResult.week}
+                </div>
+              </div>
+              {/* CTA */}
+              <button onClick={()=>setWeekResult(null)} style={{width:"100%",background:weekResult.won?IOS.green:IOS.blue,border:"none",borderRadius:14,padding:"14px",fontSize:15,fontWeight:700,color:weekResult.won?"#000":"#fff",cursor:"pointer",fontFamily:"Manrope,sans-serif"}}>
+                {weekResult.won ? "Let's Go! 🔥" : "Get 'Em Next Week"}
+              </button>
+            </div>
+          </div>
         )}
 
         {/* ══ GAME DETAIL SHEET ══ */}
