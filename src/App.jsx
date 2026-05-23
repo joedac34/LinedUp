@@ -1870,7 +1870,7 @@ export default function App() {
           {
             icon: "🎯",
             title: "Build Your Pick Slip",
-            body: "Each week you get 5 pick slots — Moneyline, Prop, Over/Under, Spread, and a Longshot (straight or parlay). For each pick, choose your bet and set a multiplier (1x–5x).",
+            body: "Each week you get 5 pick slots — Moneyline, Prop, Over/Under, Spread, and a Longshot (straight or parlay of +400 or greater). For each pick, choose your bet and set a multiplier (1x–5x).",
             highlight: null,
             pos: "center",
           },
@@ -4712,8 +4712,15 @@ export default function App() {
                 </div>
               )}
 
-              {/* Sign Out */}
-              <div style={{padding:"8px 16px 32px"}}>
+              {/* How to Play */}
+              <div style={{padding:"0 16px 4px"}}>
+                <button onClick={()=>setTutorialStep(0)} style={{width:"100%",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"14px",fontSize:15,fontWeight:600,color:"rgba(255,255,255,0.7)",cursor:"pointer",fontFamily:"Manrope,sans-serif"}}>
+                  ❓ How to Play
+                </button>
+              </div>
+
+              {/* Sign Out + Delete Account */}
+              <div style={{padding:"8px 16px 32px",display:"flex",flexDirection:"column",gap:10}}>
                 <button onClick={async()=>{
                   await supabase.auth.signOut();
                   setUser(null);
@@ -4725,6 +4732,28 @@ export default function App() {
                   setScreen("home");
                 }} style={{width:"100%",background:"rgba(255,59,48,0.1)",border:"1px solid rgba(255,59,48,0.2)",borderRadius:12,padding:"14px",fontSize:15,fontWeight:600,color:IOS.red,cursor:"pointer",fontFamily:"Manrope,sans-serif"}}>
                   Sign Out
+                </button>
+                <button onClick={async()=>{
+                  const confirm1 = window.confirm("Are you sure you want to delete your account? This cannot be undone.");
+                  if(!confirm1) return;
+                  const confirm2 = window.confirm("Last chance — this will permanently delete your account and all your picks.");
+                  if(!confirm2) return;
+                  // Delete user data from DB
+                  await supabase.from("picks").delete().eq("user_id", user.id);
+                  await supabase.from("league_members").delete().eq("user_id", user.id);
+                  await supabase.from("users").delete().eq("id", user.id);
+                  await supabase.auth.admin?.deleteUser(user.id).catch(()=>{});
+                  await supabase.auth.signOut();
+                  setUser(null);
+                  setUserProfile(null);
+                  setRealLeagues([]);
+                  setActiveLeagueId(null);
+                  setSavedPicks(null);
+                  setFlexPicks(EMPTY_FLEX);
+                  setScreen("home");
+                  alert("Your account has been deleted.");
+                }} style={{width:"100%",background:"transparent",border:"none",borderRadius:12,padding:"10px",fontSize:13,fontWeight:600,color:"rgba(255,59,48,0.5)",cursor:"pointer",fontFamily:"Manrope,sans-serif"}}>
+                  Delete Account
                 </button>
               </div>
 
