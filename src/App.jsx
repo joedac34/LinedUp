@@ -1211,7 +1211,11 @@ export default function App() {
         wpct: total > 0 ? `${Math.round(s.wins/total*100)}%` : "0%",
         isYou: uid === user?.id,
       };
-    }).sort((a,b)=>b.points-a.points)
+    }).sort((a,b)=>{
+      // Wins first, then points as tiebreaker
+      if(b.wins !== a.wins) return b.wins - a.wins;
+      return b.points - a.points;
+    })
       .map((s,i)=>({...s, rank:i+1}));
 
     setRealStandings(standings);
@@ -1513,7 +1517,11 @@ export default function App() {
     if(sortBy==="roi")   return parseFloat(b.roi)-parseFloat(a.roi);
     if(sortBy==="units") return parseFloat(b.units)-parseFloat(a.units);
     if(sortBy==="wpct")  return parseFloat(b.wpct)-parseFloat(a.wpct);
-    return a.rank-b.rank;
+    // Default: wins first, then points as tiebreaker
+    const aWins = parseInt((a.record||"0-0").split("-")[0])||0;
+    const bWins = parseInt((b.record||"0-0").split("-")[0])||0;
+    if(bWins !== aWins) return bWins - aWins;
+    return (b.points||0) - (a.points||0);
   });
 
   const W=280;const R=W/2;const segA=360/WHEEL_ITEMS.length;
@@ -4341,30 +4349,50 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Weekly scores */}
-                  <div style={{background:IOS.bg2,borderRadius:16,margin:"0 16px 16px",overflow:"hidden"}}>
-                    {realStandings.length===0 ? (
-                      <div style={{padding:"20px 16px",textAlign:"center",color:IOS.label3,fontSize:14}}>No graded picks yet this week</div>
-                    ) : (
-                      [...realStandings].sort((a,b)=>b.points-a.points).map((row,i)=>{
-                        const isMe = row.isYou;
-                        return (
-                          <div key={row.userId} style={{display:"flex",alignItems:"center",padding:"13px 16px",background:isMe?"rgba(10,132,255,0.08)":"transparent",borderBottom:i<realStandings.length-1?`0.5px solid ${IOS.sep}`:"none"}}>
-                            <div style={{width:28,fontSize:15,fontWeight:700,color:i===0?IOS.yellow:i===1?IOS.gray:i===2?IOS.orange:IOS.label3,flexShrink:0}}>
-                              {i===0?"🥇":i===1?"🥈":i===2?"🥉":`${i+1}`}
+                  {/* Weekly scores — filtered to current week only */}
+                  {(()=>{
+                    const curWeek = activeLeague.current_week||activeLeague.week||1;
+                    const curWeekPicks = weekPicks.filter(p=>p.week===curWeek);
+                    // Group by user
+                    const byUser = {};
+                    curWeekPicks.forEach(p=>{
+                      if(!byUser[p.user_id]) byUser[p.user_id]={wins:0,losses:0,points:0,name:p.users?.username||p.users?.email?.split("@")[0]||"Unknown",isYou:p.user_id===user?.id};
+                      if(p.result==="W"){ byUser[p.user_id].wins++; byUser[p.user_id].points+=parseFloat(p.points_earned||0); }
+                      else if(p.result==="L") byUser[p.user_id].losses++;
+                    });
+                    // Include all league members even if no picks yet
+                    const allMembers = leagueMembers.map(m=>({
+                      userId: m.userId||m.user_id||m.id,
+                      name: m.isYou?"You":m.name||m.username||"Unknown",
+                      isYou: m.isYou,
+                      ...(byUser[m.userId||m.user_id||m.id]||{wins:0,losses:0,points:0}),
+                    }));
+                    const sorted = [...allMembers].sort((a,b)=>b.points-a.points);
+                    return (
+                      <div style={{background:IOS.bg2,borderRadius:16,margin:"0 16px 16px",overflow:"hidden"}}>
+                        {sorted.length===0 ? (
+                          <div style={{padding:"20px 16px",textAlign:"center",color:IOS.label3,fontSize:14}}>No graded picks yet this week</div>
+                        ) : sorted.map((row,i)=>{
+                          const isMe = row.isYou;
+                          const pts = parseFloat((row.points||0).toFixed(1));
+                          return (
+                            <div key={row.userId||i} style={{display:"flex",alignItems:"center",padding:"13px 16px",background:isMe?"rgba(10,132,255,0.08)":"transparent",borderBottom:i<sorted.length-1?`0.5px solid ${IOS.sep}`:"none"}}>
+                              <div style={{width:28,fontSize:15,fontWeight:700,color:i===0?IOS.yellow:i===1?IOS.gray:i===2?IOS.orange:IOS.label3,flexShrink:0}}>
+                                {i===0?"🥇":i===1?"🥈":i===2?"🥉":`${i+1}`}
+                              </div>
+                              <div style={{flex:1}}>
+                                <div style={{fontSize:15,fontWeight:600,color:isMe?IOS.blue:"#fff"}}>{isMe?"You ✦":row.name}</div>
+                                <div style={{fontSize:12,color:IOS.label3,marginTop:1}}>{row.wins}W · {row.losses}L this week</div>
+                              </div>
+                              <div style={{textAlign:"right"}}>
+                                <div style={{fontSize:20,fontWeight:800,letterSpacing:-0.5,color:pts>0?IOS.green:IOS.label3}}>{pts}pts</div>
+                              </div>
                             </div>
-                            <div style={{flex:1}}>
-                              <div style={{fontSize:15,fontWeight:600,color:isMe?IOS.blue:"#fff"}}>{isMe?"You ✦":row.name}</div>
-                              <div style={{fontSize:12,color:IOS.label3,marginTop:1}}>{row.wins}W · {row.losses}L this week</div>
-                            </div>
-                            <div style={{textAlign:"right"}}>
-                              <div style={{fontSize:20,fontWeight:800,letterSpacing:-0.5,color:row.points>0?IOS.green:IOS.label3}}>{row.points}pts</div>
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
 
                   {/* Season Standings section */}
                   <div style={{padding:"4px 20px 8px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
@@ -4394,14 +4422,14 @@ export default function App() {
                               <div className={`st-name ${isMe?"me":""}`}>{isMe?"You ✦":row.name}</div>
                               <div className="st-streak" style={{color:IOS.label3}}>{row.wpct} win rate</div>
                             </div>
-                            <div className="st-rec" style={{color:IOS.label3}}>0-0</div>
+                            <div className="st-rec" style={{color:IOS.label3}}>{row.record||"0-0"}</div>
                             <div className={`st-units ${(row.points||0)>0?"pos":"neg"}`}>{row.points!==undefined?`${row.points}`:row.units}</div>
                           </div>
                           {isExp&&(
                             <div className="expand-row">
                               <div className="expand-inner">
                                 <div className="exp-stat-row">
-                                  <div className="exp-stat"><div className="exp-stat-val" style={{color:IOS.blue}}>0-0</div><div className="exp-stat-lbl">W/L</div></div>
+                                  <div className="exp-stat"><div className="exp-stat-val" style={{color:IOS.blue}}>{row.record||"0-0"}</div><div className="exp-stat-lbl">W/L</div></div>
                                   <div className="exp-stat"><div className="exp-stat-val" style={{color:IOS.green}}>{row.wpct}</div><div className="exp-stat-lbl">Win %</div></div>
                                   <div className="exp-stat"><div className="exp-stat-val" style={{color:IOS.green}}>{row.points!==undefined?`${row.points}pts`:row.units}</div><div className="exp-stat-lbl">Points</div></div>
                                 </div>
