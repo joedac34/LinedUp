@@ -4136,7 +4136,27 @@ export default function App() {
                     </div>
                     <div style={{padding:"14px 16px"}}>
                       <div style={{fontSize:14,color:"#fff",marginBottom:4}}>Week {activeLeague.current_week||1} of {activeLeague.season_weeks||18}</div>
-                      <div style={{fontSize:12,color:IOS.orange,marginBottom:14}}>⚠ Grade all slips before advancing</div>
+                      <div style={{fontSize:12,color:IOS.orange,marginBottom:14}}>⚠ Auto-grade runs hourly. You can also trigger it manually below.</div>
+                      {/* Auto-grade button */}
+                      <button onClick={async()=>{
+                        try {
+                          const r = await fetch("/api/grade", {
+                            method:"POST",
+                            headers:{"Content-Type":"application/json"},
+                            body: JSON.stringify({secret: import.meta.env.VITE_CRON_SECRET||""})
+                          });
+                          const d = await r.json();
+                          if(d.ok) {
+                            await fetchWeekPicks(activeLeague.id, activeLeague.current_week||1);
+                            await fetchStandings(activeLeague.id);
+                            alert(`✅ Auto-grade complete!\nGraded: ${d.graded} picks\nSkipped: ${d.skipped} (props or incomplete games)`);
+                          } else {
+                            alert("Grade error: " + (d.error||"Unknown"));
+                          }
+                        } catch(e) { alert("Failed to reach grade API: " + e.message); }
+                      }} style={{width:"100%",background:"rgba(10,132,255,0.15)",border:"1px solid rgba(10,132,255,0.3)",borderRadius:12,padding:"12px",fontFamily:"Manrope,sans-serif",fontSize:14,fontWeight:700,color:IOS.blue,cursor:"pointer",marginBottom:10}}>
+                        ⚡ Run Auto-Grade Now
+                      </button>
                       <button onClick={async()=>{
                         if(!window.confirm(`End Week ${activeLeague.current_week||1} and start Week ${(activeLeague.current_week||1)+1}? Make sure all slips are graded first.`)) return;
                         setAdvancingWeek(true);
