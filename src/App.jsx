@@ -2582,9 +2582,14 @@ export default function App() {
                 </div>
               </div>
               <div style={{background:IOS.bg2,borderRadius:16,margin:"0 16px",overflow:"hidden"}}>
-                {baseStandings.slice(0,5).map(r=>(
+                {[...baseStandings].sort((a,b)=>{
+                  const aw=parseInt((a.record||"0-0").split("-")[0])||0;
+                  const bw=parseInt((b.record||"0-0").split("-")[0])||0;
+                  if(bw!==aw) return bw-aw;
+                  return (b.points||0)-(a.points||0);
+                }).slice(0,5).map((r,i)=>(
                   <div key={r.rank} className="mini-stand" style={r.isYou||r.name==="You"?{background:"rgba(10,132,255,0.08)"}:{}}>
-                    <div className={`ms-rank ${r.rank===1?"top":""}`}>{r.rank}</div>
+                    <div className={`ms-rank ${i===0?"top":""}`}>{i+1}</div>
                     <div className={`ms-name ${r.isYou||r.name==="You"?"me":""}`}>{r.isYou||r.name==="You"?"You":r.name}</div>
                     <div className="ms-rec">{r.record}</div>
                     <div className={`ms-units ${String(r.units).startsWith("+")&&r.units!=="0"?"pos":"neg"}`}>{r.points!==undefined?`${r.points}pts`:r.units}</div>
