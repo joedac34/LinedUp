@@ -1963,6 +1963,7 @@ export default function App() {
       </div>
     , document.body)}
     <div style={{minHeight:"100vh",background:"#111",display:"flex",justifyContent:"center",alignItems:"flex-start",position:"relative"}}>
+      <style>{css}</style>
 
       {/* ══ AUTH SCREEN ══ */}
       {!user && (
