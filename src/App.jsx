@@ -2582,6 +2582,7 @@ export default function App() {
                 );
               })()}
 
+              {homeTab==='home' && <>
               {/* Games available widget — replaces countdown timer */}
               {(()=>{
                 const sportBets = liveOdds[activeLeague.sport];
@@ -2665,6 +2666,8 @@ export default function App() {
               )}
 
               {/* Power-Ups */}
+              </>}
+
               {homeTab==='home' && <>
               <div className="ios-section" style={{margin:"12px 16px 6px"}}>
                 <div className="ios-section-header" style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
