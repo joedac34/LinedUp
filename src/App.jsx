@@ -1395,7 +1395,11 @@ export default function App() {
   const [savedPicks,  setSavedPicks]  = useState(null);
   const [selectedMatchup, setSelectedMatchup] = useState(null);
   const [pastMatchupPicks, setPastMatchupPicks] = useState({my:[], opp:[]});
-  const [pastMatchupLoading, setPastMatchupLoading] = useState(false); // week number of selected past matchup // locked picks for the week
+  const [pastMatchupLoading, setPastMatchupLoading] = useState(false);
+  useEffect(()=>{
+    const phone = document.querySelector('.phone');
+    if(phone) phone.style.overflow = selectedMatchup ? 'visible' : 'hidden';
+  }, [selectedMatchup]); // week number of selected past matchup // locked picks for the week
   const chatRef=useRef(null);
 
   const fetchMessages = async (leagueId) => {
@@ -4648,10 +4652,10 @@ export default function App() {
                     oppPicks: pastMatchupPicks.opp,
                   };
                   const slotColors = {Moneyline:IOS.blue, Prop:IOS.yellow, "Over/Under":IOS.orange, Spread:IOS.green, Parlay:IOS.pink};
-                  const myTotal = parseFloat(calcMatchupScore(m.myPicks));
-                  const oppTotal = parseFloat(calcMatchupScore(m.oppPicks));
+                  const myTotal = m.myPts || 0;
+                  const oppTotal = m.oppPts || 0;
                   return (
-                    <div style={{position:"absolute",inset:0,background:IOS.bg,zIndex:30,overflowY:"auto",paddingBottom:40}}>
+                    <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"#111",zIndex:500,overflowY:"auto",paddingBottom:40}}>
                       {/* Header */}
                       <div style={{padding:"52px 20px 16px",borderBottom:`0.5px solid ${IOS.sep}`}}>
                         <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
