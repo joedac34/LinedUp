@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, createPortal } from "react";
 import { supabase } from './supabase';
 
 // iOS System Colors
@@ -1533,7 +1533,7 @@ export default function App() {
     *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
     ::-webkit-scrollbar{display:none;}
 
-    .phone{width:390px;min-height:844px;background:#000;position:relative;display:flex;flex-direction:column;font-family:'Manrope',system-ui,-apple-system,sans-serif;color:#fff;-webkit-font-smoothing:antialiased;padding-top:env(safe-area-inset-top,0px);box-sizing:border-box;}
+    .phone{width:390px;min-height:844px;background:#000;position:relative;overflow:hidden;display:flex;flex-direction:column;font-family:'Manrope',system-ui,-apple-system,sans-serif;color:#fff;-webkit-font-smoothing:antialiased;padding-top:env(safe-area-inset-top,0px);box-sizing:border-box;}
 
     /* iOS Status Bar */
 
@@ -1902,8 +1902,8 @@ export default function App() {
 
   return (
     <>
-    {/* ══ WHEEL ══ - outside root div so fixed positioning works */}
-    {showWheel && (
+    {/* ══ WHEEL ══ - rendered via portal to escape stacking context */}
+    {showWheel && createPortal(
       <div className="wheel-overlay">
         {showWin && wonPU ? (
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"0 32px",maxWidth:360,width:"100%"}}>
@@ -1961,7 +1961,7 @@ export default function App() {
           </>
         )}
       </div>
-    )}
+    , document.body)}
     <div style={{minHeight:"100vh",background:"#111",display:"flex",justifyContent:"center",alignItems:"flex-start",position:"relative"}}>
 
       {/* ══ AUTH SCREEN ══ */}
