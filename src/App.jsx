@@ -1901,7 +1901,7 @@ export default function App() {
   `;
 
   return (
-    <div style={{minHeight:"100vh",background:"#111",display:"flex",justifyContent:"center",alignItems:"flex-start"}}>
+    <div style={{minHeight:"100vh",background:"#111",display:"flex",justifyContent:"center",alignItems:"flex-start",position:"relative"}}>
       <style>{css}</style>
 
       {/* ══ WHEEL ══ */}
