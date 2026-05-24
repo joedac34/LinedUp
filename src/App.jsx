@@ -608,7 +608,8 @@ export default function App() {
   const SLOTS = sport.slots;
 
   // ─── LIVE ODDS STATE ─────────────────────────────────────────────
-  const [liveOdds,    setLiveOdds]    = useState({}); // { sportId: {ml,prop,ou,spread,longshot} }
+  const [liveOdds,    setLiveOdds]    = useState({});
+  const [homeTab,     setHomeTab]     = useState('home'); // 'home' | 'games'  // { sportId: {ml,prop,ou,spread,longshot} }
   const [tickerGames, setTickerGames] = useState([]); // raw games for the ticker
   const [espnGames,   setEspnGames]   = useState([]); // ESPN scoreboard with IDs
   const [weekResult,  setWeekResult]  = useState(null); // {won, myPts, oppPts, oppName, week}
@@ -2426,6 +2427,15 @@ export default function App() {
               </div>
 
               {/* Games Ticker */}
+              {/* Home / Games tab switcher */}
+              <div style={{display:"flex",gap:0,margin:"8px 16px 0",background:"rgba(255,255,255,0.06)",borderRadius:10,padding:3}}>
+                {[{id:"home",label:"Home"},{id:"games",label:"Games"}].map(t=>(
+                  <div key={t.id} onClick={()=>setHomeTab(t.id)} style={{flex:1,textAlign:"center",padding:"7px",borderRadius:8,fontSize:13,fontWeight:600,cursor:"pointer",transition:"all .15s",background:homeTab===t.id?"rgba(255,255,255,0.12)":"transparent",color:homeTab===t.id?"#fff":"rgba(255,255,255,0.4)"}}>
+                    {t.label}
+                  </div>
+                ))}
+              </div>
+
               {tickerGames.length > 0 && (() => {
                 const now = new Date();
                 // Only highlight games from LOCKED slip (weekPicks from DB)
@@ -2509,7 +2519,7 @@ export default function App() {
               })()}
 
               {/* Matchup — compact card — only show if there's a real opponent */}
-              {(()=>{
+              {homeTab==='home' && (()=>{
                 const myPicks = weekPicks.filter(p=>p.user_id===user?.id);
                 const currentWeekNum = activeLeague.current_week||activeLeague.week||1;
                 const currentOpp = liveSchedule.find(w=>w.week===currentWeekNum)?.opp;
@@ -2655,6 +2665,7 @@ export default function App() {
               )}
 
               {/* Power-Ups */}
+              {homeTab==='home' && <>
               <div className="ios-section" style={{margin:"12px 16px 6px"}}>
                 <div className="ios-section-header" style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <span>Power-Ups</span>
@@ -2702,6 +2713,105 @@ export default function App() {
                 ))}
               </div>
               <div style={{height:16}}/>
+              </>}
+              {homeTab==="games" && (<>
+
+              {/* ══ GAMES TAB ══ */}
+              <div style={{padding:"12px 16px 0"}}>
+                <div style={{fontSize:11,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:IOS.label3,marginBottom:12}}>
+                  {SPORTS[activeLeague?.sport]?.label||"NFL"} · This Week
+                </div>
+              </div>
+
+              {tickerGames.length === 0 ? (
+                <div style={{textAlign:"center",padding:"40px 24px",color:IOS.label3,fontSize:14}}>
+                  <div style={{fontSize:32,marginBottom:8}}>🏈</div>
+                  No games found. Check back closer to game day.
+                </div>
+              ) : tickerGames.map((g, gi) => {
+                const away = g.away.split(" ").pop();
+                const home = g.home.split(" ").pop();
+                const espn = espnGames.find(e =>
+                  e.awayTeam?.toLowerCase().includes(away.toLowerCase()) ||
+                  e.homeTeam?.toLowerCase().includes(home.toLowerCase())
+                );
+                const t = new Date(g.time);
+                const now = new Date();
+                const isLive = now >= t && now < new Date(t.getTime() + 4*60*60*1000);
+                const isDone = espn?.awayScore && espn?.homeScore && !isLive;
+                const gameTime = t.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
+                // Get odds for this game
+                const sportOdds = liveOdds[activeLeague?.sport];
+                const mlOdds = (sportOdds?.ml||[]).filter(o=>o.game?.includes(away)||o.game?.includes(home));
+                const spreadOdds = (sportOdds?.spread||[]).filter(o=>o.game?.includes(away)||o.game?.includes(home));
+                const ouOdds = (sportOdds?.ou||[]).filter(o=>o.game?.includes(away)||o.game?.includes(home));
+                // Check if user has a pick on this game
+                const myPickNames = (weekPicks||[]).filter(p=>p.user_id===user?.id).map(p=>(p.pick_name||"").toLowerCase());
+                const hasPick = myPickNames.some(n=>n.includes(away.toLowerCase())||n.includes(home.toLowerCase()));
+
+                return (
+                  <div key={gi} onClick={async()=>{
+                    const gameOdds = {ml:mlOdds,spread:spreadOdds,ou:ouOdds};
+                    setGameSheet({tickerGame:{...g,away,home,isLive,timeStr:gameTime},espnGame:espn,detail:null,odds:gameOdds});
+                    setGameTeamTab("matchup");
+                    if(espn?.id){
+                      setGameLoading(true);
+                      try{
+                        const r=await fetch(`/api/espn?sport=${SPORT_KEYS[activeLeague?.sport]}&gameId=${espn.id}`);
+                        if(r.ok){const d=await r.json();setGameSheet(prev=>({...prev,detail:d}));}
+                      }catch(e){}
+                      finally{setGameLoading(false);}
+                    }
+                  }} style={{margin:"0 16px 10px",background:IOS.bg2,borderRadius:14,overflow:"hidden",cursor:"pointer",border:hasPick?`1px solid ${IOS.blue}40`:"1px solid rgba(255,255,255,0.06)"}}>
+                    {/* Status bar */}
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 14px",borderBottom:`0.5px solid ${IOS.sep}`}}>
+                      <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,color:isLive?IOS.green:IOS.label3,textTransform:"uppercase"}}>
+                        {isLive?"● LIVE":isDone?"Final":gameTime}
+                      </div>
+                      {hasPick && <div style={{fontSize:10,fontWeight:700,color:IOS.blue,letterSpacing:0.5}}>MY PICK</div>}
+                    </div>
+                    {/* Teams */}
+                    <div style={{padding:"10px 14px"}}>
+                      {[{name:g.away,abbr:away,logo:espn?.awayLogo,score:espn?.awayScore,record:espn?.awayRecord},
+                        {name:g.home,abbr:home,logo:espn?.homeLogo,score:espn?.homeScore,record:espn?.homeRecord}
+                      ].map((team,ti)=>(
+                        <div key={ti} style={{display:"flex",alignItems:"center",gap:10,marginBottom:ti===0?8:0}}>
+                          {team.logo
+                            ? <img src={team.logo} style={{width:28,height:28,objectFit:"contain",flexShrink:0}} onError={e=>e.target.style.display="none"}/>
+                            : <div style={{width:28,height:28,borderRadius:"50%",background:"rgba(255,255,255,0.1)",flexShrink:0}}/>
+                          }
+                          <div style={{flex:1}}>
+                            <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>{team.name}</div>
+                            {team.record && <div style={{fontSize:11,color:IOS.label3}}>{team.record}</div>}
+                          </div>
+                          {(isLive||isDone) && team.score!==undefined && (
+                            <div style={{fontSize:20,fontWeight:800,color:"#fff"}}>{team.score}</div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    {/* Odds strip */}
+                    {mlOdds.length > 0 && (
+                      <div style={{display:"flex",borderTop:`0.5px solid ${IOS.sep}`}}>
+                        {[
+                          {label:"ML", items:mlOdds.slice(0,2)},
+                          {label:"Spread", items:spreadOdds.slice(0,2)},
+                          {label:"O/U", items:ouOdds.slice(0,2)},
+                        ].map((col,ci)=>(
+                          <div key={ci} style={{flex:1,padding:"8px 6px",borderRight:ci<2?`0.5px solid ${IOS.sep}`:"none",textAlign:"center"}}>
+                            <div style={{fontSize:9,color:IOS.label3,fontWeight:600,letterSpacing:0.5,marginBottom:4}}>{col.label}</div>
+                            {col.items.map((o,oi)=>(
+                              <div key={oi} style={{fontSize:11,fontWeight:700,color:o.odds?.startsWith("+")?IOS.green:IOS.blue,lineHeight:1.4}}>{o.pick?.split(" ").slice(-1)[0]} {o.odds}</div>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              <div style={{height:16}}/>
+              </>)}
             </div>
           </>
         )}
