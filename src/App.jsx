@@ -1907,464 +1907,64 @@ export default function App() {
       {showWheel && (
         <div className="wheel-overlay">
           {showWin && wonPU ? (
-            /* ── Win screen ── */
             <div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"0 32px",maxWidth:360,width:"100%"}}>
-            {/* Animated glow */}
-            <div style={{width:100,height:100,borderRadius:"50%",background:`radial-gradient(circle, ${wonPU.color}40, transparent 70%)`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:20,boxShadow:`0 0 60px ${wonPU.color}50`}}>
-              <div style={{width:60,height:60,borderRadius:"50%",background:`linear-gradient(135deg, ${wonPU.color}, ${wonPU.color}99)`,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                <div style={{width:28,height:28,borderRadius:6,background:"rgba(0,0,0,0.3)"}}/>
+              <div style={{width:100,height:100,borderRadius:"50%",background:`radial-gradient(circle, ${wonPU.color}40, transparent 70%)`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:20,boxShadow:`0 0 60px ${wonPU.color}50`}}>
+                <div style={{width:60,height:60,borderRadius:"50%",background:`linear-gradient(135deg, ${wonPU.color}, ${wonPU.color}99)`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <div style={{width:28,height:28,borderRadius:6,background:"rgba(0,0,0,0.3)"}}/>
+                </div>
               </div>
-            </div>
-            <div style={{fontSize:13,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:wonPU.color,marginBottom:8}}>Power-Up Unlocked</div>
-            <div style={{fontSize:28,fontWeight:900,color:"#fff",letterSpacing:-0.5,marginBottom:6,textAlign:"center"}}>{wonPU.name}</div>
-            <div style={{
-              fontSize:11,fontWeight:700,letterSpacing:1,textTransform:"uppercase",
-              padding:"4px 12px",borderRadius:20,marginBottom:16,
-              background:`${wonPU.color}20`,color:wonPU.color,border:`1px solid ${wonPU.color}40`
-            }}>
-              {wonPU.rarity==="legendary"?"Legendary":wonPU.rarity==="rare"?"Rare":"Common"}
-            </div>
-            <div style={{fontSize:14,color:"rgba(255,255,255,0.6)",textAlign:"center",lineHeight:1.6,marginBottom:32}}>{wonPU.desc}</div>
-            <button onClick={claimPU} style={{width:"100%",background:`linear-gradient(135deg, ${wonPU.color}, ${wonPU.color}cc)`,border:"none",borderRadius:16,padding:"16px",fontSize:16,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Manrope,sans-serif",marginBottom:12,boxShadow:`0 8px 30px ${wonPU.color}40`}}>
-              Add to Inventory
-            </button>
-            <div onClick={()=>{setShowWin(false);setShowWheel(false);setWonPU(null);}} style={{fontSize:14,color:"rgba(255,255,255,0.35)",cursor:"pointer",padding:8}}>
-              Dismiss
-            </div>
+              <div style={{fontSize:13,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:wonPU.color,marginBottom:8}}>Power-Up Unlocked</div>
+              <div style={{fontSize:28,fontWeight:900,color:"#fff",letterSpacing:-0.5,marginBottom:6,textAlign:"center"}}>{wonPU.name}</div>
+              <div style={{fontSize:11,fontWeight:700,letterSpacing:1,textTransform:"uppercase",padding:"4px 12px",borderRadius:20,marginBottom:16,background:`${wonPU.color}20`,color:wonPU.color,border:`1px solid ${wonPU.color}40`}}>
+                {wonPU.rarity==="legendary"?"Legendary":wonPU.rarity==="rare"?"Rare":"Common"}
+              </div>
+              <div style={{fontSize:14,color:"rgba(255,255,255,0.6)",textAlign:"center",lineHeight:1.6,marginBottom:32}}>{wonPU.desc}</div>
+              <button onClick={claimPU} style={{width:"100%",background:`linear-gradient(135deg, ${wonPU.color}, ${wonPU.color}cc)`,border:"none",borderRadius:16,padding:"16px",fontSize:16,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Manrope,sans-serif",marginBottom:12,boxShadow:`0 8px 30px ${wonPU.color}40`}}>
+                Add to Inventory
+              </button>
+              <div onClick={()=>{setShowWin(false);setShowWheel(false);setWonPU(null);}} style={{fontSize:14,color:"rgba(255,255,255,0.35)",cursor:"pointer",padding:8}}>
+                Dismiss
+              </div>
             </div>
           ) : (
-            /* ── Wheel screen ── */
             <>
-            {/* Header */}
-            <div style={{textAlign:"center",marginBottom:28,padding:"0 24px"}}>
-              <div style={{fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:"rgba(255,255,255,0.35)",marginBottom:6}}>Power-Up Wheel</div>
-              <div style={{fontSize:22,fontWeight:800,color:"#fff",letterSpacing:-0.3}}>
-                {wheelSpins} Spin{wheelSpins!==1?"s":""} Available
+              <div style={{textAlign:"center",marginBottom:28,padding:"0 24px"}}>
+                <div style={{fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:"rgba(255,255,255,0.35)",marginBottom:6}}>Power-Up Wheel</div>
+                <div style={{fontSize:22,fontWeight:800,color:"#fff",letterSpacing:-0.3}}>{wheelSpins} Spin{wheelSpins!==1?"s":""} Available</div>
               </div>
-            </div>
-
-            {/* Wheel */}
-            <div className="wheel-wrap">
-              <div className="wheel-pointer"/>
-              <svg width={W} height={W} style={{
-                transition:spinning?"transform 4s cubic-bezier(0.17,0.67,0.12,0.99)":"none",
-                transform:`rotate(${wheelAngle}deg)`,
-                borderRadius:"50%",
-                display:"block",
-                filter:"drop-shadow(0 0 30px rgba(255,255,255,0.08))",
-              }}>
-                {WHEEL_ITEMS.map((item,i)=>{
-                  const sa=i*segA;const ea=(i+1)*segA;
-                  const p1=polarToCart(R,R,R,sa);const p2=polarToCart(R,R,R,ea);
-                  const mid=polarToCart(R,R,R*0.63,sa+segA/2);
-                  const textPt=polarToCart(R,R,R*0.72,sa+segA/2);
-                  // Use item color for segment fill
-                  const segColor = item.color || "#1a1a2e";
-                  return (
-                  <g key={i}>
-                    <path
-                      d={`M ${R} ${R} L ${p1.x} ${p1.y} A ${R} ${R} 0 0 1 ${p2.x} ${p2.y} Z`}
-                      fill={`${segColor}22`}
-                      stroke={`${segColor}66`}
-                      strokeWidth="1.5"
-                    />
-                    {/* Rarity accent arc */}
-                    <path
-                      d={`M ${polarToCart(R,R,R-6,sa+2).x} ${polarToCart(R,R,R-6,sa+2).y} A ${R-6} ${R-6} 0 0 1 ${polarToCart(R,R,R-6,ea-2).x} ${polarToCart(R,R,R-6,ea-2).y}`}
-                      fill="none"
-                      stroke={segColor}
-                      strokeWidth={item.rarity==="legendary"?3:item.rarity==="rare"?2:1}
-                      opacity={item.rarity==="legendary"?0.9:item.rarity==="rare"?0.7:0.4}
-                    />
-                    {/* Item name — two lines if needed */}
-                    <text
-                      x={mid.x} y={mid.y - 7}
-                      textAnchor="middle"
-                      dominantBaseline="middle"
-                      fontSize={item.name.length > 10 ? "8.5" : "9.5"}
-                      fontWeight="700"
-                      fill="#fff"
-                      opacity="0.95"
-                      fontFamily="Manrope, system-ui, sans-serif"
-                      letterSpacing="0.3"
-                      transform={`rotate(${sa+segA/2}, ${mid.x}, ${mid.y})`}
-                    >
-                      {item.name.split(" ").slice(0,1).join(" ")}
-                    </text>
-                    <text
-                      x={mid.x} y={mid.y + 7}
-                      textAnchor="middle"
-                      dominantBaseline="middle"
-                      fontSize={item.name.length > 10 ? "8.5" : "9.5"}
-                      fontWeight="700"
-                      fill="#fff"
-                      opacity="0.95"
-                      fontFamily="Manrope, system-ui, sans-serif"
-                      transform={`rotate(${sa+segA/2}, ${mid.x}, ${mid.y})`}
-                    >
-                      {item.name.split(" ").slice(1).join(" ")}
-                    </text>
-                  </g>
-                  );
-                })}
-                {/* Center hub */}
-                <circle cx={R} cy={R} r={22} fill="#0a0a0a" stroke="rgba(255,255,255,0.15)" strokeWidth="2"/>
-                <circle cx={R} cy={R} r={8} fill="rgba(255,255,255,0.2)"/>
-              </svg>
-            </div>
-
-            {/* Spin button */}
-            <button
-              disabled={spinning || wheelSpins < 1}
-              onClick={spinWheel}
-              style={{
-                width:200,
-                background: spinning || wheelSpins < 1
-                  ? "rgba(255,255,255,0.08)"
-                  : "linear-gradient(135deg, #0A84FF, #5E5CE6)",
-                border:"none",
-                borderRadius:50,
-                padding:"16px 40px",
-                fontSize:17,
-                fontWeight:800,
-                color: spinning || wheelSpins < 1 ? "rgba(255,255,255,0.3)" : "#fff",
-                cursor: spinning || wheelSpins < 1 ? "default" : "pointer",
-                fontFamily:"Manrope,sans-serif",
-                letterSpacing:-0.3,
-                boxShadow: spinning ? "none" : "0 8px 30px rgba(10,132,255,0.4)",
-                transition:"all 0.2s",
-                marginBottom:16,
-              }}
-            >
-              {spinning ? "Spinning..." : wheelSpins < 1 ? "No Spins Left" : "Spin"}
-            </button>
-            <div
-              onClick={()=>{ if(!spinning){ setShowWheel(false); } }}
-              style={{fontSize:14,color:"rgba(255,255,255,0.3)",cursor:spinning?"default":"pointer",padding:8}}
-            >
-              {spinning ? "" : "Close"}
-            </div>
+              <div className="wheel-wrap">
+                <div className="wheel-pointer"/>
+                <svg width={W} height={W} style={{transition:spinning?"transform 4s cubic-bezier(0.17,0.67,0.12,0.99)":"none",transform:`rotate(${wheelAngle}deg)`,borderRadius:"50%",display:"block",filter:"drop-shadow(0 0 30px rgba(255,255,255,0.08))"}}>
+                  {WHEEL_ITEMS.map((item,i)=>{
+                    const sa=i*segA; const ea=(i+1)*segA;
+                    const p1=polarToCart(R,R,R,sa); const p2=polarToCart(R,R,R,ea);
+                    const mid=polarToCart(R,R,R*0.63,sa+segA/2);
+                    const segColor = item.color || "#1a1a2e";
+                    return (
+                      <g key={i}>
+                        <path d={`M ${R} ${R} L ${p1.x} ${p1.y} A ${R} ${R} 0 0 1 ${p2.x} ${p2.y} Z`} fill={`${segColor}22`} stroke={`${segColor}66`} strokeWidth="1.5"/>
+                        <path d={`M ${polarToCart(R,R,R-6,sa+2).x} ${polarToCart(R,R,R-6,sa+2).y} A ${R-6} ${R-6} 0 0 1 ${polarToCart(R,R,R-6,ea-2).x} ${polarToCart(R,R,R-6,ea-2).y}`} fill="none" stroke={segColor} strokeWidth={item.rarity==="legendary"?3:item.rarity==="rare"?2:1} opacity={item.rarity==="legendary"?0.9:item.rarity==="rare"?0.7:0.4}/>
+                        <text x={mid.x} y={mid.y-7} textAnchor="middle" dominantBaseline="middle" fontSize={item.name.length>10?"8.5":"9.5"} fontWeight="700" fill="#fff" opacity="0.95" fontFamily="Manrope,system-ui,sans-serif" transform={`rotate(${sa+segA/2}, ${mid.x}, ${mid.y})`}>{item.name.split(" ").slice(0,1).join(" ")}</text>
+                        <text x={mid.x} y={mid.y+7} textAnchor="middle" dominantBaseline="middle" fontSize={item.name.length>10?"8.5":"9.5"} fontWeight="700" fill="#fff" opacity="0.95" fontFamily="Manrope,system-ui,sans-serif" transform={`rotate(${sa+segA/2}, ${mid.x}, ${mid.y})`}>{item.name.split(" ").slice(1).join(" ")}</text>
+                      </g>
+                    );
+                  })}
+                  <circle cx={R} cy={R} r={22} fill="#0a0a0a" stroke="rgba(255,255,255,0.15)" strokeWidth="2"/>
+                  <circle cx={R} cy={R} r={8} fill="rgba(255,255,255,0.2)"/>
+                </svg>
+              </div>
+              <button disabled={spinning||wheelSpins<1} onClick={spinWheel} style={{width:200,background:spinning||wheelSpins<1?"rgba(255,255,255,0.08)":"linear-gradient(135deg,#0A84FF,#5E5CE6)",border:"none",borderRadius:50,padding:"16px 40px",fontSize:17,fontWeight:800,color:spinning||wheelSpins<1?"rgba(255,255,255,0.3)":"#fff",cursor:spinning||wheelSpins<1?"default":"pointer",fontFamily:"Manrope,sans-serif",letterSpacing:-0.3,boxShadow:spinning?"none":"0 8px 30px rgba(10,132,255,0.4)",marginBottom:16}}>
+                {spinning?"Spinning...":wheelSpins<1?"No Spins Left":"Spin"}
+              </button>
+              <div onClick={()=>{if(!spinning)setShowWheel(false);}} style={{fontSize:14,color:"rgba(255,255,255,0.3)",cursor:spinning?"default":"pointer",padding:8}}>
+                {spinning?"":"Close"}
+              </div>
             </>
           )}
-
-      {/* ══ TUTORIAL OVERLAY ══ */}
-      {user && tutorialStep >= 0 && (() => {
-        const steps = [
-          {
-            icon: "🏆",
-            title: "Welcome to PickLock",
-            body: "Fantasy sports betting with your friends. Each week you build a pick slip, lock it in, and compete head-to-head for points.",
-            highlight: null,
-            pos: "center",
-          },
-          {
-            icon: "🏈",
-            title: "Create or Join a League",
-            body: "Tap 'All Leagues' to create your own league or join one with an invite code. Leagues are 6–12 players.",
-            highlight: "All Leagues",
-            pos: "top",
-          },
-          {
-            icon: "🎯",
-            title: "Build Your Pick Slip",
-            body: "Each week you get 5 pick slots — Moneyline, Prop, Over/Under, Spread, and a Longshot (straight or parlay of +400 or greater). For each pick, choose your bet and set a multiplier (1x–5x).",
-            highlight: null,
-            pos: "center",
-          },
-
-
-          {
-            icon: "📊",
-            title: "Matchups & Scoring",
-            body: "Every week you're matched against one league member. Your points from winning picks add up — whoever scores more wins the week. Check live scores on the Matchup tab.",
-            highlight: null,
-            pos: "center",
-          },
-          {
-            icon: "🔒",
-            title: "Lock It In",
-            body: "Once you're happy with your slip, lock it in. You can still make changes up until the first event actually starts. Good luck!",
-            highlight: null,
-            pos: "bottom",
-          },
-        ];
-        const step = steps[tutorialStep];
-        const isLast = tutorialStep === steps.length - 1;
-        const isFirst = tutorialStep === 0;
-        return (
-          <div style={{position:"fixed",inset:0,zIndex:9000,pointerEvents:"all"}}>
-            {/* Dim overlay */}
-            <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.75)",backdropFilter:"blur(2px)"}} onClick={dismissTutorial}/>
-            {/* Card */}
-            <div style={{
-              position:"absolute",
-              left:"50%",
-              transform:"translateX(-50%)",
-              ...(step.pos==="bottom" ? {bottom:100} : step.pos==="top" ? {top:120} : {top:"50%",transform:"translate(-50%,-50%)"}),
-              width:"calc(100% - 48px)",
-              maxWidth:360,
-              background:"#1C1C1E",
-              borderRadius:24,
-              padding:"28px 24px 22px",
-              boxShadow:"0 24px 80px rgba(0,0,0,0.7)",
-              border:"1px solid rgba(255,255,255,0.08)",
-              zIndex:9001,
-            }}>
-              {/* Skip */}
-              <div onClick={dismissTutorial} style={{position:"absolute",top:16,right:16,fontSize:12,fontWeight:600,color:"rgba(255,255,255,0.35)",cursor:"pointer",padding:"4px 8px",background:"rgba(255,255,255,0.06)",borderRadius:8}}>Skip</div>
-              {/* Step dots */}
-              <div style={{display:"flex",gap:5,justifyContent:"center",marginBottom:20}}>
-                {steps.map((_,i)=>(
-                  <div key={i} onClick={()=>setTutorialStep(i)} style={{width:i===tutorialStep?20:6,height:6,borderRadius:3,background:i===tutorialStep?IOS.blue:"rgba(255,255,255,0.2)",transition:"all 0.25s",cursor:"pointer"}}/>
-                ))}
-              </div>
-              {/* Icon */}
-              <div style={{fontSize:44,textAlign:"center",marginBottom:12}}>{step.icon}</div>
-              {/* Title */}
-              <div style={{fontSize:20,fontWeight:800,color:"#fff",textAlign:"center",marginBottom:10,letterSpacing:-0.3}}>{step.title}</div>
-              {/* Body */}
-              <div style={{fontSize:14,color:"rgba(255,255,255,0.6)",textAlign:"center",lineHeight:1.6,marginBottom:24}}>{step.body}</div>
-              {/* Buttons */}
-              <div style={{display:"flex",gap:10}}>
-                {!isFirst && (
-                  <button onClick={()=>setTutorialStep(s=>s-1)} style={{flex:1,background:"rgba(255,255,255,0.08)",border:"none",borderRadius:14,padding:"13px",fontSize:15,fontWeight:700,color:"rgba(255,255,255,0.7)",cursor:"pointer",fontFamily:"Manrope,sans-serif"}}>Back</button>
-                )}
-                <button onClick={()=>isLast?dismissTutorial():setTutorialStep(s=>s+1)} style={{flex:2,background:IOS.blue,border:"none",borderRadius:14,padding:"13px",fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Manrope,sans-serif"}}>{isLast?"Let's Go! 🏆":"Next"}</button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* ══ AUTH SCREEN ══ */}
-      {!user && (
-        <div style={{width:390,minHeight:"100vh",background:"#09090f",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"40px 32px",fontFamily:"'Manrope',sans-serif"}}>
-          <div style={{fontSize:38,fontWeight:800,letterSpacing:-1,color:"#60a5fa",marginBottom:6}}>PICKLOCK</div>
-          <div style={{fontSize:14,color:"rgba(255,255,255,0.4)",marginBottom:48}}>Fantasy sports betting, built different</div>
-          <div style={{display:"flex",background:"#1C1C1E",borderRadius:12,padding:2,marginBottom:28,width:"100%"}}>
-            {["login","signup"].map(t=>(
-              <div key={t} onClick={()=>setAuthScreen(t)} style={{flex:1,textAlign:"center",padding:"10px",borderRadius:10,fontSize:14,fontWeight:700,cursor:"pointer",background:authScreen===t?"#2C2C2E":"transparent",color:authScreen===t?"#fff":"rgba(255,255,255,0.4)",transition:"all .2s"}}>{t==="login"?"Sign In":"Sign Up"}</div>
-            ))}
-          </div>
-          <input id="auth-email" type="email" placeholder="Email" style={{width:"100%",background:"#1C1C1E",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"14px 16px",color:"#fff",fontSize:15,fontFamily:"'Manrope',sans-serif",outline:"none",marginBottom:12}}/>
-          <input id="auth-password" type="password" placeholder="Password" style={{width:"100%",background:"#1C1C1E",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"14px 16px",color:"#fff",fontSize:15,fontFamily:"'Manrope',sans-serif",outline:"none",marginBottom:12}}/>
-          {authScreen==="signup"&&<input id="auth-username" type="text" placeholder="Username (e.g. sharpshooter99)" style={{width:"100%",background:"#1C1C1E",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"14px 16px",color:"#fff",fontSize:15,fontFamily:"'Manrope',sans-serif",outline:"none",marginBottom:8}}/>}
-          {authScreen==="signup"&&<div style={{fontSize:11,color:"rgba(255,255,255,0.3)",marginBottom:16,alignSelf:"flex-start",paddingLeft:4}}>This is how you'll appear to other players</div>}
-          {authScreen==="login"&&<div style={{height:24}}/>}
-          <button onClick={async()=>{
-            const email=document.getElementById("auth-email").value.trim();
-            const password=document.getElementById("auth-password").value;
-            if(authScreen==="login"){
-              const {error}=await supabase.auth.signInWithPassword({email,password});
-              if(error)alert(error.message);
-            } else {
-              const username=(document.getElementById("auth-username")?.value||"").trim();
-              if(!username){ alert("Please enter a username."); return; }
-              if(username.length<3){ alert("Username must be at least 3 characters."); return; }
-              if(!/^[a-zA-Z0-9_]+$/.test(username)){ alert("Username can only contain letters, numbers, and underscores."); return; }
-              // Check username not taken
-              const {data:existing}=await supabase.from("users").select("id").eq("username",username).maybeSingle();
-              if(existing){ alert("That username is taken. Try another."); return; }
-              const {data,error}=await supabase.auth.signUp({email,password});
-              if(error){ alert(error.message); return; }
-              // Save username to users table
-              const uid = data?.user?.id;
-              if(uid){
-                await supabase.from("users").upsert({id:uid, email, username}, {onConflict:"id"});
-              }
-              setTutorialStep(0); // show tutorial for new signups only
-              alert("Account created! Check your email to confirm, then sign in.");
-            }
-          }} style={{width:"100%",background:"#0A84FF",color:"#fff",border:"none",borderRadius:12,padding:"16px",fontSize:16,fontWeight:700,cursor:"pointer",fontFamily:"'Manrope',sans-serif",marginBottom:16}}>
-            {authScreen==="login"?"Sign In":"Create Account"}
-          </button>
-          {authScreen==="login"&&<div style={{fontSize:13,color:"rgba(255,255,255,0.35)",cursor:"pointer"}} onClick={()=>setAuthScreen("signup")}>No account? Sign up</div>}
-          {authScreen==="signup"&&<div style={{fontSize:13,color:"rgba(255,255,255,0.35)",cursor:"pointer"}} onClick={()=>setAuthScreen("login")}>Already have an account? Sign in</div>}
         </div>
       )}
 
-      {user && <div className="phone">
-        {/* Status bar safe area cover — blends iPhone time/battery into app */}
-        <div style={{
-          position:"fixed",
-          top:0,
-          left:"50%",
-          transform:"translateX(-50%)",
-          width:390,
-          height:"env(safe-area-inset-top, 44px)",
-          background:"#000",
-          zIndex:999,
-          pointerEvents:"none",
-        }}/>
-
-        {/* ══ POWER-UP MODAL ══ */}
-        {showPUModal && (
-          <div className="pu-modal-bg" onClick={()=>setShowPUModal(null)}>
-            <div className="pu-modal-sheet" onClick={e=>e.stopPropagation()}>
-              <div className="pu-modal-handle"/>
-              <div className="pu-modal-hdr">
-                <div className="pu-modal-title">Use a Power-Up</div>
-                <div className="pu-modal-sub">
-                  {showPUModal.context==="picks"
-                    ? `Applied to your ${showPUModal.slotLabel} pick`
-                    : `Applied to pick #${(showPUModal.pickIdx||0)+1} in live matchup`}
-                </div>
-              </div>
-              {(()=>{
-                const filteredPUs = showPUModal?.context==="picks"
-                  ? myPUs.filter(pu=>pu.type==="offensive")
-                  : myPUs;
-                return filteredPUs.length===0
-                  ? <div style={{padding:"28px 20px",textAlign:"center",color:IOS.label3,fontSize:15}}>No offensive power-ups in inventory</div>
-                  : filteredPUs.map((pu,i)=>(
-                    <div key={i} className="pu-opt" onClick={()=>usePU(pu, showPUModal.context, showPUModal.context==="picks"?showPUModal.slotId:showPUModal.pickIdx)}>
-                      <div className="pu-opt-icon" style={{background:`${pu.color}20`}}>{pu.icon}</div>
-                      <div style={{flex:1}}>
-                        <div className="pu-opt-name">{pu.name}</div>
-                        <div className="pu-opt-desc">{pu.desc}</div>
-                        <div className="pu-opt-rarity" style={{color:rarityColor(pu.rarity)}}>{pu.rarity}</div>
-                      </div>
-                      <div style={{fontSize:20,color:IOS.label3}}>›</div>
-                    </div>
-                  ));
-              })()}
-              <div style={{padding:"14px 20px 0"}}>
-                <button onClick={()=>setShowPUModal(null)} style={{width:"100%",background:IOS.bg3,border:"none",borderRadius:12,padding:"14px",fontFamily:"Manrope,sans-serif",fontSize:15,fontWeight:600,color:IOS.label2,cursor:"pointer"}}>Cancel</button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ══ TOP SCORER CELEBRATION ══ */}
-        {showTopScorer && (
-          <div style={{
-            position:"absolute",inset:0,zIndex:200,
-            background:"linear-gradient(180deg, #0a0a1a 0%, #0d0d20 60%, #050510 100%)",
-            display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
-            padding:"40px 32px",gap:0,
-            fontFamily:"'Manrope',sans-serif",
-          }}>
-            <style>{`
-              @keyframes floatUp{0%{transform:translateY(0) scale(1);}50%{transform:translateY(-12px) scale(1.05);}100%{transform:translateY(0) scale(1);}}
-              @keyframes pulseGlow{0%,100%{box-shadow:0 0 40px rgba(255,214,10,0.3),0 0 80px rgba(255,214,10,0.1);}50%{box-shadow:0 0 60px rgba(255,214,10,0.5),0 0 120px rgba(255,214,10,0.2);}}
-              @keyframes shimmer{0%{opacity:0.6;}50%{opacity:1;}100%{opacity:0.6;}}
-              @keyframes fadeSlideUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
-              .ts-trophy{animation:floatUp 3s ease-in-out infinite, pulseGlow 3s ease-in-out infinite;}
-              .ts-line1{animation:fadeSlideUp .5s ease forwards; animation-delay:.1s; opacity:0;}
-              .ts-line2{animation:fadeSlideUp .5s ease forwards; animation-delay:.3s; opacity:0;}
-              .ts-line3{animation:fadeSlideUp .5s ease forwards; animation-delay:.5s; opacity:0;}
-              .ts-score{animation:fadeSlideUp .5s ease forwards; animation-delay:.65s; opacity:0;}
-              .ts-divider{animation:fadeSlideUp .5s ease forwards; animation-delay:.8s; opacity:0;}
-              .ts-btn{animation:fadeSlideUp .5s ease forwards; animation-delay:1s; opacity:0;}
-              .ts-dismiss{animation:fadeSlideUp .5s ease forwards; animation-delay:1.2s; opacity:0;}
-              .spin-glow-btn{
-                background: linear-gradient(135deg, #FFD60A, #FF9F0A);
-                border: none; border-radius: 18px; padding: 18px 0; width: 100%;
-                font-family: 'Manrope', sans-serif; font-size: 18px; font-weight: 800;
-                color: #000; cursor: pointer; letter-spacing: -0.3px;
-                box-shadow: 0 8px 32px rgba(255,214,10,0.4), 0 2px 8px rgba(0,0,0,0.3);
-                display: flex; align-items: center; justify-content: center; gap: 10px;
-                transition: transform .15s, box-shadow .15s;
-              }
-              .spin-glow-btn:active{transform:scale(0.97);box-shadow:0 4px 16px rgba(255,214,10,0.3);}
-              .confetti-dot{position:absolute;border-radius:50%;animation:shimmer 2s ease-in-out infinite;}
-            `}</style>
-
-            {/* Confetti dots */}
-            {[
-              {top:"12%",left:"14%",size:6,color:"#FFD60A",delay:"0s"},
-              {top:"18%",right:"12%",size:8,color:"#FF9F0A",delay:"0.4s"},
-              {top:"8%",left:"52%",size:5,color:"#30D158",delay:"0.8s"},
-              {top:"25%",left:"8%",size:4,color:"#0A84FF",delay:"1.2s"},
-              {top:"22%",right:"22%",size:5,color:"#FF375F",delay:"0.6s"},
-              {top:"78%",left:"10%",size:6,color:"#FFD60A",delay:"1s"},
-              {top:"82%",right:"14%",size:5,color:"#30D158",delay:"0.3s"},
-              {top:"72%",left:"82%",size:7,color:"#FF9F0A",delay:"0.7s"},
-              {top:"88%",left:"40%",size:4,color:"#BF5AF2",delay:"1.1s"},
-            ].map((d,i)=>(
-              <div key={i} className="confetti-dot" style={{
-                top:d.top,left:d.left,right:d.right,
-                width:d.size,height:d.size,
-                background:d.color,
-                animationDelay:d.delay,
-              }}/>
-            ))}
-
-            {/* Trophy */}
-            <div className="ts-trophy" style={{fontSize:90,lineHeight:1,marginBottom:28}}>🏆</div>
-
-            {/* Week badge */}
-            <div className="ts-line1" style={{
-              background:"rgba(255,214,10,0.12)",border:"1px solid rgba(255,214,10,0.3)",
-              borderRadius:20,padding:"5px 16px",marginBottom:16,
-              fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:"#FFD60A",
-            }}>Week 6 · Top Scorer</div>
-
-            {/* Main headline */}
-            <div className="ts-line2" style={{
-              fontSize:38,fontWeight:800,letterSpacing:-1.5,textAlign:"center",
-              color:"#fff",lineHeight:1.1,marginBottom:10,
-            }}>You're the top scorer this week</div>
-
-            {/* Sub */}
-            <div className="ts-line3" style={{
-              fontSize:15,fontWeight:500,color:"rgba(255,255,255,0.45)",
-              textAlign:"center",lineHeight:1.6,marginBottom:24,letterSpacing:-0.2,
-            }}>You went 4-1 and outscored everyone in The Boys League. Time to claim your reward.</div>
-
-            {/* Score card */}
-            <div className="ts-score" style={{
-              background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",
-              borderRadius:16,padding:"14px 28px",marginBottom:28,
-              display:"flex",gap:32,alignItems:"center",
-            }}>
-              <div style={{textAlign:"center"}}>
-                <div style={{fontSize:28,fontWeight:800,letterSpacing:-0.5,color:"#FFD60A"}}>4-1</div>
-                <div style={{fontSize:11,fontWeight:600,letterSpacing:1,textTransform:"uppercase",color:"rgba(255,255,255,0.4)",marginTop:2}}>This Week</div>
-              </div>
-              <div style={{width:1,height:36,background:"rgba(255,255,255,0.1)"}}/>
-              <div style={{textAlign:"center"}}>
-                <div style={{fontSize:28,fontWeight:800,letterSpacing:-0.5,color:"#30D158"}}>+8.5u</div>
-                <div style={{fontSize:11,fontWeight:600,letterSpacing:1,textTransform:"uppercase",color:"rgba(255,255,255,0.4)",marginTop:2}}>Units Won</div>
-              </div>
-              <div style={{width:1,height:36,background:"rgba(255,255,255,0.1)"}}/>
-              <div style={{textAlign:"center"}}>
-                <div style={{fontSize:28,fontWeight:800,letterSpacing:-0.5,color:"#fff"}}>#1</div>
-                <div style={{fontSize:11,fontWeight:600,letterSpacing:1,textTransform:"uppercase",color:"rgba(255,255,255,0.4)",marginTop:2}}>Rank</div>
-              </div>
-            </div>
-
-            {/* Divider with label */}
-            <div className="ts-divider" style={{
-              display:"flex",alignItems:"center",gap:10,marginBottom:20,width:"100%",
-            }}>
-              <div style={{flex:1,height:1,background:"rgba(255,255,255,0.08)"}}/>
-              <div style={{fontSize:11,fontWeight:600,letterSpacing:2,textTransform:"uppercase",color:"rgba(255,255,255,0.25)"}}>Your reward</div>
-              <div style={{flex:1,height:1,background:"rgba(255,255,255,0.08)"}}/>
-            </div>
-
-            {/* Spin button */}
-            <div className="ts-btn" style={{width:"100%",marginBottom:14}}>
-              <button className="spin-glow-btn" onClick={()=>{setShowTopScorer(false);setShowWheel(true);}}>
-                🎰 Spin the Wheel
-              </button>
-            </div>
-
-            {/* Dismiss */}
-            <div className="ts-dismiss">
-              <div onClick={()=>setShowTopScorer(false)} style={{
-                fontSize:14,fontWeight:500,color:"rgba(255,255,255,0.3)",
-                cursor:"pointer",textAlign:"center",padding:"4px 20px",
-              }}>Claim later</div>
-            </div>
-          </div>
-        )}
-
-
-          </div>
-        )}
-
-        {/* ══ USERNAME PROMPT MODAL ══ */}
+              {/* ══ USERNAME PROMPT MODAL ══ */}
         {showUsernamePrompt && (
           <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
             <div style={{background:IOS.bg2,borderRadius:24,padding:28,width:"100%",maxWidth:340,boxShadow:"0 20px 60px rgba(0,0,0,0.5)"}}>
