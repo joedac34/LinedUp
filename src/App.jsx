@@ -4655,7 +4655,7 @@ export default function App() {
                   const myTotal = m.myPts || 0;
                   const oppTotal = m.oppPts || 0;
                   return (
-                    <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"#111",zIndex:500,overflowY:"auto",paddingBottom:40}}>
+                    <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"#111",zIndex:500,overflowY:"auto",paddingBottom:100,WebkitOverflowScrolling:"touch"}}>
                       {/* Header */}
                       <div style={{padding:"52px 20px 16px",borderBottom:`0.5px solid ${IOS.sep}`}}>
                         <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
@@ -4667,16 +4667,16 @@ export default function App() {
                           <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:mDisplay.result==="W"?`linear-gradient(90deg,${IOS.green},${IOS.teal})`:`linear-gradient(90deg,${IOS.red},${IOS.orange})`}}/>
                           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
                             <div>
-                              <div style={{fontSize:22,fontWeight:800,letterSpacing:-0.5,color:IOS.blue}}>You</div>
+                              <div style={{fontSize:16,fontWeight:800,letterSpacing:-0.3,color:IOS.blue}}>You</div>
                               <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>Week {mDisplay.week}</div>
                             </div>
                             <div style={{textAlign:"center"}}>
-                              <div style={{fontSize:32,fontWeight:800,letterSpacing:-1,color:m.result==="W"?IOS.green:IOS.red}}>{m.myPts} <span style={{fontSize:18,color:IOS.label3,fontWeight:400}}>–</span> {m.oppPts}</div>
+                              <div style={{fontSize:24,fontWeight:800,letterSpacing:-0.5,color:m.result==="W"?IOS.green:IOS.red}}>{m.myPts} <span style={{fontSize:14,color:IOS.label3,fontWeight:400}}>–</span> {m.oppPts}</div>
                               <div style={{fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:mDisplay.result==="W"?IOS.green:IOS.red,marginTop:2}}>{mDisplay.result==="W"?"Victory":"Defeat"}</div>
                               <div style={{fontSize:10,color:IOS.label3,marginTop:2}}>pts</div>
                             </div>
                             <div style={{textAlign:"right"}}>
-                              <div style={{fontSize:22,fontWeight:800,letterSpacing:-0.5}}>{mDisplay.opp}</div>
+                              <div style={{fontSize:16,fontWeight:800,letterSpacing:-0.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:100}}>{mDisplay.opp}</div>
                               <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>Week {mDisplay.week}</div>
                             </div>
                           </div>
@@ -4743,21 +4743,6 @@ export default function App() {
                         );
                       })}
 
-                      {/* Final score summary */}
-                      <div style={{margin:"4px 16px 16px",background:m.result==="W"?"rgba(48,209,88,0.08)":"rgba(255,69,58,0.08)",borderRadius:12,padding:"14px 16px",border:`1px solid ${m.result==="W"?"rgba(48,209,88,0.25)":"rgba(255,69,58,0.25)"}`}}>
-                        <div style={{fontSize:12,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:m.result==="W"?IOS.green:IOS.red,marginBottom:8}}>{m.result==="W"?"You Won This Week":"You Lost This Week"}</div>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                          <div>
-                            <div style={{fontSize:28,fontWeight:800,letterSpacing:-1,color:IOS.blue}}>{myTotal} pts</div>
-                            <div style={{fontSize:11,color:IOS.label3}}>Your score</div>
-                          </div>
-                          <div style={{fontSize:24,color:IOS.label3}}>vs</div>
-                          <div style={{textAlign:"right"}}>
-                            <div style={{fontSize:28,fontWeight:800,letterSpacing:-1,color:IOS.label2}}>{oppTotal} pts</div>
-                            <div style={{fontSize:11,color:IOS.label3}}>{m.opp}'s score</div>
-                          </div>
-                        </div>
-                      </div>
                     </div>
                   );
                 })()}
