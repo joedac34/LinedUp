@@ -2342,14 +2342,27 @@ export default function App() {
               {/* Games Ticker */}
               {tickerGames.length > 0 && (() => {
                 const now = new Date();
+                // Collect team names from user's current picks
+                const myPickNames = (savedPicks?.flexPicks||[]).flatMap(slot =>
+                  slot.isParlay
+                    ? (slot.parlayLegs||[]).map(l=>l.pick||'')
+                    : [slot.bet?.pick||'']
+                ).concat(
+                  (weekPicks||[]).filter(p=>p.user_id===user?.id).map(p=>p.pick_name||'')
+                ).map(s=>s.toLowerCase());
+
+                const gameHasPick = (away, home) =>
+                  myPickNames.some(n => n.includes(away.toLowerCase()) || n.includes(home.toLowerCase()));
+
                 const items = tickerGames.map(g => {
                   const t = new Date(g.time);
                   const isLive = now >= t && now < new Date(t.getTime() + 4*60*60*1000);
                   const isToday = t.toDateString() === now.toDateString();
                   const timeStr = t.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
-                  const away = g.away.split(' ').pop(); // last word = team name
+                  const away = g.away.split(' ').pop();
                   const home = g.home.split(' ').pop();
-                  return {away, home, isLive, isToday, timeStr};
+                  const hasPick = gameHasPick(away, home);
+                  return {away, home, isLive, isToday, timeStr, hasPick};
                 });
                 // Duplicate for seamless loop
                 const doubled = [...items, ...items];
@@ -2389,13 +2402,20 @@ export default function App() {
                         <span key={i} className='ticker-item'
                           onClick={e=>{e.stopPropagation();if(i<items.length)openGame(g);}}
                           onTouchEnd={e=>{e.preventDefault();e.stopPropagation();if(i<items.length)openGame(g);}}
-                          style={{cursor:"pointer",WebkitTapHighlightColor:"rgba(255,255,255,0.1)",userSelect:"none"}}>
-                          <span className='ti-teams'>{g.away} @ {g.home}</span>
+                          style={{cursor:"pointer",WebkitTapHighlightColor:"rgba(255,255,255,0.1)",userSelect:"none",
+                            background: g.hasPick ? "rgba(10,132,255,0.18)" : "transparent",
+                            borderRadius: g.hasPick ? 8 : 0,
+                            padding: g.hasPick ? "2px 10px" : "0 22px",
+                            border: g.hasPick ? "1px solid rgba(10,132,255,0.35)" : "none",
+                            margin: g.hasPick ? "0 8px" : 0,
+                          }}>
+                          {g.hasPick && <span style={{fontSize:9,color:IOS.blue,fontWeight:800,marginRight:4,letterSpacing:0.5}}>MY PICK</span>}
+                          <span className='ti-teams' style={{color: g.hasPick ? "#fff" : undefined}}>{g.away} @ {g.home}</span>
                           {g.isLive
                             ? <span className='ti-live'>● LIVE</span>
                             : <span className='ti-time'>{g.timeStr}</span>
                           }
-                          <span className='ticker-sep'>|</span>
+                          {!g.hasPick && <span className='ticker-sep'>|</span>}
                         </span>
                       ))}
                     </div>
@@ -5135,21 +5155,53 @@ export default function App() {
                 <div style={{textAlign:"center",padding:"24px",color:IOS.label3,fontSize:13}}>Loading stats...</div>
               )}
 
-              {/* Stat leaders */}
+              {/* ── Season Stats ── */}
+              {gameSheet.detail?.teams?.length > 0 && gameSheet.detail.teams.some(t=>t.seasonStats?.length>0) && (
+                <div style={{margin:"0 16px 16px"}}>
+                  <div style={{fontSize:11,fontWeight:700,color:IOS.label3,letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Season Stats</div>
+                  <div style={{background:"#2C2C2E",borderRadius:12,overflow:"hidden"}}>
+                    {/* Header */}
+                    <div style={{display:"flex",borderBottom:"0.5px solid rgba(255,255,255,0.08)"}}>
+                      <div style={{flex:1,textAlign:"center",padding:"8px 4px",fontSize:12,fontWeight:700,color:gameSheet.detail.teams[0]?.color||IOS.blue}}>{gameSheet.detail.teams[0]?.abbrev}</div>
+                      <div style={{flex:1.4,textAlign:"center",padding:"8px 4px",fontSize:10,fontWeight:600,color:IOS.label3,letterSpacing:0.5}}>STAT</div>
+                      <div style={{flex:1,textAlign:"center",padding:"8px 4px",fontSize:12,fontWeight:700,color:gameSheet.detail.teams[1]?.color||IOS.orange}}>{gameSheet.detail.teams[1]?.abbrev}</div>
+                    </div>
+                    {(gameSheet.detail.teams[0]?.seasonStats||[]).map((stat,si)=>{
+                      const v0 = stat.value;
+                      const v1 = gameSheet.detail.teams[1]?.seasonStats?.[si]?.value||"—";
+                      const n0 = parseFloat(v0); const n1 = parseFloat(v1);
+                      const t0better = !isNaN(n0)&&!isNaN(n1)&&n0>n1;
+                      const t1better = !isNaN(n0)&&!isNaN(n1)&&n1>n0;
+                      return (
+                        <div key={si} style={{display:"flex",borderBottom:si<(gameSheet.detail.teams[0]?.seasonStats?.length||0)-1?"0.5px solid rgba(255,255,255,0.04)":"none"}}>
+                          <div style={{flex:1,textAlign:"center",padding:"8px 4px",fontSize:13,fontWeight:700,color:t0better?IOS.green:"#fff"}}>{v0||"—"}</div>
+                          <div style={{flex:1.4,textAlign:"center",padding:"8px 4px",fontSize:10,color:IOS.label3,lineHeight:1.3}}>{stat.label}</div>
+                          <div style={{flex:1,textAlign:"center",padding:"8px 4px",fontSize:13,fontWeight:700,color:t1better?IOS.green:"#fff"}}>{v1}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* ── Stat Leaders ── */}
               {gameSheet.detail?.statLeaders?.length > 0 && (
                 <div style={{margin:"0 16px 16px"}}>
-                  <div style={{fontSize:11,fontWeight:700,color:IOS.label3,letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Key Players</div>
-                  {gameSheet.detail.statLeaders.slice(0,4).map((cat,ci) => (
+                  <div style={{fontSize:11,fontWeight:700,color:IOS.label3,letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Player Leaders</div>
+                  {gameSheet.detail.statLeaders.slice(0,5).map((cat,ci) => (
                     <div key={ci} style={{background:"#2C2C2E",borderRadius:12,padding:"10px 14px",marginBottom:8}}>
                       <div style={{fontSize:10,fontWeight:700,color:IOS.blue,letterSpacing:0.5,textTransform:"uppercase",marginBottom:8}}>{cat.category}</div>
                       {cat.leaders.map((l,li) => (
                         <div key={li} style={{display:"flex",alignItems:"center",gap:10,marginBottom:li<cat.leaders.length-1?8:0}}>
-                          {l.photo && <img src={l.photo} style={{width:32,height:32,borderRadius:"50%",objectFit:"cover",background:"#3A3A3C"}} onError={e=>e.target.style.display="none"}/>}
-                          <div style={{flex:1}}>
-                            <div style={{fontSize:13,fontWeight:600,color:"#fff"}}>{l.name}</div>
+                          {l.photo
+                            ? <img src={l.photo} style={{width:34,height:34,borderRadius:"50%",objectFit:"cover",background:"#3A3A3C",flexShrink:0}} onError={e=>e.target.style.display="none"}/>
+                            : <div style={{width:34,height:34,borderRadius:"50%",background:"#3A3A3C",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,color:IOS.label3}}>?</div>
+                          }
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:13,fontWeight:600,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{l.name}</div>
                             <div style={{fontSize:11,color:IOS.label3}}>{l.team}</div>
                           </div>
-                          <div style={{fontSize:14,fontWeight:800,color:IOS.green}}>{l.stat}</div>
+                          <div style={{fontSize:15,fontWeight:800,color:IOS.green,flexShrink:0}}>{l.stat}</div>
                         </div>
                       ))}
                     </div>
@@ -5157,21 +5209,30 @@ export default function App() {
                 </div>
               )}
 
-              {/* Team stats */}
-              {gameSheet.detail?.teams?.length > 0 && (
+              {/* ── Injury Report ── */}
+              {gameSheet.detail?.injuries?.length > 0 && (
                 <div style={{margin:"0 16px 16px"}}>
-                  <div style={{fontSize:11,fontWeight:700,color:IOS.label3,letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Team Stats</div>
+                  <div style={{fontSize:11,fontWeight:700,color:IOS.label3,letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Injury Report</div>
                   <div style={{background:"#2C2C2E",borderRadius:12,overflow:"hidden"}}>
-                    <div style={{display:"flex",borderBottom:"0.5px solid rgba(255,255,255,0.06)"}}>
-                      {gameSheet.detail.teams.map((t,ti)=>(
-                        <div key={ti} style={{flex:1,textAlign:"center",padding:"8px 4px",fontSize:12,fontWeight:700,color:"#fff",borderRight:ti===0?"0.5px solid rgba(255,255,255,0.06)":"none"}}>{t.abbrev}</div>
-                      ))}
-                    </div>
-                    {(gameSheet.detail.teams[0]?.stats||[]).map((stat,si)=>(
-                      <div key={si} style={{display:"flex",borderBottom:si<gameSheet.detail.teams[0].stats.length-1?"0.5px solid rgba(255,255,255,0.04)":"none"}}>
-                        <div style={{flex:1,textAlign:"center",padding:"7px 4px",fontSize:13,fontWeight:600,color:"#fff"}}>{gameSheet.detail.teams[0]?.stats[si]?.value||"—"}</div>
-                        <div style={{flex:1,textAlign:"center",padding:"7px 4px",fontSize:11,color:IOS.label3,borderLeft:"0.5px solid rgba(255,255,255,0.06)",borderRight:"0.5px solid rgba(255,255,255,0.06)"}}>{stat.label}</div>
-                        <div style={{flex:1,textAlign:"center",padding:"7px 4px",fontSize:13,fontWeight:600,color:"#fff"}}>{gameSheet.detail.teams[1]?.stats[si]?.value||"—"}</div>
+                    {gameSheet.detail.injuries.map((p,pi)=>(
+                      <div key={pi} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px",borderBottom:pi<gameSheet.detail.injuries.length-1?"0.5px solid rgba(255,255,255,0.04)":"none"}}>
+                        {p.photo
+                          ? <img src={p.photo} style={{width:30,height:30,borderRadius:"50%",objectFit:"cover",background:"#3A3A3C",flexShrink:0}} onError={e=>e.target.style.display="none"}/>
+                          : <div style={{width:30,height:30,borderRadius:"50%",background:"#3A3A3C",flexShrink:0}}/>
+                        }
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:13,fontWeight:600,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.name}</div>
+                          <div style={{fontSize:11,color:IOS.label3}}>{p.team} · {p.detail}</div>
+                        </div>
+                        <div style={{fontSize:11,fontWeight:700,padding:"3px 8px",borderRadius:6,
+                          background: p.status?.toLowerCase().includes("out") ? "rgba(255,69,58,0.2)"
+                                    : p.status?.toLowerCase().includes("quest") ? "rgba(255,159,10,0.2)"
+                                    : "rgba(48,209,88,0.15)",
+                          color: p.status?.toLowerCase().includes("out") ? IOS.red
+                               : p.status?.toLowerCase().includes("quest") ? IOS.orange
+                               : IOS.green,
+                          flexShrink:0,
+                        }}>{p.status}</div>
                       </div>
                     ))}
                   </div>
