@@ -613,6 +613,7 @@ export default function App() {
   const [espnGames,   setEspnGames]   = useState([]); // ESPN scoreboard with IDs
   const [weekResult,  setWeekResult]  = useState(null); // {won, myPts, oppPts, oppName, week}
   const [gameSheet,   setGameSheet]   = useState(null); // { tickerGame, espnGame, detail }
+  const [gameTeamTab, setGameTeamTab] = useState('matchup'); // 'matchup' | 'away' | 'home' 
   const [gameLoading, setGameLoading] = useState(false);
   const [oddsLoading, setOddsLoading] = useState(false);
   const [oddsError,   setOddsError]   = useState(false);
@@ -2342,17 +2343,15 @@ export default function App() {
               {/* Games Ticker */}
               {tickerGames.length > 0 && (() => {
                 const now = new Date();
-                // Collect team names from user's current picks
-                const myPickNames = (savedPicks?.flexPicks||[]).flatMap(slot =>
-                  slot.isParlay
-                    ? (slot.parlayLegs||[]).map(l=>l.pick||'')
-                    : [slot.bet?.pick||'']
-                ).concat(
-                  (weekPicks||[]).filter(p=>p.user_id===user?.id).map(p=>p.pick_name||'')
-                ).map(s=>s.toLowerCase());
+                // Only highlight games from LOCKED slip (weekPicks from DB)
+                const myLockedPickNames = (weekPicks||[])
+                  .filter(p=>p.user_id===user?.id)
+                  .map(p=>(p.pick_name||'').toLowerCase());
 
-                const gameHasPick = (away, home) =>
-                  myPickNames.some(n => n.includes(away.toLowerCase()) || n.includes(home.toLowerCase()));
+                const gameHasPick = (away, home) => {
+                  const a = away.toLowerCase(); const h = home.toLowerCase();
+                  return myLockedPickNames.some(n => n.includes(a) || n.includes(h));
+                };
 
                 const items = tickerGames.map(g => {
                   const t = new Date(g.time);
@@ -2382,6 +2381,7 @@ export default function App() {
                     ou: (liveOdds[activeLeague?.sport]?.ou||[]).filter(o=>o.game?.includes(g.away)||o.game?.includes(g.home)),
                   };
                   setGameSheet({ tickerGame: g, espnGame: espn, detail: null, odds: gameOdds });
+                  setGameTeamTab('matchup');
                   if(espn?.id) {
                     setGameLoading(true);
                     try {
@@ -5090,7 +5090,7 @@ export default function App() {
                 <div style={{width:36,height:4,borderRadius:2,background:"rgba(255,255,255,0.2)"}}/>
               </div>
 
-              {/* Teams header */}
+              {/* Teams header + tab bar */}
               {(() => {
                 const eg = gameSheet.espnGame;
                 const tg = gameSheet.tickerGame;
@@ -5101,27 +5101,78 @@ export default function App() {
                 const awayLogo = eg?.awayLogo;
                 const homeLogo = eg?.homeLogo;
                 const gameTime = new Date(tg?.time).toLocaleTimeString([],{hour:"numeric",minute:"2-digit",timeZoneName:"short"});
+                const awayColor = gameSheet.detail?.teams?.[0]?.color || IOS.blue;
+                const homeColor = gameSheet.detail?.teams?.[1]?.color || IOS.orange;
                 return (
-                  <div style={{padding:"16px 20px 12px"}}>
-                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
-                      {/* Away */}
-                      <div style={{flex:1,textAlign:"center"}}>
-                        {awayLogo && <img src={awayLogo} style={{width:52,height:52,objectFit:"contain",marginBottom:6}} onError={e=>e.target.style.display="none"}/>}
-                        <div style={{fontSize:14,fontWeight:800,color:"#fff"}}>{away}</div>
-                        {awayRec && <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>{awayRec}</div>}
+                  <div>
+                    <div style={{padding:"16px 20px 8px"}}>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+                        {/* Away — clickable */}
+                        <div style={{flex:1,textAlign:"center",cursor:"pointer",opacity:gameTeamTab==='away'?1:0.7,transition:"opacity 0.15s"}}
+                          onClick={()=>setGameTeamTab(t=>t==='away'?'matchup':'away')}>
+                          {awayLogo && <img src={awayLogo} style={{width:52,height:52,objectFit:"contain",marginBottom:6,filter:gameTeamTab==='away'?'none':'grayscale(0.3)'}} onError={e=>e.target.style.display="none"}/>}
+                          <div style={{fontSize:14,fontWeight:800,color:gameTeamTab==='away'?awayColor:"#fff"}}>{away}</div>
+                          {awayRec && <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>{awayRec}</div>}
+                          {gameTeamTab==='away' && <div style={{width:24,height:3,borderRadius:2,background:awayColor,margin:"4px auto 0"}}/>}
+                        </div>
+                        {/* VS */}
+                        <div style={{textAlign:"center"}}>
+                          <div style={{fontSize:13,fontWeight:700,color:IOS.label3}}>VS</div>
+                          <div style={{fontSize:11,color:IOS.label3,marginTop:4}}>{tg.isLive ? <span style={{color:IOS.green,fontWeight:700}}>● LIVE</span> : gameTime}</div>
+                        </div>
+                        {/* Home — clickable */}
+                        <div style={{flex:1,textAlign:"center",cursor:"pointer",opacity:gameTeamTab==='home'?1:0.7,transition:"opacity 0.15s"}}
+                          onClick={()=>setGameTeamTab(t=>t==='home'?'matchup':'home')}>
+                          {homeLogo && <img src={homeLogo} style={{width:52,height:52,objectFit:"contain",marginBottom:6,filter:gameTeamTab==='home'?'none':'grayscale(0.3)'}} onError={e=>e.target.style.display="none"}/>}
+                          <div style={{fontSize:14,fontWeight:800,color:gameTeamTab==='home'?homeColor:"#fff"}}>{home}</div>
+                          {homeRec && <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>{homeRec}</div>}
+                          {gameTeamTab==='home' && <div style={{width:24,height:3,borderRadius:2,background:homeColor,margin:"4px auto 0"}}/>}
+                        </div>
                       </div>
-                      {/* VS */}
-                      <div style={{textAlign:"center"}}>
-                        <div style={{fontSize:13,fontWeight:700,color:IOS.label3}}>VS</div>
-                        <div style={{fontSize:11,color:IOS.label3,marginTop:4}}>{gameSheet.tickerGame.isLive ? <span style={{color:IOS.green,fontWeight:700}}>● LIVE</span> : gameTime}</div>
-                      </div>
-                      {/* Home */}
-                      <div style={{flex:1,textAlign:"center"}}>
-                        {homeLogo && <img src={homeLogo} style={{width:52,height:52,objectFit:"contain",marginBottom:6}} onError={e=>e.target.style.display="none"}/>}
-                        <div style={{fontSize:14,fontWeight:800,color:"#fff"}}>{home}</div>
-                        {homeRec && <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>{homeRec}</div>}
-                      </div>
+                      {gameTeamTab==='matchup' && (
+                        <div style={{textAlign:"center",fontSize:11,color:IOS.label3,marginTop:8}}>Tap a team to see their stats</div>
+                      )}
                     </div>
+
+                    {/* Team stats panel */}
+                    {gameTeamTab!=='matchup' && (() => {
+                      const idx = gameTeamTab==='away' ? 0 : 1;
+                      const teamData = gameSheet.detail?.teams?.[idx];
+                      const teamColor = idx===0 ? awayColor : homeColor;
+                      const teamName = idx===0 ? away : home;
+                      const seasonStats = teamData?.seasonStats || [];
+                      const gameStats = teamData?.gameStats || [];
+                      return (
+                        <div style={{margin:"0 16px 16px",background:"#2C2C2E",borderRadius:14,overflow:"hidden"}}>
+                          <div style={{padding:"10px 14px",borderBottom:"0.5px solid rgba(255,255,255,0.06)",display:"flex",alignItems:"center",gap:8}}>
+                            <div style={{width:6,height:6,borderRadius:"50%",background:teamColor}}/>
+                            <div style={{fontSize:12,fontWeight:700,color:teamColor,letterSpacing:0.5,textTransform:"uppercase"}}>{teamName} Stats</div>
+                          </div>
+                          {gameLoading ? (
+                            <div style={{padding:"20px",textAlign:"center",color:IOS.label3,fontSize:13}}>Loading...</div>
+                          ) : seasonStats.length > 0 ? (
+                            seasonStats.map((s,si)=>(
+                              <div key={si} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 16px",borderBottom:si<seasonStats.length-1?"0.5px solid rgba(255,255,255,0.04)":"none"}}>
+                                <div style={{fontSize:13,color:"rgba(255,255,255,0.6)"}}>{s.label}</div>
+                                <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>{s.value}</div>
+                              </div>
+                            ))
+                          ) : gameStats.length > 0 ? (
+                            gameStats.map((s,si)=>(
+                              <div key={si} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 16px",borderBottom:si<gameStats.length-1?"0.5px solid rgba(255,255,255,0.04)":"none"}}>
+                                <div style={{fontSize:13,color:"rgba(255,255,255,0.6)"}}>{s.label}</div>
+                                <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>{s.value}</div>
+                              </div>
+                            ))
+                          ) : (
+                            <div style={{padding:"24px 16px",textAlign:"center"}}>
+                              <div style={{fontSize:24,marginBottom:8}}>📊</div>
+                              <div style={{fontSize:13,color:IOS.label3,lineHeight:1.5}}>Season stats will appear here once the season is underway.</div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })()}
