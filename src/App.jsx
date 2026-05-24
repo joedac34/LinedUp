@@ -585,6 +585,7 @@ export default function App() {
   const [usernameSaving,  setUsernameSaving]  = useState(false);
   const [usernameError,   setUsernameError]   = useState("");
   const [authScreen,  setAuthScreen]  = useState("login");
+  const [authError,   setAuthError]   = useState("");
   const [anim,        setAnim]        = useState(false);
   const [timeLeft,    setTimeLeft]    = useState({h:0,m:0,s:0});
   const [submitted,   setSubmitted]   = useState(false);
@@ -1961,6 +1962,51 @@ export default function App() {
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {/* ══ AUTH SCREEN ══ */}
+      {!user && (
+        <div className="phone" style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"40px 24px",gap:16}}>
+          <div style={{fontSize:36,fontWeight:900,letterSpacing:-1,color:"#fff",marginBottom:8}}>PICKLOCK</div>
+          <div style={{fontSize:14,color:"rgba(255,255,255,0.4)",marginBottom:24,textAlign:"center"}}>Fantasy sports betting, built different</div>
+          <div style={{display:"flex",gap:0,background:"rgba(255,255,255,0.08)",borderRadius:12,padding:4,width:"100%",marginBottom:8}}>
+            {["login","signup"].map(t=>(
+              <div key={t} onClick={()=>setAuthScreen(t)} style={{flex:1,textAlign:"center",padding:"9px",borderRadius:9,fontSize:14,fontWeight:600,cursor:"pointer",background:authScreen===t?"#fff":"transparent",color:authScreen===t?"#000":"rgba(255,255,255,0.5)",transition:"all .15s"}}>
+                {t==="login"?"Sign In":"Sign Up"}
+              </div>
+            ))}
+          </div>
+          <input id="auth-email" type="email" placeholder="Email" style={{width:"100%",background:"#1C1C1E",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"14px 16px",color:"#fff",fontSize:15,fontFamily:"'Manrope',sans-serif",outline:"none"}}/>
+          {authScreen==="signup"&&<input id="auth-username" type="text" placeholder="Username (e.g. sharpshooter99)" style={{width:"100%",background:"#1C1C1E",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"14px 16px",color:"#fff",fontSize:15,fontFamily:"'Manrope',sans-serif",outline:"none"}}/>}
+          <input id="auth-password" type="password" placeholder="Password" style={{width:"100%",background:"#1C1C1E",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"14px 16px",color:"#fff",fontSize:15,fontFamily:"'Manrope',sans-serif",outline:"none"}}/>
+          {authError&&<div style={{fontSize:13,color:"#FF453A",textAlign:"center"}}>{authError}</div>}
+          <button onClick={async()=>{
+            const email=document.getElementById("auth-email")?.value;
+            const password=document.getElementById("auth-password")?.value;
+            setAuthError("");
+            if(authScreen==="login"){
+              const {error}=await supabase.auth.signInWithPassword({email,password});
+              if(error)setAuthError(error.message);
+            } else {
+              const username=document.getElementById("auth-username")?.value;
+              const {data,error}=await supabase.auth.signUp({email,password});
+              if(error){setAuthError(error.message);return;}
+              if(data?.user){
+                await supabase.from("users").upsert({id:data.user.id,email,username},{onConflict:"id"});
+                setTutorialStep(0);
+              }
+              setAuthError("Account created! Check your email to confirm, then sign in.");
+            }
+          }} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:12,padding:"15px",fontSize:16,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"'Manrope',sans-serif"}}>
+            {authScreen==="login"?"Sign In":"Create Account"}
+          </button>
+          {authScreen==="login"&&<div style={{fontSize:13,color:"rgba(255,255,255,0.35)",cursor:"pointer"}} onClick={async()=>{
+            const email=document.getElementById("auth-email")?.value;
+            if(!email){setAuthError("Enter your email first");return;}
+            await supabase.auth.resetPasswordForEmail(email);
+            setAuthError("Password reset email sent!");
+          }}>Forgot Password?</div>}
         </div>
       )}
 
