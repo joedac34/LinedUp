@@ -1964,7 +1964,9 @@ export default function App() {
         </div>
       )}
 
-              {/* ══ USERNAME PROMPT MODAL ══ */}
+      {user && <div className="phone">
+
+        {/* ══ USERNAME PROMPT MODAL ══ */}
         {showUsernamePrompt && (
           <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
             <div style={{background:IOS.bg2,borderRadius:24,padding:28,width:"100%",maxWidth:340,boxShadow:"0 20px 60px rgba(0,0,0,0.5)"}}>
