@@ -1,6 +1,15 @@
 import { useState, useEffect, useRef, createPortal } from "react";
 import { supabase } from './supabase';
 
+// Inject wheel CSS globally so portal can access it
+const wheelStyle = document.createElement('style');
+wheelStyle.textContent = `
+  .wheel-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.96);z-index:9900;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+  .wheel-wrap{position:relative;width:340px;height:340px;margin-bottom:32px;}
+  .wheel-pointer{position:absolute;top:-18px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:12px solid transparent;border-right:12px solid transparent;border-top:28px solid #fff;z-index:10;filter:drop-shadow(0 2px 8px rgba(255,255,255,0.5));}
+`;
+document.head.appendChild(wheelStyle);
+
 // iOS System Colors
 const IOS = {
   blue:    "#0A84FF",
