@@ -1532,7 +1532,7 @@ export default function App() {
     *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
     ::-webkit-scrollbar{display:none;}
 
-    .phone{width:390px;min-height:844px;background:#000;position:relative;overflow:hidden;display:flex;flex-direction:column;font-family:'Manrope',system-ui,-apple-system,sans-serif;color:#fff;-webkit-font-smoothing:antialiased;padding-top:env(safe-area-inset-top,0px);box-sizing:border-box;}
+    .phone{width:390px;min-height:844px;background:#000;position:relative;display:flex;flex-direction:column;font-family:'Manrope',system-ui,-apple-system,sans-serif;color:#fff;-webkit-font-smoothing:antialiased;padding-top:env(safe-area-inset-top,0px);box-sizing:border-box;}
 
     /* iOS Status Bar */
 
@@ -1903,6 +1903,150 @@ export default function App() {
     <div style={{minHeight:"100vh",background:"#111",display:"flex",justifyContent:"center",alignItems:"flex-start"}}>
       <style>{css}</style>
 
+      {/* ══ WHEEL ══ */}
+      {showWheel && (
+        <div className="wheel-overlay">
+          {showWin && wonPU ? (
+            /* ── Win screen ── */
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"0 32px",maxWidth:360,width:"100%"}}>
+            {/* Animated glow */}
+            <div style={{width:100,height:100,borderRadius:"50%",background:`radial-gradient(circle, ${wonPU.color}40, transparent 70%)`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:20,boxShadow:`0 0 60px ${wonPU.color}50`}}>
+              <div style={{width:60,height:60,borderRadius:"50%",background:`linear-gradient(135deg, ${wonPU.color}, ${wonPU.color}99)`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <div style={{width:28,height:28,borderRadius:6,background:"rgba(0,0,0,0.3)"}}/>
+              </div>
+            </div>
+            <div style={{fontSize:13,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:wonPU.color,marginBottom:8}}>Power-Up Unlocked</div>
+            <div style={{fontSize:28,fontWeight:900,color:"#fff",letterSpacing:-0.5,marginBottom:6,textAlign:"center"}}>{wonPU.name}</div>
+            <div style={{
+              fontSize:11,fontWeight:700,letterSpacing:1,textTransform:"uppercase",
+              padding:"4px 12px",borderRadius:20,marginBottom:16,
+              background:`${wonPU.color}20`,color:wonPU.color,border:`1px solid ${wonPU.color}40`
+            }}>
+              {wonPU.rarity==="legendary"?"Legendary":wonPU.rarity==="rare"?"Rare":"Common"}
+            </div>
+            <div style={{fontSize:14,color:"rgba(255,255,255,0.6)",textAlign:"center",lineHeight:1.6,marginBottom:32}}>{wonPU.desc}</div>
+            <button onClick={claimPU} style={{width:"100%",background:`linear-gradient(135deg, ${wonPU.color}, ${wonPU.color}cc)`,border:"none",borderRadius:16,padding:"16px",fontSize:16,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Manrope,sans-serif",marginBottom:12,boxShadow:`0 8px 30px ${wonPU.color}40`}}>
+              Add to Inventory
+            </button>
+            <div onClick={()=>{setShowWin(false);setShowWheel(false);setWonPU(null);}} style={{fontSize:14,color:"rgba(255,255,255,0.35)",cursor:"pointer",padding:8}}>
+              Dismiss
+            </div>
+            </div>
+          ) : (
+            /* ── Wheel screen ── */
+            <>
+            {/* Header */}
+            <div style={{textAlign:"center",marginBottom:28,padding:"0 24px"}}>
+              <div style={{fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:"rgba(255,255,255,0.35)",marginBottom:6}}>Power-Up Wheel</div>
+              <div style={{fontSize:22,fontWeight:800,color:"#fff",letterSpacing:-0.3}}>
+                {wheelSpins} Spin{wheelSpins!==1?"s":""} Available
+              </div>
+            </div>
+
+            {/* Wheel */}
+            <div className="wheel-wrap">
+              <div className="wheel-pointer"/>
+              <svg width={W} height={W} style={{
+                transition:spinning?"transform 4s cubic-bezier(0.17,0.67,0.12,0.99)":"none",
+                transform:`rotate(${wheelAngle}deg)`,
+                borderRadius:"50%",
+                display:"block",
+                filter:"drop-shadow(0 0 30px rgba(255,255,255,0.08))",
+              }}>
+                {WHEEL_ITEMS.map((item,i)=>{
+                  const sa=i*segA;const ea=(i+1)*segA;
+                  const p1=polarToCart(R,R,R,sa);const p2=polarToCart(R,R,R,ea);
+                  const mid=polarToCart(R,R,R*0.63,sa+segA/2);
+                  const textPt=polarToCart(R,R,R*0.72,sa+segA/2);
+                  // Use item color for segment fill
+                  const segColor = item.color || "#1a1a2e";
+                  return (
+                  <g key={i}>
+                    <path
+                      d={`M ${R} ${R} L ${p1.x} ${p1.y} A ${R} ${R} 0 0 1 ${p2.x} ${p2.y} Z`}
+                      fill={`${segColor}22`}
+                      stroke={`${segColor}66`}
+                      strokeWidth="1.5"
+                    />
+                    {/* Rarity accent arc */}
+                    <path
+                      d={`M ${polarToCart(R,R,R-6,sa+2).x} ${polarToCart(R,R,R-6,sa+2).y} A ${R-6} ${R-6} 0 0 1 ${polarToCart(R,R,R-6,ea-2).x} ${polarToCart(R,R,R-6,ea-2).y}`}
+                      fill="none"
+                      stroke={segColor}
+                      strokeWidth={item.rarity==="legendary"?3:item.rarity==="rare"?2:1}
+                      opacity={item.rarity==="legendary"?0.9:item.rarity==="rare"?0.7:0.4}
+                    />
+                    {/* Item name — two lines if needed */}
+                    <text
+                      x={mid.x} y={mid.y - 7}
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      fontSize={item.name.length > 10 ? "8.5" : "9.5"}
+                      fontWeight="700"
+                      fill="#fff"
+                      opacity="0.95"
+                      fontFamily="Manrope, system-ui, sans-serif"
+                      letterSpacing="0.3"
+                      transform={`rotate(${sa+segA/2}, ${mid.x}, ${mid.y})`}
+                    >
+                      {item.name.split(" ").slice(0,1).join(" ")}
+                    </text>
+                    <text
+                      x={mid.x} y={mid.y + 7}
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      fontSize={item.name.length > 10 ? "8.5" : "9.5"}
+                      fontWeight="700"
+                      fill="#fff"
+                      opacity="0.95"
+                      fontFamily="Manrope, system-ui, sans-serif"
+                      transform={`rotate(${sa+segA/2}, ${mid.x}, ${mid.y})`}
+                    >
+                      {item.name.split(" ").slice(1).join(" ")}
+                    </text>
+                  </g>
+                  );
+                })}
+                {/* Center hub */}
+                <circle cx={R} cy={R} r={22} fill="#0a0a0a" stroke="rgba(255,255,255,0.15)" strokeWidth="2"/>
+                <circle cx={R} cy={R} r={8} fill="rgba(255,255,255,0.2)"/>
+              </svg>
+            </div>
+
+            {/* Spin button */}
+            <button
+              disabled={spinning || wheelSpins < 1}
+              onClick={spinWheel}
+              style={{
+                width:200,
+                background: spinning || wheelSpins < 1
+                  ? "rgba(255,255,255,0.08)"
+                  : "linear-gradient(135deg, #0A84FF, #5E5CE6)",
+                border:"none",
+                borderRadius:50,
+                padding:"16px 40px",
+                fontSize:17,
+                fontWeight:800,
+                color: spinning || wheelSpins < 1 ? "rgba(255,255,255,0.3)" : "#fff",
+                cursor: spinning || wheelSpins < 1 ? "default" : "pointer",
+                fontFamily:"Manrope,sans-serif",
+                letterSpacing:-0.3,
+                boxShadow: spinning ? "none" : "0 8px 30px rgba(10,132,255,0.4)",
+                transition:"all 0.2s",
+                marginBottom:16,
+              }}
+            >
+              {spinning ? "Spinning..." : wheelSpins < 1 ? "No Spins Left" : "Spin"}
+            </button>
+            <div
+              onClick={()=>{ if(!spinning){ setShowWheel(false); } }}
+              style={{fontSize:14,color:"rgba(255,255,255,0.3)",cursor:spinning?"default":"pointer",padding:8}}
+            >
+              {spinning ? "" : "Close"}
+            </div>
+            </>
+          )}
+
       {/* ══ TUTORIAL OVERLAY ══ */}
       {user && tutorialStep >= 0 && (() => {
         const steps = [
@@ -2216,149 +2360,7 @@ export default function App() {
           </div>
         )}
 
-        {/* ══ WHEEL ══ */}
-        {showWheel && (
-          <div className="wheel-overlay">
-            {showWin && wonPU ? (
-              /* ── Win screen ── */
-              <div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"0 32px",maxWidth:360,width:"100%"}}>
-                {/* Animated glow */}
-                <div style={{width:100,height:100,borderRadius:"50%",background:`radial-gradient(circle, ${wonPU.color}40, transparent 70%)`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:20,boxShadow:`0 0 60px ${wonPU.color}50`}}>
-                  <div style={{width:60,height:60,borderRadius:"50%",background:`linear-gradient(135deg, ${wonPU.color}, ${wonPU.color}99)`,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                    <div style={{width:28,height:28,borderRadius:6,background:"rgba(0,0,0,0.3)"}}/>
-                  </div>
-                </div>
-                <div style={{fontSize:13,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:wonPU.color,marginBottom:8}}>Power-Up Unlocked</div>
-                <div style={{fontSize:28,fontWeight:900,color:"#fff",letterSpacing:-0.5,marginBottom:6,textAlign:"center"}}>{wonPU.name}</div>
-                <div style={{
-                  fontSize:11,fontWeight:700,letterSpacing:1,textTransform:"uppercase",
-                  padding:"4px 12px",borderRadius:20,marginBottom:16,
-                  background:`${wonPU.color}20`,color:wonPU.color,border:`1px solid ${wonPU.color}40`
-                }}>
-                  {wonPU.rarity==="legendary"?"Legendary":wonPU.rarity==="rare"?"Rare":"Common"}
-                </div>
-                <div style={{fontSize:14,color:"rgba(255,255,255,0.6)",textAlign:"center",lineHeight:1.6,marginBottom:32}}>{wonPU.desc}</div>
-                <button onClick={claimPU} style={{width:"100%",background:`linear-gradient(135deg, ${wonPU.color}, ${wonPU.color}cc)`,border:"none",borderRadius:16,padding:"16px",fontSize:16,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Manrope,sans-serif",marginBottom:12,boxShadow:`0 8px 30px ${wonPU.color}40`}}>
-                  Add to Inventory
-                </button>
-                <div onClick={()=>{setShowWin(false);setShowWheel(false);setWonPU(null);}} style={{fontSize:14,color:"rgba(255,255,255,0.35)",cursor:"pointer",padding:8}}>
-                  Dismiss
-                </div>
-              </div>
-            ) : (
-              /* ── Wheel screen ── */
-              <>
-                {/* Header */}
-                <div style={{textAlign:"center",marginBottom:28,padding:"0 24px"}}>
-                  <div style={{fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:"rgba(255,255,255,0.35)",marginBottom:6}}>Power-Up Wheel</div>
-                  <div style={{fontSize:22,fontWeight:800,color:"#fff",letterSpacing:-0.3}}>
-                    {wheelSpins} Spin{wheelSpins!==1?"s":""} Available
-                  </div>
-                </div>
 
-                {/* Wheel */}
-                <div className="wheel-wrap">
-                  <div className="wheel-pointer"/>
-                  <svg width={W} height={W} style={{
-                    transition:spinning?"transform 4s cubic-bezier(0.17,0.67,0.12,0.99)":"none",
-                    transform:`rotate(${wheelAngle}deg)`,
-                    borderRadius:"50%",
-                    display:"block",
-                    filter:"drop-shadow(0 0 30px rgba(255,255,255,0.08))",
-                  }}>
-                    {WHEEL_ITEMS.map((item,i)=>{
-                      const sa=i*segA;const ea=(i+1)*segA;
-                      const p1=polarToCart(R,R,R,sa);const p2=polarToCart(R,R,R,ea);
-                      const mid=polarToCart(R,R,R*0.63,sa+segA/2);
-                      const textPt=polarToCart(R,R,R*0.72,sa+segA/2);
-                      // Use item color for segment fill
-                      const segColor = item.color || "#1a1a2e";
-                      return (
-                        <g key={i}>
-                          <path
-                            d={`M ${R} ${R} L ${p1.x} ${p1.y} A ${R} ${R} 0 0 1 ${p2.x} ${p2.y} Z`}
-                            fill={`${segColor}22`}
-                            stroke={`${segColor}66`}
-                            strokeWidth="1.5"
-                          />
-                          {/* Rarity accent arc */}
-                          <path
-                            d={`M ${polarToCart(R,R,R-6,sa+2).x} ${polarToCart(R,R,R-6,sa+2).y} A ${R-6} ${R-6} 0 0 1 ${polarToCart(R,R,R-6,ea-2).x} ${polarToCart(R,R,R-6,ea-2).y}`}
-                            fill="none"
-                            stroke={segColor}
-                            strokeWidth={item.rarity==="legendary"?3:item.rarity==="rare"?2:1}
-                            opacity={item.rarity==="legendary"?0.9:item.rarity==="rare"?0.7:0.4}
-                          />
-                          {/* Item name — two lines if needed */}
-                          <text
-                            x={mid.x} y={mid.y - 7}
-                            textAnchor="middle"
-                            dominantBaseline="middle"
-                            fontSize={item.name.length > 10 ? "8.5" : "9.5"}
-                            fontWeight="700"
-                            fill="#fff"
-                            opacity="0.95"
-                            fontFamily="Manrope, system-ui, sans-serif"
-                            letterSpacing="0.3"
-                            transform={`rotate(${sa+segA/2}, ${mid.x}, ${mid.y})`}
-                          >
-                            {item.name.split(" ").slice(0,1).join(" ")}
-                          </text>
-                          <text
-                            x={mid.x} y={mid.y + 7}
-                            textAnchor="middle"
-                            dominantBaseline="middle"
-                            fontSize={item.name.length > 10 ? "8.5" : "9.5"}
-                            fontWeight="700"
-                            fill="#fff"
-                            opacity="0.95"
-                            fontFamily="Manrope, system-ui, sans-serif"
-                            transform={`rotate(${sa+segA/2}, ${mid.x}, ${mid.y})`}
-                          >
-                            {item.name.split(" ").slice(1).join(" ")}
-                          </text>
-                        </g>
-                      );
-                    })}
-                    {/* Center hub */}
-                    <circle cx={R} cy={R} r={22} fill="#0a0a0a" stroke="rgba(255,255,255,0.15)" strokeWidth="2"/>
-                    <circle cx={R} cy={R} r={8} fill="rgba(255,255,255,0.2)"/>
-                  </svg>
-                </div>
-
-                {/* Spin button */}
-                <button
-                  disabled={spinning || wheelSpins < 1}
-                  onClick={spinWheel}
-                  style={{
-                    width:200,
-                    background: spinning || wheelSpins < 1
-                      ? "rgba(255,255,255,0.08)"
-                      : "linear-gradient(135deg, #0A84FF, #5E5CE6)",
-                    border:"none",
-                    borderRadius:50,
-                    padding:"16px 40px",
-                    fontSize:17,
-                    fontWeight:800,
-                    color: spinning || wheelSpins < 1 ? "rgba(255,255,255,0.3)" : "#fff",
-                    cursor: spinning || wheelSpins < 1 ? "default" : "pointer",
-                    fontFamily:"Manrope,sans-serif",
-                    letterSpacing:-0.3,
-                    boxShadow: spinning ? "none" : "0 8px 30px rgba(10,132,255,0.4)",
-                    transition:"all 0.2s",
-                    marginBottom:16,
-                  }}
-                >
-                  {spinning ? "Spinning..." : wheelSpins < 1 ? "No Spins Left" : "Spin"}
-                </button>
-                <div
-                  onClick={()=>{ if(!spinning){ setShowWheel(false); } }}
-                  style={{fontSize:14,color:"rgba(255,255,255,0.3)",cursor:spinning?"default":"pointer",padding:8}}
-                >
-                  {spinning ? "" : "Close"}
-                </div>
-              </>
-            )}
           </div>
         )}
 
