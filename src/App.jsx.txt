@@ -886,10 +886,6 @@ export default function App() {
   const [puLeaguePUs, setPuLeaguePUs] = useState([]); // PUs for the viewed league
   const [puLeagueSpins, setPuLeagueSpins] = useState(0); // wheel spins for viewed league
   const [showWheel,   setShowWheel]   = useState(false);
-  useEffect(()=>{
-    const phone = document.querySelector('.phone');
-    if(phone) phone.style.overflow = showWheel ? 'visible' : 'hidden';
-  }, [showWheel]);
   const [spinning,    setSpinning]    = useState(false);
   const [wheelSpins,  setWheelSpins]  = useState(0); // earned by winning a week
   const [wheelAngle,  setWheelAngle]  = useState(0);
@@ -1830,7 +1826,7 @@ export default function App() {
     .pu-use-btn{background:${IOS.fill2};border:none;border-radius:8px;padding:7px 14px;font-family:'Manrope',sans-serif;font-size:13px;font-weight:600;color:${IOS.blue};cursor:pointer;white-space:nowrap;flex-shrink:0;}
 
     /* Wheel */
-    .wheel-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.96);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;}
+    .wheel-overlay{position:absolute;inset:0;background:rgba(0,0,0,0.92);z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;backdrop-filter:blur(10px);}
     .wheel-hdr{text-align:center;margin-bottom:24px;}
     .wheel-hdr-title{font-size:28px;font-weight:700;letter-spacing:-0.5px;}
     .wheel-hdr-sub{font-size:15px;color:${IOS.label3};margin-top:4px;}
