@@ -1,15 +1,6 @@
 import { useState, useEffect, useRef, createPortal } from "react";
 import { supabase } from './supabase';
 
-// Inject wheel CSS globally so portal can access it
-const wheelStyle = document.createElement('style');
-wheelStyle.textContent = `
-  .wheel-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.96);z-index:9900;display:flex;flex-direction:column;align-items:center;justify-content:center;}
-  .wheel-wrap{position:relative;width:340px;height:340px;margin-bottom:32px;}
-  .wheel-pointer{position:absolute;top:-18px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:12px solid transparent;border-right:12px solid transparent;border-top:28px solid #fff;z-index:10;filter:drop-shadow(0 2px 8px rgba(255,255,255,0.5));}
-`;
-document.head.appendChild(wheelStyle);
-
 // iOS System Colors
 const IOS = {
   blue:    "#0A84FF",
@@ -1913,7 +1904,7 @@ export default function App() {
     <>
     {/* ══ WHEEL ══ - rendered via portal to escape stacking context */}
     {showWheel && createPortal(
-      <div className="wheel-overlay">
+      <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.96)",zIndex:9900,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"Manrope,sans-serif"}}>
         {showWin && wonPU ? (
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"0 32px",maxWidth:360,width:"100%"}}>
             <div style={{width:100,height:100,borderRadius:"50%",background:`radial-gradient(circle, ${wonPU.color}40, transparent 70%)`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:20,boxShadow:`0 0 60px ${wonPU.color}50`}}>
@@ -1940,8 +1931,8 @@ export default function App() {
               <div style={{fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:"rgba(255,255,255,0.35)",marginBottom:6}}>Power-Up Wheel</div>
               <div style={{fontSize:22,fontWeight:800,color:"#fff",letterSpacing:-0.3}}>{wheelSpins} Spin{wheelSpins!==1?"s":""} Available</div>
             </div>
-            <div className="wheel-wrap">
-              <div className="wheel-pointer"/>
+            <div style={{position:"relative",width:340,height:340,marginBottom:32}}>
+              <div style={{position:"absolute",top:-18,left:"50%",transform:"translateX(-50%)",width:0,height:0,borderLeft:"12px solid transparent",borderRight:"12px solid transparent",borderTop:"28px solid #fff",zIndex:10,filter:"drop-shadow(0 2px 8px rgba(255,255,255,0.5))"}}/>
               <svg width={W} height={W} style={{transition:spinning?"transform 4s cubic-bezier(0.17,0.67,0.12,0.99)":"none",transform:`rotate(${wheelAngle}deg)`,borderRadius:"50%",display:"block",filter:"drop-shadow(0 0 30px rgba(255,255,255,0.08))"}}>
                 {WHEEL_ITEMS.map((item,i)=>{
                   const sa=i*segA; const ea=(i+1)*segA;
@@ -1972,7 +1963,6 @@ export default function App() {
       </div>
     , document.body)}
     <div style={{minHeight:"100vh",background:"#111",display:"flex",justifyContent:"center",alignItems:"flex-start",position:"relative"}}>
-      <style>{css}</style>
 
       {/* ══ AUTH SCREEN ══ */}
       {!user && (
