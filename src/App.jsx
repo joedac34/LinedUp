@@ -967,6 +967,81 @@ export default function App() {
     setLiveSchedule(schedule);
   };
 
+  const fetchPastMatchupPicks = async (week, myId, oppId) => {
+    setPastMatchupLoading(true);
+    setPastMatchupPicks({my:[], opp:[]});
+    const {data} = await supabase
+      .from('picks')
+      .select('*')
+      .eq('league_id', activeLeagueId)
+      .eq('week', week)
+      .in('user_id', [myId, oppId]);
+    if(data) {
+      setPastMatchupPicks({
+        my: data.filter(p=>p.user_id===myId),
+        opp: data.filter(p=>p.user_id===oppId),
+      });
+    }
+    setPastMatchupLoading(false);
+  };
+
+  const checkAutoAdvanceWeek = async (leagueId, league) => {
+    const currentWeek = league.current_week || 1;
+    // Get all picks for this week
+    const {data:allPicks} = await supabase
+      .from('picks')
+      .select('user_id, result')
+      .eq('league_id', leagueId)
+      .eq('week', currentWeek);
+    if(!allPicks || allPicks.length === 0) return;
+    // Check if every pick is graded (not pending)
+    const allGraded = allPicks.every(p => p.result !== 'pending');
+    if(!allGraded) return;
+    // All graded — auto advance
+    const nextWeek = currentWeek + 1;
+    // Tally points per user
+    const {data:wonPicks} = await supabase
+      .from('picks')
+      .select('user_id, points_earned')
+      .eq('league_id', leagueId)
+      .eq('week', currentWeek)
+      .eq('result', 'W');
+    const totals = {};
+    (wonPicks||[]).forEach(p => {
+      totals[p.user_id] = (totals[p.user_id]||0) + parseFloat(p.points_earned||0);
+    });
+    // Write winner_id to matchups
+    const {data:weekMatchups} = await supabase
+      .from('matchups')
+      .select('id,user1_id,user2_id')
+      .eq('league_id', leagueId)
+      .eq('week', currentWeek)
+      .is('winner_id', null);
+    for(const m of (weekMatchups||[])) {
+      const p1 = totals[m.user1_id]||0;
+      const p2 = totals[m.user2_id]||0;
+      await supabase.from('matchups').update({
+        winner_id: p1 >= p2 ? m.user1_id : m.user2_id,
+        user1_points: parseFloat(p1.toFixed(1)),
+        user2_points: parseFloat(p2.toFixed(1)),
+      }).eq('id', m.id);
+      // Store pending_result for each user
+      for(const [uid, myPts, oppPts] of [[m.user1_id,p1,p2],[m.user2_id,p2,p1]]) {
+        await supabase.from('users').update({
+          pending_result: JSON.stringify({
+            won: (p1>=p2?m.user1_id:m.user2_id)===uid,
+            myPts: parseFloat(myPts.toFixed(1)),
+            oppPts: parseFloat(oppPts.toFixed(1)),
+            week: currentWeek,
+          })
+        }).eq('id', uid);
+      }
+    }
+    // Advance week
+    await supabase.from('leagues').update({current_week: nextWeek}).eq('id', leagueId);
+    console.log('Auto-advanced to week', nextWeek);
+  };
+
   // ─── SCHEDULE GENERATION ────────────────────────────────────────
   const generateSchedule = async (leagueId, memberIds, seasonWeeks) => {
     // Round-robin algorithm: generates matchups so everyone plays everyone else
@@ -1318,7 +1393,9 @@ export default function App() {
     });
   };
   const [savedPicks,  setSavedPicks]  = useState(null);
-  const [selectedMatchup, setSelectedMatchup] = useState(null); // week number of selected past matchup // locked picks for the week
+  const [selectedMatchup, setSelectedMatchup] = useState(null);
+  const [pastMatchupPicks, setPastMatchupPicks] = useState({my:[], opp:[]});
+  const [pastMatchupLoading, setPastMatchupLoading] = useState(false); // week number of selected past matchup // locked picks for the week
   const chatRef=useRef(null);
 
   const fetchMessages = async (leagueId) => {
@@ -4088,6 +4165,10 @@ export default function App() {
                           //   body:JSON.stringify({userId:uid, title:'Picks Graded!',
                           //     body:`Your Week ${week} picks have been graded. Check your results!`,
                           //     data:{screen:'matchup'}})});
+                          // Check if all picks are graded and auto-advance if so
+                          await checkAutoAdvanceWeek(activeLeague.id, activeLeague);
+                          await fetchLeagues(user.id);
+                          await fetchSchedule(activeLeague.id, user.id);
                           alert(memberData.name+"'s picks submitted!");
                         }} style={{width:"100%",background:"linear-gradient(135deg,"+IOS.blue+","+IOS.indigo+")",border:"none",borderRadius:10,padding:"12px",fontFamily:"Manrope,sans-serif",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer",letterSpacing:-0.2}}>
                           ✓ Submit Picks for {memberData.name}
@@ -4563,7 +4644,8 @@ export default function App() {
                   const mDisplay = {
                     week: m.week, opp: m.opp,
                     result: m.result,
-                    myPicks: [], oppPicks: [], // real pick detail not available yet
+                    myPicks: pastMatchupPicks.my,
+                    oppPicks: pastMatchupPicks.opp,
                   };
                   const slotColors = {Moneyline:IOS.blue, Prop:IOS.yellow, "Over/Under":IOS.orange, Spread:IOS.green, Parlay:IOS.pink};
                   const myTotal = parseFloat(calcMatchupScore(m.myPicks));
@@ -4605,55 +4687,53 @@ export default function App() {
                       <div style={{padding:"16px 20px 8px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                         <div style={{fontSize:12,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3}}>Pick by Pick</div>
                         <div style={{display:"flex",gap:16}}>
-                          <div style={{fontSize:11,fontWeight:700,color:IOS.blue}}>You: {myTotal}pts</div>
-                          <div style={{fontSize:11,color:IOS.label3}}>{m.opp}: {oppTotal}pts</div>
+                          <div style={{fontSize:11,fontWeight:700,color:IOS.blue}}>You: {m.myPts}pts</div>
+                          <div style={{fontSize:11,color:IOS.label3}}>{m.opp}: {m.oppPts}pts</div>
                         </div>
                       </div>
 
-                      {m.myPicks.map((myP, i)=>{
-                        const oppP = m.oppPicks[i];
-                        const col = slotColors[myP.slot]||IOS.blue;
-                        const myPts = calcPickPoints(myP.mult, myP.impliedOdds||0, myP.result);
-                        const oppPts = calcPickPoints(oppP.mult, oppP.impliedOdds||0, oppP.result);
-                        const maxPts = (myP.mult * (myP.impliedOdds > 0 ? myP.impliedOdds/100 : 100/Math.abs(myP.impliedOdds||110))).toFixed(2);
+                      {pastMatchupLoading && (
+                        <div style={{textAlign:"center",padding:24,color:IOS.label3,fontSize:13}}>Loading picks...</div>
+                      )}
+
+                      {!pastMatchupLoading && pastMatchupPicks.my.length === 0 && (
+                        <div style={{textAlign:"center",padding:24,color:IOS.label3,fontSize:13}}>No picks found for this week.</div>
+                      )}
+
+                      {!pastMatchupLoading && pastMatchupPicks.my.map((myP, i) => {
+                        const oppP = pastMatchupPicks.opp[i];
+                        const slotLabel = {ml:"Moneyline",prop:"Prop",ou:"Over/Under",spread:"Spread"}[myP.slot] || myP.slot || "Pick";
+                        const col = {ml:IOS.blue,prop:IOS.yellow,ou:IOS.orange,spread:IOS.green}[myP.slot] || IOS.blue;
                         return (
                           <div key={i} style={{margin:"0 16px 10px",background:IOS.bg2,borderRadius:14,overflow:"hidden",border:`1px solid rgba(255,255,255,0.06)`}}>
-                            {/* Slot header */}
-                            <div style={{padding:"10px 14px",borderBottom:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                                <div style={{width:28,height:28,borderRadius:8,background:`${col}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:col}}>{myP.mult}×</div>
-                                <div style={{fontSize:12,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:col}}>{myP.slot}</div>
-                              </div>
-                              <div style={{fontSize:10,color:IOS.label3}}>Max {maxPts} pts available</div>
+                            <div style={{padding:"10px 14px",borderBottom:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",gap:8}}>
+                              <div style={{fontSize:11,fontWeight:700,color:col,letterSpacing:0.5,textTransform:"uppercase"}}>{myP.multiplier}× · {slotLabel}</div>
                             </div>
-                            {/* Side by side */}
-                            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr"}}>
-                              {/* Your pick */}
-                              <div style={{padding:"12px 14px",borderRight:`0.5px solid ${IOS.sep}`,background:myP.result==="W"?"rgba(48,209,88,0.05)":"rgba(255,69,58,0.04)"}}>
-                                <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.blue,marginBottom:5}}>You</div>
-                                <div style={{fontSize:13,fontWeight:600,color:"#fff",marginBottom:6,lineHeight:1.3}}>{myP.pick}</div>
-                                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:4}}>
-                                  <div style={{fontSize:13,fontWeight:800,letterSpacing:-0.3,color:myP.odds.startsWith("+")?IOS.green:IOS.blue}}>{myP.odds}</div>
-                                  <div style={{display:"flex",alignItems:"center",gap:4}}>
-                                    <div style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:6,background:myP.result==="W"?"rgba(48,209,88,0.15)":"rgba(255,69,58,0.15)",color:myP.result==="W"?IOS.green:IOS.red}}>{myP.result==="W"?"✓ Win":"✗ Loss"}</div>
-                                    {myPts>0&&<div style={{fontSize:11,fontWeight:800,color:IOS.green}}>+{myPts}pt</div>}
-                                    {myPts===0&&myP.result==="L"&&<div style={{fontSize:11,fontWeight:700,color:IOS.red}}>0pt</div>}
+                            <div style={{display:"flex"}}>
+                              {/* My pick */}
+                              <div style={{flex:1,padding:"10px 14px",borderRight:`0.5px solid ${IOS.sep}`}}>
+                                <div style={{fontSize:11,color:IOS.blue,fontWeight:600,marginBottom:4}}>You</div>
+                                <div style={{fontSize:13,fontWeight:600,color:"#fff",marginBottom:4}}>{myP.pick_name}</div>
+                                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                                  <div style={{fontSize:12,color:myP.odds?.startsWith("+")?IOS.green:IOS.blue}}>{myP.odds}</div>
+                                  <div style={{fontSize:12,fontWeight:700,color:myP.result==="W"?IOS.green:myP.result==="L"?IOS.red:IOS.label3}}>
+                                    {myP.result==="W"?`+${parseFloat(myP.points_earned||0).toFixed(1)}pts`:myP.result==="L"?"0pts":"—"}
                                   </div>
                                 </div>
                               </div>
                               {/* Opp pick */}
-                              <div style={{padding:"12px 14px",background:oppP.result==="W"?"rgba(48,209,88,0.05)":"rgba(255,69,58,0.04)"}}>
-                                <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3,marginBottom:5}}>{mDisplay.opp}</div>
-                                <div style={{fontSize:13,fontWeight:600,color:"#fff",marginBottom:6,lineHeight:1.3}}>{oppP.pick}</div>
-                                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:4}}>
-                                  <div style={{fontSize:13,fontWeight:800,letterSpacing:-0.3,color:oppP.odds.startsWith("+")?IOS.green:IOS.blue}}>{oppP.odds}</div>
-                                  <div style={{display:"flex",alignItems:"center",gap:4}}>
-                                    <div style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:6,background:oppP.result==="W"?"rgba(48,209,88,0.15)":"rgba(255,69,58,0.15)",color:oppP.result==="W"?IOS.green:IOS.red}}>{oppP.result==="W"?"✓ Win":"✗ Loss"}</div>
-                                    {oppPts>0&&<div style={{fontSize:11,fontWeight:800,color:IOS.green}}>+{oppPts}pt</div>}
-                                    {oppPts===0&&oppP.result==="L"&&<div style={{fontSize:11,fontWeight:700,color:IOS.red}}>0pt</div>}
+                              {oppP && (
+                                <div style={{flex:1,padding:"10px 14px"}}>
+                                  <div style={{fontSize:11,color:IOS.label3,fontWeight:600,marginBottom:4}}>{m.opp}</div>
+                                  <div style={{fontSize:13,fontWeight:600,color:"#fff",marginBottom:4}}>{oppP.pick_name}</div>
+                                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                                    <div style={{fontSize:12,color:oppP.odds?.startsWith("+")?IOS.green:IOS.blue}}>{oppP.odds}</div>
+                                    <div style={{fontSize:12,fontWeight:700,color:oppP.result==="W"?IOS.green:oppP.result==="L"?IOS.red:IOS.label3}}>
+                                      {oppP.result==="W"?`+${parseFloat(oppP.points_earned||0).toFixed(1)}pts`:oppP.result==="L"?"0pts":"—"}
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
+                              )}
                             </div>
                           </div>
                         );
@@ -4703,7 +4783,12 @@ export default function App() {
                     return (
                       <div key={wk.week} className="sch-item"
                         style={{...(live?{background:"rgba(10,132,255,0.06)"}:{}), ...(done?{cursor:"pointer"}:{})}}
-                        onClick={()=>done&&setSelectedMatchup(wk.week)}
+                        onClick={()=>{
+                          if(done) {
+                            setSelectedMatchup(wk.week);
+                            fetchPastMatchupPicks(wk.week, user.id, wk.oppId);
+                          }
+                        }}
                       >
                         <div className={`sch-wk ${live?"live":""}`}>W{wk.week}</div>
                         <div className={`sch-opp ${live?"live":done?"done":"up"}`}>{live&&<span style={{color:IOS.blue,marginRight:6}}>●</span>}vs {wk.opp}</div>
