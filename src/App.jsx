@@ -2662,41 +2662,61 @@ export default function App() {
                       }}>Clear</div>
                     </div>
                   </div>
-                  {[...savedPicks.flexPicks].sort((a,b)=>a.mult-b.mult).map((slot,i)=>{
-                    if(!slot.mult) return null;
-                    const multColors = {1:"#3A9EE0", 2:"#3A9EE0", 3:"#3A9EE0", 4:"#3A9EE0", 5:"#3A9EE0"};
-                    const legs = slot.parlayLegs || [];
-                    const isParlay = slot.isParlay || legs.length > 0;
-                    if(isParlay && legs.length > 0) {
-                      const ls = calcLS(legs);
-                      return (
-                        <div key={i} style={{borderBottom:`0.5px solid ${IOS.sep}`}}>
-                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 16px 6px"}}>
-                            <div style={{fontSize:12,fontWeight:800,letterSpacing:0.5,textTransform:"uppercase",color:multColors[slot.mult]}}>{slot.mult}× · LONGSHOT · {legs.length} LEGS</div>
-                            <div style={{fontSize:18,fontWeight:800,color:IOS.pink}}>{ls?.american}</div>
-                          </div>
-                          {legs.map((b,j)=>(
-                            <div key={j} style={{padding:"3px 16px",fontSize:13,fontWeight:500,color:"rgba(255,255,255,0.7)"}}>
-                              {b.pick || b.pick_name || b.name || JSON.stringify(b)}
+                  {(()=>{
+                    const slotColor = "#3A9EE0";
+                    let totalPossible = 0;
+                    const rows = [...savedPicks.flexPicks].sort((a,b)=>a.mult-b.mult).map((slot,i)=>{
+                      if(!slot.mult) return null;
+                      const legs = slot.parlayLegs || [];
+                      const isParlay = slot.isParlay || legs.length > 0;
+                      if(isParlay && legs.length > 0) {
+                        const ls = calcLS(legs);
+                        const dec = ls?.decimal || 1;
+                        const pts = parseFloat((slot.mult * (dec - 1) * 10).toFixed(1));
+                        totalPossible += pts;
+                        return (
+                          <div key={i} style={{borderBottom:`0.5px solid ${IOS.sep}`}}>
+                            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 16px 4px"}}>
+                              <div style={{fontSize:12,fontWeight:800,letterSpacing:0.5,textTransform:"uppercase",color:slotColor}}>{slot.mult}× · LONGSHOT · {legs.length} LEGS</div>
+                              <div style={{fontSize:18,fontWeight:800,color:IOS.blue}}>{ls?.american}</div>
                             </div>
-                          ))}
-                          <div style={{height:8}}/>
+                            {legs.map((b,j)=>(
+                              <div key={j} style={{padding:"3px 16px",fontSize:13,fontWeight:500,color:"rgba(255,255,255,0.7)"}}>
+                                {b.pick || b.pick_name || b.name || ""}
+                              </div>
+                            ))}
+                            <div style={{padding:"5px 16px 9px"}}>
+                              <span style={{fontSize:11,fontWeight:700,color:IOS.green,background:"rgba(48,209,88,0.1)",border:"1px solid rgba(48,209,88,0.2)",borderRadius:6,padding:"2px 8px"}}>+{pts} pts if win</span>
+                            </div>
+                          </div>
+                        );
+                      }
+                      if(!slot.bet) return null;
+                      const pts = parseFloat(calcPickPoints(slot.mult, slot.bet.impliedOdds, "W").toFixed(1));
+                      totalPossible += pts;
+                      return (
+                        <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 16px",borderBottom:`0.5px solid ${IOS.sep}`}}>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:12,fontWeight:800,letterSpacing:0.5,textTransform:"uppercase",color:slotColor,marginBottom:3,textAlign:"left"}}>
+                              {slot.mult}× · {slot.category?{ml:"MONEYLINE",prop:"PROP",ou:"OVER/UNDER",spread:"SPREAD",longshot:"LONGSHOT"}[slot.category]||slot.category.toUpperCase():"PICK"}
+                            </div>
+                            <div style={{fontSize:14,fontWeight:600,color:"#fff",marginBottom:4}}>{slot.bet.pick}</div>
+                            <span style={{fontSize:11,fontWeight:700,color:IOS.green,background:"rgba(48,209,88,0.1)",border:"1px solid rgba(48,209,88,0.2)",borderRadius:6,padding:"2px 8px"}}>+{pts} pts if win</span>
+                          </div>
+                          <div style={{fontSize:20,fontWeight:800,letterSpacing:-0.5,color:slot.bet.odds.startsWith("+")?IOS.green:IOS.blue,marginLeft:12}}>{slot.bet.odds}</div>
                         </div>
                       );
-                    }
-                    if(!slot.bet) return null;
+                    });
                     return (
-                      <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 16px",borderBottom:`0.5px solid ${IOS.sep}`}}>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontSize:12,fontWeight:800,letterSpacing:0.5,textTransform:"uppercase",color:multColors[slot.mult],marginBottom:3,textAlign:"left"}}>
-                            {slot.mult}× · {slot.category?{ml:"MONEYLINE",prop:"PROP",ou:"OVER/UNDER",spread:"SPREAD",longshot:"LONGSHOT"}[slot.category]||slot.category.toUpperCase():"PICK"}
-                          </div>
-                          <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>{slot.bet.pick}</div>
+                      <>
+                        {rows}
+                        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 16px"}}>
+                          <div style={{fontSize:12,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3}}>Total Points Possible</div>
+                          <div style={{fontSize:16,fontWeight:800,color:IOS.green}}>+{totalPossible.toFixed(1)}</div>
                         </div>
-                        <div style={{fontSize:20,fontWeight:800,letterSpacing:-0.5,color:slot.bet.odds.startsWith("+")?IOS.green:IOS.blue}}>{slot.bet.odds}</div>
-                      </div>
+                      </>
                     );
-                  })}
+                  })()}
                 </div>
               )}
 
