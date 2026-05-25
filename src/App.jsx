@@ -612,7 +612,8 @@ export default function App() {
   const [homeTab,     setHomeTab]     = useState('home'); // 'home' | 'games'  // { sportId: {ml,prop,ou,spread,longshot} }
   const [tickerGames, setTickerGames] = useState([]); // raw games for the ticker
   const [espnGames,   setEspnGames]   = useState([]); // ESPN scoreboard with IDs
-  const [weekResult,  setWeekResult]  = useState(null); // {won, myPts, oppPts, oppName, week}
+  const [weekResult,  setWeekResult]  = useState(null);
+  const [recapPicks,  setRecapPicks]  = useState([]); // {won, myPts, oppPts, oppName, week}
   const [gameSheet,   setGameSheet]   = useState(null); // { tickerGame, espnGame, detail }
   const [gameTeamTab, setGameTeamTab] = useState('matchup'); // 'matchup' | 'away' | 'home' 
   const [gameLoading, setGameLoading] = useState(false);
@@ -1265,7 +1266,7 @@ export default function App() {
     // Fetch matchup W/L records for season record
     const {data:matchups} = await supabase
       .from("matchups")
-      .select("user1_id,user2_id,winner_id")
+      .select("user1_id,user2_id,winner_id,week")
       .eq("league_id", leagueId)
       .not("winner_id", "is", null);
 
@@ -1275,6 +1276,33 @@ export default function App() {
       if(!matchupRecord[m.user2_id]) matchupRecord[m.user2_id]={mw:0,ml:0};
       if(m.winner_id===m.user1_id){ matchupRecord[m.user1_id].mw++; matchupRecord[m.user2_id].ml++; }
       else { matchupRecord[m.user2_id].mw++; matchupRecord[m.user1_id].ml++; }
+    });
+
+    // Calculate current streak per user from matchup history
+    const streakByUser = {};
+    const matchupsByWeek = {};
+    (matchups||[]).forEach(m=>{
+      const week = m.week || 0;
+      if(!matchupsByWeek[week]) matchupsByWeek[week] = [];
+      matchupsByWeek[week].push(m);
+    });
+    userIds.forEach(uid=>{
+      // Get matchup results in week order
+      const results = Object.keys(matchupsByWeek)
+        .map(Number).sort((a,b)=>a-b)
+        .map(w=>{
+          const m = matchupsByWeek[w].find(x=>x.user1_id===uid||x.user2_id===uid);
+          if(!m) return null;
+          return m.winner_id===uid ? 'W' : 'L';
+        }).filter(Boolean);
+      if(!results.length){ streakByUser[uid]={count:0,type:'W'}; return; }
+      const last = results[results.length-1];
+      let count = 0;
+      for(let i=results.length-1;i>=0;i--){
+        if(results[i]===last) count++;
+        else break;
+      }
+      streakByUser[uid] = {count, type:last};
     });
 
     const standings = userIds.map(uid=>{
@@ -1291,6 +1319,7 @@ export default function App() {
         record: `${mr.mw}-${mr.ml}`,
         wpct: total > 0 ? `${Math.round(s.wins/total*100)}%` : "0%",
         isYou: uid === user?.id,
+        streak: streakByUser[uid] || {count:0, type:'W'},
       };
     }).sort((a,b)=>{
       // Wins first, then points as tiebreaker
@@ -1580,6 +1609,7 @@ export default function App() {
     rank: s.rank,
     name: s.isYou ? "You" : s.name,
     record: s.record,
+    streak: s.streak,
     units: `+${s.points}`,
     roi: s.wpct,
     streak: "—",
@@ -2710,6 +2740,11 @@ export default function App() {
                   <div key={r.rank} className="mini-stand" style={r.isYou||r.name==="You"?{background:"rgba(10,132,255,0.08)"}:{}}>
                     <div className={`ms-rank ${i===0?"top":""}`}>{i+1}</div>
                     <div className={`ms-name ${r.isYou||r.name==="You"?"me":""}`}>{r.isYou||r.name==="You"?"You":r.name}</div>
+                    {r.streak?.count >= 1 && (
+                      <div style={{fontSize:10,fontWeight:700,color:r.streak.type==='W'?IOS.green:IOS.red,marginRight:6}}>
+                        {r.streak.type==='W' && r.streak.count>=2?`🔥W${r.streak.count}`:`${r.streak.type}${r.streak.count}`}
+                      </div>
+                    )}
                     <div className="ms-rec">{r.record}</div>
                     <div className={`ms-units ${String(r.units).startsWith("+")&&r.units!=="0"?"pos":"neg"}`}>{r.points!==undefined?`${r.points}pts`:r.units}</div>
                   </div>
@@ -4667,6 +4702,11 @@ export default function App() {
                             <div className="st-rank">{dr<=3?rankMedal(dr):dr}</div>
                             <div className="st-info">
                               <div className={`st-name ${isMe?"me":""}`}>{isMe?"You ✦":row.name}</div>
+                              {row.streak?.count >= 1 && (
+                                <div style={{fontSize:11,fontWeight:700,color:row.streak.type==='W'?IOS.green:IOS.red,marginTop:2}}>
+                                  {row.streak.type==='W' && row.streak.count >= 2 ? `🔥 W${row.streak.count}` : `${row.streak.type}${row.streak.count}`}
+                                </div>
+                              )}
                               <div className="st-streak" style={{color:IOS.label3}}>{row.wpct} win rate</div>
                             </div>
                             <div className="st-rec" style={{color:IOS.label3}}>{row.record||"0-0"}</div>
@@ -5240,33 +5280,132 @@ export default function App() {
 
         {/* ══ WEEK RESULT MODAL ══ */}
         {weekResult && (
-          <div style={{position:"fixed",inset:0,zIndex:9500,display:"flex",alignItems:"center",justifyContent:"center",padding:24}} onClick={()=>setWeekResult(null)}>
+          <div style={{position:"fixed",inset:0,zIndex:9500,display:"flex",alignItems:"flex-end",justifyContent:"center",padding:"0"}} onClick={()=>setWeekResult(null)}>
             <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.85)",backdropFilter:"blur(6px)"}}/>
-            <div onClick={e=>e.stopPropagation()} style={{position:"relative",background:"#1C1C1E",borderRadius:28,padding:"36px 28px 28px",width:"100%",maxWidth:340,textAlign:"center",border:`1px solid ${weekResult.won?"rgba(48,209,88,0.3)":"rgba(255,69,58,0.3)"}`,boxShadow:`0 0 60px ${weekResult.won?"rgba(48,209,88,0.15)":"rgba(255,69,58,0.1)"}`}}>
-              {/* Icon */}
-              <div style={{fontSize:56,marginBottom:8}}>{weekResult.won ? "🏆" : "💀"}</div>
-              {/* Result */}
-              <div style={{fontSize:26,fontWeight:800,letterSpacing:-0.5,color:weekResult.won?IOS.green:IOS.red,marginBottom:6}}>
-                {weekResult.won ? "You Won!" : "You Lost"}
+            <div onClick={e=>e.stopPropagation()} style={{position:"relative",background:"#111",borderRadius:"28px 28px 0 0",width:"100%",maxWidth:480,maxHeight:"90vh",overflowY:"auto",WebkitOverflowScrolling:"touch",paddingBottom:40}}>
+
+              {/* Handle */}
+              <div style={{display:"flex",justifyContent:"center",padding:"12px 0 0"}}>
+                <div style={{width:36,height:4,borderRadius:2,background:"rgba(255,255,255,0.2)"}}/>
               </div>
-              <div style={{fontSize:14,color:"rgba(255,255,255,0.5)",marginBottom:24}}>
-                Week {weekResult.week} Matchup Result
-              </div>
-              {/* Score */}
-              <div style={{background:"rgba(255,255,255,0.06)",borderRadius:16,padding:"16px 20px",marginBottom:24}}>
-                <div style={{fontSize:36,fontWeight:800,letterSpacing:-1,color:"#fff",marginBottom:4}}>
-                  <span style={{color:weekResult.won?IOS.green:"#fff"}}>{weekResult.myPts}</span>
-                  <span style={{fontSize:20,color:"rgba(255,255,255,0.3)",margin:"0 10px"}}>–</span>
-                  <span style={{color:weekResult.won?"#fff":IOS.red}}>{weekResult.oppPts}</span>
+
+              {/* Header */}
+              <div style={{padding:"20px 24px 16px",textAlign:"center",borderBottom:"0.5px solid rgba(255,255,255,0.08)"}}>
+                <div style={{fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:"rgba(255,255,255,0.35)",marginBottom:6}}>Week {weekResult.week} Recap</div>
+                <div style={{fontSize:32,fontWeight:900,letterSpacing:-1,color:weekResult.won?IOS.green:IOS.red,marginBottom:4}}>
+                  {weekResult.won?"You Won":"You Lost"}
                 </div>
-                <div style={{fontSize:12,color:"rgba(255,255,255,0.35)"}}>
-                  You vs Opponent · Wk {weekResult.week}
+                <div style={{fontSize:15,color:"rgba(255,255,255,0.5)"}}>
+                  {weekResult.myPts} — {weekResult.oppPts} vs {weekResult.oppName||"Opponent"}
                 </div>
               </div>
+
+              {/* Stats row */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",borderBottom:"0.5px solid rgba(255,255,255,0.08)"}}>
+                {[
+                  {label:"Wins", value: recapPicks.filter(p=>p.result==="W").length, color:IOS.green},
+                  {label:"Losses", value: recapPicks.filter(p=>p.result==="L").length, color:IOS.red},
+                  {label:"Points", value: parseFloat(weekResult.myPts||0).toFixed(1), color:IOS.blue},
+                ].map((s,i)=>(
+                  <div key={i} style={{padding:"14px 8px",textAlign:"center",borderRight:i<2?"0.5px solid rgba(255,255,255,0.08)":"none"}}>
+                    <div style={{fontSize:22,fontWeight:800,color:s.color,letterSpacing:-0.5}}>{s.value}</div>
+                    <div style={{fontSize:11,color:"rgba(255,255,255,0.35)",marginTop:2,fontWeight:500}}>{s.label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Best pick */}
+              {(()=>{
+                const won = recapPicks.filter(p=>p.result==="W").sort((a,b)=>parseFloat(b.points_earned||0)-parseFloat(a.points_earned||0));
+                const best = won[0];
+                if(!best) return null;
+                return (
+                  <div style={{margin:"12px 16px 0",background:"#1C1C1E",borderRadius:14,padding:"12px 16px",border:"0.5px solid rgba(255,255,255,0.06)"}}>
+                    <div style={{fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:"rgba(255,255,255,0.35)",marginBottom:8}}>Best pick</div>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                      <div>
+                        <div style={{fontSize:15,fontWeight:700,color:"#fff"}}>{best.pick_name}</div>
+                        <div style={{fontSize:12,color:"rgba(255,255,255,0.4)",marginTop:2}}>{best.multiplier}× · {best.slot?.toUpperCase()} · {best.odds}</div>
+                      </div>
+                      <div style={{fontSize:14,fontWeight:800,color:IOS.green,background:"rgba(48,209,88,0.12)",padding:"4px 12px",borderRadius:8}}>+{parseFloat(best.points_earned||0).toFixed(1)}pts</div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Worst pick */}
+              {(()=>{
+                const lost = recapPicks.filter(p=>p.result==="L");
+                const worst = lost[0];
+                if(!worst) return null;
+                return (
+                  <div style={{margin:"10px 16px 0",background:"#1C1C1E",borderRadius:14,padding:"12px 16px",border:"0.5px solid rgba(255,255,255,0.06)"}}>
+                    <div style={{fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:"rgba(255,255,255,0.35)",marginBottom:8}}>Miss of the week</div>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                      <div>
+                        <div style={{fontSize:15,fontWeight:700,color:"#fff"}}>{worst.pick_name}</div>
+                        <div style={{fontSize:12,color:"rgba(255,255,255,0.4)",marginTop:2}}>{worst.multiplier}× · {worst.slot?.toUpperCase()} · {worst.odds}</div>
+                      </div>
+                      <div style={{fontSize:14,fontWeight:800,color:IOS.red,background:"rgba(255,69,58,0.12)",padding:"4px 12px",borderRadius:8}}>0 pts</div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Pick breakdown by category */}
+              {recapPicks.length > 0 && (()=>{
+                const slots = ["ml","prop","ou","spread","longshot"];
+                const slotLabels = {ml:"ML",prop:"Prop",ou:"O/U",spread:"Spread",longshot:"Longshot"};
+                const slotColors = {ml:IOS.blue,prop:IOS.yellow,ou:IOS.orange,spread:IOS.green,longshot:IOS.pink};
+                return (
+                  <div style={{margin:"10px 16px 0",background:"#1C1C1E",borderRadius:14,padding:"12px 16px",border:"0.5px solid rgba(255,255,255,0.06)"}}>
+                    <div style={{fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:"rgba(255,255,255,0.35)",marginBottom:10}}>Pick breakdown</div>
+                    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                      {slots.map(s=>{
+                        const picks = recapPicks.filter(p=>p.slot===s);
+                        if(!picks.length) return null;
+                        const w = picks.filter(p=>p.result==="W").length;
+                        const l = picks.filter(p=>p.result==="L").length;
+                        const color = w>l?IOS.green:l>w?IOS.red:"rgba(255,255,255,0.3)";
+                        return (
+                          <div key={s} style={{background:`${color}15`,border:`0.5px solid ${color}40`,borderRadius:8,padding:"4px 10px",fontSize:12,fontWeight:700,color:color}}>
+                            {slotLabels[s]} {w}-{l}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Season so far */}
+              {(()=>{
+                const me = realStandings.find(s=>s.isYou);
+                if(!me) return null;
+                return (
+                  <div style={{margin:"10px 16px 0",background:"#1C1C1E",borderRadius:14,padding:"12px 16px",border:"0.5px solid rgba(255,255,255,0.06)"}}>
+                    <div style={{fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:"rgba(255,255,255,0.35)",marginBottom:8}}>Season so far</div>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                      <div style={{fontSize:13,color:"rgba(255,255,255,0.5)"}}>Record</div>
+                      <div style={{fontSize:13,fontWeight:700,color:"#fff"}}>{me.record} · #{me.rank} of {activeLeague?.target_size||8}</div>
+                    </div>
+                    <div style={{display:"flex",justifyContent:"space-between"}}>
+                      <div style={{fontSize:13,color:"rgba(255,255,255,0.5)"}}>Streak</div>
+                      <div style={{fontSize:13,fontWeight:700,color:me.streak?.type==="W"?IOS.green:IOS.red}}>
+                        {me.streak?.type==="W"&&me.streak?.count>=2?`🔥 W${me.streak.count}`:`${me.streak?.type||"W"}${me.streak?.count||0}`}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* CTA */}
-              <button onClick={()=>setWeekResult(null)} style={{width:"100%",background:weekResult.won?IOS.green:IOS.blue,border:"none",borderRadius:14,padding:"14px",fontSize:15,fontWeight:700,color:weekResult.won?"#000":"#fff",cursor:"pointer",fontFamily:"Manrope,sans-serif"}}>
-                {weekResult.won ? "Let's Go! 🔥" : "Get 'Em Next Week"}
-              </button>
+              <div style={{padding:"16px 16px 0",display:"flex",gap:10}}>
+                <button onClick={()=>setWeekResult(null)} style={{flex:1,background:weekResult.won?"rgba(48,209,88,0.15)":"rgba(255,69,58,0.15)",border:`1px solid ${weekResult.won?"rgba(48,209,88,0.3)":"rgba(255,69,58,0.3)"}`,borderRadius:14,padding:"14px",fontSize:15,fontWeight:700,color:weekResult.won?IOS.green:IOS.red,cursor:"pointer",fontFamily:"Manrope,sans-serif"}}>
+                  {weekResult.won?"Let's Go 🔥":"Get 'Em Next Week"}
+                </button>
+              </div>
+
             </div>
           </div>
         )}
