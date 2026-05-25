@@ -2665,16 +2665,20 @@ export default function App() {
                   {[...savedPicks.flexPicks].sort((a,b)=>a.mult-b.mult).map((slot,i)=>{
                     if(!slot.mult) return null;
                     const multColors = {1:"#3A9EE0", 2:"#3A9EE0", 3:"#3A9EE0", 4:"#3A9EE0", 5:"#3A9EE0"};
-                    if(slot.isParlay || (slot.parlayLegs && slot.parlayLegs.length > 0)) {
-                      const ls = calcLS(slot.parlayLegs);
+                    const legs = slot.parlayLegs || [];
+                    const isParlay = slot.isParlay || legs.length > 0;
+                    if(isParlay && legs.length > 0) {
+                      const ls = calcLS(legs);
                       return (
                         <div key={i} style={{borderBottom:`0.5px solid ${IOS.sep}`}}>
                           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 16px 6px"}}>
-                            <div style={{fontSize:12,fontWeight:800,letterSpacing:0.5,textTransform:"uppercase",color:multColors[slot.mult]}}>{slot.mult}× · LONGSHOT · {slot.parlayLegs.length} LEGS</div>
+                            <div style={{fontSize:12,fontWeight:800,letterSpacing:0.5,textTransform:"uppercase",color:multColors[slot.mult]}}>{slot.mult}× · LONGSHOT · {legs.length} LEGS</div>
                             <div style={{fontSize:18,fontWeight:800,color:IOS.pink}}>{ls?.american}</div>
                           </div>
-                          {slot.parlayLegs.map((b,j)=>(
-                            <div key={j} style={{padding:"3px 16px",fontSize:13,fontWeight:500,color:"rgba(255,255,255,0.7)"}}>{b.pick}</div>
+                          {legs.map((b,j)=>(
+                            <div key={j} style={{padding:"3px 16px",fontSize:13,fontWeight:500,color:"rgba(255,255,255,0.7)"}}>
+                              {b.pick || b.pick_name || b.name || JSON.stringify(b)}
+                            </div>
                           ))}
                           <div style={{height:8}}/>
                         </div>
