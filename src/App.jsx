@@ -2664,7 +2664,7 @@ export default function App() {
                   </div>
                   {[...savedPicks.flexPicks].sort((a,b)=>a.mult-b.mult).map((slot,i)=>{
                     if(!slot.mult) return null;
-                    const multColors = {1:IOS.blue, 2:IOS.yellow, 3:IOS.orange, 4:IOS.green, 5:IOS.pink};
+                    const multColors = {1:"#5AC8FA", 2:"#5AC8FA", 3:"#5AC8FA", 4:"#5AC8FA", 5:"#5AC8FA"};
                     if(slot.isParlay) {
                       const ls = calcLS(slot.parlayLegs);
                       return (
@@ -3172,7 +3172,7 @@ export default function App() {
                   </div>
                   {[...savedPicks.flexPicks].sort((a,b)=>a.mult-b.mult).map((slot,i)=>{
                     if(!slot.mult) return null;
-                    const multColors = {1:IOS.blue, 2:IOS.yellow, 3:IOS.orange, 4:IOS.green, 5:IOS.pink};
+                    const multColors = {1:"#5AC8FA", 2:"#5AC8FA", 3:"#5AC8FA", 4:"#5AC8FA", 5:"#5AC8FA"};
                     const col = multColors[slot.mult];
                     if(slot.isParlay) {
                       const ls = calcLS(slot.parlayLegs);
@@ -3264,7 +3264,7 @@ export default function App() {
                 const parlayValid = slot.isParlay && slot.parlayLegs.length>=2 && parlayAmerican >= 400;
                 const filled = slot.isParlay ? parlayValid : slot.bet!==null;
                 const parlayOdds = slot.isParlay && slot.parlayLegs.length>=2 ? calcLS(slot.parlayLegs) : null;
-                const multColors = {1:IOS.blue, 2:IOS.yellow, 3:IOS.orange, 4:IOS.green, 5:IOS.pink};
+                const multColors = {1:"#5AC8FA", 2:"#5AC8FA", 3:"#5AC8FA", 4:"#5AC8FA", 5:"#5AC8FA"};
                 const catColors = {ml:IOS.blue, prop:IOS.yellow, ou:IOS.orange, spread:IOS.green, longshot:IOS.pink};
                 const catLabels = {ml:"MONEYLINE", prop:"PROP", ou:"OVER/UNDER", spread:"SPREAD", longshot:"LONGSHOT"};
                 const appliedPU = activatedPUs[idx];
@@ -3652,7 +3652,7 @@ export default function App() {
                   myPicksByMult[key].push(p);
                 });
 
-                const multColors = {1:IOS.blue, 2:IOS.yellow, 3:IOS.orange, 4:IOS.green, 5:IOS.pink};
+                const multColors = {1:"#5AC8FA", 2:"#5AC8FA", 3:"#5AC8FA", 4:"#5AC8FA", 5:"#5AC8FA"};
                 const slotLabels = {ml:"Moneyline", prop:"Prop", ou:"Over/Under", spread:"Spread", longshot:"Longshot"};
                 const rColor = r=>r==="W"?IOS.green:r==="L"?IOS.red:IOS.label3;
                 const rLabel = r=>r==="W"?"✓ Win":r==="L"?"✗ Loss":"● Pending";
@@ -4148,7 +4148,7 @@ export default function App() {
 
                       {/* Active member picks */}
                       {activeMemberData&&(()=>{
-                        const slotColors={ml:IOS.blue,prop:IOS.yellow,ou:IOS.orange,spread:IOS.green,longshot:IOS.pink};
+                        const slotColors={ml:"#5AC8FA",prop:"#5AC8FA",ou:"#5AC8FA",spread:"#5AC8FA",longshot:"#5AC8FA"};
                         const memberTotal = activeMemberData.picks.filter(p=>p.result==="W").reduce((sum,p)=>{
                           const dec = p.implied_odds?(p.implied_odds>0?p.implied_odds/100:100/Math.abs(p.implied_odds)):0.91;
                           return sum+parseFloat((p.multiplier*dec*10).toFixed(1));
@@ -4804,7 +4804,7 @@ export default function App() {
                     myPicks: pastMatchupPicks.my,
                     oppPicks: pastMatchupPicks.opp,
                   };
-                  const slotColors = {Moneyline:IOS.blue, Prop:IOS.yellow, "Over/Under":IOS.orange, Spread:IOS.green, Parlay:IOS.pink};
+                  const slotColors = {Moneyline:"#5AC8FA", Prop:"#5AC8FA", "Over/Under":"#5AC8FA", Spread:"#5AC8FA", Parlay:"#5AC8FA"};
                   const myTotal = m.myPts || 0;
                   const oppTotal = m.oppPts || 0;
                   return (
@@ -5356,7 +5356,7 @@ export default function App() {
               {recapPicks.length > 0 && (()=>{
                 const slots = ["ml","prop","ou","spread","longshot"];
                 const slotLabels = {ml:"ML",prop:"Prop",ou:"O/U",spread:"Spread",longshot:"Longshot"};
-                const slotColors = {ml:IOS.blue,prop:IOS.yellow,ou:IOS.orange,spread:IOS.green,longshot:IOS.pink};
+                const slotColors = {ml:"#5AC8FA",prop:"#5AC8FA",ou:"#5AC8FA",spread:"#5AC8FA",longshot:"#5AC8FA"};
                 return (
                   <div style={{margin:"10px 16px 0",background:"#1C1C1E",borderRadius:14,padding:"12px 16px",border:"0.5px solid rgba(255,255,255,0.06)"}}>
                     <div style={{fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:"rgba(255,255,255,0.35)",marginBottom:10}}>Pick breakdown</div>
