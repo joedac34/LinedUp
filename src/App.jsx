@@ -1345,7 +1345,7 @@ export default function App() {
         multGroups[p.multiplier].push(p);
       });
       const flexPicks = Object.entries(multGroups).map(([mult, picks])=>{
-        const isParlay = picks[0].slot === "longshot";
+        const isParlay = picks[0].slot?.startsWith("longshot_");
         return {
           id: parseInt(mult)-1,
           mult: parseInt(mult),
