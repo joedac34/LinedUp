@@ -8,7 +8,7 @@ const IOS = {
   red:     "#FF453A",
   orange:  "#FF9F0A",
   purple:  "#BF5AF2",
-  teal:    "#5AC8FA",
+  teal:    "#3A9EE0",
   yellow:  "#FFD60A",
   pink:    "#FF375F",
   indigo:  "#5E5CE6",
@@ -1345,7 +1345,7 @@ export default function App() {
         multGroups[p.multiplier].push(p);
       });
       const flexPicks = Object.entries(multGroups).map(([mult, picks])=>{
-        const isParlay = picks[0].slot?.startsWith("longshot_");
+        const isParlay = picks[0].slot === "longshot";
         return {
           id: parseInt(mult)-1,
           mult: parseInt(mult),
@@ -2664,27 +2664,32 @@ export default function App() {
                   </div>
                   {[...savedPicks.flexPicks].sort((a,b)=>a.mult-b.mult).map((slot,i)=>{
                     if(!slot.mult) return null;
-                    const multColors = {1:IOS.blue, 2:IOS.yellow, 3:IOS.orange, 4:IOS.green, 5:IOS.pink};
-                    if(slot.isParlay) {
-                      const ls = calcLS(slot.parlayLegs);
+                    const multColors = {1:"#3A9EE0", 2:"#3A9EE0", 3:"#3A9EE0", 4:"#3A9EE0", 5:"#3A9EE0"};
+                    const legs = slot.parlayLegs || [];
+                    const isParlay = slot.isParlay || legs.length > 0;
+                    if(isParlay && legs.length > 0) {
+                      const ls = calcLS(legs);
                       return (
-                        <div key={i} style={{padding:"11px 16px",borderBottom:`0.5px solid ${IOS.sep}`}}>
-                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                            <div>
-                              <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:multColors[slot.mult],marginBottom:3}}>{slot.mult}× · Longshot · {slot.parlayLegs.length} legs</div>
-                              <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>{slot.parlayLegs.map(b=>b.pick).join(" + ")}</div>
-                            </div>
+                        <div key={i} style={{borderBottom:`0.5px solid ${IOS.sep}`}}>
+                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 16px 6px"}}>
+                            <div style={{fontSize:12,fontWeight:800,letterSpacing:0.5,textTransform:"uppercase",color:multColors[slot.mult]}}>{slot.mult}× · LONGSHOT · {legs.length} LEGS</div>
                             <div style={{fontSize:18,fontWeight:800,color:IOS.pink}}>{ls?.american}</div>
                           </div>
+                          {legs.map((b,j)=>(
+                            <div key={j} style={{padding:"3px 16px",fontSize:13,fontWeight:500,color:"rgba(255,255,255,0.7)"}}>
+                              {b.pick || b.pick_name || b.name || JSON.stringify(b)}
+                            </div>
+                          ))}
+                          <div style={{height:8}}/>
                         </div>
                       );
                     }
                     if(!slot.bet) return null;
                     return (
                       <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 16px",borderBottom:`0.5px solid ${IOS.sep}`}}>
-                        <div>
-                          <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:multColors[slot.mult],marginBottom:3}}>
-                            {slot.mult}× · {slot.category?{ml:"Moneyline",prop:"Prop",ou:"Over/Under",spread:"Spread",longshot:"Longshot"}[slot.category]||slot.category:"Pick"}
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:12,fontWeight:800,letterSpacing:0.5,textTransform:"uppercase",color:multColors[slot.mult],marginBottom:3,textAlign:"left"}}>
+                            {slot.mult}× · {slot.category?{ml:"MONEYLINE",prop:"PROP",ou:"OVER/UNDER",spread:"SPREAD",longshot:"LONGSHOT"}[slot.category]||slot.category.toUpperCase():"PICK"}
                           </div>
                           <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>{slot.bet.pick}</div>
                         </div>
@@ -3172,16 +3177,16 @@ export default function App() {
                   </div>
                   {[...savedPicks.flexPicks].sort((a,b)=>a.mult-b.mult).map((slot,i)=>{
                     if(!slot.mult) return null;
-                    const multColors = {1:IOS.blue, 2:IOS.yellow, 3:IOS.orange, 4:IOS.green, 5:IOS.pink};
+                    const multColors = {1:"#3A9EE0", 2:"#3A9EE0", 3:"#3A9EE0", 4:"#3A9EE0", 5:"#3A9EE0"};
                     const col = multColors[slot.mult];
-                    if(slot.isParlay) {
+                    if(slot.isParlay || (slot.parlayLegs && slot.parlayLegs.length > 0)) {
                       const ls = calcLS(slot.parlayLegs);
                       return (
                         <div key={i} style={{margin:"0 16px 8px",background:IOS.bg2,borderRadius:14,overflow:"hidden",border:`1px solid ${col}30`}}>
                           <div style={{padding:"12px 14px",borderBottom:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                             <div style={{display:"flex",alignItems:"center",gap:8}}>
                               <div style={{width:32,height:32,borderRadius:8,background:`${col}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:col}}>{slot.mult}×</div>
-                              <div style={{fontSize:13,fontWeight:700,color:col}}>🚀 Parlay · {slot.parlayLegs.length} legs</div>
+                              <div style={{fontSize:12,fontWeight:800,letterSpacing:0.5,textTransform:"uppercase",color:col}}>LONGSHOT · {slot.parlayLegs.length} LEGS</div>
                             </div>
                             <div style={{fontSize:20,fontWeight:800,color:IOS.pink}}>{ls?.american}</div>
                           </div>
@@ -3199,20 +3204,22 @@ export default function App() {
                     }
                     if(!slot.bet) return null;
                     const pts = calcPickPoints(slot.mult, slot.bet.impliedOdds, "W");
+                    const catLabel = slot.category ? {ml:"MONEYLINE",prop:"PROP",ou:"OVER/UNDER",spread:"SPREAD",longshot:"LONGSHOT"}[slot.category]||slot.category.toUpperCase() : "PICK";
                     return (
-                      <div key={i} style={{margin:"0 16px 8px",background:IOS.bg2,borderRadius:14,padding:"14px",border:`1px solid ${col}30`}}>
-                        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                          <div style={{display:"flex",alignItems:"center",gap:10}}>
-                            <div style={{width:32,height:32,borderRadius:8,background:`${col}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:col}}>{slot.mult}×</div>
-                            <div>
-                              <div style={{fontSize:11,color:IOS.label3,marginBottom:2}}>{slot.bet.game}</div>
-                              <div style={{fontSize:15,fontWeight:600,color:"#fff"}}>{slot.bet.pick}</div>
-                            </div>
+                      <div key={i} style={{margin:"0 16px 8px",background:IOS.bg2,borderRadius:14,overflow:"hidden",border:`1px solid ${col}30`}}>
+                        <div style={{padding:"10px 14px",borderBottom:`0.5px solid rgba(255,255,255,0.06)`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                          <div style={{display:"flex",alignItems:"center",gap:8}}>
+                            <div style={{width:30,height:30,borderRadius:8,background:`${col}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:col}}>{slot.mult}×</div>
+                            <div style={{fontSize:12,fontWeight:800,letterSpacing:0.5,textTransform:"uppercase",color:col}}>{catLabel}</div>
                           </div>
                           <div style={{textAlign:"right"}}>
                             <div style={{fontSize:20,fontWeight:800,color:slot.bet.odds.startsWith("+")?IOS.green:IOS.blue}}>{slot.bet.odds}</div>
                             <div style={{fontSize:10,color:IOS.green,marginTop:2}}>+{pts} pts</div>
                           </div>
+                        </div>
+                        <div style={{padding:"10px 14px"}}>
+                          <div style={{fontSize:11,color:IOS.label3,marginBottom:2}}>{slot.bet.game}</div>
+                          <div style={{fontSize:15,fontWeight:600,color:"#fff"}}>{slot.bet.pick}</div>
                         </div>
                       </div>
                     );
@@ -3264,7 +3271,7 @@ export default function App() {
                 const parlayValid = slot.isParlay && slot.parlayLegs.length>=2 && parlayAmerican >= 400;
                 const filled = slot.isParlay ? parlayValid : slot.bet!==null;
                 const parlayOdds = slot.isParlay && slot.parlayLegs.length>=2 ? calcLS(slot.parlayLegs) : null;
-                const multColors = {1:IOS.blue, 2:IOS.yellow, 3:IOS.orange, 4:IOS.green, 5:IOS.pink};
+                const multColors = {1:"#3A9EE0", 2:"#3A9EE0", 3:"#3A9EE0", 4:"#3A9EE0", 5:"#3A9EE0"};
                 const catColors = {ml:IOS.blue, prop:IOS.yellow, ou:IOS.orange, spread:IOS.green, longshot:IOS.pink};
                 const catLabels = {ml:"MONEYLINE", prop:"PROP", ou:"OVER/UNDER", spread:"SPREAD", longshot:"LONGSHOT"};
                 const appliedPU = activatedPUs[idx];
@@ -3652,7 +3659,7 @@ export default function App() {
                   myPicksByMult[key].push(p);
                 });
 
-                const multColors = {1:IOS.blue, 2:IOS.yellow, 3:IOS.orange, 4:IOS.green, 5:IOS.pink};
+                const multColors = {1:"#3A9EE0", 2:"#3A9EE0", 3:"#3A9EE0", 4:"#3A9EE0", 5:"#3A9EE0"};
                 const slotLabels = {ml:"Moneyline", prop:"Prop", ou:"Over/Under", spread:"Spread", longshot:"Longshot"};
                 const rColor = r=>r==="W"?IOS.green:r==="L"?IOS.red:IOS.label3;
                 const rLabel = r=>r==="W"?"✓ Win":r==="L"?"✗ Loss":"● Pending";
@@ -4148,7 +4155,7 @@ export default function App() {
 
                       {/* Active member picks */}
                       {activeMemberData&&(()=>{
-                        const slotColors={ml:IOS.blue,prop:IOS.yellow,ou:IOS.orange,spread:IOS.green,longshot:IOS.pink};
+                        const slotColors={ml:"#3A9EE0",prop:"#3A9EE0",ou:"#3A9EE0",spread:"#3A9EE0",longshot:"#3A9EE0"};
                         const memberTotal = activeMemberData.picks.filter(p=>p.result==="W").reduce((sum,p)=>{
                           const dec = p.implied_odds?(p.implied_odds>0?p.implied_odds/100:100/Math.abs(p.implied_odds)):0.91;
                           return sum+parseFloat((p.multiplier*dec*10).toFixed(1));
@@ -4804,7 +4811,7 @@ export default function App() {
                     myPicks: pastMatchupPicks.my,
                     oppPicks: pastMatchupPicks.opp,
                   };
-                  const slotColors = {Moneyline:IOS.blue, Prop:IOS.yellow, "Over/Under":IOS.orange, Spread:IOS.green, Parlay:IOS.pink};
+                  const slotColors = {Moneyline:"#3A9EE0", Prop:"#3A9EE0", "Over/Under":"#3A9EE0", Spread:"#3A9EE0", Parlay:"#3A9EE0"};
                   const myTotal = m.myPts || 0;
                   const oppTotal = m.oppPts || 0;
                   return (
@@ -5356,7 +5363,7 @@ export default function App() {
               {recapPicks.length > 0 && (()=>{
                 const slots = ["ml","prop","ou","spread","longshot"];
                 const slotLabels = {ml:"ML",prop:"Prop",ou:"O/U",spread:"Spread",longshot:"Longshot"};
-                const slotColors = {ml:IOS.blue,prop:IOS.yellow,ou:IOS.orange,spread:IOS.green,longshot:IOS.pink};
+                const slotColors = {ml:"#3A9EE0",prop:"#3A9EE0",ou:"#3A9EE0",spread:"#3A9EE0",longshot:"#3A9EE0"};
                 return (
                   <div style={{margin:"10px 16px 0",background:"#1C1C1E",borderRadius:14,padding:"12px 16px",border:"0.5px solid rgba(255,255,255,0.06)"}}>
                     <div style={{fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:"rgba(255,255,255,0.35)",marginBottom:10}}>Pick breakdown</div>
