@@ -2665,7 +2665,7 @@ export default function App() {
                   {[...savedPicks.flexPicks].sort((a,b)=>a.mult-b.mult).map((slot,i)=>{
                     if(!slot.mult) return null;
                     const multColors = {1:"#3A9EE0", 2:"#3A9EE0", 3:"#3A9EE0", 4:"#3A9EE0", 5:"#3A9EE0"};
-                    if(slot.isParlay) {
+                    if(slot.isParlay || (slot.parlayLegs && slot.parlayLegs.length > 0)) {
                       const ls = calcLS(slot.parlayLegs);
                       return (
                         <div key={i} style={{borderBottom:`0.5px solid ${IOS.sep}`}}>
@@ -3175,7 +3175,7 @@ export default function App() {
                     if(!slot.mult) return null;
                     const multColors = {1:"#3A9EE0", 2:"#3A9EE0", 3:"#3A9EE0", 4:"#3A9EE0", 5:"#3A9EE0"};
                     const col = multColors[slot.mult];
-                    if(slot.isParlay) {
+                    if(slot.isParlay || (slot.parlayLegs && slot.parlayLegs.length > 0)) {
                       const ls = calcLS(slot.parlayLegs);
                       return (
                         <div key={i} style={{margin:"0 16px 8px",background:IOS.bg2,borderRadius:14,overflow:"hidden",border:`1px solid ${col}30`}}>
