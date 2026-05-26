@@ -989,6 +989,13 @@ export default function App() {
 
   const checkAutoAdvanceWeek = async (leagueId, league) => {
     const currentWeek = league.current_week || 1;
+    // Get all league members
+    const {data:leagueMembers} = await supabase
+      .from('league_members')
+      .select('user_id')
+      .eq('league_id', leagueId);
+    if(!leagueMembers || leagueMembers.length === 0) return;
+    const memberIds = leagueMembers.map(m => m.user_id);
     // Get all picks for this week
     const {data:allPicks} = await supabase
       .from('picks')
@@ -996,7 +1003,11 @@ export default function App() {
       .eq('league_id', leagueId)
       .eq('week', currentWeek);
     if(!allPicks || allPicks.length === 0) return;
-    // Check if every pick is graded (not pending)
+    // Check every member has submitted picks this week
+    const submittedUserIds = [...new Set(allPicks.map(p => p.user_id))];
+    const allMembersSubmitted = memberIds.every(id => submittedUserIds.includes(id));
+    if(!allMembersSubmitted) return;
+    // Check if every submitted pick is graded (not pending)
     const allGraded = allPicks.every(p => p.result !== 'pending');
     if(!allGraded) return;
     // All graded — auto advance
@@ -1612,7 +1623,6 @@ export default function App() {
     streak: s.streak,
     units: `+${s.points}`,
     roi: s.wpct,
-    streak: "—",
     wpct: s.wpct,
     wr: [],
     points: s.points,
@@ -3043,7 +3053,7 @@ export default function App() {
 
                   {/* Bet list */}
                   {!oddsLoading && (flexCategory || flexPicks[activeFlexSlot]?.isParlay) && (
-                    (flexPicks[activeFlexSlot]?.isParlay ? ALL_BETS : (BETS[flexCategory]||[])).filter(bet=>{
+                    (flexCategory==="longshot" || flexPicks[activeFlexSlot]?.isParlay ? ALL_BETS : (BETS[flexCategory]||[])).filter(bet=>{
                       const q = pickSearch.toLowerCase().trim();
                       const textMatch = !q || bet.game.toLowerCase().includes(q) || bet.pick.toLowerCase().includes(q);
                       // Longshot straight mode: only show +400 or better
@@ -4025,7 +4035,16 @@ export default function App() {
               ) : realLeagues.map(lg=>{
                 const sp = SPORTS[lg.sport];
                 const isActive = activeLeagueId === lg.id;
-                const myMember = lg.members?.find(m=>m.isYou) || {record: lg.userRecord||"—", roi: lg.userRoi||"—", streak: "—"};
+                const myStanding = realStandings.find(s=>s.isYou);
+                const myMember = myStanding
+                  ? {
+                      record: myStanding.record || "0-0",
+                      roi: myStanding.wpct || "0%",
+                      streak: myStanding.streak?.count > 0
+                        ? `${myStanding.streak.type}${myStanding.streak.count}`
+                        : "—",
+                    }
+                  : lg.members?.find(m=>m.isYou) || {record: "—", roi: "—", streak: "—"};
                 const pendingPicks = (gradingData[lg.id]||[]).reduce((acc,m)=>acc+m.picks.filter(p=>p.result==="pending").length,0);
                 return (
                   <div key={lg.id} style={{margin:"0 16px 12px",background:IOS.bg2,borderRadius:20,overflow:"hidden",border:`1px solid ${isActive?sp.color+"50":"rgba(255,255,255,0.07)"}`,cursor:"pointer"}}
