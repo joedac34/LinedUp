@@ -2444,7 +2444,13 @@ export default function App() {
                           background:isActive?`${sp.color}20`:"rgba(255,255,255,0.06)",
                           border:`1px solid ${isActive?sp.color+"50":"rgba(255,255,255,0.08)"}`,
                         }}>
-                        <span style={{fontSize:15}}>{sp.icon}</span>
+                        <div style={{color:isActive?sp.color:"rgba(255,255,255,0.3)",display:"flex",alignItems:"center",transition:"color .18s"}}>
+                          {lg.sport==="nfl"&&<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><ellipse cx="12" cy="12" rx="9" ry="5.5" transform="rotate(-35 12 12)"/><line x1="12" y1="7" x2="12" y2="17" transform="rotate(-35 12 12)"/><line x1="8.5" y1="10" x2="15.5" y2="10" transform="rotate(-35 12 12)"/><line x1="8.5" y1="14" x2="15.5" y2="14" transform="rotate(-35 12 12)"/></svg>}
+                          {lg.sport==="nba"&&<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10"/><path d="M12 2a15.3 15.3 0 0 0-4 10 15.3 15.3 0 0 0 4 10"/><line x1="2" y1="12" x2="22" y2="12"/></svg>}
+                          {lg.sport==="mlb"&&<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M14.5 4.5c-1 2.5-1 5.5 0 8s2.5 5 2.5 7"/><path d="M9.5 4.5c1 2.5 1 5.5 0 8s-2.5 5-2.5 7"/></svg>}
+                          {lg.sport==="nhl"&&<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><ellipse cx="12" cy="17" rx="9" ry="3.5"/><rect x="7" y="4" width="10" height="13" rx="2"/></svg>}
+                          {!["nfl","nba","mlb","nhl"].includes(lg.sport)&&<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="10"/></svg>}
+                        </div>
                         <div>
                           <div style={{fontSize:12,fontWeight:700,color:isActive?sp.color:"rgba(255,255,255,0.6)",letterSpacing:-0.2}}>{lg.name}</div>
                           <div style={{fontSize:10,color:"rgba(255,255,255,0.35)",marginTop:1}}>Wk {lg.current_week||lg.week||1} · {sp.label}</div>
@@ -5630,17 +5636,27 @@ export default function App() {
         {/* ══ TAB BAR ══ */}
         <div className="tab-bar">
           {[
-            {icon:"⚡",label:"Home",      id:"home"},
-            {icon:"🎯",label:"Picks",     id:"picks"},
-            {icon:"🏈",label:"Matchup",   id:"matchup"},
-            {icon:"🏆",label:"Leagues",   id:"leagues"},
-            {icon:"📊",label:"Standings", id:"league"},
-          ].map(t=>(
-            <div key={t.id} className={`tab-item ${screen===t.id?"on":""}`} onClick={()=>setScreen(t.id)}>
-              <div className="tab-icon" style={{filter:screen===t.id?"none":"grayscale(1) opacity(0.5)"}}>{t.icon}</div>
-              <div className="tab-label" style={screen===t.id?{color:IOS.blue}:{}}>{t.label}</div>
+            {icon:"home",label:"Home",id:"home"},
+            {icon:"picks",label:"Picks",id:"picks"},
+            {icon:"matchup",label:"Matchup",id:"matchup"},
+            {icon:"leagues",label:"Leagues",id:"leagues"},
+            {icon:"standings",label:"Standings",id:"league"},
+          ].map(t=>{
+            const isOn=screen===t.id;
+            const col=isOn?IOS.blue:"rgba(255,255,255,0.3)";
+            const svgs={
+              home:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
+              picks:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>,
+              matchup:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="18 13 12 19 6 13"/><polyline points="18 11 12 5 6 11"/></svg>,
+              leagues:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+              standings:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
+            };
+            return (
+            <div key={t.id} className={`tab-item ${isOn?"on":""}`} onClick={()=>setScreen(t.id)}>
+              <div className="tab-icon" style={{display:"flex",alignItems:"center",justifyContent:"center"}}>{svgs[t.icon]}</div>
+              <div className="tab-label" style={isOn?{color:IOS.blue}:{}}>{t.label}</div>
             </div>
-          ))}
+          );})}
         </div>
       </div>}
     </div>
