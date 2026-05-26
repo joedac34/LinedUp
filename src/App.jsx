@@ -1644,11 +1644,11 @@ export default function App() {
   const W=280;const R=W/2;const segA=360/WHEEL_ITEMS.length;
 
   const css=`
-    /* Futura/Century Gothic is a system font — no import needed */
+    /* Trebuchet MS is a system font — no import needed */
     *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
     ::-webkit-scrollbar{display:none;}
 
-    .phone{width:390px;min-height:844px;background:#000;position:relative;overflow:hidden;display:flex;flex-direction:column;font-family:'Century Gothic',Futura,'Trebuchet MS',sans-serif;color:#fff;-webkit-font-smoothing:antialiased;padding-top:env(safe-area-inset-top,0px);box-sizing:border-box;}
+    .phone{width:390px;min-height:844px;background:#000;position:relative;overflow:hidden;display:flex;flex-direction:column;font-family:'Trebuchet MS',system-ui,-apple-system,sans-serif;color:#fff;-webkit-font-smoothing:antialiased;padding-top:env(safe-area-inset-top,0px);box-sizing:border-box;}
 
     /* iOS Status Bar */
 
@@ -1716,7 +1716,7 @@ export default function App() {
     .cd-time{font-size:22px;font-weight:700;letter-spacing:-0.5px;color:${IOS.blue};}
 
     /* iOS Primary Button */
-    .ios-btn{width:calc(100% - 32px);margin:4px 16px;border:none;border-radius:14px;padding:16px;font-family:'Century Gothic',Futura,sans-serif;font-size:17px;font-weight:600;cursor:pointer;transition:opacity .15s,transform .1s;letter-spacing:-0.2px;display:flex;align-items:center;justify-content:center;gap:8px;}
+    .ios-btn{width:calc(100% - 32px);margin:4px 16px;border:none;border-radius:14px;padding:16px;font-family:'Trebuchet MS',sans-serif;font-size:17px;font-weight:600;cursor:pointer;transition:opacity .15s,transform .1s;letter-spacing:-0.2px;display:flex;align-items:center;justify-content:center;gap:8px;}
     .ios-btn:active{opacity:0.85;transform:scale(0.99);}
     .ios-btn.blue{background:${IOS.blue};color:#fff;}
     .ios-btn.green{background:${IOS.green};color:#000;}
@@ -1804,7 +1804,7 @@ export default function App() {
     .sheet-hdr-sub{font-size:13px;color:${IOS.label3};margin-top:2px;}
     .sheet-done{font-size:17px;font-weight:600;color:${IOS.blue};cursor:pointer;padding:4px 0;}
     .sheet-search-wrap{padding:10px 16px;background:#1C1C1E;border-bottom:0.5px solid ${IOS.sep};position:sticky;top:60px;z-index:1;}
-    .sheet-search{width:100%;background:rgba(255,255,255,0.08);border:none;border-radius:10px;padding:9px 14px 9px 40px;font-family:'Century Gothic',Futura,sans-serif;font-size:15px;color:#fff;outline:none;}
+    .sheet-search{width:100%;background:rgba(255,255,255,0.08);border:none;border-radius:10px;padding:9px 14px 9px 40px;font-family:'Trebuchet MS',sans-serif;font-size:15px;color:#fff;outline:none;}
     .sheet-search::placeholder{color:rgba(255,255,255,0.3);}
     .sheet-search-icon{position:absolute;left:30px;top:50%;transform:translateY(-50%);font-size:13px;color:rgba(255,255,255,0.3);pointer-events:none;}
     .sheet-count{font-size:11px;color:${IOS.label3};padding:8px 20px 4px;}
@@ -1842,7 +1842,7 @@ export default function App() {
     .ticker-wrap{overflow:hidden;background:#0a0a0a;border-top:0.5px solid rgba(255,255,255,0.06);border-bottom:0.5px solid rgba(255,255,255,0.06);height:42px;display:flex;align-items:center;margin:0 0 10px;}
     .ticker-track{display:flex;align-items:center;white-space:nowrap;animation:ticker-scroll 40s linear infinite;will-change:transform;}
     .ticker-track:hover,.ticker-track:active{animation-play-state:paused;}
-    .ticker-item{display:inline-flex;align-items:center;gap:7px;padding:0 22px;font-size:13px;font-weight:600;color:rgba(255,255,255,0.5);letter-spacing:0.02em;font-family:'Century Gothic',Futura,sans-serif;}
+    .ticker-item{display:inline-flex;align-items:center;gap:7px;padding:0 22px;font-size:13px;font-weight:600;color:rgba(255,255,255,0.5);letter-spacing:0.02em;font-family:'Trebuchet MS',sans-serif;}
     .ticker-item .ti-teams{color:rgba(255,255,255,0.85);font-weight:700;}
     .ticker-item .ti-live{color:#30D158;font-weight:800;letter-spacing:0.05em;}
     .ticker-item .ti-time{color:rgba(255,255,255,0.35);}
@@ -1939,7 +1939,7 @@ export default function App() {
     .pu-card-name{font-size:16px;font-weight:600;letter-spacing:-0.2px;margin-bottom:2px;}
     .pu-card-rarity{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;}
     .pu-card-desc{font-size:13px;color:${IOS.label3};}
-    .pu-use-btn{background:${IOS.fill2};border:none;border-radius:8px;padding:7px 14px;font-family:'Century Gothic',Futura,sans-serif;font-size:13px;font-weight:600;color:${IOS.blue};cursor:pointer;white-space:nowrap;flex-shrink:0;}
+    .pu-use-btn{background:${IOS.fill2};border:none;border-radius:8px;padding:7px 14px;font-family:'Trebuchet MS',sans-serif;font-size:13px;font-weight:600;color:${IOS.blue};cursor:pointer;white-space:nowrap;flex-shrink:0;}
 
     /* Wheel */
     .wheel-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.96);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;}
@@ -1948,7 +1948,7 @@ export default function App() {
     .wheel-hdr-sub{font-size:15px;color:${IOS.label3};margin-top:4px;}
     .wheel-wrap{position:relative;width:280px;height:280px;margin-bottom:28px;}
     .wheel-pointer{position:absolute;top:-14px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:10px solid transparent;border-right:10px solid transparent;border-top:22px solid #fff;z-index:10;filter:drop-shadow(0 2px 6px rgba(255,255,255,0.3));}
-    .spin-ios-btn{background:${IOS.blue};color:#fff;border:none;border-radius:14px;padding:16px 48px;font-family:'Century Gothic',Futura,sans-serif;font-size:17px;font-weight:600;cursor:pointer;letter-spacing:-0.3px;transition:opacity .15s;}
+    .spin-ios-btn{background:${IOS.blue};color:#fff;border:none;border-radius:14px;padding:16px 48px;font-family:'Trebuchet MS',sans-serif;font-size:17px;font-weight:600;cursor:pointer;letter-spacing:-0.3px;transition:opacity .15s;}
     .spin-ios-btn:active{opacity:0.8;}
     .spin-ios-btn:disabled{background:${IOS.bg3};color:${IOS.gray};cursor:default;}
     .win-modal{position:absolute;inset:0;background:rgba(0,0,0,0.85);z-index:110;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:40px;}
@@ -1997,7 +1997,7 @@ export default function App() {
     .date-sep{text-align:center;margin:6px 0;}
     .date-sep span{font-size:12px;color:${IOS.label3};font-weight:500;}
     .chat-input-bar{background:${IOS.bg2};border-top:0.5px solid ${IOS.sep};padding:10px 16px;display:flex;align-items:center;gap:10px;}
-    .chat-field{flex:1;background:${IOS.bg3};border:none;border-radius:20px;padding:10px 16px;font-family:'Century Gothic',Futura,sans-serif;font-size:15px;color:#fff;outline:none;letter-spacing:-0.2px;}
+    .chat-field{flex:1;background:${IOS.bg3};border:none;border-radius:20px;padding:10px 16px;font-family:'Trebuchet MS',sans-serif;font-size:15px;color:#fff;outline:none;letter-spacing:-0.2px;}
     .chat-field::placeholder{color:${IOS.label3};}
     .chat-send{width:34px;height:34px;border-radius:50%;background:${IOS.blue};border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;}
     .chat-send:active{opacity:0.8;}
@@ -2099,9 +2099,9 @@ export default function App() {
               {/* Buttons */}
               <div style={{display:"flex",gap:10}}>
                 {!isFirst && (
-                  <button onClick={()=>setTutorialStep(s=>s-1)} style={{flex:1,background:"rgba(255,255,255,0.08)",border:"none",borderRadius:14,padding:"13px",fontSize:15,fontWeight:700,color:"rgba(255,255,255,0.7)",cursor:"pointer",fontFamily:"'Century Gothic',Futura,sans-serif"}}>Back</button>
+                  <button onClick={()=>setTutorialStep(s=>s-1)} style={{flex:1,background:"rgba(255,255,255,0.08)",border:"none",borderRadius:14,padding:"13px",fontSize:15,fontWeight:700,color:"rgba(255,255,255,0.7)",cursor:"pointer",fontFamily:"'Trebuchet MS',sans-serif"}}>Back</button>
                 )}
-                <button onClick={()=>isLast?dismissTutorial():setTutorialStep(s=>s+1)} style={{flex:2,background:IOS.blue,border:"none",borderRadius:14,padding:"13px",fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"'Century Gothic',Futura,sans-serif"}}>{isLast?"Let's Go! 🏆":"Next"}</button>
+                <button onClick={()=>isLast?dismissTutorial():setTutorialStep(s=>s+1)} style={{flex:2,background:IOS.blue,border:"none",borderRadius:14,padding:"13px",fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"'Trebuchet MS',sans-serif"}}>{isLast?"Let's Go! 🏆":"Next"}</button>
               </div>
             </div>
           </div>
@@ -2110,7 +2110,7 @@ export default function App() {
 
       {/* ══ AUTH SCREEN ══ */}
       {!user && (
-        <div style={{width:390,minHeight:"100vh",background:"#09090f",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"40px 32px",fontFamily:"'Century Gothic',Futura,sans-serif"}}>
+        <div style={{width:390,minHeight:"100vh",background:"#09090f",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"40px 32px",fontFamily:"'Trebuchet MS',sans-serif"}}>
           <div style={{fontSize:38,fontWeight:800,letterSpacing:-1,color:"#60a5fa",marginBottom:6}}>PICKLOCK</div>
           <div style={{fontSize:14,color:"rgba(255,255,255,0.4)",marginBottom:48}}>Fantasy sports betting, built different</div>
           <div style={{display:"flex",background:"#1C1C1E",borderRadius:12,padding:2,marginBottom:28,width:"100%"}}>
@@ -2118,9 +2118,9 @@ export default function App() {
               <div key={t} onClick={()=>setAuthScreen(t)} style={{flex:1,textAlign:"center",padding:"10px",borderRadius:10,fontSize:14,fontWeight:700,cursor:"pointer",background:authScreen===t?"#2C2C2E":"transparent",color:authScreen===t?"#fff":"rgba(255,255,255,0.4)",transition:"all .2s"}}>{t==="login"?"Sign In":"Sign Up"}</div>
             ))}
           </div>
-          <input id="auth-email" type="email" placeholder="Email" style={{width:"100%",background:"#1C1C1E",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"14px 16px",color:"#fff",fontSize:15,fontFamily:"'Century Gothic',Futura,sans-serif",outline:"none",marginBottom:12}}/>
-          <input id="auth-password" type="password" placeholder="Password" style={{width:"100%",background:"#1C1C1E",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"14px 16px",color:"#fff",fontSize:15,fontFamily:"'Century Gothic',Futura,sans-serif",outline:"none",marginBottom:12}}/>
-          {authScreen==="signup"&&<input id="auth-username" type="text" placeholder="Username (e.g. sharpshooter99)" style={{width:"100%",background:"#1C1C1E",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"14px 16px",color:"#fff",fontSize:15,fontFamily:"'Century Gothic',Futura,sans-serif",outline:"none",marginBottom:8}}/>}
+          <input id="auth-email" type="email" placeholder="Email" style={{width:"100%",background:"#1C1C1E",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"14px 16px",color:"#fff",fontSize:15,fontFamily:"'Trebuchet MS',sans-serif",outline:"none",marginBottom:12}}/>
+          <input id="auth-password" type="password" placeholder="Password" style={{width:"100%",background:"#1C1C1E",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"14px 16px",color:"#fff",fontSize:15,fontFamily:"'Trebuchet MS',sans-serif",outline:"none",marginBottom:12}}/>
+          {authScreen==="signup"&&<input id="auth-username" type="text" placeholder="Username (e.g. sharpshooter99)" style={{width:"100%",background:"#1C1C1E",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"14px 16px",color:"#fff",fontSize:15,fontFamily:"'Trebuchet MS',sans-serif",outline:"none",marginBottom:8}}/>}
           {authScreen==="signup"&&<div style={{fontSize:11,color:"rgba(255,255,255,0.3)",marginBottom:16,alignSelf:"flex-start",paddingLeft:4}}>This is how you'll appear to other players</div>}
           {authScreen==="login"&&<div style={{height:24}}/>}
           <button onClick={async()=>{
@@ -2147,7 +2147,7 @@ export default function App() {
               setTutorialStep(0); // show tutorial for new signups only
               alert("Account created! Check your email to confirm, then sign in.");
             }
-          }} style={{width:"100%",background:"#0A84FF",color:"#fff",border:"none",borderRadius:12,padding:"16px",fontSize:16,fontWeight:700,cursor:"pointer",fontFamily:"'Century Gothic',Futura,sans-serif",marginBottom:16}}>
+          }} style={{width:"100%",background:"#0A84FF",color:"#fff",border:"none",borderRadius:12,padding:"16px",fontSize:16,fontWeight:700,cursor:"pointer",fontFamily:"'Trebuchet MS',sans-serif",marginBottom:16}}>
             {authScreen==="login"?"Sign In":"Create Account"}
           </button>
           {authScreen==="login"&&<div style={{fontSize:13,color:"rgba(255,255,255,0.35)",cursor:"pointer"}} onClick={()=>setAuthScreen("signup")}>No account? Sign up</div>}
@@ -2201,7 +2201,7 @@ export default function App() {
                   ));
               })()}
               <div style={{padding:"14px 20px 0"}}>
-                <button onClick={()=>setShowPUModal(null)} style={{width:"100%",background:IOS.bg3,border:"none",borderRadius:12,padding:"14px",fontFamily:"'Century Gothic',Futura,sans-serif",fontSize:15,fontWeight:600,color:IOS.label2,cursor:"pointer"}}>Cancel</button>
+                <button onClick={()=>setShowPUModal(null)} style={{width:"100%",background:IOS.bg3,border:"none",borderRadius:12,padding:"14px",fontFamily:"'Trebuchet MS',sans-serif",fontSize:15,fontWeight:600,color:IOS.label2,cursor:"pointer"}}>Cancel</button>
               </div>
             </div>
           </div>
@@ -2214,7 +2214,7 @@ export default function App() {
             background:"linear-gradient(180deg, #0a0a1a 0%, #0d0d20 60%, #050510 100%)",
             display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
             padding:"40px 32px",gap:0,
-            fontFamily:"'Century Gothic',Futura,sans-serif",
+            fontFamily:"'Trebuchet MS',sans-serif",
           }}>
             <style>{`
               @keyframes floatUp{0%{transform:translateY(0) scale(1);}50%{transform:translateY(-12px) scale(1.05);}100%{transform:translateY(0) scale(1);}}
@@ -2232,7 +2232,7 @@ export default function App() {
               .spin-glow-btn{
                 background: linear-gradient(135deg, #FFD60A, #FF9F0A);
                 border: none; border-radius: 18px; padding: 18px 0; width: 100%;
-                font-family: 'Century Gothic',Futura,sans-serif; font-size: 18px; font-weight: 800;
+                font-family: 'Trebuchet MS',sans-serif; font-size: 18px; font-weight: 800;
                 color: #000; cursor: pointer; letter-spacing: -0.3px;
                 box-shadow: 0 8px 32px rgba(255,214,10,0.4), 0 2px 8px rgba(0,0,0,0.3);
                 display: flex; align-items: center; justify-content: center; gap: 10px;
@@ -2392,7 +2392,7 @@ export default function App() {
                 onChange={e=>{setUsernamePromptInput(e.target.value);setUsernamePromptError("");}}
                 placeholder="Choose a username..."
                 autoFocus
-                style={{width:"100%",background:"#1C1C1E",border:`1.5px solid ${usernamePromptError?IOS.red:IOS.blue}`,borderRadius:12,padding:"12px 14px",color:"#fff",fontSize:16,fontFamily:"'Century Gothic',Futura,sans-serif",outline:"none",marginBottom:8,boxSizing:"border-box"}}
+                style={{width:"100%",background:"#1C1C1E",border:`1.5px solid ${usernamePromptError?IOS.red:IOS.blue}`,borderRadius:12,padding:"12px 14px",color:"#fff",fontSize:16,fontFamily:"'Trebuchet MS',sans-serif",outline:"none",marginBottom:8,boxSizing:"border-box"}}
               />
               {usernamePromptError && <div style={{fontSize:12,color:IOS.red,marginBottom:8}}>{usernamePromptError}</div>}
               <div style={{fontSize:11,color:IOS.label3,marginBottom:20}}>Letters, numbers, and underscores only. Min 3 characters.</div>
@@ -2408,7 +2408,7 @@ export default function App() {
                 setUserProfile(prev=>({...prev,username:val}));
                 setShowUsernamePrompt(false);
                 setUsernamePromptSaving(false);
-              }} style={{width:"100%",background:usernamePromptSaving?"rgba(255,255,255,0.1)":IOS.blue,border:"none",borderRadius:12,padding:"14px",fontSize:16,fontWeight:700,color:usernamePromptSaving?"rgba(255,255,255,0.3)":"#fff",cursor:usernamePromptSaving?"default":"pointer",fontFamily:"'Century Gothic',Futura,sans-serif",marginBottom:10}}>
+              }} style={{width:"100%",background:usernamePromptSaving?"rgba(255,255,255,0.1)":IOS.blue,border:"none",borderRadius:12,padding:"14px",fontSize:16,fontWeight:700,color:usernamePromptSaving?"rgba(255,255,255,0.3)":"#fff",cursor:usernamePromptSaving?"default":"pointer",fontFamily:"'Trebuchet MS',sans-serif",marginBottom:10}}>
                 {usernamePromptSaving?"Saving...":"Set Username"}
               </button>
               <div onClick={()=>setShowUsernamePrompt(false)} style={{textAlign:"center",fontSize:13,color:IOS.label3,cursor:"pointer"}}>Skip for now</div>
@@ -3629,11 +3629,11 @@ export default function App() {
                         <div style={{fontSize:28,fontWeight:800,letterSpacing:5,color:"#fff",marginBottom:12}}>{activeLeague.invite_code||activeLeague.inviteCode}</div>
                         <div style={{display:"flex",gap:8}}>
                           <button onClick={()=>shareInvite(activeLeague.invite_code||activeLeague.inviteCode, activeLeague.name)}
-                            style={{flex:1,background:IOS.blue,border:"none",borderRadius:10,padding:"10px",fontFamily:"'Century Gothic',Futura,sans-serif",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>
+                            style={{flex:1,background:IOS.blue,border:"none",borderRadius:10,padding:"10px",fontFamily:"'Trebuchet MS',sans-serif",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>
                             📤 Share
                           </button>
                           <button onClick={async()=>{const c=activeLeague.invite_code||activeLeague.inviteCode;try{await navigator.clipboard.writeText(c);alert("Copied! ✓");}catch(e){alert(c);}}}
-                            style={{flex:1,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:10,padding:"10px",fontFamily:"'Century Gothic',Futura,sans-serif",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>
+                            style={{flex:1,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:10,padding:"10px",fontFamily:"'Trebuchet MS',sans-serif",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>
                             📋 Copy
                           </button>
                         </div>
@@ -3887,11 +3887,11 @@ export default function App() {
                           <div style={{fontSize:40,fontWeight:800,letterSpacing:6,color:"#fff"}}>{newLeagueCreated.invite_code}</div>
                           <div style={{display:"flex",gap:10,marginTop:16}}>
                             <button onClick={()=>shareInvite(newLeagueCreated.invite_code, newLeagueCreated.name)}
-                              style={{flex:1,background:IOS.blue,border:"none",borderRadius:12,padding:"12px",fontFamily:"'Century Gothic',Futura,sans-serif",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer"}}>
+                              style={{flex:1,background:IOS.blue,border:"none",borderRadius:12,padding:"12px",fontFamily:"'Trebuchet MS',sans-serif",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer"}}>
                               📤 Share Invite
                             </button>
                             <button onClick={async()=>{try{await navigator.clipboard.writeText(newLeagueCreated.invite_code);alert("Copied! ✓");}catch(e){alert(newLeagueCreated.invite_code);}}}
-                              style={{flex:1,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:12,padding:"12px",fontFamily:"'Century Gothic',Futura,sans-serif",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer"}}>
+                              style={{flex:1,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:12,padding:"12px",fontFamily:"'Trebuchet MS',sans-serif",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer"}}>
                               📋 Copy Code
                             </button>
                           </div>
@@ -3904,7 +3904,7 @@ export default function App() {
                           setNewLeagueSport(null);
                           setNewLeagueName("");
                           setNewLeagueSize(8);
-                        }} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:14,padding:"16px",fontFamily:"'Century Gothic',Futura,sans-serif",fontSize:17,fontWeight:600,color:"#fff",cursor:"pointer"}}>
+                        }} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:14,padding:"16px",fontFamily:"'Trebuchet MS',sans-serif",fontSize:17,fontWeight:600,color:"#fff",cursor:"pointer"}}>
                           Go to My League →
                         </button>
                       </div>
@@ -3938,7 +3938,7 @@ export default function App() {
                           value={newLeagueName}
                           onChange={e=>setNewLeagueName(e.target.value)}
                           placeholder="e.g. The Boys League"
-                          style={{width:"100%",background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"14px 16px",color:"#fff",fontSize:16,fontFamily:"'Century Gothic',Futura,sans-serif",outline:"none",marginBottom:24,boxSizing:"border-box"}}
+                          style={{width:"100%",background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"14px 16px",color:"#fff",fontSize:16,fontFamily:"'Trebuchet MS',sans-serif",outline:"none",marginBottom:24,boxSizing:"border-box"}}
                         />
 
                         {/* League size picker */}
@@ -3960,7 +3960,7 @@ export default function App() {
                         <button
                           disabled={!newLeagueSport||!newLeagueName.trim()||creatingLeague}
                           onClick={()=>createLeague(newLeagueName.trim(), newLeagueSport)}
-                          style={{width:"100%",background:newLeagueSport&&newLeagueName.trim()?IOS.blue:"rgba(255,255,255,0.1)",border:"none",borderRadius:14,padding:"16px",fontFamily:"'Century Gothic',Futura,sans-serif",fontSize:17,fontWeight:600,color:newLeagueSport&&newLeagueName.trim()?"#fff":"rgba(255,255,255,0.3)",cursor:newLeagueSport&&newLeagueName.trim()?"pointer":"default",transition:"all .2s"}}
+                          style={{width:"100%",background:newLeagueSport&&newLeagueName.trim()?IOS.blue:"rgba(255,255,255,0.1)",border:"none",borderRadius:14,padding:"16px",fontFamily:"'Trebuchet MS',sans-serif",fontSize:17,fontWeight:600,color:newLeagueSport&&newLeagueName.trim()?"#fff":"rgba(255,255,255,0.3)",cursor:newLeagueSport&&newLeagueName.trim()?"pointer":"default",transition:"all .2s"}}
                         >
                           {creatingLeague ? "Creating..." : "Create League"}
                         </button>
@@ -3991,7 +3991,7 @@ export default function App() {
                   <div style={{fontSize:22,fontWeight:800,letterSpacing:-0.5,color:"#fff"}}>No Leagues Yet</div>
                   <div style={{fontSize:14,color:IOS.label3,lineHeight:1.6,maxWidth:260}}>Create your first league and invite your friends to get started.</div>
                   <button onClick={()=>{setShowNewLeague(true);setNewLeagueCreated(null);setNewLeagueSport(null);setNewLeagueName("");setNewLeagueSize(8);}}
-                    style={{marginTop:8,background:IOS.blue,border:"none",borderRadius:14,padding:"14px 32px",fontFamily:"'Century Gothic',Futura,sans-serif",fontSize:16,fontWeight:700,color:"#fff",cursor:"pointer"}}>
+                    style={{marginTop:8,background:IOS.blue,border:"none",borderRadius:14,padding:"14px 32px",fontFamily:"'Trebuchet MS',sans-serif",fontSize:16,fontWeight:700,color:"#fff",cursor:"pointer"}}>
                     + Create a League
                   </button>
                   <div style={{fontSize:13,color:IOS.label3}}>or</div>
@@ -4276,7 +4276,7 @@ export default function App() {
                                 }
                               }
                               fetchStandings(activeLeagueId);
-                            }} style={{flex:1,background:"rgba(255,69,58,0.1)",border:"1px solid rgba(255,69,58,0.2)",borderRadius:8,padding:"8px",fontFamily:"'Century Gothic',Futura,sans-serif",fontSize:12,fontWeight:700,color:IOS.red,cursor:"pointer"}}>
+                            }} style={{flex:1,background:"rgba(255,69,58,0.1)",border:"1px solid rgba(255,69,58,0.2)",borderRadius:8,padding:"8px",fontFamily:"'Trebuchet MS',sans-serif",fontSize:12,fontWeight:700,color:IOS.red,cursor:"pointer"}}>
                               ✗ Mark {pendingCount} pending as Loss
                             </button>
                           </div>
@@ -4343,7 +4343,7 @@ export default function App() {
                           await fetchLeagues(user.id);
                           await fetchSchedule(activeLeague.id, user.id);
                           alert(memberData.name+"'s picks submitted!");
-                        }} style={{width:"100%",background:"linear-gradient(135deg,"+IOS.blue+","+IOS.indigo+")",border:"none",borderRadius:10,padding:"12px",fontFamily:"'Century Gothic',Futura,sans-serif",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer",letterSpacing:-0.2}}>
+                        }} style={{width:"100%",background:"linear-gradient(135deg,"+IOS.blue+","+IOS.indigo+")",border:"none",borderRadius:10,padding:"12px",fontFamily:"'Trebuchet MS',sans-serif",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer",letterSpacing:-0.2}}>
                           ✓ Submit Picks for {memberData.name}
                         </button>
                       </div>
@@ -4391,11 +4391,11 @@ export default function App() {
                     <div style={{fontSize:12,color:IOS.label3,marginBottom:12}}>Share this code with friends to join</div>
                     <div style={{display:"flex",gap:8}}>
                       <button onClick={()=>shareInvite(activeLeague.invite_code||activeLeague.inviteCode, activeLeague.name)}
-                        style={{flex:1,background:IOS.blue,border:"none",borderRadius:10,padding:"10px",fontFamily:"'Century Gothic',Futura,sans-serif",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>
+                        style={{flex:1,background:IOS.blue,border:"none",borderRadius:10,padding:"10px",fontFamily:"'Trebuchet MS',sans-serif",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>
                         📤 Share
                       </button>
                       <button onClick={async()=>{const c=activeLeague.invite_code||activeLeague.inviteCode;try{await navigator.clipboard.writeText(c);alert("Copied! ✓");}catch(e){alert(c);}}}
-                        style={{flex:1,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:10,padding:"10px",fontFamily:"'Century Gothic',Futura,sans-serif",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>
+                        style={{flex:1,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:10,padding:"10px",fontFamily:"'Trebuchet MS',sans-serif",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>
                         📋 Copy
                       </button>
                     </div>
@@ -4432,7 +4432,7 @@ export default function App() {
                             alert("Grade error: " + (d.error||"Unknown"));
                           }
                         } catch(e) { alert("Failed to reach grade API: " + e.message); }
-                      }} style={{width:"100%",background:"rgba(10,132,255,0.15)",border:"1px solid rgba(10,132,255,0.3)",borderRadius:12,padding:"12px",fontFamily:"'Century Gothic',Futura,sans-serif",fontSize:14,fontWeight:700,color:IOS.blue,cursor:"pointer",marginBottom:10}}>
+                      }} style={{width:"100%",background:"rgba(10,132,255,0.15)",border:"1px solid rgba(10,132,255,0.3)",borderRadius:12,padding:"12px",fontFamily:"'Trebuchet MS',sans-serif",fontSize:14,fontWeight:700,color:IOS.blue,cursor:"pointer",marginBottom:10}}>
                         ⚡ Run Auto-Grade Now
                       </button>
                       <button onClick={async()=>{
@@ -4534,7 +4534,7 @@ export default function App() {
                         setFlexPicks(EMPTY_FLEX);
                         try { localStorage.removeItem(`linedup_picks_${activeLeague.id}_wk${currentWeek}`); } catch(e) {}
                         setAdvancingWeek(false);
-                      }} style={{width:"100%",background:advancingWeek?"rgba(255,255,255,0.08)":IOS.green,border:"none",borderRadius:12,padding:"14px",fontFamily:"'Century Gothic',Futura,sans-serif",fontSize:15,fontWeight:700,color:advancingWeek?"rgba(255,255,255,0.3)":"#000",cursor:advancingWeek?"default":"pointer"}}>
+                      }} style={{width:"100%",background:advancingWeek?"rgba(255,255,255,0.08)":IOS.green,border:"none",borderRadius:12,padding:"14px",fontFamily:"'Trebuchet MS',sans-serif",fontSize:15,fontWeight:700,color:advancingWeek?"rgba(255,255,255,0.3)":"#000",cursor:advancingWeek?"default":"pointer"}}>
                         {advancingWeek ? "Advancing..." : `⏭ End Week ${activeLeague.current_week||1} · Start Week ${(activeLeague.current_week||1)+1}`}
                       </button>
                     </div>
@@ -5038,7 +5038,7 @@ export default function App() {
                         onChange={e=>{setUsernameInput(e.target.value);setUsernameError("");}}
                         placeholder="Enter username"
                         autoFocus
-                        style={{background:"#2C2C2E",border:`1px solid ${usernameError?IOS.red:IOS.blue}`,borderRadius:10,padding:"8px 12px",color:"#fff",fontSize:15,fontFamily:"'Century Gothic',Futura,sans-serif",outline:"none",width:180}}
+                        style={{background:"#2C2C2E",border:`1px solid ${usernameError?IOS.red:IOS.blue}`,borderRadius:10,padding:"8px 12px",color:"#fff",fontSize:15,fontFamily:"'Trebuchet MS',sans-serif",outline:"none",width:180}}
                       />
                       {usernameError&&<div style={{fontSize:11,color:IOS.red}}>{usernameError}</div>}
                       <div style={{display:"flex",gap:10}}>
@@ -5168,11 +5168,11 @@ export default function App() {
                       <div style={{padding:"14px 20px 10px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                         <div style={{fontSize:15,color:IOS.label3}}>{displayPUs.length} power-up{displayPUs.length!==1?"s":""} in inventory</div>
                         {displaySpins > 0 && isActiveLeague
-                          ? <button onClick={()=>setShowWheel(true)} style={{background:`linear-gradient(135deg,${IOS.indigo},${IOS.purple})`,border:"none",borderRadius:10,padding:"8px 16px",fontFamily:"'Century Gothic',Futura,sans-serif",fontSize:13,fontWeight:600,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
+                          ? <button onClick={()=>setShowWheel(true)} style={{background:`linear-gradient(135deg,${IOS.indigo},${IOS.purple})`,border:"none",borderRadius:10,padding:"8px 16px",fontFamily:"'Trebuchet MS',sans-serif",fontSize:13,fontWeight:600,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
                               🎰 Spin Wheel
                               <span style={{background:"rgba(255,255,255,0.25)",borderRadius:20,padding:"1px 8px",fontSize:12,fontWeight:800}}>{displaySpins}</span>
                             </button>
-                          : <button disabled style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 16px",fontFamily:"'Century Gothic',Futura,sans-serif",fontSize:13,fontWeight:600,color:"rgba(255,255,255,0.25)",cursor:"not-allowed",display:"flex",alignItems:"center",gap:8}}>
+                          : <button disabled style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 16px",fontFamily:"'Trebuchet MS',sans-serif",fontSize:13,fontWeight:600,color:"rgba(255,255,255,0.25)",cursor:"not-allowed",display:"flex",alignItems:"center",gap:8}}>
                               🎰 Spin Wheel
                               <span style={{background:"rgba(255,255,255,0.08)",borderRadius:20,padding:"1px 8px",fontSize:12,fontWeight:800,color:"rgba(255,255,255,0.25)"}}>{displaySpins}</span>
                             </button>
@@ -5252,7 +5252,7 @@ export default function App() {
 
               {/* How to Play */}
               <div style={{padding:"0 16px 4px"}}>
-                <button onClick={()=>setTutorialStep(0)} style={{width:"100%",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"14px",fontSize:15,fontWeight:600,color:"rgba(255,255,255,0.7)",cursor:"pointer",fontFamily:"'Century Gothic',Futura,sans-serif"}}>
+                <button onClick={()=>setTutorialStep(0)} style={{width:"100%",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"14px",fontSize:15,fontWeight:600,color:"rgba(255,255,255,0.7)",cursor:"pointer",fontFamily:"'Trebuchet MS',sans-serif"}}>
                   ❓ How to Play
                 </button>
               </div>
@@ -5268,7 +5268,7 @@ export default function App() {
                   setSavedPicks(null);
                   setFlexPicks(EMPTY_FLEX);
                   setScreen("home");
-                }} style={{width:"100%",background:"rgba(255,59,48,0.1)",border:"1px solid rgba(255,59,48,0.2)",borderRadius:12,padding:"14px",fontSize:15,fontWeight:600,color:IOS.red,cursor:"pointer",fontFamily:"'Century Gothic',Futura,sans-serif"}}>
+                }} style={{width:"100%",background:"rgba(255,59,48,0.1)",border:"1px solid rgba(255,59,48,0.2)",borderRadius:12,padding:"14px",fontSize:15,fontWeight:600,color:IOS.red,cursor:"pointer",fontFamily:"'Trebuchet MS',sans-serif"}}>
                   Sign Out
                 </button>
                 <button onClick={async()=>{
@@ -5290,7 +5290,7 @@ export default function App() {
                   setFlexPicks(EMPTY_FLEX);
                   setScreen("home");
                   alert("Your account has been deleted.");
-                }} style={{width:"100%",background:"transparent",border:"none",borderRadius:12,padding:"10px",fontSize:13,fontWeight:600,color:"rgba(255,59,48,0.5)",cursor:"pointer",fontFamily:"'Century Gothic',Futura,sans-serif"}}>
+                }} style={{width:"100%",background:"transparent",border:"none",borderRadius:12,padding:"10px",fontSize:13,fontWeight:600,color:"rgba(255,59,48,0.5)",cursor:"pointer",fontFamily:"'Trebuchet MS',sans-serif"}}>
                   Delete Account
                 </button>
               </div>
@@ -5422,7 +5422,7 @@ export default function App() {
 
               {/* CTA */}
               <div style={{padding:"16px 16px 0",display:"flex",gap:10}}>
-                <button onClick={()=>setWeekResult(null)} style={{flex:1,background:weekResult.won?"rgba(48,209,88,0.15)":"rgba(255,69,58,0.15)",border:`1px solid ${weekResult.won?"rgba(48,209,88,0.3)":"rgba(255,69,58,0.3)"}`,borderRadius:14,padding:"14px",fontSize:15,fontWeight:700,color:weekResult.won?IOS.green:IOS.red,cursor:"pointer",fontFamily:"'Century Gothic',Futura,sans-serif"}}>
+                <button onClick={()=>setWeekResult(null)} style={{flex:1,background:weekResult.won?"rgba(48,209,88,0.15)":"rgba(255,69,58,0.15)",border:`1px solid ${weekResult.won?"rgba(48,209,88,0.3)":"rgba(255,69,58,0.3)"}`,borderRadius:14,padding:"14px",fontSize:15,fontWeight:700,color:weekResult.won?IOS.green:IOS.red,cursor:"pointer",fontFamily:"'Trebuchet MS',sans-serif"}}>
                   {weekResult.won?"Let's Go 🔥":"Get 'Em Next Week"}
                 </button>
               </div>
