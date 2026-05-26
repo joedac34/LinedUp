@@ -365,10 +365,10 @@ const LEAGUES_DATA = [
 const POWER_UPS = [
   { id:"steal",    icon:"🔀", name:"Pick Steal",      desc:"See one opponent's locked lineup",       rarity:"rare",      color:IOS.purple, type:"defensive" },
   { id:"enhance",  icon:"📈", name:"Spread Enhancer", desc:"Move any spread 1.5pts in your favor",   rarity:"rare",      color:IOS.blue,   type:"offensive" },
-  { id:"insurance",icon:"🛡️", name:"Insurance",       desc:"Lose by 1 leg? Counts as a push",        rarity:"common",    color:IOS.green,  type:"offensive" },
+  { id:"insurance",icon:"🛡", name:"Insurance",       desc:"Lose by 1 leg? Counts as a push",        rarity:"common",    color:IOS.green,  type:"offensive" },
   { id:"lock",     icon:"🔒", name:"Lock It In",      desc:"Force opponent — no lineup changes",      rarity:"rare",      color:IOS.orange, type:"defensive" },
-  { id:"double",   icon:"2️⃣", name:"Double Down",     desc:"One pick counts double this week",        rarity:"common",    color:IOS.yellow, type:"offensive" },
-  { id:"peek",     icon:"👁️", name:"Peek",            desc:"See what % of league took each bet",      rarity:"common",    color:IOS.teal,   type:"defensive" },
+  { id:"double",   icon:"2⃣", name:"Double Down",     desc:"One pick counts double this week",        rarity:"common",    color:IOS.yellow, type:"offensive" },
+  { id:"peek",     icon:"👁", name:"Peek",            desc:"See what % of league took each bet",      rarity:"common",    color:IOS.teal,   type:"defensive" },
   { id:"bomb",     icon:"💣", name:"Bomb",            desc:"Nullify one of opponent's winning picks", rarity:"legendary", color:IOS.red,    type:"defensive" },
   { id:"swap",     icon:"🔄", name:"Hot Swap",        desc:"Swap a losing pick after games start",    rarity:"legendary", color:IOS.pink,   type:"offensive" },
   { id:"wildcard", icon:"⭐", name:"Wildcard",        desc:"Play any bet — no slot rules",            rarity:"rare",      color:IOS.purple, type:"offensive" },
@@ -381,7 +381,7 @@ const TROPHIES = [
   { id:"upset",   icon:"🃏", name:"Upset Artist",   desc:"Most upsets correctly called",    holder:"YOU",      yours:true,  color:IOS.purple },
   { id:"whale",   icon:"💰", name:"The Whale",      desc:"Most units won in a single week", holder:"Chris R.", yours:false, color:IOS.green  },
   { id:"cold",    icon:"🧊", name:"Ice Cold",       desc:"Worst ROI in the league",         holder:"Jake P.",  yours:false, color:IOS.teal   },
-  { id:"grind",   icon:"⚙️", name:"The Grinder",   desc:"Most picks submitted all season", holder:"Ryan S.",  yours:false, color:IOS.gray   },
+  { id:"grind",   icon:"⚙", name:"The Grinder",   desc:"Most picks submitted all season", holder:"Ryan S.",  yours:false, color:IOS.gray   },
   { id:"come",    icon:"⚡", name:"Comeback Kid",   desc:"Biggest weekly points swing",     holder:"Tom B.",   yours:false, color:IOS.yellow },
   { id:"goat",    icon:"🐐", name:"GOAT",           desc:"Season champion",                 holder:"???",      yours:false, color:IOS.yellow },
 ];
@@ -563,7 +563,7 @@ function calcMatchupScore(picks) {
 const pad=n=>String(n).padStart(2,"0");
 const acColor=i=>({D:"#5E5CE6",M:"#0A84FF",T:"#FF453A",C:"#30D158",A:"#FF9F0A",R:"#FF375F"}[i]||IOS.purple);
 const rarityColor=r=>r==="legendary"?IOS.pink:r==="rare"?IOS.purple:IOS.green;
-const rankMedal=r=>r===1?"🥇":r===2?"🥈":r===3?"🥉":`${r}`;
+const rankMedal=r=>r===1?"":r===2?"":r===3?"":`${r}`;
 
 const polarToCart=(cx,cy,r,deg)=>{const rad=(deg-90)*Math.PI/180;return{x:cx+r*Math.cos(rad),y:cy+r*Math.sin(rad)};};
 
@@ -2441,10 +2441,10 @@ export default function App() {
                     return (
                       <div key={lg.id} onClick={()=>{setActiveLeagueId(lg.id);setPicks({ml:null,prop:null,ou:null,spread:null});setLsBets([]);}}
                         style={{flexShrink:0,display:"flex",alignItems:"center",gap:7,padding:"8px 14px",borderRadius:20,cursor:"pointer",transition:"all .18s",
-                          background:isActive?`${sp.color}20`:"rgba(255,255,255,0.06)",
-                          border:`1px solid ${isActive?sp.color+"50":"rgba(255,255,255,0.08)"}`,
+                          background:isActive?"rgba(10,132,255,0.15)":"rgba(255,255,255,0.06)",
+                          border:`1px solid ${isActive?"rgba(10,132,255,0.4)":"rgba(255,255,255,0.08)"}`,
                         }}>
-                        <div style={{color:isActive?sp.color:"rgba(255,255,255,0.3)",display:"flex",alignItems:"center",transition:"color .18s"}}>
+                        <div style={{color:isActive?IOS.blue:"rgba(255,255,255,0.3)",display:"flex",alignItems:"center",transition:"color .18s"}}>
                           {lg.sport==="nfl"&&<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><ellipse cx="12" cy="12" rx="9" ry="5.5" transform="rotate(-35 12 12)"/><line x1="12" y1="7" x2="12" y2="17" transform="rotate(-35 12 12)"/><line x1="8.5" y1="10" x2="15.5" y2="10" transform="rotate(-35 12 12)"/><line x1="8.5" y1="14" x2="15.5" y2="14" transform="rotate(-35 12 12)"/></svg>}
                           {lg.sport==="nba"&&<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10"/><path d="M12 2a15.3 15.3 0 0 0-4 10 15.3 15.3 0 0 0 4 10"/><line x1="2" y1="12" x2="22" y2="12"/></svg>}
                           {lg.sport==="mlb"&&<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M14.5 4.5c-1 2.5-1 5.5 0 8s2.5 5 2.5 7"/><path d="M9.5 4.5c1 2.5 1 5.5 0 8s-2.5 5-2.5 7"/></svg>}
@@ -2452,10 +2452,10 @@ export default function App() {
                           {!["nfl","nba","mlb","nhl"].includes(lg.sport)&&<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="10"/></svg>}
                         </div>
                         <div>
-                          <div style={{fontSize:12,fontWeight:700,color:isActive?sp.color:"rgba(255,255,255,0.6)",letterSpacing:-0.2}}>{lg.name}</div>
+                          <div style={{fontSize:12,fontWeight:700,color:isActive?IOS.blue:"rgba(255,255,255,0.6)",letterSpacing:-0.2}}>{lg.name}</div>
                           <div style={{fontSize:10,color:"rgba(255,255,255,0.35)",marginTop:1}}>Wk {lg.current_week||lg.week||1} · {sp.label}</div>
                         </div>
-                        {isActive&&<div style={{width:6,height:6,borderRadius:"50%",background:sp.color,marginLeft:2}}/>}
+                        {isActive&&<div style={{width:6,height:6,borderRadius:"50%",background:IOS.blue,marginLeft:2}}/>}
                       </div>
                     );
                   })}
@@ -2641,7 +2641,7 @@ export default function App() {
               })()}
               {savedPicks
                 ? <button className="ios-btn" style={{background:IOS.green,color:"#000",marginBottom:6}} onClick={()=>setScreen("picks")}>✓ Slip Locked — View or Edit</button>
-                : <button className="ios-btn" style={{background:sport.color,color:"#fff",marginBottom:6}} onClick={()=>setScreen("picks")}>{sport.icon} Build Your {sport.label} Slip</button>
+                : <button className="ios-btn" style={{background:sport.color,color:"#fff",marginBottom:6}} onClick={()=>setScreen("picks")}>Build Your {sport.label} Slip</button>
               }
 
               {/* My Locked Picks card */}
@@ -3256,14 +3256,14 @@ export default function App() {
               ) : (
                 <>
               <div className="pb-header">
-                <div className="pb-title">{sport.icon} {sport.label} Slip</div>
+                <div className="pb-title">{sport.label} Slip</div>
                 <div className="pb-sub">{activeLeague.name} · Wk {activeLeague.current_week||activeLeague.week||1}</div>
               </div>
 
               {/* League filling banner */}
               {leagueMembers.length < (activeLeague.target_size||activeLeague.max_members||8) && (
                 <div style={{margin:"0 16px 14px",background:"rgba(255,159,10,0.08)",borderRadius:12,padding:"10px 14px",border:"1px solid rgba(255,159,10,0.2)",display:"flex",alignItems:"center",gap:10}}>
-                  <div style={{fontSize:16,flexShrink:0}}>⚠️</div>
+                  <div style={{fontSize:16,flexShrink:0}}>⚠</div>
                   <div>
                     <div style={{fontSize:13,fontWeight:600,color:IOS.orange}}>League still filling up</div>
                     <div style={{fontSize:11,color:IOS.label3,marginTop:2}}>Matchups start when {activeLeague.target_size||activeLeague.max_members||8} members join · {leagueMembers.length}/{activeLeague.target_size||activeLeague.max_members||8} so far</div>
@@ -3474,7 +3474,7 @@ export default function App() {
                       {/* Pts + power-up */}
                       <div style={{display:"flex",alignItems:"center",gap:8}}>
                         {slot.mult&&filled&&<div style={{fontSize:12,fontWeight:700,color:IOS.green,flexShrink:0}}>
-                          {isDouble?`+${pts} pts (2️⃣ doubled!)`:isEnhance&&slot.bet?`+${pts} pts 📈`:`+${pts} pts if win`}
+                          {isDouble?`+${pts} pts (2⃣ doubled!)`:isEnhance&&slot.bet?`+${pts} pts 📈`:`+${pts} pts if win`}
                         </div>}
                         {(myPUs.filter(p=>p.type==="offensive").length>0||appliedPU)&&slot.mult&&filled&&(
                           appliedPU ? (
@@ -3651,7 +3651,7 @@ export default function App() {
                 // No opponent — show empty state
                 if(!hasOpponent) return (
                   <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"60px 32px",textAlign:"center",gap:16}}>
-                    <div style={{fontSize:56}}>🏟️</div>
+                    <div style={{fontSize:56}}>🏟</div>
                     <div style={{fontSize:22,fontWeight:700,letterSpacing:-0.5,color:"#fff"}}>No Matchup Yet</div>
                     <div style={{fontSize:15,color:IOS.label3,lineHeight:1.6}}>You need at least one other member in {activeLeague.name} to have a matchup.</div>
                     <div onClick={()=>setScreen("commissioner")} style={{marginTop:8,background:IOS.blue,borderRadius:12,padding:"12px 24px",fontSize:15,fontWeight:600,color:"#fff",cursor:"pointer"}}>
@@ -3903,7 +3903,7 @@ export default function App() {
                                 background:newLeagueSport===sp.id?`${sp.color}20`:"rgba(255,255,255,0.05)",
                                 border:`1.5px solid ${newLeagueSport===sp.id?sp.color:"rgba(255,255,255,0.08)"}`,
                               }}>
-                              <div style={{fontSize:26,marginBottom:6}}>{sp.icon}</div>
+                              <div style={{fontSize:26,marginBottom:6}}></div>
                               <div style={{fontSize:13,fontWeight:700,color:newLeagueSport===sp.id?sp.color:"rgba(255,255,255,0.6)"}}>{sp.label}</div>
                             </div>
                           ))}
@@ -3999,28 +3999,27 @@ export default function App() {
                 const myMember = lg.members?.find(m=>m.isYou) || {record: lg.userRecord||"—", roi: lg.userRoi||"—", streak: "—"};
                 const pendingPicks = (gradingData[lg.id]||[]).reduce((acc,m)=>acc+m.picks.filter(p=>p.result==="pending").length,0);
                 return (
-                  <div key={lg.id} style={{margin:"0 16px 12px",background:IOS.bg2,borderRadius:20,overflow:"hidden",border:`1px solid ${isActive?sp.color+"50":"rgba(255,255,255,0.07)"}`,cursor:"pointer"}}
+                  <div key={lg.id} style={{margin:"0 16px 12px",background:IOS.bg2,borderRadius:20,overflow:"hidden",border:`1px solid ${isActive?"rgba(10,132,255,0.4)":"rgba(255,255,255,0.07)"}`,cursor:"pointer"}}
                     onClick={()=>{setActiveLeagueId(lg.id);setPicks({ml:null,prop:null,ou:null,spread:null});setLsBets([]);}}>
                     {/* Sport accent bar */}
-                    <div style={{height:3,background:`linear-gradient(90deg,${sp.color},${sp.color}80)`}}/>
+                    <div style={{height:3,background:"rgba(10,132,255,0.6)"}}/>
                     <div style={{padding:"16px 18px"}}>
                       {/* Top row */}
                       <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:12}}>
                         <div>
                           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
-                            <span style={{fontSize:18}}>{sp.icon}</span>
                             <div style={{fontSize:18,fontWeight:800,letterSpacing:-0.5,color:"#fff"}}>{lg.name}</div>
                           </div>
                           <div style={{fontSize:12,color:IOS.label3}}>{sp.label} · Wk {lg.current_week||lg.week||1} · {lg.members?.length||lg.max_members||"?"} members</div>
                         </div>
                         <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
-                          {lg.isCommissioner&&<div style={{background:"rgba(255,214,10,0.15)",border:"1px solid rgba(255,214,10,0.3)",borderRadius:6,padding:"2px 8px",fontSize:10,fontWeight:700,color:IOS.yellow}}>⚙️ COMMISH</div>}
-                          {isActive&&<div style={{background:`${sp.color}20`,border:`1px solid ${sp.color}40`,borderRadius:6,padding:"2px 8px",fontSize:10,fontWeight:700,color:sp.color}}>● ACTIVE</div>}
+                          {lg.isCommissioner&&<div style={{background:"rgba(255,214,10,0.15)",border:"1px solid rgba(255,214,10,0.3)",borderRadius:6,padding:"2px 8px",fontSize:10,fontWeight:700,color:IOS.yellow}}>⚙ COMMISH</div>}
+                          {isActive&&<div style={{background:"rgba(10,132,255,0.15)",border:"1px solid rgba(10,132,255,0.3)",borderRadius:6,padding:"2px 8px",fontSize:10,fontWeight:700,color:IOS.blue}}>ACTIVE</div>}
                         </div>
                       </div>
                       {/* Stats row */}
                       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:1,background:"rgba(255,255,255,0.05)",borderRadius:10,overflow:"hidden",marginBottom:12}}>
-                        {[{l:"Record",v:myMember?.record,c:sp.color},{l:"ROI",v:myMember?.roi,c:IOS.green},{l:"Streak",v:myMember?.streak,c:myMember?.streak?.startsWith("W")?IOS.green:IOS.red}].map((s,i)=>(
+                        {[{l:"Record",v:myMember?.record,c:IOS.blue},{l:"ROI",v:myMember?.roi,c:IOS.blue},{l:"Streak",v:myMember?.streak,c:IOS.blue}].map((s,i)=>(
                           <div key={i} style={{background:IOS.bg3,padding:"10px 8px",textAlign:"center"}}>
                             <div style={{fontSize:16,fontWeight:800,letterSpacing:-0.3,color:s.c,marginBottom:2}}>{s.v}</div>
                             <div style={{fontSize:9,fontWeight:600,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3}}>{s.l}</div>
@@ -4035,7 +4034,7 @@ export default function App() {
                             <div style={{background:"rgba(255,159,10,0.15)",border:"1px solid rgba(255,159,10,0.3)",borderRadius:6,padding:"3px 8px",fontSize:10,fontWeight:700,color:IOS.orange}}>{pendingPicks} to grade</div>
                           )}
                           <div onClick={e=>{e.stopPropagation();setActiveLeagueId(lg.id);setScreen(lg.isCommissioner?"commissioner":"league");}} style={{background:IOS.fill2,borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:600,color:IOS.blue,cursor:"pointer"}}>
-                            {lg.isCommissioner?"Commish ⚙️":"View →"}
+                            {lg.isCommissioner?"Commish ⚙":"View →"}
                           </div>
                         </div>
                       </div>
@@ -4085,7 +4084,7 @@ export default function App() {
                 <button onClick={()=>setScreen("leagues")} style={{background:IOS.fill2,border:"none",borderRadius:10,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:17,flexShrink:0}}>‹</button>
                 <div>
                   <div style={{fontSize:17,fontWeight:700,letterSpacing:-0.3,color:"#fff"}}>{activeLeague.name}</div>
-                  <div style={{fontSize:12,color:IOS.yellow}}>⚙️ Commissioner Panel</div>
+                  <div style={{fontSize:12,color:IOS.yellow}}>⚙ Commissioner Panel</div>
                 </div>
               </div>
 
@@ -4658,7 +4657,7 @@ export default function App() {
                           return (
                             <div key={row.userId||i} style={{display:"flex",alignItems:"center",padding:"13px 16px",background:isMe?"rgba(10,132,255,0.08)":"transparent",borderBottom:i<sorted.length-1?`0.5px solid ${IOS.sep}`:"none"}}>
                               <div style={{width:28,fontSize:15,fontWeight:700,color:i===0?IOS.yellow:i===1?IOS.gray:i===2?IOS.orange:IOS.label3,flexShrink:0}}>
-                                {i===0?"🥇":i===1?"🥈":i===2?"🥉":`${i+1}`}
+                                {i===0?"":i===1?"":i===2?"":`${i+1}`}
                               </div>
                               <div style={{flex:1}}>
                                 <div style={{fontSize:15,fontWeight:600,color:isMe?IOS.blue:"#fff"}}>{isMe?"You ✦":row.name}</div>
@@ -5128,7 +5127,7 @@ export default function App() {
                             background:isSelected?`${sp.color}20`:"rgba(255,255,255,0.06)",
                             border:`1px solid ${isSelected?sp.color+"60":"rgba(255,255,255,0.08)"}`,
                           }}>
-                            <span style={{fontSize:14}}>{sp.icon}</span>
+                            <span style={{fontSize:14}}></span>
                             <span style={{fontSize:12,fontWeight:700,color:isSelected?sp.color:"rgba(255,255,255,0.6)"}}>{lg.name}</span>
                           </div>
                         );
