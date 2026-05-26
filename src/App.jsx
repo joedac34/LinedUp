@@ -3689,55 +3689,26 @@ export default function App() {
 
                 return (
                   <>
-                    {/* Big score card */}
-                    <div style={{margin:"0 16px 14px",background:IOS.bg2,borderRadius:20,padding:"20px",position:"relative",overflow:"hidden",border:`1px solid rgba(10,132,255,0.25)`}}>
-                      <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${IOS.blue},${IOS.teal})`}}/>
-                      
-                      {/* Live badge */}
-                      <div style={{textAlign:"center",marginBottom:14}}>
-                        <div style={{display:"inline-flex",alignItems:"center",gap:6,background:"rgba(10,132,255,0.12)",border:"1px solid rgba(10,132,255,0.25)",borderRadius:20,padding:"4px 14px"}}>
-                          <div style={{width:6,height:6,borderRadius:"50%",background:IOS.blue}}/>
-                          <div style={{fontSize:11,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:isTied?IOS.blue:isWinning?IOS.green:IOS.red}}>{isTied?"You're Tied":isWinning?"You're Leading":"You're Trailing"}</div>
+                    {/* ── Sticky header ── */}
+                    <div style={{position:"sticky",top:0,zIndex:10,background:"#000",borderBottom:"0.5px solid #1A1A1A",marginBottom:4}}>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px 6px"}}>
+                        <div>
+                          <div style={{fontSize:17,fontWeight:700,color:"#fff",letterSpacing:-0.3}}>WK {currentWeekNum} MATCHUP</div>
+                          <div style={{fontSize:11,color:"#555",marginTop:2}}>{sport?.label||"NFL"} · {activeLeague.name}</div>
+                        </div>
+                        <div style={{textAlign:"right"}}>
+                          <div style={{fontSize:22,fontWeight:800,color:"#fff",letterSpacing:-1}}>
+                            {myTotal} <span style={{color:"#333",fontSize:16}}>–</span> {oppTotal}
+                          </div>
+                          <div style={{fontSize:10,fontWeight:700,marginTop:1,letterSpacing:0.3,color:isTied?IOS.blue:isWinning?IOS.green:IOS.red}}>
+                            {isTied?"YOU'RE TIED":isWinning?"LIVE · YOU'RE WINNING":"LIVE · YOU'RE TRAILING"}
+                          </div>
                         </div>
                       </div>
-
-                      {/* Two scorecards side by side */}
-                      <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:12,alignItems:"center"}}>
-                        
-                        {/* My scorecard */}
-                        <div style={{background:`linear-gradient(135deg,rgba(10,132,255,0.12),rgba(10,132,255,0.06))`,borderRadius:16,padding:"16px 12px",border:"1px solid rgba(10,132,255,0.2)"}}>
-                          <div style={{fontSize:11,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.blue,marginBottom:6}}>You</div>
-                          <div style={{fontSize:34,fontWeight:800,letterSpacing:-1.5,color:IOS.green,lineHeight:1}}>{myTotal}</div>
-                          <div style={{fontSize:10,color:IOS.label3,marginBottom:12}}>points</div>
-                          <div style={{display:"flex",gap:6}}>
-                            {[{n:myWins,l:"W",c:IOS.green},{n:myLosses,l:"L",c:IOS.red},{n:myPending,l:"P",c:IOS.blue}].map((s,i)=>(
-                              <div key={i} style={{flex:1,background:"rgba(0,0,0,0.2)",borderRadius:8,padding:"6px 4px",textAlign:"center"}}>
-                                <div style={{fontSize:16,fontWeight:800,color:s.c,letterSpacing:-0.5}}>{s.n}</div>
-                                <div style={{fontSize:9,fontWeight:600,color:IOS.label3,marginTop:1}}>{s.l}</div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* VS divider */}
-                        <div style={{textAlign:"center"}}>
-                          <div style={{fontSize:13,fontWeight:600,color:IOS.label3}}>vs</div>
-                        </div>
-
-                        {/* Opp scorecard */}
-                        <div style={{background:`linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))`,borderRadius:16,padding:"16px 12px",border:"1px solid rgba(255,255,255,0.08)"}}>
-                          <div style={{fontSize:11,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label2,marginBottom:6}}>{oppName}</div>
-                          <div style={{fontSize:34,fontWeight:800,letterSpacing:-1.5,color:IOS.label2,lineHeight:1}}>{oppTotal}</div>
-                          <div style={{fontSize:10,color:IOS.label3,marginBottom:12}}>points</div>
-                          <div style={{display:"flex",gap:6}}>
-                            {[{n:oppWins,l:"W",c:IOS.green},{n:oppLosses,l:"L",c:IOS.red},{n:oppUserPicks.filter(p=>p.result==="pending").length,l:"P",c:IOS.blue}].map((s,i)=>(
-                              <div key={i} style={{flex:1,background:"rgba(0,0,0,0.2)",borderRadius:8,padding:"6px 4px",textAlign:"center"}}>
-                                <div style={{fontSize:16,fontWeight:800,color:s.c,letterSpacing:-0.5}}>{s.n}</div>
-                                <div style={{fontSize:9,fontWeight:600,color:IOS.label3,marginTop:1}}>{s.l}</div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"4px 16px 10px"}}>
+                        <div style={{fontSize:11,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",color:IOS.blue}}>You</div>
+                        <div style={{fontSize:10,color:"#333",fontWeight:800}}>VS</div>
+                        <div style={{fontSize:11,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",color:"#888"}}>{oppName}</div>
                       </div>
                     </div>
 
