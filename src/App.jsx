@@ -910,6 +910,9 @@ export default function App() {
  const [newLeagueName, setNewLeagueName] = useState("");
  const [newLeagueCreated, setNewLeagueCreated] = useState(null); // holds created league data for invite code screen
  const [newLeagueSize, setNewLeagueSize] = useState(8);
+ const [newLeagueType, setNewLeagueType] = useState(null); // 'h2h' | 'bracket' | 'points'
+ const [newLeagueWeeks, setNewLeagueWeeks] = useState(18);
+ const [newLeagueStep, setNewLeagueStep] = useState(0); // 0=type, 1=details
  const [advancingWeek, setAdvancingWeek] = useState(false);
  const [creatingLeague, setCreatingLeague] = useState(false);
 
@@ -927,10 +930,13 @@ export default function App() {
  if(!user||!name||!sportId) return;
  setCreatingLeague(true);
  const inviteCode = Math.random().toString(36).substring(2,8).toUpperCase();
+ const bracketWeeks = {4:2,8:3,16:4,32:5};
+ const seasonWeeks = newLeagueType==='bracket' ? (bracketWeeks[newLeagueSize]||3) : newLeagueWeeks;
  const {data,error} = await supabase.from("leagues").insert({
- name, sport:sportId, commissioner_id:user.id, invite_code:inviteCode,
- max_members:newLeagueSize, target_size:newLeagueSize, pick_deadline:"Sun 1PM ET", season_weeks:18,
- current_week:1, privacy:"private", scoring_type:"multiplier_odds",
+   name, sport:sportId, commissioner_id:user.id, invite_code:inviteCode,
+   max_members:newLeagueSize, target_size:newLeagueSize, pick_deadline:"Sun 1PM ET",
+   season_weeks:seasonWeeks, current_week:1, privacy:"private",
+   scoring_type:"multiplier_odds", league_type:newLeagueType||"h2h",
  }).select().single();
  if(error){alert(`leagues error: ${error.message} | code: ${error.code} | details: ${error.details}`);setCreatingLeague(false);return;}
  const {error:memberError} = await supabase.from("league_members").insert({league_id:data.id,user_id:user.id,is_commissioner:true});
@@ -1092,6 +1098,35 @@ export default function App() {
  });
  }
 
+ await supabase.from("matchups").insert(matchupsToInsert);
+ };
+
+ const generateBracket = async (leagueId, memberIds) => {
+ // Pure single-elimination bracket — sizes: 4=2wks, 8=3wks, 16=4wks, 32=5wks
+ const n = memberIds.length;
+ if(![4,8,16,32].includes(n)) return;
+ await supabase.from("matchups").delete().eq("league_id", leagueId);
+ const shuffled = [...memberIds].sort(()=>Math.random()-0.5);
+ const matchupsToInsert = [];
+ let week = 1;
+ let roundSize = n;
+ while(roundSize > 1) {
+   const matchesThisRound = roundSize / 2;
+   for(let i = 0; i < matchesThisRound; i++) {
+     matchupsToInsert.push({
+       league_id: leagueId,
+       week,
+       user1_id: week === 1 ? shuffled[i*2] : null,
+       user2_id: week === 1 ? shuffled[i*2+1] : null,
+       user1_points: 0,
+       user2_points: 0,
+       winner_id: null,
+       bracket_match_id: `W${week}M${i+1}`,
+     });
+   }
+   roundSize = matchesThisRound;
+   week++;
+ }
  await supabase.from("matchups").insert(matchupsToInsert);
  };
 
@@ -3875,7 +3910,7 @@ export default function App() {
  {/* ── NEW LEAGUE MODAL ── */}
  {showNewLeague && (
  <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.7)",zIndex:50,display:"flex",flexDirection:"column",justifyContent:"flex-end",backdropFilter:"blur(8px)"}}
- onClick={()=>{if(!newLeagueCreated){setShowNewLeague(false);setNewLeagueSport(null);setNewLeagueName("");setNewLeagueSize(8);}}}>
+ onClick={()=>{if(!newLeagueCreated){setShowNewLeague(false);setNewLeagueSport(null);setNewLeagueName("");setNewLeagueSize(8);setNewLeagueType(null);setNewLeagueStep(0);setNewLeagueWeeks(18);}}}>
  <div style={{background:IOS.bg2,borderRadius:"20px 20px 0 0",padding:"0 0 40px"}} onClick={e=>e.stopPropagation()}>
  <div style={{width:36,height:5,borderRadius:3,background:"rgba(255,255,255,0.2)",margin:"10px auto 0"}}/>
 
@@ -3907,77 +3942,163 @@ export default function App() {
  setNewLeagueSport(null);
  setNewLeagueName("");
  setNewLeagueSize(8);
+ setNewLeagueType(null);
+ setNewLeagueStep(0);
+ setNewLeagueWeeks(18);
  }} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:14,padding:"16px",fontFamily:"Barlow,sans-serif",fontSize:17,fontWeight:600,color:"#fff",cursor:"pointer"}}>
  Go to My League →
  </button>
  </div>
  ) : (
  <div style={{padding:"20px 20px 0"}}>
- <div style={{fontSize:22,fontWeight:800,letterSpacing:-0.5,color:"#fff",marginBottom:4}}>New League</div>
- <div style={{fontSize:14,color:IOS.label3,marginBottom:20}}>Pick a sport and name your league</div>
-
- {/* Sport selector */}
- <div style={{fontSize:11,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:IOS.label3,marginBottom:10}}>Sport</div>
- <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:20}}>
- {[
- {id:"nfl", icon:"", label:"NFL", color:IOS.blue},
- {id:"nba", icon:"", label:"NBA", color:"#FF6B35"},
- {id:"mlb", icon:"", label:"MLB", color:IOS.green},
- ].map(sp=>(
- <div key={sp.id} onClick={()=>setNewLeagueSport(sp.id)}
- style={{borderRadius:14,padding:"14px 8px",textAlign:"center",cursor:"pointer",transition:"all .15s",
- background:newLeagueSport===sp.id?`${sp.color}20`:"rgba(255,255,255,0.05)",
- border:`1.5px solid ${newLeagueSport===sp.id?sp.color:"rgba(255,255,255,0.08)"}`,
- }}>
- <div style={{fontSize:26,marginBottom:6}}></div>
- <div style={{fontSize:13,fontWeight:700,color:newLeagueSport===sp.id?sp.color:"rgba(255,255,255,0.6)"}}>{sp.label}</div>
- </div>
- ))}
+ {/* Step indicator */}
+ <div style={{display:"flex",gap:5,marginBottom:16}}>
+   {[0,1].map(i=><div key={i} style={{flex:1,height:3,borderRadius:2,background:newLeagueStep>=i?IOS.blue:"#1E1E1E",transition:"background .2s"}}/>)}
  </div>
 
- {/* League name input */}
- <div style={{fontSize:11,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:IOS.label3,marginBottom:10}}>League Name</div>
- <input
- value={newLeagueName}
- onChange={e=>setNewLeagueName(e.target.value)}
- placeholder="e.g. The Boys League"
- style={{width:"100%",background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"14px 16px",color:"#fff",fontSize:16,fontFamily:"Barlow,sans-serif",outline:"none",marginBottom:24,boxSizing:"border-box"}}
- />
+ {/* ── STEP 0: League type ── */}
+ {newLeagueStep===0&&(
+   <>
+   <div style={{fontSize:18,fontWeight:800,color:"#fff",marginBottom:4}}>What kind of league?</div>
+   <div style={{fontSize:13,color:"#555",marginBottom:16}}>Choose a format for your league</div>
+   {[
+     {id:"h2h",icon:"ti-users",label:"Head-to-head",desc:"Weekly matchups + seeded playoffs"},
+     {id:"points",icon:"ti-chart-bar",label:"Total points",desc:"Everyone competes simultaneously, ranked by cumulative points"},
+     {id:"bracket",icon:"ti-tournament",label:"Tournament",desc:"Single-elimination bracket. 4, 8, 16, or 32 players only.",badge:"New"},
+   ].map(t=>(
+     <div key={t.id} onClick={()=>{
+       setNewLeagueType(t.id);
+       if(t.id==='h2h'&&![6,8,10,12].includes(newLeagueSize)) setNewLeagueSize(8);
+       if(t.id==='bracket'&&![4,8,16,32].includes(newLeagueSize)) setNewLeagueSize(8);
+     }} style={{
+       display:"flex",alignItems:"flex-start",gap:12,borderRadius:10,padding:"13px 14px",
+       marginBottom:8,cursor:"pointer",transition:"all .15s",
+       background:newLeagueType===t.id?"rgba(10,132,255,0.08)":"#111",
+       border:`0.5px solid ${newLeagueType===t.id?"rgba(10,132,255,0.35)":"#1E1E1E"}`,
+     }}>
+       <div style={{width:36,height:36,borderRadius:8,background:newLeagueType===t.id?"rgba(10,132,255,0.15)":"#1A1A1A",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"background .15s"}}>
+         <i className={"ti "+t.icon} style={{fontSize:18,color:newLeagueType===t.id?IOS.blue:"#555"}} aria-hidden="true"/>
+       </div>
+       <div>
+         <div style={{fontSize:14,fontWeight:700,color:newLeagueType===t.id?"#fff":"#888",marginBottom:3}}>
+           {t.label}
+           {t.badge&&<span style={{display:"inline-flex",alignItems:"center",background:"rgba(255,159,10,0.12)",border:"0.5px solid rgba(255,159,10,0.3)",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:700,color:"#FF9F0A",marginLeft:7}}>{t.badge}</span>}
+         </div>
+         <div style={{fontSize:11,color:"#555",lineHeight:1.4}}>{t.desc}</div>
+       </div>
+     </div>
+   ))}
+   <button
+     disabled={!newLeagueType}
+     onClick={()=>{if(newLeagueType) setNewLeagueStep(1);}}
+     style={{width:"100%",background:newLeagueType?IOS.blue:"rgba(255,255,255,0.08)",border:"none",borderRadius:10,padding:"13px",fontFamily:"Barlow,sans-serif",fontSize:15,fontWeight:700,color:newLeagueType?"#fff":"rgba(255,255,255,0.25)",cursor:newLeagueType?"pointer":"default",marginTop:8,marginBottom:4,transition:"all .2s"}}
+   >
+     Continue
+   </button>
+   </>
+ )}
 
- {/* Commish Pro toggle */}
- <div style={{background:IOS.bg2,borderRadius:12,padding:"12px 14px",marginBottom:20,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-   <div>
-     <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>Commish Pro</div>
-     <div style={{fontSize:11,color:IOS.label3,marginTop:2}}>Custom picks, multi-sport, power-ups</div>
+ {/* ── STEP 1: Details ── */}
+ {newLeagueStep===1&&(
+   <>
+   <button onClick={()=>setNewLeagueStep(0)} style={{background:"none",border:"none",color:"#555",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"Barlow,sans-serif",padding:"0 0 14px",display:"flex",alignItems:"center",gap:4}}>
+     <i className="ti ti-arrow-left" style={{fontSize:14}} aria-hidden="true"/> Back
+   </button>
+
+   {/* Sports */}
+   <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"#555",marginBottom:8}}>Sport</div>
+   <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:16}}>
+   {[
+     {id:"nfl",label:"NFL"},{id:"nba",label:"NBA"},{id:"mlb",label:"MLB"},{id:"nhl",label:"NHL"},
+   ].map(sp=>(
+     <div key={sp.id} onClick={()=>{
+       const cur=newLeagueSport===sp.id?null:sp.id;
+       setNewLeagueSport(cur);
+     }} style={{padding:"7px 14px",borderRadius:6,fontSize:12,fontWeight:600,cursor:"pointer",transition:"all .15s",
+       background:newLeagueSport===sp.id?"rgba(10,132,255,0.12)":"#111",
+       border:`0.5px solid ${newLeagueSport===sp.id?"rgba(10,132,255,0.4)":"#222"}`,
+       color:newLeagueSport===sp.id?IOS.blue:"#666",
+     }}>{sp.label}</div>
+   ))}
    </div>
-   <div onClick={()=>isPro?setIsPro(false):setShowPaywall("settings")} style={{width:44,height:26,borderRadius:13,background:isPro?IOS.blue:"#2A2A2A",border:`1px solid ${isPro?IOS.blue:"#3A3A3A"}`,position:"relative",cursor:"pointer",transition:"background .2s"}}>
-     <div style={{position:"absolute",top:2,left:isPro?18:2,width:22,height:22,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
+
+   {/* League name */}
+   <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"#555",marginBottom:8}}>League name</div>
+   <input
+     value={newLeagueName}
+     onChange={e=>setNewLeagueName(e.target.value)}
+     placeholder="e.g. The Boys League"
+     style={{width:"100%",background:"#111",border:"0.5px solid #222",borderRadius:8,padding:"11px 13px",color:"#fff",fontSize:14,fontFamily:"Barlow,sans-serif",outline:"none",marginBottom:16,boxSizing:"border-box"}}
+   />
+
+   {/* Size */}
+   <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"#555",marginBottom:8}}>
+     {newLeagueType==="bracket"?"Tournament size":"League size"}
    </div>
- </div>
+   {newLeagueType==="points"?(
+     <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
+       <div onClick={()=>setNewLeagueSize(s=>Math.max(2,s-1))} style={{width:28,height:28,borderRadius:6,background:"#1A1A1A",border:"0.5px solid #2A2A2A",color:"#ccc",fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>−</div>
+       <div style={{fontSize:16,fontWeight:700,color:"#fff",minWidth:28,textAlign:"center"}}>{newLeagueSize}</div>
+       <div onClick={()=>setNewLeagueSize(s=>Math.min(32,s+1))} style={{width:28,height:28,borderRadius:6,background:"#1A1A1A",border:"0.5px solid #2A2A2A",color:"#ccc",fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>+</div>
+       <div style={{fontSize:12,color:"#555",marginLeft:4}}>players (2–32)</div>
+     </div>
+   ):(
+     <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:4}}>
+     {(newLeagueType==="bracket"?[4,8,16,32]:[6,8,10,12]).map(sz=>(
+       <div key={sz} onClick={()=>setNewLeagueSize(sz)} style={{
+         flex:1,minWidth:52,borderRadius:8,padding:"10px 4px",textAlign:"center",cursor:"pointer",transition:"all .15s",
+         background:newLeagueSize===sz?"rgba(10,132,255,0.12)":"#111",
+         border:`0.5px solid ${newLeagueSize===sz?"rgba(10,132,255,0.4)":"#222"}`,
+       }}>
+         <div style={{fontSize:18,fontWeight:800,color:newLeagueSize===sz?IOS.blue:"#666"}}>{sz}</div>
+         <div style={{fontSize:10,color:"#555",marginTop:2}}>players</div>
+       </div>
+     ))}
+     </div>
+   )}
+   {newLeagueType==="bracket"&&(
+     <div style={{background:"rgba(255,159,10,0.07)",border:"0.5px solid rgba(255,159,10,0.2)",borderRadius:8,padding:"9px 12px",marginBottom:12,marginTop:8}}>
+       <div style={{display:"flex",justifyContent:"space-between",fontSize:11,padding:"2px 0"}}><span style={{color:"rgba(255,159,10,0.7)"}}>Duration</span><span style={{fontWeight:700,color:"#FF9F0A"}}>{({4:2,8:3,16:4,32:5})[newLeagueSize]||3} weeks</span></div>
+       <div style={{display:"flex",justifyContent:"space-between",fontSize:11,padding:"2px 0"}}><span style={{color:"rgba(255,159,10,0.7)"}}>Format</span><span style={{fontWeight:700,color:"#FF9F0A"}}>Single elimination</span></div>
+       <div style={{display:"flex",justifyContent:"space-between",fontSize:11,padding:"2px 0"}}><span style={{color:"rgba(255,159,10,0.7)"}}>Byes</span><span style={{fontWeight:700,color:"#FF9F0A"}}>None</span></div>
+     </div>
+   )}
 
- {/* League size picker */}
- <div style={{fontSize:11,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:IOS.label3,marginBottom:10}}>League Size</div>
- <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8,marginBottom:24}}>
- {[6,8,10,12].map(sz=>(
- <div key={sz} onClick={()=>setNewLeagueSize(sz)}
- style={{borderRadius:12,padding:"12px 4px",textAlign:"center",cursor:"pointer",transition:"all .15s",
- background:newLeagueSize===sz?`${IOS.blue}20`:"rgba(255,255,255,0.05)",
- border:`1.5px solid ${newLeagueSize===sz?IOS.blue:"rgba(255,255,255,0.08)"}`,
- }}>
- <div style={{fontSize:20,fontWeight:800,color:newLeagueSize===sz?IOS.blue:"rgba(255,255,255,0.6)"}}>{sz}</div>
- <div style={{fontSize:10,color:IOS.label3,marginTop:2}}>players</div>
- </div>
- ))}
- </div>
+   {/* Season weeks — h2h and points only */}
+   {newLeagueType!=="bracket"&&(
+     <>
+     <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"#555",marginBottom:8,marginTop:12}}>Season length</div>
+     <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
+       <div onClick={()=>setNewLeagueWeeks(w=>Math.max(1,w-1))} style={{width:28,height:28,borderRadius:6,background:"#1A1A1A",border:"0.5px solid #2A2A2A",color:"#ccc",fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>−</div>
+       <div style={{fontSize:16,fontWeight:700,color:"#fff",minWidth:28,textAlign:"center"}}>{newLeagueWeeks}</div>
+       <div onClick={()=>setNewLeagueWeeks(w=>Math.min(30,w+1))} style={{width:28,height:28,borderRadius:6,background:"#1A1A1A",border:"0.5px solid #2A2A2A",color:"#ccc",fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>+</div>
+       <div style={{fontSize:12,color:"#555",marginLeft:4}}>weeks</div>
+     </div>
+     <div style={{fontSize:11,color:"#444",marginBottom:16}}>{newLeagueType==="points"?"Ranked by total points at the end":"NFL regular season is 18 weeks"}</div>
+     </>
+   )}
 
- {/* Create button */}
- <button
- disabled={!newLeagueSport||!newLeagueName.trim()||creatingLeague}
- onClick={()=>createLeague(newLeagueName.trim(), newLeagueSport)}
- style={{width:"100%",background:newLeagueSport&&newLeagueName.trim()?IOS.blue:"rgba(255,255,255,0.1)",border:"none",borderRadius:14,padding:"16px",fontFamily:"Barlow,sans-serif",fontSize:17,fontWeight:600,color:newLeagueSport&&newLeagueName.trim()?"#fff":"rgba(255,255,255,0.3)",cursor:newLeagueSport&&newLeagueName.trim()?"pointer":"default",transition:"all .2s"}}
- >
- {creatingLeague ? "Creating..." : "Create League"}
- </button>
+   {/* Commish Pro toggle */}
+   <div style={{background:"#111",borderRadius:10,padding:"11px 13px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",border:"0.5px solid #1E1E1E"}}>
+     <div>
+       <div style={{fontSize:13,fontWeight:600,color:"#fff"}}>Commish Pro</div>
+       <div style={{fontSize:11,color:"#555",marginTop:2}}>Custom picks, multi-sport, power-ups</div>
+     </div>
+     <div onClick={()=>isPro?setIsPro(false):setShowPaywall("settings")} style={{width:44,height:26,borderRadius:13,background:isPro?IOS.blue:"#2A2A2A",border:`1px solid ${isPro?IOS.blue:"#3A3A3A"}`,position:"relative",cursor:"pointer",transition:"background .2s"}}>
+       <div style={{position:"absolute",top:2,left:isPro?18:2,width:22,height:22,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
+     </div>
+   </div>
+
+   {/* Create button */}
+   <button
+     disabled={!newLeagueSport||!newLeagueName.trim()||creatingLeague}
+     onClick={()=>createLeague(newLeagueName.trim(), newLeagueSport)}
+     style={{width:"100%",background:newLeagueSport&&newLeagueName.trim()?IOS.blue:"rgba(255,255,255,0.08)",border:"none",borderRadius:10,padding:"13px",fontFamily:"Barlow,sans-serif",fontSize:15,fontWeight:700,color:newLeagueSport&&newLeagueName.trim()?"#fff":"rgba(255,255,255,0.25)",cursor:newLeagueSport&&newLeagueName.trim()?"pointer":"default",transition:"all .2s",marginBottom:4}}
+   >
+     {creatingLeague?"Creating...":"Create League"}
+   </button>
+   </>
+ )}
  </div>
  )}
  </div>
@@ -4022,7 +4143,17 @@ export default function App() {
  if(joinError){alert("Error joining. You may already be a member.");return;}
  const {data:allMembers}=await supabase.from("league_members").select("user_id").eq("league_id",league.id);
  if(allMembers && allMembers.length === targetSize) {
- await generateSchedule(league.id, allMembers.map(m=>m.user_id), league.season_weeks||18);
+ const memberIds = allMembers.map(m=>m.user_id);
+   if((league.league_type||'h2h')==='bracket') {
+     await generateBracket(league.id, memberIds);
+   } else if((league.league_type||'h2h')==='h2h') {
+     if((league.league_type||'h2h')==='bracket') {
+     await generateBracket(league.id, memberIds);
+   } else if((league.league_type||'h2h')==='h2h') {
+     await generateSchedule(league.id, memberIds, league.season_weeks||18);
+   }
+   }
+   // points-only: no schedule generated
  alert(`Joined ${league.name}! League is full — schedule generated!`);
  } else {
  alert(`Joined ${league.name}! Welcome. ${targetSize-allMembers.length} more player${targetSize-allMembers.length!==1?"s":""} needed.`);
