@@ -759,6 +759,9 @@ export default function App() {
  {id:4, bet:null, mult:null, isParlay:false, parlayLegs:[]},
  ];
  const [flexPicks, setFlexPicks] = useState(EMPTY_FLEX);
+ const [isPro, setIsPro] = useState(false);
+ const [showPaywall, setShowPaywall] = useState(null);
+ const [showPostLeagueUpsell, setShowPostLeagueUpsell] = useState(false);
  const [activeFlexSlot, setActiveFlexSlot] = useState(null); // index of slot being edited
  const [flexCategory, setFlexCategory] = useState(null); // category being browsed
  const [longshotMode, setLongshotMode] = useState("straight"); // "straight" | "parlay" — for longshot sheet
@@ -934,6 +937,7 @@ export default function App() {
  if(memberError){alert(`league_members error: ${memberError.message} | code: ${memberError.code}`);setCreatingLeague(false);return;}
  await fetchLeagues(user.id);
  setNewLeagueCreated(data);
+ setTimeout(()=>setShowPostLeagueUpsell(true), 800);
  setCreatingLeague(false);
  };
 
@@ -2433,6 +2437,17 @@ export default function App() {
  </div>
  </div>
  </div>
+ {/* Commish Pro soft banner */}
+ {!isPro && realLeagues.some(lg=>lg.isCommissioner) && (
+   <div style={{margin:"10px 0 0",background:"rgba(10,132,255,0.08)",border:"0.5px solid rgba(10,132,255,0.2)",borderRadius:8,padding:"9px 12px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}} onClick={()=>setShowPaywall("settings")}>
+     <div>
+       <div style={{fontSize:12,fontWeight:600,color:IOS.blue}}>Unlock Commish Pro</div>
+       <div style={{fontSize:11,color:"#555",marginTop:1}}>Custom picks, multi-sport, power-ups</div>
+     </div>
+     <div style={{fontSize:11,fontWeight:700,color:IOS.blue,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.25)",borderRadius:6,padding:"4px 9px",whiteSpace:"nowrap"}}>$5/mo</div>
+   </div>
+ )}
+
  {/* League toggle */}
  <div style={{display:"flex",gap:6,marginTop:10,marginBottom:2,overflowX:"auto",paddingBottom:2}}>
  {realLeagues.map(lg=>{
@@ -3105,6 +3120,17 @@ export default function App() {
  )}
  </div>
  </div>
+ )}
+
+ {/* Commish Pro: locked extra slot for non-pro users */}
+ {!isPro && !submitted && (
+   <div onClick={()=>setShowPaywall("picks")} style={{margin:"0 16px 8px",background:"#0A0A0A",border:"0.5px dashed #333",borderRadius:14,padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",opacity:0.8}}>
+     <div style={{fontSize:13,color:"#555"}}>Add more picks</div>
+     <div style={{display:"flex",alignItems:"center",gap:6,background:"rgba(10,132,255,0.1)",border:"0.5px solid rgba(10,132,255,0.25)",borderRadius:6,padding:"3px 8px"}}>
+       <i className="ti ti-lock" style={{fontSize:12,color:IOS.blue}} aria-hidden="true"/>
+       <span style={{fontSize:10,fontWeight:700,color:IOS.blue}}>Commish Pro</span>
+     </div>
+   </div>
  )}
 
  {/* Submitted */}
@@ -3918,6 +3944,17 @@ export default function App() {
  style={{width:"100%",background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"14px 16px",color:"#fff",fontSize:16,fontFamily:"Barlow,sans-serif",outline:"none",marginBottom:24,boxSizing:"border-box"}}
  />
 
+ {/* Commish Pro toggle */}
+ <div style={{background:IOS.bg2,borderRadius:12,padding:"12px 14px",marginBottom:20,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+   <div>
+     <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>Commish Pro</div>
+     <div style={{fontSize:11,color:IOS.label3,marginTop:2}}>Custom picks, multi-sport, power-ups</div>
+   </div>
+   <div onClick={()=>isPro?setIsPro(false):setShowPaywall("settings")} style={{width:44,height:26,borderRadius:13,background:isPro?IOS.blue:"#2A2A2A",border:`1px solid ${isPro?IOS.blue:"#3A3A3A"}`,position:"relative",cursor:"pointer",transition:"background .2s"}}>
+     <div style={{position:"absolute",top:2,left:isPro?18:2,width:22,height:22,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
+   </div>
+ </div>
+
  {/* League size picker */}
  <div style={{fontSize:11,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:IOS.label3,marginBottom:10}}>League Size</div>
  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8,marginBottom:24}}>
@@ -4382,6 +4419,33 @@ export default function App() {
  {/* SETTINGS tab */}
  {commishTab==="settings"&&(
  <>
+ {/* ── Commish Pro toggle ── */}
+ <div style={{margin:"0 16px 12px",background:IOS.bg2,borderRadius:16,overflow:"hidden",border:"1px solid rgba(255,255,255,0.07)"}}>
+   <div style={{padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+     <div>
+       <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>Commish Pro</div>
+       <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>{isPro?"Active — full league control":"Unlock custom picks, sports, and more"}</div>
+     </div>
+     <div onClick={()=>isPro?setIsPro(false):setShowPaywall("settings")} style={{width:51,height:31,borderRadius:16,background:isPro?IOS.blue:"#2A2A2A",border:`1px solid ${isPro?IOS.blue:"#3A3A3A"}`,position:"relative",cursor:"pointer",transition:"background .2s"}}>
+       <div style={{position:"absolute",top:3,left:isPro?22:3,width:25,height:25,borderRadius:"50%",background:"#fff",transition:"left .2s",boxShadow:"0 1px 3px rgba(0,0,0,0.4)"}}/>
+     </div>
+   </div>
+   {isPro&&(
+     <div style={{padding:"0 16px 12px",borderTop:`0.5px solid ${IOS.sep}`}}>
+       {[{label:"Max picks per week",val:"Unlimited"},
+         {label:"Sports",val:"NFL, NBA, MLB, NHL"},
+         {label:"Multiplier range",val:"Custom"},
+         {label:"Power-ups",val:"Enabled"},
+       ].map((r,i)=>(
+         <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:i<3?`0.5px solid ${IOS.sep}`:"none"}}>
+           <div style={{fontSize:13,color:IOS.label3}}>{r.label}</div>
+           <div style={{fontSize:13,fontWeight:600,color:IOS.blue}}>{r.val}</div>
+         </div>
+       ))}
+     </div>
+   )}
+ </div>
+
  {/* ── Week Management ── */}
  <div style={{margin:"0 16px 12px",background:IOS.bg2,borderRadius:16,overflow:"hidden",border:"1px solid rgba(255,255,255,0.07)"}}>
  <div style={{padding:"12px 16px",borderBottom:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
@@ -5113,6 +5177,20 @@ export default function App() {
 
  {profTab==="power-ups"&&(
  <div style={{paddingBottom:24}}>
+ {!isPro && (
+   <div style={{margin:"16px 16px 0",background:"#0A0A0A",border:"0.5px solid #1E1E1E",borderRadius:14,padding:"24px 20px",textAlign:"center"}}>
+     <div style={{width:48,height:48,borderRadius:12,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.25)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 12px"}}>
+       <i className="ti ti-bolt" style={{fontSize:24,color:IOS.blue}} aria-hidden="true"/>
+     </div>
+     <div style={{fontSize:16,fontWeight:700,color:"#fff",marginBottom:6}}>Power-ups are a Pro feature</div>
+     <div style={{fontSize:13,color:"#666",marginBottom:16,lineHeight:1.5}}>Upgrade to Commish Pro to unlock Double Down, Mulligan, Shield, and more.</div>
+     <button onClick={()=>setShowPaywall("powerups")} style={{background:IOS.blue,color:"#fff",border:"none",borderRadius:8,padding:"12px 24px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
+       Unlock Power-ups
+     </button>
+   </div>
+ )}
+ {isPro&&(
+ <>
  {/* League toggle */}
  {realLeagues.length > 1 && (
  <div style={{overflowX:"auto",display:"flex",gap:8,padding:"10px 16px 4px",scrollbarWidth:"none"}}>
@@ -5180,6 +5258,8 @@ export default function App() {
  <div style={{fontSize:10,fontWeight:700,color:rarityColor(pu.rarity),background:`${rarityColor(pu.rarity)}15`,border:`1px solid ${rarityColor(pu.rarity)}30`,padding:"3px 8px",borderRadius:6,whiteSpace:"nowrap"}}>{pu.rarity}</div>
  </div>
  ))}
+ </>
+ )}
  </div>
  )}
 
@@ -5630,6 +5710,74 @@ export default function App() {
  )}
  </div>
  </div>
+ )}
+
+ {/* ══ PAYWALL SHEET ══ */}
+ {showPaywall && (()=>{
+   const configs = {
+     picks:{icon:"ti-plus",title:"Unlimited picks",sub:"Commish Pro lets you add as many pick slots as you want each week.",features:["Unlimited pick slots per week","Custom multipliers on any slot","NFL, NBA, MLB, NHL","Power-ups and custom bet types"]},
+     settings:{icon:"ti-settings",title:"Custom league settings",sub:"Set your own pick counts, multiplier ranges, and allowed bet types.",features:["Custom pick count per week","Custom multiplier ranges","Restrict or expand bet types","Multi-sport leagues"]},
+     sport:{icon:"ti-world",title:"Multi-sport leagues",sub:"Run your league across NFL, NBA, MLB, and NHL — all in one place.",features:["NFL, NBA, MLB, NHL support","Custom pick counts and bet types","Custom multiplier ranges","Power-ups for your league"]},
+     powerups:{icon:"ti-bolt",title:"Power-ups are a Pro feature",sub:"Double Down, Mulligan, Shield and more are unlocked with Commish Pro.",features:["All current and future power-ups","Unlimited picks and custom settings","Multi-sport league support"]},
+   };
+   const cfg = configs[showPaywall]||configs.picks;
+   return (
+     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:9999,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>setShowPaywall(null)}>
+       <div style={{background:"#111",borderRadius:"20px 20px 0 0",padding:"0 0 40px",border:"0.5px solid #1E1E1E"}} onClick={e=>e.stopPropagation()}>
+         <div style={{width:36,height:4,background:"#2A2A2A",borderRadius:2,margin:"12px auto 20px"}}/>
+         <div style={{padding:"0 20px"}}>
+           <div style={{width:44,height:44,borderRadius:10,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.25)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:12}}>
+             <i className={"ti "+cfg.icon} style={{fontSize:22,color:IOS.blue}} aria-hidden="true"/>
+           </div>
+           <div style={{fontSize:18,fontWeight:700,color:"#fff",marginBottom:4}}>{cfg.title}</div>
+           <div style={{fontSize:13,color:"#666",marginBottom:16,lineHeight:1.5}}>{cfg.sub}</div>
+           {cfg.features.map((f,i)=>(
+             <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:"0.5px solid #1A1A1A"}}>
+               <div style={{width:6,height:6,borderRadius:"50%",background:IOS.blue,flexShrink:0}}/>
+               <div style={{fontSize:13,color:"#ccc"}}>{f}</div>
+             </div>
+           ))}
+           <button onClick={()=>{setIsPro(true);setShowPaywall(null);}} style={{display:"block",width:"100%",background:IOS.blue,color:"#fff",border:"none",borderRadius:8,padding:13,fontSize:14,fontWeight:700,textAlign:"center",marginTop:16,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
+             Upgrade to Commish Pro — $5/mo
+           </button>
+           <button onClick={()=>setShowPaywall(null)} style={{display:"block",width:"100%",background:"none",border:"none",color:"#555",fontSize:12,textAlign:"center",marginTop:10,cursor:"pointer",fontFamily:"Barlow,sans-serif",padding:4}}>
+             Not now
+           </button>
+         </div>
+       </div>
+     </div>
+   );
+ })()}
+
+ {/* ══ POST LEAGUE UPSELL ══ */}
+ {showPostLeagueUpsell && (
+   <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:9999,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>setShowPostLeagueUpsell(false)}>
+     <div style={{background:"#111",borderRadius:"20px 20px 0 0",padding:"0 0 40px",border:"0.5px solid #1E1E1E"}} onClick={e=>e.stopPropagation()}>
+       <div style={{width:36,height:4,background:"#2A2A2A",borderRadius:2,margin:"12px auto 20px"}}/>
+       <div style={{padding:"0 20px"}}>
+         <div style={{width:44,height:44,borderRadius:10,background:"rgba(48,209,88,0.12)",border:"0.5px solid rgba(48,209,88,0.25)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:12}}>
+           <i className="ti ti-circle-check" style={{fontSize:22,color:"#30D158"}} aria-hidden="true"/>
+         </div>
+         <div style={{fontSize:18,fontWeight:700,color:"#fff",marginBottom:4}}>Your league is live</div>
+         <div style={{fontSize:13,color:"#666",marginBottom:16,lineHeight:1.5}}>Want more control over how your league works?</div>
+         <div style={{background:"#0A0A0A",border:"0.5px solid #1E1E1E",borderRadius:8,padding:"12px",marginBottom:16}}>
+           <div style={{fontSize:10,fontWeight:700,color:IOS.blue,letterSpacing:.5,textTransform:"uppercase",marginBottom:10}}>Commish Pro unlocks</div>
+           {["Set custom pick counts per week","Add NBA, MLB, or NHL picks","Unlock power-ups for your league"].map((f,i)=>(
+             <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:i<2?"0.5px solid #1A1A1A":"none"}}>
+               <div style={{width:6,height:6,borderRadius:"50%",background:IOS.blue,flexShrink:0}}/>
+               <div style={{fontSize:13,color:"#ccc"}}>{f}</div>
+             </div>
+           ))}
+         </div>
+         <button onClick={()=>{setIsPro(true);setShowPostLeagueUpsell(false);}} style={{display:"block",width:"100%",background:IOS.blue,color:"#fff",border:"none",borderRadius:8,padding:13,fontSize:14,fontWeight:700,textAlign:"center",marginBottom:10,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
+           Upgrade to Commish Pro — $5/mo
+         </button>
+         <button onClick={()=>setShowPostLeagueUpsell(false)} style={{display:"block",width:"100%",background:"none",border:"none",color:"#555",fontSize:12,textAlign:"center",cursor:"pointer",fontFamily:"Barlow,sans-serif",padding:4}}>
+           I'm good with free for now
+         </button>
+       </div>
+     </div>
+   </div>
  )}
 
  {/* ══ TAB BAR ══ */}
