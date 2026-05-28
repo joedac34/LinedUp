@@ -910,7 +910,12 @@ export default function App() {
  const [newLeagueName, setNewLeagueName] = useState("");
  const [newLeagueCreated, setNewLeagueCreated] = useState(null); // holds created league data for invite code screen
  const [newLeagueSize, setNewLeagueSize] = useState(8);
- const [newLeagueType, setNewLeagueType] = useState(null); // 'h2h' | 'bracket' | 'points'
+ const [newLeagueType, setNewLeagueType] = useState(null);
+ const [showBrowse, setShowBrowse] = useState(false);
+ const [publicLeagues, setPublicLeagues] = useState([]);
+ const [browseFilter, setBrowseFilter] = useState({sport:"all", picks:"all", type:"all"});
+ const [browseLoading, setBrowseLoading] = useState(false);
+ const [joiningLeagueId, setJoiningLeagueId] = useState(null); // 'h2h' | 'bracket' | 'points'
  const [newLeagueWeeks, setNewLeagueWeeks] = useState(18);
  const [newLeagueStep, setNewLeagueStep] = useState(0); // 0=type, 1=details
  const [advancingWeek, setAdvancingWeek] = useState(false);
@@ -1099,6 +1104,56 @@ export default function App() {
  }
 
  await supabase.from("matchups").insert(matchupsToInsert);
+ };
+
+ const fetchPublicLeagues = async () => {
+ setBrowseLoading(true);
+ try {
+   const {data} = await supabase
+     .from("leagues")
+     .select("*, league_members(count)")
+     .eq("privacy", "public")
+     .order("created_at", {ascending:false})
+     .limit(50);
+   if(data) {
+     // Filter out full leagues and leagues user is already in
+     const myLeagueIds = realLeagues.map(l=>l.id);
+     const filtered = data.filter(lg=>{
+       const memberCount = lg.league_members?.[0]?.count || 0;
+       const maxSize = lg.target_size||lg.max_members||8;
+       return memberCount < maxSize && !myLeagueIds.includes(lg.id);
+     });
+     setPublicLeagues(filtered);
+   }
+ } catch(e) { console.error("fetchPublicLeagues error:", e); }
+ setBrowseLoading(false);
+ };
+
+ const joinPublicLeague = async (league) => {
+ if(joiningLeagueId) return;
+ setJoiningLeagueId(league.id);
+ try {
+   const {data:currentMembers} = await supabase.from("league_members").select("user_id").eq("league_id",league.id);
+   const targetSize = league.target_size||league.max_members||8;
+   if(currentMembers && currentMembers.length >= targetSize) {
+     alert("This league just filled up!");
+     setJoiningLeagueId(null);
+     fetchPublicLeagues();
+     return;
+   }
+   const {error:joinError} = await supabase.from("league_members").insert({league_id:league.id,user_id:user.id,is_commissioner:false});
+   if(joinError) { alert("Error joining. You may already be a member."); setJoiningLeagueId(null); return; }
+   const {data:allMembers} = await supabase.from("league_members").select("user_id").eq("league_id",league.id);
+   if(allMembers && allMembers.length === targetSize) {
+     const memberIds = allMembers.map(m=>m.user_id);
+     if((league.league_type||"h2h")==="bracket") await generateBracket(league.id, memberIds);
+     else if((league.league_type||"h2h")==="h2h") await generateSchedule(league.id, memberIds, league.season_weeks||18);
+   }
+   await fetchLeagues(user.id);
+   setShowBrowse(false);
+   alert(`Joined ${league.name}!`);
+ } catch(e) { alert("Something went wrong."); }
+ setJoiningLeagueId(null);
  };
 
  const generateBracket = async (leagueId, memberIds) => {
@@ -4150,11 +4205,7 @@ export default function App() {
    if((league.league_type||'h2h')==='bracket') {
      await generateBracket(league.id, memberIds);
    } else if((league.league_type||'h2h')==='h2h') {
-     if((league.league_type||'h2h')==='bracket') {
-     await generateBracket(league.id, memberIds);
-   } else if((league.league_type||'h2h')==='h2h') {
      await generateSchedule(league.id, memberIds, league.season_weeks||18);
-   }
    }
    // points-only: no schedule generated
  alert(`Joined ${league.name}! League is full — schedule generated!`);
@@ -4242,6 +4293,19 @@ export default function App() {
  <div style={{fontSize:12,color:IOS.label3}}>Enter an invite code from a friend</div>
  </div>
  </div>
+
+ {/* Browse Public Leagues button */}
+ <div onClick={()=>{setShowBrowse(true);fetchPublicLeagues();}}
+ style={{margin:"0 16px 16px",background:"rgba(10,132,255,0.08)",borderRadius:16,padding:"16px 18px",border:"0.5px solid rgba(10,132,255,0.25)",cursor:"pointer",display:"flex",alignItems:"center",gap:14}}>
+ <div style={{width:44,height:44,borderRadius:12,background:"rgba(10,132,255,0.12)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+   <i className="ti ti-world" style={{fontSize:22,color:IOS.blue}} aria-hidden="true"/>
+ </div>
+ <div>
+   <div style={{fontSize:15,fontWeight:700,color:"#fff",marginBottom:2}}>Browse Public Leagues</div>
+   <div style={{fontSize:12,color:IOS.label3}}>Find and join open leagues</div>
+ </div>
+ </div>
+
  </div>
  </>
  )}
@@ -5843,6 +5907,102 @@ export default function App() {
  </div>
  )}
  </div>
+ </div>
+ )}
+
+ {/* ══ BROWSE PUBLIC LEAGUES SHEET ══ */}
+ {showBrowse&&(
+ <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:9998,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>setShowBrowse(false)}>
+   <div style={{background:"#111",borderRadius:"20px 20px 0 0",maxHeight:"85vh",display:"flex",flexDirection:"column",border:"0.5px solid #1E1E1E"}} onClick={e=>e.stopPropagation()}>
+     <div style={{width:36,height:4,background:"#2A2A2A",borderRadius:2,margin:"12px auto 0"}}/>
+
+     {/* Header */}
+     <div style={{padding:"12px 20px 10px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"0.5px solid #1A1A1A",flexShrink:0}}>
+       <div style={{fontSize:17,fontWeight:700,color:"#fff"}}>Browse Leagues</div>
+       <div onClick={()=>setShowBrowse(false)} style={{fontSize:13,fontWeight:600,color:IOS.blue,cursor:"pointer"}}>Done</div>
+     </div>
+
+     {/* Filters */}
+     <div style={{padding:"10px 16px 8px",borderBottom:"0.5px solid #1A1A1A",flexShrink:0}}>
+       <div style={{display:"flex",gap:6,overflowX:"auto",scrollbarWidth:"none",paddingBottom:2}}>
+         {/* Sport filter */}
+         {[{id:"all",l:"All Sports"},{id:"nfl",l:"NFL"},{id:"nba",l:"NBA"},{id:"mlb",l:"MLB"},{id:"nhl",l:"NHL"}].map(f=>(
+           <div key={f.id} onClick={()=>setBrowseFilter(prev=>({...prev,sport:f.id}))}
+           style={{padding:"5px 12px",borderRadius:6,fontSize:11,fontWeight:700,whiteSpace:"nowrap",cursor:"pointer",flexShrink:0,
+             background:browseFilter.sport===f.id?"rgba(10,132,255,0.15)":"#1A1A1A",
+             border:`0.5px solid ${browseFilter.sport===f.id?"rgba(10,132,255,0.4)":"#2A2A2A"}`,
+             color:browseFilter.sport===f.id?IOS.blue:"#666"}}>{f.l}</div>
+         ))}
+       </div>
+       <div style={{display:"flex",gap:6,marginTop:6,overflowX:"auto",scrollbarWidth:"none"}}>
+         {/* League type filter */}
+         {[{id:"all",l:"Any Type"},{id:"h2h",l:"Head-to-head"},{id:"bracket",l:"Tournament"},{id:"points",l:"Total Points"}].map(f=>(
+           <div key={f.id} onClick={()=>setBrowseFilter(prev=>({...prev,type:f.id}))}
+           style={{padding:"5px 12px",borderRadius:6,fontSize:11,fontWeight:700,whiteSpace:"nowrap",cursor:"pointer",flexShrink:0,
+             background:browseFilter.type===f.id?"rgba(10,132,255,0.15)":"#1A1A1A",
+             border:`0.5px solid ${browseFilter.type===f.id?"rgba(10,132,255,0.4)":"#2A2A2A"}`,
+             color:browseFilter.type===f.id?IOS.blue:"#666"}}>{f.l}</div>
+         ))}
+       </div>
+       <div style={{display:"flex",gap:6,marginTop:6,overflowX:"auto",scrollbarWidth:"none"}}>
+         {/* Picks per week filter */}
+         {[{id:"all",l:"Any picks"},{id:"5",l:"5 picks"},{id:"6",l:"6+ picks"}].map(f=>(
+           <div key={f.id} onClick={()=>setBrowseFilter(prev=>({...prev,picks:f.id}))}
+           style={{padding:"5px 12px",borderRadius:6,fontSize:11,fontWeight:700,whiteSpace:"nowrap",cursor:"pointer",flexShrink:0,
+             background:browseFilter.picks===f.id?"rgba(10,132,255,0.15)":"#1A1A1A",
+             border:`0.5px solid ${browseFilter.picks===f.id?"rgba(10,132,255,0.4)":"#2A2A2A"}`,
+             color:browseFilter.picks===f.id?IOS.blue:"#666"}}>{f.l}</div>
+         ))}
+       </div>
+     </div>
+
+     {/* League list */}
+     <div style={{overflowY:"auto",flex:1,padding:"8px 0 40px"}}>
+       {browseLoading ? (
+         <div style={{padding:"40px 20px",textAlign:"center",color:"#555",fontSize:14}}>Loading leagues...</div>
+       ) : (()=>{
+         const filtered = publicLeagues.filter(lg=>{
+           if(browseFilter.sport!=="all" && lg.sport!==browseFilter.sport) return false;
+           if(browseFilter.type!=="all" && (lg.league_type||"h2h")!==browseFilter.type) return false;
+           return true;
+         });
+         if(!filtered.length) return (
+           <div style={{padding:"40px 20px",textAlign:"center"}}>
+             <div style={{fontSize:14,color:"#555",marginBottom:8}}>No open leagues found</div>
+             <div style={{fontSize:12,color:"#333"}}>Try different filters or create your own</div>
+           </div>
+         );
+         return filtered.map(lg=>{
+           const memberCount = lg.league_members?.[0]?.count||0;
+           const maxSize = lg.target_size||lg.max_members||8;
+           const spotsLeft = maxSize - memberCount;
+           const typeLabels = {h2h:"Head-to-head",bracket:"Tournament",points:"Total points"};
+           const sport = SPORTS[lg.sport]||{label:lg.sport?.toUpperCase()||"?",color:IOS.blue};
+           const isJoining = joiningLeagueId===lg.id;
+           return (
+             <div key={lg.id} style={{margin:"0 16px 8px",background:"#0D0D0D",borderRadius:12,padding:"13px 14px",border:"0.5px solid #1E1E1E",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+               <div style={{flex:1,minWidth:0}}>
+                 <div style={{fontSize:14,fontWeight:700,color:"#fff",marginBottom:3}}>{lg.name}</div>
+                 <div style={{fontSize:11,color:"#555",marginBottom:4}}>
+                   {sport.label} · {typeLabels[lg.league_type||"h2h"]||"H2H"} · Wk {lg.season_weeks||18} season
+                 </div>
+                 <div style={{display:"flex",alignItems:"center",gap:8}}>
+                   <div style={{fontSize:10,fontWeight:700,color:IOS.green,background:"rgba(48,209,88,0.1)",border:"0.5px solid rgba(48,209,88,0.25)",borderRadius:5,padding:"2px 7px"}}>
+                     {spotsLeft} spot{spotsLeft!==1?"s":""} left
+                   </div>
+                   <div style={{fontSize:10,color:"#444"}}>{memberCount}/{maxSize} members</div>
+                 </div>
+               </div>
+               <button onClick={()=>joinPublicLeague(lg)} disabled={isJoining}
+               style={{background:isJoining?"#1A1A1A":IOS.blue,border:"none",borderRadius:8,padding:"9px 16px",fontSize:13,fontWeight:700,color:isJoining?"#555":"#fff",cursor:isJoining?"default":"pointer",fontFamily:"Barlow,sans-serif",flexShrink:0,whiteSpace:"nowrap"}}>
+                 {isJoining?"Joining...":"Join"}
+               </button>
+             </div>
+           );
+         });
+       })()}
+     </div>
+   </div>
  </div>
  )}
 
