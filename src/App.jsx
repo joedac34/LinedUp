@@ -918,6 +918,7 @@ export default function App() {
  const [joiningLeagueId, setJoiningLeagueId] = useState(null); // 'h2h' | 'bracket' | 'points'
  const [newLeagueWeeks, setNewLeagueWeeks] = useState(18);
  const [newLeagueStep, setNewLeagueStep] = useState(0); // 0=type, 1=details
+ const [newLeaguePrivacy, setNewLeaguePrivacy] = useState('private');
  const [advancingWeek, setAdvancingWeek] = useState(false);
  const [creatingLeague, setCreatingLeague] = useState(false);
 
@@ -940,7 +941,7 @@ export default function App() {
  const {data,error} = await supabase.from("leagues").insert({
    name, sport:sportId, commissioner_id:user.id, invite_code:inviteCode,
    max_members:newLeagueSize, target_size:newLeagueSize, pick_deadline:"Sun 1PM ET",
-   season_weeks:seasonWeeks, current_week:1, privacy:"private",
+   season_weeks:seasonWeeks, current_week:1, privacy:newLeaguePrivacy||"private",
    scoring_type:"multiplier_odds", league_type:newLeagueType||"h2h",
  }).select().single();
  if(error){alert(`leagues error: ${error.message} | code: ${error.code} | details: ${error.details}`);setCreatingLeague(false);return;}
@@ -3968,7 +3969,7 @@ export default function App() {
  {/* ── NEW LEAGUE MODAL ── */}
  {showNewLeague && (
  <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.7)",zIndex:50,display:"flex",flexDirection:"column",justifyContent:"flex-end",backdropFilter:"blur(8px)"}}
- onClick={()=>{if(!newLeagueCreated){setShowNewLeague(false);setNewLeagueSport(null);setNewLeagueName("");setNewLeagueSize(8);setNewLeagueType(null);setNewLeagueStep(0);setNewLeagueWeeks(18);}}}>
+ onClick={()=>{if(!newLeagueCreated){setShowNewLeague(false);setNewLeagueSport(null);setNewLeagueName("");setNewLeagueSize(8);setNewLeagueType(null);setNewLeagueStep(0);setNewLeagueWeeks(18);setNewLeaguePrivacy('private');}}}>
  <div style={{background:IOS.bg2,borderRadius:"20px 20px 0 0",padding:"0 0 40px"}} onClick={e=>e.stopPropagation()}>
  <div style={{width:36,height:5,borderRadius:3,background:"rgba(255,255,255,0.2)",margin:"10px auto 0"}}/>
 
@@ -4135,6 +4136,19 @@ export default function App() {
      <div style={{fontSize:11,color:"#444",marginBottom:16}}>{newLeagueType==="points"?"Ranked by total points at the end":"NFL regular season is 18 weeks"}</div>
      </>
    )}
+
+   {/* Visibility */}
+   <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"#555",marginBottom:8}}>Visibility</div>
+   <div style={{display:"flex",gap:6,marginBottom:16}}>
+   {[{id:"private",icon:"ti-lock",l:"Private",d:"Invite code only"},{id:"public",icon:"ti-world",l:"Public",d:"Anyone can find & join"}].map(v=>(
+     <div key={v.id} onClick={()=>setNewLeaguePrivacy(v.id)}
+     style={{flex:1,borderRadius:8,padding:"11px 10px",border:`0.5px solid ${newLeaguePrivacy===v.id?"rgba(10,132,255,0.4)":"#222"}`,background:newLeaguePrivacy===v.id?"rgba(10,132,255,0.1)":"#111",cursor:"pointer",textAlign:"center",transition:"all .15s"}}>
+       <i className={"ti "+v.icon} style={{fontSize:18,color:newLeaguePrivacy===v.id?IOS.blue:"#555",display:"block",marginBottom:4}} aria-hidden="true"/>
+       <div style={{fontSize:12,fontWeight:700,color:newLeaguePrivacy===v.id?IOS.blue:"#555"}}>{v.l}</div>
+       <div style={{fontSize:10,color:"#444",marginTop:2}}>{v.d}</div>
+     </div>
+   ))}
+   </div>
 
    {/* Commish Pro toggle */}
    <div style={{background:"#111",borderRadius:10,padding:"11px 13px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",border:"0.5px solid #1E1E1E"}}>
