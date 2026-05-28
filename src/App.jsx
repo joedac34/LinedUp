@@ -3843,8 +3843,8 @@ export default function App() {
  <span style={{fontSize:8,fontWeight:800,color:IOS.blue,letterSpacing:.4,textTransform:"uppercase"}}>{typeLabel}</span>
  <span style={{fontSize:8,fontWeight:800,padding:"2px 5px",borderRadius:4,background:badgeBg,color:badgeColor,flexShrink:0}}>{won?"W":lost?"L":"–"}</span>
  </div>
- <div style={{fontSize:10.5,fontWeight:600,color:"#ddd",lineHeight:1.3,marginTop:3}}>{pickName}</div>
- {gameCtx&&<div style={{fontSize:9,color:"#888",marginTop:1}}>{gameCtx}</div>}
+ <div style={{fontSize:10.5,fontWeight:600,color:"#ddd",lineHeight:1.3,marginTop:3,textAlign:"left"}}>{pickName}</div>
+ {gameCtx&&<div style={{fontSize:9,color:"#666",marginTop:1,textAlign:"left"}}>{gameCtx}</div>}
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:4}}>
  <span style={{fontSize:11,fontWeight:800,color:oddsColor}}>{oddsVal}</span>
  <span style={{fontSize:8.5,fontWeight:700,padding:"2px 5px",borderRadius:5,whiteSpace:"nowrap",background:ptsBg,color:ptsColor}}>{ptsLabel}</span>
