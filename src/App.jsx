@@ -2739,11 +2739,9 @@ export default function App() {
  </div>
  <div style={{borderTop:`0.5px solid rgba(255,255,255,0.06)`,paddingTop:6,marginBottom:6}}>
  {legs.map((b,j)=>(
-   <div key={j} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"3px 0"}}>
-     <div>
-       <div style={{fontSize:12,fontWeight:500,color:"rgba(255,255,255,0.75)"}}>{b.pick || b.pick_name || b.name || ""}</div>
-       {b.game&&<div style={{fontSize:10,color:"rgba(255,255,255,0.35)"}}>{b.game}</div>}
-     </div>
+   <div key={j} style={{padding:"3px 0"}}>
+     <div style={{fontSize:12,fontWeight:500,color:"rgba(255,255,255,0.75)",textAlign:"left"}}>{b.pick || b.pick_name || b.name || ""}</div>
+     {b.game&&<div style={{fontSize:10,color:"rgba(255,255,255,0.35)",textAlign:"left"}}>{b.game}</div>}
    </div>
  ))}
  </div>
@@ -3293,10 +3291,10 @@ export default function App() {
  {slot.parlayLegs.map((b,j)=>(
  <div key={j} style={{padding:"3px 0"}}>
    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-     <div style={{fontSize:12,fontWeight:500,color:"rgba(255,255,255,0.75)"}}>{b.pick}</div>
+     <div style={{fontSize:12,fontWeight:500,color:"rgba(255,255,255,0.75)",textAlign:"left"}}>{b.pick}</div>
      <div style={{fontSize:13,fontWeight:700,color:b.odds.startsWith("+")?IOS.green:IOS.blue,flexShrink:0,marginLeft:8}}>{b.odds}</div>
    </div>
-   {b.game&&<div style={{fontSize:10,color:"rgba(255,255,255,0.35)",marginTop:1}}>{b.game}</div>}
+   {b.game&&<div style={{fontSize:10,color:"rgba(255,255,255,0.35)",marginTop:1,textAlign:"left"}}>{b.game}</div>}
  </div>
  ))}
  </div>
@@ -3853,13 +3851,10 @@ export default function App() {
  {isParlay&&(
  <div id={expandId} style={{display:"none",marginTop:6,borderTop:"0.5px solid #1E1E3A",paddingTop:5}}>
  {picks.map((leg,li)=>(
- <div key={li} style={{display:"flex",alignItems:"flex-start",gap:5,padding:"3px 0",borderBottom:li<picks.length-1?"0.5px solid #111":"none"}}>
- <span style={{fontSize:8,fontWeight:800,color:IOS.blue,background:"rgba(10,132,255,0.1)",padding:"1px 4px",borderRadius:3,whiteSpace:"nowrap",flexShrink:0,textTransform:"uppercase"}}>
- {slotLabels[leg.slot_type]||"ML"}
- </span>
- <div style={{minWidth:0}}>
+ <div key={li} style={{display:"flex",alignItems:"flex-start",padding:"3px 0",borderBottom:li<picks.length-1?"0.5px solid #111":"none"}}>
+ <div style={{minWidth:0,textAlign:"left"}}>
  <div style={{fontSize:9.5,fontWeight:600,color:"#bbb",lineHeight:1.3}}>{leg.pick_name}</div>
- {leg.game&&<div style={{fontSize:8.5,color:"#555"}}>{leg.game}</div>}
+ {leg.game&&<div style={{fontSize:8.5,color:"#555",textAlign:"left"}}>{leg.game}</div>}
  </div>
  </div>
  ))}
