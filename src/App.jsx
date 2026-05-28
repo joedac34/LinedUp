@@ -1390,7 +1390,7 @@ export default function App() {
  mult: parseInt(mult),
  isParlay,
  parlayLegs: isParlay ? picks.map(p=>({id:p.id, pick:p.pick_name, game:"", odds:p.odds, impliedOdds:p.implied_odds})) : [],
- bet: isParlay ? null : {pick:picks[0].pick_name, game:"", odds:picks[0].odds, impliedOdds:picks[0].implied_odds},
+ bet: isParlay ? null : {pick:picks[0].pick_name, game:picks[0].game||"", odds:picks[0].odds, impliedOdds:picks[0].implied_odds},
  category: picks[0].slot,
  };
  });
