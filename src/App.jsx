@@ -1389,7 +1389,7 @@ export default function App() {
  id: parseInt(mult)-1,
  mult: parseInt(mult),
  isParlay,
- parlayLegs: isParlay ? picks.map(p=>({id:p.id, pick:p.pick_name, game:"", odds:p.odds, impliedOdds:p.implied_odds})) : [],
+ parlayLegs: isParlay ? picks.map(p=>({id:p.id, pick:p.pick_name, game:p.game||"", odds:p.odds, impliedOdds:p.implied_odds})) : [],
  bet: isParlay ? null : {pick:picks[0].pick_name, game:picks[0].game||"", odds:picks[0].odds, impliedOdds:picks[0].implied_odds},
  category: picks[0].slot,
  };
@@ -2737,8 +2737,9 @@ export default function App() {
  <div style={{fontSize:18,fontWeight:800,color:IOS.blue}}>{ls?.american}</div>
  </div>
  {legs.map((b,j)=>(
- <div key={j} style={{padding:"3px 16px",fontSize:13,fontWeight:500,color:"rgba(255,255,255,0.7)"}}>
- {b.pick || b.pick_name || b.name || ""}
+ <div key={j} style={{padding:"3px 16px 4px"}}>
+ <div style={{fontSize:13,fontWeight:500,color:"rgba(255,255,255,0.7)"}}>{b.pick || b.pick_name || b.name || ""}</div>
+ {b.game&&<div style={{fontSize:11,color:"rgba(255,255,255,0.35)"}}>{b.game}</div>}
  </div>
  ))}
  <div style={{padding:"5px 16px 9px"}}>
@@ -3186,9 +3187,14 @@ export default function App() {
  <div className="done-leg-odds" style={{color:IOS.pink}}>{ls?.american}</div>
  </div>
  {slot.parlayLegs.map(b=>(
- <div key={b.id} style={{display:"flex",justifyContent:"space-between",padding:"8px 16px 8px 28px",borderBottom:`0.5px solid ${IOS.sep}`}}>
- <span style={{fontSize:13,color:IOS.label3}}>{b.pick}</span>
- <span style={{fontSize:14,fontWeight:700,color:b.odds.startsWith("+")?IOS.green:IOS.blue}}>{b.odds}</span>
+ <div key={b.id} style={{padding:"8px 16px 8px 28px",borderBottom:`0.5px solid ${IOS.sep}`}}>
+ <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+ <div>
+ <div style={{fontSize:13,color:IOS.label3}}>{b.pick}</div>
+ {b.game&&<div style={{fontSize:11,color:IOS.label3,opacity:0.6,marginTop:2}}>{b.game}</div>}
+ </div>
+ <span style={{fontSize:14,fontWeight:700,color:b.odds.startsWith("+")?IOS.green:IOS.blue,flexShrink:0,marginLeft:8}}>{b.odds}</span>
+ </div>
  </div>
  ))}
  </div>
