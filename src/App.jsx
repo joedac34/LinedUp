@@ -2731,19 +2731,24 @@ export default function App() {
  const pts = parseFloat((slot.mult * (dec - 1) * 10).toFixed(1));
  totalPossible += pts;
  return (
- <div key={i} style={{borderBottom:`0.5px solid ${IOS.sep}`}}>
- <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 16px 4px"}}>
- <div style={{fontSize:12,fontWeight:800,letterSpacing:0.5,textTransform:"uppercase",color:slotColor}}>{slot.mult}× · LONGSHOT · {legs.length} LEGS</div>
- <div style={{fontSize:18,fontWeight:800,color:IOS.blue}}>{ls?.american}</div>
+ <div key={i} style={{padding:"11px 16px",borderBottom:`0.5px solid ${IOS.sep}`}}>
+ <div style={{fontSize:10,fontWeight:800,letterSpacing:0.5,textTransform:"uppercase",color:IOS.blue,marginBottom:5}}>{slot.mult}× · LONGSHOT · {legs.length} LEGS</div>
+ <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:8,marginBottom:6}}>
+   <div style={{fontSize:13,fontWeight:600,color:"rgba(255,255,255,0.6)"}}>Parlay</div>
+   <div style={{fontSize:15,fontWeight:800,color:IOS.green,flexShrink:0}}>{ls?.american}</div>
  </div>
+ <div style={{borderTop:`0.5px solid rgba(255,255,255,0.06)`,paddingTop:6,marginBottom:6}}>
  {legs.map((b,j)=>(
- <div key={j} style={{padding:"3px 16px 4px"}}>
- <div style={{fontSize:13,fontWeight:500,color:"rgba(255,255,255,0.7)"}}>{b.pick || b.pick_name || b.name || ""}</div>
- {b.game&&<div style={{fontSize:11,color:"rgba(255,255,255,0.35)"}}>{b.game}</div>}
- </div>
+   <div key={j} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"3px 0"}}>
+     <div>
+       <div style={{fontSize:12,fontWeight:500,color:"rgba(255,255,255,0.75)"}}>{b.pick || b.pick_name || b.name || ""}</div>
+       {b.game&&<div style={{fontSize:10,color:"rgba(255,255,255,0.35)"}}>{b.game}</div>}
+     </div>
+   </div>
  ))}
- <div style={{padding:"5px 16px 9px"}}>
- <span style={{fontSize:11,fontWeight:700,color:IOS.green,background:"rgba(48,209,88,0.1)",border:"1px solid rgba(48,209,88,0.2)",borderRadius:6,padding:"2px 8px"}}>+{pts} pts if win</span>
+ </div>
+ <div style={{display:"flex",justifyContent:"flex-end"}}>
+   <span style={{fontSize:10,fontWeight:700,color:IOS.green,background:"rgba(48,209,88,0.1)",border:"0.5px solid rgba(48,209,88,0.25)",borderRadius:5,padding:"2px 7px"}}>+{pts} pts if win</span>
  </div>
  </div>
  );
@@ -2752,16 +2757,18 @@ export default function App() {
  const pts = parseFloat(calcPickPoints(slot.mult, slot.bet.impliedOdds, "W").toFixed(1));
  totalPossible += pts;
  return (
- <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 16px",borderBottom:`0.5px solid ${IOS.sep}`}}>
- <div style={{flex:1,minWidth:0}}>
- <div style={{fontSize:12,fontWeight:800,letterSpacing:0.5,textTransform:"uppercase",color:slotColor,marginBottom:3,textAlign:"left"}}>
- {slot.mult}× · {slot.category?{ml:"MONEYLINE",prop:"PROP",ou:"OVER/UNDER",spread:"SPREAD",longshot:"LONGSHOT"}[slot.category]||slot.category.toUpperCase():"PICK"}
+ <div key={i} style={{padding:"11px 16px",borderBottom:`0.5px solid ${IOS.sep}`}}>
+ <div style={{fontSize:10,fontWeight:800,letterSpacing:0.5,textTransform:"uppercase",color:IOS.blue,marginBottom:5}}>
+   {slot.mult}× · {slot.category?{ml:"MONEYLINE",prop:"PROP",ou:"OVER/UNDER",spread:"SPREAD",longshot:"LONGSHOT"}[slot.category]||slot.category.toUpperCase():"PICK"}
  </div>
- <div style={{fontSize:14,fontWeight:600,color:"#fff",marginBottom:2}}>{slot.bet.pick}</div>
- {slot.bet.game&&<div style={{fontSize:11,color:"rgba(255,255,255,0.45)",marginBottom:3}}>{slot.bet.game}</div>}
- <span style={{fontSize:11,fontWeight:700,color:IOS.green,background:"rgba(48,209,88,0.1)",border:"1px solid rgba(48,209,88,0.2)",borderRadius:6,padding:"2px 8px"}}>+{pts} pts if win</span>
+ <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:8,marginBottom:4}}>
+   <div style={{fontSize:15,fontWeight:700,color:"#fff",minWidth:0}}>{slot.bet.pick}</div>
+   <div style={{fontSize:15,fontWeight:800,color:slot.bet.odds.startsWith("+")?IOS.green:IOS.blue,flexShrink:0}}>{slot.bet.odds}</div>
  </div>
- <div style={{fontSize:20,fontWeight:800,letterSpacing:-0.5,color:slot.bet.odds.startsWith("+")?IOS.green:IOS.blue,marginLeft:12}}>{slot.bet.odds}</div>
+ <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+   <div style={{fontSize:11,color:"rgba(255,255,255,0.4)"}}>{slot.bet.game||""}</div>
+   <span style={{fontSize:10,fontWeight:700,color:IOS.green,background:"rgba(48,209,88,0.1)",border:"0.5px solid rgba(48,209,88,0.25)",borderRadius:5,padding:"2px 7px",whiteSpace:"nowrap",flexShrink:0}}>+{pts} pts if win</span>
+ </div>
  </div>
  );
  });
@@ -3276,23 +3283,23 @@ export default function App() {
  if(slot.isParlay || (slot.parlayLegs && slot.parlayLegs.length > 0)) {
  const ls = calcLS(slot.parlayLegs);
  return (
- <div key={i} style={{margin:"0 16px 8px",background:IOS.bg2,borderRadius:14,overflow:"hidden",border:`1px solid ${col}30`}}>
- <div style={{padding:"12px 14px",borderBottom:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
- <div style={{display:"flex",alignItems:"center",gap:8}}>
- <div style={{width:32,height:32,borderRadius:8,background:`${col}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:col}}>{slot.mult}×</div>
- <div style={{fontSize:12,fontWeight:800,letterSpacing:0.5,textTransform:"uppercase",color:col}}>LONGSHOT · {slot.parlayLegs.length} LEGS</div>
+ <div key={i} style={{margin:"0 16px 6px",background:IOS.bg2,borderRadius:12,padding:"11px 14px",border:"0.5px solid rgba(255,255,255,0.07)"}}>
+ <div style={{fontSize:10,fontWeight:800,letterSpacing:0.5,textTransform:"uppercase",color:IOS.blue,marginBottom:5}}>{slot.mult}× · LONGSHOT · {slot.parlayLegs.length} LEGS</div>
+ <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:8,marginBottom:6}}>
+   <div style={{fontSize:13,fontWeight:600,color:"rgba(255,255,255,0.55)"}}>Parlay</div>
+   <div style={{fontSize:15,fontWeight:800,color:IOS.green,flexShrink:0}}>{ls?.american}</div>
  </div>
- <div style={{fontSize:20,fontWeight:800,color:IOS.pink}}>{ls?.american}</div>
- </div>
+ <div style={{borderTop:`0.5px solid rgba(255,255,255,0.06)`,paddingTop:6}}>
  {slot.parlayLegs.map((b,j)=>(
- <div key={j} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px",borderBottom:j<slot.parlayLegs.length-1?`0.5px solid ${IOS.sep}`:"none"}}>
- <div>
- <div style={{fontSize:11,color:IOS.label3,marginBottom:2}}>{b.game}</div>
- <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>{b.pick}</div>
- </div>
- <div style={{fontSize:16,fontWeight:800,color:b.odds.startsWith("+")?IOS.green:IOS.blue}}>{b.odds}</div>
+ <div key={j} style={{padding:"3px 0"}}>
+   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+     <div style={{fontSize:12,fontWeight:500,color:"rgba(255,255,255,0.75)"}}>{b.pick}</div>
+     <div style={{fontSize:13,fontWeight:700,color:b.odds.startsWith("+")?IOS.green:IOS.blue,flexShrink:0,marginLeft:8}}>{b.odds}</div>
+   </div>
+   {b.game&&<div style={{fontSize:10,color:"rgba(255,255,255,0.35)",marginTop:1}}>{b.game}</div>}
  </div>
  ))}
+ </div>
  </div>
  );
  }
@@ -3300,20 +3307,15 @@ export default function App() {
  const pts = calcPickPoints(slot.mult, slot.bet.impliedOdds, "W");
  const catLabel = slot.category ? {ml:"MONEYLINE",prop:"PROP",ou:"OVER/UNDER",spread:"SPREAD",longshot:"LONGSHOT"}[slot.category]||slot.category.toUpperCase() : "PICK";
  return (
- <div key={i} style={{margin:"0 16px 8px",background:IOS.bg2,borderRadius:14,overflow:"hidden",border:`1px solid ${col}30`}}>
- <div style={{padding:"10px 14px",borderBottom:`0.5px solid rgba(255,255,255,0.06)`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
- <div style={{display:"flex",alignItems:"center",gap:8}}>
- <div style={{width:30,height:30,borderRadius:8,background:`${col}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:col}}>{slot.mult}×</div>
- <div style={{fontSize:12,fontWeight:800,letterSpacing:0.5,textTransform:"uppercase",color:col}}>{catLabel}</div>
+ <div key={i} style={{margin:"0 16px 6px",background:IOS.bg2,borderRadius:12,padding:"11px 14px",border:`0.5px solid rgba(255,255,255,0.07)`}}>
+ <div style={{fontSize:10,fontWeight:800,letterSpacing:0.5,textTransform:"uppercase",color:IOS.blue,marginBottom:5}}>{slot.mult}× · {catLabel}</div>
+ <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:8,marginBottom:4}}>
+   <div style={{fontSize:15,fontWeight:700,color:"#fff",minWidth:0}}>{slot.bet.pick}</div>
+   <div style={{fontSize:15,fontWeight:800,color:slot.bet.odds.startsWith("+")?IOS.green:IOS.blue,flexShrink:0}}>{slot.bet.odds}</div>
  </div>
- <div style={{textAlign:"right"}}>
- <div style={{fontSize:20,fontWeight:800,color:slot.bet.odds.startsWith("+")?IOS.green:IOS.blue}}>{slot.bet.odds}</div>
- <div style={{fontSize:10,color:IOS.green,marginTop:2}}>+{pts} pts</div>
- </div>
- </div>
- <div style={{padding:"10px 14px"}}>
- <div style={{fontSize:11,color:IOS.label3,marginBottom:2}}>{slot.bet.game}</div>
- <div style={{fontSize:15,fontWeight:600,color:"#fff"}}>{slot.bet.pick}</div>
+ <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+   <div style={{fontSize:11,color:"rgba(255,255,255,0.4)"}}>{slot.bet.game||""}</div>
+   <span style={{fontSize:10,fontWeight:700,color:IOS.green,background:"rgba(48,209,88,0.1)",border:"0.5px solid rgba(48,209,88,0.25)",borderRadius:5,padding:"2px 7px",whiteSpace:"nowrap",flexShrink:0}}>+{pts.toFixed(1)} pts if win</span>
  </div>
  </div>
  );
