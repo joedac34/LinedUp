@@ -567,7 +567,7 @@ const rankMedal=r=>r===1?"":r===2?"":r===3?"":`${r}`;
 
 const polarToCart=(cx,cy,r,deg)=>{const rad=(deg-90)*Math.PI/180;return{x:cx+r*Math.cos(rad),y:cy+r*Math.sin(rad)};};
 
-function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeague, setNewLeagueStep, setShowBrowse, fetchPublicLeagues, setIsSoloMode, setActiveLeagueId}) {
+function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeague, setNewLeagueStep, setShowBrowse, fetchPublicLeagues, setIsSoloMode, setActiveLeagueId, getOrCreateSoloLeague}) {
   const totalWins = soloWeeks.reduce((s,w)=>s+w.wins,0);
   const totalLosses = soloWeeks.reduce((s,w)=>s+w.losses,0);
   const totalPts = soloWeeks.reduce((s,w)=>s+w.pts,0);
@@ -603,7 +603,12 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
       <div style={{background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"14px",marginBottom:16}}>
         <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:4}}>Week {soloWeeks.length+1} picks</div>
         <div style={{fontSize:11,color:IOS.label3,marginBottom:12}}>Same bet types, same odds. Just you vs the line.</div>
-        <button onClick={()=>{if(setIsSoloMode)setIsSoloMode(true);if(setActiveLeagueId)setActiveLeagueId("solo");setScreen("picks");}} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:8,padding:"12px",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
+        <button onClick={async()=>{
+          if(setIsSoloMode) setIsSoloMode(true);
+          const lgId = await getOrCreateSoloLeague();
+          if(setActiveLeagueId) setActiveLeagueId(lgId||"solo");
+          setScreen("picks");
+        }} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:8,padding:"12px",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
           Build This Week&apos;s Slip
         </button>
       </div>
@@ -686,7 +691,7 @@ export default function App() {
  // solo weeks must be declared before activeLeague since activeLeague uses soloWeeks.length
  const [soloWeeks, setSoloWeeks] = useState([]);
  const [soloLoading, setSoloLoading] = useState(false);
- const activeLeague = activeLeagueId==="solo" ? {id:"solo",name:"Solo Mode",sport:"nfl",current_week:(soloWeeks.length+1),season_weeks:99,max_members:1,target_size:1,isCommissioner:false} : ([...realLeagues].find(l=>l.id===activeLeagueId) || realLeagues[0] || {id:"",name:"",sport:"nfl",current_week:1,season_weeks:18,max_members:8,target_size:8,isCommissioner:false});
+ const activeLeague = isSoloMode ? {id:soloLeagueId||"solo",name:"Solo Mode",sport:"nfl",current_week:(soloWeeks.length+1),season_weeks:99,max_members:1,target_size:1,isCommissioner:false} : ([...realLeagues].find(l=>l.id===activeLeagueId) || realLeagues[0] || {id:"",name:"",sport:"nfl",current_week:1,season_weeks:18,max_members:8,target_size:8,isCommissioner:false});
  const sport = SPORTS[activeLeague?.sport] || SPORTS["nfl"];
  const SLOTS = sport.slots;
 
@@ -845,6 +850,10 @@ export default function App() {
  {id:4, bet:null, mult:null, isParlay:false, parlayLegs:[]},
  ];
  const [flexPicks, setFlexPicks] = useState(EMPTY_FLEX);
+ const [soloFlexPicks, setSoloFlexPicks] = useState(EMPTY_FLEX);
+ const [soloSavedPicks, setSoloSavedPicks] = useState(null);
+ const [soloSubmitted, setSoloSubmitted] = useState(false);
+ const [soloLeagueId, setSoloLeagueId] = useState(null); // real UUID for solo league in DB
  const [isPro, setIsPro] = useState(()=>{ try { return localStorage.getItem("picklock_is_pro")==="true"; } catch(e){ return false; } });
  const [showPaywall, setShowPaywall] = useState(null);
  const [showPostLeagueUpsell, setShowPostLeagueUpsell] = useState(false);
@@ -1193,15 +1202,55 @@ export default function App() {
  await supabase.from("matchups").insert(matchupsToInsert);
  };
 
+ const getOrCreateSoloLeague = async () => {
+ if(!user) return null;
+ // Check if solo league already exists for this user
+ const {data:existing} = await supabase
+   .from("leagues")
+   .select("id")
+   .eq("commissioner_id", user.id)
+   .eq("league_type", "solo")
+   .single();
+ if(existing?.id) { setSoloLeagueId(existing.id); return existing.id; }
+ // Create one
+ const {data:created, error} = await supabase
+   .from("leagues")
+   .insert({
+     name: "Solo",
+     sport: "nfl",
+     commissioner_id: user.id,
+     invite_code: Math.random().toString(36).substring(2,8).toUpperCase(),
+     max_members: 1,
+     target_size: 1,
+     pick_deadline: "Sun 1PM ET",
+     season_weeks: 99,
+     current_week: 1,
+     privacy: "private",
+     scoring_type: "multiplier_odds",
+     league_type: "solo",
+   })
+   .select()
+   .single();
+ if(created?.id) {
+   // Add user as member
+   await supabase.from("league_members").insert({league_id:created.id, user_id:user.id, is_commissioner:true});
+   setSoloLeagueId(created.id);
+   return created.id;
+ }
+ return null;
+ };
+
  const fetchSoloWeeks = async () => {
  if(!user) return;
  setSoloLoading(true);
  try {
+   const lgId = soloLeagueId || await getOrCreateSoloLeague();
+   if(!lgId) { setSoloLoading(false); return; }
    const {data} = await supabase
      .from("picks")
      .select("*")
      .eq("user_id", user.id)
-     .eq("league_id", "solo")
+     .eq("league_id", lgId)
      .order("week", {ascending:false});
    if(data) {
      // Group by week
@@ -1697,7 +1746,7 @@ export default function App() {
 
  useEffect(()=>{
  if(!activeLeagueId||!user) return;
- if(activeLeagueId==="solo") return; // solo mode - no league data to fetch
+ if(isSoloMode) return; // solo mode - no league data to fetch
  // Clear stale data immediately when league switches
  setWeekPicks([]);
  setLeagueMembers([]);
@@ -1725,7 +1774,7 @@ export default function App() {
 
  useEffect(()=>{
  if(!activeLeagueId||!user) return;
- if(activeLeagueId==="solo") return;
+ if(isSoloMode) return;
  const lg = realLeagues.find(l=>l.id===activeLeagueId);
  if(lg) fetchWeekPicks(activeLeagueId, lg.current_week||lg.week||1);
  },[activeLeagueId, user, screen]);
@@ -2700,7 +2749,7 @@ export default function App() {
  </div>
 
  {/* ══ SOLO MODE HOME SCREEN ══ */}
- {homeMode==="solo" && <SoloHome soloWeeks={soloWeeks} soloLoading={soloLoading} isPro={isPro} IOS={IOS} setScreen={setScreen} setShowNewLeague={setShowNewLeague} setNewLeagueStep={setNewLeagueStep} setShowBrowse={setShowBrowse} fetchPublicLeagues={fetchPublicLeagues} setIsSoloMode={setIsSoloMode} setActiveLeagueId={setActiveLeagueId}/>}
+ {homeMode==="solo" && <SoloHome soloWeeks={soloWeeks} soloLoading={soloLoading} isPro={isPro} IOS={IOS} setScreen={setScreen} setShowNewLeague={setShowNewLeague} setNewLeagueStep={setNewLeagueStep} setShowBrowse={setShowBrowse} fetchPublicLeagues={fetchPublicLeagues} setIsSoloMode={setIsSoloMode} setActiveLeagueId={setActiveLeagueId} getOrCreateSoloLeague={getOrCreateSoloLeague}/>}
 
  {/* ══ LEAGUES MODE ══ */}
  <div style={{display:homeMode==="leagues"?"block":"none"}}>
@@ -3138,7 +3187,15 @@ export default function App() {
  )}
 
  {/* ══ PICKS ══ */}
- {screen==="picks"&&(
+ {screen==="picks"&&(()=>{
+ // Use separate state for solo mode vs league mode
+ const activePicks = isSoloMode ? soloFlexPicks : flexPicks;
+ const setActivePicks = isSoloMode ? setSoloFlexPicks : setFlexPicks;
+ const activeSubmitted = isSoloMode ? soloSubmitted : submitted;
+ const activeSavedPicks = isSoloMode ? soloSavedPicks : savedPicks;
+ const setActiveSavedPicks = isSoloMode ? setSoloSavedPicks : setSavedPicks;
+ const setActiveSubmitted = isSoloMode ? setSoloSubmitted : setSubmitted;
+ return (
  <>
 
  {/* Bet picker sheet */}
@@ -3149,16 +3206,16 @@ export default function App() {
  <div className="sheet-hdr">
  <div>
  <div className="sheet-hdr-title">
- {flexPicks[activeFlexSlot]?.isParlay ? "Parlay Legs" : flexCategory ? ["Moneyline","Prop","Over/Under","Spread","Longshot"][["ml","prop","ou","spread","longshot"].indexOf(flexCategory)] : "Choose a Bet"}
+ {activePicks[activeFlexSlot]?.isParlay ? "Parlay Legs" : flexCategory ? ["Moneyline","Prop","Over/Under","Spread","Longshot"][["ml","prop","ou","spread","longshot"].indexOf(flexCategory)] : "Choose a Bet"}
  </div>
  <div className="sheet-hdr-sub">
- {flexPicks[activeFlexSlot]?.isParlay
- ? `${flexPicks[activeFlexSlot]?.parlayLegs.length} legs selected — need 2+`
+ {activePicks[activeFlexSlot]?.isParlay
+ ? `${activePicks[activeFlexSlot]?.parlayLegs.length} legs selected — need 2+`
  : flexCategory ? "Tap to select" : "Pick a category first"}
  </div>
  </div>
  {(()=>{
- const slot = activeFlexSlot!==null ? flexPicks[activeFlexSlot] : null;
+ const slot = activeFlexSlot!==null ? activePicks[activeFlexSlot] : null;
  const isLongshotParlay = flexCategory==="longshot" && slot?.isParlay;
  const legs = slot?.parlayLegs||[];
  const parlayDec = legs.length>=2 ? legs.reduce((acc,b)=>{
@@ -3185,7 +3242,7 @@ export default function App() {
  </div>
 
  {/* Category selector — show if not parlay and no category chosen yet */}
- {!flexPicks[activeFlexSlot]?.isParlay && !flexCategory && (
+ {!activePicks[activeFlexSlot]?.isParlay && !flexCategory && (
  <div style={{padding:"12px 16px"}}>
  {(()=>{
  // Find categories already used by OTHER slots (not the current one being edited)
@@ -3221,7 +3278,7 @@ export default function App() {
  )}
 
  {/* Back button when category chosen */}
- {!flexPicks[activeFlexSlot]?.isParlay && flexCategory && (
+ {!activePicks[activeFlexSlot]?.isParlay && flexCategory && (
  <div onClick={()=>setFlexCategory(null)} style={{padding:"10px 16px",display:"flex",alignItems:"center",gap:6,cursor:"pointer",borderBottom:`0.5px solid ${IOS.sep}`}}>
  <span style={{color:IOS.blue,fontSize:14}}>‹</span>
  <span style={{color:IOS.blue,fontSize:14,fontWeight:600}}>Categories</span>
@@ -3238,7 +3295,7 @@ export default function App() {
  setBetTypeFilter("all");
  // sync isParlay on the active slot
  if(activeFlexSlot!==null) {
- setFlexPicks(prev=>prev.map((p,i)=>i===activeFlexSlot?{...p,isParlay:mode==="parlay",bet:null,parlayLegs:[]}:p));
+ setActivePicks(prev=>prev.map((p,i)=>i===activeFlexSlot?{...p,isParlay:mode==="parlay",bet:null,parlayLegs:[]}:p));
  }
  }} style={{flex:1,textAlign:"center",padding:"8px 4px",borderRadius:8,fontSize:13,fontWeight:700,cursor:"pointer",transition:"all .15s",
  background:longshotMode===mode?(mode==="parlay"?IOS.pink:IOS.green):"transparent",
@@ -3274,7 +3331,7 @@ export default function App() {
  </div>
  )}
 
- {(flexCategory || flexPicks[activeFlexSlot]?.isParlay) && (
+ {(flexCategory || activePicks[activeFlexSlot]?.isParlay) && (
  <div className="sheet-search-wrap" style={{top:0,position:"relative"}}>
  <div style={{position:"relative"}}>
  <input className="sheet-search" placeholder="Search..." value={pickSearch} onChange={e=>setPickSearch(e.target.value)} autoFocus={false} style={{paddingLeft:14}}/>
@@ -3284,10 +3341,10 @@ export default function App() {
  )}
 
  {/* Parlay legs selected bar */}
- {flexPicks[activeFlexSlot]?.isParlay && flexPicks[activeFlexSlot]?.parlayLegs.length >= 2 && (
+ {activePicks[activeFlexSlot]?.isParlay && activePicks[activeFlexSlot]?.parlayLegs.length >= 2 && (
  <div className="sheet-ls-bar">
  <span style={{fontSize:12,fontWeight:600,color:IOS.pink}}> Parlay odds</span>
- <span style={{fontSize:20,fontWeight:700,color:IOS.pink}}>{calcLS(flexPicks[activeFlexSlot].parlayLegs)?.american}</span>
+ <span style={{fontSize:20,fontWeight:700,color:IOS.pink}}>{calcLS(activePicks[activeFlexSlot].parlayLegs)?.american}</span>
  </div>
  )}
 
@@ -3300,8 +3357,8 @@ export default function App() {
  )}
 
  {/* Bet list */}
- {!oddsLoading && (flexCategory || flexPicks[activeFlexSlot]?.isParlay) && (
- (flexPicks[activeFlexSlot]?.isParlay ? ALL_BETS : (BETS[flexCategory]||[])).filter(bet=>{
+ {!oddsLoading && (flexCategory || activePicks[activeFlexSlot]?.isParlay) && (
+ (activePicks[activeFlexSlot]?.isParlay ? ALL_BETS : (BETS[flexCategory]||[])).filter(bet=>{
  const q = pickSearch.toLowerCase().trim();
  const textMatch = !q || bet.game.toLowerCase().includes(q) || bet.pick.toLowerCase().includes(q);
  // Longshot straight mode: only show +400 or better
@@ -3318,7 +3375,7 @@ export default function App() {
  }
  return textMatch;
  }).map(bet=>{
- const slot = flexPicks[activeFlexSlot];
+ const slot = activePicks[activeFlexSlot];
  const isCur = slot?.isParlay
  ? slot.parlayLegs.find(b=>b.id===bet.id)
  : slot?.bet?.id===bet.id;
@@ -3327,14 +3384,14 @@ export default function App() {
  <div key={bet.id} className="bet-row" style={isCur?{background:"rgba(10,132,255,0.06)"}:{}}
  onClick={()=>{
  if(slot?.isParlay) {
- setFlexPicks(prev=>prev.map((p,i)=>i===activeFlexSlot?{
+ setActivePicks(prev=>prev.map((p,i)=>i===activeFlexSlot?{
  ...p,
  parlayLegs: p.parlayLegs.find(b=>b.id===bet.id)
  ? p.parlayLegs.filter(b=>b.id!==bet.id)
  : [...p.parlayLegs, bet]
  }:p));
  } else {
- setFlexPicks(prev=>prev.map((p,i)=>i===activeFlexSlot?{...p,bet,category:flexCategory}:p));
+ setActivePicks(prev=>prev.map((p,i)=>i===activeFlexSlot?{...p,bet,category:flexCategory}:p));
  setActiveFlexSlot(null);
  setFlexCategory(null);
  }
@@ -3359,7 +3416,7 @@ export default function App() {
  )}
 
  {/* Commish Pro: locked extra slot for non-pro users */}
- {!isPro && !submitted && (
+ {!isPro && !activeSubmitted && (
    <div onClick={()=>setShowPaywall("picks")} style={{margin:"0 16px 8px",background:"#0A0A0A",border:"0.5px dashed #333",borderRadius:14,padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",opacity:0.8}}>
      <div style={{fontSize:13,color:"#555"}}>Add more picks</div>
      <div style={{display:"flex",alignItems:"center",gap:6,background:"rgba(10,132,255,0.1)",border:"0.5px solid rgba(10,132,255,0.25)",borderRadius:6,padding:"3px 8px"}}>
@@ -3370,7 +3427,7 @@ export default function App() {
  )}
 
  {/* Submitted */}
- {submitted&&(
+ {activeSubmitted&&(
  <div className="done-screen">
  <div className="done-checkmark"></div>
  <div className="done-title">Slip Locked </div>
@@ -3411,7 +3468,7 @@ export default function App() {
  );
  })}
  </div>
- <button className="ios-btn blue" onClick={()=>{setSubmitted(false);setFlexPicks(EMPTY_FLEX);setScreen("home");}}>Back to Home</button>
+ <button className="ios-btn blue" onClick={()=>{setActiveSubmitted(false);setActivePicks(EMPTY_FLEX);setScreen("home");}}>Back to Home</button>
  </div>
  )}
 
@@ -3439,8 +3496,8 @@ export default function App() {
  {!oddsLoading && oddsError && <div style={{marginLeft:"auto",fontSize:11,color:IOS.orange}}> Static odds</div>}
  {savedPicks&&!oddsLoading&&<div style={{marginLeft:"auto",display:"flex",gap:14,alignItems:"center"}}>
  <div onClick={()=>{
- if(savedPicks?.flexPicks) setFlexPicks(savedPicks.flexPicks);
- setSavedPicks(null);
+ if(activeSavedPicks?.flexPicks) setFlexPicks(activeSavedPicks.flexPicks);
+ setActiveSavedPicks(null);
  }} style={{fontSize:13,fontWeight:600,color:IOS.blue,cursor:"pointer"}}>Edit</div>
  <div onClick={async()=>{
  if(window.confirm("Clear your slip? This cannot be undone.")){
@@ -3453,8 +3510,8 @@ export default function App() {
  .eq("week", week);
  }
  // Wipe local state + localStorage
- setSavedPicks(null);
- setFlexPicks(EMPTY_FLEX);
+ setActiveSavedPicks(null);
+ setActivePicks(EMPTY_FLEX);
  setWeekPicks(prev=>prev.filter(p=>p.user_id!==user?.id));
  try { localStorage.removeItem(`linedup_picks_${activeLeague.id}_wk${activeLeague.current_week||activeLeague.week||1}`); } catch(e) {}
  }
@@ -3463,13 +3520,13 @@ export default function App() {
  </div>
 
  {/* Locked picks view */}
- {savedPicks && savedPicks.flexPicks ? (
+ {activeSavedPicks && activeSavedPicks.flexPicks ? (
  <div>
  <div style={{padding:"0 16px 12px"}}>
  <div style={{fontSize:34,fontWeight:800,letterSpacing:-1,color:"#fff",lineHeight:1.05}}>Your Slip</div>
  <div style={{fontSize:14,color:IOS.label3,marginTop:4}}>{activeLeague.name} · Wk {activeLeague.current_week||activeLeague.week||1} · Locked </div>
  </div>
- {[...savedPicks.flexPicks].sort((a,b)=>a.mult-b.mult).map((slot,i)=>{
+ {[...activeSavedPicks.flexPicks].sort((a,b)=>a.mult-b.mult).map((slot,i)=>{
  if(!slot.mult) return null;
  const multColors = {1:"#3A9EE0", 2:"#3A9EE0", 3:"#3A9EE0", 4:"#3A9EE0", 5:"#3A9EE0"};
  const col = multColors[slot.mult];
@@ -3538,7 +3595,7 @@ export default function App() {
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
  <div style={{fontSize:13,fontWeight:600,color:IOS.label3}}>Your Slip</div>
  <div style={{fontSize:13,fontWeight:600,color:allFlexFilled?IOS.green:IOS.blue}}>
- {flexPicks.filter(p=>p.mult!==null&&(p.isParlay?p.parlayLegs.length>=2:p.bet!==null)).length}/5 picks
+ {activePicks.filter(p=>p.mult!==null&&(p.isParlay?p.parlayLegs.length>=2:p.bet!==null)).length}/5 picks
  </div>
  </div>
  <div style={{display:"flex",gap:6}}>
@@ -3684,7 +3741,7 @@ export default function App() {
  <div onClick={()=>setActiveFlexSlot(idx)} style={{background:"#2a2a2a",borderRadius:7,color:"#bbb",fontSize:11,fontWeight:600,padding:"4px 10px",cursor:"pointer"}}>
  {filled?"Edit":"+ Pick"}
  </div>
- {filled&&<button onClick={e=>{e.stopPropagation();setFlexPicks(prev=>prev.map((p,i)=>i===idx?{...EMPTY_FLEX[0],id:i}:p));}} style={{background:"#2a2a2a",border:"none",borderRadius:7,color:"#555",fontSize:14,width:26,height:26,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>}
+ {filled&&<button onClick={e=>{e.stopPropagation();setActivePicks(prev=>prev.map((p,i)=>i===idx?{...EMPTY_FLEX[0],id:i}:p));}} style={{background:"#2a2a2a",border:"none",borderRadius:7,color:"#555",fontSize:14,width:26,height:26,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>}
  </div>
  </div>
  </div>
@@ -3697,7 +3754,7 @@ export default function App() {
  <div style={{fontSize:11,color:IOS.label3}}>Make this a Parlay</div>
  <div style={{fontSize:10,color:"#444",marginTop:1}}>Pick 2+ legs instead of one straight bet</div>
  </div>
- <div onClick={()=>setFlexPicks(prev=>prev.map((p,i)=>i===idx?{...p,isParlay:!p.isParlay,bet:null,parlayLegs:[]}:p))}
+ <div onClick={()=>setActivePicks(prev=>prev.map((p,i)=>i===idx?{...p,isParlay:!p.isParlay,bet:null,parlayLegs:[]}:p))}
  style={{width:40,height:24,borderRadius:12,background:slot.isParlay?IOS.pink:"rgba(255,255,255,0.1)",position:"relative",cursor:"pointer",transition:"background .2s",flexShrink:0}}>
  <div style={{position:"absolute",top:2,left:slot.isParlay?18:2,width:20,height:20,borderRadius:50,background:"#fff",transition:"left .2s"}}/>
  </div>
@@ -3722,7 +3779,7 @@ export default function App() {
  const taken = usedMults.includes(m) && slot.mult!==m;
  const active = slot.mult===m;
  return (
- <div key={m} onClick={()=>{if(taken)return;setFlexPicks(prev=>prev.map((p,i)=>i===idx?{...p,mult:active?null:m}:p));}}
+ <div key={m} onClick={()=>{if(taken)return;setActivePicks(prev=>prev.map((p,i)=>i===idx?{...p,mult:active?null:m}:p));}}
  style={{width:34,height:26,borderRadius:7,border:"none",display:"flex",alignItems:"center",justifyContent:"center",
  background:active?multColors[m]:"#2a2a2a",
  color:active?"#fff":taken?"rgba(255,255,255,0.1)":"#555",
@@ -3799,7 +3856,7 @@ export default function App() {
  .eq("week", week);
 
  const picksToSave = [];
- flexPicks.forEach((slot, slotIdx)=>{
+ activePicks.forEach((slot, slotIdx)=>{
  if(!slot.mult) return;
  const effectiveMult = activatedPUs[slotIdx]?.id==="double" ? slot.mult * 2 : slot.mult;
  if(slot.isParlay) {
@@ -3839,13 +3896,14 @@ export default function App() {
  }
  }
  const weekNum = activeLeague.current_week||activeLeague.week||1;
- const locked = {flexPicks, lockedAt: new Date().toISOString()};
- try { localStorage.setItem(`linedup_picks_${activeLeague.id}_wk${weekNum}`, JSON.stringify(locked)); } catch(e) {}
- setSavedPicks(locked);
- setSubmitted(true);
+ const locked = {flexPicks: activePicks, lockedAt: new Date().toISOString()};
+ const storageKey = `linedup_picks_${activeLeague.id}_wk${weekNum}`;
+ try { localStorage.setItem(storageKey, JSON.stringify(locked)); } catch(e) {}
+ if(isSoloMode) { setSoloSavedPicks(locked); setSoloSubmitted(true); }
+ else { setActiveSavedPicks(locked); setActiveSubmitted(true); }
  }}> Lock Your Slip </button>
  : <button className="ios-btn disabled" disabled>
- {!hasParlay ? " Need a Longshot (+400 straight or +400 parlay)" : `${flexPicks.filter(p=>p.mult!==null&&(p.isParlay?p.parlayLegs.length>=2:p.bet!==null)).length} / 5 Slots Filled`}
+ {!hasParlay ? " Need a Longshot (+400 straight or +400 parlay)" : (activePicks.filter(p=>p.mult!==null&&(p.isParlay?p.parlayLegs.length>=2:p.bet!==null)).length + " / 5 Slots Filled")}
  </button>;
  })()}
  <div style={{height:20}}/>
@@ -3853,7 +3911,8 @@ export default function App() {
  )}
  </div>
  </>
- )}
+ );})()
+ }
 
  {/* ══ MATCHUP ══ */}
  {screen==="matchup"&&(
