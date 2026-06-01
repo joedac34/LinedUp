@@ -683,6 +683,9 @@ export default function App() {
  const [realStandings, setRealStandings] = useState([]);
  const [allMyStats, setAllMyStats] = useState(null);
  const [leagueTrophies, setLeagueTrophies] = useState([]);
+ // solo weeks must be declared before activeLeague since activeLeague uses soloWeeks.length
+ const [soloWeeks, setSoloWeeks] = useState([]);
+ const [soloLoading, setSoloLoading] = useState(false);
  const activeLeague = activeLeagueId==="solo" ? {id:"solo",name:"Solo Mode",sport:"nfl",current_week:(soloWeeks.length+1),season_weeks:99,max_members:1,target_size:1,isCommissioner:false} : ([...realLeagues].find(l=>l.id===activeLeagueId) || realLeagues[0] || {id:"",name:"",sport:"nfl",current_week:1,season_weeks:18,max_members:8,target_size:8,isCommissioner:false});
  const sport = SPORTS[activeLeague?.sport] || SPORTS["nfl"];
  const SLOTS = sport.slots;
@@ -691,10 +694,8 @@ export default function App() {
  const [liveOdds, setLiveOdds] = useState({});
  const [homeTab, setHomeTab] = useState('home');
  const [homeMode, setHomeMode] = useState('leagues');
- const [isSoloMode, setIsSoloMode] = useState(false); // true when picking in solo mode // 'leagues' | 'solo'
- const [leagueSubTab, setLeagueSubTab] = useState("overview"); // 'overview' | 'standings' | 'schedule'
- const [soloWeeks, setSoloWeeks] = useState([]); // history of solo weeks
- const [soloLoading, setSoloLoading] = useState(false); // 'home' | 'games' // { sportId: {ml,prop,ou,spread,longshot} }
+ const [isSoloMode, setIsSoloMode] = useState(false);
+ const [leagueSubTab, setLeagueSubTab] = useState("overview");
  const [tickerGames, setTickerGames] = useState([]); // raw games for the ticker
  const [espnGames, setEspnGames] = useState([]); // ESPN scoreboard with IDs
  const [weekResult, setWeekResult] = useState(null);
