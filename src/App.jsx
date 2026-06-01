@@ -3132,7 +3132,7 @@ export default function App() {
  );
  })}
  <div style={{height:16}}/>
- </>}
+ </>)}
  {/* End leagues mode */}
  </div>
  </>
