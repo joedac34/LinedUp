@@ -2803,7 +2803,7 @@ export default function App() {
  const currentOpp = liveSchedule.find(w=>w.week===currentWeekNum)?.opp;
  const oppId = liveSchedule.find(w=>w.week===currentWeekNum)?.oppId;
  const targetSize = activeLeague.target_size||activeLeague.max_members||8;
- const leagueIsFull = leagueMembers.length >= targetSize;
+ const leagueIsFull = activeLeagueId==="solo" || leagueMembers.length >= targetSize;
  const hasOpponent = leagueMembers.filter(m=>!m.isYou).length > 0;
 
  if(!leagueIsFull || !hasOpponent) return null;
@@ -3762,7 +3762,7 @@ export default function App() {
  <div style={{height:12}}/>
  {(()=>{
  const targetSize = activeLeague.target_size||activeLeague.max_members||8;
- const leagueIsFull = leagueMembers.length >= targetSize;
+ const leagueIsFull = activeLeagueId==="solo" || leagueMembers.length >= targetSize;
  if(!leagueIsFull) return (
  <div style={{margin:"0 16px",background:"rgba(255,159,10,0.08)",borderRadius:14,padding:"16px",textAlign:"center",border:"1px solid rgba(255,159,10,0.2)"}}>
  <div style={{fontSize:18,marginBottom:6}}>⏳</div>
@@ -3778,7 +3778,7 @@ export default function App() {
  })()}
  {(()=>{
  const targetSize = activeLeague.target_size||activeLeague.max_members||8;
- const leagueIsFull = leagueMembers.length >= targetSize;
+ const leagueIsFull = activeLeagueId==="solo" || leagueMembers.length >= targetSize;
  if(!leagueIsFull) return null;
  return allFlexFilled && hasParlay
  ? <button className="ios-btn green" onClick={async()=>{
@@ -3868,7 +3868,7 @@ export default function App() {
 
  {(()=>{
  const targetSize = activeLeague.target_size||activeLeague.max_members||8;
- const leagueIsFull = leagueMembers.length >= targetSize;
+ const leagueIsFull = activeLeagueId==="solo" || leagueMembers.length >= targetSize;
  const hasOpponent = leagueMembers.filter(m=>!m.isYou).length > 0;
 
  // League not full yet — no schedule, no matchup
