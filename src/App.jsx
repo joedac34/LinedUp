@@ -567,7 +567,7 @@ const rankMedal=r=>r===1?"":r===2?"":r===3?"":`${r}`;
 
 const polarToCart=(cx,cy,r,deg)=>{const rad=(deg-90)*Math.PI/180;return{x:cx+r*Math.cos(rad),y:cy+r*Math.sin(rad)};};
 
-function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeague, setNewLeagueStep, setShowBrowse, fetchPublicLeagues}) {
+function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeague, setNewLeagueStep, setShowBrowse, fetchPublicLeagues, setIsSoloMode, setActiveLeagueId}) {
   const totalWins = soloWeeks.reduce((s,w)=>s+w.wins,0);
   const totalLosses = soloWeeks.reduce((s,w)=>s+w.losses,0);
   const totalPts = soloWeeks.reduce((s,w)=>s+w.pts,0);
@@ -603,7 +603,7 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
       <div style={{background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"14px",marginBottom:16}}>
         <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:4}}>Week {soloWeeks.length+1} picks</div>
         <div style={{fontSize:11,color:IOS.label3,marginBottom:12}}>Same bet types, same odds. Just you vs the line.</div>
-        <button onClick={()=>{setIsSoloMode(true);setActiveLeagueId("solo");setScreen("picks");}} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:8,padding:"12px",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
+        <button onClick={()=>{if(setIsSoloMode)setIsSoloMode(true);if(setActiveLeagueId)setActiveLeagueId("solo");setScreen("picks");}} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:8,padding:"12px",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
           Build This Week&apos;s Slip
         </button>
       </div>
@@ -692,6 +692,7 @@ export default function App() {
  const [homeTab, setHomeTab] = useState('home');
  const [homeMode, setHomeMode] = useState('leagues');
  const [isSoloMode, setIsSoloMode] = useState(false); // true when picking in solo mode // 'leagues' | 'solo'
+ const [leagueSubTab, setLeagueSubTab] = useState("overview"); // 'overview' | 'standings' | 'schedule'
  const [soloWeeks, setSoloWeeks] = useState([]); // history of solo weeks
  const [soloLoading, setSoloLoading] = useState(false); // 'home' | 'games' // { sportId: {ml,prop,ou,spread,longshot} }
  const [tickerGames, setTickerGames] = useState([]); // raw games for the ticker
@@ -2696,7 +2697,7 @@ export default function App() {
  </div>
 
  {/* ══ SOLO MODE HOME SCREEN ══ */}
- {homeMode==="solo" && <SoloHome soloWeeks={soloWeeks} soloLoading={soloLoading} isPro={isPro} IOS={IOS} setScreen={setScreen} setShowNewLeague={setShowNewLeague} setNewLeagueStep={setNewLeagueStep} setShowBrowse={setShowBrowse} fetchPublicLeagues={fetchPublicLeagues}/>}
+ {homeMode==="solo" && <SoloHome soloWeeks={soloWeeks} soloLoading={soloLoading} isPro={isPro} IOS={IOS} setScreen={setScreen} setShowNewLeague={setShowNewLeague} setNewLeagueStep={setNewLeagueStep} setShowBrowse={setShowBrowse} fetchPublicLeagues={fetchPublicLeagues} setIsSoloMode={setIsSoloMode} setActiveLeagueId={setActiveLeagueId}/>}
 
  {/* ══ LEAGUES MODE ══ */}
  <div style={{display:homeMode==="leagues"?"block":"none"}}>
@@ -4374,7 +4375,6 @@ export default function App() {
  const myPts = myStanding?.points||0;
  const myWinPct = myStanding ? Math.round((myStanding.wins/(myStanding.wins+myStanding.losses||1))*100)||0 : 0;
  const pendingPicks = lg ? (gradingData[lg.id]||[]).reduce((acc,m)=>acc+m.picks.filter(p=>p.result==="pending").length,0) : 0;
- const [leagueSubTab, setLeagueSubTab] = React.useState("overview");
  const myPicksThisWeek = weekPicks.filter(p=>p.user_id===user?.id);
  return (
  <div>
