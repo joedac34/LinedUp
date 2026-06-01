@@ -567,6 +567,86 @@ const rankMedal=r=>r===1?"":r===2?"":r===3?"":`${r}`;
 
 const polarToCart=(cx,cy,r,deg)=>{const rad=(deg-90)*Math.PI/180;return{x:cx+r*Math.cos(rad),y:cy+r*Math.sin(rad)};};
 
+function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeague, setNewLeagueStep, setShowBrowse, fetchPublicLeagues}) {
+  const totalWins = soloWeeks.reduce((s,w)=>s+w.wins,0);
+  const totalLosses = soloWeeks.reduce((s,w)=>s+w.losses,0);
+  const totalPts = soloWeeks.reduce((s,w)=>s+w.pts,0);
+  const winPct = totalWins+totalLosses > 0 ? Math.round((totalWins/(totalWins+totalLosses))*100) : 0;
+  const bestWeek = soloWeeks.length > 0 ? soloWeeks.reduce((b,w)=>w.pts>b.pts?w:b,soloWeeks[0]) : null;
+  return (
+    <div style={{padding:"0 16px 40px"}}>
+      <div style={{display:"flex",gap:8,marginBottom:12}}>
+        <div style={{flex:1,background:IOS.bg2,borderRadius:10,padding:"10px 12px",border:"0.5px solid rgba(255,255,255,0.07)"}}>
+          <div style={{fontSize:10,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:3}}>Record</div>
+          <div style={{fontSize:18,fontWeight:800,color:IOS.blue}}>{totalWins}-{totalLosses}</div>
+        </div>
+        <div style={{flex:1,background:IOS.bg2,borderRadius:10,padding:"10px 12px",border:"0.5px solid rgba(255,255,255,0.07)"}}>
+          <div style={{fontSize:10,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:3}}>Win %</div>
+          <div style={{fontSize:18,fontWeight:800,color:winPct>=60?IOS.green:winPct>=40?IOS.yellow:IOS.red}}>{winPct}%</div>
+        </div>
+        <div style={{flex:1,background:IOS.bg2,borderRadius:10,padding:"10px 12px",border:"0.5px solid rgba(255,255,255,0.07)"}}>
+          <div style={{fontSize:10,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:3}}>Total Pts</div>
+          <div style={{fontSize:18,fontWeight:800,color:"#fff"}}>{totalPts.toFixed(1)}</div>
+        </div>
+      </div>
+      <div style={{background:"rgba(255,159,10,0.07)",border:"0.5px solid rgba(255,159,10,0.25)",borderRadius:12,padding:"12px 14px",marginBottom:12}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+          <div style={{fontSize:11,fontWeight:700,color:"#FF9F0A"}}>Weekly Challenge</div>
+          <div style={{fontSize:10,color:IOS.label3}}>This week</div>
+        </div>
+        <div style={{fontSize:13,color:"#ccc",marginBottom:8}}>Score 40+ points</div>
+        <div style={{height:4,background:"#1A1A1A",borderRadius:2,marginBottom:4}}>
+          <div style={{width:"0%",height:"100%",background:"#FF9F0A",borderRadius:2}}/>
+        </div>
+        <div style={{fontSize:10,color:IOS.label3}}>Lock your slip to start tracking</div>
+      </div>
+      <div style={{background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"14px",marginBottom:16}}>
+        <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:4}}>Week {soloWeeks.length+1} picks</div>
+        <div style={{fontSize:11,color:IOS.label3,marginBottom:12}}>Same bet types, same odds. Just you vs the line.</div>
+        <button onClick={()=>setScreen("picks")} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:8,padding:"12px",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
+          Build This Week&apos;s Slip
+        </button>
+      </div>
+      {soloLoading ? (
+        <div style={{textAlign:"center",padding:"24px",color:IOS.label3,fontSize:13}}>Loading...</div>
+      ) : soloWeeks.length === 0 ? (
+        <div style={{textAlign:"center",padding:"24px 16px",background:IOS.bg2,borderRadius:12,border:"0.5px solid rgba(255,255,255,0.07)"}}>
+          <div style={{fontSize:14,fontWeight:700,color:"#fff",marginBottom:6}}>No picks yet</div>
+          <div style={{fontSize:12,color:IOS.label3}}>Lock in your first slip to start tracking your record.</div>
+        </div>
+      ) : (
+        <div>
+          <div style={{fontSize:11,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Recent Weeks</div>
+          {soloWeeks.map((w,idx2)=>(
+            <div key={w.week} style={{background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:10,padding:"11px 14px",marginBottom:6,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <div>
+                <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:2}}>Week {w.week}</div>
+                <div style={{fontSize:11,color:IOS.label3}}>{w.wins}W - {w.losses}L - {w.picks.length} picks</div>
+              </div>
+              <div style={{textAlign:"right"}}>
+                <div style={{fontSize:16,fontWeight:800,color:w.pts>0?IOS.green:"#555"}}>{w.pts > 0 ? "+"+w.pts : "0"} pts</div>
+                {bestWeek && bestWeek.week===w.week && soloWeeks.length>1 && (
+                  <div style={{fontSize:8,fontWeight:700,color:IOS.green,background:"rgba(48,209,88,0.1)",border:"0.5px solid rgba(48,209,88,0.2)",borderRadius:4,padding:"1px 5px",marginTop:2}}>BEST WEEK</div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {soloWeeks.length >= 2 && (
+        <div style={{marginTop:12,background:"rgba(10,132,255,0.08)",border:"0.5px solid rgba(10,132,255,0.2)",borderRadius:12,padding:"14px"}}>
+          <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:4}}>You&apos;re picking at {winPct}%</div>
+          <div style={{fontSize:11,color:IOS.label3,marginBottom:12,lineHeight:1.5}}>Prove it against friends — create a league and see how you stack up.</div>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={()=>{setShowNewLeague(true);setNewLeagueStep(0);}} style={{flex:1,background:IOS.blue,border:"none",borderRadius:8,padding:"10px",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Create League</button>
+            <button onClick={()=>{setShowBrowse(true);fetchPublicLeagues();}} style={{flex:1,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:8,padding:"10px",fontSize:12,fontWeight:700,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Browse Leagues</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
  const [screen, setScreen] = useState("home");
  const [tutorialStep, setTutorialStep] = useState(-1); // -1 = hidden; only shown on fresh signup
@@ -2615,97 +2695,10 @@ export default function App() {
  </div>
 
  {/* ══ SOLO MODE HOME SCREEN ══ */}
- {homeMode==="solo" && (()=>{
-   const totalWins = soloWeeks.reduce((s,w)=>s+w.wins,0);
-   const totalLosses = soloWeeks.reduce((s,w)=>s+w.losses,0);
-   const totalPts = soloWeeks.reduce((s,w)=>s+w.pts,0);
-   const winPct = totalWins+totalLosses > 0 ? Math.round((totalWins/(totalWins+totalLosses))*100) : 0;
-   const bestWeek = soloWeeks.length ? soloWeeks.reduce((b,w)=>w.pts>b.pts?w:b,soloWeeks[0]) : null;
-   return (
-     <div style={{padding:"0 16px 40px"}}>
-       {/* Stats bar */}
-       <div style={{display:"flex",gap:8,marginBottom:12}}>
-         <div style={{flex:1,background:IOS.bg2,borderRadius:10,padding:"10px 12px",border:`0.5px solid ${IOS.sep}`}}>
-           <div style={{fontSize:10,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:3}}>Record</div>
-           <div style={{fontSize:18,fontWeight:800,color:IOS.blue}}>{totalWins}-{totalLosses}</div>
-         </div>
-         <div style={{flex:1,background:IOS.bg2,borderRadius:10,padding:"10px 12px",border:`0.5px solid ${IOS.sep}`}}>
-           <div style={{fontSize:10,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:3}}>Win %</div>
-           <div style={{fontSize:18,fontWeight:800,color:winPct>=60?IOS.green:winPct>=40?IOS.yellow:IOS.red}}>{winPct}%</div>
-         </div>
-         <div style={{flex:1,background:IOS.bg2,borderRadius:10,padding:"10px 12px",border:`0.5px solid ${IOS.sep}`}}>
-           <div style={{fontSize:10,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:3}}>Total Pts</div>
-           <div style={{fontSize:18,fontWeight:800,color:"#fff"}}>{totalPts.toFixed(1)}</div>
-         </div>
-       </div>
-
-       {/* Weekly challenge */}
-       <div style={{background:"rgba(255,159,10,0.07)",border:"0.5px solid rgba(255,159,10,0.25)",borderRadius:12,padding:"12px 14px",marginBottom:12}}>
-         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
-           <div style={{fontSize:11,fontWeight:700,color:"#FF9F0A"}}>Weekly Challenge</div>
-           <div style={{fontSize:10,color:IOS.label3}}>This week</div>
-         </div>
-         <div style={{fontSize:13,color:"#ccc",marginBottom:8}}>Score 40+ points</div>
-         <div style={{height:4,background:"#1A1A1A",borderRadius:2,marginBottom:4}}>
-           <div style={{width:"0%",height:"100%",background:"#FF9F0A",borderRadius:2}}/>
-         </div>
-         <div style={{fontSize:10,color:IOS.label3}}>Lock your slip to start tracking</div>
-       </div>
-
-       {/* Lock slip CTA */}
-       <div style={{background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:12,padding:"14px",marginBottom:16}}>
-         <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:4}}>Week {soloWeeks.length+1} picks</div>
-         <div style={{fontSize:11,color:IOS.label3,marginBottom:12}}>Same bet types, same odds — just you vs the line.</div>
-         <button onClick={()=>setScreen("picks")} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:8,padding:"12px",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
-           Build This Week's Slip
-         </button>
-       </div>
-
-       {/* Recent weeks */}
-       {soloLoading ? (
-         <div style={{textAlign:"center",padding:"24px",color:IOS.label3,fontSize:13}}>Loading...</div>
-       ) : soloWeeks.length === 0 ? (
-         <div style={{textAlign:"center",padding:"24px 16px",background:IOS.bg2,borderRadius:12,border:`0.5px solid ${IOS.sep}`}}>
-           <div style={{fontSize:14,fontWeight:700,color:"#fff",marginBottom:6}}>No picks yet</div>
-           <div style={{fontSize:12,color:IOS.label3}}>Lock in your first slip to start tracking your personal record.</div>
-         </div>
-       ) : (
-         <>
-         <div style={{fontSize:11,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Recent Weeks</div>
-         {soloWeeks.map((w,i)=>(
-           <div key={w.week} style={{background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:10,padding:"11px 14px",marginBottom:6,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-             <div>
-               <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:2}}>Week {w.week}</div>
-               <div style={{fontSize:11,color:IOS.label3}}>{w.wins}W · {w.losses}L · {w.picks.length} picks</div>
-             </div>
-             <div style={{textAlign:"right"}}>
-               <div style={{fontSize:16,fontWeight:800,color:w.pts>0?IOS.green:"#555"}}>{w.pts > 0 ? `+${w.pts}` : "0"} pts</div>
-               {bestWeek && bestWeek.week===w.week && soloWeeks.length>1 && (
-                 <div style={{fontSize:8,fontWeight:700,color:IOS.green,background:"rgba(48,209,88,0.1)",border:"0.5px solid rgba(48,209,88,0.2)",borderRadius:4,padding:"1px 5px",marginTop:2}}>BEST WEEK</div>
-               )}
-             </div>
-           </div>
-         ))}
-         </>
-       )}
-
-       {/* Join league CTA */}
-       {soloWeeks.length >= 2 && (
-         <div style={{marginTop:12,background:"rgba(10,132,255,0.08)",border:"0.5px solid rgba(10,132,255,0.2)",borderRadius:12,padding:"14px"}}>
-           <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:4}}>You're picking at {winPct}%</div>
-           <div style={{fontSize:11,color:IOS.label3,marginBottom:12,lineHeight:1.5}}>Prove it against friends — create a league and see how you stack up.</div>
-           <div style={{display:"flex",gap:8}}>
-             <button onClick={()=>{setShowNewLeague(true);setNewLeagueStep(0);}} style={{flex:1,background:IOS.blue,border:"none",borderRadius:8,padding:"10px",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Create League</button>
-             <button onClick={()=>{setShowBrowse(true);fetchPublicLeagues();}} style={{flex:1,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:8,padding:"10px",fontSize:12,fontWeight:700,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Browse Leagues</button>
-           </div>
-         </div>
-       )}
-     </div>
-   );
- })()}
+ {homeMode==="solo" && <SoloHome soloWeeks={soloWeeks} soloLoading={soloLoading} isPro={isPro} IOS={IOS} setScreen={setScreen} setShowNewLeague={setShowNewLeague} setNewLeagueStep={setNewLeagueStep} setShowBrowse={setShowBrowse} fetchPublicLeagues={fetchPublicLeagues}/>}
 
  {/* ══ LEAGUES MODE ══ */}
- {homeMode==="leagues" && <>
+ <div style={{display:homeMode==="leagues"?"block":"none"}}>
 
  {/* Games Ticker */}
  {/* Home / Games tab switcher */}
@@ -3133,6 +3126,7 @@ export default function App() {
  })}
  <div style={{height:16}}/>
  </>)}
+ </div>
  {/* End leagues mode */}
  </div>
  </>
@@ -6253,7 +6247,7 @@ export default function App() {
  </div>
  );})}
  </div>
- </div>
+ </div>}
  </div>
  );
 }
