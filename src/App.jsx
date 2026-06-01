@@ -603,7 +603,7 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
       <div style={{background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"14px",marginBottom:16}}>
         <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:4}}>Week {soloWeeks.length+1} picks</div>
         <div style={{fontSize:11,color:IOS.label3,marginBottom:12}}>Same bet types, same odds. Just you vs the line.</div>
-        <button onClick={()=>setScreen("picks")} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:8,padding:"12px",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
+        <button onClick={()=>{setIsSoloMode(true);setActiveLeagueId("solo");setScreen("picks");}} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:8,padding:"12px",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
           Build This Week&apos;s Slip
         </button>
       </div>
@@ -683,14 +683,15 @@ export default function App() {
  const [realStandings, setRealStandings] = useState([]);
  const [allMyStats, setAllMyStats] = useState(null);
  const [leagueTrophies, setLeagueTrophies] = useState([]);
- const activeLeague = [...realLeagues].find(l=>l.id===activeLeagueId) || realLeagues[0] || {id:"",name:"",sport:"nfl",current_week:1,season_weeks:18,max_members:8,target_size:8,isCommissioner:false};
+ const activeLeague = activeLeagueId==="solo" ? {id:"solo",name:"Solo Mode",sport:"nfl",current_week:(soloWeeks.length+1),season_weeks:99,max_members:1,target_size:1,isCommissioner:false} : ([...realLeagues].find(l=>l.id===activeLeagueId) || realLeagues[0] || {id:"",name:"",sport:"nfl",current_week:1,season_weeks:18,max_members:8,target_size:8,isCommissioner:false});
  const sport = SPORTS[activeLeague?.sport] || SPORTS["nfl"];
  const SLOTS = sport.slots;
 
  // ─── LIVE ODDS STATE ─────────────────────────────────────────────
  const [liveOdds, setLiveOdds] = useState({});
  const [homeTab, setHomeTab] = useState('home');
- const [homeMode, setHomeMode] = useState('leagues'); // 'leagues' | 'solo'
+ const [homeMode, setHomeMode] = useState('leagues');
+ const [isSoloMode, setIsSoloMode] = useState(false); // true when picking in solo mode // 'leagues' | 'solo'
  const [soloWeeks, setSoloWeeks] = useState([]); // history of solo weeks
  const [soloLoading, setSoloLoading] = useState(false); // 'home' | 'games' // { sportId: {ml,prop,ou,spread,longshot} }
  const [tickerGames, setTickerGames] = useState([]); // raw games for the ticker
@@ -2656,7 +2657,7 @@ export default function App() {
  {/* Leagues / Solo mode switcher */}
  <div style={{display:"flex",gap:0,marginTop:10,marginBottom:10,background:"rgba(255,255,255,0.06)",borderRadius:10,padding:3}}>
    {[{id:"leagues",label:"Leagues"},{id:"solo",label:"Solo"}].map(m=>(
-     <div key={m.id} onClick={()=>{setHomeMode(m.id);if(m.id==="solo")fetchSoloWeeks();}}
+     <div key={m.id} onClick={()=>{setHomeMode(m.id);if(m.id==="solo"){fetchSoloWeeks();}else{setIsSoloMode(false);}}}
      style={{flex:1,textAlign:"center",padding:"7px",borderRadius:8,fontSize:13,fontWeight:700,cursor:"pointer",transition:"all .15s",
        background:homeMode===m.id?"rgba(255,255,255,0.12)":"transparent",
        color:homeMode===m.id?"#fff":"rgba(255,255,255,0.4)"}}>
@@ -4363,96 +4364,234 @@ export default function App() {
  fetchLeagues(user.id);
  }} style={{fontSize:14,fontWeight:600,color:IOS.blue,cursor:"pointer"}}>Join with Invite Code</div>
  </div>
- ) : realLeagues.map(lg=>{
- const sp = SPORTS[lg.sport];
- const isActive = activeLeagueId === lg.id;
- const myMember = lg.members?.find(m=>m.isYou) || {record: lg.userRecord||"—", roi: lg.userRoi||"—", streak: "—"};
- const pendingPicks = (gradingData[lg.id]||[]).reduce((acc,m)=>acc+m.picks.filter(p=>p.result==="pending").length,0);
+ ) : (()=>{
+ /* ── VERSION B: Dropdown + sub-tabs leagues tab ── */
+ const lg = realLeagues.find(l=>l.id===activeLeagueId) || realLeagues[0];
+ const sp = lg ? SPORTS[lg.sport] : {label:"NFL",color:IOS.blue};
+ const myStanding = realStandings.find(s=>s.isYou);
+ const myRank = myStanding?.rank||"—";
+ const myRecord = myStanding?.record||"—";
+ const myPts = myStanding?.points||0;
+ const myWinPct = myStanding ? Math.round((myStanding.wins/(myStanding.wins+myStanding.losses||1))*100)||0 : 0;
+ const pendingPicks = lg ? (gradingData[lg.id]||[]).reduce((acc,m)=>acc+m.picks.filter(p=>p.result==="pending").length,0) : 0;
+ const [leagueSubTab, setLeagueSubTab] = React.useState("overview");
+ const myPicksThisWeek = weekPicks.filter(p=>p.user_id===user?.id);
  return (
- <div key={lg.id} style={{margin:"0 16px 12px",background:IOS.bg2,borderRadius:20,overflow:"hidden",border:`1px solid ${isActive?"rgba(10,132,255,0.4)":"rgba(255,255,255,0.07)"}`,cursor:"pointer"}}
- onClick={()=>{setActiveLeagueId(lg.id);setPicks({ml:null,prop:null,ou:null,spread:null});setLsBets([]);}}>
- {/* Sport accent bar */}
- <div style={{height:3,background:"rgba(10,132,255,0.6)"}}/>
- <div style={{padding:"16px 18px"}}>
- {/* Top row */}
- <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:12}}>
  <div>
- <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
- <div style={{fontSize:18,fontWeight:800,letterSpacing:-0.5,color:"#fff"}}>{lg.name}</div>
+ {/* Dropdown league switcher */}
+ <div style={{padding:"12px 16px 0"}}>
+   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+     <div style={{fontSize:11,fontWeight:700,color:IOS.label3,letterSpacing:.5,textTransform:"uppercase"}}>My Leagues</div>
+     <div style={{display:"flex",gap:6}}>
+       <div onClick={()=>{setShowBrowse(true);fetchPublicLeagues();}} style={{width:28,height:28,borderRadius:8,background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
+         <i className="ti ti-world" style={{fontSize:14,color:IOS.blue}} aria-hidden="true"/>
+       </div>
+       <div onClick={()=>setShowNewLeague(true)} style={{width:28,height:28,borderRadius:8,background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
+         <i className="ti ti-plus" style={{fontSize:14,color:IOS.blue}} aria-hidden="true"/>
+       </div>
+     </div>
+   </div>
+   {/* Dropdown */}
+   {lg ? (
+   <div onClick={()=>{
+     const idx = realLeagues.findIndex(l=>l.id===activeLeagueId);
+     const next = realLeagues[(idx+1)%realLeagues.length];
+     if(next) setActiveLeagueId(next.id);
+   }} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:10,padding:"10px 14px",cursor:realLeagues.length>1?"pointer":"default",marginBottom:0}}>
+     <div>
+       <div style={{fontSize:15,fontWeight:800,color:"#fff"}}>{lg.name}</div>
+       <div style={{fontSize:10,color:IOS.label3,marginTop:2}}>{sp.label} · {(lg.league_type||"h2h")==="h2h"?"H2H":(lg.league_type||"h2h")==="bracket"?"Tournament":"Points"} · {lg.members?.length||"?"} members · #{myRank} of {lg.target_size||lg.max_members||"?"}</div>
+     </div>
+     <div style={{display:"flex",alignItems:"center",gap:8}}>
+       {lg.isCommissioner&&<div style={{background:"rgba(255,214,10,0.15)",border:"0.5px solid rgba(255,214,10,0.3)",borderRadius:5,padding:"2px 7px",fontSize:9,fontWeight:700,color:IOS.yellow}}>COMMISH</div>}
+       {realLeagues.length>1&&<i className="ti ti-chevron-down" style={{fontSize:13,color:IOS.label3}} aria-hidden="true"/>}
+     </div>
+   </div>
+   ) : (
+   <div style={{background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:10,padding:"10px 14px",marginBottom:0,color:IOS.label3,fontSize:13}}>No leagues yet</div>
+   )}
  </div>
- <div style={{fontSize:12,color:IOS.label3}}>{sp.label} · Wk {lg.current_week||lg.week||1} · {lg.members?.length||lg.max_members||"?"} members</div>
+
+ {/* Sub-tabs */}
+ {lg && (
+ <div style={{display:"flex",borderBottom:`0.5px solid ${IOS.sep}`,margin:"10px 0 0"}}>
+   {["overview","standings","schedule"].map(t=>(
+     <div key={t} onClick={()=>setLeagueSubTab(t)} style={{flex:1,textAlign:"center",padding:"9px 4px",fontSize:11,fontWeight:700,textTransform:"capitalize",cursor:"pointer",
+       color:leagueSubTab===t?IOS.blue:"rgba(255,255,255,0.4)",
+       borderBottom:leagueSubTab===t?`2px solid ${IOS.blue}`:"2px solid transparent",transition:"all .15s"}}>
+       {t}
+     </div>
+   ))}
  </div>
- <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
- {lg.isCommissioner&&<div style={{background:"rgba(255,214,10,0.15)",border:"1px solid rgba(255,214,10,0.3)",borderRadius:6,padding:"2px 8px",fontSize:10,fontWeight:700,color:IOS.yellow}}> COMMISH</div>}
- {isActive&&<div style={{background:"rgba(10,132,255,0.15)",border:"1px solid rgba(10,132,255,0.3)",borderRadius:6,padding:"2px 8px",fontSize:10,fontWeight:700,color:IOS.blue}}>ACTIVE</div>}
- </div>
- </div>
- {/* Stats row */}
- <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:1,background:"rgba(255,255,255,0.05)",borderRadius:10,overflow:"hidden",marginBottom:12}}>
- {[{l:"Record",v:myMember?.record,c:IOS.blue},{l:"ROI",v:myMember?.roi,c:IOS.blue},{l:"Streak",v:myMember?.streak,c:IOS.blue}].map((s,i)=>(
- <div key={i} style={{background:IOS.bg3,padding:"10px 8px",textAlign:"center"}}>
- <div style={{fontSize:16,fontWeight:800,letterSpacing:-0.3,color:s.c,marginBottom:2}}>{s.v}</div>
- <div style={{fontSize:9,fontWeight:600,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3}}>{s.l}</div>
- </div>
- ))}
- </div>
- {/* Bottom row */}
- <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
- <div style={{fontSize:12,color:IOS.label3}}>vs {lg.opponent||"TBD"} this week</div>
- <div style={{display:"flex",gap:8,alignItems:"center"}}>
- {pendingPicks>0&&lg.isCommissioner&&(
- <div style={{background:"rgba(255,159,10,0.15)",border:"1px solid rgba(255,159,10,0.3)",borderRadius:6,padding:"3px 8px",fontSize:10,fontWeight:700,color:IOS.orange}}>{pendingPicks} to grade</div>
  )}
- <div onClick={e=>{e.stopPropagation();setActiveLeagueId(lg.id);setScreen(lg.isCommissioner?"commissioner":"league");}} style={{background:IOS.fill2,borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:600,color:IOS.blue,cursor:"pointer"}}>
- {lg.isCommissioner?"Commish ":"View →"}
+
+ {/* ── OVERVIEW TAB ── */}
+ {lg && leagueSubTab==="overview" && (
+ <div style={{padding:"12px 16px 20px"}}>
+   {/* My rank card */}
+   <div style={{background:`linear-gradient(135deg,rgba(10,132,255,0.1),rgba(94,92,230,0.07))`,border:`0.5px solid rgba(10,132,255,0.25)`,borderRadius:12,padding:"12px 14px",marginBottom:10}}>
+     <div style={{fontSize:10,fontWeight:700,color:IOS.blue,letterSpacing:.5,textTransform:"uppercase",marginBottom:8}}>Your Rank — #{myRank} of {lg.target_size||lg.max_members||"?"}</div>
+     <div style={{display:"flex",gap:8,marginBottom:0}}>
+       {[{l:"Record",v:myRecord,c:IOS.blue},{l:"Win %",v:myWinPct+"%",c:IOS.green},{l:"Points",v:myPts.toFixed?myPts.toFixed(1):myPts,c:"#fff"}].map((s,i)=>(
+         <div key={i} style={{flex:1,background:"rgba(0,0,0,0.3)",borderRadius:7,padding:"7px 6px",textAlign:"center"}}>
+           <div style={{fontSize:14,fontWeight:800,color:s.c}}>{s.v}</div>
+           <div style={{fontSize:8,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4,marginTop:1}}>{s.l}</div>
+         </div>
+       ))}
+     </div>
+   </div>
+
+   {/* Current matchup */}
+   {(()=>{
+     const opp = realStandings.find(s=>s.userId===lg.opponent_id||(!s.isYou&&lg.opponent));
+     const myWkPts = myPicksThisWeek.reduce((s,p)=>s+parseFloat(p.points_earned||0),0);
+     return (
+     <div style={{background:"linear-gradient(135deg,#0D1A2A,#0A0A14)",border:"0.5px solid #1A3A5A",borderRadius:12,padding:"12px 14px",marginBottom:10}}>
+       <div style={{fontSize:9,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Wk {lg.current_week||1} Matchup</div>
+       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
+         <div><div style={{fontSize:13,fontWeight:800,color:IOS.blue}}>You</div><div style={{fontSize:22,fontWeight:800,color:IOS.blue,letterSpacing:-1}}>{myWkPts.toFixed(1)}</div></div>
+         <div style={{fontSize:11,color:"#333",fontWeight:700}}>vs</div>
+         <div style={{textAlign:"right"}}><div style={{fontSize:13,fontWeight:800,color:"#ccc"}}>{lg.opponent||opp?.username||"Opponent"}</div><div style={{fontSize:22,fontWeight:800,color:"#ccc",letterSpacing:-1}}>{opp?.weekPts||"0.0"}</div></div>
+       </div>
+       <div style={{fontSize:9,fontWeight:700,color:myWkPts>0?IOS.green:"#555",textAlign:"center"}}>{myWkPts>0?"WINNING — ":""}{myPicksThisWeek.filter(p=>p.result==="pending").length} picks pending</div>
+     </div>
+     );
+   })()}
+
+   {/* This week picks preview */}
+   <div style={{fontSize:9,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>This week</div>
+   {myPicksThisWeek.length===0 ? (
+     <div style={{background:IOS.bg2,borderRadius:10,padding:"12px 14px",marginBottom:10,border:`0.5px solid ${IOS.sep}`}}>
+       <div style={{fontSize:12,color:IOS.label3,textAlign:"center"}}>No picks locked yet</div>
+       <button onClick={()=>setScreen("picks")} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:7,padding:"9px",fontFamily:"Barlow,sans-serif",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",marginTop:10}}>Build My Slip</button>
+     </div>
+   ) : (
+   <div style={{background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:10,overflow:"hidden",marginBottom:10}}>
+     {myPicksThisWeek.slice(0,5).map((p,i)=>{
+       const won=p.result==="W", lost=p.result==="L";
+       return (
+       <div key={p.id||i} style={{display:"flex",alignItems:"center",padding:"7px 12px",borderBottom:i<Math.min(myPicksThisWeek.length,5)-1?`0.5px solid ${IOS.sep}`:"none",background:won?"rgba(48,209,88,0.04)":lost?"rgba(255,59,48,0.04)":"transparent"}}>
+         <div style={{fontSize:8,fontWeight:800,color:IOS.blue,textTransform:"uppercase",width:30,flexShrink:0}}>{p.slot?.replace("_0","")?.replace("longshot","LS")||"ML"}</div>
+         <div style={{flex:1,fontSize:11,color:"#ccc",padding:"0 8px"}}>{p.pick_name}</div>
+         <div style={{fontSize:10,fontWeight:700,color:won?IOS.green:lost?IOS.red:"#555"}}>{won?"+"+parseFloat(p.points_earned||0).toFixed(1)+" pts":lost?"L":"pending"}</div>
+       </div>
+       );
+     })}
+   </div>
+   )}
+
+   {/* Standings mini */}
+   <div style={{fontSize:9,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Standings</div>
+   <div style={{background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:10,overflow:"hidden",marginBottom:10}}>
+     <div style={{display:"flex",padding:"5px 12px",borderBottom:`0.5px solid ${IOS.sep}`}}>
+       <div style={{width:22}}/>
+       <div style={{flex:1,fontSize:8,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4}}/>
+       <div style={{width:34,fontSize:8,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4,textAlign:"right"}}>W/L</div>
+       <div style={{width:52,fontSize:8,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4,textAlign:"right"}}>PTS</div>
+     </div>
+     {realStandings.slice(0,4).map((s,i)=>(
+       <div key={s.userId||i} style={{display:"flex",alignItems:"center",padding:"8px 12px",borderBottom:i<Math.min(realStandings.length,4)-1?`0.5px solid rgba(255,255,255,0.04)`:"none",background:s.isYou?"rgba(10,132,255,0.06)":"transparent"}}>
+         <div style={{width:22,fontSize:12,fontWeight:700,color:i===0?IOS.blue:IOS.label3}}>{i+1}</div>
+         <div style={{flex:1}}>
+           <div style={{fontSize:12,fontWeight:700,color:s.isYou?IOS.blue:"#ccc"}}>{s.isYou?"You":s.username}</div>
+           <div style={{fontSize:9,color:IOS.label3,marginTop:1}}>{s.winPct||0}% win rate</div>
+         </div>
+         <div style={{width:34,fontSize:11,color:IOS.label3,textAlign:"right"}}>{s.record}</div>
+         <div style={{width:52,fontSize:12,fontWeight:800,color:parseFloat(s.points)>0?IOS.green:"#555",textAlign:"right"}}>{parseFloat(s.points||0).toFixed(1)}</div>
+       </div>
+     ))}
+     {realStandings.length>4&&(
+       <div onClick={()=>setLeagueSubTab("standings")} style={{padding:"8px 12px",textAlign:"center",borderTop:`0.5px solid ${IOS.sep}`}}>
+         <div style={{fontSize:10,color:IOS.blue,fontWeight:600}}>See full standings</div>
+       </div>
+     )}
+   </div>
+
+   {/* Quick actions */}
+   <div style={{display:"flex",gap:8}}>
+     <button onClick={()=>setScreen("picks")} style={{flex:1,background:IOS.blue,border:"none",borderRadius:8,padding:"10px",fontFamily:"Barlow,sans-serif",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer"}}>My Picks</button>
+     <button onClick={e=>{e.stopPropagation();setActiveLeagueId(lg.id);setScreen(lg.isCommissioner?"commissioner":"league");}} style={{flex:1,background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:8,padding:"10px",fontFamily:"Barlow,sans-serif",fontSize:12,fontWeight:700,color:IOS.blue,cursor:"pointer"}}>{lg.isCommissioner?"Commish Panel":"League Detail"}</button>
+   </div>
  </div>
+ )}
+
+ {/* ── STANDINGS TAB ── */}
+ {lg && leagueSubTab==="standings" && (
+ <div style={{padding:"12px 16px 20px"}}>
+   <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:10}}>Season Standings</div>
+   <div style={{background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:10,overflow:"hidden"}}>
+     <div style={{display:"flex",padding:"6px 12px",borderBottom:`0.5px solid ${IOS.sep}`}}>
+       <div style={{width:24}}/>
+       <div style={{flex:1,fontSize:8,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4}}>Player</div>
+       <div style={{width:36,fontSize:8,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4,textAlign:"right"}}>W/L</div>
+       <div style={{width:56,fontSize:8,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4,textAlign:"right"}}>Total Pts</div>
+     </div>
+     {realStandings.map((s,i)=>(
+       <div key={s.userId||i} style={{display:"flex",alignItems:"center",padding:"10px 12px",borderBottom:i<realStandings.length-1?`0.5px solid rgba(255,255,255,0.04)`:"none",background:s.isYou?"rgba(10,132,255,0.06)":"transparent"}}>
+         <div style={{width:24,fontSize:13,fontWeight:700,color:i===0?IOS.blue:IOS.label3}}>{i+1}</div>
+         <div style={{flex:1}}>
+           <div style={{fontSize:12,fontWeight:700,color:s.isYou?IOS.blue:"#ccc"}}>{s.isYou?"You":s.username}</div>
+           <div style={{fontSize:9,color:IOS.label3,marginTop:1}}>{s.winPct||0}% win rate</div>
+         </div>
+         <div style={{width:36,fontSize:11,color:IOS.label3,textAlign:"right"}}>{s.record}</div>
+         <div style={{width:56,fontSize:13,fontWeight:800,color:parseFloat(s.points)>0?IOS.green:"#555",textAlign:"right"}}>{parseFloat(s.points||0).toFixed(1)}</div>
+       </div>
+     ))}
+   </div>
  </div>
+ )}
+
+ {/* ── SCHEDULE TAB ── */}
+ {lg && leagueSubTab==="schedule" && (
+ <div style={{padding:"12px 16px 20px"}}>
+   <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:10}}>Season Schedule</div>
+   <button onClick={e=>{e.stopPropagation();setActiveLeagueId(lg.id);setScreen(lg.isCommissioner?"commissioner":"league");}} style={{width:"100%",background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:8,padding:"11px",fontFamily:"Barlow,sans-serif",fontSize:13,fontWeight:700,color:IOS.blue,cursor:"pointer",marginBottom:12}}>View Full Schedule →</button>
  </div>
+ )}
+
+ {/* Other leagues list */}
+ {realLeagues.length>1&&(
+ <div style={{padding:"0 16px",marginTop:4}}>
+   <div style={{fontSize:10,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Other leagues</div>
+   {realLeagues.filter(l=>l.id!==activeLeagueId).map(l=>{
+     const lsp=SPORTS[l.sport];
+     return (
+     <div key={l.id} onClick={()=>setActiveLeagueId(l.id)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:10,padding:"10px 12px",marginBottom:6,cursor:"pointer"}}>
+       <div>
+         <div style={{fontSize:13,fontWeight:700,color:"#fff"}}>{l.name}</div>
+         <div style={{fontSize:10,color:IOS.label3,marginTop:2}}>{lsp.label} · Wk {l.current_week||1}</div>
+       </div>
+       <i className="ti ti-chevron-right" style={{fontSize:13,color:IOS.label3}} aria-hidden="true"/>
+     </div>
+     );
+   })}
+ </div>
+ )}
+
+ {/* Action buttons */}
+ <div style={{padding:"12px 16px 8px",display:"flex",gap:8}}>
+   <div onClick={async()=>{
+     const code=prompt("Enter invite code:");
+     if(!code) return;
+     const {data:league,error}=await supabase.from("leagues").select().eq("invite_code",code.toUpperCase().trim()).single();
+     if(error||!league){alert("League not found.");return;}
+     const {data:currentMems}=await supabase.from("league_members").select("user_id").eq("league_id",league.id);
+     const targetSize=league.target_size||league.max_members||8;
+     if(currentMems&&currentMems.length>=targetSize){alert("League is full.");return;}
+     const {error:joinError}=await supabase.from("league_members").insert({league_id:league.id,user_id:user.id,is_commissioner:false});
+     if(joinError){alert("Error joining.");return;}
+     await fetchLeagues(user.id);
+     alert("Joined "+league.name+"!");
+   }} style={{flex:1,background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:9,padding:"11px",textAlign:"center",cursor:"pointer"}}>
+     <div style={{fontSize:12,fontWeight:700,color:"#fff"}}>Join with Code</div>
+   </div>
+   <div onClick={()=>{setShowBrowse(true);fetchPublicLeagues();}} style={{flex:1,background:"rgba(10,132,255,0.08)",border:"0.5px solid rgba(10,132,255,0.25)",borderRadius:9,padding:"11px",textAlign:"center",cursor:"pointer"}}>
+     <div style={{fontSize:12,fontWeight:700,color:IOS.blue}}>Browse Public</div>
+   </div>
  </div>
  </div>
  );
- })}
-
- {/* Join league */}
- <div onClick={async()=>{
- const code=prompt("Enter invite code:");
- if(!code) return;
- const {data:league,error}=await supabase.from("leagues").select().eq("invite_code",code.toUpperCase().trim()).single();
- if(error||!league){alert("League not found. Check the code and try again.");return;}
- // Check capacity before joining
- const {data:currentMems}=await supabase.from("league_members").select("user_id").eq("league_id",league.id);
- const targetSize = league.target_size||league.max_members||8;
- if(currentMems && currentMems.length >= targetSize){alert(`This league is already full (${targetSize}/${targetSize} members).`);return;}
- const {error:joinError}=await supabase.from("league_members").insert({league_id:league.id,user_id:user.id,is_commissioner:false});
- if(joinError){alert("Error joining. You may already be a member.");return;}
- const {data:allMembers}=await supabase.from("league_members").select("user_id").eq("league_id",league.id);
- if(allMembers && allMembers.length === targetSize) {
- const memberIds = allMembers.map(m=>m.user_id);
- await generateSchedule(league.id, memberIds, league.season_weeks||18);
- alert(`Joined ${league.name}! League is full — schedule has been generated!`);
- } else {
- alert(`Joined ${league.name}! Welcome. ${targetSize - allMembers.length} more player${targetSize-allMembers.length!==1?"s":""} needed to start the season.`);
- }
- fetchLeagues(user.id);
- }} style={{margin:"4px 16px 16px",background:IOS.bg2,borderRadius:16,padding:"16px 18px",border:"1.5px dashed rgba(255,255,255,0.1)",cursor:"pointer",display:"flex",alignItems:"center",gap:14}}>
- <div style={{width:44,height:44,borderRadius:12,background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}></div>
- <div>
- <div style={{fontSize:15,fontWeight:700,color:"#fff",marginBottom:2}}>Join a League</div>
- <div style={{fontSize:12,color:IOS.label3}}>Enter an invite code from a friend</div>
- </div>
- </div>
-
- {/* Browse Public Leagues button */}
- <div onClick={()=>{setShowBrowse(true);fetchPublicLeagues();}}
- style={{margin:"0 16px 16px",background:"rgba(10,132,255,0.08)",borderRadius:16,padding:"16px 18px",border:"0.5px solid rgba(10,132,255,0.25)",cursor:"pointer",display:"flex",alignItems:"center",gap:14}}>
- <div style={{width:44,height:44,borderRadius:12,background:"rgba(10,132,255,0.12)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-   <i className="ti ti-world" style={{fontSize:22,color:IOS.blue}} aria-hidden="true"/>
- </div>
- <div>
-   <div style={{fontSize:15,fontWeight:700,color:"#fff",marginBottom:2}}>Browse Public Leagues</div>
-   <div style={{fontSize:12,color:IOS.label3}}>Find and join open leagues</div>
- </div>
- </div>
+ })()}
 
  </div>
  </>
