@@ -1696,6 +1696,7 @@ export default function App() {
 
  useEffect(()=>{
  if(!activeLeagueId||!user) return;
+ if(activeLeagueId==="solo") return; // solo mode - no league data to fetch
  // Clear stale data immediately when league switches
  setWeekPicks([]);
  setLeagueMembers([]);
@@ -1723,6 +1724,7 @@ export default function App() {
 
  useEffect(()=>{
  if(!activeLeagueId||!user) return;
+ if(activeLeagueId==="solo") return;
  const lg = realLeagues.find(l=>l.id===activeLeagueId);
  if(lg) fetchWeekPicks(activeLeagueId, lg.current_week||lg.week||1);
  },[activeLeagueId, user, screen]);
@@ -4393,27 +4395,43 @@ export default function App() {
    </div>
    {/* Dropdown */}
    {lg ? (
-   <div onClick={()=>{
-     const idx = realLeagues.findIndex(l=>l.id===activeLeagueId);
-     const next = realLeagues[(idx+1)%realLeagues.length];
-     if(next) setActiveLeagueId(next.id);
-   }} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:10,padding:"10px 14px",cursor:realLeagues.length>1?"pointer":"default",marginBottom:0}}>
+   <>
+   <div onClick={()=>setLeagueSubTab(leagueSubTab==="dropdown"?"overview":"dropdown")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:IOS.bg2,border:`0.5px solid ${leagueSubTab==="dropdown"?"rgba(10,132,255,0.4)":IOS.sep}`,borderRadius:10,padding:"10px 14px",cursor:"pointer",marginBottom:0}}>
      <div>
        <div style={{fontSize:15,fontWeight:800,color:"#fff"}}>{lg.name}</div>
-       <div style={{fontSize:10,color:IOS.label3,marginTop:2}}>{sp.label} · {(lg.league_type||"h2h")==="h2h"?"H2H":(lg.league_type||"h2h")==="bracket"?"Tournament":"Points"} · {lg.members?.length||"?"} members · #{myRank} of {lg.target_size||lg.max_members||"?"}</div>
+       <div style={{fontSize:10,color:IOS.label3,marginTop:2}}>{sp.label} · {(lg.league_type||"h2h")==="h2h"?"H2H":(lg.league_type||"h2h")==="bracket"?"Tournament":"Points"} · #{myRank} of {lg.target_size||lg.max_members||"?"}</div>
      </div>
      <div style={{display:"flex",alignItems:"center",gap:8}}>
        {lg.isCommissioner&&<div style={{background:"rgba(255,214,10,0.15)",border:"0.5px solid rgba(255,214,10,0.3)",borderRadius:5,padding:"2px 7px",fontSize:9,fontWeight:700,color:IOS.yellow}}>COMMISH</div>}
-       {realLeagues.length>1&&<i className="ti ti-chevron-down" style={{fontSize:13,color:IOS.label3}} aria-hidden="true"/>}
+       <i className={"ti "+(leagueSubTab==="dropdown"?"ti-chevron-up":"ti-chevron-down")} style={{fontSize:13,color:IOS.label3}} aria-hidden="true"/>
      </div>
    </div>
+   {/* Dropdown list */}
+   {leagueSubTab==="dropdown"&&(
+   <div style={{background:IOS.bg2,border:`0.5px solid rgba(10,132,255,0.3)`,borderRadius:10,overflow:"hidden",marginTop:4}}>
+     {realLeagues.map((l,i)=>{
+       const lsp=SPORTS[l.sport];
+       const isSelected=l.id===activeLeagueId;
+       return (
+       <div key={l.id} onClick={()=>{setActiveLeagueId(l.id);setLeagueSubTab("overview");}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 14px",borderBottom:i<realLeagues.length-1?`0.5px solid ${IOS.sep}`:"none",background:isSelected?"rgba(10,132,255,0.08)":"transparent",cursor:"pointer"}}>
+         <div>
+           <div style={{fontSize:13,fontWeight:700,color:isSelected?IOS.blue:"#fff"}}>{l.name}</div>
+           <div style={{fontSize:10,color:IOS.label3,marginTop:1}}>{lsp.label} · Wk {l.current_week||1}</div>
+         </div>
+         {isSelected&&<i className="ti ti-check" style={{fontSize:14,color:IOS.blue}} aria-hidden="true"/>}
+       </div>
+       );
+     })}
+   </div>
+   )}
+   </>
    ) : (
    <div style={{background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:10,padding:"10px 14px",marginBottom:0,color:IOS.label3,fontSize:13}}>No leagues yet</div>
    )}
  </div>
 
- {/* Sub-tabs */}
- {lg && (
+ {/* Sub-tabs - hide when dropdown is open */}
+ {lg && leagueSubTab!=="dropdown" && (
  <div style={{display:"flex",borderBottom:`0.5px solid ${IOS.sep}`,margin:"10px 0 0"}}>
    {["overview","standings","schedule"].map(t=>(
      <div key={t} onClick={()=>setLeagueSubTab(t)} style={{flex:1,textAlign:"center",padding:"9px 4px",fontSize:11,fontWeight:700,textTransform:"capitalize",cursor:"pointer",
@@ -4443,17 +4461,27 @@ export default function App() {
 
    {/* Current matchup */}
    {(()=>{
-     const opp = realStandings.find(s=>s.userId===lg.opponent_id||(!s.isYou&&lg.opponent));
+     const currentWeekNum = lg.current_week||1;
+     const currentMatchup = liveSchedule.find(w=>w.week===currentWeekNum);
+     const oppName = currentMatchup?.opp;
      const myWkPts = myPicksThisWeek.reduce((s,p)=>s+parseFloat(p.points_earned||0),0);
+     const oppWkPts = currentMatchup?.oppPts||0;
+     const pendingCount = myPicksThisWeek.filter(p=>p.result==="pending").length;
      return (
      <div style={{background:"linear-gradient(135deg,#0D1A2A,#0A0A14)",border:"0.5px solid #1A3A5A",borderRadius:12,padding:"12px 14px",marginBottom:10}}>
-       <div style={{fontSize:9,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Wk {lg.current_week||1} Matchup</div>
+       <div style={{fontSize:9,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Wk {currentWeekNum} Matchup</div>
+       {!oppName ? (
+         <div style={{textAlign:"center",padding:"8px 0",fontSize:12,color:IOS.label3}}>Fill up league to get a schedule!</div>
+       ) : (
+       <>
        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
          <div><div style={{fontSize:13,fontWeight:800,color:IOS.blue}}>You</div><div style={{fontSize:22,fontWeight:800,color:IOS.blue,letterSpacing:-1}}>{myWkPts.toFixed(1)}</div></div>
          <div style={{fontSize:11,color:"#333",fontWeight:700}}>vs</div>
-         <div style={{textAlign:"right"}}><div style={{fontSize:13,fontWeight:800,color:"#ccc"}}>{lg.opponent||opp?.username||"Opponent"}</div><div style={{fontSize:22,fontWeight:800,color:"#ccc",letterSpacing:-1}}>{opp?.weekPts||"0.0"}</div></div>
+         <div style={{textAlign:"right"}}><div style={{fontSize:13,fontWeight:800,color:"#ccc"}}>{oppName}</div><div style={{fontSize:22,fontWeight:800,color:"#ccc",letterSpacing:-1}}>{oppWkPts.toFixed(1)}</div></div>
        </div>
-       <div style={{fontSize:9,fontWeight:700,color:myWkPts>0?IOS.green:"#555",textAlign:"center"}}>{myWkPts>0?"WINNING — ":""}{myPicksThisWeek.filter(p=>p.result==="pending").length} picks pending</div>
+       <div style={{fontSize:9,fontWeight:700,color:myWkPts>oppWkPts?IOS.green:"#555",textAlign:"center"}}>{myWkPts>oppWkPts?"WINNING — ":"TRAILING — "}{pendingCount} picks pending</div>
+       </>
+       )}
      </div>
      );
    })()}
@@ -4545,28 +4573,37 @@ export default function App() {
  {lg && leagueSubTab==="schedule" && (
  <div style={{padding:"12px 16px 20px"}}>
    <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:10}}>Season Schedule</div>
-   <button onClick={e=>{e.stopPropagation();setActiveLeagueId(lg.id);setScreen(lg.isCommissioner?"commissioner":"league");}} style={{width:"100%",background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:8,padding:"11px",fontFamily:"Barlow,sans-serif",fontSize:13,fontWeight:700,color:IOS.blue,cursor:"pointer",marginBottom:12}}>View Full Schedule →</button>
+   {liveSchedule.length===0 ? (
+     <div style={{background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:10,padding:"20px",textAlign:"center"}}>
+       <div style={{fontSize:13,color:"#fff",fontWeight:700,marginBottom:4}}>No schedule yet</div>
+       <div style={{fontSize:11,color:IOS.label3}}>Fill up the league to generate the schedule</div>
+     </div>
+   ) : (
+   <div style={{background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:10,overflow:"hidden"}}>
+     {liveSchedule.map((m,i)=>{
+       const isCurrentWk = m.week===(lg.current_week||1);
+       const won=m.result==="W", lost=m.result==="L", live=m.result==="live";
+       return (
+       <div key={i} style={{display:"flex",alignItems:"center",padding:"10px 14px",borderBottom:i<liveSchedule.length-1?`0.5px solid ${IOS.sep}`:"none",background:isCurrentWk?"rgba(10,132,255,0.05)":"transparent"}}>
+         <div style={{width:32,fontSize:11,fontWeight:700,color:isCurrentWk?IOS.blue:IOS.label3,flexShrink:0}}>Wk {m.week}</div>
+         <div style={{flex:1,fontSize:12,color:"#ccc"}}>vs {m.opp}</div>
+         <div style={{display:"flex",alignItems:"center",gap:6}}>
+           {(m.myPts>0||m.oppPts>0)&&<div style={{fontSize:11,color:IOS.label3}}>{m.myPts.toFixed(1)} - {m.oppPts.toFixed(1)}</div>}
+           <div style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:5,
+             background:won?"rgba(48,209,88,0.1)":lost?"rgba(255,59,48,0.08)":live?"rgba(255,159,10,0.1)":"rgba(255,255,255,0.06)",
+             color:won?IOS.green:lost?IOS.red:live?IOS.orange:IOS.label3}}>
+             {won?"W":lost?"L":live?"Live":isCurrentWk?"Now":"—"}
+           </div>
+         </div>
+       </div>
+       );
+     })}
+   </div>
+   )}
  </div>
  )}
 
- {/* Other leagues list */}
- {realLeagues.length>1&&(
- <div style={{padding:"0 16px",marginTop:4}}>
-   <div style={{fontSize:10,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Other leagues</div>
-   {realLeagues.filter(l=>l.id!==activeLeagueId).map(l=>{
-     const lsp=SPORTS[l.sport];
-     return (
-     <div key={l.id} onClick={()=>setActiveLeagueId(l.id)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:10,padding:"10px 12px",marginBottom:6,cursor:"pointer"}}>
-       <div>
-         <div style={{fontSize:13,fontWeight:700,color:"#fff"}}>{l.name}</div>
-         <div style={{fontSize:10,color:IOS.label3,marginTop:2}}>{lsp.label} · Wk {l.current_week||1}</div>
-       </div>
-       <i className="ti ti-chevron-right" style={{fontSize:13,color:IOS.label3}} aria-hidden="true"/>
-     </div>
-     );
-   })}
- </div>
- )}
+
 
  {/* Action buttons */}
  <div style={{padding:"12px 16px 8px",display:"flex",gap:8}}>
