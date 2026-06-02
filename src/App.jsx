@@ -6856,6 +6856,7 @@ export default function App() {
  const maxPts = byWeek.length?Math.max(...byWeek.map(w=>w.pts),1):1;
  const totalPtsAllTypes = byTypeArr.reduce((s,t)=>s+t.pts,0)||1;
  const totalPicksAllTypes = byTypeArr.reduce((s,t)=>s+t.wins+t.losses,0)||1;
+ const ATABS = ["Overview","Bet Types","Sports","Longshot","Season"];
 
  const WinBar = ({pct, color}) => (
    <div style={{flex:1,height:4,background:"#1A1A1A",borderRadius:2,marginLeft:8}}>
