@@ -1049,6 +1049,7 @@ export default function App() {
  const [activatedPUs,setActivatedPUs]= useState({}); // slotId -> pu applied on picks screen
  const [matchupPUs, setMatchupPUs] = useState({}); // pickIdx -> pu applied on live matchup
  const [profTab, setProfTab] = useState("stats");
+ const [analyticsTab, setAnalyticsTab] = useState("Overview");
  const [puLeagueId, setPuLeagueId] = useState(null); // which league to view PUs for on profile
  const [puLeaguePUs, setPuLeaguePUs] = useState([]); // PUs for the viewed league
  const [puLeagueSpins, setPuLeagueSpins] = useState(0); // wheel spins for viewed league
@@ -1552,20 +1553,56 @@ export default function App() {
  };
 
  const fetchAllMyStats = async (uid) => {
- const {data:picks} = await supabase
- .from("picks")
- .select("*")
- .eq("user_id", uid)
- .neq("result", "pending");
- if(!picks||!picks.length) { setAllMyStats({wins:0,losses:0,points:0,total:0,winRate:"0%",bestBet:null,worstBet:null}); return; }
- const wins = picks.filter(p=>p.result==="W").length;
- const losses = picks.filter(p=>p.result==="L").length;
- const points = parseFloat(picks.filter(p=>p.result==="W").reduce((sum,p)=>sum+parseFloat(p.points_earned||0),0).toFixed(1));
- const total = wins + losses;
- const winRate = total > 0 ? `${Math.round(wins/total*100)}%` : "0%";
- const bestBet = picks.filter(p=>p.result==="W").sort((a,b)=>parseFloat(b.points_earned||0)-parseFloat(a.points_earned||0))[0];
- const worstBet = picks.filter(p=>p.result==="L")[0];
- setAllMyStats({wins, losses, points, total, winRate, bestBet, worstBet});
+ const {data:picks} = await supabase.from("picks").select("*").eq("user_id", uid).neq("result", "pending");
+ if(!picks||!picks.length){setAllMyStats({wins:0,losses:0,points:0,total:0,winRate:"0%",bestBet:null,worstBet:null,byType:{},bySport:{},byWeek:[],avgOdds:0,currentStreak:{count:0,type:"W"},maxStreak:0,bestWeek:null,personality:"The Rookie",personalityDesc:"Keep picking and your style will emerge.",longshotStats:[]});return;}
+ const wins=picks.filter(p=>p.result==="W").length;
+ const losses=picks.filter(p=>p.result==="L").length;
+ const points=parseFloat(picks.filter(p=>p.result==="W").reduce((sum,p)=>sum+parseFloat(p.points_earned||0),0).toFixed(1));
+ const total=wins+losses;
+ const winRate=total>0?`${Math.round(wins/total*100)}%`:"0%";
+ const bestBet=picks.filter(p=>p.result==="W").sort((a,b)=>parseFloat(b.points_earned||0)-parseFloat(a.points_earned||0))[0];
+ const worstBet=picks.filter(p=>p.result==="L")[0];
+ // By bet type
+ const TYPE_COLORS={ml:"#0A84FF",prop:"#FFD60A",ou:"#FF9F0A",spread:"#30D158",longshot:"#FF375F"};
+ const TYPE_LABELS={ml:"Moneyline",prop:"Prop",ou:"Over/Under",spread:"Spread",longshot:"Longshot"};
+ const byType={};
+ picks.forEach(p=>{const slot=p.slot?.startsWith("longshot_")?"longshot":(p.slot||"ml");if(!byType[slot])byType[slot]={wins:0,losses:0,pts:0,color:TYPE_COLORS[slot]||"#888",label:TYPE_LABELS[slot]||slot};if(p.result==="W"){byType[slot].wins++;byType[slot].pts+=parseFloat(p.points_earned||0);}else byType[slot].losses++;});
+ Object.values(byType).forEach(t=>{const tot=t.wins+t.losses;t.pct=tot>0?Math.round(t.wins/tot*100):0;t.pts=parseFloat(t.pts.toFixed(1));});
+ // By sport
+ const leagueIds=[...new Set(picks.map(p=>p.league_id).filter(Boolean))];
+ let sportMap={};
+ if(leagueIds.length){const{data:lgs}=await supabase.from("leagues").select("id,sport").in("id",leagueIds);(lgs||[]).forEach(lg=>{sportMap[lg.id]=lg.sport;});}
+ const SPORT_COLORS={nfl:"#0A84FF",nba:"#FF6B35",mlb:"#30D158"};
+ const SPORT_LABELS={nfl:"NFL",nba:"NBA",mlb:"MLB"};
+ const bySport={};
+ picks.forEach(p=>{const sport=sportMap[p.league_id]||"nfl";if(!bySport[sport])bySport[sport]={wins:0,losses:0,pts:0,color:SPORT_COLORS[sport]||"#888",label:SPORT_LABELS[sport]||sport.toUpperCase()};if(p.result==="W"){bySport[sport].wins++;bySport[sport].pts+=parseFloat(p.points_earned||0);}else bySport[sport].losses++;});
+ Object.values(bySport).forEach(s=>{const tot=s.wins+s.losses;s.pct=tot>0?Math.round(s.wins/tot*100):0;s.pts=parseFloat(s.pts.toFixed(1));});
+ // By week trend
+ const byWeekMap={};
+ picks.forEach(p=>{const w=p.week||1;if(!byWeekMap[w])byWeekMap[w]={week:w,wins:0,losses:0,pts:0};if(p.result==="W"){byWeekMap[w].wins++;byWeekMap[w].pts+=parseFloat(p.points_earned||0);}else byWeekMap[w].losses++;});
+ const byWeek=Object.values(byWeekMap).sort((a,b)=>a.week-b.week).map(w=>({...w,pts:parseFloat(w.pts.toFixed(1)),label:`Wk${w.week}`}));
+ // Streak
+ const sorted=[...picks].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+ let curStreak=0,curType=sorted[sorted.length-1]?.result||"W",maxStreak=0,tmpStreak=0,tmpType=sorted[0]?.result;
+ for(let i=sorted.length-1;i>=0;i--){if(i===sorted.length-1){curStreak=1;curType=sorted[i].result;}else if(sorted[i].result===curType)curStreak++;else break;}
+ sorted.forEach(p=>{if(p.result===tmpType){tmpStreak++;maxStreak=Math.max(maxStreak,tmpStreak);}else{tmpType=p.result;tmpStreak=1;}});
+ // Avg odds
+ const oddsVals=picks.map(p=>p.implied_odds||0).filter(v=>v!==0);
+ const avgOdds=oddsVals.length?Math.round(oddsVals.reduce((s,v)=>s+v,0)/oddsVals.length):0;
+ const bestWeekObj=byWeek.length?byWeek.reduce((b,w)=>w.pts>b.pts?w:b,byWeek[0]):null;
+ // Personality
+ const lsT=byType["longshot"]||{wins:0,pct:0};const mlT=byType["ml"]||{wins:0,pct:0};const spT=byType["spread"]||{pct:0};const prT=byType["prop"]||{wins:0,pct:0};
+ let personality="The Rookie",personalityDesc="You're just getting started. Keep picking and your style will emerge.";
+ if(total>=10){if(lsT.wins>=2&&lsT.pct>=25){personality="The Gambler";personalityDesc="You're not afraid of big odds. Your longshot hit rate is turning heads.";}else if(mlT.pct>=65&&mlT.wins>=8){personality="The Chalk";personalityDesc="You ride favorites hard and it's working. Boring? Maybe. Profitable? Yes.";}else if(spT.pct>=60){personality="The Handicapper";personalityDesc="You beat the spread at an elite clip. Vegas should be worried.";}else if(prT.pct>=60&&prT.wins>=6){personality="The Analyst";personalityDesc="Player props are your bread and butter. You do your homework.";}else if(wins/total>=0.60){personality="The Sharpshooter";personalityDesc="Consistent, disciplined, winning across the board. Textbook sharp.";}else{personality="The Contrarian";personalityDesc="You pick against the grain. Your record proves it's not always wrong.";}}
+ // Longshot deep stats
+ const lsPicks=picks.filter(p=>p.slot?.startsWith("longshot_"));
+ const lsByLegs={};
+ lsPicks.forEach(p=>{const k=p.league_id+"_"+p.week+"_"+p.multiplier;if(!lsByLegs[k])lsByLegs[k]={legs:0,result:p.result};lsByLegs[k].legs++;});
+ const parlayGroups=Object.values(lsByLegs);
+ const parlayBySize={};
+ parlayGroups.forEach(g=>{const s=Math.min(g.legs,5);if(!parlayBySize[s])parlayBySize[s]={legs:s,hit:0,total:0};parlayBySize[s].total++;if(g.result==="W")parlayBySize[s].hit++;});
+ const longshotStats=Object.values(parlayBySize).sort((a,b)=>a.legs-b.legs).map(x=>({...x,pct:x.total>0?Math.round(x.hit/x.total*100):0}));
+ setAllMyStats({wins,losses,points,total,winRate,bestBet,worstBet,byType,bySport,byWeek,avgOdds,currentStreak:{count:curStreak,type:curType},maxStreak,bestWeek:bestWeekObj,personality,personalityDesc,longshotStats});
  };
 
  const fetchStandings = async (leagueId) => {
@@ -5891,6 +5928,17 @@ export default function App() {
  </div>
  ))}
  </div>
+ <div style={{height:8}}/>
+ <div onClick={()=>setScreen("analytics")} style={{margin:"0 16px",background:isPro?"rgba(10,132,255,0.1)":"rgba(191,90,242,0.08)",border:`0.5px solid ${isPro?"rgba(10,132,255,0.3)":"rgba(191,90,242,0.3)"}`,borderRadius:14,padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}}>
+   <div>
+     <div style={{fontSize:14,fontWeight:700,color:"#fff",marginBottom:2}}>Full Analytics</div>
+     <div style={{fontSize:11,color:IOS.label3}}>{isPro?"Bet types, sports, H2H, longshot, season recap":"6 analytics tabs — unlock with Pro"}</div>
+   </div>
+   <div style={{display:"flex",alignItems:"center",gap:6}}>
+     {!isPro&&<div style={{background:"rgba(191,90,242,0.15)",border:"0.5px solid rgba(191,90,242,0.3)",borderRadius:5,padding:"2px 7px",fontSize:9,fontWeight:700,color:"#BF5AF2"}}>PRO</div>}
+     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+   </div>
+ </div>
  <div style={{height:20}}/>
  </>
  )}
@@ -6738,107 +6786,379 @@ export default function App() {
  )}
 
  {/* ══ SOLO STATS ══ */}
- {screen==="solostats"&&(
- <div className="body" style={{padding:"0 16px 40px"}}>
- <div style={{padding:"20px 0 14px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-   <div>
-     <div style={{fontSize:24,fontWeight:800,color:"#fff",letterSpacing:-0.5}}>Stats</div>
-     <div style={{fontSize:13,color:IOS.label3,marginTop:2}}>Your pick performance</div>
+ {(screen==="solostats"||screen==="analytics")&&(()=>{
+ const s = allMyStats||{};
+ const byTypeArr = Object.values(s.byType||{});
+ const bySportArr = Object.values(s.bySport||{});
+ const byWeek = s.byWeek||[];
+ const noData = !s.total;
+ const ATABS = ["Overview","Bet Types","Sports","H2H","Longshot","Season"];
+ // H2H data from real matchups standings
+ const h2hArr = realStandings.filter(x=>!x.isYou).map(x=>({
+   name: x.name,
+   wins: x.wins||0,
+   losses: x.losses||0,
+   pct: (x.wins+x.losses)>0?Math.round((x.wins/(x.wins+x.losses))*100):0,
+ })).sort((a,b)=>b.wins-a.wins);
+ const nemesis = h2hArr.length?[...h2hArr].sort((a,b)=>a.pct-b.pct)[0]:null;
+ const victim = h2hArr.length?[...h2hArr].sort((a,b)=>b.pct-a.pct)[0]:null;
+ // Strongest/weakest bet type
+ const sorted_types = [...byTypeArr].filter(t=>t.wins+t.losses>=3).sort((a,b)=>b.pct-a.pct);
+ const strongest = sorted_types[0];
+ const weakest = sorted_types[sorted_types.length-1];
+
+ // Simple inline chart using divs (no recharts dep in App.jsx)
+ const maxPts = byWeek.length?Math.max(...byWeek.map(w=>w.pts),1):1;
+
+ const WinBar = ({pct, color}) => (
+   <div style={{flex:1,height:4,background:"#1A1A1A",borderRadius:2,marginLeft:8}}>
+     <div style={{width:pct+"%",height:"100%",background:color,borderRadius:2,transition:"width 0.5s"}}/>
    </div>
-   {!isPro&&<div style={{background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:6,padding:"4px 10px",fontSize:10,fontWeight:700,color:IOS.blue}}>Pro Preview</div>}
- </div>
- {soloWeeks.length===0 ? (
- <div style={{textAlign:"center",padding:"40px 20px",background:IOS.bg2,borderRadius:12,border:"0.5px solid rgba(255,255,255,0.07)"}}>
-   <div style={{fontSize:14,fontWeight:700,color:"#fff",marginBottom:6}}>No stats yet</div>
-   <div style={{fontSize:12,color:IOS.label3}}>Lock in a few slips and your stats will appear here.</div>
- </div>
- ) : (()=>{
-   const allPicks = soloWeeks.flatMap(w=>w.picks);
-   const byType = {};
-   allPicks.forEach(p=>{
-     const t = p.slot||"ml";
-     if(!byType[t]) byType[t]={wins:0,losses:0,pts:0};
-     if(p.result==="W"){byType[t].wins++;byType[t].pts+=parseFloat(p.points_earned||0);}
-     else if(p.result==="L") byType[t].losses++;
-   });
-   const totalW = allPicks.filter(p=>p.result==="W").length;
-   const totalL = allPicks.filter(p=>p.result==="L").length;
-   const winPct = totalW+totalL>0?Math.round((totalW/(totalW+totalL))*100):0;
-   const bestWeek = soloWeeks.length>0?soloWeeks.reduce((b,w)=>w.pts>b.pts?w:b,soloWeeks[0]):null;
-   const streak = (()=>{
-     let s=0, type=null;
-     for(let i=0;i<soloWeeks.length;i++){
-       const w=soloWeeks[i];
-       const wWins=w.picks.filter(p=>p.result==="W").length;
-       const wLoss=w.picks.filter(p=>p.result==="L").length;
-       const wType=wWins>wLoss?"W":"L";
-       if(i===0){s=1;type=wType;}
-       else if(wType===type) s++;
-       else break;
-     }
-     return {count:s,type};
-   })();
-   const typeLabels={ml:"Moneyline",prop:"Prop","ou":"Over/Under",spread:"Spread",longshot:"Longshot"};
-   const typeColors={ml:IOS.blue,prop:"#FFD60A",ou:IOS.orange,spread:IOS.green,longshot:IOS.red};
-   return (
-   <>
-   {/* Overview */}
-   <div style={{display:"flex",gap:8,marginBottom:12}}>
-     <div style={{flex:1,background:IOS.bg2,borderRadius:10,padding:"10px 8px",textAlign:"center",border:"0.5px solid rgba(255,255,255,0.07)"}}>
-       <div style={{fontSize:20,fontWeight:800,color:winPct>=60?IOS.green:winPct>=40?IOS.orange:IOS.red}}>{winPct}%</div>
-       <div style={{fontSize:9,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4,marginTop:2}}>Win Rate</div>
-     </div>
-     <div style={{flex:1,background:IOS.bg2,borderRadius:10,padding:"10px 8px",textAlign:"center",border:"0.5px solid rgba(255,255,255,0.07)"}}>
-       <div style={{fontSize:20,fontWeight:800,color:IOS.blue}}>{soloWeeks.length}</div>
-       <div style={{fontSize:9,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4,marginTop:2}}>Weeks</div>
-     </div>
-     <div style={{flex:1,background:IOS.bg2,borderRadius:10,padding:"10px 8px",textAlign:"center",border:"0.5px solid rgba(255,255,255,0.07)"}}>
-       <div style={{fontSize:20,fontWeight:800,color:streak.type==="W"?IOS.green:IOS.red}}>{streak.type==="W"?"W":"L"}{streak.count}</div>
-       <div style={{fontSize:9,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4,marginTop:2}}>Streak</div>
-     </div>
+ );
+ const StatCard = ({label,value,sub,color="#fff"}) => (
+   <div style={{flex:1,background:IOS.bg2,borderRadius:10,padding:"10px 12px",border:"0.5px solid rgba(255,255,255,0.07)"}}>
+     <div style={{fontSize:10,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>{label}</div>
+     <div style={{fontSize:20,fontWeight:800,color,letterSpacing:-.5}}>{value||"—"}</div>
+     {sub&&<div style={{fontSize:10,color:IOS.label3,marginTop:2}}>{sub}</div>}
    </div>
-   {/* Best week */}
-   {bestWeek&&(
-   <div style={{background:"rgba(48,209,88,0.07)",border:"0.5px solid rgba(48,209,88,0.2)",borderRadius:10,padding:"11px 14px",marginBottom:12,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-     <div><div style={{fontSize:10,fontWeight:700,color:IOS.green,textTransform:"uppercase",letterSpacing:.4,marginBottom:2}}>Best Week</div>
-     <div style={{fontSize:13,fontWeight:700,color:"#fff"}}>Week {bestWeek.week} — {bestWeek.wins}W · {bestWeek.losses}L</div></div>
-     <div style={{fontSize:20,fontWeight:800,color:IOS.green}}>+{bestWeek.pts} pts</div>
-   </div>
-   )}
-   {/* By bet type */}
-   <div style={{fontSize:11,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>By Bet Type</div>
-   <div style={{background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:12,overflow:"hidden",marginBottom:12}}>
-     {Object.entries(byType).map(([type,data],i,arr)=>{
-       const pct=data.wins+data.losses>0?Math.round((data.wins/(data.wins+data.losses))*100):0;
-       return (
-       <div key={type} style={{padding:"10px 14px",borderBottom:i<arr.length-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
-         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
-           <div style={{fontSize:12,fontWeight:700,color:"#fff"}}>{typeLabels[type]||type}</div>
-           <div style={{fontSize:13,fontWeight:800,color:pct>=60?IOS.green:pct>=40?IOS.orange:IOS.red}}>{pct}%</div>
+ );
+
+ // State for analytics tab — stored in a ref so it doesn't reset on re-render
+ // Pro blur wrapper
+ const ProBlur = ({children, label="Unlock with Pro"}) => (
+   <div style={{position:"relative",overflow:"hidden",borderRadius:12,marginBottom:12}}>
+     {children}
+     {!isPro&&(
+       <div onClick={()=>setShowPaywall("analytics")} style={{position:"absolute",inset:0,backdropFilter:"blur(5px)",WebkitBackdropFilter:"blur(5px)",background:"rgba(0,0,0,0.55)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",cursor:"pointer",borderRadius:12,zIndex:10}}>
+         <div style={{width:36,height:36,borderRadius:10,background:"rgba(10,132,255,0.2)",border:"1px solid rgba(10,132,255,0.4)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:8}}>
+           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2" strokeLinecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
          </div>
-         <div style={{display:"flex",alignItems:"center",gap:8}}>
-           <div style={{fontSize:10,color:IOS.label3,width:48}}>{data.wins}W-{data.losses}L</div>
-           <div style={{flex:1,height:4,background:"#1A1A1A",borderRadius:2}}>
-             <div style={{width:pct+"%",height:"100%",background:typeColors[type]||IOS.blue,borderRadius:2}}/>
+         <div style={{fontSize:12,fontWeight:700,color:"#fff",marginBottom:2}}>{label}</div>
+         <div style={{fontSize:10,color:"rgba(255,255,255,0.5)"}}>Upgrade to Pro</div>
+       </div>
+     )}
+   </div>
+ );
+
+ return (
+ <div className="body">
+   {/* Header */}
+   <div style={{padding:"12px 16px 10px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"0.5px solid rgba(255,255,255,0.07)"}}>
+     <div style={{display:"flex",alignItems:"center",gap:10}}>
+       <div onClick={()=>setScreen(homeMode==="solo"?"home":"profile")} style={{width:32,height:32,borderRadius:10,background:IOS.fill2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:18}}>‹</div>
+       <div>
+         <div style={{fontSize:20,fontWeight:800,color:"#fff",letterSpacing:-.5}}>Analytics</div>
+         <div style={{fontSize:11,color:IOS.label3}}>All time · All leagues</div>
+       </div>
+     </div>
+     {isPro
+       ? <div style={{background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,color:IOS.blue}}>PRO</div>
+       : <div onClick={()=>setShowPaywall("analytics")} style={{background:"rgba(191,90,242,0.15)",border:"0.5px solid rgba(191,90,242,0.35)",borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,color:"#BF5AF2",cursor:"pointer"}}>UPGRADE</div>
+     }
+   </div>
+
+   {/* Always-visible free stats row */}
+   <div style={{display:"flex",gap:8,padding:"12px 16px 0"}}>
+     <StatCard label="Record" value={`${s.wins||0}-${s.losses||0}`} color={IOS.blue}/>
+     <StatCard label="Win Rate" value={s.winRate||"0%"} color={(s.wins||0)/Math.max((s.total||1),1)>=0.6?IOS.green:(s.wins||0)/Math.max((s.total||1),1)>=0.4?IOS.yellow:IOS.red}/>
+     <StatCard label="Total Pts" value={s.points||0} color="#fff"/>
+   </div>
+
+   {/* Analytics tab bar */}
+   <div style={{display:"flex",overflowX:"auto",scrollbarWidth:"none",padding:"10px 16px 0",gap:4,borderBottom:"0.5px solid rgba(255,255,255,0.07)"}}>
+     {ATABS.map(t=>(
+       <div key={t} onClick={()=>setAnalyticsTab(t)} style={{padding:"8px 12px",fontSize:12,fontWeight:700,whiteSpace:"nowrap",cursor:"pointer",color:analyticsTab===t?IOS.blue:"rgba(255,255,255,0.4)",borderBottom:analyticsTab===t?`2px solid ${IOS.blue}`:"2px solid transparent",transition:"all .15s",flexShrink:0}}>
+         {t}{!isPro&&t!=="Overview"&&<span style={{fontSize:9,color:"#BF5AF2",marginLeft:3}}>🔒</span>}
+       </div>
+     ))}
+   </div>
+
+   <div style={{padding:"12px 16px 80px"}}>
+
+     {/* ── OVERVIEW ── */}
+     {analyticsTab==="Overview"&&(
+     <>
+       {/* Personality card */}
+       <ProBlur label="Unlock Pick Personality">
+         <div style={{background:"linear-gradient(135deg,rgba(10,132,255,0.15),rgba(94,92,230,0.12))",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:12,padding:"14px 16px",marginBottom:0}}>
+           <div style={{fontSize:10,fontWeight:700,color:IOS.blue,letterSpacing:.5,textTransform:"uppercase",marginBottom:4}}>Pick Personality</div>
+           <div style={{fontSize:20,fontWeight:800,color:"#fff",marginBottom:4}}>{s.personality||"The Rookie"}</div>
+           <div style={{fontSize:12,color:"rgba(255,255,255,0.6)",lineHeight:1.5}}>{s.personalityDesc||"Keep picking and your style will emerge."}</div>
+         </div>
+       </ProBlur>
+
+       {/* Extra stats row */}
+       <ProBlur label="Unlock Full Stats">
+         <div style={{display:"flex",gap:8,marginBottom:0}}>
+           <StatCard label="Best Week" value={s.bestWeek?s.bestWeek.pts:"—"} sub={s.bestWeek?`Wk ${s.bestWeek.week}`:""} color={IOS.orange}/>
+           <StatCard label="Avg Odds" value={s.avgOdds?`${s.avgOdds>0?"+":""}${s.avgOdds}`:"—"} sub={s.avgOdds>0?"Dog lean":"Chalk lean"}/>
+           <StatCard label="Streak" value={s.currentStreak?`${s.currentStreak.type}${s.currentStreak.count}`:"—"} color={s.currentStreak?.type==="W"?IOS.green:IOS.red}/>
+         </div>
+       </ProBlur>
+
+       {/* Trend chart */}
+       <ProBlur label="Unlock Trend Chart">
+         <div style={{background:IOS.bg2,borderRadius:12,padding:"14px 12px",border:"0.5px solid rgba(255,255,255,0.07)"}}>
+           <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:12}}>Points per week</div>
+           {byWeek.length===0?(
+             <div style={{height:80,display:"flex",alignItems:"center",justifyContent:"center",color:IOS.label3,fontSize:12}}>No data yet</div>
+           ):(
+             <div style={{display:"flex",alignItems:"flex-end",gap:4,height:80}}>
+               {byWeek.map((w,i)=>(
+                 <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+                   <div style={{width:"100%",background:IOS.blue,borderRadius:"3px 3px 0 0",height:Math.max(4,Math.round((w.pts/maxPts)*72))+"px",opacity:.85}}/>
+                   <div style={{fontSize:8,color:IOS.label3,whiteSpace:"nowrap"}}>{w.label}</div>
+                 </div>
+               ))}
+             </div>
+           )}
+         </div>
+       </ProBlur>
+
+       {/* Hall of fame */}
+       <ProBlur label="Unlock Hall of Fame">
+         <div style={{background:IOS.bg2,borderRadius:12,padding:"14px 16px",border:"0.5px solid rgba(255,255,255,0.07)"}}>
+           <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:10}}>Hall of Fame</div>
+           <div style={{borderBottom:"0.5px solid rgba(255,255,255,0.07)",paddingBottom:10,marginBottom:10}}>
+             <div style={{fontSize:10,fontWeight:700,color:IOS.green,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Best Pick Ever</div>
+             <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>{s.bestBet?.pick_name||"No wins yet"}</div>
+             {s.bestBet&&<div style={{fontSize:11,color:IOS.label3,marginTop:2}}>{s.bestBet.game||""} · {s.bestBet.odds||""} · +{parseFloat(s.bestBet.points_earned||0).toFixed(1)} pts</div>}
+           </div>
+           <div>
+             <div style={{fontSize:10,fontWeight:700,color:IOS.red,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Last Loss</div>
+             <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>{s.worstBet?.pick_name||"No losses yet"}</div>
+             {s.worstBet&&<div style={{fontSize:11,color:IOS.label3,marginTop:2}}>{s.worstBet.game||""} · {s.worstBet.odds||""}</div>}
+           </div>
+         </div>
+       </ProBlur>
+     </>
+     )}
+
+     {/* ── BET TYPES ── */}
+     {analyticsTab==="Bet Types"&&(
+     <ProBlur label="Unlock Bet Type Breakdown">
+       <div>
+         <div style={{background:IOS.bg2,borderRadius:12,padding:"14px 16px",marginBottom:12,border:"0.5px solid rgba(255,255,255,0.07)"}}>
+           <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:12}}>Win rate by bet type</div>
+           {byTypeArr.length===0?(
+             <div style={{color:IOS.label3,fontSize:12,textAlign:"center",padding:"12px 0"}}>No graded picks yet</div>
+           ):byTypeArr.map((b,i)=>(
+             <div key={i} style={{marginBottom:12}}>
+               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
+                 <div style={{fontSize:13,fontWeight:600,color:"#fff"}}>{b.label}</div>
+                 <div style={{fontSize:13,fontWeight:800,color:b.pct>=60?IOS.green:b.pct>=45?IOS.orange:IOS.red}}>{b.pct}%</div>
+               </div>
+               <div style={{display:"flex",alignItems:"center"}}>
+                 <div style={{fontSize:11,color:IOS.label3,width:52}}>{b.wins}W-{b.losses}L</div>
+                 <WinBar pct={b.pct} color={b.color}/>
+               </div>
+             </div>
+           ))}
+         </div>
+         {/* Points per win bar chart (div-based) */}
+         <div style={{background:IOS.bg2,borderRadius:12,padding:"14px 16px",marginBottom:12,border:"0.5px solid rgba(255,255,255,0.07)"}}>
+           <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:12}}>Total pts by type</div>
+           {byTypeArr.length===0?(
+             <div style={{color:IOS.label3,fontSize:12,textAlign:"center",padding:"12px 0"}}>No data yet</div>
+           ):(()=>{
+             const maxPtsType = Math.max(...byTypeArr.map(b=>b.pts),1);
+             return (
+               <div style={{display:"flex",alignItems:"flex-end",gap:6,height:80}}>
+                 {byTypeArr.map((b,i)=>(
+                   <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+                     <div style={{fontSize:8,color:"#fff",fontWeight:700}}>{b.pts}</div>
+                     <div style={{width:"100%",background:b.color,borderRadius:"3px 3px 0 0",height:Math.max(4,Math.round((b.pts/maxPtsType)*56))+"px",opacity:.8}}/>
+                     <div style={{fontSize:8,color:IOS.label3,whiteSpace:"nowrap",textAlign:"center",maxWidth:40,overflow:"hidden",textOverflow:"ellipsis"}}>{b.label.split("/")[0]}</div>
+                   </div>
+                 ))}
+               </div>
+             );
+           })()}
+         </div>
+         <div style={{display:"flex",gap:8}}>
+           <div style={{flex:1,background:"rgba(48,209,88,0.1)",border:"0.5px solid rgba(48,209,88,0.25)",borderRadius:10,padding:"12px 14px"}}>
+             <div style={{fontSize:10,fontWeight:700,color:IOS.green,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Strongest</div>
+             <div style={{fontSize:15,fontWeight:700,color:"#fff"}}>{strongest?.label||"—"}</div>
+             <div style={{fontSize:11,color:IOS.label3}}>{strongest?`${strongest.pct}% win rate`:"Not enough data"}</div>
+           </div>
+           <div style={{flex:1,background:"rgba(255,59,48,0.08)",border:"0.5px solid rgba(255,59,48,0.2)",borderRadius:10,padding:"12px 14px"}}>
+             <div style={{fontSize:10,fontWeight:700,color:IOS.red,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Weakest</div>
+             <div style={{fontSize:15,fontWeight:700,color:"#fff"}}>{weakest?.label||"—"}</div>
+             <div style={{fontSize:11,color:IOS.label3}}>{weakest?`${weakest.pct}% win rate`:"Not enough data"}</div>
            </div>
          </div>
        </div>
-       );
-     })}
+     </ProBlur>
+     )}
+
+     {/* ── SPORTS ── */}
+     {analyticsTab==="Sports"&&(
+     <ProBlur label="Unlock Sport Breakdown">
+       <div>
+         {bySportArr.length===0?(
+           <div style={{textAlign:"center",padding:"40px 20px",background:IOS.bg2,borderRadius:12,border:"0.5px solid rgba(255,255,255,0.07)"}}>
+             <div style={{fontSize:13,color:IOS.label3}}>No graded picks yet</div>
+           </div>
+         ):bySportArr.map((s2,i)=>(
+           <div key={i} style={{background:IOS.bg2,borderRadius:12,padding:"14px 16px",marginBottom:10,border:"0.5px solid rgba(255,255,255,0.07)"}}>
+             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+               <div style={{fontSize:16,fontWeight:800,color:"#fff"}}>{s2.label}</div>
+               <div style={{fontSize:16,fontWeight:800,color:s2.pct>=60?IOS.green:IOS.orange}}>{s2.pct}%</div>
+             </div>
+             <div style={{display:"flex",gap:8,marginBottom:8}}>
+               <div style={{flex:1,background:"#1A1A1A",borderRadius:6,padding:"6px 10px",textAlign:"center"}}>
+                 <div style={{fontSize:14,fontWeight:700,color:IOS.green}}>{s2.wins}W</div>
+                 <div style={{fontSize:9,color:IOS.label3}}>Wins</div>
+               </div>
+               <div style={{flex:1,background:"#1A1A1A",borderRadius:6,padding:"6px 10px",textAlign:"center"}}>
+                 <div style={{fontSize:14,fontWeight:700,color:IOS.red}}>{s2.losses}L</div>
+                 <div style={{fontSize:9,color:IOS.label3}}>Losses</div>
+               </div>
+               <div style={{flex:1,background:"#1A1A1A",borderRadius:6,padding:"6px 10px",textAlign:"center"}}>
+                 <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>{s2.pts}</div>
+                 <div style={{fontSize:9,color:IOS.label3}}>Total pts</div>
+               </div>
+             </div>
+             <div style={{height:4,background:"#1A1A1A",borderRadius:2}}>
+               <div style={{width:s2.pct+"%",height:"100%",background:s2.color,borderRadius:2}}/>
+             </div>
+           </div>
+         ))}
+         {bySportArr.length>=2&&(
+           <div style={{background:"rgba(10,132,255,0.08)",border:"0.5px solid rgba(10,132,255,0.2)",borderRadius:10,padding:"12px 14px"}}>
+             <div style={{fontSize:11,fontWeight:700,color:IOS.blue,marginBottom:3}}>Insight</div>
+             <div style={{fontSize:12,color:"rgba(255,255,255,0.7)",lineHeight:1.5}}>
+               {(()=>{const best=[...bySportArr].sort((a,b)=>b.pct-a.pct)[0];const worst=[...bySportArr].sort((a,b)=>a.pct-b.pct)[0];return `You pick ${best.label} at ${best.pct}% but ${worst.label} at only ${worst.pct}%. Lean into your strengths.`;})()}
+             </div>
+           </div>
+         )}
+       </div>
+     </ProBlur>
+     )}
+
+     {/* ── H2H ── */}
+     {analyticsTab==="H2H"&&(
+     <ProBlur label="Unlock H2H Records">
+       <div>
+         <div style={{background:IOS.bg2,borderRadius:12,padding:"14px 16px",marginBottom:12,border:"0.5px solid rgba(255,255,255,0.07)"}}>
+           <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:10}}>All-time records</div>
+           {h2hArr.length===0?(
+             <div style={{color:IOS.label3,fontSize:12,textAlign:"center",padding:"12px 0"}}>No matchup history yet</div>
+           ):h2hArr.map((p,i)=>{
+             const isN=nemesis&&p.name===nemesis.name&&p.pct<50;
+             const isV=victim&&p.name===victim.name&&p.pct>50&&p.name!==nemesis?.name;
+             return (
+             <div key={i} style={{display:"flex",alignItems:"center",padding:"9px 0",borderBottom:i<h2hArr.length-1?"0.5px solid rgba(255,255,255,0.07)":"none"}}>
+               <div style={{flex:1}}>
+                 <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
+                   <div style={{fontSize:13,fontWeight:600,color:"#fff"}}>{p.name}</div>
+                   {isN&&<div style={{fontSize:8,fontWeight:700,color:IOS.red,background:"rgba(255,59,48,0.1)",border:"0.5px solid rgba(255,59,48,0.25)",borderRadius:4,padding:"1px 5px"}}>NEMESIS</div>}
+                   {isV&&<div style={{fontSize:8,fontWeight:700,color:IOS.green,background:"rgba(48,209,88,0.1)",border:"0.5px solid rgba(48,209,88,0.25)",borderRadius:4,padding:"1px 5px"}}>FAVORITE</div>}
+                 </div>
+                 <div style={{fontSize:11,color:IOS.label3}}>{p.wins}W · {p.losses}L all time</div>
+               </div>
+               <div style={{fontSize:15,fontWeight:800,color:p.pct>=60?IOS.green:p.pct>=40?IOS.orange:IOS.red}}>{p.pct}%</div>
+             </div>
+             );
+           })}
+         </div>
+         {h2hArr.length>=2&&(
+           <div style={{display:"flex",gap:8}}>
+             <div style={{flex:1,background:"rgba(255,59,48,0.08)",border:"0.5px solid rgba(255,59,48,0.2)",borderRadius:10,padding:"12px 14px"}}>
+               <div style={{fontSize:10,fontWeight:700,color:IOS.red,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Nemesis</div>
+               <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>{nemesis?.name||"—"}</div>
+               <div style={{fontSize:11,color:IOS.label3}}>You are {nemesis?.wins||0}-{nemesis?.losses||0} all time</div>
+             </div>
+             <div style={{flex:1,background:"rgba(48,209,88,0.08)",border:"0.5px solid rgba(48,209,88,0.2)",borderRadius:10,padding:"12px 14px"}}>
+               <div style={{fontSize:10,fontWeight:700,color:IOS.green,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Fav Victim</div>
+               <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>{victim?.name||"—"}</div>
+               <div style={{fontSize:11,color:IOS.label3}}>You are {victim?.wins||0}-{victim?.losses||0} all time</div>
+             </div>
+           </div>
+         )}
+       </div>
+     </ProBlur>
+     )}
+
+     {/* ── LONGSHOT ── */}
+     {analyticsTab==="Longshot"&&(
+     <ProBlur label="Unlock Longshot Analytics">
+       <div>
+         <div style={{display:"flex",gap:8,marginBottom:12}}>
+           <StatCard label="Total longshots" value={(s.byType?.longshot?.wins||0)+(s.byType?.longshot?.losses||0)||"0"}/>
+           <StatCard label="Hit rate" value={s.byType?.longshot?.pct?`${s.byType.longshot.pct}%`:"0%"} color={IOS.orange}/>
+           <StatCard label="Pts earned" value={s.byType?.longshot?.pts||0} color={IOS.green}/>
+         </div>
+         {(s.longshotStats||[]).length>0&&(
+           <div style={{background:IOS.bg2,borderRadius:12,padding:"14px 16px",marginBottom:12,border:"0.5px solid rgba(255,255,255,0.07)"}}>
+             <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:10}}>Hit rate by parlay size</div>
+             {(s.longshotStats||[]).map((p,i)=>(
+               <div key={i} style={{marginBottom:10}}>
+                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                   <div style={{fontSize:12,color:"rgba(255,255,255,0.7)"}}>{p.legs||"?"}-leg parlay</div>
+                   <div style={{fontSize:12,fontWeight:700,color:p.pct>=35?IOS.green:IOS.orange}}>{p.hit}/{p.total} · {p.pct}%</div>
+                 </div>
+                 <WinBar pct={p.pct} color={p.pct>=35?IOS.green:IOS.orange}/>
+               </div>
+             ))}
+           </div>
+         )}
+         {s.bestBet?.slot?.startsWith("longshot")&&(
+           <div style={{background:"rgba(48,209,88,0.08)",border:"0.5px solid rgba(48,209,88,0.2)",borderRadius:12,padding:"14px 16px"}}>
+             <div style={{fontSize:10,fontWeight:700,color:IOS.green,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Biggest hit</div>
+             <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:2}}>+{parseFloat(s.bestBet.points_earned||0).toFixed(1)} pts</div>
+             <div style={{fontSize:11,color:"rgba(255,255,255,0.5)"}}>{s.bestBet.pick_name} · {s.bestBet.odds}</div>
+           </div>
+         )}
+       </div>
+     </ProBlur>
+     )}
+
+     {/* ── SEASON ── */}
+     {analyticsTab==="Season"&&(
+     <ProBlur label="Unlock Season Wrapped">
+       <div>
+         <div style={{background:"linear-gradient(135deg,#0A1628,#1A0A28)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:16,padding:"20px 18px",marginBottom:14,textAlign:"center"}}>
+           <div style={{fontSize:10,fontWeight:700,color:IOS.blue,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>PickLock Wrapped · 2025</div>
+           <div style={{fontSize:28,fontWeight:800,color:"#fff",letterSpacing:-1,marginBottom:4}}>{s.personality||"The Rookie"}</div>
+           <div style={{fontSize:13,color:"rgba(255,255,255,0.5)",marginBottom:16,lineHeight:1.5}}>You went {s.wins||0}-{s.losses||0} · {s.winRate||"0%"} win rate · {s.points||0} total pts</div>
+           <div style={{display:"flex",gap:8,marginBottom:12}}>
+             <div style={{flex:1,background:"rgba(255,255,255,0.06)",borderRadius:8,padding:"10px 6px"}}>
+               <div style={{fontSize:18,fontWeight:800,color:IOS.green}}>{s.byType?.longshot?.wins||0}</div>
+               <div style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>Longshots hit</div>
+             </div>
+             <div style={{flex:1,background:"rgba(255,255,255,0.06)",borderRadius:8,padding:"10px 6px"}}>
+               <div style={{fontSize:18,fontWeight:800,color:IOS.blue}}>{s.bestWeek?.pts||"—"}</div>
+               <div style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>Best week pts</div>
+             </div>
+             <div style={{flex:1,background:"rgba(255,255,255,0.06)",borderRadius:8,padding:"10px 6px"}}>
+               <div style={{fontSize:18,fontWeight:800,color:IOS.orange}}>{s.maxStreak||0}</div>
+               <div style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>Best streak</div>
+             </div>
+           </div>
+           <div style={{background:IOS.blue,borderRadius:8,padding:"11px",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}} onClick={()=>{try{navigator.share({title:"My PickLock Wrapped",text:`I went ${s.wins||0}-${s.losses||0} with a ${s.winRate||"0%"} win rate on PickLock. I'm "${s.personality||"The Rookie"}". Can you beat me?`});}catch(e){}}}>Share My Wrapped Card</div>
+         </div>
+         {byWeek.length>0&&(
+           <div style={{background:IOS.bg2,borderRadius:12,padding:"14px 16px",border:"0.5px solid rgba(255,255,255,0.07)"}}>
+             <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:10}}>Your best weeks</div>
+             {[...byWeek].sort((a,b)=>b.pts-a.pts).slice(0,4).map((w,i)=>(
+               <div key={i} style={{display:"flex",alignItems:"center",padding:"8px 0",borderBottom:i<3?"0.5px solid rgba(255,255,255,0.07)":"none"}}>
+                 <div style={{width:24,fontSize:13,fontWeight:700,color:i===0?IOS.blue:"rgba(255,255,255,0.4)"}}>{i+1}</div>
+                 <div style={{flex:1,fontSize:13,color:"#fff"}}>{w.label}</div>
+                 <div style={{fontSize:14,fontWeight:800,color:i===0?IOS.green:"#fff"}}>{w.pts} pts</div>
+                 {i===0&&<div style={{marginLeft:8,fontSize:8,fontWeight:700,color:IOS.green,background:"rgba(48,209,88,0.1)",border:"0.5px solid rgba(48,209,88,0.2)",borderRadius:4,padding:"1px 5px"}}>BEST</div>}
+               </div>
+             ))}
+           </div>
+         )}
+       </div>
+     </ProBlur>
+     )}
+
    </div>
-   {/* Pro upsell */}
-   {!isPro&&(
-   <div onClick={()=>setShowPaywall("stats")} style={{background:"rgba(10,132,255,0.08)",border:"0.5px solid rgba(10,132,255,0.2)",borderRadius:12,padding:"14px",textAlign:"center",cursor:"pointer"}}>
-     <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:4}}>Unlock Full Analytics</div>
-     <div style={{fontSize:11,color:IOS.label3,marginBottom:10}}>H2H records, per-sport breakdown, trend charts, and your pick personality — all in Pro.</div>
-     <div style={{background:IOS.blue,borderRadius:7,padding:"9px",fontSize:12,fontWeight:700,color:"#fff"}}>Upgrade to Pro</div>
-   </div>
-   )}
-   </>
-   );
- })()}
  </div>
- )}
+ );})()}
+
 
  <div className="tab-bar">
  {(homeMode==="solo" ? [
