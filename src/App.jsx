@@ -692,8 +692,7 @@ export default function App() {
  const [soloWeeks, setSoloWeeks] = useState([]);
  const [soloLoading, setSoloLoading] = useState(false);
  const [isSoloMode, setIsSoloMode] = useState(false);
- const isSoloModeRef = React.useRef(false);
- const setSoloModeWithRef = (val) => { isSoloModeRef.current = val; setIsSoloMode(val); };
+
  const [soloLeagueId, setSoloLeagueId] = useState(null);
  const activeLeague = isSoloMode ? {id:soloLeagueId||"solo",name:"Solo Mode",sport:"nfl",current_week:(soloWeeks.length+1),season_weeks:99,max_members:1,target_size:1,isCommissioner:false} : ([...realLeagues].find(l=>l.id===activeLeagueId) || realLeagues[0] || {id:"",name:"",sport:"nfl",current_week:1,season_weeks:18,max_members:8,target_size:8,isCommissioner:false});
  const sport = SPORTS[activeLeague?.sport] || SPORTS["nfl"];
