@@ -692,7 +692,8 @@ export default function App() {
  const [soloWeeks, setSoloWeeks] = useState([]);
  const [soloLoading, setSoloLoading] = useState(false);
  const [isSoloMode, setIsSoloMode] = useState(false);
-
+ const isSoloModeRef = React.useRef(false);
+ const setSoloModeWithRef = (val) => { isSoloModeRef.current = val; setIsSoloMode(val); };
  const [soloLeagueId, setSoloLeagueId] = useState(null);
  const activeLeague = isSoloMode ? {id:soloLeagueId||"solo",name:"Solo Mode",sport:"nfl",current_week:(soloWeeks.length+1),season_weeks:99,max_members:1,target_size:1,isCommissioner:false} : ([...realLeagues].find(l=>l.id===activeLeagueId) || realLeagues[0] || {id:"",name:"",sport:"nfl",current_week:1,season_weeks:18,max_members:8,target_size:8,isCommissioner:false});
  const sport = SPORTS[activeLeague?.sport] || SPORTS["nfl"];
@@ -862,9 +863,9 @@ export default function App() {
  const [flexCategory, setFlexCategory] = useState(null); // category being browsed
  const [longshotMode, setLongshotMode] = useState("straight"); // "straight" | "parlay" — for longshot sheet
  const [betTypeFilter, setBetTypeFilter] = useState("all"); // "all" | "ml" | "spread" | "ou"
- const usedMults = flexPicks.filter(p=>p.mult!==null).map(p=>p.mult);
- const availableMults = [1,2,3,4,5].filter(m=>!usedMults.includes(m));
- // Valid longshot = straight +400 bet, OR parlay with 2+ legs AND combined odds +400 or better
+ const [propTypeFilter, setPropTypeFilter] = useState("all"); // prop sub-category filter
+ // usedMults / availableMults / hasLongshot / allFlexFilled are derived inside the picks IIFE
+ // so they always read from the correct activePicks (solo vs league). Do NOT compute them here.
  // ─── TEAM ACRONYM HELPER ─────────────────────────────────────────
  const getAcronym = (name, isProp=false) => {
  if(!name) return "?";
@@ -952,16 +953,7 @@ export default function App() {
  return acc * dec;
  }, 1);
  const parlayAmericanOdds = (decimal) => decimal >= 2 ? Math.round((decimal-1)*100) : Math.round(-100/(decimal-1));
- const hasLongshot = flexPicks.some(p=> {
- if(p.category==="longshot" && p.bet && p.bet.impliedOdds >= 400) return true;
- if(p.isParlay && p.parlayLegs.length>=2) {
- const dec = calcParlayOddsDecimal(p.parlayLegs);
- return parlayAmericanOdds(dec) >= 400;
- }
- return false;
- });
- const hasParlay = hasLongshot; // keep hasParlay name so nothing else breaks
- const allFlexFilled = flexPicks.every(p=>p.mult!==null&&(p.isParlay?p.parlayLegs.length>=2:p.bet!==null));
+ // hasLongshot / hasParlay / allFlexFilled computed inside picks IIFE from activePicks
  const ALL_BETS = [
  ...BETS.ml.map(b=>({...b, category:"ml", categoryLabel:"Moneyline", categoryColor:IOS.blue})),
  ...BETS.prop.map(b=>({...b, category:"prop", categoryLabel:"Prop", categoryColor:IOS.yellow})),
@@ -3196,12 +3188,25 @@ export default function App() {
  const activeSavedPicks = isSoloMode ? soloSavedPicks : savedPicks;
  const setActiveSavedPicks = isSoloMode ? setSoloSavedPicks : setSavedPicks;
  const setActiveSubmitted = isSoloMode ? setSoloSubmitted : setSubmitted;
+ // ── Derived from activePicks (correct for both solo & league) ──
+ const usedMults = activePicks.filter(p=>p.mult!==null).map(p=>p.mult);
+ const availableMults = [1,2,3,4,5].filter(m=>!usedMults.includes(m));
+ const hasLongshot = activePicks.some(p=> {
+ if(p.category==="longshot" && p.bet && p.bet.impliedOdds >= 400) return true;
+ if(p.isParlay && p.parlayLegs.length>=2) {
+ const dec = calcParlayOddsDecimal(p.parlayLegs);
+ return parlayAmericanOdds(dec) >= 400;
+ }
+ return false;
+ });
+ const hasParlay = hasLongshot;
+ const allFlexFilled = activePicks.every(p=>p.mult!==null&&(p.isParlay?p.parlayLegs.length>=2:p.bet!==null));
  return (
  <>
 
  {/* Bet picker sheet */}
  {activeFlexSlot!==null&&(
- <div className="sheet-bg" onClick={()=>{setActiveFlexSlot(null);setFlexCategory(null);setPickSearch("");setLongshotMode("straight");setBetTypeFilter("all");}}>
+ <div className="sheet-bg" onClick={()=>{setActiveFlexSlot(null);setFlexCategory(null);setPickSearch("");setLongshotMode("straight");setBetTypeFilter("all");setPropTypeFilter("all");}}>
  <div className="sheet" onClick={e=>e.stopPropagation()}>
  <div className="sheet-handle"/>
  <div className="sheet-hdr">
@@ -3233,7 +3238,7 @@ export default function App() {
  style={{color:blocked?"rgba(255,255,255,0.25)":"",cursor:blocked?"not-allowed":""}}
  onClick={()=>{
  if(blocked) return;
- setActiveFlexSlot(null);setFlexCategory(null);setPickSearch("");setLongshotMode("straight");
+ setActiveFlexSlot(null);setFlexCategory(null);setPickSearch("");setLongshotMode("straight");setPropTypeFilter("all");
  }}>Done</div>
  {parlayBlocked && <div style={{fontSize:10,color:IOS.orange,textAlign:"right"}}>Need +400 odds</div>}
  {parlayNeedsLegs && <div style={{fontSize:10,color:IOS.orange,textAlign:"right"}}>Add 2+ legs</div>}
@@ -3280,11 +3285,53 @@ export default function App() {
 
  {/* Back button when category chosen */}
  {!activePicks[activeFlexSlot]?.isParlay && flexCategory && (
- <div onClick={()=>setFlexCategory(null)} style={{padding:"10px 16px",display:"flex",alignItems:"center",gap:6,cursor:"pointer",borderBottom:`0.5px solid ${IOS.sep}`}}>
+ <div onClick={()=>{setFlexCategory(null);setPropTypeFilter("all");}} style={{padding:"10px 16px",display:"flex",alignItems:"center",gap:6,cursor:"pointer",borderBottom:`0.5px solid ${IOS.sep}`}}>
  <span style={{color:IOS.blue,fontSize:14}}>‹</span>
  <span style={{color:IOS.blue,fontSize:14,fontWeight:600}}>Categories</span>
  </div>
  )}
+
+ {/* Prop type sub-filter bar — only when prop category is selected */}
+ {flexCategory==="prop" && (()=>{
+ const sportId = activeLeague?.sport || "nfl";
+ const propFilters = {
+ nfl: [
+ {id:"all", label:"All"},
+ {id:"pass", label:"Pass"},
+ {id:"rush", label:"Rush"},
+ {id:"receiving", label:"Rec"},
+ {id:"td", label:"TDs"},
+ ],
+ nba: [
+ {id:"all", label:"All"},
+ {id:"points", label:"Points"},
+ {id:"rebounds", label:"Boards"},
+ {id:"assists", label:"Assists"},
+ {id:"threes", label:"3-Pointers"},
+ ],
+ mlb: [
+ {id:"all", label:"All"},
+ {id:"pitcher", label:"Pitcher"},
+ {id:"batter", label:"Batter"},
+ {id:"hr", label:"Home Runs"},
+ ],
+ };
+ const filters = propFilters[sportId] || propFilters.nfl;
+ return (
+ <div style={{display:"flex",gap:6,padding:"8px 16px 4px",overflowX:"auto",scrollbarWidth:"none"}}>
+ {filters.map(f=>(
+ <div key={f.id} onClick={()=>setPropTypeFilter(f.id)}
+ style={{flexShrink:0,padding:"5px 12px",borderRadius:16,fontSize:12,fontWeight:600,cursor:"pointer",transition:"all .15s",
+ background:propTypeFilter===f.id?"rgba(255,214,10,0.2)":"rgba(255,255,255,0.06)",
+ color:propTypeFilter===f.id?IOS.yellow:"rgba(255,255,255,0.5)",
+ border:`1px solid ${propTypeFilter===f.id?"rgba(255,214,10,0.5)":"rgba(255,255,255,0.08)"}`,
+ }}>
+ {f.label}
+ </div>
+ ))}
+ </div>
+ );
+ })()}
 
  {/* Search */}
  {/* Straight / Parlay toggle — longshot only */}
@@ -3294,6 +3341,7 @@ export default function App() {
  <div key={mode} onClick={()=>{
  setLongshotMode(mode);
  setBetTypeFilter("all");
+ setPropTypeFilter("all");
  // sync isParlay on the active slot
  if(activeFlexSlot!==null) {
  setActivePicks(prev=>prev.map((p,i)=>i===activeFlexSlot?{...p,isParlay:mode==="parlay",bet:null,parlayLegs:[]}:p));
@@ -3362,6 +3410,29 @@ export default function App() {
  (activePicks[activeFlexSlot]?.isParlay ? ALL_BETS : (BETS[flexCategory]||[])).filter(bet=>{
  const q = pickSearch.toLowerCase().trim();
  const textMatch = !q || bet.game.toLowerCase().includes(q) || bet.pick.toLowerCase().includes(q);
+ // Prop sub-category filter
+ if(flexCategory==="prop" && propTypeFilter!=="all") {
+ const p = bet.pick.toLowerCase();
+ const g = (bet.game||"").toLowerCase();
+ const sportId = activeLeague?.sport||"nfl";
+ let propMatch = true;
+ if(sportId==="nfl") {
+ if(propTypeFilter==="pass") propMatch = p.includes("pass") || p.includes("yard") && (p.includes("pass")||g.includes("qb")||["mahomes","allen","hurts","purdy","jackson","burrow","dak","herbert","stafford","cousins","fields","stroud","love","young","mills"].some(n=>g.includes(n)));
+ if(propTypeFilter==="rush") propMatch = p.includes("rush") && !p.includes("rec");
+ if(propTypeFilter==="receiving") propMatch = p.includes("rec") || (p.includes("yard") && !p.includes("rush") && !p.includes("pass"));
+ if(propTypeFilter==="td") propMatch = p.includes("td") || p.includes("touchdown") || p.includes("touch");
+ } else if(sportId==="nba") {
+ if(propTypeFilter==="points") propMatch = p.includes("point") || p.includes("pts");
+ if(propTypeFilter==="rebounds") propMatch = p.includes("rebound") || p.includes("reb");
+ if(propTypeFilter==="assists") propMatch = p.includes("assist");
+ if(propTypeFilter==="threes") propMatch = p.includes("three") || p.includes("3-point") || p.includes("3pt") || p.includes("threes");
+ } else if(sportId==="mlb") {
+ if(propTypeFilter==="pitcher") propMatch = p.includes("strikeout") || p.includes("out") || g.toLowerCase().includes("pitcher")||["cole","scherzer","verlander","degrom","alcantara","nola","kershaw","burnes","bieber","manoah","rodon","flaherty","castillo","ohtani","glasnow"].some(n=>g.includes(n));
+ if(propTypeFilter==="batter") propMatch = p.includes("hit") || p.includes("rbi") || p.includes("base") || p.includes("walk") || p.includes("run");
+ if(propTypeFilter==="hr") propMatch = p.includes("home run") || p.includes("hr") || p.includes("homer");
+ }
+ if(!propMatch) return false;
+ }
  // Longshot straight mode: only show +400 or better
  if(flexCategory==="longshot" && longshotMode==="straight") {
  if(!textMatch || bet.impliedOdds < 400) return false;
