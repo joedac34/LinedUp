@@ -567,14 +567,22 @@ const rankMedal=r=>r===1?"":r===2?"":r===3?"":`${r}`;
 
 const polarToCart=(cx,cy,r,deg)=>{const rad=(deg-90)*Math.PI/180;return{x:cx+r*Math.cos(rad),y:cy+r*Math.sin(rad)};};
 
-function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeague, setNewLeagueStep, setShowBrowse, fetchPublicLeagues, setIsSoloMode, setActiveLeagueId, getOrCreateSoloLeague}) {
+function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeague, setNewLeagueStep, setShowBrowse, fetchPublicLeagues, setIsSoloMode, setActiveLeagueId, getOrCreateSoloLeague, soloSavedPicks, setSoloSavedPicks, soloFlexPicks, setSoloFlexPicks, soloSport, setSoloSport, setShowSoloSportPicker, soloSubmitted, setSoloSubmitted}) {
   const totalWins = soloWeeks.reduce((s,w)=>s+w.wins,0);
   const totalLosses = soloWeeks.reduce((s,w)=>s+w.losses,0);
   const totalPts = soloWeeks.reduce((s,w)=>s+w.pts,0);
   const winPct = totalWins+totalLosses > 0 ? Math.round((totalWins/(totalWins+totalLosses))*100) : 0;
   const bestWeek = soloWeeks.length > 0 ? soloWeeks.reduce((b,w)=>w.pts>b.pts?w:b,soloWeeks[0]) : null;
+  const hasLockedSlip = soloSavedPicks && soloSavedPicks.flexPicks;
+  const lockedPicks = hasLockedSlip ? [...soloSavedPicks.flexPicks].filter(s=>s.mult!==null) : [];
+  const currentWeekNum = soloWeeks.length + 1;
+
+  const sportLabels = {nfl:"NFL",nba:"NBA",mlb:"MLB"};
+  const sportColors = {nfl:"#0A84FF",nba:"#FF6B35",mlb:"#30D158"};
+
   return (
     <div style={{padding:"0 16px 40px"}}>
+      {/* Stats row */}
       <div style={{display:"flex",gap:8,marginBottom:12}}>
         <div style={{flex:1,background:IOS.bg2,borderRadius:10,padding:"10px 12px",border:"0.5px solid rgba(255,255,255,0.07)"}}>
           <div style={{fontSize:10,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:3}}>Record</div>
@@ -589,6 +597,8 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
           <div style={{fontSize:18,fontWeight:800,color:"#fff"}}>{totalPts.toFixed(1)}</div>
         </div>
       </div>
+
+      {/* Weekly Challenge */}
       <div style={{background:"rgba(255,159,10,0.07)",border:"0.5px solid rgba(255,159,10,0.25)",borderRadius:12,padding:"12px 14px",marginBottom:12}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
           <div style={{fontSize:11,fontWeight:700,color:"#FF9F0A"}}>Weekly Challenge</div>
@@ -598,20 +608,80 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
         <div style={{height:4,background:"#1A1A1A",borderRadius:2,marginBottom:4}}>
           <div style={{width:"0%",height:"100%",background:"#FF9F0A",borderRadius:2}}/>
         </div>
-        <div style={{fontSize:10,color:IOS.label3}}>Lock your slip to start tracking</div>
+        <div style={{fontSize:10,color:IOS.label3}}>{hasLockedSlip ? "Slip locked — pending results" : "Lock your slip to start tracking"}</div>
       </div>
-      <div style={{background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"14px",marginBottom:16}}>
-        <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:4}}>Week {soloWeeks.length+1} picks</div>
-        <div style={{fontSize:11,color:IOS.label3,marginBottom:12}}>Same bet types, same odds. Just you vs the line.</div>
-        <button onClick={async()=>{
-          if(setIsSoloMode) setIsSoloMode(true);
-          const lgId = await getOrCreateSoloLeague();
-          if(setActiveLeagueId) setActiveLeagueId(lgId||"solo");
-          setScreen("picks");
-        }} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:8,padding:"12px",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
-          Build This Week&apos;s Slip
-        </button>
+
+      {/* This week's slip card */}
+      <div style={{background:IOS.bg2,border:`0.5px solid ${hasLockedSlip?"rgba(48,209,88,0.25)":"rgba(255,255,255,0.07)"}`,borderRadius:12,padding:"14px",marginBottom:16}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:hasLockedSlip?10:4}}>
+          <div>
+            <div style={{fontSize:13,fontWeight:700,color:"#fff"}}>Week {currentWeekNum} picks</div>
+            {!hasLockedSlip && <div style={{fontSize:11,color:IOS.label3,marginTop:2}}>Same bet types, same odds. Just you vs the line.</div>}
+          </div>
+          {hasLockedSlip && (
+            <div style={{display:"flex",alignItems:"center",gap:5,background:"rgba(48,209,88,0.1)",border:"0.5px solid rgba(48,209,88,0.3)",borderRadius:8,padding:"4px 9px"}}>
+              <svg width="8" height="8" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" fill="#30D158"/></svg>
+              <span style={{fontSize:10,fontWeight:700,color:IOS.green}}>LOCKED</span>
+            </div>
+          )}
+        </div>
+
+        {/* Locked slip mini preview */}
+        {hasLockedSlip ? (
+          <>
+            <div style={{marginBottom:10}}>
+              {lockedPicks.sort((a,b)=>a.mult-b.mult).map((slot,i)=>{
+                const catColors = {ml:IOS.blue,prop:IOS.yellow,ou:IOS.orange,spread:IOS.green,longshot:IOS.pink};
+                const catLabels = {ml:"ML",prop:"PROP",ou:"O/U",spread:"SPR",longshot:"PARLAY"};
+                const isParlay = slot.isParlay && slot.parlayLegs?.length >= 2;
+                const label = isParlay ? "PARLAY" : catLabels[slot.category] || "PICK";
+                const col = isParlay ? IOS.pink : catColors[slot.category] || IOS.blue;
+                const pickName = isParlay
+                  ? `${slot.parlayLegs.length}-leg parlay`
+                  : slot.bet?.pick || "—";
+                const odds = isParlay
+                  ? (() => { try { const d=slot.parlayLegs.reduce((a,b)=>{const dec=b.impliedOdds>0?(b.impliedOdds/100)+1:(100/Math.abs(b.impliedOdds))+1;return a*dec;},1); return d>=2?`+${Math.round((d-1)*100)}`:`${Math.round(-100/(d-1))}`; } catch(e){return "—";} })()
+                  : slot.bet?.odds || "—";
+                return (
+                  <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:i<lockedPicks.length-1?`0.5px solid rgba(255,255,255,0.05)`:"none"}}>
+                    <div style={{width:28,textAlign:"center",fontSize:9,fontWeight:800,color:col,background:`${col}18`,borderRadius:5,padding:"2px 4px",flexShrink:0}}>{label}</div>
+                    <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.75)",flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pickName}</div>
+                    <div style={{fontSize:11,fontWeight:800,color:odds.startsWith("+")?IOS.green:IOS.blue,flexShrink:0}}>{odds}</div>
+                    <div style={{fontSize:9,fontWeight:700,color:"rgba(255,255,255,0.3)",width:16,textAlign:"right",flexShrink:0}}>{slot.mult}×</div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={async()=>{
+                if(setIsSoloMode) setIsSoloMode(true);
+                const lgId = await getOrCreateSoloLeague();
+                if(setActiveLeagueId) setActiveLeagueId(lgId||"solo");
+                setScreen("picks");
+              }} style={{flex:1,background:"rgba(255,255,255,0.08)",border:"none",borderRadius:8,padding:"10px",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
+                View Slip
+              </button>
+            </div>
+          </>
+        ) : (
+          <button onClick={async()=>{
+            if(isPro) {
+              // Pro: go straight to picks with current soloSport
+              if(setIsSoloMode) setIsSoloMode(true);
+              const lgId = await getOrCreateSoloLeague();
+              if(setActiveLeagueId) setActiveLeagueId(lgId||"solo");
+              setScreen("picks");
+            } else {
+              // Free: show sport picker first
+              setShowSoloSportPicker(true);
+            }
+          }} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:8,padding:"12px",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
+            Build This Week&apos;s Slip
+          </button>
+        )}
       </div>
+
+      {/* Past weeks */}
       {soloLoading ? (
         <div style={{textAlign:"center",padding:"24px",color:IOS.label3,fontSize:13}}>Loading...</div>
       ) : soloWeeks.length === 0 ? (
@@ -638,6 +708,8 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
           ))}
         </div>
       )}
+
+      {/* Convert to league CTA */}
       {soloWeeks.length >= 2 && (
         <div style={{marginTop:12,background:"rgba(10,132,255,0.08)",border:"0.5px solid rgba(10,132,255,0.2)",borderRadius:12,padding:"14px"}}>
           <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:4}}>You&apos;re picking at {winPct}%</div>
@@ -695,7 +767,9 @@ export default function App() {
  const isSoloModeRef = useRef(false);
  const setSoloModeWithRef = (val) => { isSoloModeRef.current = val; setIsSoloMode(val); };
  const [soloLeagueId, setSoloLeagueId] = useState(null);
- const activeLeague = isSoloMode ? {id:soloLeagueId||"solo",name:"Solo Mode",sport:"nfl",current_week:(soloWeeks.length+1),season_weeks:99,max_members:1,target_size:1,isCommissioner:false} : ([...realLeagues].find(l=>l.id===activeLeagueId) || realLeagues[0] || {id:"",name:"",sport:"nfl",current_week:1,season_weeks:18,max_members:8,target_size:8,isCommissioner:false});
+ const [soloSport, setSoloSport] = useState("nfl"); // selected sport for current solo week
+ const [showSoloSportPicker, setShowSoloSportPicker] = useState(false); // sport selector before building
+ const activeLeague = isSoloMode ? {id:soloLeagueId||"solo",name:"Solo Mode",sport:soloSport,current_week:(soloWeeks.length+1),season_weeks:99,max_members:1,target_size:1,isCommissioner:false} : ([...realLeagues].find(l=>l.id===activeLeagueId) || realLeagues[0] || {id:"",name:"",sport:"nfl",current_week:1,season_weeks:18,max_members:8,target_size:8,isCommissioner:false});
  const sport = SPORTS[activeLeague?.sport] || SPORTS["nfl"];
  const SLOTS = sport.slots;
 
@@ -2742,7 +2816,7 @@ export default function App() {
  </div>
 
  {/* ══ SOLO MODE HOME SCREEN ══ */}
- {homeMode==="solo" && <SoloHome soloWeeks={soloWeeks} soloLoading={soloLoading} isPro={isPro} IOS={IOS} setScreen={setScreen} setShowNewLeague={setShowNewLeague} setNewLeagueStep={setNewLeagueStep} setShowBrowse={setShowBrowse} fetchPublicLeagues={fetchPublicLeagues} setIsSoloMode={setIsSoloMode} setActiveLeagueId={setActiveLeagueId} getOrCreateSoloLeague={getOrCreateSoloLeague}/>}
+ {homeMode==="solo" && <SoloHome soloWeeks={soloWeeks} soloLoading={soloLoading} isPro={isPro} IOS={IOS} setScreen={setScreen} setShowNewLeague={setShowNewLeague} setNewLeagueStep={setNewLeagueStep} setShowBrowse={setShowBrowse} fetchPublicLeagues={fetchPublicLeagues} setIsSoloMode={setIsSoloMode} setActiveLeagueId={setActiveLeagueId} getOrCreateSoloLeague={getOrCreateSoloLeague} soloSavedPicks={soloSavedPicks} setSoloSavedPicks={setSoloSavedPicks} soloFlexPicks={soloFlexPicks} setSoloFlexPicks={setSoloFlexPicks} soloSport={soloSport} setSoloSport={setSoloSport} setShowSoloSportPicker={setShowSoloSportPicker} soloSubmitted={soloSubmitted} setSoloSubmitted={setSoloSubmitted}/>}
 
  {/* ══ LEAGUES MODE ══ */}
  <div style={{display:homeMode==="leagues"?"block":"none"}}>
@@ -6364,6 +6438,61 @@ export default function App() {
  </div>
  )}
  </div>
+ </div>
+ )}
+
+ {/* ══ SOLO SPORT PICKER ══ */}
+ {showSoloSportPicker && (
+ <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",zIndex:9999,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>setShowSoloSportPicker(false)}>
+   <div style={{background:"#111",borderRadius:"20px 20px 0 0",padding:"0 0 40px",border:"0.5px solid #1E1E1E"}} onClick={e=>e.stopPropagation()}>
+     <div style={{width:36,height:4,background:"#2A2A2A",borderRadius:2,margin:"12px auto 16px"}}/>
+     <div style={{padding:"0 20px 20px"}}>
+       <div style={{fontSize:22,fontWeight:800,letterSpacing:-0.5,color:"#fff",marginBottom:4}}>Pick a Sport</div>
+       <div style={{fontSize:13,color:"rgba(255,255,255,0.4)",marginBottom:24}}>Your whole slip will be this sport. Upgrade to Pro for multi-sport slips.</div>
+       {[
+         {id:"nfl", label:"NFL", sub:"Football", color:"#0A84FF", icon:(
+           <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><ellipse cx="12" cy="12" rx="9" ry="6" stroke="currentColor" strokeWidth="1.8"/><line x1="3" y1="12" x2="21" y2="12" stroke="currentColor" strokeWidth="1.5"/><line x1="8" y1="7.5" x2="8" y2="16.5" stroke="currentColor" strokeWidth="1.2"/><line x1="16" y1="7.5" x2="16" y2="16.5" stroke="currentColor" strokeWidth="1.2"/></svg>
+         )},
+         {id:"nba", label:"NBA", sub:"Basketball", color:"#FF6B35", icon:(
+           <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8"/><line x1="3.5" y1="8.5" x2="20.5" y2="8.5" stroke="currentColor" strokeWidth="1.2"/><line x1="3.5" y1="15.5" x2="20.5" y2="15.5" stroke="currentColor" strokeWidth="1.2"/><path d="M12 3 Q16 8 16 12 Q16 16 12 21" stroke="currentColor" strokeWidth="1.2" fill="none"/><path d="M12 3 Q8 8 8 12 Q8 16 12 21" stroke="currentColor" strokeWidth="1.2" fill="none"/></svg>
+         )},
+         {id:"mlb", label:"MLB", sub:"Baseball", color:"#30D158", icon:(
+           <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8"/><path d="M7 5.5 Q10 12 7 18.5" stroke="currentColor" strokeWidth="1.2" fill="none"/><path d="M17 5.5 Q14 12 17 18.5" stroke="currentColor" strokeWidth="1.2" fill="none"/></svg>
+         )},
+       ].map(s=>(
+         <div key={s.id} onClick={async()=>{
+           setSoloSport(s.id);
+           setShowSoloSportPicker(false);
+           setIsSoloMode(true);
+           const lgId = await getOrCreateSoloLeague();
+           setActiveLeagueId(lgId||"solo");
+           // Fetch odds for selected sport
+           fetchLiveOdds(s.id);
+           setScreen("picks");
+         }} style={{display:"flex",alignItems:"center",gap:14,padding:"16px",marginBottom:10,background:"#1A1A1A",borderRadius:14,cursor:"pointer",border:`1px solid ${soloSport===s.id?s.color+"60":"rgba(255,255,255,0.06)"}`}}>
+           <div style={{width:44,height:44,borderRadius:12,background:`${s.color}18`,display:"flex",alignItems:"center",justifyContent:"center",color:s.color,flexShrink:0}}>{s.icon}</div>
+           <div style={{flex:1}}>
+             <div style={{fontSize:17,fontWeight:700,color:"#fff"}}>{s.label}</div>
+             <div style={{fontSize:12,color:"rgba(255,255,255,0.4)",marginTop:1}}>{s.sub}</div>
+           </div>
+           <div style={{width:22,height:22,borderRadius:"50%",border:`2px solid ${soloSport===s.id?s.color:"rgba(255,255,255,0.15)"}`,background:soloSport===s.id?s.color:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+             {soloSport===s.id && <svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 5l2.5 2.5L8 3" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none"/></svg>}
+           </div>
+         </div>
+       ))}
+       {/* Pro upsell */}
+       <div onClick={()=>{setShowSoloSportPicker(false);setShowPaywall("solo_sport");}} style={{display:"flex",alignItems:"center",gap:12,padding:"13px 16px",background:"rgba(191,90,242,0.08)",border:"1px solid rgba(191,90,242,0.25)",borderRadius:14,cursor:"pointer",marginTop:4}}>
+         <div style={{width:44,height:44,borderRadius:12,background:"rgba(191,90,242,0.15)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+           <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2l3 6h6l-5 4 2 6-6-4-6 4 2-6L3 8h6l3-6z" stroke="#BF5AF2" strokeWidth="1.8" strokeLinejoin="round"/></svg>
+         </div>
+         <div style={{flex:1}}>
+           <div style={{fontSize:14,fontWeight:700,color:"#BF5AF2"}}>Multi-Sport Slips</div>
+           <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:1}}>Mix NFL, NBA & MLB picks in one slip</div>
+         </div>
+         <div style={{fontSize:11,fontWeight:700,color:"#BF5AF2",background:"rgba(191,90,242,0.15)",borderRadius:6,padding:"3px 8px",flexShrink:0}}>Pro</div>
+       </div>
+     </div>
+   </div>
  </div>
  )}
 
