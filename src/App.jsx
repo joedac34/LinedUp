@@ -2710,7 +2710,7 @@ export default function App() {
  {/* Leagues / Solo mode switcher */}
  <div style={{display:"flex",gap:0,marginTop:10,marginBottom:10,background:"rgba(255,255,255,0.06)",borderRadius:10,padding:3}}>
    {[{id:"leagues",label:"Leagues"},{id:"solo",label:"Solo"}].map(m=>(
-     <div key={m.id} onClick={()=>{setHomeMode(m.id);if(m.id==="solo"){fetchSoloWeeks();}else{setIsSoloMode(false);}}}
+     <div key={m.id} onClick={()=>{setHomeMode(m.id);setScreen("home");if(m.id==="solo"){fetchSoloWeeks();}else{setIsSoloMode(false);}}}
      style={{flex:1,textAlign:"center",padding:"7px",borderRadius:8,fontSize:13,fontWeight:700,cursor:"pointer",transition:"all .15s",
        background:homeMode===m.id?"rgba(255,255,255,0.12)":"transparent",
        color:homeMode===m.id?"#fff":"rgba(255,255,255,0.4)"}}>
@@ -6459,14 +6459,188 @@ export default function App() {
  )}
 
  {/* ══ TAB BAR ══ */}
+ {/* ══ SOLO HISTORY ══ */}
+ {screen==="solohistory"&&(
+ <div className="body" style={{padding:"0 16px 40px"}}>
+ <div style={{padding:"20px 0 14px"}}>
+ <div style={{fontSize:24,fontWeight:800,color:"#fff",letterSpacing:-0.5}}>History</div>
+ <div style={{fontSize:13,color:IOS.label3,marginTop:2}}>Your solo pick record</div>
+ </div>
+ {soloWeeks.length===0 ? (
+ <div style={{textAlign:"center",padding:"40px 20px",background:IOS.bg2,borderRadius:12,border:"0.5px solid rgba(255,255,255,0.07)"}}>
+   <div style={{fontSize:14,fontWeight:700,color:"#fff",marginBottom:6}}>No history yet</div>
+   <div style={{fontSize:12,color:IOS.label3}}>Lock in your first solo slip to start building your record.</div>
+   <button onClick={()=>setScreen("picks")} style={{marginTop:14,background:IOS.blue,border:"none",borderRadius:8,padding:"10px 24px",fontFamily:"Barlow,sans-serif",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>Build First Slip</button>
+ </div>
+ ) : (
+ <>
+ {/* Summary stats */}
+ <div style={{display:"flex",gap:8,marginBottom:16}}>
+   {[
+     {l:"Record",v:soloWeeks.reduce((s,w)=>s+w.wins,0)+"-"+soloWeeks.reduce((s,w)=>s+w.losses,0),c:IOS.blue},
+     {l:"Win %",v:Math.round((soloWeeks.reduce((s,w)=>s+w.wins,0)/(soloWeeks.reduce((s,w)=>s+w.wins+w.losses,0)||1))*100)+"%",c:IOS.green},
+     {l:"Total Pts",v:soloWeeks.reduce((s,w)=>s+w.pts,0).toFixed(1),c:"#fff"},
+   ].map((s,i)=>(
+   <div key={i} style={{flex:1,background:IOS.bg2,borderRadius:10,padding:"10px 8px",textAlign:"center",border:"0.5px solid rgba(255,255,255,0.07)"}}>
+     <div style={{fontSize:18,fontWeight:800,color:s.c}}>{s.v}</div>
+     <div style={{fontSize:9,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4,marginTop:2}}>{s.l}</div>
+   </div>
+   ))}
+ </div>
+ {/* Week list */}
+ <div style={{fontSize:11,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>All Weeks</div>
+ {soloWeeks.map((w,i)=>{
+   const isBest = soloWeeks.length>1 && w.pts===Math.max(...soloWeeks.map(x=>x.pts));
+   return (
+   <div key={w.week} style={{background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"12px 14px",marginBottom:8}}>
+     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+       <div>
+         <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>Week {w.week}</div>
+         <div style={{fontSize:11,color:IOS.label3,marginTop:2}}>{w.wins}W · {w.losses}L · {w.picks.length} picks</div>
+       </div>
+       <div style={{textAlign:"right"}}>
+         <div style={{fontSize:18,fontWeight:800,color:w.pts>0?IOS.green:"#555"}}>{w.pts>0?"+"+w.pts:"0"} pts</div>
+         {isBest&&<div style={{fontSize:8,fontWeight:700,color:IOS.green,background:"rgba(48,209,88,0.1)",border:"0.5px solid rgba(48,209,88,0.2)",borderRadius:4,padding:"1px 5px",marginTop:2}}>BEST WEEK</div>}
+       </div>
+     </div>
+     {/* Pick breakdown */}
+     <div style={{borderTop:"0.5px solid rgba(255,255,255,0.06)",paddingTop:8}}>
+       {w.picks.map((p,j)=>{
+         const won=p.result==="W",lost=p.result==="L";
+         return (
+         <div key={j} style={{display:"flex",alignItems:"center",padding:"3px 0"}}>
+           <div style={{width:8,height:8,borderRadius:"50%",background:won?IOS.green:lost?IOS.red:"#444",flexShrink:0,marginRight:8}}/>
+           <div style={{flex:1,fontSize:11,color:"#ccc"}}>{p.pick_name}</div>
+           <div style={{fontSize:11,fontWeight:700,color:won?IOS.green:lost?IOS.red:"#555"}}>{won?"+"+parseFloat(p.points_earned||0).toFixed(1)+"pts":lost?"L":"—"}</div>
+         </div>
+         );
+       })}
+     </div>
+   </div>
+   );
+ })}
+ </>
+ )}
+ </div>
+ )}
+
+ {/* ══ SOLO STATS ══ */}
+ {screen==="solostats"&&(
+ <div className="body" style={{padding:"0 16px 40px"}}>
+ <div style={{padding:"20px 0 14px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+   <div>
+     <div style={{fontSize:24,fontWeight:800,color:"#fff",letterSpacing:-0.5}}>Stats</div>
+     <div style={{fontSize:13,color:IOS.label3,marginTop:2}}>Your pick performance</div>
+   </div>
+   {!isPro&&<div style={{background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:6,padding:"4px 10px",fontSize:10,fontWeight:700,color:IOS.blue}}>Pro Preview</div>}
+ </div>
+ {soloWeeks.length===0 ? (
+ <div style={{textAlign:"center",padding:"40px 20px",background:IOS.bg2,borderRadius:12,border:"0.5px solid rgba(255,255,255,0.07)"}}>
+   <div style={{fontSize:14,fontWeight:700,color:"#fff",marginBottom:6}}>No stats yet</div>
+   <div style={{fontSize:12,color:IOS.label3}}>Lock in a few slips and your stats will appear here.</div>
+ </div>
+ ) : (()=>{
+   const allPicks = soloWeeks.flatMap(w=>w.picks);
+   const byType = {};
+   allPicks.forEach(p=>{
+     const t = p.slot||"ml";
+     if(!byType[t]) byType[t]={wins:0,losses:0,pts:0};
+     if(p.result==="W"){byType[t].wins++;byType[t].pts+=parseFloat(p.points_earned||0);}
+     else if(p.result==="L") byType[t].losses++;
+   });
+   const totalW = allPicks.filter(p=>p.result==="W").length;
+   const totalL = allPicks.filter(p=>p.result==="L").length;
+   const winPct = totalW+totalL>0?Math.round((totalW/(totalW+totalL))*100):0;
+   const bestWeek = soloWeeks.length>0?soloWeeks.reduce((b,w)=>w.pts>b.pts?w:b,soloWeeks[0]):null;
+   const streak = (()=>{
+     let s=0, type=null;
+     for(let i=0;i<soloWeeks.length;i++){
+       const w=soloWeeks[i];
+       const wWins=w.picks.filter(p=>p.result==="W").length;
+       const wLoss=w.picks.filter(p=>p.result==="L").length;
+       const wType=wWins>wLoss?"W":"L";
+       if(i===0){s=1;type=wType;}
+       else if(wType===type) s++;
+       else break;
+     }
+     return {count:s,type};
+   })();
+   const typeLabels={ml:"Moneyline",prop:"Prop","ou":"Over/Under",spread:"Spread",longshot:"Longshot"};
+   const typeColors={ml:IOS.blue,prop:"#FFD60A",ou:IOS.orange,spread:IOS.green,longshot:IOS.red};
+   return (
+   <>
+   {/* Overview */}
+   <div style={{display:"flex",gap:8,marginBottom:12}}>
+     <div style={{flex:1,background:IOS.bg2,borderRadius:10,padding:"10px 8px",textAlign:"center",border:"0.5px solid rgba(255,255,255,0.07)"}}>
+       <div style={{fontSize:20,fontWeight:800,color:winPct>=60?IOS.green:winPct>=40?IOS.orange:IOS.red}}>{winPct}%</div>
+       <div style={{fontSize:9,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4,marginTop:2}}>Win Rate</div>
+     </div>
+     <div style={{flex:1,background:IOS.bg2,borderRadius:10,padding:"10px 8px",textAlign:"center",border:"0.5px solid rgba(255,255,255,0.07)"}}>
+       <div style={{fontSize:20,fontWeight:800,color:IOS.blue}}>{soloWeeks.length}</div>
+       <div style={{fontSize:9,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4,marginTop:2}}>Weeks</div>
+     </div>
+     <div style={{flex:1,background:IOS.bg2,borderRadius:10,padding:"10px 8px",textAlign:"center",border:"0.5px solid rgba(255,255,255,0.07)"}}>
+       <div style={{fontSize:20,fontWeight:800,color:streak.type==="W"?IOS.green:IOS.red}}>{streak.type==="W"?"W":"L"}{streak.count}</div>
+       <div style={{fontSize:9,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4,marginTop:2}}>Streak</div>
+     </div>
+   </div>
+   {/* Best week */}
+   {bestWeek&&(
+   <div style={{background:"rgba(48,209,88,0.07)",border:"0.5px solid rgba(48,209,88,0.2)",borderRadius:10,padding:"11px 14px",marginBottom:12,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+     <div><div style={{fontSize:10,fontWeight:700,color:IOS.green,textTransform:"uppercase",letterSpacing:.4,marginBottom:2}}>Best Week</div>
+     <div style={{fontSize:13,fontWeight:700,color:"#fff"}}>Week {bestWeek.week} — {bestWeek.wins}W · {bestWeek.losses}L</div></div>
+     <div style={{fontSize:20,fontWeight:800,color:IOS.green}}>+{bestWeek.pts} pts</div>
+   </div>
+   )}
+   {/* By bet type */}
+   <div style={{fontSize:11,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>By Bet Type</div>
+   <div style={{background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:12,overflow:"hidden",marginBottom:12}}>
+     {Object.entries(byType).map(([type,data],i,arr)=>{
+       const pct=data.wins+data.losses>0?Math.round((data.wins/(data.wins+data.losses))*100):0;
+       return (
+       <div key={type} style={{padding:"10px 14px",borderBottom:i<arr.length-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
+         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
+           <div style={{fontSize:12,fontWeight:700,color:"#fff"}}>{typeLabels[type]||type}</div>
+           <div style={{fontSize:13,fontWeight:800,color:pct>=60?IOS.green:pct>=40?IOS.orange:IOS.red}}>{pct}%</div>
+         </div>
+         <div style={{display:"flex",alignItems:"center",gap:8}}>
+           <div style={{fontSize:10,color:IOS.label3,width:48}}>{data.wins}W-{data.losses}L</div>
+           <div style={{flex:1,height:4,background:"#1A1A1A",borderRadius:2}}>
+             <div style={{width:pct+"%",height:"100%",background:typeColors[type]||IOS.blue,borderRadius:2}}/>
+           </div>
+         </div>
+       </div>
+       );
+     })}
+   </div>
+   {/* Pro upsell */}
+   {!isPro&&(
+   <div onClick={()=>setShowPaywall("stats")} style={{background:"rgba(10,132,255,0.08)",border:"0.5px solid rgba(10,132,255,0.2)",borderRadius:12,padding:"14px",textAlign:"center",cursor:"pointer"}}>
+     <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:4}}>Unlock Full Analytics</div>
+     <div style={{fontSize:11,color:IOS.label3,marginBottom:10}}>H2H records, per-sport breakdown, trend charts, and your pick personality — all in Pro.</div>
+     <div style={{background:IOS.blue,borderRadius:7,padding:"9px",fontSize:12,fontWeight:700,color:"#fff"}}>Upgrade to Pro</div>
+   </div>
+   )}
+   </>
+   );
+ })()}
+ </div>
+ )}
+
  <div className="tab-bar">
- {[
+ {(homeMode==="solo" ? [
+ {icon:"home",label:"Home",id:"home"},
+ {icon:"picks",label:"Picks",id:"picks"},
+ {icon:"history",label:"History",id:"solohistory"},
+ {icon:"stats",label:"Stats",id:"solostats"},
+ {icon:"profile",label:"Profile",id:"profile"},
+ ] : [
  {icon:"home",label:"Home",id:"home"},
  {icon:"picks",label:"Picks",id:"picks"},
  {icon:"matchup",label:"Matchup",id:"matchup"},
  {icon:"leagues",label:"Leagues",id:"leagues"},
  {icon:"standings",label:"Standings",id:"league"},
- ].map(t=>{
+ ]).map(t=>{
  const isOn=screen===t.id;
  const col=isOn?IOS.blue:"rgba(255,255,255,0.3)";
  const svgs={
@@ -6475,9 +6649,12 @@ export default function App() {
  matchup:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="18 13 12 19 6 13"/><polyline points="18 11 12 5 6 11"/></svg>,
  leagues:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
  standings:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
+ history:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.51"/></svg>,
+ stats:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
+ profile:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
  };
  return (
- <div key={t.id} className={`tab-item ${isOn?"on":""}`} onClick={()=>setScreen(t.id)}>
+ <div key={t.id} className={"tab-item "+(isOn?"on":"")} onClick={()=>setScreen(t.id)}>
  <div className="tab-icon" style={{display:"flex",alignItems:"center",justifyContent:"center"}}>{svgs[t.icon]}</div>
  <div className="tab-label" style={isOn?{color:IOS.blue}:{}}>{t.label}</div>
  </div>
