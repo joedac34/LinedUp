@@ -363,13 +363,13 @@ const LEAGUES_DATA = [
 ];
 
 const POWER_UPS = [
- { id:"steal", icon:"", name:"Pick Steal", desc:"See one opponent's locked lineup", rarity:"rare", color:IOS.purple, type:"defensive" },
- { id:"enhance", icon:"", name:"Spread Enhancer", desc:"Move any spread 1.5pts in your favor", rarity:"rare", color:IOS.blue, type:"offensive" },
- { id:"insurance",icon:"", name:"Insurance", desc:"Lose by 1 leg? Counts as a push", rarity:"common", color:IOS.green, type:"offensive" },
- { id:"lock", icon:"", name:"Lock It In", desc:"Force opponent — no lineup changes", rarity:"rare", color:IOS.orange, type:"defensive" },
+ { id:"steal", icon:"steal", name:"Pick Steal", desc:"See one opponent's locked lineup", rarity:"rare", color:IOS.purple, type:"defensive" },
+ { id:"enhance", icon:"enhance", name:"Spread Enhancer", desc:"Move any spread 1.5pts in your favor", rarity:"rare", color:IOS.blue, type:"offensive" },
+ { id:"insurance",icon:"insurance", name:"Insurance", desc:"Lose by 1 leg? Counts as a push", rarity:"common", color:IOS.green, type:"offensive" },
+ { id:"lock", icon:"lock", name:"Lock It In", desc:"Force opponent — no lineup changes", rarity:"rare", color:IOS.orange, type:"defensive" },
  { id:"double", icon:"2⃣", name:"Double Down", desc:"One pick counts double this week", rarity:"common", color:IOS.yellow, type:"offensive" },
- { id:"peek", icon:"", name:"Peek", desc:"See what % of league took each bet", rarity:"common", color:IOS.teal, type:"defensive" },
- { id:"bomb", icon:"", name:"Bomb", desc:"Nullify one of opponent's winning picks", rarity:"legendary", color:IOS.red, type:"defensive" },
+ { id:"peek", icon:"peek", name:"Peek", desc:"See what % of league took each bet", rarity:"common", color:IOS.teal, type:"defensive" },
+ { id:"bomb", icon:"bomb", name:"Bomb", desc:"Nullify one of opponent's winning picks", rarity:"legendary", color:IOS.red, type:"defensive" },
  { id:"swap", icon:"", name:"Hot Swap", desc:"Swap a losing pick after games start", rarity:"legendary", color:IOS.pink, type:"offensive" },
  { id:"wildcard", icon:"", name:"Wildcard", desc:"Play any bet — no slot rules", rarity:"rare", color:IOS.purple, type:"offensive" },
 ];
@@ -563,7 +563,7 @@ function calcMatchupScore(picks) {
 const pad=n=>String(n).padStart(2,"0");
 const acColor=i=>({D:"#5E5CE6",M:"#0A84FF",T:"#FF453A",C:"#30D158",A:"#FF9F0A",R:"#FF375F"}[i]||IOS.purple);
 const rarityColor=r=>r==="legendary"?IOS.pink:r==="rare"?IOS.purple:IOS.green;
-const rankMedal=r=>r===1?"":r===2?"":r===3?"":`${r}`;
+const rankMedal=r=>`${r}`;
 
 const polarToCart=(cx,cy,r,deg)=>{const rad=(deg-90)*Math.PI/180;return{x:cx+r*Math.cos(rad),y:cy+r*Math.sin(rad)};};
 
@@ -723,6 +723,50 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
     </div>
   );
 }
+
+// ─── ICON HELPERS (SVG, no emoji) ────────────────────────────────
+const puSVG = (id, color="#fff") => {
+  const s = {width:22,height:22,viewBox:"0 0 24 24",fill:"none",stroke:color,strokeWidth:1.8,strokeLinecap:"round",strokeLinejoin:"round"};
+  const icons = {
+    steal:    <svg {...s}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>,
+    enhance:  <svg {...s}><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>,
+    insurance:<svg {...s}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
+    lock:     <svg {...s}><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>,
+    double:   <svg {...s}><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>,
+    peek:     <svg {...s}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/></svg>,
+    bomb:     <svg {...s}><circle cx="11" cy="13" r="8"/><path d="M14 2l4 4"/><path d="M18 2l-4 4"/><line x1="14" y1="6" x2="18" y2="2"/></svg>,
+    clock:    <svg {...s}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
+  };
+  return icons[id] || <svg {...s}><circle cx="12" cy="12" r="10"/></svg>;
+};
+
+const catSVG = (id, color="#fff") => {
+  const s = {width:20,height:20,viewBox:"0 0 24 24",fill:"none",stroke:color,strokeWidth:1.8,strokeLinecap:"round",strokeLinejoin:"round"};
+  const icons = {
+    ml:       <svg {...s}><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>,
+    prop:     <svg {...s}><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>,
+    ou:       <svg {...s}><polyline points="18 15 12 9 6 15"/><polyline points="18 19 12 13 6 19"/></svg>,
+    spread:   <svg {...s}><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
+    longshot: <svg {...s}><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>,
+  };
+  return icons[id] || <svg {...s}><circle cx="12" cy="12" r="10"/></svg>;
+};
+
+const trophySVG = (id, color="#fff") => {
+  const s = {width:22,height:22,viewBox:"0 0 24 24",fill:"none",stroke:color,strokeWidth:1.8,strokeLinecap:"round",strokeLinejoin:"round"};
+  const icons = {
+    sharp:  <svg {...s}><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>,
+    long:   <svg {...s}><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>,
+    hot:    <svg {...s}><path d="M13 2c0 2.4-1.5 4.6-3 6 0-2-1.5-3-3-3 0 2.5-1.5 4.5-3 6.5-1 1.5-1 3.5 0 5a9 9 0 0 0 18 0c0-5-4-9.5-9-14.5z"/></svg>,
+    upset:  <svg {...s}><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>,
+    whale:  <svg {...s}><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>,
+    cold:   <svg {...s}><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>,
+    grind:  <svg {...s}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
+    come:   <svg {...s}><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>,
+    goat:   <svg {...s}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
+  };
+  return icons[id] || <svg {...s}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>;
+};
 
 export default function App() {
  const [screen, setScreen] = useState("home");
@@ -2568,7 +2612,7 @@ export default function App() {
  ? <div style={{padding:"28px 20px",textAlign:"center",color:IOS.label3,fontSize:15}}>No offensive power-ups in inventory</div>
  : filteredPUs.map((pu,i)=>(
  <div key={i} className="pu-opt" onClick={()=>usePU(pu, showPUModal.context, showPUModal.context==="picks"?showPUModal.slotId:showPUModal.pickIdx)}>
- <div className="pu-opt-icon" style={{background:`${pu.color}20`}}>{pu.icon}</div>
+ <div className="pu-opt-icon" style={{background:`${pu.color}20`}}>{puSVG(pu.icon,pu.color)}</div>
  <div style={{flex:1}}>
  <div className="pu-opt-name">{pu.name}</div>
  <div className="pu-opt-desc">{pu.desc}</div>
@@ -3153,7 +3197,7 @@ export default function App() {
  <div className="pu-scroll" style={{paddingBottom:6}}>
  {myPUs.map((pu,i)=>(
  <div key={i} className="pu-chip">
- <div className="pu-chip-icon">{pu.icon}</div>
+ <div className="pu-chip-icon">{puSVG(pu.icon,pu.color)}</div>
  <div><div className="pu-chip-name">{pu.name}</div><div className="pu-chip-rarity" style={{color:rarityColor(pu.rarity)}}>{pu.rarity}</div></div>
  </div>
  ))}
@@ -3389,7 +3433,7 @@ export default function App() {
  return (
  <div key={cat.id} onClick={()=>{ if(!taken) setFlexCategory(cat.id); }}
  style={{display:"flex",alignItems:"center",gap:14,padding:"14px 4px",borderBottom:`0.5px solid ${IOS.sep}`,cursor:taken?"not-allowed":"pointer",opacity:taken?0.35:1}}>
- <div style={{width:40,height:40,borderRadius:12,background:`${cat.color}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{cat.icon}</div>
+ <div style={{width:40,height:40,borderRadius:12,background:`${cat.color}20`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{catSVG(cat.id,cat.color)}</div>
  <div style={{flex:1}}>
  <div style={{fontSize:16,fontWeight:600,color:taken?IOS.label3:"#fff"}}>{cat.label}</div>
  <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>{taken?"Already in your slip":cat.desc}</div>
@@ -3614,7 +3658,7 @@ export default function App() {
    <div onClick={()=>setShowPaywall("picks")} style={{margin:"0 16px 8px",background:"#0A0A0A",border:"0.5px dashed #333",borderRadius:14,padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",opacity:0.8}}>
      <div style={{fontSize:13,color:"#555"}}>Add more picks</div>
      <div style={{display:"flex",alignItems:"center",gap:6,background:"rgba(10,132,255,0.1)",border:"0.5px solid rgba(10,132,255,0.25)",borderRadius:6,padding:"3px 8px"}}>
-       <i className="ti ti-lock" style={{fontSize:12,color:IOS.blue}} aria-hidden="true"/>
+       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
        <span style={{fontSize:10,fontWeight:700,color:IOS.blue}}>Commish Pro</span>
      </div>
    </div>
@@ -4429,7 +4473,9 @@ export default function App() {
        border:`0.5px solid ${newLeagueType===t.id?"rgba(10,132,255,0.35)":"#1E1E1E"}`,
      }}>
        <div style={{width:40,height:40,borderRadius:10,background:newLeagueType===t.id?"rgba(10,132,255,0.15)":"#1A1A1A",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:10,transition:"background .15s"}}>
-         <i className={"ti "+t.icon} style={{fontSize:20,color:newLeagueType===t.id?IOS.blue:"#555"}} aria-hidden="true"/>
+         {t.id==="h2h"&&<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={newLeagueType===t.id?IOS.blue:"#555"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>}
+         {t.id==="points"&&<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={newLeagueType===t.id?IOS.blue:"#555"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>}
+         {t.id==="bracket"&&<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={newLeagueType===t.id?IOS.blue:"#555"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>}
        </div>
        <div>
          <div style={{fontSize:14,fontWeight:700,color:newLeagueType===t.id?"#fff":"#888",marginBottom:3,textAlign:"center"}}>
@@ -4454,7 +4500,7 @@ export default function App() {
  {newLeagueStep===1&&(
    <>
    <button onClick={()=>setNewLeagueStep(0)} style={{background:"none",border:"none",color:"#555",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"Barlow,sans-serif",padding:"0 0 14px",display:"flex",alignItems:"center",gap:4}}>
-     <i className="ti ti-arrow-left" style={{fontSize:14}} aria-hidden="true"/> Back
+     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg> Back
    </button>
 
    {/* Sports */}
@@ -4533,10 +4579,13 @@ export default function App() {
    {/* Visibility */}
    <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"#555",marginBottom:8}}>Visibility</div>
    <div style={{display:"flex",gap:6,marginBottom:16}}>
-   {[{id:"private",icon:"ti-lock",l:"Private",d:"Invite code only"},{id:"public",icon:"ti-world",l:"Public",d:"Anyone can find & join"}].map(v=>(
+   {[{id:"private",l:"Private",d:"Invite code only"},{id:"public",l:"Public",d:"Anyone can find & join"}].map(v=>(
      <div key={v.id} onClick={()=>setNewLeaguePrivacy(v.id)}
      style={{flex:1,borderRadius:8,padding:"11px 10px",border:`0.5px solid ${newLeaguePrivacy===v.id?"rgba(10,132,255,0.4)":"#222"}`,background:newLeaguePrivacy===v.id?"rgba(10,132,255,0.1)":"#111",cursor:"pointer",textAlign:"center",transition:"all .15s"}}>
-       <i className={"ti "+v.icon} style={{fontSize:18,color:newLeaguePrivacy===v.id?IOS.blue:"#555",display:"block",marginBottom:4}} aria-hidden="true"/>
+       {v.id==="private"
+         ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={newLeaguePrivacy===v.id?IOS.blue:"#555"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{display:"block",marginBottom:4}}><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+         : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={newLeaguePrivacy===v.id?IOS.blue:"#555"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{display:"block",marginBottom:4}}><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+       }
        <div style={{fontSize:12,fontWeight:700,color:newLeaguePrivacy===v.id?IOS.blue:"#555"}}>{v.l}</div>
        <div style={{fontSize:10,color:"#444",marginTop:2}}>{v.d}</div>
      </div>
@@ -4641,10 +4690,10 @@ export default function App() {
      <div style={{fontSize:11,fontWeight:700,color:IOS.label3,letterSpacing:.5,textTransform:"uppercase"}}>My Leagues</div>
      <div style={{display:"flex",gap:6}}>
        <div onClick={()=>{setShowBrowse(true);fetchPublicLeagues();}} style={{width:28,height:28,borderRadius:8,background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
-         <i className="ti ti-world" style={{fontSize:14,color:IOS.blue}} aria-hidden="true"/>
+         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
        </div>
        <div onClick={()=>setShowNewLeague(true)} style={{width:28,height:28,borderRadius:8,background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
-         <i className="ti ti-plus" style={{fontSize:14,color:IOS.blue}} aria-hidden="true"/>
+         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
        </div>
      </div>
    </div>
@@ -4658,7 +4707,10 @@ export default function App() {
      </div>
      <div style={{display:"flex",alignItems:"center",gap:8}}>
        {lg.isCommissioner&&<div style={{background:"rgba(255,214,10,0.15)",border:"0.5px solid rgba(255,214,10,0.3)",borderRadius:5,padding:"2px 7px",fontSize:9,fontWeight:700,color:IOS.yellow}}>COMMISH</div>}
-       <i className={"ti "+(leagueSubTab==="dropdown"?"ti-chevron-up":"ti-chevron-down")} style={{fontSize:13,color:IOS.label3}} aria-hidden="true"/>
+       {leagueSubTab==="dropdown"
+         ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={IOS.label3} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+         : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={IOS.label3} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+       }
      </div>
    </div>
    {/* Dropdown list */}
@@ -4673,7 +4725,7 @@ export default function App() {
            <div style={{fontSize:13,fontWeight:700,color:isSelected?IOS.blue:"#fff"}}>{l.name}</div>
            <div style={{fontSize:10,color:IOS.label3,marginTop:1}}>{lsp.label} · Wk {l.current_week||1}</div>
          </div>
-         {isSelected&&<i className="ti ti-check" style={{fontSize:14,color:IOS.blue}} aria-hidden="true"/>}
+         {isSelected&&<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
        </div>
        );
      })}
@@ -5590,7 +5642,7 @@ export default function App() {
  {leagueTrophies.map(t=>(
  <div key={t.id} style={{margin:"0 16px 10px",background:IOS.bg2,borderRadius:16,padding:"16px",display:"flex",alignItems:"center",gap:14,position:"relative",overflow:"hidden",border:t.isYou?`1px solid ${t.color}30`:"1px solid rgba(255,255,255,0.06)"}}>
  {t.isYou&&<div style={{position:"absolute",left:0,top:0,bottom:0,width:4,background:t.color,borderRadius:"16px 0 0 16px"}}/>}
- <div style={{width:48,height:48,borderRadius:14,background:`${t.color}18`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,flexShrink:0}}>{t.icon}</div>
+ <div style={{width:48,height:48,borderRadius:14,background:`${t.color}18`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{trophySVG(t.id,t.color)}</div>
  <div style={{flex:1}}>
  <div style={{fontSize:16,fontWeight:700,color:t.isYou?t.color:"#fff",marginBottom:3}}>{t.name}</div>
  <div style={{fontSize:12,color:IOS.label3,marginBottom:4}}>{t.desc}</div>
@@ -5968,7 +6020,7 @@ export default function App() {
  {!isPro && (
    <div style={{margin:"16px 16px 0",background:"#0A0A0A",border:"0.5px solid #1E1E1E",borderRadius:14,padding:"24px 20px",textAlign:"center"}}>
      <div style={{width:48,height:48,borderRadius:12,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.25)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 12px"}}>
-       <i className="ti ti-bolt" style={{fontSize:24,color:IOS.blue}} aria-hidden="true"/>
+       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
      </div>
      <div style={{fontSize:16,fontWeight:700,color:"#fff",marginBottom:6}}>Power-ups are a Pro feature</div>
      <div style={{fontSize:13,color:"#666",marginBottom:16,lineHeight:1.5}}>Upgrade to Commish Pro to unlock Double Down, Mulligan, Shield, and more.</div>
@@ -6058,13 +6110,13 @@ export default function App() {
  {[
  {key:"notif_results", label:"Weekly Results", sub:"When your week is graded", icon:""},
  {key:"notif_grades", label:"Picks Graded", sub:"When a pick result comes in", icon:""},
- {key:"notif_reminder", label:"Pick Reminder", sub:"Reminder before slip locks", icon:"⏰"},
+ {key:"notif_reminder", label:"Pick Reminder", sub:"Reminder before slip locks", icon:"clock"},
  {key:"notif_league", label:"League Activity", sub:"New members, chat messages", icon:""},
  ].map((pref,i,arr)=>{
  const val = userProfile?.[pref.key] !== false; // default true
  return (
  <div key={pref.key} style={{display:"flex",alignItems:"center",padding:"12px 16px",borderBottom:i<arr.length-1?`0.5px solid ${IOS.sep}`:"none"}}>
- <div style={{fontSize:18,marginRight:12}}>{pref.icon}</div>
+ {pref.icon&&<div style={{marginRight:12,display:"flex",alignItems:"center"}}>{puSVG(pref.icon,"rgba(255,255,255,0.4)")}</div>}
  <div style={{flex:1}}>
  <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>{pref.label}</div>
  <div style={{fontSize:12,color:IOS.label3,marginTop:1}}>{pref.sub}</div>
@@ -6655,9 +6707,9 @@ export default function App() {
  {showPaywall && (()=>{
    const configs = {
      picks:{icon:"ti-plus",title:"Unlimited picks",sub:"Commish Pro lets you add as many pick slots as you want each week.",features:["Unlimited pick slots per week","Custom multipliers on any slot","NFL, NBA, MLB, NHL","Power-ups and custom bet types"]},
-     settings:{icon:"ti-settings",title:"Custom league settings",sub:"Set your own pick counts, multiplier ranges, and allowed bet types.",features:["Custom pick count per week","Custom multiplier ranges","Restrict or expand bet types","Multi-sport leagues"]},
-     sport:{icon:"ti-world",title:"Multi-sport leagues",sub:"Run your league across NFL, NBA, MLB, and NHL — all in one place.",features:["NFL, NBA, MLB, NHL support","Custom pick counts and bet types","Custom multiplier ranges","Power-ups for your league"]},
-     powerups:{icon:"ti-bolt",title:"Power-ups are a Pro feature",sub:"Double Down, Mulligan, Shield and more are unlocked with Commish Pro.",features:["All current and future power-ups","Unlimited picks and custom settings","Multi-sport league support"]},
+     settings:{icon:"settings",title:"Custom league settings",sub:"Set your own pick counts, multiplier ranges, and allowed bet types.",features:["Custom pick count per week","Custom multiplier ranges","Restrict or expand bet types","Multi-sport leagues"]},
+     sport:{icon:"world",title:"Multi-sport leagues",sub:"Run your league across NFL, NBA, MLB, and NHL — all in one place.",features:["NFL, NBA, MLB, NHL support","Custom pick counts and bet types","Custom multiplier ranges","Power-ups for your league"]},
+     powerups:{icon:"bolt",title:"Power-ups are a Pro feature",sub:"Double Down, Mulligan, Shield and more are unlocked with Commish Pro.",features:["All current and future power-ups","Unlimited picks and custom settings","Multi-sport league support"]},
    };
    const cfg = configs[showPaywall]||configs.picks;
    return (
@@ -6666,7 +6718,10 @@ export default function App() {
          <div style={{width:36,height:4,background:"#2A2A2A",borderRadius:2,margin:"12px auto 20px"}}/>
          <div style={{padding:"0 20px"}}>
            <div style={{width:44,height:44,borderRadius:10,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.25)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:12}}>
-             <i className={"ti "+cfg.icon} style={{fontSize:22,color:IOS.blue}} aria-hidden="true"/>
+             {cfg.icon==="bolt"&&<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>}
+             {cfg.icon==="settings"&&<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>}
+             {cfg.icon==="world"&&<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>}
+             {!["bolt","settings","world"].includes(cfg.icon)&&<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>}
            </div>
            <div style={{fontSize:18,fontWeight:700,color:"#fff",marginBottom:4}}>{cfg.title}</div>
            <div style={{fontSize:13,color:"#666",marginBottom:16,lineHeight:1.5}}>{cfg.sub}</div>
@@ -6695,7 +6750,7 @@ export default function App() {
        <div style={{width:36,height:4,background:"#2A2A2A",borderRadius:2,margin:"12px auto 20px"}}/>
        <div style={{padding:"0 20px"}}>
          <div style={{width:44,height:44,borderRadius:10,background:"rgba(48,209,88,0.12)",border:"0.5px solid rgba(48,209,88,0.25)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:12}}>
-           <i className="ti ti-circle-check" style={{fontSize:22,color:"#30D158"}} aria-hidden="true"/>
+           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#30D158" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
          </div>
          <div style={{fontSize:18,fontWeight:700,color:"#fff",marginBottom:4}}>Your league is live</div>
          <div style={{fontSize:13,color:"#666",marginBottom:16,lineHeight:1.5}}>Want more control over how your league works?</div>
