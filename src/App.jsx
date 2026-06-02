@@ -692,6 +692,8 @@ export default function App() {
  const [soloWeeks, setSoloWeeks] = useState([]);
  const [soloLoading, setSoloLoading] = useState(false);
  const [isSoloMode, setIsSoloMode] = useState(false);
+ const isSoloModeRef = React.useRef(false);
+ const setSoloModeWithRef = (val) => { isSoloModeRef.current = val; setIsSoloMode(val); };
  const [soloLeagueId, setSoloLeagueId] = useState(null);
  const activeLeague = isSoloMode ? {id:soloLeagueId||"solo",name:"Solo Mode",sport:"nfl",current_week:(soloWeeks.length+1),season_weeks:99,max_members:1,target_size:1,isCommissioner:false} : ([...realLeagues].find(l=>l.id===activeLeagueId) || realLeagues[0] || {id:"",name:"",sport:"nfl",current_week:1,season_weeks:18,max_members:8,target_size:8,isCommissioner:false});
  const sport = SPORTS[activeLeague?.sport] || SPORTS["nfl"];
@@ -3246,7 +3248,7 @@ export default function App() {
  <div style={{padding:"12px 16px"}}>
  {(()=>{
  // Find categories already used by OTHER slots (not the current one being edited)
- const usedCats = flexPicks
+ const usedCats = activePicks
  .filter((_,i)=>i!==activeFlexSlot)
  .filter(p=>(p.bet&&p.category&&!p.isParlay)||(p.isParlay&&p.parlayLegs.length>=2))
  .map(p=>p.isParlay?"longshot":p.category);
@@ -3433,7 +3435,7 @@ export default function App() {
  <div className="done-title">Slip Locked </div>
  <div style={{fontSize:13,color:IOS.label3,textAlign:"center"}}>Week {activeLeague.current_week||activeLeague.week||1} · {activeLeague.name}</div>
  <div className="done-legs-card">
- {[...flexPicks].sort((a,b)=>a.mult-b.mult).map((slot,i)=>{
+ {[...activePicks].sort((a,b)=>a.mult-b.mult).map((slot,i)=>{
  if(!slot.mult) return null;
  if(slot.isParlay) {
  const ls = calcLS(slot.parlayLegs);
@@ -3496,7 +3498,7 @@ export default function App() {
  {!oddsLoading && oddsError && <div style={{marginLeft:"auto",fontSize:11,color:IOS.orange}}> Static odds</div>}
  {savedPicks&&!oddsLoading&&<div style={{marginLeft:"auto",display:"flex",gap:14,alignItems:"center"}}>
  <div onClick={()=>{
- if(activeSavedPicks?.flexPicks) setFlexPicks(activeSavedPicks.flexPicks);
+ if(activeSavedPicks?.flexPicks) setActivePicks(activeSavedPicks.flexPicks);
  setActiveSavedPicks(null);
  }} style={{fontSize:13,fontWeight:600,color:IOS.blue,cursor:"pointer"}}>Edit</div>
  <div onClick={async()=>{
@@ -3600,7 +3602,7 @@ export default function App() {
  </div>
  <div style={{display:"flex",gap:6}}>
  {[1,2,3,4,5].map(m=>{
- const slot = flexPicks.find(p=>p.mult===m);
+ const slot = activePicks.find(p=>p.mult===m);
  const filled = slot && (slot.isParlay ? slot.parlayLegs.length>=2 : slot.bet!==null);
  return (
  <div key={m} style={{flex:1,height:6,borderRadius:3,background:filled?IOS.green:slot?"rgba(10,132,255,0.4)":"rgba(255,255,255,0.1)"}}/>
@@ -3611,7 +3613,7 @@ export default function App() {
  </div>
 
  {/* Flex pick slots — compact card design */}
- {flexPicks.map((slot, idx)=>{
+ {activePicks.map((slot, idx)=>{
  const parlayDec = slot.isParlay && slot.parlayLegs.length>=2 ? calcParlayOddsDecimal(slot.parlayLegs) : 1;
  const parlayAmerican = slot.isParlay && slot.parlayLegs.length>=2 ? parlayAmericanOdds(parlayDec) : 0;
  const parlayValid = slot.isParlay && slot.parlayLegs.length>=2 && parlayAmerican >= 400;
@@ -4228,20 +4230,21 @@ export default function App() {
        if(t.id==='h2h'&&![6,8,10,12].includes(newLeagueSize)) setNewLeagueSize(8);
        if(t.id==='bracket'&&![4,8,16,32].includes(newLeagueSize)) setNewLeagueSize(8);
      }} style={{
-       display:"flex",alignItems:"flex-start",gap:12,borderRadius:10,padding:"13px 14px",
+       display:"flex",flexDirection:"column",alignItems:"center",textAlign:"center",
+       borderRadius:10,padding:"16px 14px",
        marginBottom:8,cursor:"pointer",transition:"all .15s",
        background:newLeagueType===t.id?"rgba(10,132,255,0.08)":"#111",
        border:`0.5px solid ${newLeagueType===t.id?"rgba(10,132,255,0.35)":"#1E1E1E"}`,
      }}>
-       <div style={{width:36,height:36,borderRadius:8,background:newLeagueType===t.id?"rgba(10,132,255,0.15)":"#1A1A1A",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"background .15s"}}>
-         <i className={"ti "+t.icon} style={{fontSize:18,color:newLeagueType===t.id?IOS.blue:"#555"}} aria-hidden="true"/>
+       <div style={{width:40,height:40,borderRadius:10,background:newLeagueType===t.id?"rgba(10,132,255,0.15)":"#1A1A1A",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:10,transition:"background .15s"}}>
+         <i className={"ti "+t.icon} style={{fontSize:20,color:newLeagueType===t.id?IOS.blue:"#555"}} aria-hidden="true"/>
        </div>
        <div>
-         <div style={{fontSize:14,fontWeight:700,color:newLeagueType===t.id?"#fff":"#888",marginBottom:3}}>
+         <div style={{fontSize:14,fontWeight:700,color:newLeagueType===t.id?"#fff":"#888",marginBottom:3,textAlign:"center"}}>
            {t.label}
            {t.badge&&<span style={{display:"inline-flex",alignItems:"center",background:"rgba(255,159,10,0.12)",border:"0.5px solid rgba(255,159,10,0.3)",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:700,color:"#FF9F0A",marginLeft:7}}>{t.badge}</span>}
          </div>
-         <div style={{fontSize:11,color:"#555",lineHeight:1.4}}>{t.desc}</div>
+         <div style={{fontSize:11,color:"#555",lineHeight:1.4,textAlign:"center"}}>{t.desc}</div>
        </div>
      </div>
    ))}
@@ -4493,7 +4496,7 @@ export default function App() {
  {/* Sub-tabs - hide when dropdown is open */}
  {lg && leagueSubTab!=="dropdown" && (
  <div style={{display:"flex",borderBottom:`0.5px solid ${IOS.sep}`,margin:"10px 0 0"}}>
-   {["overview","standings","schedule"].map(t=>(
+   {["overview","standings",(lg.league_type||"h2h")==="bracket"?"bracket":"schedule"].map(t=>(
      <div key={t} onClick={()=>setLeagueSubTab(t)} style={{flex:1,textAlign:"center",padding:"9px 4px",fontSize:11,fontWeight:700,textTransform:"capitalize",cursor:"pointer",
        color:leagueSubTab===t?IOS.blue:"rgba(255,255,255,0.4)",
        borderBottom:leagueSubTab===t?`2px solid ${IOS.blue}`:"2px solid transparent",transition:"all .15s"}}>
@@ -4630,7 +4633,7 @@ export default function App() {
  )}
 
  {/* ── SCHEDULE TAB ── */}
- {lg && leagueSubTab==="schedule" && (
+ {lg && (leagueSubTab==="schedule"||leagueSubTab==="bracket") && (
  <div style={{padding:"12px 16px 20px"}}>
    <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:10}}>Season Schedule</div>
    {liveSchedule.length===0 ? (
