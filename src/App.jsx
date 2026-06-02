@@ -1525,11 +1525,13 @@ export default function App() {
  };
 
  const fetchUserProfile = async (uid) => {
- const {data} = await supabase.from("users").select("id,username,email,push_enabled,notif_results,notif_grades,notif_reminder,notif_league").eq("id",uid).maybeSingle();
+ const {data} = await supabase.from("users").select("id,username,email,is_pro,push_enabled,notif_results,notif_grades,notif_reminder,notif_league").eq("id",uid).maybeSingle();
  if(data) {
  setUserProfile(data);
- // Only show prompt if no username AND account is older than 30 seconds
- // This prevents the prompt from showing immediately after signup
+ // DB is source of truth for pro status
+ const proVal = data.is_pro === true;
+ setIsPro(proVal);
+ try { localStorage.setItem("picklock_is_pro", proVal ? "true" : "false"); } catch(e) {}
  if(!data.username) {
  const createdAt = data.created_at ? new Date(data.created_at).getTime() : 0;
  const ageSeconds = (Date.now() - createdAt) / 1000;
@@ -1537,6 +1539,15 @@ export default function App() {
  }
  } else {
  // No user record yet — they just signed up, skip prompt
+ }
+ };
+
+ // Write pro status to DB + local state
+ const setProStatus = async (val) => {
+ setIsPro(val);
+ try { localStorage.setItem("picklock_is_pro", val ? "true" : "false"); } catch(e) {}
+ if(user) {
+ await supabase.from("users").update({is_pro: val}).eq("id", user.id);
  }
  };
 
@@ -4501,7 +4512,7 @@ export default function App() {
        <div style={{fontSize:13,fontWeight:600,color:"#fff"}}>Commish Pro</div>
        <div style={{fontSize:11,color:"#555",marginTop:2}}>Custom picks, multi-sport, power-ups</div>
      </div>
-     <div onClick={()=>isPro?(()=>{setIsPro(false);try{localStorage.removeItem("picklock_is_pro");}catch(e){}})():setShowPaywall("settings")} style={{width:44,height:26,borderRadius:13,background:isPro?IOS.blue:"#2A2A2A",border:`1px solid ${isPro?IOS.blue:"#3A3A3A"}`,position:"relative",cursor:"pointer",transition:"background .2s"}}>
+     <div onClick={()=>isPro?setProStatus(false):setShowPaywall("settings")} style={{width:44,height:26,borderRadius:13,background:isPro?IOS.blue:"#2A2A2A",border:`1px solid ${isPro?IOS.blue:"#3A3A3A"}`,position:"relative",cursor:"pointer",transition:"background .2s"}}>
        <div style={{position:"absolute",top:2,left:isPro?18:2,width:22,height:22,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
      </div>
    </div>
@@ -5155,7 +5166,7 @@ export default function App() {
        <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>Commish Pro</div>
        <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>{isPro?"Active — full league control":"Unlock custom picks, sports, and more"}</div>
      </div>
-     <div onClick={()=>isPro?(()=>{setIsPro(false);try{localStorage.removeItem("picklock_is_pro");}catch(e){}})():setShowPaywall("settings")} style={{width:51,height:31,borderRadius:16,background:isPro?IOS.blue:"#2A2A2A",border:`1px solid ${isPro?IOS.blue:"#3A3A3A"}`,position:"relative",cursor:"pointer",transition:"background .2s"}}>
+     <div onClick={()=>isPro?setProStatus(false):setShowPaywall("settings")} style={{width:51,height:31,borderRadius:16,background:isPro?IOS.blue:"#2A2A2A",border:`1px solid ${isPro?IOS.blue:"#3A3A3A"}`,position:"relative",cursor:"pointer",transition:"background .2s"}}>
        <div style={{position:"absolute",top:3,left:isPro?22:3,width:25,height:25,borderRadius:"50%",background:"#fff",transition:"left .2s",boxShadow:"0 1px 3px rgba(0,0,0,0.4)"}}/>
      </div>
    </div>
@@ -6617,7 +6628,7 @@ export default function App() {
                <div style={{fontSize:13,color:"#ccc"}}>{f}</div>
              </div>
            ))}
-           <button onClick={()=>{setIsPro(true);try{localStorage.setItem("picklock_is_pro","true");}catch(e){}setShowPaywall(null);}} style={{display:"block",width:"100%",background:IOS.blue,color:"#fff",border:"none",borderRadius:8,padding:13,fontSize:14,fontWeight:700,textAlign:"center",marginTop:16,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
+          <button onClick={()=>{setProStatus(true);setShowPaywall(null);}} style={{display:"block",width:"100%",background:IOS.blue,color:"#fff",border:"none",borderRadius:8,padding:13,fontSize:14,fontWeight:700,textAlign:"center",marginTop:16,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
              Upgrade to Commish Pro — $5/mo
            </button>
            <button onClick={()=>setShowPaywall(null)} style={{display:"block",width:"100%",background:"none",border:"none",color:"#555",fontSize:12,textAlign:"center",marginTop:10,cursor:"pointer",fontFamily:"Barlow,sans-serif",padding:4}}>
@@ -6649,7 +6660,7 @@ export default function App() {
              </div>
            ))}
          </div>
-         <button onClick={()=>{setIsPro(true);try{localStorage.setItem("picklock_is_pro","true");}catch(e){}setShowPostLeagueUpsell(false);}} style={{display:"block",width:"100%",background:IOS.blue,color:"#fff",border:"none",borderRadius:8,padding:13,fontSize:14,fontWeight:700,textAlign:"center",marginBottom:10,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
+         <button onClick={()=>{setProStatus(true);setShowPostLeagueUpsell(false);}} style={{display:"block",width:"100%",background:IOS.blue,color:"#fff",border:"none",borderRadius:8,padding:13,fontSize:14,fontWeight:700,textAlign:"center",marginBottom:10,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
            Upgrade to Commish Pro — $5/mo
          </button>
          <button onClick={()=>setShowPostLeagueUpsell(false)} style={{display:"block",width:"100%",background:"none",border:"none",color:"#555",fontSize:12,textAlign:"center",cursor:"pointer",fontFamily:"Barlow,sans-serif",padding:4}}>
