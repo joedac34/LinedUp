@@ -6639,7 +6639,7 @@ export default function App() {
  {icon:"picks",label:"Picks",id:"picks"},
  {icon:"matchup",label:"Matchup",id:"matchup"},
  {icon:"leagues",label:"Leagues",id:"leagues"},
- {icon:"standings",label:"Standings",id:"league"},
+ {icon:"profile",label:"Profile",id:"profile"},
  ]).map(t=>{
  const isOn=screen===t.id;
  const col=isOn?IOS.blue:"rgba(255,255,255,0.3)";
