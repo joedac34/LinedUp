@@ -3839,7 +3839,7 @@ export default function App() {
  <div style={{position:"absolute",top:-50,right:-40,width:160,height:160,borderRadius:"50%",background:"radial-gradient(circle,rgba(48,209,88,0.18),transparent 70%)",pointerEvents:"none"}}/>
  <div style={{padding:"22px 18px 14px",display:"flex",alignItems:"flex-start",justifyContent:"space-between",position:"relative"}}>
  <div>
- <div style={{fontSize:10.5,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(255,255,255,0.38)"}}>{activeLeague.name} \u00b7 Week {wk}</div>
+ <div style={{fontSize:10.5,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(255,255,255,0.38)"}}>{activeLeague.name} · Week {wk}</div>
  <div style={{fontSize:27,fontWeight:800,letterSpacing:"-0.7px",color:"#fff",marginTop:3,lineHeight:1}}>Your Slip</div>
  </div>
  <div style={{display:"flex",alignItems:"center",gap:6,background:"rgba(48,209,88,0.12)",border:"0.5px solid rgba(48,209,88,0.35)",borderRadius:20,padding:"6px 11px",flexShrink:0}}>
@@ -3865,7 +3865,7 @@ export default function App() {
  const ls=slot.isParlay?calcLS(slot.parlayLegs):null;
  const odds=slot.isParlay?(ls?ls.american:""):(slot.bet?.odds||"");
  const oddsPos=odds.startsWith("+");
- const name=slot.isParlay?slot.parlayLegs.map(b=>b.pick).join("  \u00b7  "):(slot.bet?.pick||"");
+ const name=slot.isParlay?slot.parlayLegs.map(b=>b.pick).join("  ·  "):(slot.bet?.pick||"");
  const game=slot.isParlay?(slot.parlayLegs[0]?.game||""):(slot.bet?.game||"");
  return (
  <div key={i} className="lsx-card" style={{position:"relative",overflow:"hidden",borderRadius:14,
@@ -3875,9 +3875,9 @@ export default function App() {
  <div style={{position:"absolute",top:0,left:0,bottom:0,width:3,background:c}}/>
  <div style={{position:"absolute",top:-26,right:-26,width:80,height:80,borderRadius:"50%",background:`radial-gradient(circle,${c}22,transparent 70%)`,pointerEvents:"none"}}/>
  <div style={{display:"flex",alignItems:"center",gap:11,padding:"12px 13px 11px 14px"}}>
- <div style={{width:30,height:30,borderRadius:9,background:`${c}1f`,border:`0.5px solid ${c}40`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:c,flexShrink:0}}>{slot.mult}\u00d7</div>
+ <div style={{width:30,height:30,borderRadius:9,background:`${c}1f`,border:`0.5px solid ${c}40`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:c,flexShrink:0}}>{slot.mult}×</div>
  <div style={{flex:1,minWidth:0}}>
- <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:c,marginBottom:2}}>{catLabels[cat]}{slot.isParlay?` \u00b7 ${slot.parlayLegs.length}-leg parlay`:""}</div>
+ <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:c,marginBottom:2}}>{catLabels[cat]}{slot.isParlay?` · ${slot.parlayLegs.length}-leg parlay`:""}</div>
  <div style={{fontSize:13.5,fontWeight:700,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{name}</div>
  {game&&<div style={{fontSize:10,color:"rgba(255,255,255,0.36)",marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{game}</div>}
  </div>
