@@ -4397,9 +4397,15 @@ export default function App() {
  // ─── Build the bet list for the selected sport + type ───
  let list = [];
  if(gridType==="longshot") {
- list = (ALL_BETS||[]).filter(b=> b._sport===gSport && b.impliedOdds>=400);
+ list = (ALL_BETS||[]).filter(b=> {
+   if(sportsList.length > 1 && b._sport && b._sport !== gSport) return false;
+   return b.impliedOdds>=400;
+ });
  } else {
- list = (BETS[gridType]||[]).filter(b=> b._sport===gSport);
+ list = (BETS[gridType]||[]).filter(b=> {
+   if(sportsList.length > 1 && b._sport && b._sport !== gSport) return false;
+   return true;
+ });
  }
 
  // Prop sub-category filter
