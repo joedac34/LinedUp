@@ -979,7 +979,8 @@ export default function App() {
    });
    return merged;
  })();
- console.log("[BETS]", "ml:", BETS.ml.length, "spread:", BETS.spread.length, "ou:", BETS.ou.length, "liveOdds.mlb:", liveOdds["mlb"]?.ml?.length);
+ const isLiveOdds = leagueSports.some(sp => !!liveOdds[sp]);
+ console.log("[BETS]", "ml:", BETS.ml.length, "liveOdds.mlb:", liveOdds["mlb"]?.ml?.length, "isLiveOdds:", isLiveOdds);
 
  const [picks, setPicks] = useState({ml:null,prop:null,ou:null,spread:null});
  const [lsBets, setLsBets] = useState([]);
