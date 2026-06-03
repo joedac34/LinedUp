@@ -1156,7 +1156,7 @@ export default function App() {
  if(memberError){alert(`league_members error: ${memberError.message} | code: ${memberError.code}`);setCreatingLeague(false);return;}
  await fetchLeagues(user.id);
  setNewLeagueCreated(data);
- setTimeout(()=>setShowPostLeagueUpsell(true), 800);
+ setTimeout(()=>{ if(!isPro) setShowPostLeagueUpsell(true); }, 800);
  setCreatingLeague(false);
  };
 
