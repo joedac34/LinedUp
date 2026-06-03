@@ -509,8 +509,30 @@ const CHAT = [
 
 const WHEEL_ITEMS = [POWER_UPS[0],POWER_UPS[4],POWER_UPS[1],POWER_UPS[9],POWER_UPS[6],POWER_UPS[2],POWER_UPS[8],POWER_UPS[3],POWER_UPS[7],POWER_UPS[5]];
 
-function toDecimal(a){return a>=0?(a/100)+1:(100/Math.abs(a))+1;}
-function toAmerican(d){return d>=2?`+${Math.round((d-1)*100)}`:`${Math.round(-100/(d-1))}`;}
+// ─── SPORT DETECTION (by team name) ───────────────────────────────
+// Used to keep each league's bet list scoped to its own sport(s), even if an
+// upstream odds feed returns games for the wrong sport. "cardinals"/"giants"/
+// "rangers" are intentionally listed under multiple leagues (ambiguous) so we
+// never wrongly drop a real game for those franchises.
+const SPORT_NICKS = {
+ nfl:["chiefs","eagles","49ers","niners","cowboys","bills","dolphins","patriots","jets","new york giants","ny giants","rams","chargers","raiders","seahawks","arizona cardinals","packers","bears","vikings","lions","falcons","saints","panthers","buccaneers","bucs","steelers","ravens","browns","bengals","titans","colts","texans","jaguars","jags","broncos","commanders","cardinals","giants"],
+ nba:["lakers","warriors","celtics","bucks","suns","heat","nets","bulls","nuggets","grizzlies","mavericks","mavs","clippers","hawks","cavaliers","cavs","76ers","sixers","raptors","knicks","pacers","timberwolves","thunder","sacramento kings","trail blazers","blazers","jazz","pelicans","spurs","hornets","wizards","magic","pistons","rockets"],
+ mlb:["dodgers","yankees","red sox","cubs","braves","astros","blue jays","mets","phillies","padres","brewers","reds","mariners","athletics","texas rangers","orioles","rays","marlins","nationals","pirates","rockies","diamondbacks","dbacks","angels","royals","guardians","twins","tigers","white sox","st. louis cardinals","st louis cardinals","san francisco giants","sf giants","cardinals","giants","rangers"],
+};
+function guessSports(text=""){
+ const s = (text||"").toLowerCase();
+ const hasNick = (nick) => {
+ const esc = nick.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+ return new RegExp(`(^|[^a-z0-9])${esc}([^a-z0-9]|$)`).test(s);
+ };
+ const out = [];
+ for(const sp of Object.keys(SPORT_NICKS)){
+ if(SPORT_NICKS[sp].some(hasNick)) out.push(sp);
+ }
+ return out;
+}
+
+function toDecimal(a){return a>=0?(a/100)+1:(100/Math.abs(a))+1;}function toAmerican(d){return d>=2?`+${Math.round((d-1)*100)}`:`${Math.round(-100/(d-1))}`;}
 function calcLS(bets){if(!bets||!bets.length)return null;const d=bets.reduce((a,b)=>a*toDecimal(b.impliedOdds),1);return{decimal:d,american:toAmerican(d),payout:Math.round((d-1)*100)};}
 function calcParlay(picks,ls,slots){
  const singles=slots.filter(s=>s.id!=="longshot").map(s=>([s.id,picks[s.id]])).filter(([,v])=>v);
@@ -943,17 +965,31 @@ export default function App() {
    : [activeLeague.sport || "nfl"];
  const BETS = (() => {
    const merged = {ml:[],spread:[],ou:[],prop:[],longshot:[]};
+   // A team-based bet belongs in this league only if its detected sport(s)
+   // intersect the league's sports. Unknown teams are trusted (kept).
+   const belongs = (b) => {
+     const g = guessSports(`${b.game||""} ${b.pick||""}`);
+     return g.length===0 ? true : g.some(s=>leagueSports.includes(s));
+   };
+   // Re-tag _sport from the team names when we can identify a single sport,
+   // so a feed that returns the wrong sport gets correctly bucketed/filtered.
+   const tagTeam = (arr, sport) => (arr||[]).map(b=>{
+     const g = guessSports(`${b.game||""} ${b.pick||""}`);
+     const _sport = g.length===1 ? g[0] : sport;
+     return {...b, _sport};
+   }).filter(belongs);
+   // Props come from a sport-correct endpoint; player names aren't reliable to
+   // detect, so just tag them with the fetch sport.
+   const tagProp = (arr, sport) => (arr||[]).map(b=>({...b, _sport:sport}));
    leagueSports.forEach(sp => {
      const odds = liveOdds[sp];
      const fallback = SPORTS[sp]?.bets || {};
      const src = odds || {ml:[],spread:[],ou:[],prop:fallback.prop||[],longshot:[]};
-     // Tag each bet with its sport so the UI can show it
-     const tag = (arr, sport) => arr.map(b=>({...b, _sport:sport}));
-     merged.ml.push(...tag(src.ml||[], sp));
-     merged.spread.push(...tag(src.spread||[], sp));
-     merged.ou.push(...tag(src.ou||[], sp));
-     merged.prop.push(...tag(src.prop||[], sp));
-     merged.longshot.push(...tag(src.longshot||[], sp));
+     merged.ml.push(...tagTeam(src.ml, sp));
+     merged.spread.push(...tagTeam(src.spread, sp));
+     merged.ou.push(...tagTeam(src.ou, sp));
+     merged.prop.push(...tagProp(src.prop, sp));
+     merged.longshot.push(...tagTeam(src.longshot, sp));
    });
    return merged;
  })();
