@@ -937,8 +937,25 @@ export default function App() {
  };
 
  // Use live odds if available, else fall back to hardcoded
- const BETS = liveOdds[activeLeague.sport] || {ml:[],spread:[],ou:[],prop:sport.bets.prop||[],longshot:[]};
- const isLiveOdds = !!liveOdds[activeLeague.sport];
+ // Multi-sport: merge bets from all sports in the league
+ const leagueSports = activeLeague.sports || [activeLeague.sport || "nfl"];
+ const BETS = (() => {
+   const merged = {ml:[],spread:[],ou:[],prop:[],longshot:[]};
+   leagueSports.forEach(sp => {
+     const odds = liveOdds[sp];
+     const fallback = SPORTS[sp]?.bets || {};
+     const src = odds || {ml:[],spread:[],ou:[],prop:fallback.prop||[],longshot:[]};
+     // Tag each bet with its sport so the UI can show it
+     const tag = (arr, sport) => arr.map(b=>({...b, _sport:sport}));
+     merged.ml.push(...tag(src.ml||[], sp));
+     merged.spread.push(...tag(src.spread||[], sp));
+     merged.ou.push(...tag(src.ou||[], sp));
+     merged.prop.push(...tag(src.prop||[], sp));
+     merged.longshot.push(...tag(src.longshot||[], sp));
+   });
+   return merged;
+ })();
+ const isLiveOdds = leagueSports.some(sp => !!liveOdds[sp]);
 
  const [picks, setPicks] = useState({ml:null,prop:null,ou:null,spread:null});
  const [lsBets, setLsBets] = useState([]);
@@ -1094,7 +1111,19 @@ export default function App() {
  const [selectedGradeMember, setSelectedGradeMember] = useState(null); // userId of member being graded
  const [showLeaguesList, setShowLeaguesList] = useState(false);
  const [showNewLeague, setShowNewLeague] = useState(false);
- const [newLeagueSport, setNewLeagueSport] = useState(null);
+ const [newLeagueSport, setNewLeagueSport] = useState(null); // kept for backwards compat
+ const [newLeagueSports, setNewLeagueSports] = useState([]); // multi-sport array
+ const toggleNewLeagueSport = (id) => {
+ if(!isPro) {
+ // Free: single sport only
+ setNewLeagueSports(prev => prev.includes(id) ? [] : [id]);
+ setNewLeagueSport(prev => prev === id ? null : id);
+ } else {
+ // Pro: toggle multi-select
+ setNewLeagueSports(prev => prev.includes(id) ? prev.filter(s=>s!==id) : [...prev, id]);
+ setNewLeagueSport(id); // track last selected as primary
+ }
+ };
  const [newLeagueName, setNewLeagueName] = useState("");
  const [newLeagueCreated, setNewLeagueCreated] = useState(null); // holds created league data for invite code screen
  const [newLeagueSize, setNewLeagueSize] = useState(8);
@@ -1126,8 +1155,9 @@ export default function App() {
  const inviteCode = Math.random().toString(36).substring(2,8).toUpperCase();
  const bracketWeeks = {4:2,8:3,16:4,32:5};
  const seasonWeeks = newLeagueType==='bracket' ? (bracketWeeks[newLeagueSize]||3) : newLeagueWeeks;
+ const sportsArr = newLeagueSports.length > 0 ? newLeagueSports : [sportId];
  const {data,error} = await supabase.from("leagues").insert({
-   name, sport:sportId, commissioner_id:user.id, invite_code:inviteCode,
+   name, sport:sportsArr[0], sports:sportsArr, commissioner_id:user.id, invite_code:inviteCode,
    max_members:newLeagueSize, target_size:newLeagueSize, pick_deadline:"Sun 1PM ET",
    season_weeks:seasonWeeks, current_week:1, privacy:newLeaguePrivacy||"private",
    scoring_type:"multiplier_odds", league_type:newLeagueType||"h2h",
@@ -1902,8 +1932,9 @@ export default function App() {
  fetchStandings(activeLeagueId);
  fetchLeagueTrophies(activeLeagueId);
  const lg2 = realLeagues.find(l=>l.id===activeLeagueId);
- // Always fetch odds even if lg2 not loaded yet — use activeLeague sport
- fetchLiveOdds((lg2?.sport || activeLeague?.sport || "nfl"));
+ // Always fetch odds even if lg2 not loaded yet — fetch all sports
+ const leagueSportsToFetch = lg2?.sports || (lg2?.sport ? [lg2.sport] : [activeLeague?.sport || "nfl"]);
+ leagueSportsToFetch.forEach(sp => fetchLiveOdds(sp));
  if(lg2) {
  const week = lg2.current_week||lg2.week||1;
  fetchMyPicks(activeLeagueId, week, user.id);
@@ -3672,6 +3703,9 @@ export default function App() {
  <div className="bet-row-left">
  <div className="bet-row-game">{bet.game}</div>
  <div className="bet-row-pick">{bet.pick}</div>
+ {bet._sport && leagueSports.length > 1 && (
+   <div style={{display:"inline-block",fontSize:8,fontWeight:800,letterSpacing:.4,color:SPORTS[bet._sport]?.color||IOS.blue,background:`${SPORTS[bet._sport]?.color||IOS.blue}18`,borderRadius:4,padding:"1px 5px",marginTop:3,textTransform:"uppercase"}}>{bet._sport.toUpperCase()}</div>
+ )}
  {slot?.mult&&<div style={{marginTop:5,display:"inline-flex",alignItems:"center",gap:4,background:"rgba(48,209,88,0.1)",border:"1px solid rgba(48,209,88,0.2)",borderRadius:6,padding:"2px 8px"}}>
  <span style={{fontSize:10,fontWeight:700,color:IOS.green}}>+{pts} pts if win</span>
  </div>}
@@ -4440,7 +4474,7 @@ export default function App() {
  {/* ── NEW LEAGUE MODAL ── */}
  {showNewLeague && (
  <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.7)",zIndex:50,display:"flex",flexDirection:"column",justifyContent:"flex-end",backdropFilter:"blur(8px)"}}
- onClick={()=>{if(!newLeagueCreated){setShowNewLeague(false);setNewLeagueSport(null);setNewLeagueName("");setNewLeagueSize(8);setNewLeagueType(null);setNewLeagueStep(0);setNewLeagueWeeks(18);setNewLeaguePrivacy('private');}}}>
+ onClick={()=>{if(!newLeagueCreated){setShowNewLeague(false);setNewLeagueSport(null);setNewLeagueSports([]);setNewLeagueName("");setNewLeagueSize(8);setNewLeagueType(null);setNewLeagueStep(0);setNewLeagueWeeks(18);setNewLeaguePrivacy('private');}}}>
  <div style={{background:IOS.bg2,borderRadius:"20px 20px 0 0",padding:"0 0 40px"}} onClick={e=>e.stopPropagation()}>
  <div style={{width:36,height:5,borderRadius:3,background:"rgba(255,255,255,0.2)",margin:"10px auto 0"}}/>
 
@@ -4470,6 +4504,7 @@ export default function App() {
  setShowNewLeague(false);
  setNewLeagueCreated(null);
  setNewLeagueSport(null);
+ setNewLeagueSports([]);
  setNewLeagueName("");
  setNewLeagueSize(8);
  setNewLeagueType(null);
@@ -4539,21 +4574,38 @@ export default function App() {
    </button>
 
    {/* Sports */}
-   <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"#555",marginBottom:8}}>Sport</div>
-   <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:16}}>
+   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+     <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"#555"}}>Sport{isPro?" (select all that apply)":""}</div>
+     {isPro && <div style={{fontSize:9,fontWeight:700,color:IOS.blue,background:"rgba(10,132,255,0.1)",border:"0.5px solid rgba(10,132,255,0.25)",borderRadius:4,padding:"2px 6px"}}>MULTI-SPORT</div>}
+   </div>
+   <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:isPro?4:16}}>
    {[
      {id:"nfl",label:"NFL"},{id:"nba",label:"NBA"},{id:"mlb",label:"MLB"},{id:"nhl",label:"NHL"},
-   ].map(sp=>(
-     <div key={sp.id} onClick={()=>{
-       const cur=newLeagueSport===sp.id?null:sp.id;
-       setNewLeagueSport(cur);
-     }} style={{padding:"7px 14px",borderRadius:6,fontSize:12,fontWeight:600,cursor:"pointer",transition:"all .15s",
-       background:newLeagueSport===sp.id?"rgba(10,132,255,0.12)":"#111",
-       border:`0.5px solid ${newLeagueSport===sp.id?"rgba(10,132,255,0.4)":"#222"}`,
-       color:newLeagueSport===sp.id?IOS.blue:"#666",
-     }}>{sp.label}</div>
-   ))}
+   ].map(sp=>{
+     const isSelected = newLeagueSports.includes(sp.id);
+     return (
+     <div key={sp.id} onClick={()=>toggleNewLeagueSport(sp.id)}
+     style={{padding:"7px 14px",borderRadius:6,fontSize:12,fontWeight:600,cursor:"pointer",transition:"all .15s",
+       background:isSelected?"rgba(10,132,255,0.12)":"#111",
+       border:`0.5px solid ${isSelected?"rgba(10,132,255,0.4)":"#222"}`,
+       color:isSelected?IOS.blue:"#666",
+       display:"flex",alignItems:"center",gap:5,
+     }}>
+       {isSelected && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+       {sp.label}
+     </div>
+   );})}
    </div>
+   {!isPro && (
+     <div onClick={()=>setShowPaywall("sport")} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:"rgba(191,90,242,0.06)",border:"0.5px solid rgba(191,90,242,0.2)",borderRadius:8,marginBottom:16,cursor:"pointer"}}>
+       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#BF5AF2" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+       <div style={{fontSize:11,color:"rgba(255,255,255,0.4)"}}>Mix NFL, NBA, MLB & NHL picks in one league</div>
+       <div style={{marginLeft:"auto",fontSize:9,fontWeight:700,color:"#BF5AF2",background:"rgba(191,90,242,0.12)",border:"0.5px solid rgba(191,90,242,0.3)",borderRadius:4,padding:"2px 6px",flexShrink:0}}>Pro</div>
+     </div>
+   )}
+   {isPro && newLeagueSports.length > 1 && (
+     <div style={{fontSize:10,color:IOS.label3,marginBottom:16,padding:"0 2px"}}>Each pick slot can pull from any of your selected sports every week.</div>
+   )}
 
    {/* League name */}
    <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"#555",marginBottom:8}}>League name</div>
@@ -4640,9 +4692,9 @@ export default function App() {
 
    {/* Create button */}
    <button
-     disabled={!newLeagueSport||!newLeagueName.trim()||creatingLeague}
-     onClick={()=>createLeague(newLeagueName.trim(), newLeagueSport)}
-     style={{width:"100%",background:newLeagueSport&&newLeagueName.trim()?IOS.blue:"rgba(255,255,255,0.08)",border:"none",borderRadius:10,padding:"13px",fontFamily:"Barlow,sans-serif",fontSize:15,fontWeight:700,color:newLeagueSport&&newLeagueName.trim()?"#fff":"rgba(255,255,255,0.25)",cursor:newLeagueSport&&newLeagueName.trim()?"pointer":"default",transition:"all .2s",marginBottom:4}}
+     disabled={!newLeagueSports.length||!newLeagueName.trim()||creatingLeague}
+     onClick={()=>createLeague(newLeagueName.trim(), newLeagueSports[0])}
+     style={{width:"100%",background:newLeagueSports.length&&newLeagueName.trim()?IOS.blue:"rgba(255,255,255,0.08)",border:"none",borderRadius:10,padding:"13px",fontFamily:"Barlow,sans-serif",fontSize:15,fontWeight:700,color:newLeagueSports.length&&newLeagueName.trim()?"#fff":"rgba(255,255,255,0.25)",cursor:newLeagueSports.length&&newLeagueName.trim()?"pointer":"default",transition:"all .2s",marginBottom:4}}
    >
      {creatingLeague?"Creating...":"Create League"}
    </button>
@@ -4739,7 +4791,7 @@ export default function App() {
      <div>
        <div style={{fontSize:15,fontWeight:800,color:"#fff"}}>{lg.name}</div>
        <div style={{fontSize:10,color:IOS.label3,marginTop:2,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-         <span>{sp.label} · {(lg.league_type||"h2h")==="h2h"?"H2H":(lg.league_type||"h2h")==="bracket"?"Tournament":"Points"} · #{myRank} of {lg.target_size||lg.max_members||"?"}</span>
+         <span>{(lg.sports||[lg.sport]).map(s=>SPORTS[s]?.label||s.toUpperCase()).join(" · ")} · {(lg.league_type||"h2h")==="h2h"?"H2H":(lg.league_type||"h2h")==="bracket"?"Tournament":"Points"} · #{myRank} of {lg.target_size||lg.max_members||"?"}</span>
          {lg.privacy==="public"
            ? <span style={{fontSize:8,fontWeight:700,color:"#30D158",background:"rgba(48,209,88,0.1)",border:"0.5px solid rgba(48,209,88,0.25)",borderRadius:4,padding:"1px 5px",letterSpacing:.3}}>PUBLIC</span>
            : <span style={{fontSize:8,fontWeight:700,color:"rgba(255,255,255,0.3)",background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:4,padding:"1px 5px",letterSpacing:.3}}>PRIVATE</span>
