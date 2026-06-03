@@ -137,10 +137,35 @@ const SPORTS = {
  { id:"ml4", game:"Suns @ Clippers", pick:"LA Clippers", odds:"-110", impliedOdds:-110 },
  { id:"ml5", game:"Knicks @ 76ers", pick:"New York Knicks", odds:"+105", impliedOdds:105 },
  ],
- prop:[], // live only via /api/props
- ou:[],   // live only
- spread:[], // live only
- longshot:[], // live only
+ prop:[
+ { id:"pr1", game:"LeBron James", pick:"25+ Points", odds:"-130", impliedOdds:-130 },
+ { id:"pr2", game:"Steph Curry", pick:"5+ Three-Pointers", odds:"-115", impliedOdds:-115 },
+ { id:"pr3", game:"Nikola Jokic", pick:"10+ Assists", odds:"+145", impliedOdds:145 },
+ { id:"pr4", game:"Jayson Tatum", pick:"30+ Points", odds:"+175", impliedOdds:175 },
+ { id:"pr5", game:"Giannis", pick:"12+ Rebounds", odds:"-120", impliedOdds:-120 },
+ ],
+ ou:[
+ { id:"ou1", game:"Celtics @ Lakers", pick:"Over 224.5", odds:"-110", impliedOdds:-110 },
+ { id:"ou2", game:"Warriors @ Nuggets", pick:"Over 232", odds:"-115", impliedOdds:-115 },
+ { id:"ou3", game:"Heat @ Bucks", pick:"Under 218.5", odds:"-110", impliedOdds:-110 },
+ { id:"ou4", game:"Suns @ Clippers", pick:"Over 228", odds:"-108", impliedOdds:-108 },
+ { id:"ou5", game:"Knicks @ 76ers", pick:"Under 215", odds:"-112", impliedOdds:-112 },
+ ],
+ spread:[
+ { id:"sp1", game:"Celtics @ Lakers", pick:"Celtics -3.5", odds:"-110", impliedOdds:-110 },
+ { id:"sp2", game:"Warriors @ Nuggets", pick:"Nuggets -2", odds:"-110", impliedOdds:-110 },
+ { id:"sp3", game:"Heat @ Bucks", pick:"Bucks -5.5", odds:"-115", impliedOdds:-115 },
+ { id:"sp4", game:"Suns @ Clippers", pick:"Clippers -1.5", odds:"-110", impliedOdds:-110 },
+ { id:"sp5", game:"Knicks @ 76ers", pick:"76ers -2", odds:"-108", impliedOdds:-108 },
+ ],
+ longshot:[
+ { id:"ls1", game:"Warriors @ Nuggets", pick:"Warriors ML", odds:"+125", impliedOdds:125 },
+ { id:"ls2", game:"Knicks @ 76ers", pick:"Knicks ML", odds:"+105", impliedOdds:105 },
+ { id:"ls3", game:"Pistons @ Cavs", pick:"Pistons ML", odds:"+340", impliedOdds:340 },
+ { id:"ls4", game:"Wizards @ Celtics", pick:"Wizards ML", odds:"+520", impliedOdds:520 },
+ { id:"ls5", game:"Spurs @ Thunder", pick:"Spurs ML", odds:"+290", impliedOdds:290 },
+ { id:"ls6", game:"Steph Curry", pick:"8+ Three-Pointers",odds:"+450",impliedOdds:450 },
+ ],
  },
  },
  mlb: {
@@ -154,11 +179,42 @@ const SPORTS = {
  { id:"longshot", label:"Parlay", mult:5, icon:"", color:"#FF375F", bg:"rgba(255,55,95,0.15)", desc:"Build a multi-game parlay" },
  ],
  bets:{
- ml:[],       // live only
- prop:[],     // live only via /api/props
- ou:[],       // live only
- spread:[],   // live only
- longshot:[], // live only
+ ml:[
+ { id:"ml1", game:"Yankees @ Red Sox", pick:"New York Yankees", odds:"-145", impliedOdds:-145 },
+ { id:"ml2", game:"Dodgers @ Giants", pick:"LA Dodgers", odds:"-175", impliedOdds:-175 },
+ { id:"ml3", game:"Cubs @ Cardinals", pick:"St. Louis Cardinals", odds:"-120", impliedOdds:-120 },
+ { id:"ml4", game:"Astros @ Rangers", pick:"Houston Astros", odds:"-130", impliedOdds:-130 },
+ { id:"ml5", game:"Braves @ Mets", pick:"Atlanta Braves", odds:"-115", impliedOdds:-115 },
+ ],
+ prop:[
+ { id:"pr1", game:"Shohei Ohtani", pick:"2+ RBIs", odds:"+155", impliedOdds:155 },
+ { id:"pr2", game:"Gerrit Cole", pick:"8+ Strikeouts", odds:"-125", impliedOdds:-125 },
+ { id:"pr3", game:"Mookie Betts", pick:"Over 1.5 Hits", odds:"-140", impliedOdds:-140 },
+ { id:"pr4", game:"Aaron Judge", pick:"Home Run", odds:"+280", impliedOdds:280 },
+ { id:"pr5", game:"Freddie Freeman", pick:"Over 0.5 RBIs", odds:"-160", impliedOdds:-160 },
+ ],
+ ou:[
+ { id:"ou1", game:"Yankees @ Red Sox", pick:"Over 8.5", odds:"-115", impliedOdds:-115 },
+ { id:"ou2", game:"Dodgers @ Giants", pick:"Under 7.5", odds:"-110", impliedOdds:-110 },
+ { id:"ou3", game:"Cubs @ Cardinals", pick:"Over 9", odds:"-108", impliedOdds:-108 },
+ { id:"ou4", game:"Astros @ Rangers", pick:"Under 8", odds:"-112", impliedOdds:-112 },
+ { id:"ou5", game:"Braves @ Mets", pick:"Over 8.5", odds:"-110", impliedOdds:-110 },
+ ],
+ spread:[
+ { id:"sp1", game:"Yankees @ Red Sox", pick:"Yankees -1.5", odds:"+145", impliedOdds:145 },
+ { id:"sp2", game:"Dodgers @ Giants", pick:"Dodgers -1.5", odds:"+125", impliedOdds:125 },
+ { id:"sp3", game:"Cubs @ Cardinals", pick:"Cardinals -1.5",odds:"+135", impliedOdds:135 },
+ { id:"sp4", game:"Astros @ Rangers", pick:"Astros -1.5", odds:"+140", impliedOdds:140 },
+ { id:"sp5", game:"Braves @ Mets", pick:"Mets +1.5", odds:"-165", impliedOdds:-165 },
+ ],
+ longshot:[
+ { id:"ls1", game:"Yankees @ Red Sox", pick:"Red Sox ML", odds:"+125", impliedOdds:125 },
+ { id:"ls2", game:"Giants @ Dodgers", pick:"Giants ML", odds:"+155", impliedOdds:155 },
+ { id:"ls3", game:"Cubs @ Cardinals", pick:"Cubs ML", odds:"+105", impliedOdds:105 },
+ { id:"ls4", game:"Aaron Judge", pick:"2+ Home Runs", odds:"+450", impliedOdds:450 },
+ { id:"ls5", game:"Reds @ Pirates", pick:"Reds ML", odds:"+210", impliedOdds:210 },
+ { id:"ls6", game:"Athletics @ Astros", pick:"Athletics ML", odds:"+340", impliedOdds:340 },
+ ],
  },
  },
 };
@@ -758,7 +814,8 @@ export default function App() {
  const isSoloModeRef = useRef(false);
  const setSoloModeWithRef = (val) => { isSoloModeRef.current = val; setIsSoloMode(val); };
  const [soloLeagueId, setSoloLeagueId] = useState(null);
- const [soloSport, setSoloSport] = useState("nfl"); // selected sport for current solo week
+ const [soloSport, setSoloSport] = useState(()=>{ try{return localStorage.getItem("picklock_solo_sport")||"nfl";}catch(e){return "nfl";} });
+ const setSoloSportPersist = (sp) => { setSoloSport(sp); try{localStorage.setItem("picklock_solo_sport",sp);}catch(e){} };
  const [showSoloSportPicker, setShowSoloSportPicker] = useState(false); // sport selector before building
  const activeLeague = isSoloMode ? {id:soloLeagueId||"solo",name:"Solo Mode",sport:soloSport,current_week:(soloWeeks.length+1),season_weeks:99,max_members:1,target_size:1,isCommissioner:false} : ([...realLeagues].find(l=>l.id===activeLeagueId) || realLeagues[0] || {id:"",name:"",sport:"nfl",current_week:1,season_weeks:18,max_members:8,target_size:8,isCommissioner:false});
  const sport = SPORTS[activeLeague?.sport] || SPORTS["nfl"];
@@ -796,6 +853,7 @@ export default function App() {
  const res = await fetch(`/api/odds?sport=${sportKey}`);
  if(!res.ok) throw new Error(`API error ${res.status}`);
  const payload = await res.json();
+ console.log(`[odds] ${sportId} payload keys:`, Object.keys(payload), "games:", (payload.games||payload)?.length);
  const games = payload.games || payload; // handle both formats
 
  const ml = [], spread = [], ou = [], longshot = [];
@@ -804,7 +862,6 @@ export default function App() {
  const home = game.home_team;
  const away = game.away_team;
  const gameLabel = `${away} @ ${home}`;
- const gameTime = game.commence_time ? new Date(game.commence_time).toLocaleTimeString([],{hour:"numeric",minute:"2-digit",timeZoneName:"short"}) : "";
  const dk = game.bookmakers?.[0];
  if(!dk) return;
 
@@ -818,16 +875,15 @@ export default function App() {
  ml.push({
  id: `live_ml_${gi}_${oi}`,
  game: gameLabel,
- gameTime,
  pick: o.name,
  odds: american,
  impliedOdds: o.price,
  });
+ // Longshots: +400 or better
  if(o.price >= 400) {
  longshot.push({
  id: `live_ls_${gi}_${oi}`,
  game: gameLabel,
- gameTime,
  pick: `${o.name} ML`,
  odds: american,
  impliedOdds: o.price,
@@ -842,7 +898,6 @@ export default function App() {
  spread.push({
  id: `live_sp_${gi}_${oi}`,
  game: gameLabel,
- gameTime,
  pick: `${o.name} ${sign}`,
  odds: american,
  impliedOdds: o.price,
@@ -855,7 +910,6 @@ export default function App() {
  ou.push({
  id: `live_ou_${gi}_${oi}`,
  game: gameLabel,
- gameTime,
  pick: `${o.name} ${o.point}`,
  odds: american,
  impliedOdds: o.price,
@@ -2937,7 +2991,7 @@ export default function App() {
  </div>
 
  {/* ══ SOLO MODE HOME SCREEN ══ */}
- {homeMode==="solo" && <SoloHome soloWeeks={soloWeeks} soloLoading={soloLoading} isPro={isPro} IOS={IOS} setScreen={setScreen} setShowNewLeague={setShowNewLeague} setNewLeagueStep={setNewLeagueStep} setShowBrowse={setShowBrowse} fetchPublicLeagues={fetchPublicLeagues} setIsSoloMode={setIsSoloMode} setActiveLeagueId={setActiveLeagueId} getOrCreateSoloLeague={getOrCreateSoloLeague} soloSavedPicks={soloSavedPicks} setSoloSavedPicks={setSoloSavedPicks} soloFlexPicks={soloFlexPicks} setSoloFlexPicks={setSoloFlexPicks} soloSport={soloSport} setSoloSport={setSoloSport} setShowSoloSportPicker={setShowSoloSportPicker} soloSubmitted={soloSubmitted} setSoloSubmitted={setSoloSubmitted}/>}
+ {homeMode==="solo" && <SoloHome soloWeeks={soloWeeks} soloLoading={soloLoading} isPro={isPro} IOS={IOS} setScreen={setScreen} setShowNewLeague={setShowNewLeague} setNewLeagueStep={setNewLeagueStep} setShowBrowse={setShowBrowse} fetchPublicLeagues={fetchPublicLeagues} setIsSoloMode={setIsSoloMode} setActiveLeagueId={setActiveLeagueId} getOrCreateSoloLeague={getOrCreateSoloLeague} soloSavedPicks={soloSavedPicks} setSoloSavedPicks={setSoloSavedPicks} soloFlexPicks={soloFlexPicks} setSoloFlexPicks={setSoloFlexPicks} soloSport={soloSport} setSoloSport={setSoloSportPersist} setShowSoloSportPicker={setShowSoloSportPicker} soloSubmitted={soloSubmitted} setSoloSubmitted={setSoloSubmitted}/>}
 
  {/* ══ LEAGUES MODE ══ */}
  <div style={{display:homeMode==="leagues"?"block":"none"}}>
@@ -3879,9 +3933,9 @@ export default function App() {
  <div style={{width:6,height:6,borderRadius:"50%",background:IOS.blue,animation:"pulse 1s infinite"}}/>
  <span style={{fontSize:11,fontWeight:600,color:IOS.blue}}>Loading odds</span>
  </div>}
- {!oddsLoading && isLiveOdds && <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:5,background:"rgba(48,209,88,0.1)",borderRadius:8,padding:"3px 8px",border:"1px solid rgba(48,209,88,0.2)"}}>
- <div style={{width:6,height:6,borderRadius:"50%",background:IOS.green}}/>
- <span style={{fontSize:11,fontWeight:700,color:IOS.green,letterSpacing:0.5}}>Live odds</span>
+ {!oddsLoading && isLiveOdds && <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:5,background:"rgba(255,69,58,0.12)",borderRadius:8,padding:"3px 8px",border:"1px solid rgba(255,69,58,0.25)"}}>
+ <div style={{width:6,height:6,borderRadius:"50%",background:IOS.red}}/>
+ <span style={{fontSize:11,fontWeight:700,color:IOS.red,letterSpacing:0.5}}>LIVE DK</span>
  </div>}
  {!oddsLoading && oddsError && <div style={{marginLeft:"auto",fontSize:11,color:IOS.orange}}> Static odds</div>}
  {savedPicks&&!oddsLoading&&<div style={{marginLeft:"auto",display:"flex",gap:14,alignItems:"center"}}>
@@ -4518,8 +4572,7 @@ export default function App() {
  background:sideChip==="HOME"||sideChip==="OVER"?`${acc}1f`:"rgba(255,255,255,0.06)",
  borderRadius:4,padding:"1px 6px"}}>{sideChip}</div>
  )}
- <div style={{fontSize:10.5,color:"rgba(255,255,255,0.4)",marginBottom:4,wordBreak:"break-word",lineHeight:1.3}}>{subtitle}</div>
- {bet.gameTime&&<div style={{fontSize:9.5,fontWeight:600,color:"rgba(255,255,255,0.25)",marginBottom:7,letterSpacing:.2}}>{bet.gameTime}</div>}
+ <div style={{fontSize:10.5,color:"rgba(255,255,255,0.4)",marginBottom:9,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{subtitle}</div>
 
  {/* Implied probability — accurate, derived from the line */}
  <StatLabel>Implied chance</StatLabel>
@@ -5457,8 +5510,16 @@ export default function App() {
      if(currentMems&&currentMems.length>=targetSize){alert("League is full.");return;}
      const {error:joinError}=await supabase.from("league_members").insert({league_id:league.id,user_id:user.id,is_commissioner:false});
      if(joinError){alert("Error joining.");return;}
+     const {data:allMems2}=await supabase.from("league_members").select("user_id").eq("league_id",league.id);
+     if(allMems2 && allMems2.length >= targetSize) {
+       const memberIds = allMems2.map(m=>m.user_id);
+       if((league.league_type||'h2h')==='bracket') await generateBracket(league.id, memberIds);
+       else if((league.league_type||'h2h')==='h2h') await generateSchedule(league.id, memberIds, league.season_weeks||18);
+       alert("Joined "+league.name+"! League is full — schedule generated!");
+     } else {
+       alert("Joined "+league.name+"!");
+     }
      await fetchLeagues(user.id);
-     alert("Joined "+league.name+"!");
    }} style={{flex:1,background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:9,padding:"11px",textAlign:"center",cursor:"pointer"}}>
      <div style={{fontSize:12,fontWeight:700,color:"#fff"}}>Join with Code</div>
    </div>
@@ -5806,6 +5867,29 @@ export default function App() {
        ))}
      </div>
    )}
+ </div>
+
+ {/* ── Season Length ── */}
+ <div style={{margin:"0 16px 12px",background:IOS.bg2,borderRadius:16,overflow:"hidden",border:"1px solid rgba(255,255,255,0.07)"}}>
+   <div style={{padding:"12px 16px",borderBottom:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+     <div>
+       <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>Season Length</div>
+       <div style={{fontSize:12,color:IOS.label3,marginTop:1}}>Total weeks in this league's season</div>
+     </div>
+     <div style={{display:"flex",alignItems:"center",gap:10}}>
+       <div onClick={async()=>{
+         const newVal = Math.min(52, Math.max(1,(activeLeague.season_weeks||18)-1));
+         await supabase.from("leagues").update({season_weeks:newVal}).eq("id",activeLeague.id);
+         await fetchLeagues(user.id);
+       }} style={{width:32,height:32,borderRadius:8,background:"rgba(255,255,255,0.08)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:18,color:"#fff",fontWeight:700}}>−</div>
+       <div style={{fontSize:18,fontWeight:800,color:IOS.blue,minWidth:28,textAlign:"center"}}>{activeLeague.season_weeks||18}</div>
+       <div onClick={async()=>{
+         const newVal = Math.min(52,(activeLeague.season_weeks||18)+1);
+         await supabase.from("leagues").update({season_weeks:newVal}).eq("id",activeLeague.id);
+         await fetchLeagues(user.id);
+       }} style={{width:32,height:32,borderRadius:8,background:"rgba(255,255,255,0.08)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:18,color:"#fff",fontWeight:700}}>+</div>
+     </div>
+   </div>
  </div>
 
  {/* ── Week Management ── */}
@@ -7105,7 +7189,7 @@ export default function App() {
          )},
        ].map(s=>(
          <div key={s.id} onClick={async()=>{
-           setSoloSport(s.id);
+           setSoloSportPersist(s.id);
            setShowSoloSportPicker(false);
            setIsSoloMode(true);
            const lgId = await getOrCreateSoloLeague();
