@@ -3801,8 +3801,8 @@ export default function App() {
  )}
 
  {/* Submitted */}
- {activeSubmitted&&(()=>{
- const slots=[...activePicks].filter(x=>x.mult).sort((a,b)=>a.mult-b.mult);
+ {(activeSubmitted || activeSavedPicks?.flexPicks)&&(()=>{
+ const slots=[...(activeSavedPicks?.flexPicks||activePicks)].filter(x=>x.mult).sort((a,b)=>a.mult-b.mult);
  const wk=activeLeague.current_week||activeLeague.week||1;
  const catColors={ml:IOS.blue,prop:IOS.yellow,ou:IOS.orange,spread:IOS.green,longshot:IOS.pink};
  const catLabels={ml:"Moneyline",prop:"Prop",ou:"Over/Under",spread:"Spread",longshot:"Longshot"};
@@ -3911,7 +3911,7 @@ export default function App() {
  </div>
  </div>
 
- <button className="ios-btn" style={{background:"rgba(255,255,255,0.07)",color:IOS.blue,marginTop:8}} onClick={()=>{setActiveSubmitted(false);setActivePicks(EMPTY_FLEX);setScreen("home");}}>Back to Home</button>
+ <button className="ios-btn" style={{background:"rgba(255,255,255,0.07)",color:IOS.blue,marginTop:8}} onClick={()=>{setScreen("home");}}>Back to Home</button>
  </div>
  );
  })()}
@@ -3933,9 +3933,9 @@ export default function App() {
  <div style={{width:6,height:6,borderRadius:"50%",background:IOS.blue,animation:"pulse 1s infinite"}}/>
  <span style={{fontSize:11,fontWeight:600,color:IOS.blue}}>Loading odds</span>
  </div>}
- {!oddsLoading && isLiveOdds && <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:5,background:"rgba(255,69,58,0.12)",borderRadius:8,padding:"3px 8px",border:"1px solid rgba(255,69,58,0.25)"}}>
- <div style={{width:6,height:6,borderRadius:"50%",background:IOS.red}}/>
- <span style={{fontSize:11,fontWeight:700,color:IOS.red,letterSpacing:0.5}}>LIVE DK</span>
+ {!oddsLoading && isLiveOdds && <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:5,background:"rgba(48,209,88,0.1)",borderRadius:8,padding:"3px 8px",border:"1px solid rgba(48,209,88,0.2)"}}>
+ <div style={{width:6,height:6,borderRadius:"50%",background:IOS.green}}/>
+ <span style={{fontSize:11,fontWeight:700,color:IOS.green,letterSpacing:0.5}}>Live odds</span>
  </div>}
  {!oddsLoading && oddsError && <div style={{marginLeft:"auto",fontSize:11,color:IOS.orange}}> Static odds</div>}
  {savedPicks&&!oddsLoading&&<div style={{marginLeft:"auto",display:"flex",gap:14,alignItems:"center"}}>
