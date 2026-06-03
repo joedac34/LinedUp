@@ -4432,10 +4432,13 @@ export default function App() {
 
  const addCard = (bet) => {
  const cat = gridType==="longshot" ? "longshot" : gridType;
- setActivePicks(prev=>prev.map((p,i)=> i===target ? {...p, bet, category:cat, isParlay:false, parlayLegs:[]} : p));
+ // Check if this category already has a pick — if so, replace it
+ const existingSlotIdx = activePicks.findIndex(p=>p.category===cat && p.bet!==null && !p.isParlay);
+ const slotIdx = existingSlotIdx !== -1 ? existingSlotIdx : target;
+ setActivePicks(prev=>prev.map((p,i)=> i===slotIdx ? {...p, bet, category:cat, isParlay:false, parlayLegs:[]} : p));
  setGridJustAdded(bet.id);
  // Advance to next empty slot, or bounce back to the slip if full
- const nextEmpty = activePicks.findIndex((p,i)=> i!==target && !p.isParlay && p.bet===null);
+ const nextEmpty = activePicks.findIndex((p,i)=> i!==slotIdx && !p.isParlay && p.bet===null);
  setTimeout(()=>{
  if(nextEmpty===-1){ setScreen("picks"); }
  else { setGridTargetSlot(nextEmpty); }
@@ -4463,6 +4466,8 @@ export default function App() {
  const renderCard = (bet, idx) => {
  const selected = activePicks.some(p=>p.bet?.id===bet.id);
  const added = gridJustAdded===bet.id;
+ const cat = gridType==="longshot"?"longshot":gridType;
+ const catTaken = !selected && activePicks.some(p=>p.category===cat && p.bet!==null && !p.isParlay);
  const pct = impliedPct(bet.impliedOdds);
  const read = readFor(pct);
  const pos = bet.odds?.startsWith("+");
@@ -4494,8 +4499,9 @@ export default function App() {
  <div key={bet.id} className="gbx-card" onClick={()=>addCard(bet)} style={{
  position:"relative", overflow:"hidden", cursor:"pointer", borderRadius:16, padding:"13px 13px 12px",
  background:"linear-gradient(160deg,#17171B 0%,#0D0D10 100%)",
- border:`1px solid ${selected||added?acc:"rgba(255,255,255,0.07)"}`,
+ border:`1px solid ${selected||added?acc:catTaken?"rgba(255,255,255,0.04)":"rgba(255,255,255,0.07)"}`,
  boxShadow:selected||added?`0 0 0 1px ${acc}, 0 8px 24px ${acc}22`:"0 4px 14px rgba(0,0,0,0.4)",
+ opacity:catTaken?0.45:1,
  animation:`fadeSlideUp .35s ease ${Math.min(idx,8)*0.035}s both`,
  }}>
  {/* accent glow top-right */}
@@ -4507,8 +4513,8 @@ export default function App() {
  <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.07em",textTransform:"uppercase",color:acc,marginBottom:7,paddingRight:42}}>{topLabel}</div>
 
  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2,paddingRight:34}}>
- <div style={{fontSize:gridType==="longshot"||gridType==="ou"?12.5:14.5,fontWeight:800,color:"#fff",lineHeight:1.15,letterSpacing:"-0.3px",
- whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{title}</div>
+ <div style={{fontSize:gridType==="longshot"||gridType==="ou"?12.5:14,fontWeight:800,color:"#fff",lineHeight:1.2,letterSpacing:"-0.3px",
+ wordBreak:"break-word",overflowWrap:"anywhere"}}>{title}</div>
  </div>
  {sideChip && (
  <div style={{display:"inline-flex",marginTop:2,marginBottom:4,fontSize:8,fontWeight:800,letterSpacing:"0.05em",
@@ -4516,7 +4522,7 @@ export default function App() {
  background:sideChip==="HOME"||sideChip==="OVER"?`${acc}1f`:"rgba(255,255,255,0.06)",
  borderRadius:4,padding:"1px 6px"}}>{sideChip}</div>
  )}
- <div style={{fontSize:10.5,color:"rgba(255,255,255,0.4)",marginBottom:9,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{subtitle}</div>
+ <div style={{fontSize:10.5,color:"rgba(255,255,255,0.4)",marginBottom:9,lineHeight:1.3,wordBreak:"break-word"}}>{subtitle}</div>
 
  {/* Implied probability — accurate, derived from the line */}
  <StatLabel>Implied chance</StatLabel>
