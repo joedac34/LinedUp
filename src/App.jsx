@@ -1661,20 +1661,12 @@ export default function App() {
  };
 
  const fetchStandings = async (leagueId) => {
- // Get all graded picks for this league
- const {data:picks} = await supabase
- .from("picks")
- .select("*")
- .eq("league_id", leagueId)
- .neq("result", "pending");
- if(!picks||!picks.length) return;
-
- // Get all members
+ // Get all members first — always needed regardless of picks
  const {data:members} = await supabase
  .from("league_members")
  .select("user_id, is_commissioner")
  .eq("league_id", leagueId);
- if(!members) return;
+ if(!members||!members.length) return;
 
  const userIds = members.map(m=>m.user_id);
  const {data:users} = await supabase
@@ -1682,9 +1674,16 @@ export default function App() {
  .select("id, username, email")
  .in("id", userIds);
 
+ // Get all graded picks for this league (may be empty for new leagues)
+ const {data:picks} = await supabase
+ .from("picks")
+ .select("*")
+ .eq("league_id", leagueId)
+ .neq("result", "pending");
+
  // Group picks by user and calculate stats
  const statsByUser = {};
- picks.forEach(p=>{
+ (picks||[]).forEach(p=>{
  if(!statsByUser[p.user_id]) statsByUser[p.user_id] = {wins:0, losses:0, points:0};
  if(p.result==="W") {
  statsByUser[p.user_id].wins++;
