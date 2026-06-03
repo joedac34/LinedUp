@@ -5875,7 +5875,8 @@ export default function App() {
      <div style={{fontSize:14,fontWeight:700,color:"#fff",marginBottom:4}}>League is full — no schedule yet</div>
      <div style={{fontSize:12,color:IOS.label3,marginBottom:12}}>Generate matchups for all {activeLeague.season_weeks||18} weeks of the season.</div>
      <button onClick={async()=>{
-       const memberIds = leagueMembers.map(m=>m.user_id||m.id);
+       const memberIds = leagueMembers.map(m=>m.userId).filter(Boolean);
+       if(memberIds.length === 0) { alert("Could not load member IDs. Try refreshing."); return; }
        if((activeLeague.league_type||"h2h")==="bracket") {
          await generateBracket(activeLeague.id, memberIds);
        } else {
@@ -5898,13 +5899,15 @@ export default function App() {
        <div style={{fontSize:12,color:IOS.label3,marginTop:1}}>Total weeks in this league's season</div>
      </div>
      <div style={{display:"flex",alignItems:"center",gap:10}}>
-       <div onClick={async()=>{
+       <div onClick={async(e)=>{
+         e.stopPropagation();
          const newVal = Math.min(52, Math.max(1,(activeLeague.season_weeks||18)-1));
          await supabase.from("leagues").update({season_weeks:newVal}).eq("id",activeLeague.id);
          await fetchLeagues(user.id);
        }} style={{width:32,height:32,borderRadius:8,background:"rgba(255,255,255,0.08)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:18,color:"#fff",fontWeight:700}}>−</div>
        <div style={{fontSize:18,fontWeight:800,color:IOS.blue,minWidth:28,textAlign:"center"}}>{activeLeague.season_weeks||18}</div>
-       <div onClick={async()=>{
+       <div onClick={async(e)=>{
+         e.stopPropagation();
          const newVal = Math.min(52,(activeLeague.season_weeks||18)+1);
          await supabase.from("leagues").update({season_weeks:newVal}).eq("id",activeLeague.id);
          await fetchLeagues(user.id);
