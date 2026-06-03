@@ -1120,7 +1120,7 @@ export default function App() {
  const [newLeagueType, setNewLeagueType] = useState(null);
  const [showBrowse, setShowBrowse] = useState(false);
  const [publicLeagues, setPublicLeagues] = useState([]);
- const [browseFilter, setBrowseFilter] = useState({sport:"all", picks:"all", type:"all"});
+ const [browseFilter, setBrowseFilter] = useState({sport:"all", size:"all", type:"all"});
  const [browseLoading, setBrowseLoading] = useState(false);
  const [joiningLeagueId, setJoiningLeagueId] = useState(null); // 'h2h' | 'bracket' | 'points'
  const [newLeagueWeeks, setNewLeagueWeeks] = useState(18);
@@ -6652,13 +6652,13 @@ export default function App() {
          ))}
        </div>
        <div style={{display:"flex",gap:6,marginTop:6,overflowX:"auto",scrollbarWidth:"none"}}>
-         {/* Picks per week filter */}
-         {[{id:"all",l:"Any picks"},{id:"5",l:"5 picks"},{id:"6",l:"6+ picks"}].map(f=>(
-           <div key={f.id} onClick={()=>setBrowseFilter(prev=>({...prev,picks:f.id}))}
+         {/* League size filter */}
+         {[{id:"all",l:"Any Size"},{id:"small",l:"Small (4-8)"},{id:"medium",l:"Medium (10-12)"},{id:"large",l:"Large (16+)"}].map(f=>(
+           <div key={f.id} onClick={()=>setBrowseFilter(prev=>({...prev,size:f.id}))}
            style={{padding:"5px 12px",borderRadius:6,fontSize:11,fontWeight:700,whiteSpace:"nowrap",cursor:"pointer",flexShrink:0,
-             background:browseFilter.picks===f.id?"rgba(10,132,255,0.15)":"#1A1A1A",
-             border:`0.5px solid ${browseFilter.picks===f.id?"rgba(10,132,255,0.4)":"#2A2A2A"}`,
-             color:browseFilter.picks===f.id?IOS.blue:"#666"}}>{f.l}</div>
+             background:browseFilter.size===f.id?"rgba(10,132,255,0.15)":"#1A1A1A",
+             border:`0.5px solid ${browseFilter.size===f.id?"rgba(10,132,255,0.4)":"#2A2A2A"}`,
+             color:browseFilter.size===f.id?IOS.blue:"#666"}}>{f.l}</div>
          ))}
        </div>
      </div>
@@ -6676,8 +6676,10 @@ export default function App() {
          const filtered = publicLeagues.filter(lg=>{
            if(browseFilter.sport!=="all" && lg.sport!==browseFilter.sport) return false;
            if(browseFilter.type!=="all" && (lg.league_type||"h2h")!==browseFilter.type) return false;
-           if(browseFilter.picks==="5" && (lg.picks_per_week||5)!==5) return false;
-           if(browseFilter.picks==="6+" && (lg.picks_per_week||5)<6) return false;
+           const sz = lg.target_size||lg.max_members||8;
+           if(browseFilter.size==="small" && sz>8) return false;
+           if(browseFilter.size==="medium" && (sz<10||sz>12)) return false;
+           if(browseFilter.size==="large" && sz<16) return false;
            return true;
          });
          if(!filtered.length) return (
