@@ -984,14 +984,7 @@ export default function App() {
    leagueSports.forEach(sp => {
      const odds = liveOdds[sp];
      const fallback = SPORTS[sp]?.bets || {};
-     // Use live odds per category if available and non-empty, else hardcoded fallback
-     const src = {
-       ml:       (odds?.ml?.length)       ? odds.ml       : (fallback.ml||[]),
-       spread:   (odds?.spread?.length)   ? odds.spread   : (fallback.spread||[]),
-       ou:       (odds?.ou?.length)       ? odds.ou       : (fallback.ou||[]),
-       prop:     (odds?.prop?.length)     ? odds.prop     : (fallback.prop||[]),
-       longshot: (odds?.longshot?.length) ? odds.longshot : (fallback.longshot||[]),
-     };
+     const src = odds || {ml:[],spread:[],ou:[],prop:fallback.prop||[],longshot:[]};
      merged.ml.push(...tagTeam(src.ml, sp));
      merged.spread.push(...tagTeam(src.spread, sp));
      merged.ou.push(...tagTeam(src.ou, sp));
@@ -3822,50 +3815,120 @@ export default function App() {
  )}
 
  {/* Submitted */}
- {activeSubmitted&&(
- <div className="done-screen">
- <div className="done-checkmark"></div>
- <div className="done-title">Slip Locked </div>
- <div style={{fontSize:13,color:IOS.label3,textAlign:"center"}}>Week {activeLeague.current_week||activeLeague.week||1} · {activeLeague.name}</div>
- <div className="done-legs-card">
- {[...activePicks].sort((a,b)=>a.mult-b.mult).map((slot,i)=>{
- if(!slot.mult) return null;
- if(slot.isParlay) {
- const ls = calcLS(slot.parlayLegs);
- return (
- <div key={i}>
- <div className="done-leg-row">
- <div><div className="done-leg-lbl"> {slot.mult}× Parlay · {slot.parlayLegs.length} legs</div></div>
- <div className="done-leg-odds" style={{color:IOS.pink}}>{ls?.american}</div>
- </div>
- {slot.parlayLegs.map(b=>(
- <div key={b.id} style={{padding:"8px 16px 8px 28px",borderBottom:`0.5px solid ${IOS.sep}`}}>
- <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
- <div>
- <div style={{fontSize:13,color:IOS.label3}}>{b.pick}</div>
- {b.game&&<div style={{fontSize:11,color:IOS.label3,opacity:0.6,marginTop:2}}>{b.game}</div>}
- </div>
- <span style={{fontSize:14,fontWeight:700,color:b.odds.startsWith("+")?IOS.green:IOS.blue,flexShrink:0,marginLeft:8}}>{b.odds}</span>
- </div>
- </div>
- ))}
+ {activeSubmitted&&(()=>{
+ const slots=[...activePicks].filter(x=>x.mult).sort((a,b)=>a.mult-b.mult);
+ const wk=activeLeague.current_week||activeLeague.week||1;
+ const catColors={ml:IOS.blue,prop:IOS.yellow,ou:IOS.orange,spread:IOS.green,longshot:IOS.pink};
+ const catLabels={ml:"Moneyline",prop:"Prop",ou:"Over/Under",spread:"Spread",longshot:"Longshot"};
+ const catTint={ml:"#0A1628",prop:"#16120A",ou:"#160E04",spread:"#0A1606",longshot:"#16060C"};
+ const ptsFor=(slot)=>{const m=slot.mult||1;if(slot.isParlay){const ls=calcLS(slot.parlayLegs);return ls?calcPickPoints(m,ls.decimal>1?(ls.decimal-1)*100:0,"W"):0;}return slot.bet?calcPickPoints(m,slot.bet.impliedOdds,"W"):0;};
+ const resultFor=(slot)=>slot.result||slot.bet?.result||null;
+ const graded=slots.some(x=>resultFor(x));
+ const projTotal=slots.reduce((a,x)=>a+ptsFor(x),0);
+ const wonTotal=slots.reduce((a,x)=>a+(resultFor(x)==="W"?ptsFor(x):0),0);
+ const wins=slots.filter(x=>resultFor(x)==="W").length;
+ const losses=slots.filter(x=>resultFor(x)==="L").length;
+ const lsSlot=slots.find(x=>x.category==="longshot"||(x.isParlay&&x.parlayLegs.length>=2));
+ const lsOdds=lsSlot?(lsSlot.isParlay?calcLS(lsSlot.parlayLegs)?.american:lsSlot.bet?.odds):null;
+ const onShare=()=>{try{const txt=`My ${activeLeague.name} Week ${wk} slip is locked \u2014 ${slots.length} picks, projected +${projTotal.toFixed(1)} pts.`;if(navigator.share){navigator.share({title:"PickLock slip",text:txt});}else if(navigator.clipboard){navigator.clipboard.writeText(txt);}}catch(e){}};
+ const Tile=({val,lbl,color})=>(
+ <div style={{flex:1,background:"rgba(255,255,255,0.03)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"11px 8px",textAlign:"center"}}>
+ <div style={{fontSize:19,fontWeight:800,letterSpacing:"-0.5px",color}}>{val}</div>
+ <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"rgba(255,255,255,0.32)",marginTop:3}}>{lbl}</div>
  </div>
  );
- }
  return (
- <div key={i} className="done-leg-row">
+ <div className="lsx-scroll" style={{position:"absolute",inset:0,zIndex:10,background:"#07070A",overflowY:"auto",WebkitOverflowScrolling:"touch",paddingBottom:28}}>
+ <style>{`
+ @keyframes lsxRise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+ @keyframes lsxPulse{0%,100%{opacity:1}50%{opacity:.3}}
+ @keyframes lsxShim{0%{background-position:-160px 0}100%{background-position:160px 0}}
+ .lsx-card{transition:transform .12s ease}.lsx-card:active{transform:scale(.985)}
+ .lsx-pending{background:linear-gradient(90deg,rgba(255,255,255,.03),rgba(255,255,255,.14),rgba(255,255,255,.03));background-size:240px 100%;animation:lsxShim 1.5s linear infinite}
+ .lsx-scroll::-webkit-scrollbar{display:none}
+ `}</style>
+
+ {/* Hero */}
+ <div style={{background:"linear-gradient(180deg,#0A1C12 0%,#07070A 100%)",position:"relative",overflow:"hidden"}}>
+ <div style={{position:"absolute",top:-50,right:-40,width:160,height:160,borderRadius:"50%",background:"radial-gradient(circle,rgba(48,209,88,0.18),transparent 70%)",pointerEvents:"none"}}/>
+ <div style={{padding:"22px 18px 14px",display:"flex",alignItems:"flex-start",justifyContent:"space-between",position:"relative"}}>
  <div>
- <div className="done-leg-lbl">{slot.mult}× · {slot.bet?.pick}</div>
- <div style={{fontSize:11,color:IOS.label3}}>{slot.bet?.game}</div>
+ <div style={{fontSize:10.5,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(255,255,255,0.38)"}}>{activeLeague.name} \u00b7 Week {wk}</div>
+ <div style={{fontSize:27,fontWeight:800,letterSpacing:"-0.7px",color:"#fff",marginTop:3,lineHeight:1}}>Your Slip</div>
  </div>
- <div className="done-leg-odds" style={{color:slot.bet?.odds.startsWith("+")?IOS.green:IOS.blue}}>{slot.bet?.odds}</div>
+ <div style={{display:"flex",alignItems:"center",gap:6,background:"rgba(48,209,88,0.12)",border:"0.5px solid rgba(48,209,88,0.35)",borderRadius:20,padding:"6px 11px",flexShrink:0}}>
+ <span style={{width:6,height:6,borderRadius:"50%",background:IOS.green,display:"inline-block",boxShadow:`0 0 7px ${IOS.green}`,animation:"lsxPulse 2s ease-in-out infinite"}}/>
+ <span style={{fontSize:10,fontWeight:800,letterSpacing:"0.06em",color:IOS.green}}>LOCKED</span>
+ </div>
+ </div>
+ <div style={{display:"flex",gap:8,padding:"0 16px 16px",position:"relative"}}>
+ {graded
+ ? <><Tile val={`${wins}-${losses}`} lbl="Record" color={IOS.blue}/><Tile val={`+${wonTotal.toFixed(1)}`} lbl="Pts Won" color={IOS.green}/><Tile val={lsOdds||"\u2014"} lbl="Longshot" color={IOS.pink}/></>
+ : <><Tile val={`${slots.length}/5`} lbl="Picks" color={IOS.blue}/><Tile val={`+${projTotal.toFixed(1)}`} lbl="Proj. Pts" color={IOS.green}/><Tile val={lsOdds||"\u2014"} lbl="Longshot" color={IOS.pink}/></>
+ }
+ </div>
+ </div>
+
+ {/* Pick cards */}
+ <div style={{padding:"10px 12px 0",display:"flex",flexDirection:"column",gap:8}}>
+ {slots.map((slot,i)=>{
+ const cat=slot.isParlay?"longshot":slot.category;
+ const c=catColors[cat]||IOS.blue;
+ const res=resultFor(slot);
+ const pts=ptsFor(slot);
+ const ls=slot.isParlay?calcLS(slot.parlayLegs):null;
+ const odds=slot.isParlay?(ls?ls.american:""):(slot.bet?.odds||"");
+ const oddsPos=odds.startsWith("+");
+ const name=slot.isParlay?slot.parlayLegs.map(b=>b.pick).join("  \u00b7  "):(slot.bet?.pick||"");
+ const game=slot.isParlay?(slot.parlayLegs[0]?.game||""):(slot.bet?.game||"");
+ return (
+ <div key={i} className="lsx-card" style={{position:"relative",overflow:"hidden",borderRadius:14,
+ background:`linear-gradient(155deg,${catTint[cat]} 0%,#0B0B0E 70%)`,border:`1px solid ${c}38`,
+ boxShadow:res==="W"?`0 0 0 1px ${IOS.green}55`:res==="L"?`0 0 0 1px ${IOS.red}40`:"0 4px 14px rgba(0,0,0,0.4)",
+ animation:`lsxRise .34s ease ${Math.min(i,6)*0.04}s both`}}>
+ <div style={{position:"absolute",top:0,left:0,bottom:0,width:3,background:c}}/>
+ <div style={{position:"absolute",top:-26,right:-26,width:80,height:80,borderRadius:"50%",background:`radial-gradient(circle,${c}22,transparent 70%)`,pointerEvents:"none"}}/>
+ <div style={{display:"flex",alignItems:"center",gap:11,padding:"12px 13px 11px 14px"}}>
+ <div style={{width:30,height:30,borderRadius:9,background:`${c}1f`,border:`0.5px solid ${c}40`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:c,flexShrink:0}}>{slot.mult}\u00d7</div>
+ <div style={{flex:1,minWidth:0}}>
+ <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:c,marginBottom:2}}>{catLabels[cat]}{slot.isParlay?` \u00b7 ${slot.parlayLegs.length}-leg parlay`:""}</div>
+ <div style={{fontSize:13.5,fontWeight:700,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{name}</div>
+ {game&&<div style={{fontSize:10,color:"rgba(255,255,255,0.36)",marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{game}</div>}
+ </div>
+ <div style={{textAlign:"right",flexShrink:0}}>
+ <div style={{fontSize:14.5,fontWeight:800,letterSpacing:"-0.3px",color:slot.isParlay?IOS.pink:oddsPos?IOS.green:IOS.blue}}>{odds}</div>
+ <div style={{fontSize:10,fontWeight:700,marginTop:1,color:res==="L"?"rgba(255,69,58,0.7)":res==="W"?IOS.green:"rgba(255,255,255,0.4)"}}>+{res==="L"?0:pts} pts{!graded?" if win":""}</div>
+ </div>
+ </div>
+ <div className={res?"":"lsx-pending"} style={{height:4,background:res==="W"?IOS.green:res==="L"?IOS.red:undefined}}/>
  </div>
  );
  })}
  </div>
- <button className="ios-btn blue" onClick={()=>{setActiveSubmitted(false);setActivePicks(EMPTY_FLEX);setScreen("home");}}>Back to Home</button>
+
+ {/* Total */}
+ <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 18px 4px"}}>
+ <div style={{fontSize:10.5,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:"rgba(255,255,255,0.32)"}}>{graded?"Total pts earned":"Projected if all hit"}</div>
+ <div style={{fontSize:22,fontWeight:800,letterSpacing:"-0.6px",color:IOS.green}}>+{(graded?wonTotal:projTotal).toFixed(1)}</div>
  </div>
- )}
+
+ {/* Share CTA */}
+ <div onClick={onShare} style={{margin:"12px 12px 0",borderRadius:14,padding:"13px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",
+ background:"linear-gradient(135deg,rgba(10,132,255,0.16),rgba(94,92,230,0.10))",border:"0.5px solid rgba(10,132,255,0.3)"}}>
+ <div>
+ <div style={{fontSize:13.5,fontWeight:700,color:"#fff"}}>Share your slip</div>
+ <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:2}}>Let your league know you locked in</div>
+ </div>
+ <div style={{display:"flex",alignItems:"center",gap:7,background:IOS.blue,borderRadius:9,padding:"8px 14px"}}>
+ <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg>
+ <span style={{fontSize:12,fontWeight:800,color:"#fff"}}>Share</span>
+ </div>
+ </div>
+
+ <button className="ios-btn" style={{background:"rgba(255,255,255,0.07)",color:IOS.blue,marginTop:8}} onClick={()=>{setActiveSubmitted(false);setActivePicks(EMPTY_FLEX);setScreen("home");}}>Back to Home</button>
+ </div>
+ );
+ })()}
 
  <div className="body">
  <div style={{padding:"8px 16px 14px",display:"flex",alignItems:"center",gap:12}}>
@@ -4404,15 +4467,9 @@ export default function App() {
  // ─── Build the bet list for the selected sport + type ───
  let list = [];
  if(gridType==="longshot") {
- list = (ALL_BETS||[]).filter(b=> {
-   if(sportsList.length > 1 && b._sport && b._sport !== gSport) return false;
-   return b.impliedOdds>=400;
- });
+ list = (ALL_BETS||[]).filter(b=> b._sport===gSport && b.impliedOdds>=400);
  } else {
- list = (BETS[gridType]||[]).filter(b=> {
-   if(sportsList.length > 1 && b._sport && b._sport !== gSport) return false;
-   return true;
- });
+ list = (BETS[gridType]||[]).filter(b=> b._sport===gSport);
  }
 
  // Prop sub-category filter
@@ -4445,13 +4502,10 @@ export default function App() {
 
  const addCard = (bet) => {
  const cat = gridType==="longshot" ? "longshot" : gridType;
- // Check if this category already has a pick — if so, replace it
- const existingSlotIdx = activePicks.findIndex(p=>p.category===cat && p.bet!==null && !p.isParlay);
- const slotIdx = existingSlotIdx !== -1 ? existingSlotIdx : target;
- setActivePicks(prev=>prev.map((p,i)=> i===slotIdx ? {...p, bet, category:cat, isParlay:false, parlayLegs:[]} : p));
+ setActivePicks(prev=>prev.map((p,i)=> i===target ? {...p, bet, category:cat, isParlay:false, parlayLegs:[]} : p));
  setGridJustAdded(bet.id);
  // Advance to next empty slot, or bounce back to the slip if full
- const nextEmpty = activePicks.findIndex((p,i)=> i!==slotIdx && !p.isParlay && p.bet===null);
+ const nextEmpty = activePicks.findIndex((p,i)=> i!==target && !p.isParlay && p.bet===null);
  setTimeout(()=>{
  if(nextEmpty===-1){ setScreen("picks"); }
  else { setGridTargetSlot(nextEmpty); }
@@ -4479,8 +4533,6 @@ export default function App() {
  const renderCard = (bet, idx) => {
  const selected = activePicks.some(p=>p.bet?.id===bet.id);
  const added = gridJustAdded===bet.id;
- const cat = gridType==="longshot"?"longshot":gridType;
- const catTaken = !selected && activePicks.some(p=>p.category===cat && p.bet!==null && !p.isParlay);
  const pct = impliedPct(bet.impliedOdds);
  const read = readFor(pct);
  const pos = bet.odds?.startsWith("+");
@@ -4512,10 +4564,9 @@ export default function App() {
  <div key={bet.id} className="gbx-card" onClick={()=>addCard(bet)} style={{
  position:"relative", overflow:"hidden", cursor:"pointer", borderRadius:16, padding:"13px 13px 12px",
  background:"linear-gradient(160deg,#17171B 0%,#0D0D10 100%)",
- border:`1px solid ${selected||added?acc:catTaken?"rgba(255,255,255,0.04)":"rgba(255,255,255,0.07)"}`,
+ border:`1px solid ${selected||added?acc:"rgba(255,255,255,0.07)"}`,
  boxShadow:selected||added?`0 0 0 1px ${acc}, 0 8px 24px ${acc}22`:"0 4px 14px rgba(0,0,0,0.4)",
- opacity:catTaken?0.45:1,
- animation:`fadeSlideUp .35s ease ${Math.min(idx,8)*0.035}s both`,
+ animation:`gbxRise .35s ease ${Math.min(idx,8)*0.035}s both`,
  }}>
  {/* accent glow top-right */}
  <div style={{position:"absolute",top:-30,right:-30,width:90,height:90,borderRadius:"50%",background:`radial-gradient(circle,${acc}26,transparent 70%)`,pointerEvents:"none"}}/>
@@ -4526,8 +4577,8 @@ export default function App() {
  <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.07em",textTransform:"uppercase",color:acc,marginBottom:7,paddingRight:42}}>{topLabel}</div>
 
  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2,paddingRight:34}}>
- <div style={{fontSize:gridType==="longshot"||gridType==="ou"?12.5:14,fontWeight:800,color:"#fff",lineHeight:1.2,letterSpacing:"-0.3px",
- wordBreak:"break-word",overflowWrap:"anywhere"}}>{title}</div>
+ <div style={{fontSize:gridType==="longshot"||gridType==="ou"?12.5:14.5,fontWeight:800,color:"#fff",lineHeight:1.15,letterSpacing:"-0.3px",
+ whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{title}</div>
  </div>
  {sideChip && (
  <div style={{display:"inline-flex",marginTop:2,marginBottom:4,fontSize:8,fontWeight:800,letterSpacing:"0.05em",
@@ -4535,7 +4586,7 @@ export default function App() {
  background:sideChip==="HOME"||sideChip==="OVER"?`${acc}1f`:"rgba(255,255,255,0.06)",
  borderRadius:4,padding:"1px 6px"}}>{sideChip}</div>
  )}
- <div style={{fontSize:10.5,color:"rgba(255,255,255,0.4)",marginBottom:9,lineHeight:1.3,wordBreak:"break-word"}}>{subtitle}</div>
+ <div style={{fontSize:10.5,color:"rgba(255,255,255,0.4)",marginBottom:9,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{subtitle}</div>
 
  {/* Implied probability — accurate, derived from the line */}
  <StatLabel>Implied chance</StatLabel>
@@ -4575,6 +4626,7 @@ export default function App() {
  return (
  <div className="body" style={{background:"#08080A"}}>
  <style>{`
+ @keyframes gbxRise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
  .gbx-card{ transition:transform .12s ease, border-color .15s ease, box-shadow .15s ease; will-change:transform; }
  .gbx-card:active{ transform:scale(0.965); }
  .gbx-scroll::-webkit-scrollbar{ display:none; }
