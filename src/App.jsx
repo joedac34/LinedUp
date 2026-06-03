@@ -983,6 +983,12 @@ export default function App() {
  const [betTypeFilter, setBetTypeFilter] = useState("all"); // "all" | "ml" | "spread" | "ou"
  const [propTypeFilter, setPropTypeFilter] = useState("all"); // prop sub-category filter
  const [betSportFilter, setBetSportFilter] = useState("all"); // sport filter in multi-sport leagues
+ // ─── GRID BET BROWSER state ───────────────────────────────────────
+ const [gridSport, setGridSport] = useState(null);     // null = follow league default sport
+ const [gridType, setGridType] = useState("ml");        // ml | spread | ou | prop | longshot
+ const [gridPropSub, setGridPropSub] = useState("all"); // prop sub-category filter
+ const [gridTargetSlot, setGridTargetSlot] = useState(null); // which flex slot a tapped card fills
+ const [gridJustAdded, setGridJustAdded] = useState(null);   // bet id flashing "added" feedback
  // usedMults / availableMults / hasLongshot / allFlexFilled are derived inside the picks IIFE
  // so they always read from the correct activePicks (solo vs league). Do NOT compute them here.
  // ─── TEAM ACRONYM HELPER ─────────────────────────────────────────
@@ -3471,6 +3477,18 @@ export default function App() {
  {/* Category selector — show if not parlay and no category chosen yet */}
  {!activePicks[activeFlexSlot]?.isParlay && !flexCategory && (
  <div style={{padding:"12px 16px"}}>
+ <div onClick={()=>{ const t=activeFlexSlot; setActiveFlexSlot(null); setFlexCategory(null); setGridTargetSlot(t); setGridType("ml"); setGridPropSub("all"); setScreen("browser"); }}
+   style={{display:"flex",alignItems:"center",gap:14,padding:"12px 12px",marginBottom:6,borderRadius:12,cursor:"pointer",
+     background:"linear-gradient(135deg,rgba(10,132,255,0.16),rgba(94,92,230,0.10))",border:"0.5px solid rgba(10,132,255,0.3)"}}>
+   <div style={{width:40,height:40,borderRadius:12,background:"rgba(10,132,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+   </div>
+   <div style={{flex:1}}>
+     <div style={{fontSize:16,fontWeight:600,color:"#fff"}}>Browse in Grid View</div>
+     <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>Big cards with stats &amp; recent form</div>
+   </div>
+   <div style={{fontSize:18,color:IOS.blue}}>›</div>
+ </div>
  {(()=>{
  // Find categories already used by OTHER slots (not the current one being edited)
  const usedCats = activePicks
@@ -3944,6 +3962,28 @@ export default function App() {
  {!hasParlay&&<div style={{fontSize:11,color:IOS.orange,marginTop:8}}> One pick must be a Longshot (+400 or better — straight bet or parlay)</div>}
  </div>
 
+ {/* Grid Bet Browser entry */}
+ {!activeSubmitted && (()=>{
+   const firstEmpty = activePicks.findIndex(p=>!p.isParlay && p.bet===null);
+   const target = firstEmpty===-1 ? 0 : firstEmpty;
+   return (
+   <div onClick={()=>{ setGridTargetSlot(target); setGridType("ml"); setGridPropSub("all"); setScreen("browser"); }}
+     style={{margin:"0 16px 12px",borderRadius:14,padding:"13px 16px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",
+       background:"linear-gradient(135deg,rgba(10,132,255,0.16),rgba(94,92,230,0.10))",border:"0.5px solid rgba(10,132,255,0.35)"}}>
+     <div style={{display:"flex",alignItems:"center",gap:11}}>
+       <div style={{width:34,height:34,borderRadius:10,background:"rgba(10,132,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+       </div>
+       <div>
+         <div style={{fontSize:14,fontWeight:700,color:"#fff",letterSpacing:"-0.2px"}}>Browse all bets</div>
+         <div style={{fontSize:11,color:"rgba(255,255,255,0.45)",marginTop:1}}>Grid view with stats &amp; recent form</div>
+       </div>
+     </div>
+     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+   </div>
+   );
+ })()}
+
  {/* Flex pick slots — compact card design */}
  {activePicks.map((slot, idx)=>{
  const parlayDec = slot.isParlay && slot.parlayLegs.length>=2 ? calcParlayOddsDecimal(slot.parlayLegs) : 1;
@@ -4246,6 +4286,335 @@ export default function App() {
  </div>
  </>
  );})()
+ }
+
+ {/* ══ GRID BET BROWSER ══ */}
+ {screen==="browser"&&(()=>{
+ const activePicks = isSoloMode ? soloFlexPicks : flexPicks;
+ const setActivePicks = isSoloMode ? setSoloFlexPicks : setFlexPicks;
+
+ // Per-bet-type accent — the screen's accent shifts with the selected type
+ const ACC = { ml:IOS.blue, spread:IOS.green, ou:IOS.orange, prop:IOS.yellow, longshot:IOS.pink };
+ const TYPE_LABELS = { ml:"Moneyline", spread:"Spread", ou:"Over/Under", prop:"Prop", longshot:"Longshot" };
+ const acc = ACC[gridType] || IOS.blue;
+
+ // Resolve active sport (default to league's first sport)
+ const sportsList = leagueSports && leagueSports.length ? leagueSports : ["nfl"];
+ const gSport = (gridSport && sportsList.includes(gridSport)) ? gridSport : sportsList[0];
+
+ // Resolve which slot a tapped card fills
+ const resolveTarget = () => {
+ if(gridTargetSlot!==null && activePicks[gridTargetSlot] && !activePicks[gridTargetSlot].isParlay && activePicks[gridTargetSlot].bet===null) return gridTargetSlot;
+ const firstEmpty = activePicks.findIndex(p=>!p.isParlay && p.bet===null);
+ return firstEmpty===-1 ? (gridTargetSlot!==null?gridTargetSlot:0) : firstEmpty;
+ };
+ const target = resolveTarget();
+ const targetMult = activePicks[target]?.mult || null;
+ const slotsLeft = activePicks.filter(p=>!p.isParlay && p.bet===null).length;
+
+ // ─── ACCURATE DERIVED HELPERS (from real odds) ───
+ const impliedPct = (o) => o<0 ? Math.round((-o)/((-o)+100)*100) : Math.round(100/(o+100)*100);
+ const decReturn = (o) => o<0 ? (100/Math.abs(o))+1 : (o/100)+1; // payout multiple incl. stake
+ const readFor = (pct) => {
+ if(gridType==="ou"||gridType==="prop") {
+ if(pct>=62) return {t:"Strong lean",c:IOS.green};
+ if(pct>=52) return {t:"Slight lean",c:acc};
+ if(pct>=48) return {t:"Coin flip",c:IOS.label2};
+ return {t:"Live dog",c:IOS.orange};
+ }
+ if(pct>=70) return {t:"Heavy favorite",c:IOS.green};
+ if(pct>=58) return {t:"Favored",c:acc};
+ if(pct>=50) return {t:"Slight edge",c:IOS.label2};
+ if(pct>=42) return {t:"Slight dog",c:IOS.orange};
+ return {t:"Underdog",c:IOS.pink};
+ };
+
+ // Parse "Away @ Home"
+ const parseGame = (g="") => {
+ const parts = g.includes(" @ ") ? g.split(" @ ") : g.includes(" vs ") ? g.split(" vs ") : [g];
+ return { away:(parts[0]||"").trim(), home:(parts[1]||"").trim() };
+ };
+ // Strip trailing line/suffix from a pick to recover the team name
+ const teamFromSpread = (pick="") => pick.replace(/\s*[+\-]?\d+(\.\d+)?\s*$/,"").trim();
+ const teamFromLongshot = (pick="") => pick.replace(/\s*ML$/i,"").replace(/\s*[+\-]?\d+(\.\d+)?\s*$/,"").trim();
+ const lineFromSpread = (pick="") => { const m=pick.match(/[+\-]?\d+(\.\d+)?\s*$/); return m?m[0].trim():""; };
+ const sideOf = (teamName, g) => { // "HOME" | "AWAY" | null
+ const { away, home } = parseGame(g);
+ if(!teamName) return null;
+ const ta = getAcronym(teamName,false);
+ if(ta && getAcronym(home,false)===ta) return "HOME";
+ if(ta && getAcronym(away,false)===ta) return "AWAY";
+ if(home && home.includes(teamName)) return "HOME";
+ if(away && away.includes(teamName)) return "AWAY";
+ return null;
+ };
+
+ // ─── RECENT FORM (placeholder until ESPN game logs are wired) ───
+ // Deterministic from a seed so it's stable per team/bet (not random flicker).
+ // Replace `formFor` with real last-3 results from your ESPN feed when ready.
+ const GRID_SHOW_FORM = true;
+ const formFor = (seed="") => {
+ let h=0; for(let i=0;i<seed.length;i++){ h=(h*31 + seed.charCodeAt(i))>>>0; }
+ return [0,1,2].map(i => ((h>>(i*3)) & 3) === 0 ? "L" : "W");
+ };
+
+ // ─── Build the bet list for the selected sport + type ───
+ let list = [];
+ if(gridType==="longshot") {
+ list = (ALL_BETS||[]).filter(b=> b._sport===gSport && b.impliedOdds>=400);
+ } else {
+ list = (BETS[gridType]||[]).filter(b=> b._sport===gSport);
+ }
+
+ // Prop sub-category filter
+ const propSubsBySport = {
+ nfl:[{id:"all",l:"All"},{id:"pass",l:"Pass"},{id:"rush",l:"Rush"},{id:"rec",l:"Receiving"},{id:"td",l:"TDs"}],
+ nba:[{id:"all",l:"All"},{id:"pts",l:"Points"},{id:"reb",l:"Rebounds"},{id:"ast",l:"Assists"},{id:"3pt",l:"Threes"}],
+ mlb:[{id:"all",l:"All"},{id:"k",l:"Strikeouts"},{id:"hits",l:"Hits"},{id:"hr",l:"Home Runs"},{id:"bases",l:"Bases"}],
+ };
+ const propSubs = propSubsBySport[gSport] || [{id:"all",l:"All"}];
+ if(gridType==="prop" && gridPropSub!=="all") {
+ list = list.filter(b=>{
+ const s = ((b.pick||"")+" "+(b.game||"")).toLowerCase();
+ switch(gridPropSub){
+ case "pass": return s.includes("pass");
+ case "rush": return s.includes("rush")&&!s.includes("rec");
+ case "rec": return s.includes("rec")||s.includes("receiv");
+ case "td": return s.includes("td")||s.includes("touchdown");
+ case "pts": return s.includes("point")||s.includes("pts");
+ case "reb": return s.includes("rebound")||s.includes("reb");
+ case "ast": return s.includes("assist")||s.includes("ast");
+ case "3pt": return s.includes("three")||s.includes("3pt")||s.includes("3-point");
+ case "k": return s.includes("strikeout")||s.includes(" k");
+ case "hits": return s.includes("hit");
+ case "hr": return s.includes("home run")||s.includes("hr")||s.includes("homer");
+ case "bases": return s.includes("base");
+ default: return true;
+ }
+ });
+ }
+
+ const addCard = (bet) => {
+ const cat = gridType==="longshot" ? "longshot" : gridType;
+ setActivePicks(prev=>prev.map((p,i)=> i===target ? {...p, bet, category:cat, isParlay:false, parlayLegs:[]} : p));
+ setGridJustAdded(bet.id);
+ // Advance to next empty slot, or bounce back to the slip if full
+ const nextEmpty = activePicks.findIndex((p,i)=> i!==target && !p.isParlay && p.bet===null);
+ setTimeout(()=>{
+ if(nextEmpty===-1){ setScreen("picks"); }
+ else { setGridTargetSlot(nextEmpty); }
+ setGridJustAdded(null);
+ }, 480);
+ };
+
+ const FormDots = ({seed}) => GRID_SHOW_FORM ? (
+ <div style={{display:"flex",gap:3,alignItems:"center"}}>
+ {formFor(seed).map((r,i)=>(
+ <div key={i} style={{width:15,height:15,borderRadius:4,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:800,
+ background:r==="W"?"rgba(48,209,88,0.18)":"rgba(255,69,58,0.16)", color:r==="W"?IOS.green:IOS.red}}>{r}</div>
+ ))}
+ </div>
+ ) : null;
+
+ const Meter = ({pct}) => (
+ <div style={{height:5,borderRadius:3,background:"rgba(255,255,255,0.07)",overflow:"hidden",width:"100%"}}>
+ <div style={{height:"100%",width:`${Math.max(6,Math.min(100,pct))}%`,borderRadius:3,background:`linear-gradient(90deg,${acc},${acc}88)`}}/>
+ </div>
+ );
+
+ const StatLabel = ({children}) => (<div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:"rgba(255,255,255,0.32)",marginBottom:3}}>{children}</div>);
+
+ const renderCard = (bet, idx) => {
+ const selected = activePicks.some(p=>p.bet?.id===bet.id);
+ const added = gridJustAdded===bet.id;
+ const pct = impliedPct(bet.impliedOdds);
+ const read = readFor(pct);
+ const pos = bet.odds?.startsWith("+");
+ const pts = calcPickPoints(targetMult||1, bet.impliedOdds, "W");
+ const ret = decReturn(bet.impliedOdds);
+
+ // Header line + body vary by type
+ let topLabel = `${gSport.toUpperCase()} · ${TYPE_LABELS[gridType]}`;
+ let title, subtitle, sideChip=null, formSeed=bet.id;
+
+ if(gridType==="ml"){
+ const side = sideOf(bet.pick, bet.game); const {away,home}=parseGame(bet.game);
+ const opp = side==="HOME"?away:home;
+ title = bet.pick; subtitle = opp?`vs ${opp}`:bet.game; sideChip = side; formSeed = bet.pick;
+ } else if(gridType==="spread"){
+ const team = teamFromSpread(bet.pick); const line = lineFromSpread(bet.pick);
+ const side = sideOf(team, bet.game); const {away,home}=parseGame(bet.game);
+ const opp = side==="HOME"?away:home;
+ title = team; subtitle = `${line}${opp?`  ·  vs ${opp}`:""}`; sideChip = side; formSeed = team;
+ } else if(gridType==="ou"){
+ title = bet.game; subtitle = bet.pick; sideChip = bet.pick?.toLowerCase().startsWith("over")?"OVER":bet.pick?.toLowerCase().startsWith("under")?"UNDER":null; formSeed = bet.game;
+ } else if(gridType==="prop"){
+ title = bet.game || bet.pick; subtitle = bet.pick; sideChip = bet.pick?.toLowerCase().includes("over")?"OVER":bet.pick?.toLowerCase().includes("under")?"UNDER":null; formSeed = (bet.game||"")+bet.pick;
+ } else { // longshot
+ title = teamFromLongshot(bet.pick)||bet.pick; subtitle = bet.game; formSeed = bet.pick;
+ }
+
+ return (
+ <div key={bet.id} className="gbx-card" onClick={()=>addCard(bet)} style={{
+ position:"relative", overflow:"hidden", cursor:"pointer", borderRadius:16, padding:"13px 13px 12px",
+ background:"linear-gradient(160deg,#17171B 0%,#0D0D10 100%)",
+ border:`1px solid ${selected||added?acc:"rgba(255,255,255,0.07)"}`,
+ boxShadow:selected||added?`0 0 0 1px ${acc}, 0 8px 24px ${acc}22`:"0 4px 14px rgba(0,0,0,0.4)",
+ animation:`fadeSlideUp .35s ease ${Math.min(idx,8)*0.035}s both`,
+ }}>
+ {/* accent glow top-right */}
+ <div style={{position:"absolute",top:-30,right:-30,width:90,height:90,borderRadius:"50%",background:`radial-gradient(circle,${acc}26,transparent 70%)`,pointerEvents:"none"}}/>
+ {/* odds badge */}
+ <div style={{position:"absolute",top:11,right:11,fontSize:12,fontWeight:800,letterSpacing:"-0.2px",
+ color:pos?IOS.green:"rgba(255,255,255,0.55)"}}>{bet.odds}</div>
+
+ <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.07em",textTransform:"uppercase",color:acc,marginBottom:7,paddingRight:42}}>{topLabel}</div>
+
+ <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2,paddingRight:34}}>
+ <div style={{fontSize:gridType==="longshot"||gridType==="ou"?12.5:14.5,fontWeight:800,color:"#fff",lineHeight:1.15,letterSpacing:"-0.3px",
+ whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{title}</div>
+ </div>
+ {sideChip && (
+ <div style={{display:"inline-flex",marginTop:2,marginBottom:4,fontSize:8,fontWeight:800,letterSpacing:"0.05em",
+ color:sideChip==="HOME"||sideChip==="OVER"?acc:"rgba(255,255,255,0.5)",
+ background:sideChip==="HOME"||sideChip==="OVER"?`${acc}1f`:"rgba(255,255,255,0.06)",
+ borderRadius:4,padding:"1px 6px"}}>{sideChip}</div>
+ )}
+ <div style={{fontSize:10.5,color:"rgba(255,255,255,0.4)",marginBottom:9,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{subtitle}</div>
+
+ {/* Implied probability — accurate, derived from the line */}
+ <StatLabel>Implied chance</StatLabel>
+ <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:5}}>
+ <Meter pct={pct}/>
+ <div style={{fontSize:12,fontWeight:800,color:"#fff",flexShrink:0,minWidth:30,textAlign:"right"}}>{pct}%</div>
+ </div>
+ <div style={{fontSize:10,fontWeight:700,color:read.c,marginBottom:10}}>{read.t}</div>
+
+ {/* Bottom row: recent form + reward */}
+ <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:6}}>
+ <div>
+ <StatLabel>Last 3</StatLabel>
+ <FormDots seed={formSeed}/>
+ </div>
+ <div style={{textAlign:"right"}}>
+ <StatLabel>{gridType==="longshot"?`${ret.toFixed(1)}× return`:"If win"}</StatLabel>
+ <div style={{fontSize:13,fontWeight:800,color:IOS.green,lineHeight:1}}>+{pts}<span style={{fontSize:9,fontWeight:700,color:"rgba(48,209,88,0.6)",marginLeft:2}}>pts</span></div>
+ </div>
+ </div>
+
+ {/* added flash */}
+ {added && (
+ <div style={{position:"absolute",inset:0,background:`${acc}1a`,backdropFilter:"blur(1px)",display:"flex",alignItems:"center",justifyContent:"center",borderRadius:16}}>
+ <div style={{display:"flex",alignItems:"center",gap:6,background:acc,color:"#fff",borderRadius:20,padding:"6px 14px",fontSize:12,fontWeight:800,boxShadow:`0 4px 16px ${acc}66`}}>
+ <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+ Added
+ </div>
+ </div>
+ )}
+ </div>
+ );
+ };
+
+ const pillBase = {padding:"7px 13px",borderRadius:20,fontSize:12,fontWeight:700,whiteSpace:"nowrap",cursor:"pointer",border:"1px solid",transition:"all .15s",flexShrink:0};
+
+ return (
+ <div className="body" style={{background:"#08080A"}}>
+ <style>{`
+ .gbx-card{ transition:transform .12s ease, border-color .15s ease, box-shadow .15s ease; will-change:transform; }
+ .gbx-card:active{ transform:scale(0.965); }
+ .gbx-scroll::-webkit-scrollbar{ display:none; }
+ `}</style>
+
+ {/* Header */}
+ <div style={{position:"sticky",top:0,zIndex:10,background:"linear-gradient(180deg,#08080A 70%,rgba(8,8,10,0))",paddingBottom:6}}>
+ <div style={{display:"flex",alignItems:"center",gap:11,padding:"10px 16px 8px"}}>
+ <div onClick={()=>setScreen("picks")} style={{width:34,height:34,borderRadius:10,background:"rgba(255,255,255,0.06)",border:"0.5px solid rgba(255,255,255,0.1)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:acc,fontSize:18,flexShrink:0}}>‹</div>
+ <div style={{flex:1,minWidth:0}}>
+ <div style={{fontSize:21,fontWeight:800,letterSpacing:"-0.6px",color:"#fff",lineHeight:1}}>Bet Browser</div>
+ <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:3,display:"flex",alignItems:"center",gap:5}}>
+ <span style={{width:6,height:6,borderRadius:"50%",background:isLiveOdds?IOS.green:IOS.orange,display:"inline-block",boxShadow:isLiveOdds?`0 0 6px ${IOS.green}`:"none"}}/>
+ {isLiveOdds?"Live odds":"Sample odds"} · Filling Pick {target+1}{targetMult?` (${targetMult}×)`:""}
+ </div>
+ </div>
+ </div>
+
+ {/* Sport switcher */}
+ {sportsList.length>1 && (
+ <div className="gbx-scroll" style={{display:"flex",gap:7,padding:"2px 16px 8px",overflowX:"auto"}}>
+ {sportsList.map(sp=>{
+ const on = sp===gSport; const sc = SPORTS[sp]?.color || IOS.blue;
+ return (
+ <div key={sp} onClick={()=>setGridSport(sp)} style={{...pillBase,
+ background:on?`${sc}26`:"rgba(255,255,255,0.05)", borderColor:on?`${sc}80`:"rgba(255,255,255,0.1)", color:on?sc:"rgba(255,255,255,0.45)"}}>
+ {SPORTS[sp]?.label || sp.toUpperCase()}
+ </div>
+ );
+ })}
+ </div>
+ )}
+
+ {/* Bet type switcher */}
+ <div className="gbx-scroll" style={{display:"flex",gap:7,padding:`${sportsList.length>1?0:6}px 16px 9px`,overflowX:"auto"}}>
+ {["ml","spread","ou","prop","longshot"].map(t=>{
+ const on = t===gridType; const tc = ACC[t];
+ return (
+ <div key={t} onClick={()=>{ setGridType(t); setGridPropSub("all"); }} style={{...pillBase,
+ background:on?`${tc}26`:"rgba(255,255,255,0.05)", borderColor:on?`${tc}80`:"rgba(255,255,255,0.1)", color:on?tc:"rgba(255,255,255,0.45)"}}>
+ {TYPE_LABELS[t]}
+ </div>
+ );
+ })}
+ </div>
+
+ {/* Prop sub-filter */}
+ {gridType==="prop" && (
+ <div className="gbx-scroll" style={{display:"flex",gap:6,padding:"0 16px 10px",overflowX:"auto"}}>
+ {propSubs.map(s=>{
+ const on = s.id===gridPropSub;
+ return (
+ <div key={s.id} onClick={()=>setGridPropSub(s.id)} style={{padding:"5px 11px",borderRadius:16,fontSize:11,fontWeight:700,whiteSpace:"nowrap",cursor:"pointer",border:"1px solid",flexShrink:0,
+ background:on?`${acc}1f`:"rgba(255,255,255,0.04)", borderColor:on?`${acc}66`:"rgba(255,255,255,0.08)", color:on?acc:"rgba(255,255,255,0.35)"}}>
+ {s.l}
+ </div>
+ );
+ })}
+ </div>
+ )}
+ <div style={{height:0.5,background:"rgba(255,255,255,0.07)",margin:"0 16px"}}/>
+ </div>
+
+ {/* Slot-full banner */}
+ {slotsLeft===0 && (
+ <div style={{margin:"10px 16px 0",background:"rgba(255,159,10,0.1)",border:"0.5px solid rgba(255,159,10,0.3)",borderRadius:12,padding:"10px 14px",fontSize:11.5,color:IOS.orange,lineHeight:1.5}}>
+ All slots filled — tapping a card replaces Pick {target+1}. Manage picks from your slip.
+ </div>
+ )}
+
+ {/* Card grid */}
+ {oddsLoading ? (
+ <div style={{padding:"60px 20px",textAlign:"center"}}>
+ <div style={{width:26,height:26,border:`2.5px solid ${acc}33`,borderTopColor:acc,borderRadius:"50%",margin:"0 auto 14px",animation:"spin .7s linear infinite"}}/>
+ <div style={{fontSize:13,color:"rgba(255,255,255,0.4)"}}>Loading live odds…</div>
+ </div>
+ ) : list.length===0 ? (
+ <div style={{padding:"50px 28px",textAlign:"center"}}>
+ <div style={{fontSize:14,fontWeight:700,color:"rgba(255,255,255,0.45)",marginBottom:6}}>
+ {gridType==="prop"?"No props live yet":`No ${TYPE_LABELS[gridType]} bets right now`}
+ </div>
+ <div style={{fontSize:12,color:"rgba(255,255,255,0.25)",lineHeight:1.5}}>
+ {gridType==="prop"?"Player props usually post 2–3 days before kickoff. Check back closer to game time."
+ :gridType==="longshot"?"No +400-or-better singles on the board right now. Build a parlay from your slip instead."
+ :"Check back when games are scheduled for this sport."}
+ </div>
+ </div>
+ ) : (
+ <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,padding:"12px 16px 28px"}}>
+ {list.map((bet,idx)=>renderCard(bet,idx))}
+ </div>
+ )}
+ </div>
+ );
+ })()
  }
 
  {/* ══ MATCHUP ══ */}
