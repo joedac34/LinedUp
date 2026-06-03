@@ -63,26 +63,7 @@ const SPORTS = {
  { id:"ml16", game:"Raiders @ Chiefs", pick:"Las Vegas Raiders", odds:"+240", impliedOdds:240 },
  { id:"ml17", game:"Cowboys @ Eagles", pick:"Dallas Cowboys", odds:"+145", impliedOdds:145 },
  ],
- prop:[
- { id:"pr1", game:"Patrick Mahomes", pick:"300+ Pass Yards", odds:"-130", impliedOdds:-130 },
- { id:"pr2", game:"Jalen Hurts", pick:"2+ Rush TDs", odds:"+175", impliedOdds:175 },
- { id:"pr3", game:"Josh Allen", pick:"35+ Pass Attempts", odds:"-115", impliedOdds:-115 },
- { id:"pr4", game:"Brock Purdy", pick:"Over 1.5 TDs", odds:"-140", impliedOdds:-140 },
- { id:"pr5", game:"Christian McCaffrey", pick:"90.5+ Rush Yds", odds:"-110", impliedOdds:-110 },
- { id:"pr6", game:"Tyreek Hill", pick:"Over 85.5 Rec Yds", odds:"-125", impliedOdds:-125 },
- { id:"pr7", game:"Davante Adams", pick:"Over 65.5 Rec Yds", odds:"-118", impliedOdds:-118 },
- { id:"pr8", game:"Travis Kelce", pick:"Over 55.5 Rec Yds", odds:"-130", impliedOdds:-130 },
- { id:"pr9", game:"Stefon Diggs", pick:"Over 70.5 Rec Yds", odds:"-115", impliedOdds:-115 },
- { id:"pr10", game:"Justin Jefferson", pick:"Over 80.5 Rec Yds", odds:"-120", impliedOdds:-120 },
- { id:"pr11", game:"Lamar Jackson", pick:"50+ Rush Yards", odds:"-135", impliedOdds:-135 },
- { id:"pr12", game:"CeeDee Lamb", pick:"Over 75.5 Rec Yds", odds:"-118", impliedOdds:-118 },
- { id:"pr13", game:"Ja'Marr Chase", pick:"Over 70.5 Rec Yds", odds:"-115", impliedOdds:-115 },
- { id:"pr14", game:"Deebo Samuel", pick:"Over 60.5 Rec Yds", odds:"-108", impliedOdds:-108 },
- { id:"pr15", game:"Derrick Henry", pick:"Over 85.5 Rush Yds", odds:"-120", impliedOdds:-120 },
- { id:"pr16", game:"Patrick Mahomes", pick:"2+ TD Passes", odds:"-150", impliedOdds:-150 },
- { id:"pr17", game:"Josh Allen", pick:"1+ Rush TD", odds:"-130", impliedOdds:-130 },
- { id:"pr18", game:"Jalen Hurts", pick:"Over 240.5 Pass Yds",odds:"-115", impliedOdds:-115 },
- ],
+ prop:[], // No hardcoded props — live data from /api/props only
  ou:[
  { id:"ou1", game:"Raiders @ Chiefs", pick:"Over 47.5", odds:"-110", impliedOdds:-110 },
  { id:"ou2", game:"Cowboys @ Eagles", pick:"Under 44", odds:"-110", impliedOdds:-110 },
@@ -1394,28 +1375,23 @@ export default function App() {
      .eq("privacy", "public")
      .order("created_at", {ascending:false})
      .limit(50);
-   console.log("[Browse] raw data:", data, "error:", error);
    if(data) {
      const myLeagueIds = realLeagues.map(l=>l.id);
-     console.log("[Browse] myLeagueIds:", myLeagueIds);
      const withCounts = await Promise.all(data.map(async lg=>{
        const {count, error:cErr} = await supabase
          .from("league_members")
          .select("*", {count:"exact",head:true})
          .eq("league_id", lg.id);
-       console.log(`[Browse] ${lg.name}: count=${count} err=${cErr?.message}`);
        return {...lg, memberCount: count||0};
      }));
      const filtered = withCounts.filter(lg=>{
        const maxSize = lg.target_size||lg.max_members||8;
        const passes = lg.memberCount < maxSize && !myLeagueIds.includes(lg.id);
-       console.log(`[Browse] filter ${lg.name}: cnt=${lg.memberCount} max=${maxSize} mine=${myLeagueIds.includes(lg.id)} → ${passes}`);
        return passes;
      });
-     console.log("[Browse] showing:", filtered.length);
      setPublicLeagues(filtered);
    }
- } catch(e) { console.error("[Browse] error:", e); }
+ } catch(e) { /* browse error suppressed */ }
  setBrowseLoading(false);
  };
 
@@ -3617,8 +3593,9 @@ export default function App() {
  )}
 
  {/* Bet list */}
- {!oddsLoading && (flexCategory || activePicks[activeFlexSlot]?.isParlay) && (
- (activePicks[activeFlexSlot]?.isParlay ? ALL_BETS : (BETS[flexCategory]||[])).filter(bet=>{
+ {!oddsLoading && (flexCategory || activePicks[activeFlexSlot]?.isParlay) && (()=>{
+ const allBets = activePicks[activeFlexSlot]?.isParlay ? ALL_BETS : (BETS[flexCategory]||[]);
+ const filtered = allBets.filter(bet=>{
  const q = pickSearch.toLowerCase().trim();
  const textMatch = !q || bet.game.toLowerCase().includes(q) || bet.pick.toLowerCase().includes(q);
  // Prop sub-category filter
@@ -3657,7 +3634,20 @@ export default function App() {
  return true;
  }
  return textMatch;
- }).map(bet=>{
+ });
+ if(filtered.length === 0) return (
+   <div style={{padding:"40px 20px",textAlign:"center"}}>
+     <div style={{fontSize:14,fontWeight:600,color:"rgba(255,255,255,0.25)",marginBottom:6}}>
+       {flexCategory==="prop" ? "No props available yet" : "No bets available"}
+     </div>
+     <div style={{fontSize:12,color:"rgba(255,255,255,0.15)",lineHeight:1.5}}>
+       {flexCategory==="prop"
+         ? "Player props usually go live 2-3 days before game time. Check back closer to kickoff."
+         : "Check back when games are scheduled."}
+     </div>
+   </div>
+ );
+ return <>{filtered.map(bet=>{
  const slot = activePicks[activeFlexSlot];
  const isCur = slot?.isParlay
  ? slot.parlayLegs.find(b=>b.id===bet.id)
@@ -3692,8 +3682,8 @@ export default function App() {
  </div>
  </div>
  );
- })
- )}
+ })}</>
+ })()}
  </div>
  </div>
  )}
