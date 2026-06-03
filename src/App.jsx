@@ -6667,10 +6667,17 @@ export default function App() {
      <div style={{overflowY:"auto",flex:1,padding:"8px 0 40px"}}>
        {browseLoading ? (
          <div style={{padding:"40px 20px",textAlign:"center",color:"#555",fontSize:14}}>Loading leagues...</div>
+       ) : publicLeagues.length===0 ? (
+         <div style={{padding:"40px 20px",textAlign:"center"}}>
+           <div style={{fontSize:14,color:"#555",marginBottom:8}}>No public leagues available</div>
+           <div style={{fontSize:12,color:"#333"}}>Be the first — create a public league</div>
+         </div>
        ) : (()=>{
          const filtered = publicLeagues.filter(lg=>{
            if(browseFilter.sport!=="all" && lg.sport!==browseFilter.sport) return false;
            if(browseFilter.type!=="all" && (lg.league_type||"h2h")!==browseFilter.type) return false;
+           if(browseFilter.picks==="5" && (lg.picks_per_week||5)!==5) return false;
+           if(browseFilter.picks==="6+" && (lg.picks_per_week||5)<6) return false;
            return true;
          });
          if(!filtered.length) return (
@@ -6680,9 +6687,9 @@ export default function App() {
            </div>
          );
          return filtered.map(lg=>{
-           const memberCount = lg.league_members?.[0]?.count||0;
+           const memberCount = lg.memberCount||0;
            const maxSize = lg.target_size||lg.max_members||8;
-           const spotsLeft = maxSize - memberCount;
+           const spotsLeft = Math.max(0, maxSize - memberCount);
            const typeLabels = {h2h:"Head-to-head",bracket:"Tournament",points:"Total points"};
            const sport = SPORTS[lg.sport]||{label:lg.sport?.toUpperCase()||"?",color:IOS.blue};
            const isJoining = joiningLeagueId===lg.id;
