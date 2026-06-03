@@ -4402,6 +4402,7 @@ export default function App() {
  };
 
  // ─── Build the bet list for the selected sport + type ───
+ console.log("[Grid] BETS.ml:", BETS.ml?.length, "BETS.spread:", BETS.spread?.length, "leagueSports:", leagueSports, "gSport:", gSport, "gridType:", gridType, "liveOdds keys:", Object.keys(liveOdds));
  let list = [];
  if(gridType==="longshot") {
  list = (ALL_BETS||[]).filter(b=> {
