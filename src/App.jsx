@@ -980,6 +980,7 @@ export default function App() {
  const [longshotMode, setLongshotMode] = useState("straight"); // "straight" | "parlay" — for longshot sheet
  const [betTypeFilter, setBetTypeFilter] = useState("all"); // "all" | "ml" | "spread" | "ou"
  const [propTypeFilter, setPropTypeFilter] = useState("all"); // prop sub-category filter
+ const [betSportFilter, setBetSportFilter] = useState("all"); // sport filter in multi-sport leagues
  // usedMults / availableMults / hasLongshot / allFlexFilled are derived inside the picks IIFE
  // so they always read from the correct activePicks (solo vs league). Do NOT compute them here.
  // ─── TEAM ACRONYM HELPER ─────────────────────────────────────────
@@ -3144,7 +3145,7 @@ export default function App() {
  })()}
  {savedPicks
  ? <button className="ios-btn" style={{background:IOS.green,color:"#000",marginBottom:6}} onClick={()=>setScreen("picks")}> Slip Locked — View or Edit</button>
- : <button className="ios-btn" style={{background:sport.color,color:"#fff",marginBottom:6}} onClick={()=>setScreen("picks")}>Build Your {sport.label} Slip</button>
+ : <button className="ios-btn" style={{background:sport.color,color:"#fff",marginBottom:6}} onClick={()=>setScreen("picks")}>Build Your {leagueSports.length > 1 ? "Multi-Sport" : sport.label} Slip</button>
  }
 
  {/* My Locked Picks card */}
@@ -3424,7 +3425,7 @@ export default function App() {
 
  {/* Bet picker sheet */}
  {activeFlexSlot!==null&&(
- <div className="sheet-bg" onClick={()=>{setActiveFlexSlot(null);setFlexCategory(null);setPickSearch("");setLongshotMode("straight");setBetTypeFilter("all");setPropTypeFilter("all");}}>
+ <div className="sheet-bg" onClick={()=>{setActiveFlexSlot(null);setFlexCategory(null);setPickSearch("");setLongshotMode("straight");setBetTypeFilter("all");setPropTypeFilter("all");setBetSportFilter("all");}}>
  <div className="sheet" onClick={e=>e.stopPropagation()}>
  <div className="sheet-handle"/>
  <div className="sheet-hdr">
@@ -3456,7 +3457,7 @@ export default function App() {
  style={{color:blocked?"rgba(255,255,255,0.25)":"",cursor:blocked?"not-allowed":""}}
  onClick={()=>{
  if(blocked) return;
- setActiveFlexSlot(null);setFlexCategory(null);setPickSearch("");setLongshotMode("straight");setPropTypeFilter("all");
+ setActiveFlexSlot(null);setFlexCategory(null);setPickSearch("");setLongshotMode("straight");setPropTypeFilter("all");setBetSportFilter("all");
  }}>Done</div>
  {parlayBlocked && <div style={{fontSize:10,color:IOS.orange,textAlign:"right"}}>Need +400 odds</div>}
  {parlayNeedsLegs && <div style={{fontSize:10,color:IOS.orange,textAlign:"right"}}>Add 2+ legs</div>}
@@ -3507,6 +3508,26 @@ export default function App() {
  <span style={{color:IOS.blue,fontSize:14}}>‹</span>
  <span style={{color:IOS.blue,fontSize:14,fontWeight:600}}>Categories</span>
  </div>
+ )}
+
+ {/* Sport filter bar — only for multi-sport leagues */}
+ {leagueSports.length > 1 && flexCategory && (
+   <div style={{display:"flex",gap:6,padding:"6px 16px 2px",overflowX:"auto",scrollbarWidth:"none"}}>
+     {["all", ...leagueSports].map(sp=>{
+       const isAll = sp === "all";
+       const label = isAll ? "All" : SPORTS[sp]?.label || sp.toUpperCase();
+       const color = isAll ? IOS.blue : SPORTS[sp]?.color || IOS.blue;
+       const isOn = betSportFilter === sp;
+       return (
+         <div key={sp} onClick={()=>setBetSportFilter(sp)}
+         style={{flexShrink:0,padding:"5px 12px",borderRadius:16,fontSize:12,fontWeight:700,cursor:"pointer",transition:"all .15s",
+           background:isOn?`${color}20`:"rgba(255,255,255,0.06)",
+           color:isOn?color:"rgba(255,255,255,0.45)",
+           border:`1px solid ${isOn?color+"50":"rgba(255,255,255,0.08)"}`,
+         }}>{label}</div>
+       );
+     })}
+   </div>
  )}
 
  {/* Prop type sub-filter bar — only when prop category is selected */}
@@ -3629,6 +3650,8 @@ export default function App() {
  const filtered = allBets.filter(bet=>{
  const q = pickSearch.toLowerCase().trim();
  const textMatch = !q || bet.game.toLowerCase().includes(q) || bet.pick.toLowerCase().includes(q);
+ // Sport filter for multi-sport leagues
+ if(betSportFilter !== "all" && bet._sport && bet._sport !== betSportFilter) return false;
  // Prop sub-category filter
  if(flexCategory==="prop" && propTypeFilter!=="all") {
  const p = bet.pick.toLowerCase();
@@ -3882,7 +3905,7 @@ export default function App() {
  ) : (
  <>
  <div className="pb-header">
- <div className="pb-title">{sport.label} Slip</div>
+ <div className="pb-title">{leagueSports.length > 1 ? "Multi-Sport Slip" : `${sport.label} Slip`}</div>
  <div className="pb-sub">{activeLeague.name} · Wk {activeLeague.current_week||activeLeague.week||1}</div>
  </div>
 
