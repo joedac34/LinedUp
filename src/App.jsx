@@ -964,6 +964,7 @@ export default function App() {
  const leagueSports = (activeLeague.sports && activeLeague.sports.length > 0)
    ? activeLeague.sports
    : [activeLeague.sport || "nfl"];
+ console.log("[leagueSports]", activeLeague.name, "sports:", activeLeague.sports, "sport:", activeLeague.sport, "→", leagueSports);
  const BETS = (() => {
    const merged = {ml:[],spread:[],ou:[],prop:[],longshot:[]};
    const tag = (arr, sp) => (arr||[]).map(b=>({...b, _sport:sp}));
