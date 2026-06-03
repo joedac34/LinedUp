@@ -1388,23 +1388,34 @@ export default function App() {
  const fetchPublicLeagues = async () => {
  setBrowseLoading(true);
  try {
-   const {data} = await supabase
+   const {data, error} = await supabase
      .from("leagues")
-     .select("*, league_members(count)")
+     .select("*")
      .eq("privacy", "public")
      .order("created_at", {ascending:false})
      .limit(50);
+   console.log("[Browse] raw data:", data, "error:", error);
    if(data) {
-     // Filter out full leagues and leagues user is already in
      const myLeagueIds = realLeagues.map(l=>l.id);
-     const filtered = data.filter(lg=>{
-       const memberCount = lg.league_members?.[0]?.count || 0;
+     console.log("[Browse] myLeagueIds:", myLeagueIds);
+     const withCounts = await Promise.all(data.map(async lg=>{
+       const {count, error:cErr} = await supabase
+         .from("league_members")
+         .select("*", {count:"exact",head:true})
+         .eq("league_id", lg.id);
+       console.log(`[Browse] ${lg.name}: count=${count} err=${cErr?.message}`);
+       return {...lg, memberCount: count||0};
+     }));
+     const filtered = withCounts.filter(lg=>{
        const maxSize = lg.target_size||lg.max_members||8;
-       return memberCount < maxSize && !myLeagueIds.includes(lg.id);
+       const passes = lg.memberCount < maxSize && !myLeagueIds.includes(lg.id);
+       console.log(`[Browse] filter ${lg.name}: cnt=${lg.memberCount} max=${maxSize} mine=${myLeagueIds.includes(lg.id)} → ${passes}`);
+       return passes;
      });
+     console.log("[Browse] showing:", filtered.length);
      setPublicLeagues(filtered);
    }
- } catch(e) { console.error("fetchPublicLeagues error:", e); }
+ } catch(e) { console.error("[Browse] error:", e); }
  setBrowseLoading(false);
  };
 
