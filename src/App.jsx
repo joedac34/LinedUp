@@ -984,7 +984,14 @@ export default function App() {
    leagueSports.forEach(sp => {
      const odds = liveOdds[sp];
      const fallback = SPORTS[sp]?.bets || {};
-     const src = odds || {ml:[],spread:[],ou:[],prop:fallback.prop||[],longshot:[]};
+     // Use live odds per category if available and non-empty, else hardcoded fallback
+     const src = {
+       ml:       (odds?.ml?.length)       ? odds.ml       : (fallback.ml||[]),
+       spread:   (odds?.spread?.length)   ? odds.spread   : (fallback.spread||[]),
+       ou:       (odds?.ou?.length)       ? odds.ou       : (fallback.ou||[]),
+       prop:     (odds?.prop?.length)     ? odds.prop     : (fallback.prop||[]),
+       longshot: (odds?.longshot?.length) ? odds.longshot : (fallback.longshot||[]),
+     };
      merged.ml.push(...tagTeam(src.ml, sp));
      merged.spread.push(...tagTeam(src.spread, sp));
      merged.ou.push(...tagTeam(src.ou, sp));
