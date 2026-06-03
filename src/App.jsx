@@ -1388,19 +1388,25 @@ export default function App() {
  const fetchPublicLeagues = async () => {
  setBrowseLoading(true);
  try {
-   const {data} = await supabase
+   const {data, error} = await supabase
      .from("leagues")
-     .select("*, league_members(count)")
+     .select("*")
      .eq("privacy", "public")
      .order("created_at", {ascending:false})
      .limit(50);
+   if(error) console.error("fetchPublicLeagues query error:", error);
    if(data) {
-     // Filter out full leagues and leagues user is already in
      const myLeagueIds = realLeagues.map(l=>l.id);
-     const filtered = data.filter(lg=>{
-       const memberCount = lg.league_members?.[0]?.count || 0;
+     const withCounts = await Promise.all(data.map(async lg=>{
+       const {count} = await supabase
+         .from("league_members")
+         .select("*", {count:"exact",head:true})
+         .eq("league_id", lg.id);
+       return {...lg, memberCount: count||0};
+     }));
+     const filtered = withCounts.filter(lg=>{
        const maxSize = lg.target_size||lg.max_members||8;
-       return memberCount < maxSize && !myLeagueIds.includes(lg.id);
+       return lg.memberCount < maxSize && !myLeagueIds.includes(lg.id);
      });
      setPublicLeagues(filtered);
    }
@@ -6670,7 +6676,7 @@ export default function App() {
            </div>
          );
          return filtered.map(lg=>{
-           const memberCount = lg.league_members?.[0]?.count||0;
+           const memberCount = lg.memberCount||0;
            const maxSize = lg.target_size||lg.max_members||8;
            const spotsLeft = maxSize - memberCount;
            const typeLabels = {h2h:"Head-to-head",bracket:"Tournament",points:"Total points"};
