@@ -4848,8 +4848,8 @@ export default function App() {
        <div key={s.userId||i} style={{display:"flex",alignItems:"center",padding:"8px 12px",borderBottom:i<Math.min(realStandings.length,4)-1?`0.5px solid rgba(255,255,255,0.04)`:"none",background:s.isYou?"rgba(10,132,255,0.06)":"transparent"}}>
          <div style={{width:22,fontSize:12,fontWeight:700,color:i===0?IOS.blue:IOS.label3}}>{i+1}</div>
          <div style={{flex:1}}>
-           <div style={{fontSize:12,fontWeight:700,color:s.isYou?IOS.blue:"#ccc"}}>{s.isYou?"You":s.username}</div>
-           <div style={{fontSize:9,color:IOS.label3,marginTop:1}}>{s.winPct||0}% win rate</div>
+           <div style={{fontSize:12,fontWeight:700,color:s.isYou?IOS.blue:"#ccc"}}>{s.isYou?"You":(s.name||s.username||"Unknown")}</div>
+           <div style={{fontSize:9,color:IOS.label3,marginTop:1}}>{s.wpct||"0%"} win rate</div>
          </div>
          <div style={{width:34,fontSize:11,color:IOS.label3,textAlign:"right"}}>{s.record}</div>
          <div style={{width:52,fontSize:12,fontWeight:800,color:parseFloat(s.points)>0?IOS.green:"#555",textAlign:"right"}}>{parseFloat(s.points||0).toFixed(1)}</div>
@@ -4885,8 +4885,8 @@ export default function App() {
        <div key={s.userId||i} style={{display:"flex",alignItems:"center",padding:"10px 12px",borderBottom:i<realStandings.length-1?`0.5px solid rgba(255,255,255,0.04)`:"none",background:s.isYou?"rgba(10,132,255,0.06)":"transparent"}}>
          <div style={{width:24,fontSize:13,fontWeight:700,color:i===0?IOS.blue:IOS.label3}}>{i+1}</div>
          <div style={{flex:1}}>
-           <div style={{fontSize:12,fontWeight:700,color:s.isYou?IOS.blue:"#ccc"}}>{s.isYou?"You":s.username}</div>
-           <div style={{fontSize:9,color:IOS.label3,marginTop:1}}>{s.winPct||0}% win rate</div>
+           <div style={{fontSize:12,fontWeight:700,color:s.isYou?IOS.blue:"#ccc"}}>{s.isYou?"You":(s.name||s.username||"Unknown")}</div>
+           <div style={{fontSize:9,color:IOS.label3,marginTop:1}}>{s.wpct||"0%"} win rate</div>
          </div>
          <div style={{width:36,fontSize:11,color:IOS.label3,textAlign:"right"}}>{s.record}</div>
          <div style={{width:56,fontSize:13,fontWeight:800,color:parseFloat(s.points)>0?IOS.green:"#555",textAlign:"right"}}>{parseFloat(s.points||0).toFixed(1)}</div>
