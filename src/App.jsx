@@ -5869,6 +5869,27 @@ export default function App() {
    )}
  </div>
 
+ {/* ── Generate Schedule (if league full but no schedule yet) ── */}
+ {leagueMembers.length >= (activeLeague.target_size||activeLeague.max_members||8) && liveSchedule.length === 0 && (
+   <div style={{margin:"0 16px 12px",background:"rgba(48,209,88,0.08)",borderRadius:16,padding:"14px 16px",border:"0.5px solid rgba(48,209,88,0.25)"}}>
+     <div style={{fontSize:14,fontWeight:700,color:"#fff",marginBottom:4}}>League is full — no schedule yet</div>
+     <div style={{fontSize:12,color:IOS.label3,marginBottom:12}}>Generate matchups for all {activeLeague.season_weeks||18} weeks of the season.</div>
+     <button onClick={async()=>{
+       const memberIds = leagueMembers.map(m=>m.user_id||m.id);
+       if((activeLeague.league_type||"h2h")==="bracket") {
+         await generateBracket(activeLeague.id, memberIds);
+       } else {
+         await generateSchedule(activeLeague.id, memberIds, activeLeague.season_weeks||18);
+       }
+       await fetchSchedule(activeLeague.id, user.id);
+       await fetchStandings(activeLeague.id);
+       alert("Schedule generated!");
+     }} style={{width:"100%",background:IOS.green,border:"none",borderRadius:10,padding:"12px",fontFamily:"Barlow,sans-serif",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer"}}>
+       Generate Schedule Now
+     </button>
+   </div>
+ )}
+
  {/* ── Season Length ── */}
  <div style={{margin:"0 16px 12px",background:IOS.bg2,borderRadius:16,overflow:"hidden",border:"1px solid rgba(255,255,255,0.07)"}}>
    <div style={{padding:"12px 16px",borderBottom:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
