@@ -1208,7 +1208,6 @@ export default function App() {
  const bracketWeeks = {4:2,8:3,16:4,32:5};
  const seasonWeeks = newLeagueType==='bracket' ? (bracketWeeks[newLeagueSize]||3) : newLeagueWeeks;
  const sportsArr = newLeagueSports.length > 0 ? newLeagueSports : [sportId];
- console.log("[createLeague] newLeagueSports:", newLeagueSports, "sportId:", sportId, "sportsArr:", sportsArr);
  const {data,error} = await supabase.from("leagues").insert({
    name, sport:sportsArr[0], sports:sportsArr, commissioner_id:user.id, invite_code:inviteCode,
    max_members:newLeagueSize, target_size:newLeagueSize, pick_deadline:"Sun 1PM ET",
