@@ -2542,7 +2542,7 @@ export default function App() {
      <div style={{fontSize:14,color:"rgba(255,255,255,0.45)",lineHeight:1.7,maxWidth:300}}>Create a league with friends, join a public one, or go solo and track your own picks first.</div>
    </div>
    <div style={{width:"100%",display:"flex",flexDirection:"column",gap:10}}>
-     <button onClick={()=>{dismissOnboard();setShowNewLeague(true);setNewLeagueStep(0);}} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:14,padding:"15px",fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Create a League</button>
+     <button onClick={()=>{dismissOnboard();setScreen("leagues");setShowNewLeague(true);setNewLeagueCreated(null);setNewLeagueSport(null);setNewLeagueName("");setNewLeagueSize(8);setNewLeagueStep(0);}} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:14,padding:"15px",fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Create a League</button>
      <button onClick={()=>{dismissOnboard();setShowBrowse(true);fetchPublicLeagues();}} style={{width:"100%",background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:14,padding:"15px",fontSize:15,fontWeight:700,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Browse Public Leagues</button>
      <button onClick={dismissOnboard} style={{width:"100%",background:"none",border:"none",padding:"12px",fontSize:14,fontWeight:600,color:"rgba(255,255,255,0.35)",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Go Solo for now</button>
    </div>
