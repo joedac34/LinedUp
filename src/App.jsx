@@ -938,7 +938,9 @@ export default function App() {
 
  // Use live odds if available, else fall back to hardcoded
  // Multi-sport: merge bets from all sports in the league
- const leagueSports = activeLeague.sports || [activeLeague.sport || "nfl"];
+ const leagueSports = (activeLeague.sports && activeLeague.sports.length > 0)
+   ? activeLeague.sports
+   : [activeLeague.sport || "nfl"];
  const BETS = (() => {
    const merged = {ml:[],spread:[],ou:[],prop:[],longshot:[]};
    leagueSports.forEach(sp => {
@@ -3519,7 +3521,7 @@ export default function App() {
        const color = isAll ? IOS.blue : SPORTS[sp]?.color || IOS.blue;
        const isOn = betSportFilter === sp;
        return (
-         <div key={sp} onClick={()=>setBetSportFilter(sp)}
+         <div key={sp} onClick={()=>{setBetSportFilter(sp);setPropTypeFilter("all");}}
          style={{flexShrink:0,padding:"5px 12px",borderRadius:16,fontSize:12,fontWeight:700,cursor:"pointer",transition:"all .15s",
            background:isOn?`${color}20`:"rgba(255,255,255,0.06)",
            color:isOn?color:"rgba(255,255,255,0.45)",
@@ -3532,7 +3534,9 @@ export default function App() {
 
  {/* Prop type sub-filter bar — only when prop category is selected */}
  {flexCategory==="prop" && (()=>{
- const sportId = activeLeague?.sport || "nfl";
+ // Use the active sport filter if set, otherwise primary league sport
+ const sportId = (betSportFilter !== "all" ? betSportFilter : null)
+   || activeLeague?.sport || "nfl";
  const propFilters = {
  nfl: [
  {id:"all", label:"All"},
@@ -3656,7 +3660,7 @@ export default function App() {
  if(flexCategory==="prop" && propTypeFilter!=="all") {
  const p = bet.pick.toLowerCase();
  const g = (bet.game||"").toLowerCase();
- const sportId = activeLeague?.sport||"nfl";
+ const sportId = (betSportFilter !== "all" ? betSportFilter : null) || bet._sport || activeLeague?.sport || "nfl";
  let propMatch = true;
  if(sportId==="nfl") {
  if(propTypeFilter==="pass") propMatch = p.includes("pass") || p.includes("yard") && (p.includes("pass")||g.includes("qb")||["mahomes","allen","hurts","purdy","jackson","burrow","dak","herbert","stafford","cousins","fields","stroud","love","young","mills"].some(n=>g.includes(n)));
