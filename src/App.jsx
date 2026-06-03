@@ -1388,25 +1388,19 @@ export default function App() {
  const fetchPublicLeagues = async () => {
  setBrowseLoading(true);
  try {
-   const {data, error} = await supabase
+   const {data} = await supabase
      .from("leagues")
-     .select("*")
+     .select("*, league_members(count)")
      .eq("privacy", "public")
      .order("created_at", {ascending:false})
      .limit(50);
-   if(error) console.error("fetchPublicLeagues query error:", error);
    if(data) {
+     // Filter out full leagues and leagues user is already in
      const myLeagueIds = realLeagues.map(l=>l.id);
-     const withCounts = await Promise.all(data.map(async lg=>{
-       const {count} = await supabase
-         .from("league_members")
-         .select("*", {count:"exact",head:true})
-         .eq("league_id", lg.id);
-       return {...lg, memberCount: count||0};
-     }));
-     const filtered = withCounts.filter(lg=>{
+     const filtered = data.filter(lg=>{
+       const memberCount = lg.league_members?.[0]?.count || 0;
        const maxSize = lg.target_size||lg.max_members||8;
-       return lg.memberCount < maxSize && !myLeagueIds.includes(lg.id);
+       return memberCount < maxSize && !myLeagueIds.includes(lg.id);
      });
      setPublicLeagues(filtered);
    }
@@ -2904,7 +2898,7 @@ export default function App() {
  </div>
  <div>
  <div style={{fontSize:12,fontWeight:700,color:isActive?IOS.blue:"rgba(255,255,255,0.6)",letterSpacing:-0.2}}>{lg.name}</div>
- <div style={{fontSize:10,color:"rgba(255,255,255,0.35)",marginTop:1}}>Wk {lg.current_week||lg.week||1} · {sp.label}</div>
+ <div style={{fontSize:10,color:"rgba(255,255,255,0.35)",marginTop:1}}>Wk {lg.current_week||lg.week||1} · {sp.label}{lg.privacy==="public"?" · Public":""}</div>
  </div>
  {isActive&&<div style={{width:6,height:6,borderRadius:"50%",background:IOS.blue,marginLeft:2}}/>}
  </div>
@@ -4709,7 +4703,13 @@ export default function App() {
    <div onClick={()=>setLeagueSubTab(leagueSubTab==="dropdown"?"overview":"dropdown")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:IOS.bg2,border:`0.5px solid ${leagueSubTab==="dropdown"?"rgba(10,132,255,0.4)":IOS.sep}`,borderRadius:10,padding:"10px 14px",cursor:"pointer",marginBottom:0}}>
      <div>
        <div style={{fontSize:15,fontWeight:800,color:"#fff"}}>{lg.name}</div>
-       <div style={{fontSize:10,color:IOS.label3,marginTop:2}}>{sp.label} · {(lg.league_type||"h2h")==="h2h"?"H2H":(lg.league_type||"h2h")==="bracket"?"Tournament":"Points"} · #{myRank} of {lg.target_size||lg.max_members||"?"}</div>
+       <div style={{fontSize:10,color:IOS.label3,marginTop:2,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+         <span>{sp.label} · {(lg.league_type||"h2h")==="h2h"?"H2H":(lg.league_type||"h2h")==="bracket"?"Tournament":"Points"} · #{myRank} of {lg.target_size||lg.max_members||"?"}</span>
+         {lg.privacy==="public"
+           ? <span style={{fontSize:8,fontWeight:700,color:"#30D158",background:"rgba(48,209,88,0.1)",border:"0.5px solid rgba(48,209,88,0.25)",borderRadius:4,padding:"1px 5px",letterSpacing:.3}}>PUBLIC</span>
+           : <span style={{fontSize:8,fontWeight:700,color:"rgba(255,255,255,0.3)",background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:4,padding:"1px 5px",letterSpacing:.3}}>PRIVATE</span>
+         }
+       </div>
      </div>
      <div style={{display:"flex",alignItems:"center",gap:8}}>
        {lg.isCommissioner&&<div style={{background:"rgba(255,214,10,0.15)",border:"0.5px solid rgba(255,214,10,0.3)",borderRadius:5,padding:"2px 7px",fontSize:9,fontWeight:700,color:IOS.yellow}}>COMMISH</div>}
@@ -4728,7 +4728,11 @@ export default function App() {
        return (
        <div key={l.id} onClick={()=>{setActiveLeagueId(l.id);setLeagueSubTab("overview");}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 14px",borderBottom:i<realLeagues.length-1?`0.5px solid ${IOS.sep}`:"none",background:isSelected?"rgba(10,132,255,0.08)":"transparent",cursor:"pointer"}}>
          <div>
-           <div style={{fontSize:13,fontWeight:700,color:isSelected?IOS.blue:"#fff"}}>{l.name}</div>
+           <div style={{display:"flex",alignItems:"center",gap:6}}>
+             <div style={{fontSize:13,fontWeight:700,color:isSelected?IOS.blue:"#fff"}}>{l.name}</div>
+             {l.privacy==="public"&&<div style={{fontSize:8,fontWeight:700,color:"#30D158",background:"rgba(48,209,88,0.1)",border:"0.5px solid rgba(48,209,88,0.25)",borderRadius:4,padding:"1px 5px",letterSpacing:.3}}>PUBLIC</div>}
+             {l.privacy!=="public"&&<div style={{fontSize:8,fontWeight:700,color:"rgba(255,255,255,0.3)",background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:4,padding:"1px 5px",letterSpacing:.3}}>PRIVATE</div>}
+           </div>
            <div style={{fontSize:10,color:IOS.label3,marginTop:1}}>{lsp.label} · Wk {l.current_week||1}</div>
          </div>
          {isSelected&&<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
@@ -6676,7 +6680,7 @@ export default function App() {
            </div>
          );
          return filtered.map(lg=>{
-           const memberCount = lg.memberCount||0;
+           const memberCount = lg.league_members?.[0]?.count||0;
            const maxSize = lg.target_size||lg.max_members||8;
            const spotsLeft = maxSize - memberCount;
            const typeLabels = {h2h:"Head-to-head",bracket:"Tournament",points:"Total points"};
