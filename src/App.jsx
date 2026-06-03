@@ -852,6 +852,7 @@ export default function App() {
  const res = await fetch(`/api/odds?sport=${sportKey}`);
  if(!res.ok) throw new Error(`API error ${res.status}`);
  const payload = await res.json();
+ console.log(`[odds] ${sportId} payload keys:`, Object.keys(payload), "games:", (payload.games||payload)?.length);
  const games = payload.games || payload; // handle both formats
 
  const ml = [], spread = [], ou = [], longshot = [];
@@ -965,31 +966,15 @@ export default function App() {
    : [activeLeague.sport || "nfl"];
  const BETS = (() => {
    const merged = {ml:[],spread:[],ou:[],prop:[],longshot:[]};
-   // A team-based bet belongs in this league only if its detected sport(s)
-   // intersect the league's sports. Unknown teams are trusted (kept).
-   const belongs = (b) => {
-     const g = guessSports(`${b.game||""} ${b.pick||""}`);
-     return g.length===0 ? true : g.some(s=>leagueSports.includes(s));
-   };
-   // Re-tag _sport from the team names when we can identify a single sport,
-   // so a feed that returns the wrong sport gets correctly bucketed/filtered.
-   const tagTeam = (arr, sport) => (arr||[]).map(b=>{
-     const g = guessSports(`${b.game||""} ${b.pick||""}`);
-     const _sport = g.length===1 ? g[0] : sport;
-     return {...b, _sport};
-   }).filter(belongs);
-   // Props come from a sport-correct endpoint; player names aren't reliable to
-   // detect, so just tag them with the fetch sport.
-   const tagProp = (arr, sport) => (arr||[]).map(b=>({...b, _sport:sport}));
+   const tag = (arr, sp) => (arr||[]).map(b=>({...b, _sport:sp}));
    leagueSports.forEach(sp => {
      const odds = liveOdds[sp];
-     const fallback = SPORTS[sp]?.bets || {};
-     const src = odds || {ml:[],spread:[],ou:[],prop:fallback.prop||[],longshot:[]};
-     merged.ml.push(...tagTeam(src.ml, sp));
-     merged.spread.push(...tagTeam(src.spread, sp));
-     merged.ou.push(...tagTeam(src.ou, sp));
-     merged.prop.push(...tagProp(src.prop, sp));
-     merged.longshot.push(...tagTeam(src.longshot, sp));
+     if(!odds) return; // not loaded yet for this sport
+     merged.ml.push(...tag(odds.ml||[], sp));
+     merged.spread.push(...tag(odds.spread||[], sp));
+     merged.ou.push(...tag(odds.ou||[], sp));
+     merged.prop.push(...tag(odds.prop||[], sp));
+     merged.longshot.push(...tag(odds.longshot||[], sp));
    });
    return merged;
  })();
