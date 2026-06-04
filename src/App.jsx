@@ -4008,26 +4008,23 @@ export default function App() {
  </div>
  ) : (
  <>
- <div className="pb-header">
- <div className="pb-title">{leagueSports.length > 1 ? "Multi-Sport Slip" : `${sport.label} Slip`}</div>
- <div className="pb-sub">{activeLeague.name} · Wk {activeLeague.current_week||activeLeague.week||1}</div>
+ <div style={{padding:"2px 20px 16px",background:"radial-gradient(120% 90% at 90% -10%, rgba(10,132,255,0.18), transparent 55%), linear-gradient(180deg,#0B1A2E 0%,#000 82%)"}}>
+ <div style={{fontSize:11,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(255,255,255,0.42)"}}>{activeLeague.name} · Wk {activeLeague.current_week||activeLeague.week||1}</div>
+ <div style={{fontSize:30,fontWeight:800,letterSpacing:"-0.7px",color:"#fff",lineHeight:1.05,marginTop:2}}>{leagueSports.length > 1 ? "Multi-Sport Slip" : `${sport.label} Slip`}</div>
  </div>
 
  {/* League filling banner */}
  {leagueMembers.length < (activeLeague.target_size||activeLeague.max_members||8) && (
- <div style={{margin:"0 16px 14px",background:"rgba(255,159,10,0.08)",borderRadius:12,padding:"10px 14px",border:"1px solid rgba(255,159,10,0.2)",display:"flex",alignItems:"center",gap:10}}>
- <div style={{fontSize:16,flexShrink:0}}></div>
- <div>
- <div style={{fontSize:13,fontWeight:600,color:IOS.orange}}>League still filling up</div>
- <div style={{fontSize:11,color:IOS.label3,marginTop:2}}>Matchups start when {activeLeague.target_size||activeLeague.max_members||8} members join · {leagueMembers.length}/{activeLeague.target_size||activeLeague.max_members||8} so far</div>
- </div>
+ <div style={{margin:"0 16px 10px",background:"rgba(255,159,10,0.08)",borderRadius:10,padding:"9px 13px",border:"0.5px solid rgba(255,159,10,0.25)",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+ <div style={{fontSize:12,fontWeight:700,color:IOS.orange,whiteSpace:"nowrap"}}>League still filling up</div>
+ <div style={{fontSize:11,color:IOS.label3,whiteSpace:"nowrap"}}>{leagueMembers.length}/{activeLeague.target_size||activeLeague.max_members||8} joined</div>
  </div>
  )}
 
  {/* Status bar */}
- <div style={{margin:"0 16px 12px",background:IOS.bg2,borderRadius:14,padding:"14px 16px"}}>
+ <div style={{margin:"0 16px 10px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:14,padding:"12px 14px"}}>
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
- <div style={{fontSize:13,fontWeight:600,color:IOS.label3}}>Your Slip</div>
+ <div style={{fontSize:12,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"rgba(255,255,255,0.4)"}}>Your Slip</div>
  <div style={{fontSize:13,fontWeight:600,color:allFlexFilled?IOS.green:IOS.blue}}>
  {activePicks.filter(p=>p.mult!==null&&(p.isParlay?p.parlayLegs.length>=2:p.bet!==null)).length}/5 picks
  </div>
@@ -4041,7 +4038,7 @@ export default function App() {
  );
  })}
  </div>
- {!hasParlay&&<div style={{fontSize:11,color:IOS.orange,marginTop:8}}> One pick must be a Longshot (+400 or better — straight bet or parlay)</div>}
+ {!hasParlay&&<div style={{fontSize:10.5,color:IOS.orange,marginTop:8,lineHeight:1.4}}>One pick must be a Longshot (+400 or better)</div>}
  </div>
 
  {/* Grid Bet Browser entry */}
@@ -4088,10 +4085,10 @@ export default function App() {
  const legRows = slot.isParlay ? slot.parlayLegs : slot.bet ? [slot.bet] : [];
 
  return (
- <div key={idx} style={{margin:"0 12px 8px",background:"#1a1a1a",border:"1px solid #2a2a2a",borderRadius:14,overflow:"hidden"}}>
+ <div key={idx} style={{margin:"0 12px 8px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:14,overflow:"hidden"}}>
 
  {/* Main content row */}
- <div style={{display:"flex",alignItems:"flex-start",gap:10,padding:"11px 14px 10px"}}>
+ <div style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 13px 8px"}}>
 
  {/* Left: type label + legs */}
  <div style={{flex:1,minWidth:0}} onClick={()=>setActiveFlexSlot(idx)}>
@@ -4229,7 +4226,7 @@ export default function App() {
  )}
 
  {/* Bottom bar: multipliers + pts if win */}
- <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"#141414",borderTop:"1px solid #222",padding:"7px 14px",gap:8}}>
+ <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(0,0,0,0.25)",borderTop:"0.5px solid rgba(255,255,255,0.06)",padding:"6px 13px",gap:8}}>
  <div style={{display:"flex",gap:5}}>
  {[1,2,3,4,5].map(m=>{
  const taken = usedMults.includes(m) && slot.mult!==m;
@@ -5185,13 +5182,13 @@ export default function App() {
  </div>
  )}
 
- <div style={{padding:"10px 20px 16px",display:"flex",alignItems:"flex-end",justifyContent:"space-between",background:"radial-gradient(120% 90% at 90% -10%, rgba(10,132,255,0.18), transparent 55%), linear-gradient(180deg,#0B1A2E 0%,#000 80%)"}}>
+ <div style={{padding:"6px 20px 18px",display:"flex",alignItems:"flex-end",justifyContent:"space-between"}}>
  <div>
  <div style={{fontSize:34,fontWeight:800,letterSpacing:-1,color:"#fff",lineHeight:1.05}}>My Leagues</div>
  <div style={{fontSize:14,fontWeight:500,color:IOS.label3,marginTop:3}}>{realLeagues.length} active league{realLeagues.length!==1?"s":""}</div>
  </div>
  <div onClick={()=>{setShowNewLeague(true);setNewLeagueCreated(null);setNewLeagueSport(null);setNewLeagueName("");}}
- style={{background:`linear-gradient(135deg,${IOS.blue},${IOS.indigo})`,borderRadius:10,padding:"9px 15px",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer",boxShadow:`0 4px 14px ${IOS.blue}44`}}>+ New</div>
+ style={{background:IOS.blue,borderRadius:10,padding:"8px 14px",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>+ New</div>
  </div>
 
  {/* League cards */}
@@ -5253,7 +5250,7 @@ export default function App() {
  {/* Dropdown league switcher */}
  <div style={{padding:"12px 16px 0"}}>
    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-     <div style={{fontSize:11,fontWeight:700,color:IOS.label3,letterSpacing:.5,textTransform:"uppercase"}}>Switch League</div>
+     <div style={{fontSize:11,fontWeight:700,color:IOS.label3,letterSpacing:.5,textTransform:"uppercase"}}>My Leagues</div>
      <div style={{display:"flex",gap:6}}>
        <div onClick={()=>{setShowBrowse(true);fetchPublicLeagues();}} style={{width:28,height:28,borderRadius:8,background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
@@ -5266,7 +5263,7 @@ export default function App() {
    {/* Dropdown */}
    {lg ? (
    <>
-   <div onClick={()=>setLeagueSubTab(leagueSubTab==="dropdown"?"overview":"dropdown")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"linear-gradient(160deg,#16161A,#0C0C0F)",border:`0.5px solid ${leagueSubTab==="dropdown"?"rgba(10,132,255,0.4)":"rgba(255,255,255,0.1)"}`,borderRadius:12,padding:"12px 14px",cursor:"pointer",marginBottom:0,boxShadow:"0 4px 14px rgba(0,0,0,0.35)"}}>
+   <div onClick={()=>setLeagueSubTab(leagueSubTab==="dropdown"?"overview":"dropdown")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:IOS.bg2,border:`0.5px solid ${leagueSubTab==="dropdown"?"rgba(10,132,255,0.4)":IOS.sep}`,borderRadius:10,padding:"10px 14px",cursor:"pointer",marginBottom:0}}>
      <div>
        <div style={{fontSize:15,fontWeight:800,color:"#fff"}}>{lg.name}</div>
        <div style={{fontSize:10,color:IOS.label3,marginTop:2,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
@@ -5351,7 +5348,7 @@ export default function App() {
      const oppWkPts = currentMatchup?.oppPts||0;
      const pendingCount = myPicksThisWeek.filter(p=>p.result==="pending").length;
      return (
-     <div style={{position:"relative",overflow:"hidden",background:myWkPts>oppWkPts?"linear-gradient(155deg,#0A1606,#0B0B0E 72%)":myWkPts<oppWkPts?"linear-gradient(155deg,#160808,#0B0B0E 72%)":"linear-gradient(155deg,#0A1628,#0B0B0E 72%)",border:`0.5px solid ${myWkPts>oppWkPts?"rgba(48,209,88,0.35)":myWkPts<oppWkPts?"rgba(255,69,58,0.3)":"rgba(10,132,255,0.3)"}`,borderRadius:12,padding:"12px 14px",marginBottom:10,boxShadow:"0 4px 14px rgba(0,0,0,0.35)"}}>
+     <div style={{background:"linear-gradient(135deg,#0D1A2A,#0A0A14)",border:"0.5px solid #1A3A5A",borderRadius:12,padding:"12px 14px",marginBottom:10}}>
        <div style={{fontSize:9,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Wk {currentWeekNum} Matchup</div>
        {!oppName ? (
          <div style={{textAlign:"center",padding:"8px 0",fontSize:12,color:IOS.label3}}>Fill up league to get a schedule!</div>
@@ -5372,17 +5369,17 @@ export default function App() {
    {/* This week picks preview */}
    <div style={{fontSize:9,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>This week</div>
    {myPicksThisWeek.length===0 ? (
-     <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",borderRadius:12,padding:"12px 14px",marginBottom:10,border:"0.5px solid rgba(255,255,255,0.08)"}}>
+     <div style={{background:IOS.bg2,borderRadius:10,padding:"12px 14px",marginBottom:10,border:`0.5px solid ${IOS.sep}`}}>
        <div style={{fontSize:12,color:IOS.label3,textAlign:"center"}}>No picks locked yet</div>
-       <button onClick={()=>setScreen("picks")} style={{width:"100%",background:`linear-gradient(135deg,${IOS.blue},${IOS.indigo})`,border:"none",borderRadius:9,padding:"10px",fontFamily:"Barlow,sans-serif",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",marginTop:10,boxShadow:`0 4px 14px ${IOS.blue}33`}}>Build My Slip</button>
+       <button onClick={()=>setScreen("picks")} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:7,padding:"9px",fontFamily:"Barlow,sans-serif",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",marginTop:10}}>Build My Slip</button>
      </div>
    ) : (
-   <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:12,overflow:"hidden",marginBottom:10}}>
+   <div style={{background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:10,overflow:"hidden",marginBottom:10}}>
      {myPicksThisWeek.slice(0,5).map((p,i)=>{
        const won=p.result==="W", lost=p.result==="L";
        return (
        <div key={p.id||i} style={{display:"flex",alignItems:"center",padding:"7px 12px",borderBottom:i<Math.min(myPicksThisWeek.length,5)-1?`0.5px solid ${IOS.sep}`:"none",background:won?"rgba(48,209,88,0.04)":lost?"rgba(255,59,48,0.04)":"transparent"}}>
-         {(()=>{const cc={ml:IOS.blue,prop:IOS.yellow,ou:IOS.orange,spread:IOS.green,longshot:IOS.pink};const k=(p.slot||"ml").split("_")[0];return <div style={{fontSize:8,fontWeight:800,color:cc[k]||IOS.blue,textTransform:"uppercase",width:30,flexShrink:0}}>{p.slot?.replace("_0","")?.replace("longshot","LS")||"ML"}</div>;})()}
+         <div style={{fontSize:8,fontWeight:800,color:IOS.blue,textTransform:"uppercase",width:30,flexShrink:0}}>{p.slot?.replace("_0","")?.replace("longshot","LS")||"ML"}</div>
          <div style={{flex:1,fontSize:11,color:"#ccc",padding:"0 8px"}}>{p.pick_name}</div>
          <div style={{fontSize:10,fontWeight:700,color:won?IOS.green:lost?IOS.red:"#555"}}>{won?"+"+parseFloat(p.points_earned||0).toFixed(1)+" pts":lost?"L":"pending"}</div>
        </div>
@@ -5393,7 +5390,7 @@ export default function App() {
 
    {/* Standings mini */}
    <div style={{fontSize:9,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Standings</div>
-   <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:12,overflow:"hidden",marginBottom:10}}>
+   <div style={{background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:10,overflow:"hidden",marginBottom:10}}>
      <div style={{display:"flex",padding:"5px 12px",borderBottom:`0.5px solid ${IOS.sep}`}}>
        <div style={{width:22}}/>
        <div style={{flex:1,fontSize:8,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4}}/>
@@ -5420,7 +5417,7 @@ export default function App() {
 
    {/* Quick actions */}
    <div style={{display:"flex",gap:8}}>
-     <button onClick={()=>setScreen("picks")} style={{flex:1,background:`linear-gradient(135deg,${IOS.blue},${IOS.indigo})`,border:"none",borderRadius:10,padding:"11px",fontFamily:"Barlow,sans-serif",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",boxShadow:`0 4px 14px ${IOS.blue}33`}}>My Picks</button>
+     <button onClick={()=>setScreen("picks")} style={{flex:1,background:IOS.blue,border:"none",borderRadius:8,padding:"10px",fontFamily:"Barlow,sans-serif",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer"}}>My Picks</button>
      <button onClick={e=>{e.stopPropagation();setActiveLeagueId(lg.id);setScreen(lg.isCommissioner?"commissioner":"league");}} style={{flex:1,background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:8,padding:"10px",fontFamily:"Barlow,sans-serif",fontSize:12,fontWeight:700,color:IOS.blue,cursor:"pointer"}}>{lg.isCommissioner?"Commish Panel":"League Detail"}</button>
    </div>
  </div>
@@ -5430,7 +5427,7 @@ export default function App() {
  {lg && leagueSubTab==="standings" && (
  <div style={{padding:"12px 16px 20px"}}>
    <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:10}}>Season Standings</div>
-   <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:12,overflow:"hidden"}}>
+   <div style={{background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:10,overflow:"hidden"}}>
      <div style={{display:"flex",padding:"6px 12px",borderBottom:`0.5px solid ${IOS.sep}`}}>
        <div style={{width:24}}/>
        <div style={{flex:1,fontSize:8,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4}}>Player</div>
@@ -5457,12 +5454,12 @@ export default function App() {
  <div style={{padding:"12px 16px 20px"}}>
    <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:10}}>Season Schedule</div>
    {liveSchedule.length===0 ? (
-     <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"20px",textAlign:"center"}}>
+     <div style={{background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:10,padding:"20px",textAlign:"center"}}>
        <div style={{fontSize:13,color:"#fff",fontWeight:700,marginBottom:4}}>No schedule yet</div>
        <div style={{fontSize:11,color:IOS.label3}}>Fill up the league to generate the schedule</div>
      </div>
    ) : (
-   <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:12,overflow:"hidden"}}>
+   <div style={{background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:10,overflow:"hidden"}}>
      {liveSchedule.map((m,i)=>{
        const isCurrentWk = m.week===(lg.current_week||1);
        const won=m.result==="W", lost=m.result==="L", live=m.result==="live";
