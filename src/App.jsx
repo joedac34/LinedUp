@@ -1680,8 +1680,12 @@ export default function App() {
  for(let i=sorted.length-1;i>=0;i--){if(i===sorted.length-1){curStreak=1;curType=sorted[i].result;}else if(sorted[i].result===curType)curStreak++;else break;}
  sorted.forEach(p=>{if(p.result===tmpType){tmpStreak++;maxStreak=Math.max(maxStreak,tmpStreak);}else{tmpType=p.result;tmpStreak=1;}});
  // Avg odds
- const oddsVals=picks.map(p=>p.implied_odds||0).filter(v=>v!==0);
- const avgOdds=oddsVals.length?Math.round(oddsVals.reduce((s,v)=>s+v,0)/oddsVals.length):0;
+ const oddsVals=picks.filter(p=>!(p.slot&&p.slot.startsWith("longshot_"))).map(p=>p.implied_odds||0).filter(v=>v!==0);
+ // Average odds properly: you can't arithmetic-mean American odds across the +/-100 gap.
+ // Mean the implied probability instead (straight bets only — longshot legs would skew it), then convert back to American.
+ const amToProb=a=>a>0?100/(a+100):Math.abs(a)/(Math.abs(a)+100);
+ const avgProb=oddsVals.length?oddsVals.reduce((s,v)=>s+amToProb(v),0)/oddsVals.length:0;
+ const avgOdds=avgProb>0?(avgProb>=0.5?-Math.round(100*avgProb/(1-avgProb)):Math.round(100*(1-avgProb)/avgProb)):0;
  const bestWeekObj=byWeek.length?byWeek.reduce((b,w)=>w.pts>b.pts?w:b,byWeek[0]):null;
  // Personality
  const lsT=byType["longshot"]||{wins:0,pct:0};const mlT=byType["ml"]||{wins:0,pct:0};const spT=byType["spread"]||{pct:0};const prT=byType["prop"]||{wins:0,pct:0};
@@ -3009,7 +3013,7 @@ export default function App() {
    <div style={{display:"flex",gap:8,marginTop:12}}>
      <Tile val={rec} lbl="Record" color={IOS.blue}/>
      <Tile val={`+${pts}`} lbl="Points" color={IOS.green}/>
-     <Tile val={myRank>0?`#${myRank}`:"\u2014"} lbl="Rank" color={IOS.orange}/>
+     <Tile val={myRank>0?`#${myRank}`:"—"} lbl="Rank" color={IOS.orange}/>
    </div>
    );
  })()}
@@ -3816,7 +3820,7 @@ export default function App() {
  const losses=slots.filter(x=>resultFor(x)==="L").length;
  const lsSlot=slots.find(x=>x.category==="longshot"||(x.isParlay&&x.parlayLegs.length>=2));
  const lsOdds=lsSlot?(lsSlot.isParlay?calcLS(lsSlot.parlayLegs)?.american:lsSlot.bet?.odds):null;
- const onShare=()=>{try{const txt=`My ${activeLeague.name} Week ${wk} slip is locked \u2014 ${slots.length} picks, projected +${projTotal.toFixed(1)} pts.`;if(navigator.share){navigator.share({title:"PickLock slip",text:txt});}else if(navigator.clipboard){navigator.clipboard.writeText(txt);}}catch(e){}};
+ const onShare=()=>{try{const txt=`My ${activeLeague.name} Week ${wk} slip is locked — ${slots.length} picks, projected +${projTotal.toFixed(1)} pts.`;if(navigator.share){navigator.share({title:"PickLock slip",text:txt});}else if(navigator.clipboard){navigator.clipboard.writeText(txt);}}catch(e){}};
  const Tile=({val,lbl,color})=>(
  <div style={{flex:1,background:"rgba(255,255,255,0.03)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"11px 8px",textAlign:"center"}}>
  <div style={{fontSize:19,fontWeight:800,letterSpacing:"-0.5px",color}}>{val}</div>
@@ -3849,8 +3853,8 @@ export default function App() {
  </div>
  <div style={{display:"flex",gap:8,padding:"0 16px 16px",position:"relative"}}>
  {graded
- ? <><Tile val={`${wins}-${losses}`} lbl="Record" color={IOS.blue}/><Tile val={`+${wonTotal.toFixed(1)}`} lbl="Pts Won" color={IOS.green}/><Tile val={lsOdds||"\u2014"} lbl="Longshot" color={IOS.pink}/></>
- : <><Tile val={`${slots.length}/5`} lbl="Picks" color={IOS.blue}/><Tile val={`+${projTotal.toFixed(1)}`} lbl="Proj. Pts" color={IOS.green}/><Tile val={lsOdds||"\u2014"} lbl="Longshot" color={IOS.pink}/></>
+ ? <><Tile val={`${wins}-${losses}`} lbl="Record" color={IOS.blue}/><Tile val={`+${wonTotal.toFixed(1)}`} lbl="Pts Won" color={IOS.green}/><Tile val={lsOdds||"—"} lbl="Longshot" color={IOS.pink}/></>
+ : <><Tile val={`${slots.length}/5`} lbl="Picks" color={IOS.blue}/><Tile val={`+${projTotal.toFixed(1)}`} lbl="Proj. Pts" color={IOS.green}/><Tile val={lsOdds||"—"} lbl="Longshot" color={IOS.pink}/></>
  }
  </div>
  </div>
@@ -4838,7 +4842,7 @@ export default function App() {
  <div style={{display:"flex",gap:6,marginTop:11,paddingTop:9,borderTop:`0.5px solid ${IOS.sep}`,alignItems:"center",justifyContent:"space-between"}}>
  <div style={{display:"flex",gap:5}}>
  {myPicks.slice(0,6).map((pp,ii)=>(
- <div key={ii} style={{width:24,height:24,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,background:pp.result==="W"?"rgba(48,209,88,0.15)":pp.result==="L"?"rgba(255,69,58,0.12)":"rgba(255,255,255,0.06)",color:pp.result==="W"?IOS.green:pp.result==="L"?IOS.red:IOS.label3}}>{pp.result==="W"?"W":pp.result==="L"?"L":"\u00b7"}</div>
+ <div key={ii} style={{width:24,height:24,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,background:pp.result==="W"?"rgba(48,209,88,0.15)":pp.result==="L"?"rgba(255,69,58,0.12)":"rgba(255,255,255,0.06)",color:pp.result==="W"?IOS.green:pp.result==="L"?IOS.red:IOS.label3}}>{pp.result==="W"?"W":pp.result==="L"?"L":"·"}</div>
  ))}
  </div>
  {myPending>0&&<div style={{fontSize:11,color:accent,fontWeight:700}}>{myPending} pending</div>}
@@ -7526,7 +7530,7 @@ export default function App() {
  const ls=(s.byType||{}).longshot;
  const streak=s.currentStreak||{count:0,type:"W"};
  const noData=!s.total;
- const fmtOdds=o=>!o?"\u2014":(o>0?"+"+o:""+o);
+ const fmtOdds=o=>!o?"—":(o>0?"+"+o:""+o);
  let run=0; const cumVals=[0]; byWeek.forEach(w=>{run+=w.pts; cumVals.push(parseFloat(run.toFixed(1)));});
  const ATABS=["Overview","Bet Types","Sports","Multiplier","Longshots"];
  const TDOT={Overview:CC.blue,"Bet Types":CC.green,Sports:CC.indigo,Multiplier:CC.yellow,Longshots:CC.pink};
@@ -7580,7 +7584,7 @@ export default function App() {
    {rows.map((r,i)=>{const h=(r.pct/100)*(H-pad*2);const x=pad+i*slot+slot/2-bw/2;return <rect key={i} x={x} y={H-pad-h} width={bw} height={h} rx="5" fill={r.color}/>;})}
    <polyline fill="none" stroke={CC.yellow} strokeWidth="2" points={rows.map((r,i)=>{const x=pad+i*slot+slot/2;const y=H-pad-(r.pts/maxPts)*(H-pad*2);return x+","+y;}).join(" ")}/>
    {rows.map((r,i)=>{const x=pad+i*slot+slot/2;const y=H-pad-(r.pts/maxPts)*(H-pad*2);return <circle key={"d"+i} cx={x} cy={y} r="3" fill={CC.yellow}/>;})}
-   {rows.map((r,i)=>{const x=pad+i*slot+slot/2;return <text key={"t"+i} x={x} y={H-6} fill="rgba(255,255,255,0.5)" fontSize="11" fontWeight="700" textAnchor="middle">{r.mult}\u00d7</text>;})}
+   {rows.map((r,i)=>{const x=pad+i*slot+slot/2;return <text key={"t"+i} x={x} y={H-6} fill="rgba(255,255,255,0.5)" fontSize="11" fontWeight="700" textAnchor="middle">{r.mult}×</text>;})}
   </svg>);
  };
 
@@ -7623,7 +7627,7 @@ export default function App() {
   {/* Gradient hero */}
   <div style={{padding:"46px 20px 16px",background:"radial-gradient(120% 90% at 88% -10%, rgba(10,132,255,0.22), transparent 55%),linear-gradient(180deg,#0A1A2E 0%,#000 92%)"}}>
    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-    <div onClick={()=>setScreen(homeMode==="solo"?"home":"profile")} style={{width:32,height:32,borderRadius:10,background:"rgba(255,255,255,0.08)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:CC.blue,fontSize:18}}>\u2039</div>
+    <div onClick={()=>setScreen(homeMode==="solo"?"home":"profile")} style={{width:32,height:32,borderRadius:10,background:"rgba(255,255,255,0.08)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:CC.blue,fontSize:18}}>‹</div>
     {isPro
      ? <div style={{background:"rgba(10,132,255,0.14)",border:"0.5px solid rgba(10,132,255,0.35)",borderRadius:7,padding:"4px 11px",fontSize:10,fontWeight:800,letterSpacing:"0.06em",color:CC.blue}}>PRO</div>
      : <div onClick={()=>setShowPaywall("analytics")} style={{background:"rgba(191,90,242,0.16)",border:"0.5px solid rgba(191,90,242,0.4)",borderRadius:7,padding:"4px 11px",fontSize:10,fontWeight:800,letterSpacing:"0.06em",color:CC.purple,cursor:"pointer"}}>UPGRADE</div>}
@@ -7632,7 +7636,7 @@ export default function App() {
    <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between"}}>
     <div>
      <div style={{fontSize:46,fontWeight:800,lineHeight:0.9,color:CC.green,textShadow:"0 0 30px rgba(48,209,88,0.35)",fontVariantNumeric:"tabular-nums"}}>{s.points||0}<span style={{fontSize:20,marginLeft:5,fontWeight:700}}>pts</span></div>
-     <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:CC.l3,marginTop:9}}>{s.total||0} picks \u00b7 {s.wins||0}-{s.losses||0}</div>
+     <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:CC.l3,marginTop:9}}>{s.total||0} picks · {s.wins||0}-{s.losses||0}</div>
     </div>
     <div style={{textAlign:"right"}}><div style={{fontSize:24,fontWeight:800,color:CC.green}}>{s.winRate||"0%"}</div><div style={{fontSize:9,color:CC.l3,textTransform:"uppercase",letterSpacing:"0.1em",marginTop:2}}>Win Rate</div></div>
    </div>
@@ -7659,7 +7663,7 @@ export default function App() {
      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
       <Tile lbl="Record" val={(s.wins||0)+"-"+(s.losses||0)} meta={(s.winRate||"0%")+" win"} glow={CC.blue} vcolor="#fff"/>
       <Tile lbl="Avg Odds" val={fmtOdds(s.avgOdds)} meta="across all picks" glow={CC.teal} vcolor={CC.teal}/>
-      <Tile lbl="Best Week" val={s.bestWeek?(s.bestWeek.pts+" pts"):"\u2014"} meta={s.bestWeek?s.bestWeek.label:"\u2014"} glow={CC.yellow} vcolor={CC.green}/>
+      <Tile lbl="Best Week" val={s.bestWeek?(s.bestWeek.pts+" pts"):"—"} meta={s.bestWeek?s.bestWeek.label:"—"} glow={CC.yellow} vcolor={CC.green}/>
       <Tile lbl="Streak" val={streak.type+streak.count} meta={"best "+(s.maxStreak||0)} glow={CC.pink} vcolor={streak.type==="W"?CC.green:CC.red}/>
      </div>
      <SecH t="Cumulative Points" sub={byWeek.length+" graded wks"}/>
@@ -7698,9 +7702,9 @@ export default function App() {
     {analyticsTab==="Multiplier"&&(
      <ProBlur label="Unlock Multiplier Analysis">
       <div style={{...SURF,padding:"16px"}}>
-       <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:CC.l3,marginBottom:10}}>Win % (bars) \u00b7 Points (line)</div>
+       <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:CC.l3,marginBottom:10}}>Win % (bars) · Points (line)</div>
        <MultChart rows={byMult}/>
-       {sweet&&<div style={{fontSize:12,color:CC.l2,lineHeight:1.55,marginTop:12,paddingTop:12,borderTop:"0.5px solid rgba(255,255,255,0.06)"}}>Your most profitable multiplier is <b style={{color:"#fff"}}>{sweet.mult}\u00d7</b> at <b style={{color:CC.green}}>+{sweet.pts} pts</b>. Higher multipliers pay more but hit less \u2014 the line shows where your points actually come from.</div>}
+       {sweet&&<div style={{fontSize:12,color:CC.l2,lineHeight:1.55,marginTop:12,paddingTop:12,borderTop:"0.5px solid rgba(255,255,255,0.06)"}}>Your most profitable multiplier is <b style={{color:"#fff"}}>{sweet.mult}×</b> at <b style={{color:CC.green}}>+{sweet.pts} pts</b>. Higher multipliers pay more but hit less — the line shows where your points actually come from.</div>}
       </div>
      </ProBlur>
     )}
@@ -7714,9 +7718,9 @@ export default function App() {
         <OddsChart bands={oddsBands}/>
        </div>
        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:12}}>
-        <div style={{...SURF,borderRadius:14,padding:"13px 14px"}}><div style={{fontSize:20,fontWeight:800,color:CC.pink,fontVariantNumeric:"tabular-nums"}}>{ls?(ls.pts>=0?"+":"")+ls.pts:"\u2014"}</div><div style={{fontSize:10,color:CC.l3,textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:700,marginTop:4}}>Longshot Pts</div></div>
-        <div style={{...SURF,borderRadius:14,padding:"13px 14px"}}><div style={{fontSize:20,fontWeight:800,color:CC.yellow}}>{ls?ls.pct+"%":"\u2014"}</div><div style={{fontSize:10,color:CC.l3,textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:700,marginTop:4}}>Longshot Hit Rate</div></div>
-        <div style={{...SURF,borderRadius:14,padding:"13px 14px"}}><div style={{fontSize:20,fontWeight:800,color:CC.green,fontVariantNumeric:"tabular-nums"}}>{s.bestBet?"+"+parseFloat(s.bestBet.points_earned||0).toFixed(1):"\u2014"}</div><div style={{fontSize:10,color:CC.l3,textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:700,marginTop:4}}>Biggest Single Hit</div></div>
+        <div style={{...SURF,borderRadius:14,padding:"13px 14px"}}><div style={{fontSize:20,fontWeight:800,color:CC.pink,fontVariantNumeric:"tabular-nums"}}>{ls?(ls.pts>=0?"+":"")+ls.pts:"—"}</div><div style={{fontSize:10,color:CC.l3,textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:700,marginTop:4}}>Longshot Pts</div></div>
+        <div style={{...SURF,borderRadius:14,padding:"13px 14px"}}><div style={{fontSize:20,fontWeight:800,color:CC.yellow}}>{ls?ls.pct+"%":"—"}</div><div style={{fontSize:10,color:CC.l3,textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:700,marginTop:4}}>Longshot Hit Rate</div></div>
+        <div style={{...SURF,borderRadius:14,padding:"13px 14px"}}><div style={{fontSize:20,fontWeight:800,color:CC.green,fontVariantNumeric:"tabular-nums"}}>{s.bestBet?"+"+parseFloat(s.bestBet.points_earned||0).toFixed(1):"—"}</div><div style={{fontSize:10,color:CC.l3,textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:700,marginTop:4}}>Biggest Single Hit</div></div>
         <div style={{...SURF,borderRadius:14,padding:"13px 14px"}}><div style={{fontSize:20,fontWeight:800,color:CC.teal}}>{s.bestBet&&s.bestBet.odds?s.bestBet.odds:fmtOdds(s.avgOdds)}</div><div style={{fontSize:10,color:CC.l3,textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:700,marginTop:4}}>Best Pick Odds</div></div>
        </div>
       </div>
