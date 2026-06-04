@@ -349,8 +349,12 @@ export default async function handler(req, res) {
     const results = { graded: 0, skipped: 0, errors: [], reasons: {}, samples: [], debug: { scoresCompleted: [], scoresTotal: 0, indexedPlayers: 0 } };
     const playerIndexCache = {}; // sport -> { player: stats } (shared across leagues in this run)
 
-    // Get all active leagues
-    const leagues = await sbGet("leagues?select=id,sport,current_week");
+    // Scope: a manual trigger from the app sends { leagueId } and grades ONLY that
+    // league. The cron job (no leagueId) grades every league.
+    const onlyLeagueId = req.body?.leagueId;
+    const leagues = onlyLeagueId
+      ? await sbGet(`leagues?id=eq.${onlyLeagueId}&select=id,sport,current_week`)
+      : await sbGet("leagues?select=id,sport,current_week");
     if (!Array.isArray(leagues)) throw new Error("Failed to fetch leagues");
 
     for (const league of leagues) {
