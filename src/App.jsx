@@ -5464,7 +5464,7 @@ export default function App() {
        const isCurrentWk = m.week===(lg.current_week||1);
        const won=m.result==="W", lost=m.result==="L", live=m.result==="live";
        return (
-       <div key={i} style={{display:"flex",alignItems:"center",padding:"10px 14px",borderBottom:i<liveSchedule.length-1?`0.5px solid ${IOS.sep}`:"none",background:isCurrentWk?"rgba(10,132,255,0.05)":"transparent"}}>
+       <div key={i} onClick={()=>{ if(won||lost){ setActiveLeagueId(lg.id); setSelectedMatchup(m.week); fetchPastMatchupPicks(m.week, user.id, m.oppId); } }} style={{display:"flex",alignItems:"center",padding:"10px 14px",borderBottom:i<liveSchedule.length-1?`0.5px solid ${IOS.sep}`:"none",background:isCurrentWk?"rgba(10,132,255,0.05)":"transparent",cursor:(won||lost)?"pointer":"default"}}>
          <div style={{width:32,fontSize:11,fontWeight:700,color:isCurrentWk?IOS.blue:IOS.label3,flexShrink:0}}>Wk {m.week}</div>
          <div style={{flex:1,fontSize:12,color:"#ccc"}}>vs {m.opp}</div>
          <div style={{display:"flex",alignItems:"center",gap:6}}>
@@ -5474,6 +5474,7 @@ export default function App() {
              color:won?IOS.green:lost?IOS.red:live?IOS.orange:IOS.label3}}>
              {won?"W":lost?"L":live?"Live":isCurrentWk?"Now":"—"}
            </div>
+           {(won||lost)&&<div style={{fontSize:14,color:IOS.label3,marginLeft:2}}>›</div>}
          </div>
        </div>
        );
@@ -6313,112 +6314,6 @@ export default function App() {
  {leagueMembers.length >= (activeLeague.target_size||activeLeague.max_members||8) && (
  <>
  {/* Matchup detail overlay */}
- {selectedMatchup && (()=>{
- const m = liveSchedule.find(x=>x.week===selectedMatchup);
- if(!m) return null;
- // Map liveSchedule format to what the overlay expects
- const mDisplay = {
- week: m.week, opp: m.opp,
- result: m.result,
- myPicks: pastMatchupPicks.my,
- oppPicks: pastMatchupPicks.opp,
- };
- const slotColors = {Moneyline:"#3A9EE0", Prop:"#3A9EE0", "Over/Under":"#3A9EE0", Spread:"#3A9EE0", Parlay:"#3A9EE0"};
- const myTotal = m.myPts || 0;
- const oppTotal = m.oppPts || 0;
- return (
- <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"#111",zIndex:500,overflowY:"auto",paddingBottom:100,WebkitOverflowScrolling:"touch"}}>
- {/* Header */}
- <div style={{padding:"52px 20px 16px",borderBottom:`0.5px solid ${IOS.sep}`}}>
- <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
- <button onClick={()=>setSelectedMatchup(null)} style={{background:IOS.fill2,border:"none",borderRadius:10,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:17,flexShrink:0}}>‹</button>
- <div style={{fontSize:17,fontWeight:600,letterSpacing:-0.3}}>Week {mDisplay.week} · {mDisplay.opp}</div>
- </div>
- {/* Score card with POINTS */}
- <div style={{background:IOS.bg2,borderRadius:16,padding:"16px 20px",position:"relative",overflow:"hidden"}}>
- <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:mDisplay.result==="W"?`linear-gradient(90deg,${IOS.green},${IOS.teal})`:`linear-gradient(90deg,${IOS.red},${IOS.orange})`}}/>
- <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
- <div>
- <div style={{fontSize:16,fontWeight:800,letterSpacing:-0.3,color:IOS.blue}}>You</div>
- <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>Week {mDisplay.week}</div>
- </div>
- <div style={{textAlign:"center"}}>
- <div style={{fontSize:24,fontWeight:800,letterSpacing:-0.5,color:m.result==="W"?IOS.green:IOS.red}}>{m.myPts} <span style={{fontSize:14,color:IOS.label3,fontWeight:400}}>–</span> {m.oppPts}</div>
- <div style={{fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:mDisplay.result==="W"?IOS.green:IOS.red,marginTop:2}}>{mDisplay.result==="W"?"Victory":"Defeat"}</div>
- <div style={{fontSize:10,color:IOS.label3,marginTop:2}}>pts</div>
- </div>
- <div style={{textAlign:"right"}}>
- <div style={{fontSize:16,fontWeight:800,letterSpacing:-0.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:100}}>{mDisplay.opp}</div>
- <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>Week {mDisplay.week}</div>
- </div>
- </div>
- {/* Scoring formula note */}
- <div style={{background:"rgba(255,255,255,0.04)",borderRadius:8,padding:"8px 10px",fontSize:11,color:IOS.label3}}>
- Points = Slot Multiplier × Odds Decimal · 0 for losses
- </div>
- </div>
- </div>
-
- {/* Pick by pick */}
- <div style={{padding:"16px 20px 8px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
- <div style={{fontSize:12,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3}}>Pick by Pick</div>
- <div style={{display:"flex",gap:16}}>
- <div style={{fontSize:11,fontWeight:700,color:IOS.blue}}>You: {m.myPts}pts</div>
- <div style={{fontSize:11,color:IOS.label3}}>{m.opp}: {m.oppPts}pts</div>
- </div>
- </div>
-
- {pastMatchupLoading && (
- <div style={{textAlign:"center",padding:24,color:IOS.label3,fontSize:13}}>Loading picks...</div>
- )}
-
- {!pastMatchupLoading && pastMatchupPicks.my.length === 0 && (
- <div style={{textAlign:"center",padding:24,color:IOS.label3,fontSize:13}}>No picks found for this week.</div>
- )}
-
- {!pastMatchupLoading && pastMatchupPicks.my.map((myP, i) => {
- const oppP = pastMatchupPicks.opp[i];
- const slotLabel = {ml:"Moneyline",prop:"Prop",ou:"Over/Under",spread:"Spread"}[myP.slot] || myP.slot || "Pick";
- const col = {ml:IOS.blue,prop:IOS.yellow,ou:IOS.orange,spread:IOS.green}[myP.slot] || IOS.blue;
- return (
- <div key={i} style={{margin:"0 16px 10px",background:IOS.bg2,borderRadius:14,overflow:"hidden",border:`1px solid rgba(255,255,255,0.06)`}}>
- <div style={{padding:"10px 14px",borderBottom:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",gap:8}}>
- <div style={{fontSize:11,fontWeight:700,color:col,letterSpacing:0.5,textTransform:"uppercase"}}>{myP.multiplier}× · {slotLabel}</div>
- </div>
- <div style={{display:"flex"}}>
- {/* My pick */}
- <div style={{flex:1,padding:"10px 14px",borderRight:`0.5px solid ${IOS.sep}`}}>
- <div style={{fontSize:11,color:IOS.blue,fontWeight:600,marginBottom:4}}>You</div>
- <div style={{fontSize:13,fontWeight:600,color:"#fff",marginBottom:4}}>{myP.pick_name}</div>
- <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
- <div style={{fontSize:12,color:myP.odds?.startsWith("+")?IOS.green:IOS.blue}}>{myP.odds}</div>
- <div style={{fontSize:12,fontWeight:700,color:myP.result==="W"?IOS.green:myP.result==="L"?IOS.red:IOS.label3}}>
- {myP.result==="W"?`+${parseFloat(myP.points_earned||0).toFixed(1)}pts`:myP.result==="L"?"0pts":"—"}
- </div>
- </div>
- </div>
- {/* Opp pick */}
- {oppP && (
- <div style={{flex:1,padding:"10px 14px"}}>
- <div style={{fontSize:11,color:IOS.label3,fontWeight:600,marginBottom:4}}>{m.opp}</div>
- <div style={{fontSize:13,fontWeight:600,color:"#fff",marginBottom:4}}>{oppP.pick_name}</div>
- <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
- <div style={{fontSize:12,color:oppP.odds?.startsWith("+")?IOS.green:IOS.blue}}>{oppP.odds}</div>
- <div style={{fontSize:12,fontWeight:700,color:oppP.result==="W"?IOS.green:oppP.result==="L"?IOS.red:IOS.label3}}>
- {oppP.result==="W"?`+${parseFloat(oppP.points_earned||0).toFixed(1)}pts`:oppP.result==="L"?"0pts":"—"}
- </div>
- </div>
- </div>
- )}
- </div>
- </div>
- );
- })}
-
- </div>
- );
- })()}
-
  <div style={{background:IOS.bg2,borderRadius:16,margin:"0 16px",overflow:"hidden"}}>
  {liveSchedule.length === 0 ? (
  <div style={{padding:"32px 24px",textAlign:"center",color:IOS.label3}}>
@@ -6479,7 +6374,7 @@ export default function App() {
  {/* ══ CHAT ══ */}
  {screen==="chat"&&(
  <>
- <div style={{padding:"8px 20px 12px",display:"flex",alignItems:"center",gap:12}}>
+ <div style={{padding:"10px 20px 14px",display:"flex",alignItems:"center",gap:12,background:"radial-gradient(120% 90% at 90% -10%, rgba(10,132,255,0.18), transparent 55%), linear-gradient(180deg,#0B1A2E 0%,#000 82%)"}}>
  <button onClick={()=>setScreen("home")} style={{background:"rgba(255,255,255,0.08)",border:"none",borderRadius:10,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:17,flexShrink:0}}>‹</button>
  <div>
  <div className="nav-title-large" style={{fontSize:22,marginBottom:0}}>{activeLeague.name}</div>
@@ -6491,7 +6386,7 @@ export default function App() {
  {chatLoading && <div style={{textAlign:"center",color:IOS.label3,fontSize:13,padding:20}}>Loading messages...</div>}
  {!chatLoading && messages.length===0 && (
  <div style={{textAlign:"center",color:IOS.label3,fontSize:13,padding:40}}>
- <div style={{fontSize:32,marginBottom:8}}></div>
+ <div style={{display:"flex",justifyContent:"center",marginBottom:10}}><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
  <div>No messages yet. Start the conversation!</div>
  </div>
  )}
@@ -7235,6 +7130,113 @@ export default function App() {
    </div>
  </div>
  )}
+
+ {/* ══ PAST MATCHUP HISTORY (global overlay) ══ */}
+ {selectedMatchup && (()=>{
+ const m = liveSchedule.find(x=>x.week===selectedMatchup);
+ if(!m) return null;
+ // Map liveSchedule format to what the overlay expects
+ const mDisplay = {
+ week: m.week, opp: m.opp,
+ result: m.result,
+ myPicks: pastMatchupPicks.my,
+ oppPicks: pastMatchupPicks.opp,
+ };
+ const slotColors = {Moneyline:"#3A9EE0", Prop:"#3A9EE0", "Over/Under":"#3A9EE0", Spread:"#3A9EE0", Parlay:"#3A9EE0"};
+ const myTotal = m.myPts || 0;
+ const oppTotal = m.oppPts || 0;
+ return (
+ <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"#111",zIndex:500,overflowY:"auto",paddingBottom:100,WebkitOverflowScrolling:"touch"}}>
+ {/* Header */}
+ <div style={{padding:"52px 20px 16px",borderBottom:`0.5px solid ${IOS.sep}`}}>
+ <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
+ <button onClick={()=>setSelectedMatchup(null)} style={{background:IOS.fill2,border:"none",borderRadius:10,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:17,flexShrink:0}}>‹</button>
+ <div style={{fontSize:17,fontWeight:600,letterSpacing:-0.3}}>Week {mDisplay.week} · {mDisplay.opp}</div>
+ </div>
+ {/* Score card with POINTS */}
+ <div style={{background:IOS.bg2,borderRadius:16,padding:"16px 20px",position:"relative",overflow:"hidden"}}>
+ <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:mDisplay.result==="W"?`linear-gradient(90deg,${IOS.green},${IOS.teal})`:`linear-gradient(90deg,${IOS.red},${IOS.orange})`}}/>
+ <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+ <div>
+ <div style={{fontSize:16,fontWeight:800,letterSpacing:-0.3,color:IOS.blue}}>You</div>
+ <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>Week {mDisplay.week}</div>
+ </div>
+ <div style={{textAlign:"center"}}>
+ <div style={{fontSize:24,fontWeight:800,letterSpacing:-0.5,color:m.result==="W"?IOS.green:IOS.red}}>{m.myPts} <span style={{fontSize:14,color:IOS.label3,fontWeight:400}}>–</span> {m.oppPts}</div>
+ <div style={{fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:mDisplay.result==="W"?IOS.green:IOS.red,marginTop:2}}>{mDisplay.result==="W"?"Victory":"Defeat"}</div>
+ <div style={{fontSize:10,color:IOS.label3,marginTop:2}}>pts</div>
+ </div>
+ <div style={{textAlign:"right"}}>
+ <div style={{fontSize:16,fontWeight:800,letterSpacing:-0.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:100}}>{mDisplay.opp}</div>
+ <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>Week {mDisplay.week}</div>
+ </div>
+ </div>
+ {/* Scoring formula note */}
+ <div style={{background:"rgba(255,255,255,0.04)",borderRadius:8,padding:"8px 10px",fontSize:11,color:IOS.label3}}>
+ Points = Slot Multiplier × Odds Decimal · 0 for losses
+ </div>
+ </div>
+ </div>
+
+ {/* Pick by pick */}
+ <div style={{padding:"16px 20px 8px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+ <div style={{fontSize:12,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3}}>Pick by Pick</div>
+ <div style={{display:"flex",gap:16}}>
+ <div style={{fontSize:11,fontWeight:700,color:IOS.blue}}>You: {m.myPts}pts</div>
+ <div style={{fontSize:11,color:IOS.label3}}>{m.opp}: {m.oppPts}pts</div>
+ </div>
+ </div>
+
+ {pastMatchupLoading && (
+ <div style={{textAlign:"center",padding:24,color:IOS.label3,fontSize:13}}>Loading picks...</div>
+ )}
+
+ {!pastMatchupLoading && pastMatchupPicks.my.length === 0 && (
+ <div style={{textAlign:"center",padding:24,color:IOS.label3,fontSize:13}}>No picks found for this week.</div>
+ )}
+
+ {!pastMatchupLoading && pastMatchupPicks.my.map((myP, i) => {
+ const oppP = pastMatchupPicks.opp[i];
+ const slotLabel = {ml:"Moneyline",prop:"Prop",ou:"Over/Under",spread:"Spread"}[myP.slot] || myP.slot || "Pick";
+ const col = {ml:IOS.blue,prop:IOS.yellow,ou:IOS.orange,spread:IOS.green}[myP.slot] || IOS.blue;
+ return (
+ <div key={i} style={{margin:"0 16px 10px",background:IOS.bg2,borderRadius:14,overflow:"hidden",border:`1px solid rgba(255,255,255,0.06)`}}>
+ <div style={{padding:"10px 14px",borderBottom:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",gap:8}}>
+ <div style={{fontSize:11,fontWeight:700,color:col,letterSpacing:0.5,textTransform:"uppercase"}}>{myP.multiplier}× · {slotLabel}</div>
+ </div>
+ <div style={{display:"flex"}}>
+ {/* My pick */}
+ <div style={{flex:1,padding:"10px 14px",borderRight:`0.5px solid ${IOS.sep}`}}>
+ <div style={{fontSize:11,color:IOS.blue,fontWeight:600,marginBottom:4}}>You</div>
+ <div style={{fontSize:13,fontWeight:600,color:"#fff",marginBottom:4}}>{myP.pick_name}</div>
+ <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+ <div style={{fontSize:12,color:myP.odds?.startsWith("+")?IOS.green:IOS.blue}}>{myP.odds}</div>
+ <div style={{fontSize:12,fontWeight:700,color:myP.result==="W"?IOS.green:myP.result==="L"?IOS.red:IOS.label3}}>
+ {myP.result==="W"?`+${parseFloat(myP.points_earned||0).toFixed(1)}pts`:myP.result==="L"?"0pts":"—"}
+ </div>
+ </div>
+ </div>
+ {/* Opp pick */}
+ {oppP && (
+ <div style={{flex:1,padding:"10px 14px"}}>
+ <div style={{fontSize:11,color:IOS.label3,fontWeight:600,marginBottom:4}}>{m.opp}</div>
+ <div style={{fontSize:13,fontWeight:600,color:"#fff",marginBottom:4}}>{oppP.pick_name}</div>
+ <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+ <div style={{fontSize:12,color:oppP.odds?.startsWith("+")?IOS.green:IOS.blue}}>{oppP.odds}</div>
+ <div style={{fontSize:12,fontWeight:700,color:oppP.result==="W"?IOS.green:oppP.result==="L"?IOS.red:IOS.label3}}>
+ {oppP.result==="W"?`+${parseFloat(oppP.points_earned||0).toFixed(1)}pts`:oppP.result==="L"?"0pts":"—"}
+ </div>
+ </div>
+ </div>
+ )}
+ </div>
+ </div>
+ );
+ })}
+
+ </div>
+ );
+ })()}
 
  {/* ══ BROWSE PUBLIC LEAGUES SHEET ══ */}
  {showBrowse&&(
