@@ -3192,9 +3192,8 @@ export default function App() {
  </div>
  );
  })()}
- {savedPicks
- ? <button className="ios-btn" style={{background:`linear-gradient(135deg,${IOS.green},#1FA84A)`,color:"#06210F",marginBottom:6,boxShadow:"0 6px 18px rgba(48,209,88,0.28)"}} onClick={()=>setScreen("picks")}> Slip Locked — View or Edit</button>
- : <button className="ios-btn" style={{background:`linear-gradient(135deg,${sport.color},${IOS.indigo})`,color:"#fff",marginBottom:6,boxShadow:`0 6px 18px ${sport.color}33`}} onClick={()=>setScreen("picks")}>Build Your {leagueSports.length > 1 ? "Multi-Sport" : sport.label} Slip</button>
+ {!savedPicks &&
+ <button className="ios-btn" style={{background:`linear-gradient(135deg,${sport.color},${IOS.indigo})`,color:"#fff",marginBottom:6,boxShadow:`0 6px 18px ${sport.color}33`}} onClick={()=>setScreen("picks")}>Build Your {leagueSports.length > 1 ? "Multi-Sport" : sport.label} Slip</button>
  }
 
  {/* My Locked Picks card */}
@@ -3237,7 +3236,7 @@ export default function App() {
  const c=catColors[cat]||IOS.blue;
  return (
  <div key={i} style={{display:"flex",alignItems:"center",gap:5,padding:"5px 9px",borderRadius:8,background:`${c}1a`,border:`0.5px solid ${c}3d`,flexShrink:0}}>
- <span style={{fontSize:11,fontWeight:800,color:c}}>{slot.mult}\u00d7</span>
+ <span style={{fontSize:11,fontWeight:800,color:c}}>{slot.mult}×</span>
  <span style={{fontSize:10.5,fontWeight:700,color:"rgba(255,255,255,0.8)",letterSpacing:0.3}}>{catAbbr[cat]||"PICK"}{isParlay&&legs.length>0?` ${legs.length}`:""}</span>
  </div>
  );
