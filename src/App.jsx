@@ -4705,9 +4705,11 @@ export default function App() {
  <>
  <div className="body">
  {/* Header */}
- <div style={{padding:"10px 20px 14px",background:"radial-gradient(120% 90% at 90% -10%, rgba(10,132,255,0.18), transparent 55%), linear-gradient(180deg,#0B1A2E 0%,#000 80%)"}}>
- <div style={{fontSize:11,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(255,255,255,0.42)"}}>Week {activeLeague.current_week||activeLeague.week||1} · {activeLeague.name} · Live</div>
- <div style={{fontSize:30,fontWeight:800,letterSpacing:"-0.7px",color:"#fff",lineHeight:1.05,marginTop:2}}>Matchup</div>
+ <div style={{padding:"6px 20px 16px"}}>
+ <div style={{fontSize:34,fontWeight:800,letterSpacing:-1,color:"#fff",lineHeight:1.05}}>Matchup</div>
+ <div style={{fontSize:14,fontWeight:500,color:IOS.label3,marginTop:3}}>
+ Week {activeLeague.current_week||activeLeague.week||1} · {activeLeague.name} · Live
+ </div>
  </div>
 
  {(()=>{
@@ -4795,49 +4797,35 @@ export default function App() {
 
  const multColors = {1:"#3A9EE0", 2:"#3A9EE0", 3:"#3A9EE0", 4:"#3A9EE0", 5:"#3A9EE0"};
  const slotLabels = {ml:"Moneyline", prop:"Prop", ou:"Over/Under", spread:"Spread", longshot:"Longshot"};
- const catColors = {ml:IOS.blue, prop:IOS.yellow, ou:IOS.orange, spread:IOS.green, longshot:IOS.pink};
  const rColor = r=>r==="W"?IOS.green:r==="L"?IOS.red:IOS.label3;
  const rLabel = r=>r==="W"?" Win":r==="L"?" Loss":"● Pending";
 
  return (
  <>
- {/* ── Score card ── */}
- {(()=>{
- const accent = isTied?IOS.blue:isWinning?IOS.green:IOS.red;
- const tint = isTied?"#0A1628":isWinning?"#0A1606":"#160808";
- const statusTxt = isTied?"You're Tied":isWinning?"You're Winning":"You're Trailing";
- return (
- <div style={{position:"sticky",top:0,zIndex:10,background:"#000",padding:"6px 0 8px"}}>
- <div style={{margin:"0 16px",borderRadius:16,padding:"14px 16px",position:"relative",overflow:"hidden",background:`linear-gradient(155deg,${tint} 0%,#0B0B0E 72%)`,border:`1px solid ${accent}38`,boxShadow:"0 4px 16px rgba(0,0,0,0.4)"}}>
- <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${accent},${accent}55)`}}/>
- <div style={{position:"absolute",top:-28,right:-28,width:96,height:96,borderRadius:"50%",background:`radial-gradient(circle,${accent}26,transparent 70%)`,pointerEvents:"none"}}/>
- <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
- <div style={{minWidth:0,flex:1}}>
- <div style={{fontSize:11,fontWeight:800,letterSpacing:"0.04em",textTransform:"uppercase",color:IOS.blue}}>You</div>
- <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>{myTotal} pts</div>
+ {/* ── Sticky header ── */}
+ <div style={{position:"sticky",top:0,zIndex:10,background:"#000",borderBottom:"0.5px solid #1A1A1A",marginBottom:4}}>
+ <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px 6px"}}>
+ <div>
+ <div style={{fontSize:17,fontWeight:700,color:"#fff",letterSpacing:-0.3}}>WK {currentWeekNum} MATCHUP</div>
+ <div style={{fontSize:11,color:"#555",marginTop:2}}>{sport?.label||"NFL"} · {activeLeague.name}</div>
  </div>
- <div style={{textAlign:"center",flexShrink:0}}>
- <div style={{fontSize:26,fontWeight:800,letterSpacing:"-1px",color:"#fff"}}>{myTotal} <span style={{fontSize:15,color:IOS.label3,fontWeight:500}}>–</span> {oppTotal}</div>
- <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:accent,marginTop:2}}>{statusTxt}</div>
+ <div style={{textAlign:"right"}}>
+ <div style={{fontSize:22,fontWeight:800,color:"#fff",letterSpacing:-1}}>
+ {myTotal} <span style={{color:"#333",fontSize:16}}>–</span> {oppTotal}
  </div>
- <div style={{textAlign:"right",minWidth:0,flex:1}}>
- <div style={{fontSize:11,fontWeight:800,letterSpacing:"0.04em",textTransform:"uppercase",color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{oppName}</div>
- <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>{oppTotal} pts</div>
- </div>
- </div>
- <div style={{display:"flex",gap:6,marginTop:11,paddingTop:9,borderTop:`0.5px solid ${IOS.sep}`,alignItems:"center",justifyContent:"space-between"}}>
- <div style={{display:"flex",gap:5}}>
- {myPicks.slice(0,6).map((pp,ii)=>(
- <div key={ii} style={{width:24,height:24,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,background:pp.result==="W"?"rgba(48,209,88,0.15)":pp.result==="L"?"rgba(255,69,58,0.12)":"rgba(255,255,255,0.06)",color:pp.result==="W"?IOS.green:pp.result==="L"?IOS.red:IOS.label3}}>{pp.result==="W"?"W":pp.result==="L"?"L":"\u00b7"}</div>
- ))}
- </div>
- {myPending>0&&<div style={{fontSize:11,color:accent,fontWeight:700}}>{myPending} pending</div>}
+ <div style={{fontSize:10,fontWeight:700,marginTop:1,letterSpacing:0.3,color:isTied?IOS.blue:isWinning?IOS.green:IOS.red}}>
+ {isTied?"YOU'RE TIED":isWinning?"LIVE · YOU'RE WINNING":"LIVE · YOU'RE TRAILING"}
  </div>
  </div>
  </div>
- );
- })()}
-{/* ── SIDE-BY-SIDE PICKS ── */}
+ <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"4px 16px 10px"}}>
+ <div style={{fontSize:11,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",color:IOS.blue}}>You</div>
+ <div style={{fontSize:10,color:"#333",fontWeight:800}}>VS</div>
+ <div style={{fontSize:11,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",color:"#888"}}>{oppName}</div>
+ </div>
+ </div>
+
+ {/* ── SIDE-BY-SIDE PICKS ── */}
  {(()=>{
  const oppPicksByMult = {};
  oppUserPicks.forEach(p=>{
@@ -4857,7 +4845,7 @@ export default function App() {
 
  const renderCard = (picks, isMe, expandId) => {
  if(!picks || picks.length===0) return (
- <div style={{flex:1,borderRadius:12,minHeight:68,background:"#0A0A0A",border:"0.5px dashed #1E1E1E",display:"flex",alignItems:"center",justifyContent:"center"}}>
+ <div style={{flex:1,borderRadius:10,minHeight:80,background:"#0A0A0A",border:"0.5px dashed #1E1E1E",display:"flex",alignItems:"center",justifyContent:"center"}}>
  <span style={{fontSize:9,color:"#333"}}>No pick</span>
  </div>
  );
@@ -4872,44 +4860,41 @@ export default function App() {
  const oddsVal = isParlay
  ? (()=>{const legs=picks.map(p=>({impliedOdds:p.implied_odds||0}));return calcLS(legs)?.american||"—";})()
  : picks[0]?.odds;
- const cat = isParlay?"longshot":(picks[0]?.slot||"ml");
- const c = catColors[cat]||IOS.blue;
  const typeLabel = isParlay ? `Longshot · ${picks.length} legs` : slotLabels[picks[0]?.slot]||picks[0]?.slot||"Pick";
  const pickName = isParlay ? `${picks.length}-leg parlay` : (picks[0]?.pick_name||"");
+ // game field holds player name for props (now saved to DB)
  const gameCtx = !isParlay ? (picks[0]?.game||"") : "";
- const strip = won?IOS.green:lost?IOS.red:c;
- const bg = won?"linear-gradient(155deg,#0A1A0E,#0B0B0E 75%)":lost?"linear-gradient(155deg,#1A0A0A,#0B0B0E 75%)":"linear-gradient(155deg,#141418,#0B0B0E 75%)";
- const border = won?IOS.green:lost?IOS.red:`${c}40`;
- const badgeColor = won?IOS.green:lost?IOS.red:"#555";
+
+ const bg = won?(isMe?"#081A0E":"rgba(8,26,14,0.8)"):lost?(isMe?"#1A0808":"rgba(26,8,8,0.8)"):isMe?"#0D1A2A":"#111";
+ const border = won?"#30D158":lost?"#FF3B30":isMe?"#1A3A5A":"#1E1E1E";
+ const badgeColor = won?IOS.green:lost?IOS.red:"#444";
  const badgeBg = won?"rgba(48,209,88,0.15)":lost?"rgba(255,59,48,0.12)":"rgba(255,255,255,0.05)";
- const oddsColor = isParlay?IOS.pink:(oddsVal?.startsWith("+")?IOS.green:IOS.blue);
- const ptsBg = won?"rgba(48,209,88,0.1)":lost?"rgba(255,59,48,0.1)":"rgba(255,255,255,0.04)";
- const ptsColor = won?IOS.green:lost?IOS.red:"#555";
+ const oddsColor = oddsVal?.startsWith("+")?IOS.green:IOS.blue;
+ const ptsBg = won?"rgba(48,209,88,0.1)":lost?"rgba(255,59,48,0.1)":"#1A1A1A";
+ const ptsColor = won?IOS.green:lost?IOS.red:"#444";
  const ptsLabel = won?`+${pts}pts`:lost?"+0pts":"pending";
 
  return (
- <div style={{flex:1,position:"relative",overflow:"hidden",borderRadius:12,padding:"9px 10px 8px 12px",minHeight:68,background:bg,border:`1px solid ${border}`,display:"flex",flexDirection:"column",justifyContent:"space-between",cursor:isParlay?"pointer":undefined}}
+ <div style={{flex:1,borderRadius:10,padding:"8px 9px",minHeight:80,background:bg,border:`0.5px solid ${border}`,display:"flex",flexDirection:"column",justifyContent:"space-between",cursor:isParlay?"pointer":undefined}}
  onClick={isParlay?()=>{const el=document.getElementById(expandId);if(el)el.style.display=el.style.display==="block"?"none":"block";}:undefined}>
- <div style={{position:"absolute",top:0,left:0,bottom:0,width:3,background:strip}}/>
- <div style={{position:"absolute",top:-20,right:-20,width:60,height:60,borderRadius:"50%",background:`radial-gradient(circle,${strip}1f,transparent 70%)`,pointerEvents:"none"}}/>
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
- <span style={{fontSize:8,fontWeight:800,color:c,letterSpacing:.4,textTransform:"uppercase",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{typeLabel}</span>
- <span style={{fontSize:8,fontWeight:800,padding:"2px 5px",borderRadius:4,background:badgeBg,color:badgeColor,flexShrink:0,marginLeft:4}}>{won?"W":lost?"L":"–"}</span>
+ <span style={{fontSize:8,fontWeight:800,color:IOS.blue,letterSpacing:.4,textTransform:"uppercase"}}>{typeLabel}</span>
+ <span style={{fontSize:8,fontWeight:800,padding:"2px 5px",borderRadius:4,background:badgeBg,color:badgeColor,flexShrink:0}}>{won?"W":lost?"L":"–"}</span>
  </div>
- <div style={{fontSize:11,fontWeight:700,color:"#fff",lineHeight:1.25,marginTop:3,textAlign:"left",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{pickName}</div>
- {gameCtx&&<div style={{fontSize:9,color:"#666",marginTop:1,textAlign:"left",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{gameCtx}</div>}
- <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:5}}>
+ <div style={{fontSize:10.5,fontWeight:600,color:"#ddd",lineHeight:1.3,marginTop:3,textAlign:"left"}}>{pickName}</div>
+ {gameCtx&&<div style={{fontSize:9,color:"#666",marginTop:1,textAlign:"left"}}>{gameCtx}</div>}
+ <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:4}}>
  <span style={{fontSize:11,fontWeight:800,color:oddsColor}}>{oddsVal}</span>
  <span style={{fontSize:8.5,fontWeight:700,padding:"2px 5px",borderRadius:5,whiteSpace:"nowrap",background:ptsBg,color:ptsColor}}>{ptsLabel}</span>
  </div>
- {isParlay&&<div style={{fontSize:8,color:c,marginTop:3}}>▾ tap to see legs</div>}
+ {isParlay&&<div style={{fontSize:8,color:IOS.blue,marginTop:3}}>▾ tap to see legs</div>}
  {isParlay&&(
- <div id={expandId} style={{display:"none",marginTop:6,borderTop:"0.5px solid rgba(255,255,255,0.08)",paddingTop:5}}>
+ <div id={expandId} style={{display:"none",marginTop:6,borderTop:"0.5px solid #1E1E3A",paddingTop:5}}>
  {picks.map((leg,li)=>(
- <div key={li} style={{display:"flex",alignItems:"flex-start",padding:"3px 0",borderBottom:li<picks.length-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
+ <div key={li} style={{display:"flex",alignItems:"flex-start",padding:"3px 0",borderBottom:li<picks.length-1?"0.5px solid #111":"none"}}>
  <div style={{minWidth:0,textAlign:"left"}}>
- <div style={{fontSize:9.5,fontWeight:600,color:"#bbb",lineHeight:1.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{leg.pick_name}</div>
- {leg.game&&<div style={{fontSize:8.5,color:"#555",textAlign:"left",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{leg.game}</div>}
+ <div style={{fontSize:9.5,fontWeight:600,color:"#bbb",lineHeight:1.3}}>{leg.pick_name}</div>
+ {leg.game&&<div style={{fontSize:8.5,color:"#555",textAlign:"left"}}>{leg.game}</div>}
  </div>
  </div>
  ))}
@@ -4930,12 +4915,23 @@ export default function App() {
  {allMults.map(mult=>(
  <div key={mult} style={{display:"grid",gridTemplateColumns:"1fr 28px 1fr",gap:4,marginBottom:5,alignItems:"start"}}>
  {renderCard(myPicksByMult[mult]||null, true, `mexp-my-${mult}`)}
- <div style={{display:"flex",alignItems:"center",justifyContent:"center",paddingTop:26}}>
- <span style={{fontSize:10,fontWeight:800,color:"rgba(255,255,255,0.35)"}}>{mult}×</span>
+ <div style={{display:"flex",alignItems:"center",justifyContent:"center",paddingTop:22}}>
+ <span style={{fontSize:9,fontWeight:800,color:"#333"}}>{mult}×</span>
  </div>
  {renderCard(oppPicksByMult[mult]||null, false, `mexp-opp-${mult}`)}
  </div>
  ))}
+ </div>
+ <div style={{display:"grid",gridTemplateColumns:"1fr 28px 1fr",gap:4,padding:"8px 10px 16px",borderTop:"0.5px solid #1A1A1A",marginTop:4}}>
+ <div style={{textAlign:"center"}}>
+ <div style={{fontSize:9,color:"#555",fontWeight:600,letterSpacing:.3,textTransform:"uppercase",marginBottom:3}}>Your Score</div>
+ <div style={{fontSize:18,fontWeight:800,color:isWinning?IOS.green:isTied?"#fff":IOS.red}}>{myTotal}</div>
+ </div>
+ <div style={{display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,color:"#333",fontWeight:800}}>–</div>
+ <div style={{textAlign:"center"}}>
+ <div style={{fontSize:9,color:"#555",fontWeight:600,letterSpacing:.3,textTransform:"uppercase",marginBottom:3}}>Their Score</div>
+ <div style={{fontSize:18,fontWeight:800,color:"#888"}}>{oppTotal}</div>
+ </div>
  </div>
  </>
  );
@@ -5189,13 +5185,13 @@ export default function App() {
  </div>
  )}
 
- <div style={{padding:"6px 20px 18px",display:"flex",alignItems:"flex-end",justifyContent:"space-between"}}>
+ <div style={{padding:"10px 20px 16px",display:"flex",alignItems:"flex-end",justifyContent:"space-between",background:"radial-gradient(120% 90% at 90% -10%, rgba(10,132,255,0.18), transparent 55%), linear-gradient(180deg,#0B1A2E 0%,#000 80%)"}}>
  <div>
  <div style={{fontSize:34,fontWeight:800,letterSpacing:-1,color:"#fff",lineHeight:1.05}}>My Leagues</div>
  <div style={{fontSize:14,fontWeight:500,color:IOS.label3,marginTop:3}}>{realLeagues.length} active league{realLeagues.length!==1?"s":""}</div>
  </div>
  <div onClick={()=>{setShowNewLeague(true);setNewLeagueCreated(null);setNewLeagueSport(null);setNewLeagueName("");}}
- style={{background:IOS.blue,borderRadius:10,padding:"8px 14px",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>+ New</div>
+ style={{background:`linear-gradient(135deg,${IOS.blue},${IOS.indigo})`,borderRadius:10,padding:"9px 15px",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer",boxShadow:`0 4px 14px ${IOS.blue}44`}}>+ New</div>
  </div>
 
  {/* League cards */}
@@ -5257,7 +5253,7 @@ export default function App() {
  {/* Dropdown league switcher */}
  <div style={{padding:"12px 16px 0"}}>
    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-     <div style={{fontSize:11,fontWeight:700,color:IOS.label3,letterSpacing:.5,textTransform:"uppercase"}}>My Leagues</div>
+     <div style={{fontSize:11,fontWeight:700,color:IOS.label3,letterSpacing:.5,textTransform:"uppercase"}}>Switch League</div>
      <div style={{display:"flex",gap:6}}>
        <div onClick={()=>{setShowBrowse(true);fetchPublicLeagues();}} style={{width:28,height:28,borderRadius:8,background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
@@ -5270,7 +5266,7 @@ export default function App() {
    {/* Dropdown */}
    {lg ? (
    <>
-   <div onClick={()=>setLeagueSubTab(leagueSubTab==="dropdown"?"overview":"dropdown")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:IOS.bg2,border:`0.5px solid ${leagueSubTab==="dropdown"?"rgba(10,132,255,0.4)":IOS.sep}`,borderRadius:10,padding:"10px 14px",cursor:"pointer",marginBottom:0}}>
+   <div onClick={()=>setLeagueSubTab(leagueSubTab==="dropdown"?"overview":"dropdown")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"linear-gradient(160deg,#16161A,#0C0C0F)",border:`0.5px solid ${leagueSubTab==="dropdown"?"rgba(10,132,255,0.4)":"rgba(255,255,255,0.1)"}`,borderRadius:12,padding:"12px 14px",cursor:"pointer",marginBottom:0,boxShadow:"0 4px 14px rgba(0,0,0,0.35)"}}>
      <div>
        <div style={{fontSize:15,fontWeight:800,color:"#fff"}}>{lg.name}</div>
        <div style={{fontSize:10,color:IOS.label3,marginTop:2,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
@@ -5355,7 +5351,7 @@ export default function App() {
      const oppWkPts = currentMatchup?.oppPts||0;
      const pendingCount = myPicksThisWeek.filter(p=>p.result==="pending").length;
      return (
-     <div style={{background:"linear-gradient(135deg,#0D1A2A,#0A0A14)",border:"0.5px solid #1A3A5A",borderRadius:12,padding:"12px 14px",marginBottom:10}}>
+     <div style={{position:"relative",overflow:"hidden",background:myWkPts>oppWkPts?"linear-gradient(155deg,#0A1606,#0B0B0E 72%)":myWkPts<oppWkPts?"linear-gradient(155deg,#160808,#0B0B0E 72%)":"linear-gradient(155deg,#0A1628,#0B0B0E 72%)",border:`0.5px solid ${myWkPts>oppWkPts?"rgba(48,209,88,0.35)":myWkPts<oppWkPts?"rgba(255,69,58,0.3)":"rgba(10,132,255,0.3)"}`,borderRadius:12,padding:"12px 14px",marginBottom:10,boxShadow:"0 4px 14px rgba(0,0,0,0.35)"}}>
        <div style={{fontSize:9,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Wk {currentWeekNum} Matchup</div>
        {!oppName ? (
          <div style={{textAlign:"center",padding:"8px 0",fontSize:12,color:IOS.label3}}>Fill up league to get a schedule!</div>
@@ -5376,17 +5372,17 @@ export default function App() {
    {/* This week picks preview */}
    <div style={{fontSize:9,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>This week</div>
    {myPicksThisWeek.length===0 ? (
-     <div style={{background:IOS.bg2,borderRadius:10,padding:"12px 14px",marginBottom:10,border:`0.5px solid ${IOS.sep}`}}>
+     <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",borderRadius:12,padding:"12px 14px",marginBottom:10,border:"0.5px solid rgba(255,255,255,0.08)"}}>
        <div style={{fontSize:12,color:IOS.label3,textAlign:"center"}}>No picks locked yet</div>
-       <button onClick={()=>setScreen("picks")} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:7,padding:"9px",fontFamily:"Barlow,sans-serif",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",marginTop:10}}>Build My Slip</button>
+       <button onClick={()=>setScreen("picks")} style={{width:"100%",background:`linear-gradient(135deg,${IOS.blue},${IOS.indigo})`,border:"none",borderRadius:9,padding:"10px",fontFamily:"Barlow,sans-serif",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",marginTop:10,boxShadow:`0 4px 14px ${IOS.blue}33`}}>Build My Slip</button>
      </div>
    ) : (
-   <div style={{background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:10,overflow:"hidden",marginBottom:10}}>
+   <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:12,overflow:"hidden",marginBottom:10}}>
      {myPicksThisWeek.slice(0,5).map((p,i)=>{
        const won=p.result==="W", lost=p.result==="L";
        return (
        <div key={p.id||i} style={{display:"flex",alignItems:"center",padding:"7px 12px",borderBottom:i<Math.min(myPicksThisWeek.length,5)-1?`0.5px solid ${IOS.sep}`:"none",background:won?"rgba(48,209,88,0.04)":lost?"rgba(255,59,48,0.04)":"transparent"}}>
-         <div style={{fontSize:8,fontWeight:800,color:IOS.blue,textTransform:"uppercase",width:30,flexShrink:0}}>{p.slot?.replace("_0","")?.replace("longshot","LS")||"ML"}</div>
+         {(()=>{const cc={ml:IOS.blue,prop:IOS.yellow,ou:IOS.orange,spread:IOS.green,longshot:IOS.pink};const k=(p.slot||"ml").split("_")[0];return <div style={{fontSize:8,fontWeight:800,color:cc[k]||IOS.blue,textTransform:"uppercase",width:30,flexShrink:0}}>{p.slot?.replace("_0","")?.replace("longshot","LS")||"ML"}</div>;})()}
          <div style={{flex:1,fontSize:11,color:"#ccc",padding:"0 8px"}}>{p.pick_name}</div>
          <div style={{fontSize:10,fontWeight:700,color:won?IOS.green:lost?IOS.red:"#555"}}>{won?"+"+parseFloat(p.points_earned||0).toFixed(1)+" pts":lost?"L":"pending"}</div>
        </div>
@@ -5397,7 +5393,7 @@ export default function App() {
 
    {/* Standings mini */}
    <div style={{fontSize:9,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Standings</div>
-   <div style={{background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:10,overflow:"hidden",marginBottom:10}}>
+   <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:12,overflow:"hidden",marginBottom:10}}>
      <div style={{display:"flex",padding:"5px 12px",borderBottom:`0.5px solid ${IOS.sep}`}}>
        <div style={{width:22}}/>
        <div style={{flex:1,fontSize:8,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4}}/>
@@ -5424,7 +5420,7 @@ export default function App() {
 
    {/* Quick actions */}
    <div style={{display:"flex",gap:8}}>
-     <button onClick={()=>setScreen("picks")} style={{flex:1,background:IOS.blue,border:"none",borderRadius:8,padding:"10px",fontFamily:"Barlow,sans-serif",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer"}}>My Picks</button>
+     <button onClick={()=>setScreen("picks")} style={{flex:1,background:`linear-gradient(135deg,${IOS.blue},${IOS.indigo})`,border:"none",borderRadius:10,padding:"11px",fontFamily:"Barlow,sans-serif",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",boxShadow:`0 4px 14px ${IOS.blue}33`}}>My Picks</button>
      <button onClick={e=>{e.stopPropagation();setActiveLeagueId(lg.id);setScreen(lg.isCommissioner?"commissioner":"league");}} style={{flex:1,background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:8,padding:"10px",fontFamily:"Barlow,sans-serif",fontSize:12,fontWeight:700,color:IOS.blue,cursor:"pointer"}}>{lg.isCommissioner?"Commish Panel":"League Detail"}</button>
    </div>
  </div>
@@ -5434,7 +5430,7 @@ export default function App() {
  {lg && leagueSubTab==="standings" && (
  <div style={{padding:"12px 16px 20px"}}>
    <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:10}}>Season Standings</div>
-   <div style={{background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:10,overflow:"hidden"}}>
+   <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:12,overflow:"hidden"}}>
      <div style={{display:"flex",padding:"6px 12px",borderBottom:`0.5px solid ${IOS.sep}`}}>
        <div style={{width:24}}/>
        <div style={{flex:1,fontSize:8,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4}}>Player</div>
@@ -5461,12 +5457,12 @@ export default function App() {
  <div style={{padding:"12px 16px 20px"}}>
    <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:10}}>Season Schedule</div>
    {liveSchedule.length===0 ? (
-     <div style={{background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:10,padding:"20px",textAlign:"center"}}>
+     <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"20px",textAlign:"center"}}>
        <div style={{fontSize:13,color:"#fff",fontWeight:700,marginBottom:4}}>No schedule yet</div>
        <div style={{fontSize:11,color:IOS.label3}}>Fill up the league to generate the schedule</div>
      </div>
    ) : (
-   <div style={{background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:10,overflow:"hidden"}}>
+   <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:12,overflow:"hidden"}}>
      {liveSchedule.map((m,i)=>{
        const isCurrentWk = m.week===(lg.current_week||1);
        const won=m.result==="W", lost=m.result==="L", live=m.result==="live";
