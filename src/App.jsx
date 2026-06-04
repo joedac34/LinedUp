@@ -4817,7 +4817,7 @@ export default function App() {
  <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>{myTotal} pts</div>
  </div>
  <div style={{textAlign:"center",flexShrink:0}}>
- <div style={{fontSize:26,fontWeight:800,letterSpacing:"-1px",color:"#fff"}}>{myTotal} <span style={{fontSize:15,color:IOS.label3,fontWeight:500}}>\u2013</span> {oppTotal}</div>
+ <div style={{fontSize:26,fontWeight:800,letterSpacing:"-1px",color:"#fff"}}>{myTotal} <span style={{fontSize:15,color:IOS.label3,fontWeight:500}}>–</span> {oppTotal}</div>
  <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:accent,marginTop:2}}>{statusTxt}</div>
  </div>
  <div style={{textAlign:"right",minWidth:0,flex:1}}>
@@ -4928,9 +4928,9 @@ export default function App() {
  </div>
  <div style={{padding:"0 10px 8px"}}>
  {allMults.map(mult=>(
- <div key={mult} style={{display:"grid",gridTemplateColumns:"1fr 28px 1fr",gap:4,marginBottom:5,alignItems:"stretch"}}>
+ <div key={mult} style={{display:"grid",gridTemplateColumns:"1fr 28px 1fr",gap:4,marginBottom:5,alignItems:"start"}}>
  {renderCard(myPicksByMult[mult]||null, true, `mexp-my-${mult}`)}
- <div style={{display:"flex",alignItems:"center",justifyContent:"center"}}>
+ <div style={{display:"flex",alignItems:"center",justifyContent:"center",paddingTop:26}}>
  <span style={{fontSize:10,fontWeight:800,color:"rgba(255,255,255,0.35)"}}>{mult}×</span>
  </div>
  {renderCard(oppPicksByMult[mult]||null, false, `mexp-opp-${mult}`)}
