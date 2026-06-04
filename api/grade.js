@@ -89,13 +89,24 @@ function normName(s) {
 
 // Parse "Over 2.5 Assists" | "Under 1.5 Assists" | "25+ Points" | "284.5+ Pass Yds"
 function parseProp(pickName) {
+  // The player may be embedded in the name (either word order) or supplied separately
+  // via pick.game (longshot legs). Examples:
+  //   "Dylan Harper Over 10.5 Points"        -> player before Over/Under
+  //   "Over Karl-Anthony Towns 3.5 Assists"  -> player between Over/Under and the line
+  //   "Over 65.5 Rec Yds"                    -> no player (comes from pick.game)
+  //   "LeBron James 25+ Points" / "25+ Points"
   const s = (pickName || "").trim();
-  let m = s.match(/^(over|under)\s+([\d.]+)\s+(.+)$/i);
-  if (m) return { dir: m[1].toLowerCase(), line: parseFloat(m[2]), stat: m[3].trim().toLowerCase() };
-  m = s.match(/^([\d.]+)\s*\+\s*(.+)$/);                 // "25+ Points" → at least
-  if (m) return { dir: "over_eq", line: parseFloat(m[1]), stat: m[2].trim().toLowerCase() };
-  m = s.match(/^([\d.]+)\s*-\s*(.+)$/);                   // "25- Points" → under (rare)
-  if (m) return { dir: "under", line: parseFloat(m[1]), stat: m[2].trim().toLowerCase() };
+  let m;
+  m = s.match(/^(.+?)\s+(over|under)\s+([\d.]+)\s+(.+)$/i);
+  if (m) return { player: m[1].trim(), dir: m[2].toLowerCase(), line: parseFloat(m[3]), stat: m[4].trim().toLowerCase() };
+  m = s.match(/^(over|under)\s+(.+?)\s+([\d.]+)\s+(.+)$/i);
+  if (m) return { player: m[2].trim(), dir: m[1].toLowerCase(), line: parseFloat(m[3]), stat: m[4].trim().toLowerCase() };
+  m = s.match(/^(over|under)\s+([\d.]+)\s+(.+)$/i);
+  if (m) return { player: null, dir: m[1].toLowerCase(), line: parseFloat(m[2]), stat: m[3].trim().toLowerCase() };
+  m = s.match(/^(.+?)\s+([\d.]+)\s*\+\s*(.+)$/);
+  if (m) return { player: m[1].trim(), dir: "over_eq", line: parseFloat(m[2]), stat: m[3].trim().toLowerCase() };
+  m = s.match(/^([\d.]+)\s*\+\s*(.+)$/);
+  if (m) return { player: null, dir: "over_eq", line: parseFloat(m[1]), stat: m[2].trim().toLowerCase() };
   return null;
 }
 
@@ -168,9 +179,10 @@ async function buildPlayerStatIndex(sp, lg) {
 }
 
 // Grade a single player prop against the box-score index.
-function gradeProp(pickName, playerName, index, info = {}) {
+function gradeProp(pickName, gameField, index, info = {}) {
   const parsed = parseProp(pickName);
   if (!parsed) { info.reason = "prop_unparsed"; return null; }
+  const playerName = parsed.player || gameField;   // player is in the pick_name, else in pick.game
   const pl = normName(playerName);
   if (!pl || !index) { info.reason = "prop_no_player_name"; return null; }
 
@@ -210,8 +222,7 @@ function gradePick(pick, games, playerIndex, info = {}) {
 
   // ── Prop (player stat): graded from the ESPN box-score index, not team scores.
   //    pick.game holds the player name for props (e.g. "Mikal Bridges").
-  const propParsed = parseProp(name);
-  if (slot === "prop" || (slot?.startsWith("longshot_") && propParsed && !matchup.includes("@"))) {
+  if (slot === "prop" || (slot?.startsWith("longshot_") && parseProp(name))) {
     return gradeProp(name, pick.game, playerIndex || {}, info);
   }
 
