@@ -5529,7 +5529,7 @@ export default function App() {
  <>
  <div className="body">
  {/* Header */}
- <div style={{padding:"6px 20px 0",display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
+ <div style={{padding:"10px 20px 16px",display:"flex",alignItems:"center",gap:12,marginBottom:14,background:"radial-gradient(120% 90% at 90% -10%, rgba(255,214,10,0.12), transparent 55%), linear-gradient(180deg,#15130B 0%,#000 82%)"}}>
  <button onClick={()=>setScreen("leagues")} style={{background:IOS.fill2,border:"none",borderRadius:10,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:17,flexShrink:0}}>‹</button>
  <div>
  <div style={{fontSize:17,fontWeight:700,letterSpacing:-0.3,color:"#fff"}}>{activeLeague.name}</div>
@@ -6421,7 +6421,7 @@ export default function App() {
  {screen==="profile"&&(
  <>
  <div className="body">
- <div className="prof-av-wrap">
+ <div className="prof-av-wrap" style={{background:"radial-gradient(120% 120% at 90% -20%, rgba(10,132,255,0.18), transparent 55%), linear-gradient(180deg,#0B1A2E 0%,#000 85%)"}}>
  <div className="prof-av">{(userProfile?.username?.[0]||user?.email?.[0]||"J").toUpperCase()}</div>
  <div>
  {editingUsername ? (
@@ -6474,37 +6474,53 @@ export default function App() {
 
  {profTab==="stats"&&(
  <>
- <div className="stat-pills" style={{marginBottom:10}}>
- <div className="stat-pill"><div className="stat-pill-val" style={{color:IOS.blue}}>{allMyStats?.wins||0}-{allMyStats?.losses||0}</div><div className="stat-pill-lbl">Record</div></div>
- <div className="stat-pill"><div className="stat-pill-val" style={{color:IOS.green}}>{allMyStats?.winRate||"0%"}</div><div className="stat-pill-lbl">Win Rate</div></div>
- <div className="stat-pill"><div className="stat-pill-val" style={{color:IOS.green}}>{allMyStats?.points||0}pts</div><div className="stat-pill-lbl">Total Pts</div></div>
- </div>
- <div className="perf-grid">
- <div className="perf-card">
- <div className="perf-lbl">Best Pick</div>
- <div className="perf-val" style={{color:IOS.green,fontSize:14}}>{allMyStats?.bestBet?.pick_name||"—"}</div>
- </div>
- <div className="perf-card">
- <div className="perf-lbl">Last Loss</div>
- <div className="perf-val" style={{color:IOS.red,fontSize:14}}>{allMyStats?.worstBet?.pick_name||"—"}</div>
- </div>
- </div>
- <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:16,overflow:"hidden"}}>
- {[
- ["Total Picks", allMyStats?.total||0, ""],
- ["Wins", allMyStats?.wins||0, IOS.green],
- ["Losses", allMyStats?.losses||0, IOS.red],
- ["Win Rate", allMyStats?.winRate||"0%", IOS.blue],
- ["Total Points", allMyStats?.points||0, IOS.green],
- ["Active Leagues", realLeagues.length, IOS.blue],
- ].map(([l,v,c],i,arr)=>(
- <div key={l} className="ios-row" style={i===arr.length-1?{paddingBottom:13}:{}}>
- <div className="ios-row-content"><div className="ios-row-title" style={{fontSize:15}}>{l}</div></div>
- <div className="ios-row-value" style={{fontSize:15,fontWeight:600,color:c||"#fff"}}>{v}</div>
- </div>
- ))}
- </div>
- <div style={{height:8}}/>
+ {(()=>{
+   const s = allMyStats||{};
+   const types = Object.values(s.byType||{}).filter(t=>(t.wins+t.losses)>0);
+   const bestType = types.length ? [...types].sort((a,b)=>(b.pct-a.pct)||(b.wins-a.wins))[0] : null;
+   const ls = (s.byType||{}).longshot;
+   const streak = s.currentStreak||{count:0,type:"W"};
+   const SURF = {background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:14};
+   return (
+   <div style={{padding:"4px 16px 0"}}>
+     <div style={{...SURF,padding:"14px",marginBottom:10,boxShadow:"0 4px 14px rgba(0,0,0,0.35)"}}>
+       <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:"rgba(255,255,255,0.4)",marginBottom:10}}>Career</div>
+       <div style={{display:"flex",gap:8}}>
+         {[{l:"Record",v:`${s.wins||0}-${s.losses||0}`,c:IOS.blue},{l:"Win %",v:s.winRate||"0%",c:IOS.green},{l:"Total Pts",v:(s.points||0),c:"#fff"}].map((tile,i)=>(
+           <div key={i} style={{flex:1,background:"rgba(0,0,0,0.3)",borderRadius:9,padding:"10px 6px",textAlign:"center"}}>
+             <div style={{fontSize:18,fontWeight:800,color:tile.c,letterSpacing:"-0.5px"}}>{tile.v}</div>
+             <div style={{fontSize:8.5,color:IOS.label3,textTransform:"uppercase",letterSpacing:".4px",marginTop:2}}>{tile.l}</div>
+           </div>
+         ))}
+       </div>
+     </div>
+     <div style={{display:"flex",gap:8,marginBottom:10}}>
+       <div style={{flex:1,...SURF,padding:"12px 14px"}}>
+         <div style={{fontSize:9,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:".5px",marginBottom:6}}>Best Bet Type</div>
+         <div style={{fontSize:15,fontWeight:800,color:bestType?bestType.color:"#fff"}}>{bestType?bestType.label:"—"}</div>
+         <div style={{fontSize:11,color:IOS.label3,marginTop:2}}>{bestType?`${bestType.pct}% · ${bestType.wins}-${bestType.losses}`:"No graded picks yet"}</div>
+       </div>
+       <div style={{flex:1,...SURF,padding:"12px 14px"}}>
+         <div style={{fontSize:9,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:".5px",marginBottom:6}}>Longshot Hit Rate</div>
+         <div style={{fontSize:15,fontWeight:800,color:IOS.pink}}>{ls?`${ls.pct}%`:"—"}</div>
+         <div style={{fontSize:11,color:IOS.label3,marginTop:2}}>{ls?`${ls.wins}-${ls.losses} longshots`:"No longshots yet"}</div>
+       </div>
+     </div>
+     <div style={{display:"flex",gap:8,marginBottom:10}}>
+       <div style={{flex:1,...SURF,padding:"12px 14px"}}>
+         <div style={{fontSize:9,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:".5px",marginBottom:6}}>Current Streak</div>
+         <div style={{fontSize:15,fontWeight:800,color:streak.type==="W"?IOS.green:IOS.red}}>{streak.count>0?`${streak.count}${streak.type}`:"—"}</div>
+         <div style={{fontSize:11,color:IOS.label3,marginTop:2}}>{s.total||0} total picks</div>
+       </div>
+       <div style={{flex:1,...SURF,padding:"12px 14px"}}>
+         <div style={{fontSize:9,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:".5px",marginBottom:6}}>Best Pick</div>
+         <div style={{fontSize:13,fontWeight:700,color:IOS.green,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.bestBet?.pick_name||"—"}</div>
+         <div style={{fontSize:11,color:IOS.label3,marginTop:2}}>{s.bestBet?`+${parseFloat(s.bestBet.points_earned||0).toFixed(1)} pts`:"—"}</div>
+       </div>
+     </div>
+   </div>
+   );
+ })()}
  <div onClick={()=>setScreen("analytics")} style={{margin:"0 16px",background:isPro?"rgba(10,132,255,0.1)":"rgba(191,90,242,0.08)",border:`0.5px solid ${isPro?"rgba(10,132,255,0.3)":"rgba(191,90,242,0.3)"}`,borderRadius:14,padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}}>
    <div>
      <div style={{fontSize:14,fontWeight:700,color:"#fff",marginBottom:2}}>Full Analytics</div>
@@ -6630,7 +6646,7 @@ export default function App() {
  {/* Notification Preferences */}
  <div style={{margin:"0 16px 12px"}}>
  <div style={{fontSize:11,fontWeight:700,color:IOS.label3,letterSpacing:1,textTransform:"uppercase",marginBottom:8,paddingLeft:4}}>Notifications</div>
- <div style={{background:IOS.bg2,borderRadius:14,overflow:"hidden",border:"1px solid rgba(255,255,255,0.06)"}}>
+ <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",borderRadius:14,overflow:"hidden",border:"0.5px solid rgba(255,255,255,0.08)"}}>
  {[
  {key:"notif_results", label:"Weekly Results", sub:"When your week is graded", icon:""},
  {key:"notif_grades", label:"Picks Graded", sub:"When a pick result comes in", icon:""},
