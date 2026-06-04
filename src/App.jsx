@@ -5553,7 +5553,7 @@ export default function App() {
  </div>
 
  {weekPicks.length===0&&(
- <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:14,padding:"24px 16px",textAlign:"center",color:IOS.label3,fontSize:15}}>
+ <div style={{margin:"0 16px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:14,padding:"24px 16px",textAlign:"center",color:IOS.label3,fontSize:15}}>
  No picks submitted yet this week
  </div>
  )}
@@ -5604,7 +5604,7 @@ export default function App() {
  const uid = activeMemberId;
  const memberData = activeMemberData;
  return (
- <div style={{margin:"0 16px 12px",background:IOS.bg2,borderRadius:14,overflow:"hidden",border:"1px solid rgba(255,255,255,0.07)"}}>
+ <div style={{margin:"0 16px 12px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",borderRadius:14,overflow:"hidden",border:"0.5px solid rgba(255,255,255,0.08)",boxShadow:"0 4px 14px rgba(0,0,0,0.35)"}}>
  <div style={{padding:"12px 14px",borderBottom:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.02)"}}>
  <div>
  <div style={{fontSize:15,fontWeight:700,color:isYou?IOS.blue:"#fff"}}>{memberData.name}{isYou?" (You)":""}</div>
@@ -5788,7 +5788,7 @@ export default function App() {
  <div style={{fontSize:13,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3}}>{leagueMembers.length} / {activeLeague.max_members||activeLeague.settings?.maxMembers||8} members</div>
  
  </div>
- <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:14,overflow:"hidden"}}>
+ <div style={{margin:"0 16px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:14,overflow:"hidden"}}>
  {(leagueMembers.length ? leagueMembers : activeLeague.members||[]).map((m,i,arr)=>(
  <div key={i} style={{display:"flex",alignItems:"center",padding:"13px 16px",borderBottom:i<arr.length-1?`0.5px solid ${IOS.sep}`:"none"}}>
  <div style={{width:36,height:36,borderRadius:50,background:m.isYou?`linear-gradient(135deg,${IOS.blue},${IOS.indigo})`:`linear-gradient(135deg,${IOS.bg3},${IOS.gray3})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#fff",marginRight:12,flexShrink:0}}>{(m.name||"?")[0]}</div>
@@ -5832,7 +5832,7 @@ export default function App() {
  {commishTab==="settings"&&(
  <>
  {/* ── Commish Pro toggle ── */}
- <div style={{margin:"0 16px 12px",background:IOS.bg2,borderRadius:16,overflow:"hidden",border:"1px solid rgba(255,255,255,0.07)"}}>
+ <div style={{margin:"0 16px 12px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",borderRadius:16,overflow:"hidden",border:"0.5px solid rgba(255,255,255,0.08)",boxShadow:"0 4px 14px rgba(0,0,0,0.35)"}}>
    <div style={{padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
      <div>
        <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>Commish Pro</div>
@@ -5881,7 +5881,7 @@ export default function App() {
  )}
 
  {/* ── Season Length ── */}
- <div style={{margin:"0 16px 12px",background:IOS.bg2,borderRadius:16,overflow:"hidden",border:"1px solid rgba(255,255,255,0.07)"}}>
+ <div style={{margin:"0 16px 12px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",borderRadius:16,overflow:"hidden",border:"0.5px solid rgba(255,255,255,0.08)",boxShadow:"0 4px 14px rgba(0,0,0,0.35)"}}>
    <div style={{padding:"12px 16px",borderBottom:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
      <div>
        <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>Season Length</div>
@@ -5906,7 +5906,7 @@ export default function App() {
  </div>
 
  {/* ── Week Management ── */}
- <div style={{margin:"0 16px 12px",background:IOS.bg2,borderRadius:16,overflow:"hidden",border:"1px solid rgba(255,255,255,0.07)"}}>
+ <div style={{margin:"0 16px 12px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",borderRadius:16,overflow:"hidden",border:"0.5px solid rgba(255,255,255,0.08)",boxShadow:"0 4px 14px rgba(0,0,0,0.35)"}}>
  <div style={{padding:"12px 16px",borderBottom:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
  <div style={{fontSize:13,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3}}>Week Management</div>
  <div style={{fontSize:22,fontWeight:800,color:IOS.blue}}>Wk {activeLeague.current_week||1}</div>
@@ -6040,7 +6040,7 @@ export default function App() {
  </div>
 
  {/* ── League Size ── */}
- <div style={{margin:"0 16px 12px",background:IOS.bg2,borderRadius:16,overflow:"hidden",border:"1px solid rgba(255,255,255,0.07)"}}>
+ <div style={{margin:"0 16px 12px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",borderRadius:16,overflow:"hidden",border:"0.5px solid rgba(255,255,255,0.08)",boxShadow:"0 4px 14px rgba(0,0,0,0.35)"}}>
  <div style={{padding:"12px 16px",borderBottom:`0.5px solid ${IOS.sep}`}}>
  <div style={{fontSize:13,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3}}>League Size</div>
  <div style={{fontSize:12,color:IOS.label3,marginTop:4}}>
@@ -6083,7 +6083,7 @@ export default function App() {
  {/* ── Danger Zone ── */}
  <div style={{margin:"0 16px 24px"}}>
  <div style={{fontSize:11,fontWeight:600,letterSpacing:1,textTransform:"uppercase",color:IOS.red,padding:"0 4px",marginBottom:6}}>Danger Zone</div>
- <div style={{background:IOS.bg2,borderRadius:14,overflow:"hidden"}}>
+ <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:14,overflow:"hidden"}}>
  <div onClick={async()=>{
  if(!window.confirm(`Delete "${activeLeague.name}" permanently? This cannot be undone. All picks, matchups and members will be removed.`)) return;
  // Delete all related data first
