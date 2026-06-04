@@ -5925,7 +5925,7 @@ export default function App() {
  if(d.ok) {
  await fetchWeekPicks(activeLeague.id, activeLeague.current_week||1);
  await fetchStandings(activeLeague.id);
- alert(` Auto-grade complete!\nGraded: ${d.graded} picks\nSkipped: ${d.skipped} (props or incomplete games)`);
+ alert(`Auto-grade: graded ${d.graded}, skipped ${d.skipped}\n\nReasons: ${JSON.stringify(d.reasons||{})}\n\nCompleted games seen (${d.debug?.scoresTotal||0} total): ${(d.debug?.scoresCompleted||[]).join(" | ")||"NONE"}\n\nPlayers indexed: ${d.debug?.indexedPlayers??0}\n\n${(d.samples||[]).map(s=>`${s.slot} "${s.name}" [${s.game}] -> ${s.reason}`).join("\n")}`);
  } else {
  alert("Grade error: " + (d.error||"Unknown"));
  }

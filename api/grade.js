@@ -168,11 +168,11 @@ async function buildPlayerStatIndex(sp, lg) {
 }
 
 // Grade a single player prop against the box-score index.
-function gradeProp(pickName, playerName, index) {
+function gradeProp(pickName, playerName, index, info = {}) {
   const parsed = parseProp(pickName);
-  if (!parsed) return null;
+  if (!parsed) { info.reason = "prop_unparsed"; return null; }
   const pl = normName(playerName);
-  if (!pl || !index) return null;
+  if (!pl || !index) { info.reason = "prop_no_player_name"; return null; }
 
   let stats = index[pl];
   if (!stats) {                                             // fallback: last name + first initial
@@ -185,13 +185,13 @@ function gradeProp(pickName, playerName, index) {
     });
     if (hitKey) stats = index[hitKey];
   }
-  if (!stats) return null;                                  // player not found / DNP / game outside window
+  if (!stats) { info.reason = "prop_player_not_in_boxscores"; return null; }
 
   const labels = resolveStatLabels(parsed.stat);
   let raw = null;
   for (const l of labels) { if (stats[l] != null) { raw = stats[l]; break; } }
   const val = statNumber(raw);
-  if (val == null) return null;
+  if (val == null) { info.reason = "prop_stat_not_found"; return null; }
 
   if (parsed.dir === "over")    return val > parsed.line ? "W" : val < parsed.line ? "L" : "P";
   if (parsed.dir === "under")   return val < parsed.line ? "W" : val > parsed.line ? "L" : "P";
@@ -200,7 +200,7 @@ function gradeProp(pickName, playerName, index) {
 }
 
 // ── Grade a single straight pick ─────────────────────────────────────────────
-function gradePick(pick, games, playerIndex) {
+function gradePick(pick, games, playerIndex, info = {}) {
   const slot = pick.slot;
   const name = (pick.pick_name || "").trim();
   // The matchup ("Away @ Home") lives in pick.game. O/U pick_names have NO team
@@ -212,7 +212,7 @@ function gradePick(pick, games, playerIndex) {
   //    pick.game holds the player name for props (e.g. "Mikal Bridges").
   const propParsed = parseProp(name);
   if (slot === "prop" || (slot?.startsWith("longshot_") && propParsed && !matchup.includes("@"))) {
-    return gradeProp(name, pick.game, playerIndex || {});
+    return gradeProp(name, pick.game, playerIndex || {}, info);
   }
 
   // A team is "referenced" if its full name OR its nickname (last word) appears.
@@ -231,12 +231,13 @@ function gradePick(pick, games, playerIndex) {
   // Fallback: single-team match (in case pick.game is missing on older picks).
   if (!game) game = games.find(g => g.completed && (teamRef(g.home_team) || teamRef(g.away_team)));
 
-  if (!game || !game.scores) return null; // game not found or not completed
+  if (!game) { info.reason = "game_not_found_or_not_completed"; return null; }
+  if (!game.scores) { info.reason = "no_scores_on_game"; return null; }
 
   const homeScore = parseFloat(game.scores?.find(s => s.name === game.home_team)?.score ?? -1);
   const awayScore = parseFloat(game.scores?.find(s => s.name === game.away_team)?.score ?? -1);
 
-  if (homeScore < 0 || awayScore < 0) return null; // scores not available yet
+  if (homeScore < 0 || awayScore < 0) { info.reason = "scores_unavailable"; return null; }
 
   const total = homeScore + awayScore;
   const homeWon = homeScore > awayScore;
@@ -296,6 +297,7 @@ function gradePick(pick, games, playerIndex) {
     return pickedWinner ? "W" : "L";
   }
 
+  info.reason = "slot_not_handled";
   return null;
 }
 
@@ -333,7 +335,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const results = { graded: 0, skipped: 0, errors: [] };
+    const results = { graded: 0, skipped: 0, errors: [], reasons: {}, samples: [], debug: { scoresCompleted: [], scoresTotal: 0, indexedPlayers: 0 } };
     const playerIndexCache = {}; // sport -> { player: stats } (shared across leagues in this run)
 
     // Get all active leagues
@@ -372,6 +374,16 @@ export default async function handler(req, res) {
         playerIndex = playerIndexCache[league.sport];
       }
 
+      // ── Diagnostics: what did the data sources actually return? ──
+      results.debug.scoresTotal += games.length;
+      const completedLabels = games.filter(g => g.completed).map(g => `${g.away_team} @ ${g.home_team}`);
+      results.debug.scoresCompleted = [...new Set([...results.debug.scoresCompleted, ...completedLabels])].slice(0, 25);
+      results.debug.indexedPlayers = Math.max(results.debug.indexedPlayers, Object.keys(playerIndex || {}).length);
+      const noteSkip = (pick, reason) => {
+        results.reasons[reason] = (results.reasons[reason] || 0) + 1;
+        if (results.samples.length < 14) results.samples.push({ slot: pick.slot, name: pick.pick_name, game: pick.game, reason });
+      };
+
       // Group picks by user and multiplier for parlay handling
       const byUserMult = {};
       picks.forEach(p => {
@@ -385,11 +397,13 @@ export default async function handler(req, res) {
 
         if (isParlay) {
           // Grade each leg individually
-          const legResults = group.map(p => gradePick(p, games, playerIndex));
+          const legInfos = group.map(() => ({}));
+          const legResults = group.map((p, i) => gradePick(p, games, playerIndex, legInfos[i]));
 
           // Only finalize if ALL legs have a result (no nulls)
           if (legResults.some(r => r === null)) {
             results.skipped += group.length;
+            group.forEach((p, i) => { if (legResults[i] === null) noteSkip(p, legInfos[i].reason || "unknown"); });
             continue;
           }
 
@@ -418,8 +432,9 @@ export default async function handler(req, res) {
         } else {
           // Straight pick
           for (const pick of group) {
-            const result = gradePick(pick, games, playerIndex);
-            if (result === null) { results.skipped++; continue; }
+            const info = {};
+            const result = gradePick(pick, games, playerIndex, info);
+            if (result === null) { results.skipped++; noteSkip(pick, info.reason || "unknown"); continue; }
 
             const pts = result === "W" ? calcPoints(pick.multiplier, pick.implied_odds) : 0;
             await sbPatch(`picks?id=eq.${pick.id}`, { result, points_earned: pts });
