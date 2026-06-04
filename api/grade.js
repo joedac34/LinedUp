@@ -49,14 +49,166 @@ async function fetchScores(sportKey) {
   return r.json();
 }
 
+// ── ESPN box-score helpers (for player props) ────────────────────────────────
+const ESPN_MAP = {
+  nfl: { sp: "football",   lg: "nfl" },
+  nba: { sp: "basketball", lg: "nba" },
+  mlb: { sp: "baseball",   lg: "mlb" },
+};
+
+// Map the stat words in a prop pick_name to ESPN's stat labels/keys.
+// (NBA verified against a real summary response. NFL/MLB are best-effort —
+//  confirm with a sample box score before trusting those.)
+const STAT_ALIASES = {
+  // NBA
+  "points": ["PTS", "points"], "pts": ["PTS", "points"],
+  "rebounds": ["REB", "rebounds"], "reb": ["REB", "rebounds"], "boards": ["REB", "rebounds"],
+  "assists": ["AST", "assists"], "ast": ["AST", "assists"], "dimes": ["AST", "assists"],
+  "steals": ["STL", "steals"], "stl": ["STL", "steals"],
+  "blocks": ["BLK", "blocks"], "blk": ["BLK", "blocks"],
+  "turnovers": ["TO", "turnovers"],
+  "3-pointers": ["3PT"], "three pointers": ["3PT"], "threes": ["3PT"], "3pt": ["3PT"], "3 pointers": ["3PT"],
+  // NFL (best-effort)
+  "passing yards": ["YDS", "passingYards"], "pass yds": ["YDS", "passingYards"], "pass yards": ["YDS", "passingYards"],
+  "rushing yards": ["YDS", "rushingYards"], "rush yds": ["YDS", "rushingYards"], "rush yards": ["YDS", "rushingYards"],
+  "receiving yards": ["YDS", "receivingYards"], "rec yds": ["YDS", "receivingYards"], "rec yards": ["YDS", "receivingYards"],
+  "receptions": ["REC", "receptions"], "touchdowns": ["TD"], "tds": ["TD"],
+  // MLB (best-effort)
+  "strikeouts": ["K", "strikeouts"], "hits": ["H", "hits"], "home runs": ["HR", "homeRuns"], "rbi": ["RBI", "RBIs"],
+};
+
+function normName(s) {
+  return (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
+}
+
+// Parse "Over 2.5 Assists" | "Under 1.5 Assists" | "25+ Points" | "284.5+ Pass Yds"
+function parseProp(pickName) {
+  const s = (pickName || "").trim();
+  let m = s.match(/^(over|under)\s+([\d.]+)\s+(.+)$/i);
+  if (m) return { dir: m[1].toLowerCase(), line: parseFloat(m[2]), stat: m[3].trim().toLowerCase() };
+  m = s.match(/^([\d.]+)\s*\+\s*(.+)$/);                 // "25+ Points" → at least
+  if (m) return { dir: "over_eq", line: parseFloat(m[1]), stat: m[2].trim().toLowerCase() };
+  m = s.match(/^([\d.]+)\s*-\s*(.+)$/);                   // "25- Points" → under (rare)
+  if (m) return { dir: "under", line: parseFloat(m[1]), stat: m[2].trim().toLowerCase() };
+  return null;
+}
+
+function resolveStatLabels(statText) {
+  const t = (statText || "").toLowerCase();
+  const entries = Object.entries(STAT_ALIASES).sort((a, b) => b[0].length - a[0].length);
+  for (const [k, labels] of entries) if (t.includes(k)) return labels;
+  return [];
+}
+
+// "3-6" → 3 (made), "17" → 17
+function statNumber(raw) {
+  if (raw == null) return null;
+  const s = String(raw).trim();
+  const n = parseFloat(s.includes("-") ? s.split("-")[0] : s);
+  return isNaN(n) ? null : n;
+}
+
+async function espnRecentEventIds(sp, lg) {
+  const ids = [];
+  const now = new Date();
+  for (let i = 0; i < 4; i++) {                              // today + last 3 days (UTC)
+    const d = new Date(now); d.setUTCDate(d.getUTCDate() - i);
+    const day = `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`;
+    try {
+      const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/${sp}/${lg}/scoreboard?dates=${day}`);
+      if (!r.ok) continue;
+      const data = await r.json();
+      (data.events || []).forEach(e => { if (e.status?.type?.completed) ids.push(e.id); });
+    } catch {}
+  }
+  return [...new Set(ids)];
+}
+
+// Build { normalizedPlayerName: { "AST": "3", "assists": "3", ... } } from completed box scores.
+async function buildPlayerStatIndex(sp, lg) {
+  const ids = (await espnRecentEventIds(sp, lg)).slice(0, 30); // cap for runtime
+  const index = {};
+  // Fetch summaries in small parallel batches to stay under the function timeout.
+  for (let i = 0; i < ids.length; i += 6) {
+    const batch = ids.slice(i, i + 6);
+    const results = await Promise.all(batch.map(async id => {
+      try {
+        const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/${sp}/${lg}/summary?event=${id}`);
+        if (!r.ok) return null;
+        return (await r.json()).boxscore?.players || null;
+      } catch { return null; }
+    }));
+    for (const players of results) {
+      if (!players) continue;
+      for (const teamBlock of players) {
+        for (const grp of (teamBlock.statistics || [])) {
+          const names = (grp.names || grp.labels || []);
+          const keys = (grp.keys || []);
+          for (const a of (grp.athletes || [])) {
+            if (a.didNotPlay) continue;
+            const nm = normName(a.athlete?.displayName);
+            if (!nm) continue;
+            const entry = index[nm] || (index[nm] = {});
+            (a.stats || []).forEach((val, idx) => {
+              if (names[idx] != null && entry[names[idx]] == null) entry[names[idx]] = val;
+              if (keys[idx] != null && entry[keys[idx]] == null) entry[keys[idx]] = val;
+            });
+          }
+        }
+      }
+    }
+  }
+  return index;
+}
+
+// Grade a single player prop against the box-score index.
+function gradeProp(pickName, playerName, index) {
+  const parsed = parseProp(pickName);
+  if (!parsed) return null;
+  const pl = normName(playerName);
+  if (!pl || !index) return null;
+
+  let stats = index[pl];
+  if (!stats) {                                             // fallback: last name + first initial
+    const parts = pl.split(" ");
+    const last = parts[parts.length - 1];
+    const fi = parts[0]?.[0];
+    const hitKey = Object.keys(index).find(k => {
+      const kp = k.split(" ");
+      return kp[kp.length - 1] === last && (!fi || kp[0]?.[0] === fi);
+    });
+    if (hitKey) stats = index[hitKey];
+  }
+  if (!stats) return null;                                  // player not found / DNP / game outside window
+
+  const labels = resolveStatLabels(parsed.stat);
+  let raw = null;
+  for (const l of labels) { if (stats[l] != null) { raw = stats[l]; break; } }
+  const val = statNumber(raw);
+  if (val == null) return null;
+
+  if (parsed.dir === "over")    return val > parsed.line ? "W" : val < parsed.line ? "L" : "P";
+  if (parsed.dir === "under")   return val < parsed.line ? "W" : val > parsed.line ? "L" : "P";
+  if (parsed.dir === "over_eq") return val >= parsed.line ? "W" : "L";
+  return null;
+}
+
 // ── Grade a single straight pick ─────────────────────────────────────────────
-function gradePick(pick, games) {
+function gradePick(pick, games, playerIndex) {
   const slot = pick.slot;
   const name = (pick.pick_name || "").trim();
   // The matchup ("Away @ Home") lives in pick.game. O/U pick_names have NO team
   // in them (e.g. "Over 217.5"), so we MUST use pick.game to find the game.
   const matchup = (pick.game || "").trim();
   const hay = `${name} ${matchup}`.toLowerCase();
+
+  // ── Prop (player stat): graded from the ESPN box-score index, not team scores.
+  //    pick.game holds the player name for props (e.g. "Mikal Bridges").
+  const propParsed = parseProp(name);
+  if (slot === "prop" || (slot?.startsWith("longshot_") && propParsed && !matchup.includes("@"))) {
+    return gradeProp(name, pick.game, playerIndex || {});
+  }
 
   // A team is "referenced" if its full name OR its nickname (last word) appears.
   // Handles both "New York Knicks @ San Antonio Spurs" and "Dolphins @ Bills".
@@ -131,9 +283,6 @@ function gradePick(pick, games) {
     return null;
   }
 
-  // ── Prop / Longshot legs ── (can't grade from scores, skip)
-  if (slot === "prop") return null;
-
   // ── Longshot legs (ML-style) ──
   if (slot?.startsWith("longshot_")) {
     // Try ML grading — pick_name is usually "Team Name ML" or "Team Name +400"
@@ -180,6 +329,7 @@ export default async function handler(req, res) {
 
   try {
     const results = { graded: 0, skipped: 0, errors: [] };
+    const playerIndexCache = {}; // sport -> { player: stats } (shared across leagues in this run)
 
     // Get all active leagues
     const leagues = await sbGet("leagues?select=id,sport,current_week");
@@ -204,6 +354,19 @@ export default async function handler(req, res) {
         continue;
       }
 
+      // Build the player box-score index once per sport, only if props are pending.
+      const needProps = picks.some(p =>
+        p.slot === "prop" || (p.slot?.startsWith("longshot_") && !((p.game || "").includes("@")))
+      );
+      let playerIndex = {};
+      if (needProps) {
+        const em = ESPN_MAP[league.sport];
+        if (playerIndexCache[league.sport] === undefined) {
+          playerIndexCache[league.sport] = em ? await buildPlayerStatIndex(em.sp, em.lg) : {};
+        }
+        playerIndex = playerIndexCache[league.sport];
+      }
+
       // Group picks by user and multiplier for parlay handling
       const byUserMult = {};
       picks.forEach(p => {
@@ -217,7 +380,7 @@ export default async function handler(req, res) {
 
         if (isParlay) {
           // Grade each leg individually
-          const legResults = group.map(p => gradePick(p, games));
+          const legResults = group.map(p => gradePick(p, games, playerIndex));
 
           // Only finalize if ALL legs have a result (no nulls)
           if (legResults.some(r => r === null)) {
@@ -250,9 +413,7 @@ export default async function handler(req, res) {
         } else {
           // Straight pick
           for (const pick of group) {
-            if (pick.slot === "prop") { results.skipped++; continue; } // props = manual
-
-            const result = gradePick(pick, games);
+            const result = gradePick(pick, games, playerIndex);
             if (result === null) { results.skipped++; continue; }
 
             const pts = result === "W" ? calcPoints(pick.multiplier, pick.implied_odds) : 0;
