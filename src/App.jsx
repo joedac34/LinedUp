@@ -798,7 +798,8 @@ export default function App() {
  const [chatMsg, setChatMsg] = useState("");
  const [messages, setMessages] = useState([]);
  const [chatLoading, setChatLoading] = useState(false);
- const [activeLeagueId, setActiveLeagueId] = useState("lg1");
+ const [activeLeagueId, setActiveLeagueId] = useState(()=>{ try{ return localStorage.getItem("picklock_active_league")||"lg1"; }catch(e){ return "lg1"; } });
+ useEffect(()=>{ if(activeLeagueId && activeLeagueId!=="lg1" && activeLeagueId!=="solo"){ try{ localStorage.setItem("picklock_active_league", activeLeagueId); }catch(e){} } }, [activeLeagueId]);
  const [realLeagues, setRealLeagues] = useState([]);
  const [leaguesLoading, setLeaguesLoading] = useState(true);
  const [leagueMembers, setLeagueMembers] = useState([]);
@@ -1873,9 +1874,16 @@ export default function App() {
  isCommissioner: members.find(m=>m.league_id===lg.id)?.is_commissioner||false
  }));
  setRealLeagues(mapped);
- setActiveLeagueId(mapped[0].id);
- const week = mapped[0].current_week||mapped[0].week||1;
- fetchMyPicks(mapped[0].id, week, uid);
+ // Preserve the current / last-active league across re-fetches (auth refresh on
+ // app re-focus was snapping the user back to whatever league sorted first).
+ let savedId=null; try{ savedId=localStorage.getItem("picklock_active_league"); }catch(e){}
+ const valid=(id)=>id&&mapped.some(l=>l.id===id);
+ setActiveLeagueId(prev=>{
+ const target = valid(prev) ? prev : (valid(savedId) ? savedId : mapped[0].id);
+ const tl = mapped.find(l=>l.id===target) || mapped[0];
+ fetchMyPicks(tl.id, tl.current_week||tl.week||1, uid);
+ return target;
+ });
  }
  setLeaguesLoading(false);
  };
