@@ -53,18 +53,26 @@ async function fetchScores(sportKey) {
 function gradePick(pick, games) {
   const slot = pick.slot;
   const name = (pick.pick_name || "").trim();
+  // The matchup ("Away @ Home") lives in pick.game. O/U pick_names have NO team
+  // in them (e.g. "Over 217.5"), so we MUST use pick.game to find the game.
+  const matchup = (pick.game || "").trim();
+  const hay = `${name} ${matchup}`.toLowerCase();
 
-  // Find the matching game — search all games for team name match
-  const game = games.find(g => {
-    if (!g.completed) return false;
-    const home = g.home_team || "";
-    const away = g.away_team || "";
-    // Check if pick_name contains either team
-    return name.includes(home.split(" ").pop()) ||
-           name.includes(away.split(" ").pop()) ||
-           home.toLowerCase().split(" ").some(w => w.length > 3 && name.toLowerCase().includes(w)) ||
-           away.toLowerCase().split(" ").some(w => w.length > 3 && name.toLowerCase().includes(w));
-  });
+  // A team is "referenced" if its full name OR its nickname (last word) appears.
+  // Handles both "New York Knicks @ San Antonio Spurs" and "Dolphins @ Bills".
+  const teamRef = (team) => {
+    const tn = (team || "").toLowerCase().trim();
+    if (!tn) return false;
+    if (hay.includes(tn)) return true;
+    const words = tn.split(" ");
+    return hay.includes(words[words.length - 1]);
+  };
+
+  // Find the matching game. Prefer games where BOTH teams are referenced
+  // (true for ml/spread/ou because pick.game carries the full matchup).
+  let game = games.find(g => g.completed && teamRef(g.home_team) && teamRef(g.away_team));
+  // Fallback: single-team match (in case pick.game is missing on older picks).
+  if (!game) game = games.find(g => g.completed && (teamRef(g.home_team) || teamRef(g.away_team)));
 
   if (!game || !game.scores) return null; // game not found or not completed
 
