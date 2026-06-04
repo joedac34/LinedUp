@@ -2928,13 +2928,17 @@ export default function App() {
  <div className="nav-header large" style={{padding:"0 20px 16px",background:"radial-gradient(130% 90% at 88% -10%, rgba(10,132,255,0.20), transparent 55%), linear-gradient(180deg,#0B1A2E 0%,#000 80%)"}}>
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
  <div className="nav-title-large">PICKLOCK</div>
- <div style={{display:"flex",alignItems:"center",gap:12}}>
- <div onClick={()=>setScreen("leagues")} style={{fontSize:13,fontWeight:600,color:IOS.blue,cursor:"pointer"}}>All Leagues</div>
- <div onClick={()=>setScreen("chat")} style={{width:34,height:34,borderRadius:"50%",background:"rgba(255,255,255,0.08)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
- <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="9" cy="11" r="1" fill="#fff" stroke="none"/><circle cx="12" cy="11" r="1" fill="#fff" stroke="none"/><circle cx="15" cy="11" r="1" fill="#fff" stroke="none"/></svg>
+ <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+ <div style={{display:"flex",background:"rgba(255,255,255,0.08)",borderRadius:9,padding:2}}>
+ {[{id:"leagues",label:"Leagues"},{id:"solo",label:"Solo"}].map(m=>(
+ <div key={m.id} onClick={()=>{setHomeMode(m.id);setScreen("home");if(m.id==="solo"){fetchSoloWeeks();}else{setIsSoloMode(false);}}}
+ style={{padding:"5px 11px",borderRadius:7,fontSize:11.5,fontWeight:700,cursor:"pointer",transition:"all .15s",whiteSpace:"nowrap",
+ background:homeMode===m.id?"rgba(255,255,255,0.14)":"transparent",
+ color:homeMode===m.id?"#fff":"rgba(255,255,255,0.4)"}}>{m.label}</div>
+ ))}
  </div>
- <div onClick={()=>setScreen("profile")} style={{width:34,height:34,borderRadius:50,background:`linear-gradient(135deg,${IOS.blue},${IOS.indigo})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer"}}>
- {(userProfile?.username?.[0]||user?.email?.[0]||"J").toUpperCase()}
+ <div onClick={()=>setScreen("chat")} style={{width:34,height:34,borderRadius:"50%",background:"rgba(255,255,255,0.08)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
+ <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="9" cy="11" r="1" fill="#fff" stroke="none"/><circle cx="12" cy="11" r="1" fill="#fff" stroke="none"/><circle cx="15" cy="11" r="1" fill="#fff" stroke="none"/></svg>
  </div>
  </div>
  </div>
@@ -2949,18 +2953,7 @@ export default function App() {
    </div>
  )}
 
- {/* Leagues / Solo mode switcher */}
- <div style={{display:"flex",gap:0,marginTop:10,marginBottom:10,background:"rgba(255,255,255,0.06)",borderRadius:10,padding:3}}>
-   {[{id:"leagues",label:"Leagues"},{id:"solo",label:"Solo"}].map(m=>(
-     <div key={m.id} onClick={()=>{setHomeMode(m.id);setScreen("home");if(m.id==="solo"){fetchSoloWeeks();}else{setIsSoloMode(false);}}}
-     style={{flex:1,textAlign:"center",padding:"7px",borderRadius:8,fontSize:13,fontWeight:700,cursor:"pointer",transition:"all .15s",
-       background:homeMode===m.id?"rgba(255,255,255,0.12)":"transparent",
-       color:homeMode===m.id?"#fff":"rgba(255,255,255,0.4)"}}>
-       {m.label}
-     </div>
-   ))}
- </div>
-
+ 
  {/* League toggle - only show in leagues mode */}
  {homeMode==="leagues" && <div style={{display:"flex",gap:6,marginTop:0,marginBottom:2,overflowX:"auto",paddingBottom:2}}>
  {realLeagues.map(lg=>{
@@ -4015,9 +4008,14 @@ export default function App() {
 
  {/* League filling banner */}
  {leagueMembers.length < (activeLeague.target_size||activeLeague.max_members||8) && (
- <div style={{margin:"0 16px 10px",background:"rgba(255,159,10,0.08)",borderRadius:10,padding:"9px 13px",border:"0.5px solid rgba(255,159,10,0.25)",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+ <div style={{margin:"0 16px 10px",background:"rgba(255,159,10,0.08)",borderRadius:10,padding:"9px 13px",border:"0.5px solid rgba(255,159,10,0.25)"}}>
+ <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:7}}>
  <div style={{fontSize:12,fontWeight:700,color:IOS.orange,whiteSpace:"nowrap"}}>League still filling up</div>
  <div style={{fontSize:11,color:IOS.label3,whiteSpace:"nowrap"}}>{leagueMembers.length}/{activeLeague.target_size||activeLeague.max_members||8} joined</div>
+ </div>
+ <div style={{height:4,borderRadius:2,background:"rgba(255,255,255,0.08)",overflow:"hidden"}}>
+ <div style={{height:"100%",borderRadius:2,background:`linear-gradient(90deg,${IOS.orange},${IOS.yellow})`,width:`${Math.min(100,(leagueMembers.length/(activeLeague.target_size||activeLeague.max_members||8))*100)}%`,transition:"width .4s"}}/>
+ </div>
  </div>
  )}
 
@@ -4275,14 +4273,12 @@ export default function App() {
  const targetSize = activeLeague.target_size||activeLeague.max_members||8;
  const leagueIsFull = activeLeagueId==="solo" || leagueMembers.length >= targetSize;
  if(!leagueIsFull) return (
- <div style={{margin:"0 16px",background:"rgba(255,159,10,0.08)",borderRadius:14,padding:"16px",textAlign:"center",border:"1px solid rgba(255,159,10,0.2)"}}>
- <div style={{fontSize:18,marginBottom:6}}>⏳</div>
- <div style={{fontSize:14,fontWeight:700,color:IOS.orange,marginBottom:4}}>League Not Full Yet</div>
- <div style={{fontSize:13,color:IOS.label3,marginBottom:10}}>You can lock your slip once the league is full and your schedule is set</div>
- <div style={{background:"rgba(255,255,255,0.06)",borderRadius:8,height:6,overflow:"hidden",marginBottom:6}}>
- <div style={{height:"100%",borderRadius:8,background:`linear-gradient(90deg,${IOS.orange},${IOS.yellow})`,width:`${(leagueMembers.length/targetSize)*100}%`}}/>
+ <div style={{margin:"0 16px",background:"rgba(255,159,10,0.06)",borderRadius:12,padding:"11px 14px",border:"0.5px solid rgba(255,159,10,0.2)",display:"flex",alignItems:"center",gap:11}}>
+ <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={IOS.orange} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+ <div style={{flex:1,minWidth:0}}>
+ <div style={{fontSize:12.5,fontWeight:700,color:IOS.orange}}>Submit picks when the league fills</div>
+ <div style={{fontSize:11,color:IOS.label3,marginTop:1}}>{leagueMembers.length}/{targetSize} members joined</div>
  </div>
- <div style={{fontSize:12,fontWeight:700,color:IOS.orange}}>Fill League: {leagueMembers.length}/{targetSize} members</div>
  </div>
  );
  return null;
