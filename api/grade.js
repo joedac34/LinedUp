@@ -73,8 +73,13 @@ const STAT_ALIASES = {
   "rushing yards": ["YDS", "rushingYards"], "rush yds": ["YDS", "rushingYards"], "rush yards": ["YDS", "rushingYards"],
   "receiving yards": ["YDS", "receivingYards"], "rec yds": ["YDS", "receivingYards"], "rec yards": ["YDS", "receivingYards"],
   "receptions": ["REC", "receptions"], "touchdowns": ["TD"], "tds": ["TD"],
-  // MLB (best-effort)
-  "strikeouts": ["K", "strikeouts"], "hits": ["H", "hits"], "home runs": ["HR", "homeRuns"], "rbi": ["RBI", "RBIs"],
+  // MLB (verified against a real box score). Batting & pitching share labels
+  // (H, R, HR, BB, K); with the universal DH each player is in only one group,
+  // so a player's own stat resolves correctly (exception: two-way players).
+  "strikeouts": ["K", "strikeouts"], "hits allowed": ["H", "hits"], "hits": ["H", "hits"],
+  "earned runs": ["ER", "earnedRuns"], "runs allowed": ["R", "runs"], "runs": ["R", "runs"],
+  "walks": ["BB", "walks"], "home runs": ["HR", "homeRuns"], "homers": ["HR", "homeRuns"],
+  "rbis": ["RBI", "RBIs"], "rbi": ["RBI", "RBIs"],
 };
 
 function normName(s) {
