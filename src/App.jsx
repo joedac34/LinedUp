@@ -4541,10 +4541,17 @@ export default function App() {
 
  const addCard = (bet) => {
  const cat = gridType==="longshot" ? "longshot" : gridType;
- setActivePicks(prev=>prev.map((p,i)=> i===target ? {...p, bet, category:cat, isParlay:false, parlayLegs:[]} : p));
+ // One bet per type (longshot legs excepted): if this type is already in the
+ // slip, replace that slot instead of stacking a second bet of the same type.
+ let dest = target;
+ if(cat!=="longshot"){
+ const existingIdx = activePicks.findIndex(p=>!p.isParlay && p.bet!==null && p.category===cat);
+ if(existingIdx!==-1) dest = existingIdx;
+ }
+ setActivePicks(prev=>prev.map((p,i)=> i===dest ? {...p, bet, category:cat, isParlay:false, parlayLegs:[]} : p));
  setGridJustAdded(bet.id);
  // Advance to next empty slot, or bounce back to the slip if full
- const nextEmpty = activePicks.findIndex((p,i)=> i!==target && !p.isParlay && p.bet===null);
+ const nextEmpty = activePicks.findIndex((p,i)=> i!==dest && !p.isParlay && p.bet===null);
  setTimeout(()=>{
  if(nextEmpty===-1){ setScreen("picks"); }
  else { setGridTargetSlot(nextEmpty); }
