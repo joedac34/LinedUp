@@ -2501,6 +2501,8 @@ export default function App() {
 
  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}
  @keyframes spin{to{transform:rotate(360deg);}}
+ @keyframes champSweep{0%{transform:translateX(-120%);}100%{transform:translateX(220%);}}
+ @keyframes champGlow{0%,100%{box-shadow:0 4px 22px rgba(255,193,7,0.18);}50%{box-shadow:0 4px 30px rgba(255,193,7,0.34);}}
 
  /* iOS Tab Bar */
  .tab-bar{background:rgba(28,28,30,0.92);backdrop-filter:blur(20px) saturate(180%);border-top:0.5px solid rgba(255,255,255,0.08);display:flex;padding:8px 0;padding-bottom:calc(8px + env(safe-area-inset-bottom,0px));position:sticky;bottom:0;z-index:20;}
@@ -2509,6 +2511,16 @@ export default function App() {
  .tab-icon{font-size:22px;line-height:1;}
  .tab-label{font-size:10px;font-weight:500;letter-spacing:-0.2px;color:${IOS.gray};}
  .tab-item.on .tab-label{color:${IOS.blue};}
+
+ /* Auth screen */
+ @keyframes authRise{0%{transform:translateY(0);opacity:0;}12%{opacity:0.55;}80%{opacity:0.5;}100%{transform:translateY(-130px);opacity:0;}}
+ @keyframes authGlow{0%,100%{filter:drop-shadow(0 0 16px rgba(10,132,255,0.45));}50%{filter:drop-shadow(0 0 30px rgba(10,132,255,0.7));}}
+ .auth-input{width:100%;background:rgba(255,255,255,0.045);border:0.5px solid rgba(255,255,255,0.12);border-radius:13px;padding:15px 16px;color:#fff;font-size:15px;font-family:'Barlow',sans-serif;outline:none;transition:border-color .18s, box-shadow .18s;box-sizing:border-box;}
+ .auth-input::placeholder{color:rgba(255,255,255,0.32);}
+ .auth-input:focus{border-color:rgba(10,132,255,0.7);box-shadow:0 0 0 3px rgba(10,132,255,0.14);}
+ .auth-cta{width:100%;border:none;border-radius:13px;padding:16px;font-size:16px;font-weight:800;cursor:pointer;font-family:'Barlow',sans-serif;color:#fff;background:linear-gradient(135deg,#0A84FF,#5E5CE6);box-shadow:0 8px 26px rgba(10,132,255,0.4);transition:transform .12s, box-shadow .2s;letter-spacing:0.2px;}
+ .auth-cta:active{transform:scale(0.985);box-shadow:0 4px 16px rgba(10,132,255,0.3);}
+ .auth-chip{position:absolute;font-family:'Barlow',sans-serif;font-weight:800;font-size:13px;padding:6px 11px;border-radius:9px;white-space:nowrap;pointer-events:none;will-change:transform,opacity;}
  `;
 
  return (
@@ -2641,20 +2653,53 @@ export default function App() {
 
  {/* ══ AUTH SCREEN ══ */}
  {!user && (
- <div style={{width:390,minHeight:"100vh",background:"#09090f",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"40px 32px",fontFamily:"'Barlow',sans-serif"}}>
- <div style={{fontSize:38,fontWeight:800,letterSpacing:-1,color:"#60a5fa",marginBottom:6}}>PICKLOCK</div>
- <div style={{fontSize:14,color:"rgba(255,255,255,0.4)",marginBottom:48}}>Fantasy sports betting, built different</div>
- <div style={{display:"flex",background:"#1C1C1E",borderRadius:12,padding:2,marginBottom:28,width:"100%"}}>
- {["login","signup"].map(t=>(
- <div key={t} onClick={()=>setAuthScreen(t)} style={{flex:1,textAlign:"center",padding:"10px",borderRadius:10,fontSize:14,fontWeight:700,cursor:"pointer",background:authScreen===t?"#2C2C2E":"transparent",color:authScreen===t?"#fff":"rgba(255,255,255,0.4)",transition:"all .2s"}}>{t==="login"?"Sign In":"Sign Up"}</div>
+ <div style={{position:"relative",width:390,minHeight:"100vh",overflow:"hidden",background:"radial-gradient(120% 70% at 50% -10%, rgba(10,132,255,0.18), transparent 55%), radial-gradient(85% 50% at 85% 112%, rgba(94,92,230,0.16), transparent 60%), #07070C",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"40px 30px",fontFamily:"'Barlow',sans-serif"}}>
+
+ {/* Floating odds chips */}
+ <div style={{position:"absolute",inset:0,overflow:"hidden",pointerEvents:"none"}}>
+ {[
+ {l:"+150",c:"#0A84FF",x:"7%",d:0,t:11},{l:"KC -3.5",c:"#30D158",x:"24%",d:2.5,t:13},
+ {l:"O 47.5",c:"#FF9F0A",x:"68%",d:1,t:12},{l:"PARLAY x5",c:"#FF375F",x:"83%",d:4,t:14},
+ {l:"-110",c:"#0A84FF",x:"50%",d:6,t:10},{l:"LAD ML",c:"#30D158",x:"37%",d:3,t:13},
+ {l:"U 8.5",c:"#FF9F0A",x:"13%",d:7.5,t:12},{l:"+650",c:"#FF375F",x:"60%",d:5,t:15},
+ {l:"27 PTS",c:"#FFD60A",x:"90%",d:2,t:11},{l:"BUF -7",c:"#30D158",x:"3%",d:8.5,t:14},
+ {l:"+200",c:"#0A84FF",x:"76%",d:9.5,t:12},{l:"LOCK",c:"#FFD60A",x:"45%",d:10.5,t:13}
+ ].map((c,i)=>(
+ <div key={i} className="auth-chip" style={{left:c.x,bottom:"-8%",color:c.c,background:c.c+"1A",border:"0.5px solid "+c.c+"44",animation:"authRise "+c.t+"s ease-in-out "+c.d+"s infinite"}}>{c.l}</div>
  ))}
  </div>
- <input id="auth-email" type="email" placeholder="Email" style={{width:"100%",background:"#1C1C1E",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"14px 16px",color:"#fff",fontSize:15,fontFamily:"'Barlow',sans-serif",outline:"none",marginBottom:12}}/>
- <input id="auth-password" type="password" placeholder="Password" style={{width:"100%",background:"#1C1C1E",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"14px 16px",color:"#fff",fontSize:15,fontFamily:"'Barlow',sans-serif",outline:"none",marginBottom:12}}/>
- {authScreen==="signup"&&<input id="auth-username" type="text" placeholder="Username (e.g. sharpshooter99)" style={{width:"100%",background:"#1C1C1E",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"14px 16px",color:"#fff",fontSize:15,fontFamily:"'Barlow',sans-serif",outline:"none",marginBottom:8}}/>}
- {authScreen==="signup"&&<div style={{fontSize:11,color:"rgba(255,255,255,0.3)",marginBottom:16,alignSelf:"flex-start",paddingLeft:4}}>This is how you'll appear to other players</div>}
- {authScreen==="login"&&<div style={{height:24}}/>}
- <button onClick={async()=>{
+
+ {/* Scrolling odds ticker */}
+ <div style={{position:"absolute",top:52,left:0,right:0,overflow:"hidden",opacity:0.5,pointerEvents:"none",WebkitMaskImage:"linear-gradient(90deg,transparent,#000 14%,#000 86%,transparent)",maskImage:"linear-gradient(90deg,transparent,#000 14%,#000 86%,transparent)"}}>
+ <div style={{display:"inline-flex",gap:24,whiteSpace:"nowrap",animation:"ticker-scroll 26s linear infinite"}}>
+ {[{t:"NBA FINALS · NYK +120",c:"#0A84FF"},{t:"MLB · LAD -145",c:"#30D158"},{t:"NFL · KC -3.5",c:"#FF9F0A"},{t:"PARLAY HIT +1240",c:"#FF375F"},{t:"NHL · BOS ML -130",c:"#64D2FF"},{t:"O/U 47.5",c:"#FFD60A"},
+ {t:"NBA FINALS · NYK +120",c:"#0A84FF"},{t:"MLB · LAD -145",c:"#30D158"},{t:"NFL · KC -3.5",c:"#FF9F0A"},{t:"PARLAY HIT +1240",c:"#FF375F"},{t:"NHL · BOS ML -130",c:"#64D2FF"},{t:"O/U 47.5",c:"#FFD60A"}
+ ].map((s,i)=>(<span key={i} style={{fontSize:12,fontWeight:800,letterSpacing:"0.04em",color:s.c}}>{s.t}</span>))}
+ </div>
+ </div>
+
+ {/* Brand */}
+ <div style={{position:"relative",textAlign:"center",marginBottom:30}}>
+ <div style={{display:"inline-flex",alignItems:"center",gap:9,marginBottom:9}}>
+ <svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{filter:"drop-shadow(0 0 10px rgba(10,132,255,0.6))"}}><rect x="3" y="11" width="18" height="11" rx="2.5"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+ <div style={{fontSize:40,fontWeight:900,letterSpacing:-1.5,backgroundImage:"linear-gradient(135deg,#0A84FF,#64D2FF)",WebkitBackgroundClip:"text",backgroundClip:"text",WebkitTextFillColor:"transparent",animation:"authGlow 3.6s ease-in-out infinite"}}>PICKLOCK</div>
+ </div>
+ <div style={{fontSize:14,color:"rgba(255,255,255,0.5)",fontWeight:500}}>Make your picks. Climb the board. Talk trash.</div>
+ </div>
+
+ {/* Glass form card */}
+ <div style={{position:"relative",width:"100%",background:"linear-gradient(160deg,rgba(22,22,28,0.82),rgba(11,11,14,0.9))",backdropFilter:"blur(22px)",WebkitBackdropFilter:"blur(22px)",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:22,boxShadow:"0 18px 50px rgba(0,0,0,0.55)",padding:"22px 20px"}}>
+ <div style={{display:"flex",background:"rgba(255,255,255,0.05)",borderRadius:12,padding:3,marginBottom:18}}>
+ {["login","signup"].map(t=>(
+ <div key={t} onClick={()=>setAuthScreen(t)} style={{flex:1,textAlign:"center",padding:"10px",borderRadius:9,fontSize:14,fontWeight:800,cursor:"pointer",background:authScreen===t?"linear-gradient(135deg,rgba(10,132,255,0.95),rgba(94,92,230,0.85))":"transparent",color:authScreen===t?"#fff":"rgba(255,255,255,0.45)",boxShadow:authScreen===t?"0 4px 14px rgba(10,132,255,0.3)":"none",transition:"all .2s"}}>{t==="login"?"Sign In":"Sign Up"}</div>
+ ))}
+ </div>
+ <input id="auth-email" className="auth-input" type="email" placeholder="Email" style={{marginBottom:11}}/>
+ <input id="auth-password" className="auth-input" type="password" placeholder="Password" style={{marginBottom:11}}/>
+ {authScreen==="signup"&&<input id="auth-username" className="auth-input" type="text" placeholder="Username (e.g. sharpshooter99)" style={{marginBottom:7}}/>}
+ {authScreen==="signup"&&<div style={{fontSize:11,color:"rgba(255,255,255,0.32)",marginBottom:15,paddingLeft:4}}>This is how you'll appear to other players</div>}
+ {authScreen==="login"&&<div style={{height:16}}/>}
+ <button className="auth-cta" onClick={async()=>{
  const email=document.getElementById("auth-email").value.trim();
  const password=document.getElementById("auth-password").value;
  if(authScreen==="login"){
@@ -2665,24 +2710,23 @@ export default function App() {
  if(!username){ alert("Please enter a username."); return; }
  if(username.length<3){ alert("Username must be at least 3 characters."); return; }
  if(!/^[a-zA-Z0-9_]+$/.test(username)){ alert("Username can only contain letters, numbers, and underscores."); return; }
- // Check username not taken
  const {data:existing}=await supabase.from("users").select("id").eq("username",username).maybeSingle();
  if(existing){ alert("That username is taken. Try another."); return; }
  const {data,error}=await supabase.auth.signUp({email,password});
  if(error){ alert(error.message); return; }
- // Save username to users table
  const uid = data?.user?.id;
  if(uid){
  await supabase.from("users").upsert({id:uid, email, username}, {onConflict:"id"});
  }
- setTutorialStep(0); // show onboarding for new signups only
- alert("Account created! Check your email to confirm, then sign in.");
- }
- }} style={{width:"100%",background:"#0A84FF",color:"#fff",border:"none",borderRadius:12,padding:"16px",fontSize:16,fontWeight:700,cursor:"pointer",fontFamily:"'Barlow',sans-serif",marginBottom:16}}>
- {authScreen==="login"?"Sign In":"Create Account"}
- </button>
- {authScreen==="login"&&<div style={{fontSize:13,color:"rgba(255,255,255,0.35)",cursor:"pointer"}} onClick={()=>setAuthScreen("signup")}>No account? Sign up</div>}
- {authScreen==="signup"&&<div style={{fontSize:13,color:"rgba(255,255,255,0.35)",cursor:"pointer"}} onClick={()=>setAuthScreen("login")}>Already have an account? Sign in</div>}
+ setTutorialStep(0);
+ }}}>{authScreen==="login"?"Sign In":"Create Account"}</button>
+ <div onClick={()=>setAuthScreen(authScreen==="login"?"signup":"login")} style={{textAlign:"center",fontSize:13,color:"rgba(255,255,255,0.4)",cursor:"pointer",marginTop:16}}>{authScreen==="login"?"No account? Sign up":"Already have an account? Sign in"}</div>
+ </div>
+
+ {/* Trust line */}
+ <div style={{position:"relative",marginTop:22,display:"flex",alignItems:"center",gap:8,fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.32)"}}>
+ <span style={{width:6,height:6,borderRadius:"50%",background:"#30D158",boxShadow:"0 0 8px #30D158"}}/>NFL · NBA · MLB · NHL <span style={{color:"rgba(255,255,255,0.2)"}}>·</span> Free to play
+ </div>
  </div>
  )}
 
@@ -6150,6 +6194,34 @@ export default function App() {
  <div className="nav-title-large">{activeLeague.name||"My League"}</div>
  <div className="nav-subtitle">{SPORTS[activeLeague.sport]?.label||sport.label} · {leagueMembers.length||"?"} members · Week {activeLeague.current_week||activeLeague.week||1}</div>
  </div>
+
+ {/* Season Complete banner */}
+ {(()=>{
+ const _sw=activeLeague.season_weeks||18;
+ const _cw=activeLeague.current_week||activeLeague.week||1;
+ const finalPicks=weekPicks.filter(p=>p.week===_cw);
+ const done=!isSoloMode && _cw>=_sw && finalPicks.length>0 && finalPicks.every(p=>p.result&&p.result!=="pending");
+ if(!done) return null;
+ const champ=realStandings[0];
+ const champName=champ?(champ.isYou?"You":(champ.name||champ.username||"Champion")):null;
+ const youWon=champ&&champ.isYou;
+ return (
+ <div style={{margin:"0 16px 14px",borderRadius:16,overflow:"hidden",position:"relative",background:"linear-gradient(135deg,#1A1606 0%,#0B0B0E 70%)",border:"0.5px solid rgba(255,193,7,0.35)",animation:"champGlow 3.2s ease-in-out infinite"}}>
+ <div style={{position:"absolute",top:0,bottom:0,width:"45%",background:"linear-gradient(100deg,transparent,rgba(255,214,10,0.16),transparent)",animation:"champSweep 3.8s ease-in-out infinite",pointerEvents:"none"}}/>
+ <div style={{position:"relative",display:"flex",alignItems:"center",gap:13,padding:"14px 16px"}}>
+ <div style={{width:42,height:42,borderRadius:12,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",background:"radial-gradient(circle at 50% 35%,rgba(255,214,10,0.28),rgba(255,159,10,0.1))",border:"0.5px solid rgba(255,214,10,0.4)"}}>
+ <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FFD60A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+ </div>
+ <div style={{flex:1,minWidth:0}}>
+ <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.14em",textTransform:"uppercase",color:"#FFD60A",marginBottom:2}}>Season Complete</div>
+ <div style={{fontSize:15,fontWeight:800,color:"#fff",lineHeight:1.15}}>{youWon?"You took the crown":(champName?champName+" wins the league":"Final standings are in")}</div>
+ <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.45)",marginTop:2}}>{champ?champ.record+" · "+parseFloat(champ.points||0).toFixed(1)+" pts":"Tap Standings for the final board"}</div>
+ </div>
+ {youWon&&<div style={{fontSize:9,fontWeight:800,letterSpacing:"0.08em",color:"#0B0B0E",background:"linear-gradient(135deg,#FFD60A,#FF9F0A)",borderRadius:7,padding:"4px 8px",flexShrink:0}}>CHAMPION</div>}
+ </div>
+ </div>
+ );
+ })()}
 
  {/* Tabs */}
  <div className="seg-control" style={{marginBottom:14}}>
