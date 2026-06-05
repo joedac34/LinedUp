@@ -1306,8 +1306,13 @@ export default function App() {
  }
  }
  // Advance week
+ // Don't advance past the final week — a finished season stays on its last (graded) week.
+ if(nextWeek <= (league.season_weeks||18)){
  await supabase.from('leagues').update({current_week: nextWeek}).eq('id', leagueId);
  console.log('Auto-advanced to week', nextWeek);
+ } else {
+ console.log('Season complete — final week graded; holding on week', currentWeek);
+ }
  };
 
  // ─── SCHEDULE GENERATION ────────────────────────────────────────
@@ -5995,8 +6000,13 @@ export default function App() {
  }).eq("id", m.id);
  }
 
- // Advance week
+ // Advance week — but never past the final week of the season.
+ const _seasonWeeks = activeLeague.season_weeks||18;
+ if(nextWeek > _seasonWeeks){
+ alert("This was the final week — the season is complete! Final standings are locked in.");
+ } else {
  await supabase.from("leagues").update({current_week: nextWeek}).eq("id", activeLeague.id);
+ }
 
  // Store week result in DB for each user to see on next login
  for(const m of (weekMatchups||[])) {
