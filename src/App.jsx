@@ -995,6 +995,9 @@ export default function App() {
  ];
  const [flexPicks, setFlexPicks] = useState(EMPTY_FLEX);
  const [soloFlexPicks, setSoloFlexPicks] = useState(EMPTY_FLEX);
+ const parseSlotConfig=(raw)=>{ try{ const a=typeof raw==="string"?JSON.parse(raw):raw; return (Array.isArray(a)&&a.length)?a:null; }catch(e){ return null; } };
+ const freshSlots=()=>{ const cfg = !isSoloMode ? parseSlotConfig(activeLeague&&activeLeague.slot_config) : null; return cfg ? cfg.map((c,i)=>({id:i,bet:null,mult:c.mult,category:c.type,isParlay:false,parlayLegs:[],locked:true})) : EMPTY_FLEX.map(s=>({...s})); };
+ useEffect(()=>{ if(isSoloMode) return; setFlexPicks(freshSlots()); }, [activeLeagueId, isSoloMode, activeLeague&&activeLeague.slot_config]);
  const [soloSavedPicks, setSoloSavedPicks] = useState(null);
  const [soloSubmitted, setSoloSubmitted] = useState(false);
  const [isPro, setIsPro] = useState(()=>{ try { return localStorage.getItem("picklock_is_pro")==="true"; } catch(e){ return false; } });
@@ -1678,7 +1681,7 @@ export default function App() {
  const TYPE_COLORS={ml:"#0A84FF",prop:"#FFD60A",ou:"#FF9F0A",spread:"#30D158",longshot:"#FF375F"};
  const TYPE_LABELS={ml:"Moneyline",prop:"Prop",ou:"Over/Under",spread:"Spread",longshot:"Longshot"};
  const byType={};
- picks.forEach(p=>{const slot=p.slot?.startsWith("longshot_")?"longshot":(p.slot||"ml");if(!byType[slot])byType[slot]={wins:0,losses:0,pts:0,color:TYPE_COLORS[slot]||"#888",label:TYPE_LABELS[slot]||slot};if(p.result==="W"){byType[slot].wins++;byType[slot].pts+=parseFloat(p.points_earned||0);}else byType[slot].losses++;});
+ picks.forEach(p=>{const slot=p.slot?.startsWith("longshot")?"longshot":(p.slot||"ml").split("_")[0];if(!byType[slot])byType[slot]={wins:0,losses:0,pts:0,color:TYPE_COLORS[slot]||"#888",label:TYPE_LABELS[slot]||slot};if(p.result==="W"){byType[slot].wins++;byType[slot].pts+=parseFloat(p.points_earned||0);}else byType[slot].losses++;});
  Object.values(byType).forEach(t=>{const tot=t.wins+t.losses;t.pct=tot>0?Math.round(t.wins/tot*100):0;t.pts=parseFloat(t.pts.toFixed(1));});
  // By sport
  const leagueIds=[...new Set(picks.map(p=>p.league_id).filter(Boolean))];
@@ -1839,24 +1842,23 @@ export default function App() {
  .eq("week", week);
  if(data && data.length > 0) {
  // Convert DB picks back into flexPicks format for the locked view
- const multGroups = {};
- data.forEach(p=>{
- if(!multGroups[p.multiplier]) multGroups[p.multiplier] = [];
- multGroups[p.multiplier].push(p);
- });
- const flexPicks = Object.entries(multGroups).map(([mult, picks])=>{
- const isParlay = picks[0].slot?.startsWith("longshot_");
+ const groups = {}; const order = [];
+ data.forEach(p=>{ const sl=p.slot||""; let key; if(sl.startsWith("longshot")){ const parts=sl.split("_"); key = parts.length>=3 ? "longshot_"+parts[1] : "longshot"; } else { key = sl; } if(!groups[key]){ groups[key]=[]; order.push(key); } groups[key].push(p); });
+ const flexPicks = order.map((key,gi)=>{
+ const picks = groups[key];
+ const isParlay = key.startsWith("longshot");
+ const cat = (picks[0].slot||"").split("_")[0];
  return {
- id: parseInt(mult)-1,
- mult: parseInt(mult),
+ id: gi,
+ mult: picks[0].multiplier,
  isParlay,
- parlayLegs: isParlay ? picks.map(p=>({id:p.id, pick:p.pick_name, game:p.game||"", odds:p.odds, impliedOdds:p.implied_odds})) : [],
+ parlayLegs: isParlay ? picks.map(pp=>({id:pp.id, pick:pp.pick_name, game:pp.game||"", odds:pp.odds, impliedOdds:pp.implied_odds})) : [],
  bet: isParlay ? null : {pick:picks[0].pick_name, game:picks[0].game||"", odds:picks[0].odds, impliedOdds:picks[0].implied_odds},
- category: picks[0].slot,
+ category: cat,
  };
  });
- // Fill missing slots
- while(flexPicks.length < 5) flexPicks.push({id:flexPicks.length, bet:null, mult:null, isParlay:false, parlayLegs:[]});
+ const _isCustom = data.some(pp=>{const s=pp.slot||""; return !s.startsWith("longshot") && /_\d+$/.test(s);});
+ if(!_isCustom){ while(flexPicks.length < 5) flexPicks.push({id:flexPicks.length, bet:null, mult:null, isParlay:false, parlayLegs:[]}); }
  setSavedPicks({fromDB: true, flexPicks, dbPicks: data});
  } else {
  setSavedPicks(null);
@@ -3290,7 +3292,7 @@ export default function App() {
  .eq("week",week);
  }
  setSavedPicks(null);
- setFlexPicks(EMPTY_FLEX);
+ setFlexPicks(freshSlots());
  setWeekPicks(prev=>prev.filter(p=>p.user_id!==user?.id));
  try { localStorage.removeItem(`linedup_picks_${activeLeague.id}_wk${activeLeague.current_week||activeLeague.week||1}`); } catch(e) {}
  }
@@ -3500,6 +3502,7 @@ export default function App() {
  // Use separate state for solo mode vs league mode
  const activePicks = isSoloMode ? soloFlexPicks : flexPicks;
  const setActivePicks = isSoloMode ? setSoloFlexPicks : setFlexPicks;
+ const openSlot=(i)=>{ const s=activePicks[i]; setActiveFlexSlot(i); if(s&&s.locked&&s.category) setFlexCategory(s.category); };
  const activeSubmitted = isSoloMode ? soloSubmitted : submitted;
  const activeSavedPicks = isSoloMode ? soloSavedPicks : savedPicks;
  const setActiveSavedPicks = isSoloMode ? setSoloSavedPicks : setSavedPicks;
@@ -3517,6 +3520,7 @@ export default function App() {
  });
  const hasParlay = hasLongshot;
  const allFlexFilled = activePicks.every(p=>p.mult!==null&&(p.isParlay?p.parlayLegs.length>=2:p.bet!==null));
+ const isCustomSlip = activePicks.some(p=>p.locked);
  return (
  <>
 
@@ -3612,7 +3616,7 @@ export default function App() {
  )}
 
  {/* Back button when category chosen */}
- {!activePicks[activeFlexSlot]?.isParlay && flexCategory && (
+ {!activePicks[activeFlexSlot]?.isParlay && flexCategory && !activePicks[activeFlexSlot]?.locked && (
  <div onClick={()=>{setFlexCategory(null);setPropTypeFilter("all");}} style={{padding:"10px 16px",display:"flex",alignItems:"center",gap:6,cursor:"pointer",borderBottom:`0.5px solid ${IOS.sep}`}}>
  <span style={{color:IOS.blue,fontSize:14}}>‹</span>
  <span style={{color:IOS.blue,fontSize:14,fontWeight:600}}>Categories</span>
@@ -4108,19 +4112,18 @@ export default function App() {
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
  <div style={{fontSize:12,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"rgba(255,255,255,0.4)"}}>Your Slip</div>
  <div style={{fontSize:13,fontWeight:600,color:allFlexFilled?IOS.green:IOS.blue}}>
- {activePicks.filter(p=>p.mult!==null&&(p.isParlay?p.parlayLegs.length>=2:p.bet!==null)).length}/5 picks
+ {activePicks.filter(p=>p.mult!==null&&(p.isParlay?p.parlayLegs.length>=2:p.bet!==null)).length}/{activePicks.length} picks
  </div>
  </div>
  <div style={{display:"flex",gap:6}}>
- {[1,2,3,4,5].map(m=>{
- const slot = activePicks.find(p=>p.mult===m);
+ {activePicks.map((slot,m)=>{
  const filled = slot && (slot.isParlay ? slot.parlayLegs.length>=2 : slot.bet!==null);
  return (
  <div key={m} style={{flex:1,height:6,borderRadius:3,background:filled?IOS.green:slot?"rgba(10,132,255,0.4)":"rgba(255,255,255,0.1)"}}/>
  );
  })}
  </div>
- {!hasParlay&&<div style={{fontSize:10.5,color:IOS.orange,marginTop:8,lineHeight:1.4}}>One pick must be a Longshot (+400 or better)</div>}
+ {!hasParlay&&!isCustomSlip&&<div style={{fontSize:10.5,color:IOS.orange,marginTop:8,lineHeight:1.4}}>One pick must be a Longshot (+400 or better)</div>}
  </div>
 
  {/* Grid Bet Browser entry */}
@@ -4173,7 +4176,7 @@ export default function App() {
  <div style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 13px 8px"}}>
 
  {/* Left: type label + legs */}
- <div style={{flex:1,minWidth:0}} onClick={()=>setActiveFlexSlot(idx)}>
+ <div style={{flex:1,minWidth:0}} onClick={()=>openSlot(idx)}>
  {/* Type row */}
  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:7}}>
  {slot.category ? (
@@ -4273,10 +4276,10 @@ export default function App() {
  {slot.isParlay&&parlayOdds?parlayOdds.american:slot.bet?.odds||""}
  </div>
  <div style={{display:"flex",gap:5}}>
- <div onClick={()=>setActiveFlexSlot(idx)} style={{background:"#2a2a2a",borderRadius:7,color:"#bbb",fontSize:11,fontWeight:600,padding:"4px 10px",cursor:"pointer"}}>
+ <div onClick={()=>openSlot(idx)} style={{background:"#2a2a2a",borderRadius:7,color:"#bbb",fontSize:11,fontWeight:600,padding:"4px 10px",cursor:"pointer"}}>
  {filled?"Edit":"+ Pick"}
  </div>
- {filled&&<button onClick={e=>{e.stopPropagation();setActivePicks(prev=>prev.map((p,i)=>i===idx?{...EMPTY_FLEX[0],id:i}:p));}} style={{background:"#2a2a2a",border:"none",borderRadius:7,color:"#555",fontSize:14,width:26,height:26,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>}
+ {filled&&<button onClick={e=>{e.stopPropagation();setActivePicks(prev=>prev.map((p,i)=>i===idx?(p.locked?{id:i,bet:null,mult:p.mult,category:p.category,isParlay:false,parlayLegs:[],locked:true}:{...EMPTY_FLEX[0],id:i}):p));}} style={{background:"#2a2a2a",border:"none",borderRadius:7,color:"#555",fontSize:14,width:26,height:26,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>}
  </div>
  </div>
  </div>
@@ -4310,7 +4313,7 @@ export default function App() {
  {/* Bottom bar: multipliers + pts if win */}
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(0,0,0,0.25)",borderTop:"0.5px solid rgba(255,255,255,0.06)",padding:"6px 13px",gap:8}}>
  <div style={{display:"flex",gap:5}}>
- {[1,2,3,4,5].map(m=>{
+ {slot.locked ? [(<div key="lk" style={{width:34,height:26,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",background:(multColors[slot.mult]||"#2a2a2a"),color:"#fff",fontSize:11,fontWeight:700}}>{slot.mult}×</div>)] : [1,2,3,4,5].map(m=>{
  const taken = usedMults.includes(m) && slot.mult!==m;
  const active = slot.mult===m;
  return (
@@ -4371,7 +4374,7 @@ export default function App() {
  const targetSize = activeLeague.target_size||activeLeague.max_members||8;
  const leagueIsFull = activeLeagueId==="solo" || leagueMembers.length >= targetSize;
  if(!leagueIsFull) return null;
- return allFlexFilled && hasParlay
+ return allFlexFilled && (hasParlay||isCustomSlip)
  ? <button className="ios-btn green" onClick={async()=>{
  if(user) {
  const week = activeLeague.current_week||activeLeague.week||1;
@@ -4398,7 +4401,7 @@ export default function App() {
  league_id: activeLeague.id,
  user_id: user.id,
  week,
- slot: `longshot_${legIdx}`,
+ slot: isCustomSlip ? `longshot_${slotIdx}_${legIdx}` : `longshot_${legIdx}`,
  multiplier: effectiveMult,
  pick_name: b.pick,
  game: b.game||"",
@@ -4412,7 +4415,7 @@ export default function App() {
  league_id: activeLeague.id,
  user_id: user.id,
  week,
- slot: slot.category||"ml",
+ slot: isCustomSlip ? `${slot.category||"ml"}_${slotIdx}` : (slot.category||"ml"),
  multiplier: effectiveMult,
  pick_name: slot.bet.pick,
  game: slot.bet.game||"",
@@ -4436,7 +4439,7 @@ export default function App() {
  else { setActiveSavedPicks(locked); setActiveSubmitted(true); }
  }}> Lock Your Slip </button>
  : <button className="ios-btn disabled" disabled>
- {!hasParlay ? " Need a Longshot (+400 straight or +400 parlay)" : (activePicks.filter(p=>p.mult!==null&&(p.isParlay?p.parlayLegs.length>=2:p.bet!==null)).length + " / 5 Slots Filled")}
+ {(!hasParlay&&!isCustomSlip) ? " Need a Longshot (+400 straight or +400 parlay)" : (activePicks.filter(p=>p.mult!==null&&(p.isParlay?p.parlayLegs.length>=2:p.bet!==null)).length + " / " + activePicks.length + " Slots Filled")}
  </button>;
  })()}
  <div style={{height:20}}/>
@@ -6195,7 +6198,7 @@ export default function App() {
  await fetchStandings(activeLeague.id);
  await fetchSchedule(activeLeague.id, user.id);
  setSavedPicks(null);
- setFlexPicks(EMPTY_FLEX);
+ setFlexPicks(freshSlots());
  try { localStorage.removeItem(`linedup_picks_${activeLeague.id}_wk${currentWeek}`); } catch(e) {}
  setAdvancingWeek(false);
  }} style={{width:"100%",background:advancingWeek?"rgba(255,255,255,0.08)":IOS.green,border:"none",borderRadius:12,padding:"14px",fontFamily:"Barlow,sans-serif",fontSize:15,fontWeight:700,color:advancingWeek?"rgba(255,255,255,0.3)":"#000",cursor:advancingWeek?"default":"pointer"}}>
@@ -6895,7 +6898,7 @@ export default function App() {
  setRealLeagues([]);
  setActiveLeagueId(null);
  setSavedPicks(null);
- setFlexPicks(EMPTY_FLEX);
+ setFlexPicks(freshSlots());
  setScreen("home");
  }} style={{width:"100%",background:"rgba(255,59,48,0.1)",border:"1px solid rgba(255,59,48,0.2)",borderRadius:12,padding:"14px",fontSize:15,fontWeight:600,color:IOS.red,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
  Sign Out
@@ -6916,7 +6919,7 @@ export default function App() {
  setRealLeagues([]);
  setActiveLeagueId(null);
  setSavedPicks(null);
- setFlexPicks(EMPTY_FLEX);
+ setFlexPicks(freshSlots());
  setScreen("home");
  alert("Your account has been deleted.");
  }} style={{width:"100%",background:"transparent",border:"none",borderRadius:12,padding:"10px",fontSize:13,fontWeight:600,color:"rgba(255,59,48,0.5)",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>

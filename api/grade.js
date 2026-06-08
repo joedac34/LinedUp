@@ -214,6 +214,7 @@ function gradeProp(pickName, gameField, index, info = {}) {
 // ── Grade a single straight pick ─────────────────────────────────────────────
 function gradePick(pick, games, playerIndex, info = {}) {
   const slot = pick.slot;
+  const baseType = (slot||"").split("_")[0];
   const name = (pick.pick_name || "").trim();
   // The matchup ("Away @ Home") lives in pick.game. O/U pick_names have NO team
   // in them (e.g. "Over 217.5"), so we MUST use pick.game to find the game.
@@ -222,7 +223,7 @@ function gradePick(pick, games, playerIndex, info = {}) {
 
   // ── Prop (player stat): graded from the ESPN box-score index, not team scores.
   //    pick.game holds the player name for props (e.g. "Mikal Bridges").
-  if (slot === "prop" || (slot?.startsWith("longshot_") && parseProp(name))) {
+  if (baseType === "prop" || (slot?.startsWith("longshot_") && parseProp(name))) {
     return gradeProp(name, pick.game, playerIndex || {}, info);
   }
 
@@ -258,14 +259,14 @@ function gradePick(pick, games, playerIndex, info = {}) {
   const margin     = Math.abs(homeScore - awayScore);
 
   // ── Moneyline ──
-  if (slot === "ml" || slot === "longshot_ml") {
+  if (baseType === "ml" || slot === "longshot_ml") {
     const pickedTeamWords = name.toLowerCase().split(" ");
     const pickedHome = pickedTeamWords.some(w => w.length > 3 && winnerName.toLowerCase().includes(w));
     return pickedHome ? "W" : "L";
   }
 
   // ── Spread ──
-  if (slot === "spread") {
+  if (baseType === "spread") {
     // pick_name format: "Team Name +/-X.X"  e.g. "Los Angeles Rams -2.5"
     const spreadMatch = name.match(/([+-]?\d+\.?\d*)$/);
     if (!spreadMatch) return null;
@@ -288,7 +289,7 @@ function gradePick(pick, games, playerIndex, info = {}) {
   }
 
   // ── Over/Under ──
-  if (slot === "ou") {
+  if (baseType === "ou") {
     // pick_name format: "Over 44.5" or "Under 44.5"
     const ouMatch = name.match(/^(Over|Under)\s+([\d.]+)/i);
     if (!ouMatch) return null;
@@ -378,7 +379,7 @@ export default async function handler(req, res) {
 
       // Build the player box-score index once per sport, only if props are pending.
       const needProps = picks.some(p =>
-        p.slot === "prop" || (p.slot?.startsWith("longshot_") && !((p.game || "").includes("@")))
+        (p.slot||"").split("_")[0] === "prop" || (p.slot?.startsWith("longshot_") && !((p.game || "").includes("@")))
       );
       let playerIndex = {};
       if (needProps) {
