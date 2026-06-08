@@ -1168,6 +1168,16 @@ export default function App() {
  const [newLeagueWeeks, setNewLeagueWeeks] = useState(18);
  const [newLeagueStep, setNewLeagueStep] = useState(0); // 0=type, 1=details
  const [newLeaguePrivacy, setNewLeaguePrivacy] = useState('private');
+ const SLOT_TYPES=[
+  {id:"ml",l:"Moneyline",scope:"Game line",color:"#0A84FF"},
+  {id:"spread",l:"Spread",scope:"Game line",color:"#30D158"},
+  {id:"ou",l:"Over / Under",scope:"Game line",color:"#FF9F0A"},
+  {id:"prop",l:"Player Prop",scope:"Props",color:"#FFD60A"},
+  {id:"longshot",l:"Longshot / Parlay",scope:"Exotic",color:"#FF375F"},
+ ];
+ const DEFAULT_SLOTS=[{type:"ml",mult:1},{type:"prop",mult:2},{type:"ou",mult:3},{type:"spread",mult:4},{type:"longshot",mult:5}];
+ const [newLeagueSlots,setNewLeagueSlots]=useState([{type:"ml",mult:1},{type:"prop",mult:2},{type:"ou",mult:3},{type:"spread",mult:4},{type:"longshot",mult:5}]);
+ const [slotSheetIdx,setSlotSheetIdx]=useState(null);
  const [advancingWeek, setAdvancingWeek] = useState(false);
  const [creatingLeague, setCreatingLeague] = useState(false);
 
@@ -1197,6 +1207,10 @@ export default function App() {
  if(error){alert(`leagues error: ${error.message} | code: ${error.code} | details: ${error.details}`);setCreatingLeague(false);return;}
  const {error:memberError} = await supabase.from("league_members").insert({league_id:data.id,user_id:user.id,is_commissioner:true});
  if(memberError){alert(`league_members error: ${memberError.message} | code: ${memberError.code}`);setCreatingLeague(false);return;}
+ // Best-effort: store custom per-slot config (Pro). Safe no-op until the column exists.
+ if(isPro && Array.isArray(newLeagueSlots) && newLeagueSlots.length && newLeagueSlots.every(s=>s.type)){
+ await supabase.from("leagues").update({slot_config: JSON.stringify(newLeagueSlots)}).eq("id", data.id);
+ }
  await fetchLeagues(user.id);
  setNewLeagueCreated(data);
  setTimeout(()=>{ if(!isPro) setShowPostLeagueUpsell(true); }, 800);
@@ -5027,7 +5041,8 @@ export default function App() {
  {/* ── NEW LEAGUE MODAL ── */}
  {showNewLeague && (
  <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.7)",zIndex:50,display:"flex",flexDirection:"column",justifyContent:"flex-end",backdropFilter:"blur(8px)"}}
- onClick={()=>{if(!newLeagueCreated){setShowNewLeague(false);setNewLeagueSport(null);setNewLeagueSports([]);setNewLeagueName("");setNewLeagueSize(8);setNewLeagueType(null);setNewLeagueStep(0);setNewLeagueWeeks(18);setNewLeaguePrivacy('private');}}}>
+ onClick={()=>{if(!newLeagueCreated){setShowNewLeague(false);setNewLeagueSport(null);setNewLeagueSports([]);setNewLeagueName("");setNewLeagueSize(8);setNewLeagueType(null);setNewLeagueStep(0);setNewLeagueWeeks(18);
+ setNewLeagueSlots(DEFAULT_SLOTS); setSlotSheetIdx(null);setNewLeaguePrivacy('private');}}}>
  <div style={{background:IOS.bg2,borderRadius:"20px 20px 0 0",padding:"0 0 40px"}} onClick={e=>e.stopPropagation()}>
  <div style={{width:36,height:5,borderRadius:3,background:"rgba(255,255,255,0.2)",margin:"10px auto 0"}}/>
 
@@ -5071,7 +5086,7 @@ export default function App() {
  <div style={{padding:"20px 20px 0"}}>
  {/* Step indicator */}
  <div style={{display:"flex",gap:5,marginBottom:16}}>
-   {[0,1].map(i=><div key={i} style={{flex:1,height:3,borderRadius:2,background:newLeagueStep>=i?IOS.blue:"#1E1E1E",transition:"background .2s"}}/>)}
+   {(isPro?[0,1,2]:[0,1]).map(i=><div key={i} style={{flex:1,height:3,borderRadius:2,background:newLeagueStep>=i?IOS.blue:"#1E1E1E",transition:"background .2s"}}/>)}
  </div>
 
  {/* ── STEP 0: League type ── */}
@@ -5120,6 +5135,74 @@ export default function App() {
  )}
 
  {/* ── STEP 1: Details ── */}
+ {newLeagueStep===2&&(
+ <>
+ <button onClick={()=>setNewLeagueStep(1)} style={{background:"none",border:"none",color:"#555",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"Barlow,sans-serif",padding:"0 0 14px",display:"flex",alignItems:"center",gap:4}}>
+ <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg> Back
+ </button>
+ <div style={{fontSize:18,fontWeight:800,color:"#fff",marginBottom:4}}>Design the slip</div>
+ <div style={{fontSize:13,color:"#555",marginBottom:16}}>Set each player's weekly picks — how many, what type, and the points multiplier.</div>
+
+ <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"linear-gradient(160deg,#15151A,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.09)",borderRadius:14,padding:"13px 15px",marginBottom:14}}>
+ <div style={{fontSize:13,fontWeight:700,color:"#fff"}}>Picks per week<div style={{fontSize:11,color:"#555",fontWeight:600,marginTop:2}}>How many slots in the slip</div></div>
+ <div style={{display:"flex",alignItems:"center",gap:12}}>
+ <div onClick={()=>setNewLeagueSlots(s=>s.length>1?s.slice(0,-1):s)} style={{width:32,height:32,borderRadius:9,background:newLeagueSlots.length>1?"rgba(255,255,255,0.08)":"rgba(255,255,255,0.03)",display:"flex",alignItems:"center",justifyContent:"center",cursor:newLeagueSlots.length>1?"pointer":"default",fontSize:19,fontWeight:700,color:newLeagueSlots.length>1?"#fff":"#444"}}>−</div>
+ <div style={{fontSize:20,fontWeight:800,color:"#fff",minWidth:20,textAlign:"center"}}>{newLeagueSlots.length}</div>
+ <div onClick={()=>setNewLeagueSlots(s=>s.length<10?[...s,{type:null,mult:1}]:s)} style={{width:32,height:32,borderRadius:9,background:newLeagueSlots.length<10?"rgba(255,255,255,0.08)":"rgba(255,255,255,0.03)",display:"flex",alignItems:"center",justifyContent:"center",cursor:newLeagueSlots.length<10?"pointer":"default",fontSize:19,fontWeight:700,color:newLeagueSlots.length<10?"#fff":"#444"}}>+</div>
+ </div>
+ </div>
+
+ <div onClick={()=>setSlotSheetIdx(-1)} style={{display:"flex",alignItems:"center",gap:11,background:"linear-gradient(135deg,rgba(255,55,95,0.14),rgba(191,90,242,0.08))",border:"0.5px solid rgba(255,55,95,0.32)",borderRadius:13,padding:"12px 14px",marginBottom:14,cursor:"pointer"}}>
+ <div style={{width:32,height:32,borderRadius:9,background:"rgba(255,55,95,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#FF375F" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
+ <div style={{flex:1}}><div style={{fontSize:13,fontWeight:800,color:"#fff"}}>Single-type league</div><div style={{fontSize:11,color:"rgba(255,255,255,0.55)",marginTop:1}}>Make every slot the same type</div></div>
+ <div style={{color:"#555",fontSize:18}}>›</div>
+ </div>
+
+ {newLeagueSlots.map((s,i)=>{const tt=SLOT_TYPES.find(x=>x.id===s.type);return (
+ <div key={i} onClick={()=>setSlotSheetIdx(i)} style={{display:"flex",alignItems:"center",gap:11,background:"linear-gradient(160deg,#15151A,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.09)",borderRadius:13,padding:"12px 12px",marginBottom:9,cursor:"pointer"}}>
+ <div style={{width:26,height:26,borderRadius:8,background:"rgba(255,255,255,0.07)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:"rgba(255,255,255,0.55)",flexShrink:0}}>{i+1}</div>
+ <div style={{flex:1,minWidth:0}}>
+ <div style={{fontSize:15,fontWeight:800,color:tt?"#fff":"#666",display:"flex",alignItems:"center",gap:8}}>{tt&&<span style={{width:9,height:9,borderRadius:3,background:tt.color}}/>}{tt?tt.l:"Tap to choose type"}</div>
+ <div style={{fontSize:11,color:"#555",fontWeight:600,marginTop:2}}>{tt?tt.scope:"any bet type"}</div>
+ </div>
+ <div onClick={e=>e.stopPropagation()} style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+ <div onClick={()=>setNewLeagueSlots(arr=>arr.map((p,j)=>j===i?{...p,mult:Math.max(1,p.mult-1)}:p))} style={{width:24,height:24,borderRadius:7,background:"rgba(255,255,255,0.08)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer"}}>−</div>
+ <div style={{fontSize:14,fontWeight:800,color:"#FFD60A",minWidth:24,textAlign:"center"}}>{s.mult}×</div>
+ <div onClick={()=>setNewLeagueSlots(arr=>arr.map((p,j)=>j===i?{...p,mult:Math.min(5,p.mult+1)}:p))} style={{width:24,height:24,borderRadius:7,background:"rgba(255,255,255,0.08)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer"}}>+</div>
+ </div>
+ <div style={{color:"#555",fontSize:18,flexShrink:0}}>›</div>
+ </div>
+ );})}
+
+ {(()=>{const ready=newLeagueSlots.every(s=>s.type)&&!creatingLeague;const tot=newLeagueSlots.reduce((a,b)=>a+b.mult,0);const uniq=new Set(newLeagueSlots.map(s=>s.type)).size;return (<>
+ <div style={{textAlign:"center",fontSize:11,color:"#555",fontWeight:600,margin:"6px 0 9px"}}>{newLeagueSlots.length} picks · {tot} max multiplier{uniq===1&&newLeagueSlots.length>1?" · single-type league":""}</div>
+ <button disabled={!ready} onClick={()=>{if(ready)createLeague(newLeagueName.trim(), newLeagueSports[0]);}} style={{width:"100%",background:ready?IOS.blue:"rgba(255,255,255,0.08)",border:"none",borderRadius:12,padding:"15px",fontFamily:"Barlow,sans-serif",fontSize:16,fontWeight:800,color:ready?"#fff":"rgba(255,255,255,0.25)",cursor:ready?"pointer":"default",marginBottom:4}}>{creatingLeague?"Creating...":"Create League"}</button>
+ </>);})()}
+
+ {slotSheetIdx!==null&&(
+ <div style={{position:"fixed",inset:0,zIndex:200,display:"flex",flexDirection:"column",justifyContent:"flex-end"}}>
+ <div onClick={()=>setSlotSheetIdx(null)} style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.6)"}}/>
+ <div style={{position:"relative",background:"#0C0C10",borderTopLeftRadius:22,borderTopRightRadius:22,border:"0.5px solid rgba(255,255,255,0.09)",maxHeight:"80vh",display:"flex",flexDirection:"column"}}>
+ <div style={{width:38,height:4,borderRadius:2,background:"rgba(255,255,255,0.2)",margin:"10px auto 4px"}}/>
+ <div style={{padding:"6px 18px 12px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+ <div style={{fontSize:17,fontWeight:800,color:"#fff"}}>{slotSheetIdx===-1?"Single-type league":"Slot "+(slotSheetIdx+1)+" · pick type"}</div>
+ <div onClick={()=>setSlotSheetIdx(null)} style={{fontSize:13,fontWeight:700,color:IOS.blue,cursor:"pointer"}}>Done</div>
+ </div>
+ <div style={{overflowY:"auto",padding:"0 16px 26px"}}>
+ {slotSheetIdx===-1&&<div style={{fontSize:12,color:"rgba(255,255,255,0.5)",marginBottom:12,lineHeight:1.4}}>Pick one type and every slot becomes that type.</div>}
+ {SLOT_TYPES.map(tp=>{const sel=slotSheetIdx>=0&&newLeagueSlots[slotSheetIdx]&&newLeagueSlots[slotSheetIdx].type===tp.id;return (
+ <div key={tp.id} onClick={()=>{ if(slotSheetIdx===-1){setNewLeagueSlots(arr=>arr.map(p=>({...p,type:tp.id})));} else {setNewLeagueSlots(arr=>arr.map((p,j)=>j===slotSheetIdx?{...p,type:tp.id}:p));} setSlotSheetIdx(null); }} style={{display:"flex",alignItems:"center",gap:11,background:sel?"rgba(10,132,255,0.1)":"linear-gradient(160deg,#15151A,#0B0B0E 80%)",border:"0.5px solid "+(sel?"rgba(10,132,255,0.6)":"rgba(255,255,255,0.09)"),borderRadius:12,padding:"13px 14px",marginBottom:8,cursor:"pointer"}}>
+ <span style={{width:10,height:10,borderRadius:3,background:tp.color,flexShrink:0}}/>
+ <div style={{flex:1}}><div style={{fontSize:14,fontWeight:700,color:"#fff"}}>{tp.l}</div><div style={{fontSize:11,color:"#555",marginTop:1}}>{tp.scope}</div></div>
+ {sel&&<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+ </div>
+ );})}
+ </div>
+ </div>
+ </div>
+ )}
+ </>
+)}
  {newLeagueStep===1&&(
    <>
    <button onClick={()=>setNewLeagueStep(0)} style={{background:"none",border:"none",color:"#555",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"Barlow,sans-serif",padding:"0 0 14px",display:"flex",alignItems:"center",gap:4}}>
@@ -5246,10 +5329,10 @@ export default function App() {
    {/* Create button */}
    <button
      disabled={!newLeagueSports.length||!newLeagueName.trim()||creatingLeague}
-     onClick={()=>createLeague(newLeagueName.trim(), newLeagueSports[0])}
+     onClick={()=>{ if(!newLeagueSports.length||!newLeagueName.trim()) return; if(isPro){ setNewLeagueStep(2); } else { createLeague(newLeagueName.trim(), newLeagueSports[0]); } }}
      style={{width:"100%",background:newLeagueSports.length&&newLeagueName.trim()?IOS.blue:"rgba(255,255,255,0.08)",border:"none",borderRadius:10,padding:"13px",fontFamily:"Barlow,sans-serif",fontSize:15,fontWeight:700,color:newLeagueSports.length&&newLeagueName.trim()?"#fff":"rgba(255,255,255,0.25)",cursor:newLeagueSports.length&&newLeagueName.trim()?"pointer":"default",transition:"all .2s",marginBottom:4}}
    >
-     {creatingLeague?"Creating...":"Create League"}
+     {isPro?"Continue →":(creatingLeague?"Creating...":"Create League")}
    </button>
    </>
  )}
