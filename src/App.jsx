@@ -739,6 +739,8 @@ const puSVG = (id, color="#fff") => {
     peek:     <svg {...s}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/></svg>,
     bomb:     <svg {...s}><circle cx="11" cy="13" r="8"/><path d="M14 2l4 4"/><path d="M18 2l-4 4"/><line x1="14" y1="6" x2="18" y2="2"/></svg>,
     clock:    <svg {...s}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
+    swap:     <svg {...s}><polyline points="16 3 21 8 16 13"/><path d="M21 8H9a4 4 0 0 0-4 4"/><polyline points="8 21 3 16 8 11"/><path d="M3 16h12a4 4 0 0 0 4-4"/></svg>,
+    wildcard: <svg {...s}><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.4" fill={color} stroke="none"/><circle cx="15.5" cy="15.5" r="1.4" fill={color} stroke="none"/><circle cx="12" cy="12" r="1.4" fill={color} stroke="none"/></svg>,
   };
   return icons[id] || <svg {...s}><circle cx="12" cy="12" r="10"/></svg>;
 };
@@ -1014,6 +1016,8 @@ export default function App() {
  const [gridType, setGridType] = useState("ml");        // ml | spread | ou | prop | longshot
  const [gridPropSub, setGridPropSub] = useState("all"); // prop sub-category filter
  const [gridTargetSlot, setGridTargetSlot] = useState(null); // which flex slot a tapped card fills
+ const [gridSearch, setGridSearch] = useState("");
+ useEffect(()=>{ if(screen!=="browser"||isSoloMode) return; const _cfg=parseSlotConfig(activeLeague&&activeLeague.slot_config); if(!_cfg) return; const _allowed=[...new Set(_cfg.map(s=>s.type))]; const _ts=flexPicks[gridTargetSlot]; const _tgt=(gridTargetSlot!=null&&_ts&&_ts.locked)?_ts.category:null; const _want=_tgt||(_allowed.includes(gridType)?gridType:_allowed[0]); if(_want&&_want!==gridType) setGridType(_want); }, [screen, gridTargetSlot, activeLeagueId, gridType]);
  const [gridJustAdded, setGridJustAdded] = useState(null);   // bet id flashing "added" feedback
  // usedMults / availableMults / hasLongshot / allFlexFilled are derived inside the picks IIFE
  // so they always read from the correct activePicks (solo vs league). Do NOT compute them here.
@@ -2781,7 +2785,7 @@ export default function App() {
  ? <div style={{padding:"28px 20px",textAlign:"center",color:IOS.label3,fontSize:15}}>No offensive power-ups in inventory</div>
  : filteredPUs.map((pu,i)=>(
  <div key={i} className="pu-opt" onClick={()=>usePU(pu, showPUModal.context, showPUModal.context==="picks"?showPUModal.slotId:showPUModal.pickIdx)}>
- <div className="pu-opt-icon" style={{background:`${pu.color}20`}}>{puSVG(pu.icon,pu.color)}</div>
+ <div className="pu-opt-icon" style={{background:`${pu.color}20`}}>{puSVG(pu.id,pu.color)}</div>
  <div style={{flex:1}}>
  <div className="pu-opt-name">{pu.name}</div>
  <div className="pu-opt-desc">{pu.desc}</div>
@@ -2928,7 +2932,7 @@ export default function App() {
  <div className="wheel-overlay">
  {showWin && wonPU ? (
  <div className="win-modal">
- <div className="win-icon">{wonPU.icon}</div>
+ <div className="win-icon">{puSVG(wonPU.id,wonPU.color)}</div>
  <div className="win-got">You won a power-up</div>
  <div className="win-name">{wonPU.name}</div>
  <div className="win-rarity-pill" style={{background:`${wonPU.color}20`,color:wonPU.color,border:`1px solid ${wonPU.color}40`}}>
@@ -3349,7 +3353,7 @@ export default function App() {
  <div className="pu-scroll" style={{paddingBottom:6}}>
  {myPUs.map((pu,i)=>(
  <div key={i} className="pu-chip">
- <div className="pu-chip-icon">{puSVG(pu.icon,pu.color)}</div>
+ <div className="pu-chip-icon">{puSVG(pu.id,pu.color)}</div>
  <div><div className="pu-chip-name">{pu.name}</div><div className="pu-chip-rarity" style={{color:rarityColor(pu.rarity)}}>{pu.rarity}</div></div>
  </div>
  ))}
@@ -4459,6 +4463,8 @@ export default function App() {
  const ACC = { ml:IOS.blue, spread:IOS.green, ou:IOS.orange, prop:IOS.yellow, longshot:IOS.pink };
  const TYPE_LABELS = { ml:"Moneyline", spread:"Spread", ou:"Over/Under", prop:"Prop", longshot:"Longshot" };
  const acc = ACC[gridType] || IOS.blue;
+ const gridCfg = !isSoloMode ? parseSlotConfig(activeLeague&&activeLeague.slot_config) : null;
+ const allowedTypes = gridCfg ? [...new Set(gridCfg.map(s=>s.type))] : ["ml","spread","ou","prop","longshot"];
 
  // Resolve active sport (default to league's first sport)
  const sportsList = leagueSports && leagueSports.length ? leagueSports : ["nfl"];
@@ -4514,6 +4520,7 @@ export default function App() {
  // ─── RECENT FORM (placeholder until ESPN game logs are wired) ───
  // Deterministic from a seed so it's stable per team/bet (not random flicker).
  // Replace `formFor` with real last-3 results from your ESPN feed when ready.
+ const recordFor = (teamName, g) => { const pg=parseGame(g); const aw=(pg.away||"").toLowerCase(), hm=(pg.home||"").toLowerCase(); const e=(espnGames||[]).find(x=> (x.awayTeam&&aw&&x.awayTeam.toLowerCase().includes(aw)) || (x.homeTeam&&hm&&x.homeTeam.toLowerCase().includes(hm)) ); if(!e) return null; const side=sideOf(teamName,g); return side==="HOME"?(e.homeRecord||null):side==="AWAY"?(e.awayRecord||null):null; };
  const GRID_SHOW_FORM = true;
  const formFor = (seed="") => {
  let h=0; for(let i=0;i<seed.length;i++){ h=(h*31 + seed.charCodeAt(i))>>>0; }
@@ -4556,12 +4563,13 @@ export default function App() {
  });
  }
 
+ if(gridSearch.trim()){ const _q=gridSearch.toLowerCase().trim(); list = list.filter(b=>((b.pick||"")+" "+(b.game||"")).toLowerCase().includes(_q)); }
  const addCard = (bet) => {
  const cat = gridType==="longshot" ? "longshot" : gridType;
  // One bet per type (longshot legs excepted): if this type is already in the
  // slip, replace that slot instead of stacking a second bet of the same type.
  let dest = target;
- if(cat!=="longshot"){
+ if(cat!=="longshot" && !gridCfg){
  const existingIdx = activePicks.findIndex(p=>!p.isParlay && p.bet!==null && p.category===cat);
  if(existingIdx!==-1) dest = existingIdx;
  }
@@ -4639,9 +4647,9 @@ export default function App() {
 
  <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.07em",textTransform:"uppercase",color:acc,marginBottom:7,paddingRight:42}}>{topLabel}</div>
 
- <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2,paddingRight:34}}>
+ <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2,paddingRight:6}}>
  <div style={{fontSize:gridType==="longshot"||gridType==="ou"?12.5:14.5,fontWeight:800,color:"#fff",lineHeight:1.15,letterSpacing:"-0.3px",
- whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{title}</div>
+ display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{title}</div>
  </div>
  {sideChip && (
  <div style={{display:"inline-flex",marginTop:2,marginBottom:4,fontSize:8,fontWeight:800,letterSpacing:"0.05em",
@@ -4662,8 +4670,8 @@ export default function App() {
  {/* Bottom row: recent form + reward */}
  <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:6}}>
  <div>
- <StatLabel>Last 3</StatLabel>
- <FormDots seed={formSeed}/>
+ 
+ {(()=>{ const _rec=recordFor(formSeed, bet.game); return _rec ? (<><StatLabel>Record</StatLabel><div style={{fontSize:12.5,fontWeight:800,color:"#fff",lineHeight:1}}>{_rec}</div></>) : null; })()}
  </div>
  <div style={{textAlign:"right"}}>
  <StatLabel>{gridType==="longshot"?`${ret.toFixed(1)}× return`:"If win"}</StatLabel>
@@ -4725,7 +4733,7 @@ export default function App() {
 
  {/* Bet type switcher */}
  <div className="gbx-scroll" style={{display:"flex",gap:7,padding:`${sportsList.length>1?0:6}px 16px 9px`,overflowX:"auto"}}>
- {["ml","spread","ou","prop","longshot"].map(t=>{
+ {allowedTypes.map(t=>{
  const on = t===gridType; const tc = ACC[t];
  return (
  <div key={t} onClick={()=>{ setGridType(t); setGridPropSub("all"); }} style={{...pillBase,
@@ -4736,6 +4744,13 @@ export default function App() {
  })}
  </div>
 
+ <div style={{padding:"0 16px 9px"}}>
+ <div style={{display:"flex",alignItems:"center",gap:8,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"9px 12px"}}>
+ <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+ <input value={gridSearch} onChange={e=>setGridSearch(e.target.value)} placeholder="Search teams, players, bets" style={{flex:1,background:"none",border:"none",outline:"none",color:"#fff",fontSize:13,fontFamily:"Barlow,sans-serif"}}/>
+ {gridSearch&&<div onClick={()=>setGridSearch("")} style={{color:"rgba(255,255,255,0.4)",fontSize:16,cursor:"pointer",lineHeight:1}}>×</div>}
+ </div>
+</div>
  {/* Prop sub-filter */}
  {gridType==="prop" && (
  <div className="gbx-scroll" style={{display:"flex",gap:6,padding:"0 16px 10px",overflowX:"auto"}}>
@@ -6813,7 +6828,7 @@ export default function App() {
  : displayPUs.map((pu,i)=>(
  <div key={i} className="pu-card" style={{borderWidth:1,borderStyle:"solid",borderColor:`${pu.color}30`}}>
  <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:pu.color}}/>
- <div className="pu-card-icon" style={{background:`${pu.color}15`}}>{pu.icon}</div>
+ <div className="pu-card-icon" style={{background:`${pu.color}15`}}>{puSVG(pu.id,pu.color)}</div>
  <div style={{flex:1}}>
  <div className="pu-card-rarity" style={{color:rarityColor(pu.rarity)}}>{pu.rarity}</div>
  <div className="pu-card-name">{pu.name}</div>
@@ -6829,7 +6844,7 @@ export default function App() {
  <div style={{padding:"14px 20px 8px"}}><div style={{fontSize:13,fontWeight:600,color:IOS.label3,textTransform:"uppercase",letterSpacing:0.5}}>All Power-Ups</div></div>
  {POWER_UPS.map(pu=>(
  <div key={pu.id} style={{display:"flex",alignItems:"center",padding:"12px 16px",margin:"0 16px 6px",background:IOS.bg2,borderRadius:12,gap:12}}>
- <div style={{width:38,height:38,borderRadius:10,background:`${pu.color}15`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{pu.icon}</div>
+ <div style={{width:38,height:38,borderRadius:10,background:`${pu.color}15`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{puSVG(pu.id,pu.color)}</div>
  <div style={{flex:1}}><div style={{fontSize:14,fontWeight:600,color:"#fff",marginBottom:2}}>{pu.name}</div><div style={{fontSize:12,color:IOS.label3}}>{pu.desc}</div></div>
  <div style={{fontSize:10,fontWeight:700,color:rarityColor(pu.rarity),background:`${rarityColor(pu.rarity)}15`,border:`1px solid ${rarityColor(pu.rarity)}30`,padding:"3px 8px",borderRadius:6,whiteSpace:"nowrap"}}>{pu.rarity}</div>
  </div>
