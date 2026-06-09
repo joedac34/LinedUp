@@ -49,6 +49,49 @@ async function fetchScores(sportKey) {
   return r.json();
 }
 
+// ── ESPN scoreboard fetcher (LIVE + recent finals; free, no Odds API usage) ────
+// Returns games in the same shape the grader expects, plus an `inProgress` flag
+// and live scores so an Over can be graded the moment it clears its line.
+async function fetchScoresESPN(sport) {
+  const em = ESPN_MAP[sport];
+  if (!em) return [];
+  const now = Date.now();
+  const days = [];
+  for (let i = -1; i <= 2; i++) { // tomorrow..3 days back (covers tz edges + recent finals)
+    const d = new Date(now - i * 86400000);
+    days.push(`${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`);
+  }
+  const out = [], seen = new Set();
+  for (const day of days) {
+    try {
+      const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/${em.sp}/${em.lg}/scoreboard?dates=${day}`);
+      if (!r.ok) continue;
+      const data = await r.json();
+      for (const e of (data.events || [])) {
+        if (seen.has(e.id)) continue;
+        seen.add(e.id);
+        const comp = e.competitions && e.competitions[0];
+        if (!comp) continue;
+        const cs = comp.competitors || [];
+        const home = cs.find(c => c.homeAway === "home");
+        const away = cs.find(c => c.homeAway === "away");
+        if (!home || !away) continue;
+        const st = (e.status && e.status.type) || {};
+        const hn = (home.team && (home.team.displayName || home.team.name)) || "";
+        const an = (away.team && (away.team.displayName || away.team.name)) || "";
+        out.push({
+          home_team: hn,
+          away_team: an,
+          completed: !!st.completed,
+          inProgress: st.state === "in",
+          scores: [{ name: hn, score: home.score }, { name: an, score: away.score }],
+        });
+      }
+    } catch (e) { /* skip this day */ }
+  }
+  return out;
+}
+
 // ── ESPN box-score helpers (for player props) ────────────────────────────────
 const ESPN_MAP = {
   nfl: { sp: "football",   lg: "nfl" },
@@ -239,11 +282,11 @@ function gradePick(pick, games, playerIndex, info = {}) {
 
   // Find the matching game. Prefer games where BOTH teams are referenced
   // (true for ml/spread/ou because pick.game carries the full matchup).
-  let game = games.find(g => g.completed && teamRef(g.home_team) && teamRef(g.away_team));
+  let game = games.find(g => (g.completed || g.inProgress) && teamRef(g.home_team) && teamRef(g.away_team));
   // Fallback: single-team match (in case pick.game is missing on older picks).
-  if (!game) game = games.find(g => g.completed && (teamRef(g.home_team) || teamRef(g.away_team)));
+  if (!game) game = games.find(g => (g.completed || g.inProgress) && (teamRef(g.home_team) || teamRef(g.away_team)));
 
-  if (!game) { info.reason = "game_not_found_or_not_completed"; return null; }
+  if (!game) { info.reason = "game_not_found_or_not_live"; return null; }
   if (!game.scores) { info.reason = "no_scores_on_game"; return null; }
 
   const homeScore = parseFloat(game.scores?.find(s => s.name === game.home_team)?.score ?? -1);
@@ -257,6 +300,14 @@ function gradePick(pick, games, playerIndex, info = {}) {
   const winnerName = homeWon ? game.home_team : game.away_team;
   const loserName  = homeWon ? game.away_team : game.home_team;
   const margin     = Math.abs(homeScore - awayScore);
+
+  // ── Live early-win: an Over that has already cleared its line wins NOW, before
+  //    the game is final. Under / spread / ML / props all still require a final.
+  if (baseType === "ou") {
+    const om = name.match(/^over\s+([\d.]+)/i);
+    if (om && total > parseFloat(om[1])) return "W";
+  }
+  if (!game.completed) { info.reason = "game_in_progress"; return null; }
 
   // ── Moneyline ──
   if (baseType === "ml" || slot === "longshot_ml") {
@@ -349,6 +400,7 @@ export default async function handler(req, res) {
   try {
     const results = { graded: 0, skipped: 0, errors: [], reasons: {}, samples: [], debug: { scoresCompleted: [], scoresTotal: 0, indexedPlayers: 0 } };
     const playerIndexCache = {}; // sport -> { player: stats } (shared across leagues in this run)
+    const scoresCacheBySport = {}; // sport -> ESPN games (fetched once per run, fresh each invocation)
 
     // Scope: a manual trigger from the app sends { leagueId } and grades ONLY that
     // league. The cron job (no leagueId) grades every league.
@@ -359,8 +411,8 @@ export default async function handler(req, res) {
     if (!Array.isArray(leagues)) throw new Error("Failed to fetch leagues");
 
     for (const league of leagues) {
-      const sportKey = SPORT_KEYS[league.sport];
-      if (!sportKey) continue;
+      const espnMap = ESPN_MAP[league.sport];
+      if (!espnMap) continue;
 
       // Get all pending picks for current week
       const picks = await sbGet(
@@ -368,10 +420,14 @@ export default async function handler(req, res) {
       );
       if (!Array.isArray(picks) || picks.length === 0) continue;
 
-      // Fetch scores for this sport
+      // Fetch LIVE + recent scores from ESPN (free — does NOT touch the Odds API).
+      // Cached per sport within this run so leagues sharing a sport don't refetch.
       let games;
       try {
-        games = await fetchScores(sportKey);
+        if (!scoresCacheBySport[league.sport]) {
+          scoresCacheBySport[league.sport] = await fetchScoresESPN(league.sport);
+        }
+        games = scoresCacheBySport[league.sport];
       } catch (e) {
         results.errors.push(`${league.id}: scores fetch failed — ${e.message}`);
         continue;
