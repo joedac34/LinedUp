@@ -137,19 +137,181 @@ async function teamStats(sport, teamHint) {
   } catch { return null; }
 }
 
-async function fetchSportsData(ctx) {
-  if (!SDIO) return { lines: [], note: "no stats key" };
-  const out = { lines: [] };
-  if (ctx.betType === "prop" && ctx.player) {
-    const s = await playerStats(ctx.sport, ctx.player, ctx.market || ctx.selection, num(ctx.line));
-    if (s && s.lines) out.lines.push(...s.lines);
-    if (s && s.team) out.note = `${ctx.player} — ${s.position || ""} ${s.team || ""}`.trim();
-  } else {
-    // team line: pull the picked team's record
-    const hint = (ctx.selection || "").replace(/[+-]?\d+\.?\d*$/, "").replace(/\bML\b/i, "").trim();
-    const s = await teamStats(ctx.sport, hint);
-    if (s && s.lines) out.lines.push(...s.lines);
+// ── ESPN stat layer (free + REAL; ported from grade.js, which grading runs on) ─
+// SportsDataIO's FREE TRIAL returns scrambled/fake data, so ESPN is the right
+// source for real numbers. Endpoints below are the same ones grade.js uses.
+const ESPN_MAP = {
+  nfl: { sp: "football",   lg: "nfl" },
+  nba: { sp: "basketball", lg: "nba" },
+  mlb: { sp: "baseball",   lg: "mlb" },
+};
+const STAT_ALIASES = {
+  "points": ["PTS", "points"], "pts": ["PTS", "points"],
+  "rebounds": ["REB", "rebounds"], "reb": ["REB", "rebounds"], "boards": ["REB", "rebounds"],
+  "assists": ["AST", "assists"], "ast": ["AST", "assists"], "dimes": ["AST", "assists"],
+  "steals": ["STL", "steals"], "stl": ["STL", "steals"],
+  "blocks": ["BLK", "blocks"], "blk": ["BLK", "blocks"],
+  "turnovers": ["TO", "turnovers"],
+  "3-pointers": ["3PT"], "three pointers": ["3PT"], "threes": ["3PT"], "3pt": ["3PT"], "3 pointers": ["3PT"],
+  "passing yards": ["YDS", "passingYards"], "pass yds": ["YDS", "passingYards"], "pass yards": ["YDS", "passingYards"],
+  "rushing yards": ["YDS", "rushingYards"], "rush yds": ["YDS", "rushingYards"], "rush yards": ["YDS", "rushingYards"],
+  "receiving yards": ["YDS", "receivingYards"], "rec yds": ["YDS", "receivingYards"], "rec yards": ["YDS", "receivingYards"],
+  "receptions": ["REC", "receptions"], "touchdowns": ["TD"], "tds": ["TD"],
+  "strikeouts": ["K", "strikeouts"], "hits allowed": ["H", "hits"], "hits": ["H", "hits"],
+  "earned runs": ["ER", "earnedRuns"], "runs allowed": ["R", "runs"], "runs": ["R", "runs"],
+  "walks": ["BB", "walks"], "home runs": ["HR", "homeRuns"], "homers": ["HR", "homeRuns"],
+  "rbis": ["RBI", "RBIs"], "rbi": ["RBI", "RBIs"],
+};
+function normName(s) {
+  return (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
+}
+function resolveStatLabels(statText) {
+  const t = (statText || "").toLowerCase();
+  const entries = Object.entries(STAT_ALIASES).sort((a, b) => b[0].length - a[0].length);
+  for (const [k, labels] of entries) if (t.includes(k)) return labels;
+  return [];
+}
+function statNumber(raw) {
+  if (raw == null) return null;
+  const s = String(raw).trim();
+  const n = parseFloat(s.includes("-") ? s.split("-")[0] : s);
+  return isNaN(n) ? null : n;
+}
+function parseProp(pickName) {
+  const s = (pickName || "").trim(); let m;
+  m = s.match(/^(.+?)\s+(over|under)\s+([\d.]+)\s+(.+)$/i);
+  if (m) return { player: m[1].trim(), line: parseFloat(m[3]), stat: m[4].trim().toLowerCase() };
+  m = s.match(/^(over|under)\s+(.+?)\s+([\d.]+)\s+(.+)$/i);
+  if (m) return { player: m[2].trim(), line: parseFloat(m[3]), stat: m[4].trim().toLowerCase() };
+  m = s.match(/^(over|under)\s+([\d.]+)\s+(.+)$/i);
+  if (m) return { player: null, line: parseFloat(m[2]), stat: m[3].trim().toLowerCase() };
+  m = s.match(/^(.+?)\s+([\d.]+)\s*\+\s*(.+)$/);
+  if (m) return { player: m[1].trim(), line: parseFloat(m[2]), stat: m[3].trim().toLowerCase() };
+  return null;
+}
+function nameMatch(nm, target) {
+  if (!nm || !target) return false;
+  if (nm === target || nm.includes(target) || target.includes(nm)) return true;
+  const a = nm.split(" "), b = target.split(" ");
+  if (a.length && b.length && a[a.length - 1] === b[b.length - 1] && a[0][0] === b[0][0]) return true;
+  return false;
+}
+function dayStr(d) {
+  return `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+// Pull recent ESPN scoreboard events (parallel day fetches) for a sport.
+async function espnEvents(sp, lg, days) {
+  const now = Date.now();
+  const dates = [];
+  for (let i = 0; i < days; i++) dates.push(dayStr(new Date(now - i * 86400000)));
+  const all = await Promise.all(dates.map(async (day) => {
+    try {
+      const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/${sp}/${lg}/scoreboard?dates=${day}`);
+      if (!r.ok) return [];
+      return (await r.json()).events || [];
+    } catch { return []; }
+  }));
+  const seen = new Set(), out = [];
+  for (const evs of all) for (const e of evs) { if (!seen.has(e.id)) { seen.add(e.id); out.push(e); } }
+  return out;
+}
+// A player's recent stat SERIES -> avg, hit-rate vs line, high/low.
+async function espnPlayerSeries(sport, playerName, statText, line) {
+  const em = ESPN_MAP[sport]; if (!em) return null;
+  const labels = resolveStatLabels(statText); if (!labels.length) return null;
+  const target = normName(playerName); if (!target) return null;
+  const events = await espnEvents(em.sp, em.lg, 16);
+  const ids = events.filter(e => e.status?.type?.completed).map(e => e.id).slice(0, 20);
+  const series = [];
+  for (let i = 0; i < ids.length; i += 6) {
+    const batch = ids.slice(i, i + 6);
+    const results = await Promise.all(batch.map(async (id) => {
+      try {
+        const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/${em.sp}/${em.lg}/summary?event=${id}`);
+        if (!r.ok) return null;
+        return (await r.json()).boxscore?.players || null;
+      } catch { return null; }
+    }));
+    for (const players of results) {
+      if (!players) continue;
+      for (const teamBlock of players) {
+        for (const grp of (teamBlock.statistics || [])) {
+          const names = (grp.names || grp.labels || []), keys = (grp.keys || []);
+          for (const a of (grp.athletes || [])) {
+            if (a.didNotPlay) continue;
+            if (!nameMatch(normName(a.athlete?.displayName), target)) continue;
+            let val = null;
+            for (const lbl of labels) {
+              let idx = names.findIndex(n => String(n).toLowerCase() === lbl.toLowerCase());
+              if (idx < 0) idx = keys.findIndex(k => String(k).toLowerCase() === lbl.toLowerCase());
+              if (idx >= 0 && a.stats && a.stats[idx] != null) { val = statNumber(a.stats[idx]); break; }
+            }
+            if (val != null) series.push(val);
+          }
+        }
+      }
+    }
   }
+  if (!series.length) return null;
+  const n = series.length, avg = series.reduce((x, y) => x + y, 0) / n;
+  const lines = [{ value: avg.toFixed(1), label: `Avg / last ${n}` }];
+  if (line != null) lines.push({ value: `${series.filter(v => v > line).length}/${n}`, label: `Over ${line} (last ${n})` });
+  lines.push({ value: String(Math.max(...series)), label: `High (last ${n})` });
+  lines.push({ value: String(Math.min(...series)), label: `Low (last ${n})` });
+  return { lines, note: `${playerName} — last ${n} games (ESPN)` };
+}
+// A team's recent form (W-L over the last several completed games).
+async function espnTeamForm(sport, teamHint) {
+  const em = ESPN_MAP[sport]; if (!em || !teamHint) return null;
+  const target = normName(teamHint); if (!target) return null;
+  const events = await espnEvents(em.sp, em.lg, 24);
+  const games = [];
+  for (const e of events) {
+    if (!e.status?.type?.completed) continue;
+    const comp = e.competitions && e.competitions[0]; if (!comp) continue;
+    for (const c of (comp.competitors || [])) {
+      if (nameMatch(normName(c.team?.displayName || c.team?.name), target)) {
+        games.push({ date: e.date || "", win: c.winner === true });
+      }
+    }
+  }
+  if (!games.length) return null;
+  games.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  const recent = games.slice(0, 10);
+  const w = recent.filter(g => g.win).length, l = recent.length - w;
+  let streak = 0; for (const g of recent) { if (g.win === recent[0].win) streak++; else break; }
+  const lines = [{ value: `${w}-${l}`, label: `Last ${recent.length}` }];
+  if (streak > 1) lines.push({ value: `${streak}`, label: recent[0].win ? "Win streak" : "Loss streak" });
+  return { lines, note: `${teamHint} — recent form (ESPN)` };
+}
+function parsePropCtx(ctx) {
+  const p = parseProp(ctx.selection || "");
+  const player = ctx.player || (p && p.player) || null;
+  const stat = ctx.market || (p && p.stat) || ctx.selection || "";
+  const line = ctx.line != null ? num(ctx.line) : (p ? p.line : null);
+  if (!player) return null;
+  return { player, stat, line };
+}
+function teamHintFromSelection(sel) {
+  return (sel || "").replace(/\s*[+-]?\d+(\.\d+)?\s*$/, "").replace(/\bml\b/i, "").trim();
+}
+
+async function fetchSportsData(ctx) {
+  const out = { lines: [] };
+  try {
+    if (ctx.betType === "prop") {
+      const prop = parsePropCtx(ctx);
+      if (prop && prop.player) {
+        const s = await espnPlayerSeries(ctx.sport, prop.player, prop.stat, prop.line != null ? prop.line : num(ctx.line));
+        if (s && s.lines && s.lines.length) { out.lines.push(...s.lines); out.note = s.note; }
+      }
+    } else if (ctx.betType === "ml" || ctx.betType === "spread") {
+      const s = await espnTeamForm(ctx.sport, teamHintFromSelection(ctx.selection));
+      if (s && s.lines && s.lines.length) { out.lines.push(...s.lines); out.note = s.note; }
+    }
+    // ou (game totals) stays qualitative for now — scoring-trend enrichment is a later pass.
+  } catch (e) { /* degrade to qualitative; never block the insight */ }
   return out;
 }
 

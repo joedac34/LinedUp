@@ -1134,7 +1134,104 @@ export default function App() {
  ...BETS.longshot.map(b=>({...b, category:"longshot", categoryLabel:"Parlay Leg", categoryColor:IOS.pink})),
  ];
 
- // Grading state — weekPicks per league, stored locally
+ // ─── AI INSIGHT (Ask AI) ──────────────────────────────────────────
+  const [aiThread, setAiThread] = useState([]);
+  const [aiInput, setAiInput] = useState("");
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiReturn, setAiReturn] = useState("home");
+  const aiSuggestions = aiInput.trim().length>=2
+    ? ALL_BETS.filter(b => ((b.pick||"")+" "+(b.game||"")).toLowerCase().includes(aiInput.trim().toLowerCase())).slice(0,6)
+    : [];
+  const buildBetCtx = (bet, category) => ({
+    sport: bet._sport || leagueSports[0] || "nfl",
+    betType: category,
+    selection: bet.pick,
+    game: bet.game,
+    odds: bet.odds,
+    userId: user?.id,
+  });
+  const aiAddToSlip = (bet, category) => {
+    const picks = isSoloMode ? soloFlexPicks : flexPicks;
+    const setPicks = isSoloMode ? setSoloFlexPicks : setFlexPicks;
+    let dest = picks.findIndex(pp=>!pp.isParlay && pp.bet===null && (!pp.locked || pp.category===category));
+    if(dest===-1) dest = picks.findIndex(pp=>!pp.isParlay && pp.bet!==null && pp.category===category);
+    if(dest===-1) return false;
+    setPicks(prev=>prev.map((pp,i)=> i===dest ? {...pp, bet, category, isParlay:false, parlayLegs:[]} : pp));
+    return true;
+  };
+  const askInsight = async (ctx, label, bet, category) => {
+    const item = { role:"ai", label: label||ctx.selection, bet:bet||null, category:category||null, loading:true };
+    setAiThread(prev=>[...prev, { role:"user", text: label||ctx.selection }, item]);
+    setAiBusy(true);
+    try{
+      const r = await fetch("/api/insight", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(ctx) });
+      const data = await r.json();
+      setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, data: r.ok?data:null, error: r.ok?null:(data.error||"Couldn't load insight")} : x));
+    }catch(e){
+      setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, error:"Network error — try again"} : x));
+    }finally{ setAiBusy(false); }
+  };
+  const askFromBet = (bet, category) => {
+    if(!isPro){ setShowPaywall("ai"); return; }
+    setAiReturn(screen); setScreen("ai");
+    askInsight(buildBetCtx(bet, category), bet.pick, bet, category);
+  };
+  const renderAiItem = (item, i) => {
+    if(item.role==="user"){
+      return (<div key={i} style={{alignSelf:"flex-end",maxWidth:"82%",background:IOS.blue,color:"#fff",borderRadius:"14px 14px 4px 14px",padding:"8px 12px",fontSize:13,fontWeight:600,marginLeft:"auto"}}>{item.text}</div>);
+    }
+    return (<div key={i} style={{alignSelf:"flex-start",width:"100%",background:"linear-gradient(160deg,#16161B,#0C0C0F)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:"14px 14px 14px 4px",padding:"13px 14px"}}>
+      <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg>
+        <span style={{fontSize:11,fontWeight:800,letterSpacing:"-0.2px",color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.label}</span>
+      </div>
+      {item.loading && (<div style={{fontSize:12.5,color:"rgba(255,255,255,0.5)",fontWeight:600}}>Analyzing the numbers…</div>)}
+      {item.error && (<div style={{fontSize:12.5,color:IOS.red,fontWeight:600}}>{item.error}</div>)}
+      {item.data && (<div>
+        <div style={{fontSize:13,lineHeight:1.5,color:"rgba(255,255,255,0.86)",marginBottom:(item.data.keyStats&&item.data.keyStats.length)?11:8}}>{item.data.summary}</div>
+        {item.data.keyStats && item.data.keyStats.length>0 && (
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7,marginBottom:11}}>
+            {item.data.keyStats.slice(0,4).map((s,si)=>(
+              <div key={si} style={{background:"rgba(255,255,255,0.04)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:9,padding:"8px 10px"}}>
+                <div style={{fontSize:16,fontWeight:800,color:"#fff",lineHeight:1.1}}>{s.value}</div>
+                <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.04em",textTransform:"uppercase",color:"rgba(255,255,255,0.4)",marginTop:3}}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+        )}
+        {item.data.trends && item.data.trends.length>0 && (
+          <div style={{display:"flex",flexDirection:"column",gap:5,marginBottom:11}}>
+            {item.data.trends.map((tr,ti)=>(
+              <div key={ti} style={{display:"flex",alignItems:"flex-start",gap:7,fontSize:12,color:"rgba(255,255,255,0.7)"}}>
+                <span style={{flexShrink:0,marginTop:2,display:"inline-flex"}}>{tr.dir==="up"
+                  ? <svg width="9" height="9" viewBox="0 0 10 10" fill={IOS.green}><path d="M5 1l4 8H1z"/></svg>
+                  : <svg width="9" height="9" viewBox="0 0 10 10" fill={IOS.red}><path d="M5 9L1 1h8z"/></svg>}</span>
+                <span style={{lineHeight:1.4}}>{tr.text}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        <div style={{borderLeft:"3px solid "+IOS.green,paddingLeft:9,marginBottom:8}}>
+          <div style={{fontSize:9,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:IOS.green,marginBottom:2}}>Bull case</div>
+          <div style={{fontSize:12.5,lineHeight:1.45,color:"rgba(255,255,255,0.8)"}}>{item.data.bullCase}</div>
+        </div>
+        <div style={{borderLeft:"3px solid "+IOS.red,paddingLeft:9}}>
+          <div style={{fontSize:9,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:IOS.red,marginBottom:2}}>Bear case</div>
+          <div style={{fontSize:12.5,lineHeight:1.45,color:"rgba(255,255,255,0.8)"}}>{item.data.bearCase}</div>
+        </div>
+        {item.bet && (
+          <button onClick={()=>{ if(aiAddToSlip(item.bet,item.category)){ setAiThread(prev=>prev.map(x=>x===item?{...x,added:true}:x)); } }} disabled={item.added}
+            style={{marginTop:12,width:"100%",padding:"10px",borderRadius:10,border:"none",cursor:item.added?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,
+            background:item.added?"rgba(48,209,88,0.18)":IOS.blue,color:item.added?IOS.green:"#fff",fontSize:13,fontWeight:800}}>
+            {item.added && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+            {item.added?"Added to slip":"Add to slip"}
+          </button>
+        )}
+      </div>)}
+    </div>);
+  };
+
+  // Grading state — weekPicks per league, stored locally
  const [gradingData, setGradingData] = useState(() => {
  const init = {};
  LEAGUES_DATA.forEach(lg => { init[lg.id] = JSON.parse(JSON.stringify(lg.weekPicks||[])); });
@@ -3062,6 +3159,7 @@ export default function App() {
  </div>
  <div className="gh-center"></div>
  <div className="gh-right">
+            <div className="gh-icon" onClick={()=>{ if(!isPro){setShowPaywall("ai");return;} setAiReturn(screen); setScreen("ai"); }} aria-label="PickLock AI"><svg width="18" height="18" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg></div>
  {!isSoloMode && <div className="gh-icon" onClick={()=>setScreen("chat")}>
  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
  {unreadChat>0 && <span className="gh-badge">{unreadChat>9?"9+":unreadChat}</span>}
@@ -4768,6 +4866,7 @@ export default function App() {
 
  {/* Bottom row: recent form + reward */}
  <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:6}}>
+ <button onClick={(e)=>{e.stopPropagation(); askFromBet(bet, gridType==="longshot"?"longshot":gridType);}} aria-label="Ask AI" style={{display:"inline-flex",alignItems:"center",gap:4,padding:"4px 8px",borderRadius:8,background:`${acc}1a`,border:`1px solid ${acc}33`,color:acc,fontSize:9.5,fontWeight:800,cursor:"pointer",flexShrink:0,alignSelf:"flex-end"}}><svg width="11" height="11" viewBox="0 0 24 24" fill={acc}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg>AI</button>
  <div>
  
  {(()=>{ const _rec=recordFor(formSeed, bet.game); return _rec ? (<><StatLabel>Record</StatLabel><div style={{fontSize:12.5,fontWeight:800,color:"#fff",lineHeight:1}}>{_rec}</div></>) : null; })()}
@@ -6682,7 +6781,57 @@ export default function App() {
  )}
 
  {/* ══ CHAT ══ */}
- {screen==="chat"&&(
+ {screen==="ai"&&(
+          <div className="body" style={{display:"flex",flexDirection:"column",height:"100%",background:"#08080A",overflow:"hidden"}}>
+            <div style={{flexShrink:0,display:"flex",alignItems:"center",gap:11,padding:"12px 16px 10px",borderBottom:"0.5px solid rgba(255,255,255,0.08)"}}>
+              <div onClick={()=>setScreen(aiReturn||"home")} style={{width:34,height:34,borderRadius:10,background:"rgba(255,255,255,0.06)",border:"0.5px solid rgba(255,255,255,0.1)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:18,flexShrink:0}}>‹</div>
+              <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:0}}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg>
+                <div>
+                  <div style={{fontSize:18,fontWeight:800,letterSpacing:"-0.4px",color:"#fff",lineHeight:1}}>PickLock AI</div>
+                  <div style={{fontSize:10.5,color:"rgba(255,255,255,0.4)",marginTop:2}}>Real stats · your board only</div>
+                </div>
+              </div>
+            </div>
+            <div className="gbx-scroll" style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:10,padding:"14px 14px 16px"}}>
+              {aiThread.length===0 && (
+                <div style={{margin:"auto 0",textAlign:"center",padding:"20px 10px"}}>
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="rgba(255,255,255,0.5)" style={{marginBottom:12}}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg>
+                  <div style={{fontSize:15,fontWeight:800,color:"#fff",marginBottom:6}}>Break down any bet</div>
+                  <div style={{fontSize:12.5,color:"rgba(255,255,255,0.45)",lineHeight:1.5,maxWidth:260,margin:"0 auto 16px"}}>Tap a bet below, or search a player or team that's on your board.</div>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:7,justifyContent:"center"}}>
+                    {ALL_BETS.slice(0,5).map((b,bi)=>(
+                      <button key={bi} onClick={()=>askFromBet(b,b.category)} style={{padding:"7px 12px",borderRadius:18,background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.1)",color:"rgba(255,255,255,0.85)",fontSize:11.5,fontWeight:700,cursor:"pointer",maxWidth:180,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.pick}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {aiThread.map((item,i)=>renderAiItem(item,i))}
+            </div>
+            <div style={{flexShrink:0,position:"relative",borderTop:"0.5px solid rgba(255,255,255,0.08)",background:"#0B0B0E",padding:"10px 12px"}}>
+              {aiSuggestions.length>0 && (
+                <div style={{position:"absolute",left:12,right:12,bottom:"100%",marginBottom:8,background:"#15151A",border:"0.5px solid rgba(255,255,255,0.12)",borderRadius:12,overflow:"hidden",boxShadow:"0 -8px 24px rgba(0,0,0,0.5)"}}>
+                  {aiSuggestions.map((b,bi)=>(
+                    <div key={bi} onClick={()=>{ setAiInput(""); askFromBet(b,b.category); }} style={{padding:"10px 13px",borderBottom:bi<aiSuggestions.length-1?"0.5px solid rgba(255,255,255,0.06)":"none",cursor:"pointer"}}>
+                      <div style={{fontSize:13,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.pick}</div>
+                      <div style={{fontSize:10.5,color:"rgba(255,255,255,0.4)",marginTop:1}}>{b.categoryLabel} · {b.game}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <input value={aiInput} onChange={(e)=>setAiInput(e.target.value)} placeholder="Search a bet on your board…"
+                  onKeyDown={(e)=>{ if(e.key==="Enter" && aiSuggestions.length>0){ const b=aiSuggestions[0]; setAiInput(""); askFromBet(b,b.category); } }}
+                  style={{flex:1,background:"rgba(255,255,255,0.06)",border:"0.5px solid rgba(255,255,255,0.12)",borderRadius:11,padding:"11px 13px",color:"#fff",fontSize:13.5,outline:"none",fontFamily:"inherit"}}/>
+                <button onClick={()=>{ if(aiSuggestions.length>0){ const b=aiSuggestions[0]; setAiInput(""); askFromBet(b,b.category); } }} disabled={aiBusy||aiSuggestions.length===0}
+                  style={{width:42,height:42,flexShrink:0,borderRadius:11,border:"none",background:(aiSuggestions.length>0&&!aiBusy)?IOS.blue:"rgba(255,255,255,0.08)",color:"#fff",cursor:(aiSuggestions.length>0&&!aiBusy)?"pointer":"default",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {screen==="chat"&&(
  <>
  <div style={{padding:"10px 20px 14px",display:"flex",alignItems:"center",gap:12,background:"radial-gradient(120% 90% at 90% -10%, rgba(10,132,255,0.18), transparent 55%), linear-gradient(180deg,#0B1A2E 0%,#000 82%)"}}>
  <button onClick={()=>setScreen("home")} style={{background:"rgba(255,255,255,0.08)",border:"none",borderRadius:10,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:17,flexShrink:0}}>‹</button>
