@@ -1017,6 +1017,23 @@ export default function App() {
  const [gridPropSub, setGridPropSub] = useState("all"); // prop sub-category filter
  const [gridTargetSlot, setGridTargetSlot] = useState(null); // which flex slot a tapped card fills
  const [gridSearch, setGridSearch] = useState("");
+ const [showSwitcher, setShowSwitcher] = useState(false);
+ const [showAccountMenu, setShowAccountMenu] = useState(false);
+ const [unreadChat, setUnreadChat] = useState(0);
+ const CHAT_READ_KEY = (lid)=>"picklock_chat_read_"+lid;
+ const fetchUnread = async (lid)=>{
+ if(!lid || isSoloMode){ setUnreadChat(0); return; }
+ try{
+ let last="1970-01-01T00:00:00Z";
+ try{ last = localStorage.getItem(CHAT_READ_KEY(lid)) || last; }catch(e){}
+ let q = supabase.from("league_messages").select("id",{count:"exact",head:true}).eq("league_id",lid).gt("created_at",last);
+ if(user&&user.id) q=q.neq("user_id",user.id);
+ const {count}=await q;
+ setUnreadChat(count||0);
+ }catch(e){ setUnreadChat(0); }
+ };
+ useEffect(()=>{ if(screen==="chat"&&activeLeagueId&&!isSoloMode){ try{localStorage.setItem(CHAT_READ_KEY(activeLeagueId), new Date().toISOString());}catch(e){} setUnreadChat(0); } },[screen,activeLeagueId,isSoloMode]);
+ useEffect(()=>{ if(screen!=="chat") fetchUnread(activeLeagueId); },[activeLeagueId,screen,isSoloMode]);
  useEffect(()=>{ if(screen!=="browser"||isSoloMode) return; const _cfg=parseSlotConfig(activeLeague&&activeLeague.slot_config); if(!_cfg) return; const _allowed=[...new Set(_cfg.map(s=>s.type))]; const _ts=flexPicks[gridTargetSlot]; const _tgt=(gridTargetSlot!=null&&_ts&&_ts.locked)?_ts.category:null; const _want=_tgt||(_allowed.includes(gridType)?gridType:_allowed[0]); if(_want&&_want!==gridType) setGridType(_want); }, [screen, gridTargetSlot, activeLeagueId, gridType]);
  const [gridJustAdded, setGridJustAdded] = useState(null);   // bet id flashing "added" feedback
  // usedMults / availableMults / hasLongshot / allFlexFilled are derived inside the picks IIFE
@@ -2177,8 +2194,28 @@ export default function App() {
  .nav-subtitle{font-size:13px;color:${IOS.label3};margin-top:2px;}
 
  /* Scrollable body */
- .body{flex:1;overflow-y:auto;position:relative;z-index:1;padding-top:env(safe-area-inset-top,0px);}
+ .body{flex:1;overflow-y:auto;position:relative;z-index:1;padding-top:0;}
  .body-pad{padding-bottom:calc(100px + env(safe-area-inset-bottom,0px));}
+ .app-header{flex-shrink:0;z-index:25;position:relative;display:flex;align-items:center;gap:8px;height:52px;padding:0 14px;background:linear-gradient(180deg,#10101a 0%,#0b0b0e 100%);border-bottom:0.5px solid rgba(255,255,255,0.08);box-shadow:0 6px 18px rgba(0,0,0,0.45);}
+ .gh-left{display:flex;align-items:center;min-width:0;flex-shrink:0;}
+ .gh-center{flex:1;min-width:0;}
+ .gh-right{display:flex;align-items:center;gap:9px;flex-shrink:0;}
+ .gh-switch{display:flex;align-items:center;gap:6px;background:rgba(10,132,255,0.12);border:0.5px solid rgba(10,132,255,0.32);border-radius:10px;padding:7px 11px;cursor:pointer;max-width:200px;}
+ .gh-switch.solo{background:rgba(255,55,95,0.12);border-color:rgba(255,55,95,0.32);}
+ .gh-nm{font-size:13px;font-weight:700;color:#cfe4ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+ .gh-switch.solo .gh-nm{color:#ffc4d2;}
+ .gh-icon{position:relative;width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;cursor:pointer;}
+ .gh-badge{position:absolute;top:-3px;right:-3px;min-width:16px;height:16px;border-radius:8px;background:${IOS.pink};color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 4px;border:1.5px solid #0b0b0e;}
+ .gh-avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,${IOS.blue},${IOS.indigo});display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;cursor:pointer;color:#fff;}
+ .gh-sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9000;display:flex;flex-direction:column;justify-content:flex-end;}
+ .gh-sheet{background:#0c0c10;border-top-left-radius:22px;border-top-right-radius:22px;border-top:0.5px solid rgba(255,255,255,0.09);padding:0 0 calc(14px + env(safe-area-inset-bottom,0px));max-height:75vh;overflow-y:auto;}
+ .gh-grip{width:38px;height:4px;border-radius:2px;background:rgba(255,255,255,0.2);margin:10px auto 6px;}
+ .gh-sheet-h{font-size:12px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:rgba(255,255,255,0.4);padding:8px 20px 6px;}
+ .gh-opt{display:flex;align-items:center;gap:12px;padding:13px 20px;cursor:pointer;}
+ .gh-opt:active{background:rgba(255,255,255,0.04);}
+ .gh-od{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+ .gh-on{font-size:15px;font-weight:700;color:#fff;}
+ .gh-osub{font-size:11.5px;color:rgba(255,255,255,0.4);margin-top:1px;}
 
  /* iOS grouped sections */
  .ios-section{margin:0 16px 10px;}
@@ -3011,6 +3048,70 @@ export default function App() {
  </div>
  )}
 
+ {(()=>{
+ const TAB_SCREENS = homeMode==="solo" ? ["home","picks","solohistory","solostats","profile"] : ["home","picks","matchup","leagues","profile"];
+ if(!TAB_SCREENS.includes(screen)) return null;
+ const initials = ((userProfile&&userProfile.username)||(user&&user.email)||"U").slice(0,2).toUpperCase();
+ return (
+ <div className="app-header">
+ <div className="gh-left">
+ <div className={"gh-switch"+(isSoloMode?" solo":"")} onClick={()=>setShowSwitcher(true)}>
+ <span className="gh-nm">{isSoloMode?"Solo Mode":((activeLeague&&activeLeague.name)||"Select league")}</span>
+ <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={isSoloMode?"#ffc4d2":"#9fc8ff"} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+ </div>
+ </div>
+ <div className="gh-center"></div>
+ <div className="gh-right">
+ {!isSoloMode && <div className="gh-icon" onClick={()=>setScreen("chat")}>
+ <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+ {unreadChat>0 && <span className="gh-badge">{unreadChat>9?"9+":unreadChat}</span>}
+ </div>}
+ <div className="gh-avatar" onClick={()=>setShowAccountMenu(true)}>{initials}</div>
+ </div>
+ </div>
+ );
+ })()}
+ {showSwitcher && (
+ <div className="gh-sheet-bg" onClick={()=>setShowSwitcher(false)}>
+ <div className="gh-sheet" onClick={e=>e.stopPropagation()}>
+ <div className="gh-grip"/>
+ <div className="gh-sheet-h">Switch</div>
+ <div className="gh-opt" onClick={()=>{setHomeMode("solo");setIsSoloMode(true);try{fetchSoloWeeks();}catch(e){} setScreen("home");setShowSwitcher(false);}}>
+ <div className="gh-od" style={{background:"rgba(255,55,95,0.12)"}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FF375F" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+ <div style={{flex:1}}><div className="gh-on">Solo Mode</div><div className="gh-osub">Just you, every week</div></div>
+ {isSoloMode && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+ </div>
+ {realLeagues.map(l=>(
+ <div key={l.id} className="gh-opt" onClick={()=>{setHomeMode("leagues");setIsSoloMode(false);setActiveLeagueId(l.id);setScreen("home");setShowSwitcher(false);}}>
+ <div className="gh-od" style={{background:"rgba(10,132,255,0.12)"}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+ <div style={{flex:1}}><div className="gh-on">{l.name}</div><div className="gh-osub">{(SPORTS[l.sport]&&SPORTS[l.sport].label)||"League"}</div></div>
+ {!isSoloMode && activeLeagueId===l.id && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+ </div>
+ ))}
+ </div>
+ </div>
+ )}
+ {showAccountMenu && (
+ <div className="gh-sheet-bg" onClick={()=>setShowAccountMenu(false)}>
+ <div className="gh-sheet" onClick={e=>e.stopPropagation()}>
+ <div className="gh-grip"/>
+ <div className="gh-sheet-h">Account</div>
+ <div className="gh-opt" onClick={()=>{setScreen("profile");setShowAccountMenu(false);}}>
+ <div className="gh-od" style={{background:"rgba(10,132,255,0.12)"}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+ <div style={{flex:1}}><div className="gh-on">Profile</div><div className="gh-osub">Your stats &amp; badges</div></div>
+ </div>
+ <div className="gh-opt" onClick={()=>{setScreen("profile");setShowAccountMenu(false);}}>
+ <div className="gh-od" style={{background:"rgba(142,142,147,0.18)"}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>
+ <div style={{flex:1}}><div className="gh-on">Settings</div><div className="gh-osub">Notifications, season, members</div></div>
+ </div>
+ <div className="gh-opt" onClick={async()=>{setShowAccountMenu(false); await supabase.auth.signOut();}}>
+ <div className="gh-od" style={{background:"rgba(255,55,95,0.12)"}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FF375F" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></div>
+ <div style={{flex:1}}><div className="gh-on" style={{color:"#FF375F"}}>Sign Out</div><div className="gh-osub">{(user&&user.email)||""}</div></div>
+ </div>
+ </div>
+ </div>
+ )}
+
  {/* ══ HOME ══ */}
  {screen==="home"&&(
  <>
@@ -3027,9 +3128,7 @@ export default function App() {
  color:homeMode===m.id?"#fff":"rgba(255,255,255,0.4)"}}>{m.label}</div>
  ))}
  </div>
- <div onClick={()=>setScreen("chat")} style={{width:34,height:34,borderRadius:"50%",background:"rgba(255,255,255,0.08)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
- <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="9" cy="11" r="1" fill="#fff" stroke="none"/><circle cx="12" cy="11" r="1" fill="#fff" stroke="none"/><circle cx="15" cy="11" r="1" fill="#fff" stroke="none"/></svg>
- </div>
+
  </div>
  </div>
  {/* Commish Pro soft banner */}
