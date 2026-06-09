@@ -205,15 +205,17 @@ async function espnEvents(sp, lg, days) {
   const now = Date.now();
   const dates = [];
   for (let i = 0; i < days; i++) dates.push(dayStr(new Date(now - i * 86400000)));
-  const all = await Promise.all(dates.map(async (day) => {
-    try {
-      const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/${sp}/${lg}/scoreboard?dates=${day}`);
-      if (!r.ok) return [];
-      return (await r.json()).events || [];
-    } catch { return []; }
-  }));
-  const seen = new Set(), out = [];
-  for (const evs of all) for (const e of evs) { if (!seen.has(e.id)) { seen.add(e.id); out.push(e); } }
+  const out = [], seen = new Set();
+  for (let i = 0; i < dates.length; i += 8) {
+    const all = await Promise.all(dates.slice(i, i + 8).map(async (day) => {
+      try {
+        const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/${sp}/${lg}/scoreboard?dates=${day}`);
+        if (!r.ok) return [];
+        return (await r.json()).events || [];
+      } catch { return []; }
+    }));
+    for (const evs of all) for (const e of evs) { if (!seen.has(e.id)) { seen.add(e.id); out.push(e); } }
+  }
   return out;
 }
 // A player's recent stat SERIES -> avg, hit-rate vs line, high/low.
@@ -285,6 +287,77 @@ async function espnTeamForm(sport, teamHint) {
   if (streak > 1) lines.push({ value: `${streak}`, label: recent[0].win ? "Win streak" : "Loss streak" });
   return { lines, note: `${teamHint} — recent form (ESPN)` };
 }
+function parseGameTeams(game) {
+  const s = (game || "").trim();
+  if (s.includes("@")) { const p = s.split("@"); return { away: p[0].trim(), home: p[1].trim() }; }
+  const m = s.split(/\s+(?:vs\.?|at)\s+/i);
+  if (m.length === 2) return { away: m[0].trim(), home: m[1].trim() };
+  return { away: "", home: "" };
+}
+// Rich recent stats for a game bet: splits, scoring, margin, streak, head-to-head.
+async function espnGameStats(sport, ctx) {
+  const em = ESPN_MAP[sport]; if (!em) return { lines: [] };
+  const { away, home } = parseGameTeams(ctx.game);
+  const pickHint = teamHintFromSelection(ctx.selection);
+  const events = await espnEvents(em.sp, em.lg, sport === "nfl" ? 50 : 30);
+  const completed = events.filter(e => e.status?.type?.completed);
+  const collect = (teamName) => {
+    const tnorm = normName(teamName); if (!tnorm) return [];
+    const gs = [];
+    for (const e of completed) {
+      const comp = e.competitions && e.competitions[0]; if (!comp) continue;
+      const cs = comp.competitors || [];
+      const me = cs.find(c => nameMatch(normName(c.team?.displayName || c.team?.name), tnorm));
+      if (!me) continue;
+      const opp = cs.find(c => c !== me);
+      const pf = parseFloat(me.score), pa = parseFloat(opp?.score);
+      if (isNaN(pf) || isNaN(pa)) continue;
+      gs.push({ date: e.date || "", home: me.homeAway === "home", win: me.winner === true || pf > pa, pf, pa, opp: opp?.team?.displayName || "" });
+    }
+    gs.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+    return gs;
+  };
+  const summarize = (teamName) => {
+    const gs = collect(teamName).slice(0, sport === "nfl" ? 12 : 15);
+    if (!gs.length) return null;
+    const n = gs.length, w = gs.filter(g => g.win).length;
+    const rec = (arr) => `${arr.filter(g => g.win).length}-${arr.length - arr.filter(g => g.win).length}`;
+    const avg = (arr, k) => arr.length ? arr.reduce((s, g) => s + g[k], 0) / arr.length : 0;
+    let streak = 0; for (const g of gs) { if (g.win === gs[0].win) streak++; else break; }
+    const pf = avg(gs, "pf"), pa = avg(gs, "pa");
+    return { n, overall: `${w}-${n - w}`, home: rec(gs.filter(g => g.home)), away: rec(gs.filter(g => !g.home)),
+      pf: pf.toFixed(1), pa: pa.toFixed(1), margin: pf - pa, streak: streak > 1 ? `${gs[0].win ? "W" : "L"}${streak}` : null, games: gs };
+  };
+  let pickIsHome, pickName, oppName;
+  if (ctx.betType === "ou") { pickIsHome = true; pickName = home; oppName = away; }
+  else {
+    pickIsHome = nameMatch(normName(pickHint), normName(home));
+    pickName = pickIsHome ? home : (nameMatch(normName(pickHint), normName(away)) ? away : pickHint);
+    oppName = pickIsHome ? away : home;
+  }
+  const lines = [];
+  const me = summarize(pickName);
+  if (me) {
+    lines.push({ value: me.overall, label: `Record (last ${me.n})` });
+    lines.push({ value: pickIsHome ? me.home : me.away, label: pickIsHome ? "Home record" : "Away record" });
+    if (me.streak) lines.push({ value: me.streak, label: "Current streak" });
+    if (ctx.betType === "spread") lines.push({ value: (me.margin >= 0 ? "+" : "") + me.margin.toFixed(1), label: `Avg margin (last ${me.n})` });
+    lines.push({ value: me.pf, label: "Scored / game" });
+    lines.push({ value: me.pa, label: "Allowed / game" });
+    const h2h = me.games.filter(g => nameMatch(normName(g.opp), normName(oppName)));
+    if (h2h.length) { const hw = h2h.filter(g => g.win).length; lines.push({ value: `${hw}-${h2h.length - hw}`, label: `H2H (last ${h2h.length})` }); }
+  }
+  const opp = summarize(oppName);
+  if (opp) lines.push({ value: opp.overall, label: `${oppName} (last ${opp.n})` });
+  if (ctx.betType === "ou") {
+    if (me) lines.push({ value: (parseFloat(me.pf) + parseFloat(me.pa)).toFixed(1), label: `${pickName} games avg total` });
+    if (opp) lines.push({ value: (parseFloat(opp.pf) + parseFloat(opp.pa)).toFixed(1), label: `${oppName} games avg total` });
+  }
+  const note = ctx.betType === "ou"
+    ? (home && away ? `Total — ${away} @ ${home}` : "")
+    : (pickName ? `${pickName} (${pickIsHome ? "HOME" : "AWAY"}) vs ${oppName}` : "");
+  return { lines, note };
+}
 function parsePropCtx(ctx) {
   const p = parseProp(ctx.selection || "");
   const player = ctx.player || (p && p.player) || null;
@@ -306,11 +379,10 @@ async function fetchSportsData(ctx) {
         const s = await espnPlayerSeries(ctx.sport, prop.player, prop.stat, prop.line != null ? prop.line : num(ctx.line));
         if (s && s.lines && s.lines.length) { out.lines.push(...s.lines); out.note = s.note; }
       }
-    } else if (ctx.betType === "ml" || ctx.betType === "spread") {
-      const s = await espnTeamForm(ctx.sport, teamHintFromSelection(ctx.selection));
+    } else if (ctx.betType === "ml" || ctx.betType === "spread" || ctx.betType === "ou") {
+      const s = await espnGameStats(ctx.sport, ctx);
       if (s && s.lines && s.lines.length) { out.lines.push(...s.lines); out.note = s.note; }
     }
-    // ou (game totals) stays qualitative for now — scoring-trend enrichment is a later pass.
   } catch (e) { /* degrade to qualitative; never block the insight */ }
   return out;
 }
@@ -339,6 +411,9 @@ async function generate(ctx, stats) {
     "You are PickLock AI, a sharp, concise sports-betting analyst. " +
     "Use ONLY the figures in the DATA block — never invent, estimate, or recall numbers from memory. " +
     "If a relevant stat is missing, speak qualitatively and do not state a number. " +
+    "The DATA may include recent splits (overall, home, away records), per-game scoring, average margin, head-to-head, and current streak. " +
+    "Lead with the figures most relevant to THIS bet: a home team's home record, an away team's away record; for a spread emphasize average margin and scoring; for a total emphasize both teams' combined scoring. " +
+    "Do NOT mention against-the-spread (ATS) or cover rates, and never cite any split, streak, or head-to-head that is not present in DATA. " +
     "Write a grounded read (a short paragraph), then a few sentences each for the bull and bear case. " +
     "For keyStats, surface up to 4 of the most relevant figures FROM THE DATA block as {value,label}; if DATA is empty, return an empty keyStats array. " +
     "Be analytical, not a guarantee. This is for entertainment, not financial advice.";

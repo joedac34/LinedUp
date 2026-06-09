@@ -570,6 +570,85 @@ const rankMedal=r=>`${r}`;
 
 const polarToCart=(cx,cy,r,deg)=>{const rad=(deg-90)*Math.PI/180;return{x:cx+r*Math.cos(rad),y:cy+r*Math.sin(rad)};};
 
+function AiInsightBubble({ item, IOS, onAddToSlip }) {
+  const data = item.data;
+  const [words, setWords] = useState(0);
+  const [phase, setPhase] = useState(0);
+  const summaryWords = data ? String(data.summary || "").split(/\s+/).filter(Boolean) : [];
+  useEffect(() => {
+    if (!data) return;
+    setWords(0); setPhase(0);
+    let w = 0;
+    const iv = setInterval(() => {
+      w += 1; setWords(w);
+      if (w >= summaryWords.length) { clearInterval(iv); setTimeout(() => setPhase(1), 140); }
+    }, 30);
+    return () => clearInterval(iv);
+  }, [data]);
+  useEffect(() => {
+    if (phase >= 1 && phase < 5) { const tm = setTimeout(() => setPhase(pp => pp + 1), 240); return () => clearTimeout(tm); }
+  }, [phase]);
+  const wrap = (children) => (
+    <div style={{alignSelf:"flex-start",width:"100%",background:"linear-gradient(160deg,#16161B,#0C0C0F)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:"14px 14px 14px 4px",padding:"13px 14px"}}>
+      <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg>
+        <span style={{fontSize:11,fontWeight:800,letterSpacing:"-0.2px",color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.label}</span>
+      </div>
+      {children}
+    </div>
+  );
+  if (item.loading) return wrap(<div style={{display:"flex",gap:5,alignItems:"center",height:14}}><span className="ai-dot"/><span className="ai-dot" style={{animationDelay:"0.15s"}}/><span className="ai-dot" style={{animationDelay:"0.3s"}}/></div>);
+  if (item.error || !data) return wrap(<div style={{fontSize:12.5,color:IOS.red,fontWeight:600}}>{item.error || "Couldn't load insight"}</div>);
+  const shownSummary = summaryWords.slice(0, words).join(" ");
+  const typing = words < summaryWords.length;
+  return wrap(<div>
+    <div style={{fontSize:13,lineHeight:1.5,color:"rgba(255,255,255,0.86)",marginBottom:(data.keyStats&&data.keyStats.length)?11:8}}>
+      {shownSummary}{typing && <span className="ai-caret"/>}
+    </div>
+    {phase>=1 && data.keyStats && data.keyStats.length>0 && (
+      <div className="ai-rise" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7,marginBottom:11}}>
+        {data.keyStats.slice(0,4).map((s,si)=>(
+          <div key={si} style={{background:"rgba(255,255,255,0.04)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:9,padding:"8px 10px"}}>
+            <div style={{fontSize:16,fontWeight:800,color:"#fff",lineHeight:1.1}}>{s.value}</div>
+            <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.04em",textTransform:"uppercase",color:"rgba(255,255,255,0.4)",marginTop:3}}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+    )}
+    {phase>=2 && data.trends && data.trends.length>0 && (
+      <div className="ai-rise" style={{display:"flex",flexDirection:"column",gap:5,marginBottom:11}}>
+        {data.trends.map((tr,ti)=>(
+          <div key={ti} style={{display:"flex",alignItems:"flex-start",gap:7,fontSize:12,color:"rgba(255,255,255,0.7)"}}>
+            <span style={{flexShrink:0,marginTop:2,display:"inline-flex"}}>{tr.dir==="up"
+              ? <svg width="9" height="9" viewBox="0 0 10 10" fill={IOS.green}><path d="M5 1l4 8H1z"/></svg>
+              : <svg width="9" height="9" viewBox="0 0 10 10" fill={IOS.red}><path d="M5 9L1 1h8z"/></svg>}</span>
+            <span style={{lineHeight:1.4}}>{tr.text}</span>
+          </div>
+        ))}
+      </div>
+    )}
+    {phase>=3 && (
+      <div className="ai-rise" style={{borderLeft:"3px solid "+IOS.green,paddingLeft:9,marginBottom:8}}>
+        <div style={{fontSize:9,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:IOS.green,marginBottom:2}}>Bull case</div>
+        <div style={{fontSize:12.5,lineHeight:1.45,color:"rgba(255,255,255,0.8)"}}>{data.bullCase}</div>
+      </div>
+    )}
+    {phase>=4 && (
+      <div className="ai-rise" style={{borderLeft:"3px solid "+IOS.red,paddingLeft:9}}>
+        <div style={{fontSize:9,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:IOS.red,marginBottom:2}}>Bear case</div>
+        <div style={{fontSize:12.5,lineHeight:1.45,color:"rgba(255,255,255,0.8)"}}>{data.bearCase}</div>
+      </div>
+    )}
+    {phase>=5 && item.bet && (
+      <button className="ai-rise" onClick={onAddToSlip} disabled={item.added}
+        style={{marginTop:12,width:"100%",padding:"10px",borderRadius:10,border:"none",cursor:item.added?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:item.added?"rgba(48,209,88,0.18)":IOS.blue,color:item.added?IOS.green:"#fff",fontSize:13,fontWeight:800}}>
+        {item.added && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+        {item.added ? "Added to slip" : "Add to slip"}
+      </button>
+    )}
+  </div>);
+}
+
 function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeague, setNewLeagueStep, setShowBrowse, fetchPublicLeagues, setIsSoloMode, setActiveLeagueId, getOrCreateSoloLeague, soloSavedPicks, setSoloSavedPicks, soloFlexPicks, setSoloFlexPicks, soloSport, setSoloSport, setShowSoloSportPicker, soloSubmitted, setSoloSubmitted}) {
   const totalWins = soloWeeks.reduce((s,w)=>s+w.wins,0);
   const totalLosses = soloWeeks.reduce((s,w)=>s+w.losses,0);
@@ -6783,6 +6862,7 @@ export default function App() {
  {/* ══ CHAT ══ */}
  {screen==="ai"&&(
           <div className="body" style={{display:"flex",flexDirection:"column",height:"100%",background:"#08080A",overflow:"hidden"}}>
+            <style>{`@keyframes aiRise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}} .ai-rise{animation:aiRise .28s ease both;} @keyframes aiBlink{0%,100%{opacity:1}50%{opacity:0}} .ai-caret{display:inline-block;width:2px;height:0.95em;background:#0A84FF;margin-left:2px;vertical-align:-1px;border-radius:1px;animation:aiBlink .8s steps(1) infinite;} @keyframes aiPulse{0%,100%{opacity:0.25;transform:translateY(0)}50%{opacity:1;transform:translateY(-2px)}} .ai-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.6);display:inline-block;animation:aiPulse .9s ease-in-out infinite;}`}</style>
             <div style={{flexShrink:0,display:"flex",alignItems:"center",gap:11,padding:"12px 16px 10px",borderBottom:"0.5px solid rgba(255,255,255,0.08)"}}>
               <div onClick={()=>setScreen(aiReturn||"home")} style={{width:34,height:34,borderRadius:10,background:"rgba(255,255,255,0.06)",border:"0.5px solid rgba(255,255,255,0.1)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:18,flexShrink:0}}>‹</div>
               <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:0}}>
@@ -6806,7 +6886,10 @@ export default function App() {
                   </div>
                 </div>
               )}
-              {aiThread.map((item,i)=>renderAiItem(item,i))}
+              {aiThread.map((item,i)=> item.role==="user"
+                ? (<div key={i} style={{alignSelf:"flex-end",maxWidth:"82%",background:IOS.blue,color:"#fff",borderRadius:"14px 14px 4px 14px",padding:"8px 12px",fontSize:13,fontWeight:600,marginLeft:"auto"}}>{item.text}</div>)
+                : (<AiInsightBubble key={i} item={item} IOS={IOS} onAddToSlip={()=>{ if(aiAddToSlip(item.bet,item.category)){ setAiThread(prev=>prev.map(x=>x===item?{...x,added:true}:x)); } }} />)
+              )}
             </div>
             <div style={{flexShrink:0,position:"relative",borderTop:"0.5px solid rgba(255,255,255,0.08)",background:"#0B0B0E",padding:"10px 12px"}}>
               {aiSuggestions.length>0 && (
