@@ -567,6 +567,17 @@ const rankMedal=r=>`${r}`;
 
 const polarToCart=(cx,cy,r,deg)=>{const rad=(deg-90)*Math.PI/180;return{x:cx+r*Math.cos(rad),y:cy+r*Math.sin(rad)};};
 
+// Which power-ups may attach to which picks. Double = anything; Spread Enhancer
+// = spreads only; Insurance = parlays only; Second Chance = single picks only.
+function puAppliesTo(puId, category, isParlay) {
+  if (!puId) return false;
+  if (puId === "double") return true;
+  if (puId.indexOf("enhance") === 0) return category === "spread";
+  if (puId === "insurance") return !!isParlay || category === "longshot";
+  if (puId === "second") return !isParlay && category !== "longshot";
+  return true;
+}
+
 function PUBadge({ puId, size=16 }) {
   if (!puId) return null;
   const pu = POWER_UPS.find(p => p.id === puId);
@@ -3003,10 +3014,10 @@ export default function App() {
  </div>
  {(()=>{
  const filteredPUs = showPUModal?.context==="picks"
- ? myPUs.filter(pu=>pu.type==="offensive")
+ ? myPUs.filter(pu=>puAppliesTo(pu.id, showPUModal.category, showPUModal.isParlay))
  : myPUs;
  return filteredPUs.length===0
- ? <div style={{padding:"28px 20px",textAlign:"center",color:IOS.label3,fontSize:15}}>No offensive power-ups in inventory</div>
+ ? <div style={{padding:"28px 20px",textAlign:"center",color:IOS.label3,fontSize:15}}>No power-ups apply to this pick</div>
  : filteredPUs.map((pu,i)=>(
  <div key={i} className="pu-opt" onClick={()=>usePU(pu, showPUModal.context, showPUModal.context==="picks"?showPUModal.slotId:showPUModal.pickIdx)}>
  <div className="pu-opt-icon" style={{background:`${pu.color}20`}}>{puSVG(pu.id,pu.color)}</div>
@@ -4634,7 +4645,7 @@ export default function App() {
  <span style={{fontSize:9,color:IOS.label3,marginLeft:2}}></span>
  </div>
  ) : (
- <div onClick={e=>{e.stopPropagation();setShowPUModal({context:"picks",slotId:idx,slotLabel:slot.isParlay?"Parlay":slot.bet?.pick||"Pick"});}}
+ <div onClick={e=>{e.stopPropagation();setShowPUModal({context:"picks",slotId:idx,slotLabel:slot.isParlay?"Parlay":slot.bet?.pick||"Pick",category:slot.category||"ml",isParlay:!!slot.isParlay});}}
  style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:7,background:"rgba(255,255,255,0.05)",border:"1px dashed rgba(255,255,255,0.12)",cursor:"pointer"}}>
  <span style={{fontSize:10}}></span>
  <span style={{fontSize:10,fontWeight:600,color:IOS.label3}}>Power-Up</span>
@@ -5259,9 +5270,13 @@ export default function App() {
  </div>
  );
  const isParlay = picks[0]?.slot?.startsWith("longshot_");
+ const insured = picks[0]?.power_up_id === "insurance";
+ const lostLegs = picks.filter(p=>p.result==="L").length;
  const result = isParlay
- ? picks.some(p=>p.result==="L") ? "L"
- : picks.every(p=>p.result==="W") ? "W" : "pending"
+ ? picks.some(p=>p.result==="pending") ? "pending"
+ : (insured && lostLegs===1) ? "W"
+ : picks.some(p=>p.result==="L") ? "L"
+ : "W"
  : picks[0]?.result;
  const won = result==="W";
  const lost = result==="L";

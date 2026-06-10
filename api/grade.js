@@ -498,6 +498,16 @@ export default async function handler(req, res) {
               });
             }
             results.graded += group.length;
+          } else if (group[0].power_up_id === "insurance" && legResults.filter(r => r === "L").length === 1) {
+            // Insurance: parlay missed by exactly ONE leg -> score it as if that leg wasn't in it.
+            const winning = group.filter((p, i) => legResults[i] === "W");
+            const insuredPts = winning.length ? calcParlayPoints(group[0].multiplier, winning) : 0;
+            let placed = false;
+            for (let i = 0; i < group.length; i++) {
+              const give = legResults[i] === "W" && !placed; if (give) placed = true;
+              await sbPatch(`picks?id=eq.${group[i].id}`, { result: legResults[i], points_earned: give ? insuredPts : 0 });
+            }
+            results.graded += group.length;
           } else if (anyLost) {
             for (const p of group) {
               await sbPatch(`picks?id=eq.${p.id}`, { result: "L", points_earned: 0 });
