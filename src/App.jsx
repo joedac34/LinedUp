@@ -567,6 +567,17 @@ const rankMedal=r=>`${r}`;
 
 const polarToCart=(cx,cy,r,deg)=>{const rad=(deg-90)*Math.PI/180;return{x:cx+r*Math.cos(rad),y:cy+r*Math.sin(rad)};};
 
+function PUBadge({ puId, size=16 }) {
+  if (!puId) return null;
+  const pu = POWER_UPS.find(p => p.id === puId);
+  const color = pu ? pu.color : "#0A84FF";
+  return (
+    <span title={pu ? pu.name : ""} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:size,height:size,borderRadius:"50%",background:color+"26",border:"1px solid "+color+"66",flexShrink:0,overflow:"hidden"}}>
+      <span style={{display:"inline-flex",transform:"scale("+(size/30)+")",transformOrigin:"center"}}>{puSVG(puId, color)}</span>
+    </span>
+  );
+}
+
 function AiInsightBubble({ item, IOS, onAddToSlip }) {
   const data = item.data;
   const [words, setWords] = useState(0);
@@ -2049,6 +2060,8 @@ export default function App() {
  isParlay,
  parlayLegs: isParlay ? picks.map(pp=>({id:pp.id, pick:pp.pick_name, game:pp.game||"", odds:pp.odds, impliedOdds:pp.implied_odds})) : [],
  bet: isParlay ? null : {pick:picks[0].pick_name, game:picks[0].game||"", odds:picks[0].odds, impliedOdds:picks[0].implied_odds},
+ power_up_id: picks[0].power_up_id||null,
+ pu_tier: picks[0].pu_tier!=null?picks[0].pu_tier:null,
  category: cat,
  };
  });
@@ -3595,6 +3608,7 @@ export default function App() {
  <div key={i} style={{display:"flex",alignItems:"center",gap:5,padding:"5px 9px",borderRadius:8,background:`${c}1a`,border:`0.5px solid ${c}3d`,flexShrink:0}}>
  <span style={{fontSize:11,fontWeight:800,color:c}}>{slot.mult}×</span>
  <span style={{fontSize:10.5,fontWeight:700,color:"rgba(255,255,255,0.8)",letterSpacing:0.3}}>{catAbbr[cat]||"PICK"}{isParlay&&legs.length>0?` ${legs.length}`:""}</span>
+ {slot.power_up_id&&<PUBadge puId={slot.power_up_id} size={14} />}
  </div>
  );
  });
@@ -5276,7 +5290,7 @@ export default function App() {
  <div style={{position:"absolute",top:0,left:0,bottom:0,width:3,background:strip}}/>
  <div style={{position:"absolute",top:-20,right:-20,width:60,height:60,borderRadius:"50%",background:`radial-gradient(circle,${strip}1f,transparent 70%)`,pointerEvents:"none"}}/>
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
- <span style={{fontSize:8,fontWeight:800,color:c,letterSpacing:.4,textTransform:"uppercase",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{typeLabel}</span>
+ <div style={{display:"flex",alignItems:"center",gap:4,minWidth:0}}><span style={{fontSize:8,fontWeight:800,color:c,letterSpacing:.4,textTransform:"uppercase",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{typeLabel}</span>{picks[0]?.power_up_id&&<PUBadge puId={picks[0].power_up_id} size={13} />}</div>
  <span style={{fontSize:8,fontWeight:800,padding:"2px 5px",borderRadius:4,background:badgeBg,color:badgeColor,flexShrink:0,marginLeft:4}}>{won?"W":lost?"L":"–"}</span>
  </div>
  <div style={{fontSize:11,fontWeight:700,color:"#fff",lineHeight:1.25,marginTop:3,textAlign:"left",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{pickName}</div>

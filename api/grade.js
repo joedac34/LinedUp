@@ -321,7 +321,12 @@ function gradePick(pick, games, playerIndex, info = {}) {
     // pick_name format: "Team Name +/-X.X"  e.g. "Los Angeles Rams -2.5"
     const spreadMatch = name.match(/([+-]?\d+\.?\d*)$/);
     if (!spreadMatch) return null;
-    const spread = parseFloat(spreadMatch[1]);
+    let spread = parseFloat(spreadMatch[1]);
+    // Spread Enhancer power-up: move the line in the bettor's favor by the tier.
+    if (pick.power_up_id && pick.power_up_id.indexOf("enhance") === 0) {
+      const tier = parseFloat(pick.pu_tier);
+      if (!isNaN(tier)) spread += tier;
+    }
     const teamPart = name.replace(/[+-]?\d+\.?\d*$/, "").trim().toLowerCase();
 
     const pickedHome = game.home_team.toLowerCase().split(" ").some(w => w.length > 3 && teamPart.includes(w));
