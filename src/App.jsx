@@ -1148,21 +1148,45 @@ export default function App() {
  const [gridSearch, setGridSearch] = useState("");
  const [showSwitcher, setShowSwitcher] = useState(false);
  const [showAccountMenu, setShowAccountMenu] = useState(false);
- const [unreadChat, setUnreadChat] = useState(0);
- const CHAT_READ_KEY = (lid)=>"picklock_chat_read_"+lid;
- const fetchUnread = async (lid)=>{
- if(!lid || isSoloMode){ setUnreadChat(0); return; }
- try{
- let last="1970-01-01T00:00:00Z";
- try{ last = localStorage.getItem(CHAT_READ_KEY(lid)) || last; }catch(e){}
- let q = supabase.from("league_messages").select("id",{count:"exact",head:true}).eq("league_id",lid).gt("created_at",last);
- if(user&&user.id) q=q.neq("user_id",user.id);
- const {count}=await q;
- setUnreadChat(count||0);
- }catch(e){ setUnreadChat(0); }
+ const [unreadByLeague, setUnreadByLeague] = useState({});
+ const markLeagueRead = async (lid)=>{
+   if(!lid || isSoloMode || !(user&&user.id)) return;
+   try{ await supabase.from("chat_reads").upsert({user_id:user.id, league_id:lid, last_read_at:new Date().toISOString()},{onConflict:"user_id,league_id"}); }catch(e){}
  };
- useEffect(()=>{ if(screen==="chat"&&activeLeagueId&&!isSoloMode){ try{localStorage.setItem(CHAT_READ_KEY(activeLeagueId), new Date().toISOString());}catch(e){} setUnreadChat(0); } },[screen,activeLeagueId,isSoloMode]);
- useEffect(()=>{ if(screen!=="chat") fetchUnread(activeLeagueId); },[activeLeagueId,screen,isSoloMode]);
+ const fetchUnreadAll = async ()=>{
+   if(isSoloMode || !(user&&user.id) || realLeagues.length===0){ setUnreadByLeague({}); return; }
+   try{
+     const ids = realLeagues.map(l=>l.id);
+     const {data:reads} = await supabase.from("chat_reads").select("league_id,last_read_at").eq("user_id",user.id).in("league_id",ids);
+     const readMap={}; (reads||[]).forEach(r=>{ readMap[r.league_id]=r.last_read_at; });
+     // First time we see a league (migration / freshly joined): baseline to now so the
+     // user doesn't get flooded with the entire backlog as "unread".
+     const missing = ids.filter(id=>!(id in readMap));
+     if(missing.length){
+       const nowIso=new Date().toISOString();
+       try{ await supabase.from("chat_reads").upsert(missing.map(id=>({user_id:user.id,league_id:id,last_read_at:nowIso})),{onConflict:"user_id,league_id"}); }catch(e){}
+       missing.forEach(id=>{ readMap[id]=nowIso; });
+     }
+     const entries = await Promise.all(ids.map(async (lid)=>{
+       try{ const {count}=await supabase.from("league_messages").select("id",{count:"exact",head:true}).eq("league_id",lid).gt("created_at",readMap[lid]||"1970-01-01T00:00:00Z").neq("user_id",user.id); return [lid,count||0]; }
+       catch(e){ return [lid,0]; }
+     }));
+     const map={}; entries.forEach(([lid,c])=>{ map[lid]=c; });
+     setUnreadByLeague(map);
+   }catch(e){}
+ };
+ // Mark the open league read (on enter + as new messages arrive while viewing)
+ useEffect(()=>{ if(screen==="chat"&&activeLeagueId&&!isSoloMode){ markLeagueRead(activeLeagueId); setUnreadByLeague(prev=>({...prev,[activeLeagueId]:0})); } },[screen,activeLeagueId,isSoloMode,messages.length]);
+ // Refresh per-league unread off the chat screen, on league/screen change
+ useEffect(()=>{ if(screen!=="chat"&&!isSoloMode) fetchUnreadAll(); },[activeLeagueId,screen,isSoloMode,realLeagues]);
+ // Refresh on app focus + a slow poll while active
+ useEffect(()=>{
+   if(isSoloMode) return;
+   const onVis=()=>{ if(document.visibilityState==="visible"&&screen!=="chat") fetchUnreadAll(); };
+   document.addEventListener("visibilitychange",onVis);
+   const iv=setInterval(()=>{ if(document.visibilityState==="visible"&&screen!=="chat") fetchUnreadAll(); },30000);
+   return ()=>{ document.removeEventListener("visibilitychange",onVis); clearInterval(iv); };
+ },[isSoloMode,screen,realLeagues,user]);
  useEffect(()=>{ if(screen!=="browser"||isSoloMode) return; const _cfg=parseSlotConfig(activeLeague&&activeLeague.slot_config); if(!_cfg) return; const _allowed=[...new Set(_cfg.map(s=>s.type))]; const _ts=flexPicks[gridTargetSlot]; const _tgt=(gridTargetSlot!=null&&_ts&&_ts.locked)?_ts.category:null; const _want=_tgt||(_allowed.includes(gridType)?gridType:_allowed[0]); if(_want&&_want!==gridType) setGridType(_want); }, [screen, gridTargetSlot, activeLeagueId, gridType]);
  const [gridJustAdded, setGridJustAdded] = useState(null);   // bet id flashing "added" feedback
  // usedMults / availableMults / hasLongshot / allFlexFilled are derived inside the picks IIFE
@@ -3402,7 +3426,7 @@ export default function App() {
             <div onClick={()=>{ if(!isPro){setShowPaywall("ai");return;} setAiReturn(screen); setScreen("ai"); }} aria-label="Plok" style={{display:"inline-flex",alignItems:"center",gap:5,height:34,padding:"0 11px",borderRadius:17,background:`${IOS.blue}1f`,border:`1px solid ${IOS.blue}3a`,cursor:"pointer"}}><svg width="15" height="15" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg><span style={{fontSize:13,fontWeight:800,color:IOS.blue,letterSpacing:"-0.2px"}}>Plok</span></div>
  {!isSoloMode && <div className="gh-icon" onClick={()=>setScreen("chat")}>
  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
- {unreadChat>0 && <span className="gh-badge">{unreadChat>9?"9+":unreadChat}</span>}
+ {unreadByLeague[activeLeagueId]>0 && <span className="gh-badge">{unreadByLeague[activeLeagueId]>9?"9+":unreadByLeague[activeLeagueId]}</span>}
  </div>}
  <div className="gh-avatar" onClick={()=>setShowAccountMenu(true)}>{initials}</div>
  </div>
@@ -5922,7 +5946,7 @@ export default function App() {
        <div key={l.id} onClick={()=>{setActiveLeagueId(l.id);setLeagueSubTab("overview");}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 14px",borderBottom:i<realLeagues.length-1?`0.5px solid ${IOS.sep}`:"none",background:isSelected?"rgba(10,132,255,0.08)":"transparent",cursor:"pointer"}}>
          <div>
            <div style={{display:"flex",alignItems:"center",gap:6}}>
-             <div style={{fontSize:13,fontWeight:700,color:isSelected?IOS.blue:"#fff"}}>{l.name}</div>
+             <div style={{fontSize:13,fontWeight:700,color:isSelected?IOS.blue:"#fff"}}>{l.name}</div>{unreadByLeague[l.id]>0&&<span style={{minWidth:16,height:16,borderRadius:8,background:IOS.pink,color:"#fff",fontSize:10,fontWeight:800,display:"inline-flex",alignItems:"center",justifyContent:"center",padding:"0 4px"}}>{unreadByLeague[l.id]>9?"9+":unreadByLeague[l.id]}</span>}
              {l.privacy==="public"&&<div style={{fontSize:8,fontWeight:700,color:"#30D158",background:"rgba(48,209,88,0.1)",border:"0.5px solid rgba(48,209,88,0.25)",borderRadius:4,padding:"1px 5px",letterSpacing:.3}}>PUBLIC</div>}
              {l.privacy!=="public"&&<div style={{fontSize:8,fontWeight:700,color:"rgba(255,255,255,0.3)",background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:4,padding:"1px 5px",letterSpacing:.3}}>PRIVATE</div>}
            </div>
