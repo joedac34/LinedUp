@@ -39,6 +39,26 @@ async function sbPatch(path, body) {
   return r.json();
 }
 
+async function sbPost(path, body) {
+  try {
+    await fetch(`${SB_URL}/rest/v1/${path}`, { method: "POST", headers: { ...sbHeaders, Prefer: "return=minimal" }, body: JSON.stringify(body) });
+  } catch (e) { /* never let a notification failure break grading */ }
+}
+async function notifyPick(pick, league, result, pts, legs) {
+  try {
+    const won = result === "W";
+    const what = legs > 1 ? `${legs}-leg parlay` : pick.pick_name;
+    await sbPost("notifications", {
+      user_id: pick.user_id,
+      type: won ? "pick_win" : "pick_loss",
+      title: won ? "Pick won" : "Pick lost",
+      body: `${what}${won ? ` won — +${pts} pts` : " lost"}`,
+      data: { league_id: pick.league_id, week: pick.week, result, points: pts, league_name: (league && league.name) || "" },
+      created_at: new Date().toISOString(),
+    });
+  } catch (e) { /* swallow */ }
+}
+
 // ── Scores fetcher ────────────────────────────────────────────────────────────
 async function fetchScores(sportKey) {
   const apiKey = process.env.ODDS_API_KEY;
@@ -497,6 +517,7 @@ export default async function handler(req, res) {
                 points_earned: i === 0 ? totalPts : 0,
               });
             }
+            await notifyPick(group[0], league, "W", totalPts, group.length);
             results.graded += group.length;
           } else if (group[0].power_up_id === "insurance" && legResults.filter(r => r === "L").length === 1) {
             // Insurance: parlay missed by exactly ONE leg -> score it as if that leg wasn't in it.
@@ -507,11 +528,13 @@ export default async function handler(req, res) {
               const give = legResults[i] === "W" && !placed; if (give) placed = true;
               await sbPatch(`picks?id=eq.${group[i].id}`, { result: legResults[i], points_earned: give ? insuredPts : 0 });
             }
+            await notifyPick(group[0], league, "W", insuredPts, group.length);
             results.graded += group.length;
           } else if (anyLost) {
             for (const p of group) {
               await sbPatch(`picks?id=eq.${p.id}`, { result: "L", points_earned: 0 });
             }
+            await notifyPick(group[0], league, "L", 0, group.length);
             results.graded += group.length;
           } else {
             results.skipped += group.length; // still pending
@@ -528,6 +551,7 @@ export default async function handler(req, res) {
             if (result === "W" && pick.power_up_id === "double") pts *= 2;
             if (result === "W" && pick.power_up_id === "second") pts = parseFloat((pts * 0.5).toFixed(1));
             await sbPatch(`picks?id=eq.${pick.id}`, { result, points_earned: pts });
+            await notifyPick(pick, league, result, pts, 1);
             results.graded++;
           }
         }

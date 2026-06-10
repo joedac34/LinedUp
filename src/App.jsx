@@ -1187,6 +1187,39 @@ export default function App() {
    const iv=setInterval(()=>{ if(document.visibilityState==="visible"&&screen!=="chat") fetchUnreadAll(); },30000);
    return ()=>{ document.removeEventListener("visibilitychange",onVis); clearInterval(iv); };
  },[isSoloMode,screen,realLeagues,user]);
+ const [notifs, setNotifs] = useState([]);
+ const [notifUnread, setNotifUnread] = useState(0);
+ const [showNotifs, setShowNotifs] = useState(false);
+ const fetchNotifs = async ()=>{
+   if(!(user&&user.id)){ setNotifs([]); setNotifUnread(0); return; }
+   try{
+     const {data} = await supabase.from("notifications").select("*").eq("user_id",user.id).order("created_at",{ascending:false}).limit(50);
+     setNotifs(data||[]);
+     setNotifUnread((data||[]).filter(n=>!n.read_at).length);
+   }catch(e){}
+ };
+ const openNotifs = async ()=>{
+   setShowNotifs(true);
+   if(!(user&&user.id)) return;
+   const nowIso=new Date().toISOString();
+   try{ await supabase.from("notifications").update({read_at:nowIso}).eq("user_id",user.id).is("read_at",null); }catch(e){}
+   setNotifs(prev=>prev.map(n=>n.read_at?n:{...n,read_at:nowIso}));
+   setNotifUnread(0);
+ };
+ const handleNotifTap = (n)=>{
+   setShowNotifs(false);
+   const lid = n.data && n.data.league_id;
+   if(lid && realLeagues.some(l=>l.id===lid)) setActiveLeagueId(lid);
+   if(n.type==="pick_win"||n.type==="pick_loss") setScreen("picks");
+ };
+ useEffect(()=>{
+   if(!(user&&user.id)) return;
+   fetchNotifs();
+   const onVis=()=>{ if(document.visibilityState==="visible") fetchNotifs(); };
+   document.addEventListener("visibilitychange",onVis);
+   const iv=setInterval(()=>{ if(document.visibilityState==="visible") fetchNotifs(); },30000);
+   return ()=>{ document.removeEventListener("visibilitychange",onVis); clearInterval(iv); };
+ },[user]);
  useEffect(()=>{ if(screen!=="browser"||isSoloMode) return; const _cfg=parseSlotConfig(activeLeague&&activeLeague.slot_config); if(!_cfg) return; const _allowed=[...new Set(_cfg.map(s=>s.type))]; const _ts=flexPicks[gridTargetSlot]; const _tgt=(gridTargetSlot!=null&&_ts&&_ts.locked)?_ts.category:null; const _want=_tgt||(_allowed.includes(gridType)?gridType:_allowed[0]); if(_want&&_want!==gridType) setGridType(_want); }, [screen, gridTargetSlot, activeLeagueId, gridType]);
  const [gridJustAdded, setGridJustAdded] = useState(null);   // bet id flashing "added" feedback
  // usedMults / availableMults / hasLongshot / allFlexFilled are derived inside the picks IIFE
@@ -3428,6 +3461,10 @@ export default function App() {
  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
  {unreadByLeague[activeLeagueId]>0 && <span className="gh-badge">{unreadByLeague[activeLeagueId]>9?"9+":unreadByLeague[activeLeagueId]}</span>}
  </div>}
+ <div className="gh-icon" onClick={openNotifs} aria-label="Notifications">
+ <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+ {notifUnread>0 && <span className="gh-badge">{notifUnread>9?"9+":notifUnread}</span>}
+ </div>
  <div className="gh-avatar" onClick={()=>setShowAccountMenu(true)}>{initials}</div>
  </div>
  </div>
@@ -3470,6 +3507,41 @@ export default function App() {
  <div className="gh-od" style={{background:"rgba(255,55,95,0.12)"}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FF375F" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></div>
  <div style={{flex:1}}><div className="gh-on" style={{color:"#FF375F"}}>Sign Out</div><div className="gh-osub">{(user&&user.email)||""}</div></div>
  </div>
+ </div>
+ </div>
+ )}
+
+ {showNotifs && (
+ <div className="gh-sheet-bg" onClick={()=>setShowNotifs(false)}>
+ <div className="gh-sheet" onClick={e=>e.stopPropagation()}>
+ <div className="gh-grip"/>
+ <div className="gh-sheet-h">Notifications</div>
+ {notifs.length===0 ? (
+ <div style={{padding:"26px 16px 30px",textAlign:"center",fontSize:13,color:IOS.label3,lineHeight:1.5}}>You're all caught up. Pick results and league activity show up here.</div>
+ ) : (
+ <div style={{maxHeight:"58vh",overflowY:"auto"}}>
+ {notifs.map(n=>{
+   const won=n.type==="pick_win", lost=n.type==="pick_loss";
+   const accent=won?IOS.green:lost?IOS.red:IOS.blue;
+   const t=n.created_at?new Date(n.created_at):null;
+   const mins=t?Math.floor((Date.now()-t.getTime())/60000):0;
+   const ago=!t?"":mins<1?"now":mins<60?(mins+"m"):mins<1440?(Math.floor(mins/60)+"h"):(Math.floor(mins/1440)+"d");
+   return (
+   <div key={n.id} onClick={()=>handleNotifTap(n)} className="gh-opt" style={{opacity:n.read_at?0.62:1}}>
+   <div className="gh-od" style={{background:accent+"1f"}}>
+   {won?<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    :lost?<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    :<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/></svg>}
+   </div>
+   <div style={{flex:1,minWidth:0}}>
+   <div className="gh-on">{n.title}{!n.read_at&&<span style={{display:"inline-block",width:7,height:7,borderRadius:4,background:IOS.blue,marginLeft:6,verticalAlign:"middle"}}/>}</div>
+   <div className="gh-osub" style={{whiteSpace:"normal"}}>{n.body}{(n.data&&n.data.league_name)?(" · "+n.data.league_name):""}{ago?(" · "+ago):""}</div>
+   </div>
+   </div>
+   );
+ })}
+ </div>
+ )}
  </div>
  </div>
  )}
