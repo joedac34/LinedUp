@@ -1,18 +1,15 @@
 /**
- * /api/findbet.js  —  Plok "find me a bet" value screener
+ * /api/findbet.js  —  Plok "find me a bet" value screener (Phase 2)
  *
- * The math is done HERE, in code (de-vig, consensus fair prob, EV) — deterministic
- * and exact. The model only screens, ranks, and explains the finished numbers.
+ * Game lines: de-vig every book -> consensus fair prob -> +EV vs best price.
+ * Player props: same de-vig price comparison PLUS a projection model from ESPN
+ *   game logs (normal-dist for continuous stats, Poisson for small counts), with
+ *   the guardrail safety rails enforced IN CODE: sigma floors, |Z|<=1.5 reality
+ *   check, +-8% market reconciliation, and "big edges are bugs" flag. When the
+ *   model can't be trusted, it falls back to pure de-vig price comparison.
  *
- * Method (price-discrepancy / +EV vs consensus):
- *   1. Pull every book's odds for the game (The Odds API).
- *   2. De-vig each book's two-sided market -> that book's fair prob per side.
- *   3. Consensus fair prob per side = average across books offering it.
- *   4. Best available price per side = best decimal odds across books.
- *   5. EV = consensus_fair * best_decimal - 1.  Flag positive EV; treat big
- *      edges (>6%) as likely stale/erroneous, not real (per the guardrails).
- *
- * ENV: ODDS_API_KEY (new use here), OPENAI_API_KEY, VITE_SUPABASE_URL, SUPABASE_SERVICE_KEY
+ * All math is deterministic here; the model only screens, ranks, and explains.
+ * ENV: ODDS_API_KEY, OPENAI_API_KEY, VITE_SUPABASE_URL, SUPABASE_SERVICE_KEY
  */
 
 const SB_URL = process.env.VITE_SUPABASE_URL;
@@ -23,11 +20,37 @@ const ODDS   = process.env.ODDS_API_KEY;
 const sbHeaders = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, "Content-Type": "application/json" };
 const SPORT_KEYS = { nfl: "americanfootball_nfl", nba: "basketball_nba", mlb: "baseball_mlb" };
 
-const hashKey = (s) => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return "fb_" + (h >>> 0).toString(36); };
+const hashKey = (s) => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return "fb2_" + (h >>> 0).toString(36); };
 const amToProb = (o) => (o < 0 ? Math.abs(o) / (Math.abs(o) + 100) : 100 / (o + 100));
 const amToDec  = (o) => (o < 0 ? 1 + 100 / Math.abs(o) : 1 + o / 100);
 const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
+const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
+const sampleSD = (a) => { if (a.length < 2) return 0; const m = mean(a); return Math.sqrt(a.reduce((s, v) => s + (v - m) * (v - m), 0) / (a.length - 1)); };
 
+// ── stats math ───────────────────────────────────────────────────────────────
+function erf(x) {
+  const t = 1 / (1 + 0.3275911 * Math.abs(x));
+  const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x);
+  return x >= 0 ? y : -y;
+}
+const normalCDF = (z) => 0.5 * (1 + erf(z / Math.SQRT2));
+function poissonCDF(k, lam) { // P(X <= k)
+  if (lam <= 0) return 1;
+  let sum = 0, term = Math.exp(-lam);
+  for (let i = 0; i <= k; i++) { if (i > 0) term *= lam / i; sum += term; }
+  return Math.min(1, sum);
+}
+function blendMu(series, sport) {
+  const all = mean(series);
+  const rn = { nba: 5, nfl: 3, mlb: 7 }[sport] || 5;
+  const recent = series.slice(0, rn);
+  let [Wa, Wb] = ({ nba: [0.7, 0.3], nfl: [0.6, 0.4], mlb: [0.8, 0.2] }[sport]) || [0.7, 0.3];
+  if (recent.length < 3) { Wb = Wb / 2; Wa = 1 - Wb; }
+  const rMean = recent.length ? mean(recent) : all;
+  return all * Wa + rMean * Wb;
+}
+
+// ── Supabase (Pro gate + cache) ───────────────────────────────────────────────
 async function isPro(userId) {
   if (!userId || !SB_URL) return true;
   try {
@@ -38,7 +61,7 @@ async function isPro(userId) {
 }
 async function getCached(key) {
   try {
-    const cutoff = new Date(Date.now() - 2 * 3600 * 1000).toISOString(); // 2h freshness (odds move)
+    const cutoff = new Date(Date.now() - 2 * 3600 * 1000).toISOString();
     const r = await fetch(`${SB_URL}/rest/v1/ai_insights?cache_key=eq.${key}&created_at=gte.${cutoff}&select=payload`, { headers: sbHeaders });
     const rows = await r.json();
     return Array.isArray(rows) && rows[0] ? rows[0].payload : null;
@@ -53,6 +76,84 @@ async function storeCache(key, payload) {
   } catch { /* table optional */ }
 }
 
+// ── ESPN (game logs for prop projections) ─────────────────────────────────────
+const ESPN_MAP = { nfl: { sp: "football", lg: "nfl" }, nba: { sp: "basketball", lg: "nba" }, mlb: { sp: "baseball", lg: "mlb" } };
+const STAT_ALIASES = {
+  "points": ["PTS", "points"], "rebounds": ["REB", "rebounds"], "assists": ["AST", "assists"],
+  "3-pointers": ["3PT"], "passing yards": ["YDS", "passingYards"], "rushing yards": ["YDS", "rushingYards"],
+  "receiving yards": ["YDS", "receivingYards"], "receptions": ["REC", "receptions"],
+  "strikeouts": ["K", "strikeouts"], "hits": ["H", "hits"],
+};
+const normName = (s) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
+function resolveStatLabels(statText) {
+  const t = (statText || "").toLowerCase();
+  const entries = Object.entries(STAT_ALIASES).sort((a, b) => b[0].length - a[0].length);
+  for (const [k, labels] of entries) if (t.includes(k)) return labels;
+  return [];
+}
+function statNumber(raw) {
+  if (raw == null) return null;
+  const s = String(raw).trim();
+  const n = parseFloat(s.includes("-") ? s.split("-")[0] : s);
+  return isNaN(n) ? null : n;
+}
+function nameMatch(nm, target) {
+  if (!nm || !target) return false;
+  if (nm === target || nm.includes(target) || target.includes(nm)) return true;
+  const a = nm.split(" "), b = target.split(" ");
+  if (a.length && b.length && a[a.length - 1] === b[b.length - 1] && a[0][0] === b[0][0]) return true;
+  return false;
+}
+const dayStr = (d) => `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`;
+async function espnEvents(sp, lg, days) {
+  const now = Date.now(), dates = [];
+  for (let i = 0; i < days; i++) dates.push(dayStr(new Date(now - i * 86400000)));
+  const out = [], seen = new Set();
+  for (let i = 0; i < dates.length; i += 8) {
+    const all = await Promise.all(dates.slice(i, i + 8).map(async (day) => {
+      try { const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/${sp}/${lg}/scoreboard?dates=${day}`); if (!r.ok) return []; return (await r.json()).events || []; } catch { return []; }
+    }));
+    for (const evs of all) for (const e of evs) { if (!seen.has(e.id)) { seen.add(e.id); out.push(e); } }
+  }
+  return out;
+}
+// Fetch ~20 recent completed game box scores ONCE; reuse across all players.
+async function espnBoxCache(sport) {
+  const em = ESPN_MAP[sport]; if (!em) return [];
+  const events = await espnEvents(em.sp, em.lg, 16);
+  const ids = events.filter(e => e.status?.type?.completed).map(e => e.id).slice(0, 20);
+  const boxes = [];
+  for (let i = 0; i < ids.length; i += 6) {
+    const res = await Promise.all(ids.slice(i, i + 6).map(async (id) => {
+      try { const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/${em.sp}/${em.lg}/summary?event=${id}`); if (!r.ok) return null; return (await r.json()).boxscore?.players || null; } catch { return null; }
+    }));
+    for (const p of res) if (p) boxes.push(p); // most-recent first
+  }
+  return boxes;
+}
+function seriesFromBox(boxes, player, labels) {
+  const target = normName(player), series = [];
+  for (const players of boxes) {
+    for (const teamBlock of players) {
+      for (const grp of (teamBlock.statistics || [])) {
+        const names = (grp.names || grp.labels || []), keys = (grp.keys || []);
+        for (const a of (grp.athletes || [])) {
+          if (a.didNotPlay) continue;
+          if (!nameMatch(normName(a.athlete?.displayName), target)) continue;
+          let val = null;
+          for (const lbl of labels) {
+            let idx = names.findIndex(n => String(n).toLowerCase() === lbl.toLowerCase());
+            if (idx < 0) idx = keys.findIndex(k => String(k).toLowerCase() === lbl.toLowerCase());
+            if (idx >= 0 && a.stats && a.stats[idx] != null) { val = statNumber(a.stats[idx]); break; }
+          }
+          if (val != null) series.push(val);
+        }
+      }
+    }
+  }
+  return series;
+}
+
 // ── Odds ───────────────────────────────────────────────────────────────────
 function parseTeams(game) {
   const s = (game || "").trim();
@@ -65,19 +166,16 @@ function teamMatch(a, b) {
   const x = norm(a), y = norm(b);
   if (!x || !y) return false;
   if (x === y || x.includes(y) || y.includes(x)) return true;
-  const xl = x.split(" ").pop(), yl = y.split(" ").pop();
-  return xl === yl; // nickname fallback
+  return x.split(" ").pop() === y.split(" ").pop();
 }
 async function fetchGameOdds(sport, ctx) {
-  const sk = SPORT_KEYS[sport];
-  if (!sk || !ODDS) return null;
+  const sk = SPORT_KEYS[sport]; if (!sk || !ODDS) return null;
   const url = `https://api.the-odds-api.com/v4/sports/${sk}/odds?apiKey=${ODDS}&regions=us&markets=h2h,spreads,totals&oddsFormat=american`;
   const r = await fetch(url);
   if (!r.ok) throw new Error(`Odds API ${r.status}`);
   const events = await r.json();
   const { home, away } = parseTeams(ctx.game);
   const wantHome = ctx.home || home, wantAway = ctx.away || away;
-  // Find the event whose teams match the requested game.
   return (events || []).find(e =>
     (teamMatch(e.home_team, wantHome) && teamMatch(e.away_team, wantAway)) ||
     (teamMatch(e.home_team, wantAway) && teamMatch(e.away_team, wantHome))
@@ -91,19 +189,17 @@ const labelFor = (mkt, name, point) => {
   return name;
 };
 
-// De-vig every book, build consensus fair prob per side, find +EV best prices.
+// Game lines: de-vig each book, consensus fair prob per side, +EV best price.
 function analyzeGame(event) {
   const sides = {};
   for (const bk of (event.bookmakers || [])) {
     for (const mk of (bk.markets || [])) {
       const outs = mk.outcomes || [];
-      if (outs.length !== 2) continue; // de-vig needs both sides
+      if (outs.length !== 2) continue;
       const probs = outs.map(o => amToProb(o.price));
-      const sum = probs[0] + probs[1];
-      if (!sum) continue;
+      const sum = probs[0] + probs[1]; if (!sum) continue;
       outs.forEach((o, i) => {
-        const fair = probs[i] / sum;
-        const dec = amToDec(o.price);
+        const fair = probs[i] / sum, dec = amToDec(o.price);
         const key = `${mk.key}|${o.name}|${o.point != null ? o.point : ""}`;
         if (!sides[key]) sides[key] = { market: mk.key, name: o.name, point: o.point, fairs: [], bestDec: 0, bestBook: "", bestAm: null };
         sides[key].fairs.push(fair);
@@ -114,39 +210,122 @@ function analyzeGame(event) {
   const cands = [];
   for (const k in sides) {
     const s = sides[k];
-    if (s.fairs.length < 3) continue; // need a real consensus
-    const consensus = s.fairs.reduce((a, b) => a + b, 0) / s.fairs.length;
-    const ev = consensus * s.bestDec - 1;
-    if (ev >= 0.01) {
-      cands.push({
-        label: labelFor(s.market, s.name, s.point),
-        market: s.market,
-        evPct: parseFloat((ev * 100).toFixed(1)),
-        fairPct: parseFloat((consensus * 100).toFixed(1)),
-        bestOdds: (s.bestAm > 0 ? "+" : "") + s.bestAm,
-        bestBook: s.bestBook,
-        books: s.fairs.length,
-        suspicious: ev > 0.06, // big edges are bugs
+    if (s.fairs.length < 3) continue;
+    const consensus = mean(s.fairs), ev = consensus * s.bestDec - 1;
+    if (ev >= 0.01) cands.push({ kind: "line", label: labelFor(s.market, s.name, s.point), evPct: +(ev * 100).toFixed(1), fairPct: +(consensus * 100).toFixed(1), bestOdds: (s.bestAm > 0 ? "+" : "") + s.bestAm, bestBook: s.bestBook, books: s.fairs.length, suspicious: ev > 0.06 });
+  }
+  return cands.sort((a, b) => b.evPct - a.evPct);
+}
+
+// ── Player props: de-vig + projection model ───────────────────────────────────
+const PROP_MARKETS = {
+  nba: [
+    { key: "player_points", stat: "points", short: "PTS", tier: "normal", floor: 0.30 },
+    { key: "player_rebounds", stat: "rebounds", short: "REB", tier: "poisson" },
+    { key: "player_assists", stat: "assists", short: "AST", tier: "poisson" },
+    { key: "player_threes", stat: "3-pointers", short: "3PM", tier: "poisson" },
+  ],
+  nfl: [
+    { key: "player_pass_yds", stat: "passing yards", short: "PASS YDS", tier: "normal", floor: 0.28 },
+    { key: "player_rush_yds", stat: "rushing yards", short: "RUSH YDS", tier: "normal", floor: 0.40 },
+    { key: "player_reception_yds", stat: "receiving yards", short: "REC YDS", tier: "normal", floor: 0.40 },
+    { key: "player_receptions", stat: "receptions", short: "REC", tier: "poisson" },
+  ],
+  mlb: [
+    { key: "pitcher_strikeouts", stat: "strikeouts", short: "Ks", tier: "poisson" },
+    { key: "batter_hits", stat: "hits", short: "H", tier: "poisson" },
+  ],
+};
+async function analyzeProps(sport, eventId) {
+  const markets = PROP_MARKETS[sport]; const sk = SPORT_KEYS[sport];
+  if (!markets || !eventId || !sk || !ODDS) return [];
+  const confByKey = {}; markets.forEach(m => { confByKey[m.key] = m; });
+  let ev;
+  try {
+    const url = `https://api.the-odds-api.com/v4/sports/${sk}/events/${eventId}/odds?apiKey=${ODDS}&regions=us&markets=${markets.map(m => m.key).join(",")}&oddsFormat=american`;
+    const r = await fetch(url); if (!r.ok) return [];
+    ev = await r.json();
+  } catch { return []; }
+
+  // Group: market|player|line  ->  {over, under} aggregated across books.
+  const groups = {};
+  for (const bk of (ev.bookmakers || [])) {
+    for (const m of (bk.markets || [])) {
+      const conf = confByKey[m.key]; if (!conf) continue;
+      const byPP = {};
+      for (const o of (m.outcomes || [])) {
+        const player = o.description || o.participant || "";
+        const side = (o.name || "").toLowerCase().startsWith("o") ? "over" : (o.name || "").toLowerCase().startsWith("u") ? "under" : null;
+        if (!player || o.point == null || !side) continue;
+        const ppk = `${player}|${o.point}`;
+        (byPP[ppk] = byPP[ppk] || {})[side] = o.price;
+      }
+      for (const ppk in byPP) {
+        const pair = byPP[ppk]; if (pair.over == null || pair.under == null) continue;
+        const [player, ptStr] = ppk.split("|"); const line = parseFloat(ptStr);
+        const po = amToProb(pair.over), pu = amToProb(pair.under), sum = po + pu; if (!sum) continue;
+        const gk = `${m.key}|${player}|${line}`;
+        if (!groups[gk]) groups[gk] = { market: m.key, player, line, conf, over: { fairs: [], bestDec: 0, bestAm: null, bestBook: "" }, under: { fairs: [], bestDec: 0, bestAm: null, bestBook: "" } };
+        const g = groups[gk];
+        g.over.fairs.push(po / sum); { const d = amToDec(pair.over); if (d > g.over.bestDec) { g.over.bestDec = d; g.over.bestAm = pair.over; g.over.bestBook = bk.title; } }
+        g.under.fairs.push(pu / sum); { const d = amToDec(pair.under); if (d > g.under.bestDec) { g.under.bestDec = d; g.under.bestAm = pair.under; g.under.bestBook = bk.title; } }
+      }
+    }
+  }
+  const usable = Object.values(groups).filter(g => g.over.fairs.length >= 3);
+  if (!usable.length) return [];
+
+  const boxes = await espnBoxCache(sport); // one heavy ESPN pass, reused for all
+  const out = [];
+  for (const g of usable) {
+    const labels = resolveStatLabels(g.conf.stat);
+    const series = labels.length ? seriesFromBox(boxes, g.player, labels) : [];
+    let model = null;
+    if (series.length >= 5) {
+      const mu = blendMu(series, sport);
+      if (g.conf.tier === "normal") {
+        let sd = sampleSD(series); const floor = (g.conf.floor || 0.3) * mu; if (sd < floor) sd = floor;
+        const z = sd ? (mu - g.line) / sd : 99, gap = g.line ? Math.abs(mu - g.line) / g.line : 1;
+        if (Math.abs(z) <= 1.5 && gap <= 0.08) model = { pOver: normalCDF(z), mu };
+        else model = { invalid: true, mu };
+      } else {
+        model = { pOver: 1 - poissonCDF(Math.floor(g.line), mu), mu };
+      }
+    }
+    for (const side of ["over", "under"]) {
+      const s = g[side]; const consensus = mean(s.fairs);
+      let pUsed = consensus, basis = "price";
+      if (model && !model.invalid && model.pOver != null) { pUsed = side === "over" ? model.pOver : (1 - model.pOver); basis = "model"; }
+      const evNum = pUsed * s.bestDec - 1;
+      if (evNum >= 0.01) out.push({
+        kind: "prop", market: g.market, tier: g.conf.tier, basis,
+        label: `${g.player} ${side === "over" ? "o" : "u"}${g.line} ${g.conf.short}`,
+        evPct: +(evNum * 100).toFixed(1), fairPct: +(consensus * 100).toFixed(1),
+        modelPct: basis === "model" ? +(pUsed * 100).toFixed(1) : null,
+        mu: model && model.mu != null ? +model.mu.toFixed(1) : null, line: g.line,
+        bestOdds: (s.bestAm > 0 ? "+" : "") + s.bestAm, bestBook: s.bestBook, books: s.fairs.length,
+        suspicious: evNum > 0.06,
       });
     }
   }
-  cands.sort((a, b) => b.evPct - a.evPct);
-  return cands.slice(0, 6);
+  return out.sort((a, b) => b.evPct - a.evPct).slice(0, 6);
 }
 
-// ── Plok screening prompt (distilled from the guardrail framework) ───────────
+// ── Plok screening prompt (distilled from the guardrail framework) ────────────
 const PLOK_SYSTEM =
   "You are Plok, PickLock's betting analyst. You SCREEN for value; you do not give betting advice, place bets, or suggest stake sizes. " +
   "Cite only figures from the DATA block — never invent, estimate, or recall odds or stats. " +
   "Principles: (1) The market is right until proven otherwise; a flagged edge is a rare exception, not a better forecast. " +
-  "(2) 'No strong edge' is a good, common answer — never manufacture a pick to fill space; if DATA has no qualifying value, say so plainly. " +
-  "(3) Big edges are bugs: treat any EV above ~6% as a likely stale or erroneous price needing re-verification, not a green light. " +
-  "(4) You may rank and explain the value the code already computed; you may not change the numbers. " +
-  "The DATA lists value candidates already de-vigged across books: each with market, best available price + book, consensus fair probability, EV%, and books surveyed. " +
+  "(2) 'No strong edge' is a good, common answer — never manufacture a pick; if DATA has no qualifying value, say so plainly. " +
+  "(3) Big edges are bugs: treat any EV above ~6% (FLAG) as a likely stale or erroneous price needing re-verification, not a green light. " +
+  "(4) You may rank and explain the value the code computed; you may not change the numbers. " +
+  "DATA holds two candidate kinds. [LINE] = a game line de-vigged across books; its edge is purely a price discrepancy (one book beating consensus). " +
+  "[PROP] = a player prop. A prop marked 'model' has a projection from recent game logs (normal-dist for yards/points, Poisson for small counts like rebounds/assists/threes/Ks) — treat this as a weak second opinion that should sit near the market; a prop marked 'price-only' has no reliable projection, so judge it on the price discrepancy alone. " +
+  "Props labeled poisson carry wider uncertainty — say so and keep confidence MEDIUM at best. " +
   "Read EV as: under +1% = no bet; +1-2% = marginal; +2-5% = qualifying value; above +5% = re-verify before trusting. " +
-  "Return: summary (plain-English read of the strongest value or that there is none, why the price looks soft, and the caveat that this is screening not advice); " +
-  "keyStats (up to 4 figures FROM DATA — EV%, fair probability, best price+book, books surveyed; empty if no candidates); " +
-  "trends (short value notes or empty); bullCase (the case for the flagged value); bearCase (why it may be noise — few books, line may have moved, model uncalibrated). " +
+  "Return: summary (plain-English read of the single strongest value or that there is none, why the price looks soft, and the caveat that this is screening not advice); " +
+  "keyStats (up to 4 figures FROM DATA — e.g. EV%, projection vs line, best price+book, books surveyed; empty if no candidates); " +
+  "trends (short value notes or empty); bullCase (the case for the flagged value); bearCase (why it may be noise — few books, line may have moved, model uncalibrated, small sample). " +
   "Always end summary with: lines may have moved — verify the current price; this is screening, not betting advice.";
 
 const SCHEMA = {
@@ -161,16 +340,22 @@ const SCHEMA = {
   required: ["summary", "keyStats", "trends", "bullCase", "bearCase"],
 };
 
+function fmtCand(c) {
+  const sign = c.evPct >= 0 ? "+" : "";
+  if (c.kind === "prop") {
+    const basis = c.basis === "model" ? `model ${c.modelPct}% (proj ${c.mu} vs line ${c.line})` : "price-only";
+    return `- ${c.label} [PROP ${c.tier}]: EV ${sign}${c.evPct}% | ${basis} | market-fair ${c.fairPct}% | best ${c.bestOdds} (${c.bestBook}) | ${c.books} books${c.suspicious ? " | FLAG >6%" : ""}`;
+  }
+  return `- ${c.label} [LINE]: EV ${sign}${c.evPct}% | fair ${c.fairPct}% | best ${c.bestOdds} (${c.bestBook}) | ${c.books} books${c.suspicious ? " | FLAG >6%" : ""}`;
+}
 async function generate(game, cands) {
-  const dataBlock = cands.length
-    ? cands.map(c => `- ${c.label}: EV ${c.evPct >= 0 ? "+" : ""}${c.evPct}% | fair ${c.fairPct}% | best ${c.bestOdds} (${c.bestBook}) | ${c.books} books${c.suspicious ? " | FLAG: edge >6%, likely stale" : ""}`).join("\n")
-    : "(no side cleared the value threshold across books)";
-  const user = `GAME: ${game}\n\nDATA (value candidates, EV computed across books)\n${dataBlock}`;
+  const dataBlock = cands.length ? cands.map(fmtCand).join("\n") : "(no side cleared the value threshold across books)";
+  const user = `GAME: ${game}\n\nDATA (value candidates — EV computed in code)\n${dataBlock}`;
   const r = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${OPENAI}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "gpt-4o-mini", temperature: 0.3, max_tokens: 700,
+      model: "gpt-4o-mini", temperature: 0.3, max_tokens: 800,
       messages: [{ role: "system", content: PLOK_SYSTEM }, { role: "user", content: user }],
       response_format: { type: "json_schema", json_schema: { name: "findbet", strict: true, schema: SCHEMA } },
     }),
@@ -199,7 +384,11 @@ export default async function handler(req, res) {
       const out = { summary: "I couldn't find live two-sided odds for that game right now, so there's nothing to screen. Try again closer to game time. This is screening, not betting advice.", keyStats: [], trends: [], bullCase: "", bearCase: "" };
       return res.status(200).json({ ...out, cached: false });
     }
-    const cands = analyzeGame(event);
+    const lineCands = analyzeGame(event);
+    let propCands = [];
+    try { propCands = await analyzeProps(ctx.sport, event.id); } catch { propCands = []; }
+    const cands = [...lineCands, ...propCands].sort((a, b) => b.evPct - a.evPct).slice(0, 8);
+
     const out = await generate(ctx.game, cands);
     await storeCache(key, out);
     return res.status(200).json({ ...out, cached: false });
