@@ -2390,7 +2390,7 @@ export default function App() {
  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
  ::-webkit-scrollbar{display:none;}
 
- .phone{width:390px;height:100vh;height:100dvh;max-height:100dvh;background:#000;position:relative;overflow:hidden;display:flex;flex-direction:column;font-family:'Barlow',system-ui,-apple-system,sans-serif;color:#fff;-webkit-font-smoothing:antialiased;padding-top:env(safe-area-inset-top,0px);box-sizing:border-box;}
+ html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;position:fixed;width:100%;top:0;left:0;} #root{height:100%;overflow:hidden;} .phone{width:390px;height:100vh;height:100dvh;max-height:100dvh;background:#000;position:relative;overflow:hidden;display:flex;flex-direction:column;font-family:'Barlow',system-ui,-apple-system,sans-serif;color:#fff;-webkit-font-smoothing:antialiased;padding-top:env(safe-area-inset-top,0px);box-sizing:border-box;}
 
  /* iOS Status Bar */
 
@@ -2403,7 +2403,7 @@ export default function App() {
  .nav-subtitle{font-size:13px;color:${IOS.label3};margin-top:2px;}
 
  /* Scrollable body */
- .body{flex:1;min-height:0;overflow-y:auto;position:relative;z-index:1;padding-top:0;-webkit-overflow-scrolling:touch;}
+ .body{flex:1;min-height:0;overflow-y:auto;position:relative;z-index:1;padding-top:0;overscroll-behavior:none;}
  .body-pad{padding-bottom:calc(100px + env(safe-area-inset-bottom,0px));}
  .app-header{flex-shrink:0;z-index:25;position:relative;display:flex;align-items:center;gap:8px;height:52px;padding:0 14px;background:linear-gradient(180deg,#10101a 0%,#0b0b0e 100%);border-bottom:0.5px solid rgba(255,255,255,0.08);box-shadow:0 6px 18px rgba(0,0,0,0.45);}
  .gh-left{display:flex;align-items:center;min-width:0;flex-shrink:0;}
