@@ -349,7 +349,6 @@ const POWER_UPS = [
  { id:"enhance45", icon:"enhance", name:"Spread +4.5", desc:"Move your spread 4.5 pts in your favor", rarity:"legendary", color:IOS.blue, type:"offensive", tier:4.5 },
  { id:"double", icon:"double", name:"Double Down", desc:"Double one pick's points this week (after its multiplier)", rarity:"rare", color:IOS.yellow, type:"offensive" },
  { id:"insurance", icon:"insurance", name:"Insurance", desc:"Parlay misses by one leg? Scores as if that leg wasn't in it", rarity:"common", color:IOS.green, type:"defensive" },
- { id:"swap", icon:"swap", name:"Hot Swap", desc:"Before lock, swap a pick to another unstarted game — full points", rarity:"rare", color:IOS.pink, type:"offensive" },
  { id:"second", icon:"clock", name:"Second Chance", desc:"While your pick's game is live, bail to an unstarted game for half points", rarity:"legendary", color:IOS.orange, type:"offensive" },
 ];
 
@@ -505,7 +504,7 @@ const CHAT = [
  { id:12, user:"Tom B.", init:"T", time:"5m", text:"^^^ ", me:false },
 ];
 
-const WHEEL_ITEMS = ["double","enhance15","insurance","second","enhance3","swap","enhance45"].map(_id=>POWER_UPS.find(p=>p.id===_id)).filter(Boolean);
+const WHEEL_ITEMS = ["double","enhance15","insurance","second","enhance3","enhance45"].map(_id=>POWER_UPS.find(p=>p.id===_id)).filter(Boolean);
 
 // ─── SPORT DETECTION (by team name) ───────────────────────────────
 // Used to keep each league's bet list scoped to its own sport(s), even if an
@@ -4673,7 +4672,9 @@ export default function App() {
  const picksToSave = [];
  activePicks.forEach((slot, slotIdx)=>{
  if(!slot.mult) return;
- const effectiveMult = activatedPUs[slotIdx]?.id==="double" ? slot.mult * 2 : slot.mult;
+ const _pu = activatedPUs[slotIdx] || null;
+ const _puId = _pu ? _pu.id : null;
+ const _puTier = (_pu && _pu.tier != null) ? _pu.tier : null;
  if(slot.isParlay) {
  // Give each parlay leg a unique slot name to avoid constraint violations
  slot.parlayLegs.forEach((b, legIdx)=>picksToSave.push({
@@ -4681,7 +4682,9 @@ export default function App() {
  user_id: user.id,
  week,
  slot: isCustomSlip ? `longshot_${slotIdx}_${legIdx}` : `longshot_${legIdx}`,
- multiplier: effectiveMult,
+ multiplier: slot.mult,
+ power_up_id: _puId,
+ pu_tier: _puTier,
  pick_name: b.pick,
  game: b.game||"",
  odds: b.odds,
@@ -4695,7 +4698,9 @@ export default function App() {
  user_id: user.id,
  week,
  slot: isCustomSlip ? `${slot.category||"ml"}_${slotIdx}` : (slot.category||"ml"),
- multiplier: effectiveMult,
+ multiplier: slot.mult,
+ power_up_id: _puId,
+ pu_tier: _puTier,
  pick_name: slot.bet.pick,
  game: slot.bet.game||"",
  odds: slot.bet.odds,

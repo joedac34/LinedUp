@@ -483,7 +483,8 @@ export default async function handler(req, res) {
           const anyLost = legResults.some(r => r === "L");
 
           if (allWon) {
-            const totalPts = calcParlayPoints(group[0].multiplier, group);
+            let totalPts = calcParlayPoints(group[0].multiplier, group);
+            if (group[0].power_up_id === "double") totalPts *= 2;
             // First leg gets the points, rest get 0
             for (let i = 0; i < group.length; i++) {
               await sbPatch(`picks?id=eq.${group[i].id}`, {
@@ -508,7 +509,8 @@ export default async function handler(req, res) {
             const result = gradePick(pick, games, playerIndex, info);
             if (result === null) { results.skipped++; noteSkip(pick, info.reason || "unknown"); continue; }
 
-            const pts = result === "W" ? calcPoints(pick.multiplier, pick.implied_odds) : 0;
+            let pts = result === "W" ? calcPoints(pick.multiplier, pick.implied_odds) : 0;
+            if (result === "W" && pick.power_up_id === "double") pts *= 2;
             await sbPatch(`picks?id=eq.${pick.id}`, { result, points_earned: pts });
             results.graded++;
           }
