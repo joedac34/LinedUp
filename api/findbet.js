@@ -20,7 +20,7 @@ const ODDS   = process.env.ODDS_API_KEY;
 const sbHeaders = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, "Content-Type": "application/json" };
 const SPORT_KEYS = { nfl: "americanfootball_nfl", nba: "basketball_nba", mlb: "baseball_mlb" };
 
-const hashKey = (s) => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return "fb2_" + (h >>> 0).toString(36); };
+const hashKey = (s) => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return "fb3_" + (h >>> 0).toString(36); };
 const amToProb = (o) => (o < 0 ? Math.abs(o) / (Math.abs(o) + 100) : 100 / (o + 100));
 const amToDec  = (o) => (o < 0 ? 1 + 100 / Math.abs(o) : 1 + o / 100);
 const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
@@ -365,6 +365,84 @@ async function generate(game, cands) {
   return JSON.parse(data.choices[0].message.content);
 }
 
+// ── Matchup data (accurate season splits) so results always show team context ──
+async function espnStandings(sport) {
+  const em = ESPN_MAP[sport]; if (!em) return [];
+  let json;
+  try { const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/${em.sp}/${em.lg}/standings`); if (!r.ok) return []; json = await r.json(); } catch { return []; }
+  const list = [];
+  const walk = (node) => {
+    if (!node || typeof node !== "object") return;
+    if (Array.isArray(node.entries)) {
+      for (const e of node.entries) {
+        const t = e.team || {}; const stats = {};
+        for (const st of (e.stats || [])) { const nm = (st.name || st.type || "").toLowerCase(); if (nm) stats[nm] = st; }
+        list.push({ norm: normName(t.displayName || t.name || t.shortDisplayName || ""), abbr: t.abbreviation || "", name: t.displayName || "", stats });
+      }
+    }
+    for (const k in node) { if (k !== "team" && k !== "stats") { const v = node[k]; if (v && typeof v === "object") walk(v); } }
+  };
+  walk(json);
+  return list;
+}
+function findTeamStanding(list, teamName) {
+  const t = normName(teamName); if (!t || !list.length) return null;
+  return list.find(e => e.norm && nameMatch(e.norm, t)) || null;
+}
+function recFromStats(stats) {
+  const g = (n) => stats[n];
+  const sum = (n) => { const x = g(n); return x ? (x.summary || x.displayValue || null) : null; };
+  const val = (n) => { const x = g(n); if (!x) return null; if (x.value != null) return x.value; const f = parseFloat(x.displayValue); return isNaN(f) ? null : f; };
+  let overall = sum("overall") || sum("total");
+  if (!overall && val("wins") != null && val("losses") != null) overall = `${val("wins")}-${val("losses")}`;
+  let streak = sum("streak");
+  if (streak && /^-?\d+(\.0+)?$/.test(String(streak).trim())) streak = null;
+  const gp = val("gamesplayed");
+  let scoredPG = val("avgpointsfor"), allowedPG = val("avgpointsagainst");
+  if (scoredPG == null && val("pointsfor") != null && gp) scoredPG = val("pointsfor") / gp;
+  if (allowedPG == null && val("pointsagainst") != null && gp) allowedPG = val("pointsagainst") / gp;
+  return { overall, home: sum("home"), away: sum("road") || sum("away"), streak, scoredPG, allowedPG };
+}
+async function buildMatchup(sport, ctx) {
+  const em = ESPN_MAP[sport]; if (!em) return null;
+  const { away, home } = parseTeams(ctx.game); if (!away && !home) return null;
+  const standings = await espnStandings(sport);
+  const events = await espnEvents(em.sp, em.lg, sport === "nfl" ? 50 : 30);
+  const completed = events.filter(e => e.status?.type?.completed);
+  const collect = (teamName) => {
+    const tn = normName(teamName); if (!tn) return [];
+    const gs = [];
+    for (const e of completed) {
+      const comp = e.competitions && e.competitions[0]; if (!comp) continue;
+      const cs = comp.competitors || [];
+      const me = cs.find(c => nameMatch(normName(c.team?.displayName || c.team?.name), tn));
+      if (!me) continue;
+      const opp = cs.find(c => c !== me);
+      const pf = parseFloat(me.score), pa = parseFloat(opp?.score);
+      if (isNaN(pf) || isNaN(pa)) continue;
+      gs.push({ date: e.date || "", win: me.winner === true || pf > pa, pf, pa, opp: opp?.team?.displayName || "", abbr: me.team?.abbreviation || "" });
+    }
+    gs.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+    return gs;
+  };
+  const team = (teamName) => {
+    const gs = collect(teamName).slice(0, sport === "nfl" ? 16 : 20);
+    const avg = (k) => gs.length ? (gs.reduce((acc, x) => acc + x[k], 0) / gs.length) : null;
+    let ws = null; if (gs.length) { let n = 0; for (const x of gs) { if (x.win === gs[0].win) n++; else break; } if (n > 1) ws = `${gs[0].win ? "W" : "L"}${n}`; }
+    const st = findTeamStanding(standings, teamName);
+    const rec = st ? recFromStats(st.stats) : null;
+    const abbr = (st && st.abbr) || (gs[0] && gs[0].abbr) || (teamName || "").split(" ").pop().slice(0, 3).toUpperCase();
+    const scored = (rec && rec.scoredPG != null) ? rec.scoredPG.toFixed(1) : (avg("pf") != null ? avg("pf").toFixed(1) : null);
+    const allowed = (rec && rec.allowedPG != null) ? rec.allowedPG.toFixed(1) : (avg("pa") != null ? avg("pa").toFixed(1) : null);
+    return { name: teamName, abbr, overall: (rec && rec.overall) || null, home: (rec && rec.home) || null, away: (rec && rec.away) || null, scored, allowed, streak: (rec && rec.streak) || ws || null, _games: gs };
+  };
+  const A = team(away), H = team(home);
+  let h2h = null;
+  if (away && home) { const hg = A._games.filter(x => nameMatch(normName(x.opp), normName(home))); if (hg.length) { const w = hg.filter(x => x.win).length; h2h = { label: `H2H (last ${hg.length})`, away: `${w}-${hg.length - w}`, home: `${hg.length - w}-${w}` }; } }
+  const slim = (t) => ({ name: t.name, abbr: t.abbr, overall: t.overall, home: t.home, away: t.away, scored: t.scored, allowed: t.allowed, streak: t.streak });
+  return { away: slim(A), home: slim(H), scoredLabel: sport === "mlb" ? "Runs/game" : "Points/game", allowedLabel: sport === "mlb" ? "Runs allowed/game" : "Points allowed/game", h2h, title: `${A.abbr} @ ${H.abbr}` };
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
   if (!OPENAI) return res.status(500).json({ error: "OPENAI_API_KEY not set" });
@@ -379,9 +457,13 @@ export default async function handler(req, res) {
     const cached = await getCached(key);
     if (cached) return res.status(200).json({ ...cached, cached: true });
 
+    let matchup = null;
+    try { matchup = await buildMatchup(ctx.sport, ctx); } catch { matchup = null; }
+
     const event = await fetchGameOdds(ctx.sport, ctx);
     if (!event) {
-      const out = { summary: "I couldn't find live two-sided odds for that game right now, so there's nothing to screen. Try again closer to game time. This is screening, not betting advice.", keyStats: [], trends: [], bullCase: "", bearCase: "" };
+      const out = { summary: "No live odds are posted for this game yet, so there's no value to screen right now — the matchup data below is current. Check back closer to game time. This is screening, not betting advice.", keyStats: [], trends: [], bullCase: "", bearCase: "", matchup };
+      await storeCache(key, out);
       return res.status(200).json({ ...out, cached: false });
     }
     const lineCands = analyzeGame(event);
@@ -390,6 +472,7 @@ export default async function handler(req, res) {
     const cands = [...lineCands, ...propCands].sort((a, b) => b.evPct - a.evPct).slice(0, 8);
 
     const out = await generate(ctx.game, cands);
+    if (matchup) out.matchup = matchup;
     await storeCache(key, out);
     return res.status(200).json({ ...out, cached: false });
   } catch (err) {

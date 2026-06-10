@@ -1357,6 +1357,14 @@ export default function App() {
     if(aiSuggestions.length>0){ const b=aiSuggestions[0]; setAiInput(""); askFromBet(b,b.category); }
     else { setAiInput(""); askPlok(t); }
   };
+  useEffect(() => {
+    const vv = window.visualViewport; if(!vv) return;
+    const apply = () => { document.documentElement.style.setProperty("--vvh", vv.height + "px"); };
+    apply();
+    vv.addEventListener("resize", apply);
+    vv.addEventListener("scroll", apply);
+    return () => { vv.removeEventListener("resize", apply); vv.removeEventListener("scroll", apply); };
+  }, []);
   const renderAiItem = (item, i) => {
     if(item.role==="user"){
       return (<div key={i} style={{alignSelf:"flex-end",maxWidth:"82%",background:IOS.blue,color:"#fff",borderRadius:"14px 14px 4px 14px",padding:"8px 12px",fontSize:13,fontWeight:600,marginLeft:"auto"}}>{item.text}</div>);
@@ -2472,7 +2480,7 @@ export default function App() {
  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
  ::-webkit-scrollbar{display:none;}
 
- html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;position:fixed;width:100%;top:0;left:0;} #root{height:100%;overflow:hidden;} .phone{width:390px;height:100vh;height:100dvh;max-height:100dvh;background:#000;position:relative;overflow:hidden;display:flex;flex-direction:column;font-family:'Barlow',system-ui,-apple-system,sans-serif;color:#fff;-webkit-font-smoothing:antialiased;padding-top:env(safe-area-inset-top,0px);box-sizing:border-box;}
+ html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;position:fixed;width:100%;top:0;left:0;} #root{height:100%;overflow:hidden;} .phone{width:390px;height:100vh;height:100dvh;height:var(--vvh,100dvh);max-height:var(--vvh,100dvh);background:#000;position:relative;overflow:hidden;display:flex;flex-direction:column;font-family:'Barlow',system-ui,-apple-system,sans-serif;color:#fff;-webkit-font-smoothing:antialiased;padding-top:env(safe-area-inset-top,0px);box-sizing:border-box;}
 
  /* iOS Status Bar */
 
@@ -7030,7 +7038,7 @@ export default function App() {
                   <div style={{fontSize:10.5,color:"rgba(255,255,255,0.4)",marginTop:2}}>Screening, not advice</div>
                 </div>
               </div>
-              <button onClick={()=>{ if(!isPro){setShowPaywall("ai");return;} setFindBetOpen(true); }} style={{flexShrink:0,display:"inline-flex",alignItems:"center",gap:5,padding:"7px 11px",borderRadius:10,background:`${IOS.blue}1a`,border:`1px solid ${IOS.blue}40`,color:IOS.blue,fontSize:11.5,fontWeight:800,cursor:"pointer"}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Find a bet</button>
+              <button onClick={()=>{ if(!isPro){setShowPaywall("ai");return;} setFindBetOpen(true); }} style={{flexShrink:0,display:"inline-flex",alignItems:"center",gap:5,padding:"7px 11px",borderRadius:10,background:`${IOS.blue}1a`,border:`1px solid ${IOS.blue}40`,color:IOS.blue,fontSize:11.5,fontWeight:800,cursor:"pointer"}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Find +EV</button>
             </div>
             <div className="gbx-scroll" style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:10,padding:"14px 14px 16px"}}>
               {aiThread.length===0 && (
@@ -7044,7 +7052,7 @@ export default function App() {
                     ))}
                   </div>
                   <div style={{marginTop:16,paddingTop:16,borderTop:"0.5px solid rgba(255,255,255,0.07)"}}>
-                    <button onClick={()=>{ if(!isPro){setShowPaywall("ai");return;} setFindBetOpen(true); }} style={{display:"inline-flex",alignItems:"center",gap:7,padding:"10px 16px",borderRadius:12,background:IOS.blue,border:"none",color:"#fff",fontSize:13,fontWeight:800,cursor:"pointer"}}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Find me a bet</button>
+                    <button onClick={()=>{ if(!isPro){setShowPaywall("ai");return;} setFindBetOpen(true); }} style={{display:"inline-flex",alignItems:"center",gap:7,padding:"10px 16px",borderRadius:12,background:IOS.blue,border:"none",color:"#fff",fontSize:13,fontWeight:800,cursor:"pointer"}}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Find a +EV bet</button>
                     <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:8}}>Plok scans the books for the best price on a game.</div>
                   </div>
                 </div>
@@ -7059,7 +7067,7 @@ export default function App() {
                 <div onClick={(e)=>e.stopPropagation()} style={{background:"#101015",borderTopLeftRadius:18,borderTopRightRadius:18,borderTop:"0.5px solid rgba(255,255,255,0.12)",maxHeight:"70%",display:"flex",flexDirection:"column",overflow:"hidden"}}>
                   <div style={{padding:"14px 16px 11px",flexShrink:0,borderBottom:"0.5px solid rgba(255,255,255,0.07)"}}>
                     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                      <div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Find a bet</div>
+                      <div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Find a +EV bet</div>
                       <div onClick={()=>setFindBetOpen(false)} style={{fontSize:13,fontWeight:700,color:IOS.blue,cursor:"pointer"}}>Cancel</div>
                     </div>
                     <div style={{fontSize:11.5,color:"rgba(255,255,255,0.45)",marginTop:3,lineHeight:1.4}}>Plok scans the moneyline, spread, total, and player props on a game and flags the best value.</div>
