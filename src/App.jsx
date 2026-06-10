@@ -344,15 +344,13 @@ const LEAGUES_DATA = [
 ];
 
 const POWER_UPS = [
- { id:"steal", icon:"steal", name:"Pick Steal", desc:"See one opponent's locked lineup", rarity:"rare", color:IOS.purple, type:"defensive" },
- { id:"enhance", icon:"enhance", name:"Spread Enhancer", desc:"Move any spread 1.5pts in your favor", rarity:"rare", color:IOS.blue, type:"offensive" },
- { id:"insurance",icon:"insurance", name:"Insurance", desc:"Lose by 1 leg? Counts as a push", rarity:"common", color:IOS.green, type:"offensive" },
- { id:"lock", icon:"lock", name:"Lock It In", desc:"Force opponent — no lineup changes", rarity:"rare", color:IOS.orange, type:"defensive" },
- { id:"double", icon:"2⃣", name:"Double Down", desc:"One pick counts double this week", rarity:"common", color:IOS.yellow, type:"offensive" },
- { id:"peek", icon:"peek", name:"Peek", desc:"See what % of league took each bet", rarity:"common", color:IOS.teal, type:"defensive" },
- { id:"bomb", icon:"bomb", name:"Bomb", desc:"Nullify one of opponent's winning picks", rarity:"legendary", color:IOS.red, type:"defensive" },
- { id:"swap", icon:"", name:"Hot Swap", desc:"Swap a losing pick after games start", rarity:"legendary", color:IOS.pink, type:"offensive" },
- { id:"wildcard", icon:"", name:"Wildcard", desc:"Play any bet — no slot rules", rarity:"rare", color:IOS.purple, type:"offensive" },
+ { id:"enhance15", icon:"enhance", name:"Spread +1.5", desc:"Move your spread 1.5 pts in your favor", rarity:"common", color:IOS.blue, type:"offensive", tier:1.5 },
+ { id:"enhance3", icon:"enhance", name:"Spread +3", desc:"Move your spread 3 pts in your favor", rarity:"rare", color:IOS.blue, type:"offensive", tier:3 },
+ { id:"enhance45", icon:"enhance", name:"Spread +4.5", desc:"Move your spread 4.5 pts in your favor", rarity:"legendary", color:IOS.blue, type:"offensive", tier:4.5 },
+ { id:"double", icon:"double", name:"Double Down", desc:"Double one pick's points this week (after its multiplier)", rarity:"rare", color:IOS.yellow, type:"offensive" },
+ { id:"insurance", icon:"insurance", name:"Insurance", desc:"Parlay misses by one leg? Scores as if that leg wasn't in it", rarity:"common", color:IOS.green, type:"defensive" },
+ { id:"swap", icon:"swap", name:"Hot Swap", desc:"Before lock, swap a pick to another unstarted game — full points", rarity:"rare", color:IOS.pink, type:"offensive" },
+ { id:"second", icon:"clock", name:"Second Chance", desc:"While your pick's game is live, bail to an unstarted game for half points", rarity:"legendary", color:IOS.orange, type:"offensive" },
 ];
 
 const TROPHIES = [
@@ -507,7 +505,7 @@ const CHAT = [
  { id:12, user:"Tom B.", init:"T", time:"5m", text:"^^^ ", me:false },
 ];
 
-const WHEEL_ITEMS = [POWER_UPS[0],POWER_UPS[4],POWER_UPS[1],POWER_UPS[9],POWER_UPS[6],POWER_UPS[2],POWER_UPS[8],POWER_UPS[3],POWER_UPS[7],POWER_UPS[5]];
+const WHEEL_ITEMS = ["double","enhance15","insurance","second","enhance3","swap","enhance45"].map(_id=>POWER_UPS.find(p=>p.id===_id)).filter(Boolean);
 
 // ─── SPORT DETECTION (by team name) ───────────────────────────────
 // Used to keep each league's bet list scoped to its own sport(s), even if an
@@ -821,7 +819,8 @@ const puSVG = (id, color="#fff") => {
     swap:     <svg {...s}><polyline points="16 3 21 8 16 13"/><path d="M21 8H9a4 4 0 0 0-4 4"/><polyline points="8 21 3 16 8 11"/><path d="M3 16h12a4 4 0 0 0 4-4"/></svg>,
     wildcard: <svg {...s}><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.4" fill={color} stroke="none"/><circle cx="15.5" cy="15.5" r="1.4" fill={color} stroke="none"/><circle cx="12" cy="12" r="1.4" fill={color} stroke="none"/></svg>,
   };
-  return icons[id] || <svg {...s}><circle cx="12" cy="12" r="10"/></svg>;
+  const key = (id && id.indexOf("enhance")===0) ? "enhance" : (id==="second" ? "clock" : id);
+  return icons[key] || <svg {...s}><circle cx="12" cy="12" r="10"/></svg>;
 };
 
 const catSVG = (id, color="#fff") => {
@@ -7105,7 +7104,7 @@ export default function App() {
        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
      </div>
      <div style={{fontSize:16,fontWeight:700,color:"#fff",marginBottom:6}}>Power-ups are a Pro feature</div>
-     <div style={{fontSize:13,color:"#666",marginBottom:16,lineHeight:1.5}}>Upgrade to Commish Pro to unlock Double Down, Mulligan, Shield, and more.</div>
+     <div style={{fontSize:13,color:"#666",marginBottom:16,lineHeight:1.5}}>Upgrade to Commish Pro to unlock Double Down, Spread Enhancer, Insurance, and more.</div>
      <button onClick={()=>setShowPaywall("powerups")} style={{background:IOS.blue,color:"#fff",border:"none",borderRadius:8,padding:"12px 24px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
        Unlock Power-ups
      </button>
@@ -7907,7 +7906,7 @@ export default function App() {
      picks:{icon:"ti-plus",title:"Unlimited picks",sub:"Commish Pro lets you add as many pick slots as you want each week.",features:["Unlimited pick slots per week","Custom multipliers on any slot","NFL, NBA, MLB, NHL","Power-ups and custom bet types"]},
      settings:{icon:"settings",title:"Custom league settings",sub:"Set your own pick counts, multiplier ranges, and allowed bet types.",features:["Custom pick count per week","Custom multiplier ranges","Restrict or expand bet types","Multi-sport leagues"]},
      sport:{icon:"world",title:"Multi-sport leagues",sub:"Run your league across NFL, NBA, MLB, and NHL — all in one place.",features:["NFL, NBA, MLB, NHL support","Custom pick counts and bet types","Custom multiplier ranges","Power-ups for your league"]},
-     powerups:{icon:"bolt",title:"Power-ups are a Pro feature",sub:"Double Down, Mulligan, Shield and more are unlocked with Commish Pro.",features:["All current and future power-ups","Unlimited picks and custom settings","Multi-sport league support"]},
+     powerups:{icon:"bolt",title:"Power-ups are a Pro feature",sub:"Double Down, Spread Enhancer, Insurance and more are unlocked with Commish Pro.",features:["All current and future power-ups","Unlimited picks and custom settings","Multi-sport league support"]},
    };
    const cfg = configs[showPaywall]||configs.picks;
    return (
