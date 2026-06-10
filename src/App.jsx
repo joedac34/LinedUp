@@ -1359,11 +1359,20 @@ export default function App() {
   };
   useEffect(() => {
     const vv = window.visualViewport; if(!vv) return;
-    const apply = () => { document.documentElement.style.setProperty("--vvh", vv.height + "px"); };
+    const apply = () => {
+      document.body.style.height = vv.height + "px";
+      document.body.style.transform = vv.offsetTop ? ("translateY(" + vv.offsetTop + "px)") : "none";
+    };
     apply();
     vv.addEventListener("resize", apply);
     vv.addEventListener("scroll", apply);
-    return () => { vv.removeEventListener("resize", apply); vv.removeEventListener("scroll", apply); };
+    window.addEventListener("orientationchange", apply);
+    return () => {
+      vv.removeEventListener("resize", apply);
+      vv.removeEventListener("scroll", apply);
+      window.removeEventListener("orientationchange", apply);
+      document.body.style.height = ""; document.body.style.transform = "";
+    };
   }, []);
   const renderAiItem = (item, i) => {
     if(item.role==="user"){
@@ -2480,7 +2489,7 @@ export default function App() {
  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
  ::-webkit-scrollbar{display:none;}
 
- html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;position:fixed;width:100%;top:0;left:0;} #root{height:100%;overflow:hidden;} .phone{width:390px;height:100vh;height:100dvh;height:var(--vvh,100dvh);max-height:var(--vvh,100dvh);background:#000;position:relative;overflow:hidden;display:flex;flex-direction:column;font-family:'Barlow',system-ui,-apple-system,sans-serif;color:#fff;-webkit-font-smoothing:antialiased;padding-top:env(safe-area-inset-top,0px);box-sizing:border-box;}
+ html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;position:fixed;width:100%;top:0;left:0;} #root{height:100%;overflow:hidden;} .phone{width:390px;height:100%;max-height:100%;background:#000;position:relative;overflow:hidden;display:flex;flex-direction:column;font-family:'Barlow',system-ui,-apple-system,sans-serif;color:#fff;-webkit-font-smoothing:antialiased;padding-top:env(safe-area-inset-top,0px);box-sizing:border-box;}
 
  /* iOS Status Bar */
 

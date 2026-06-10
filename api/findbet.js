@@ -20,7 +20,7 @@ const ODDS   = process.env.ODDS_API_KEY;
 const sbHeaders = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, "Content-Type": "application/json" };
 const SPORT_KEYS = { nfl: "americanfootball_nfl", nba: "basketball_nba", mlb: "baseball_mlb" };
 
-const hashKey = (s) => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return "fb3_" + (h >>> 0).toString(36); };
+const hashKey = (s) => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return "fb4_" + (h >>> 0).toString(36); };
 const amToProb = (o) => (o < 0 ? Math.abs(o) / (Math.abs(o) + 100) : 100 / (o + 100));
 const amToDec  = (o) => (o < 0 ? 1 + 100 / Math.abs(o) : 1 + o / 100);
 const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
@@ -212,7 +212,7 @@ function analyzeGame(event) {
     const s = sides[k];
     if (s.fairs.length < 3) continue;
     const consensus = mean(s.fairs), ev = consensus * s.bestDec - 1;
-    if (ev >= 0.01) cands.push({ kind: "line", label: labelFor(s.market, s.name, s.point), evPct: +(ev * 100).toFixed(1), fairPct: +(consensus * 100).toFixed(1), bestOdds: (s.bestAm > 0 ? "+" : "") + s.bestAm, bestBook: s.bestBook, books: s.fairs.length, suspicious: ev > 0.06 });
+    cands.push({ kind: "line", label: labelFor(s.market, s.name, s.point), evPct: +(ev * 100).toFixed(1), fairPct: +(consensus * 100).toFixed(1), bestOdds: (s.bestAm > 0 ? "+" : "") + s.bestAm, bestBook: s.bestBook, books: s.fairs.length, suspicious: ev > 0.06 });
   }
   return cands.sort((a, b) => b.evPct - a.evPct);
 }
@@ -297,7 +297,7 @@ async function analyzeProps(sport, eventId) {
       let pUsed = consensus, basis = "price";
       if (model && !model.invalid && model.pOver != null) { pUsed = side === "over" ? model.pOver : (1 - model.pOver); basis = "model"; }
       const evNum = pUsed * s.bestDec - 1;
-      if (evNum >= 0.01) out.push({
+      out.push({
         kind: "prop", market: g.market, tier: g.conf.tier, basis,
         label: `${g.player} ${side === "over" ? "o" : "u"}${g.line} ${g.conf.short}`,
         evPct: +(evNum * 100).toFixed(1), fairPct: +(consensus * 100).toFixed(1),
@@ -315,16 +315,16 @@ async function analyzeProps(sport, eventId) {
 const PLOK_SYSTEM =
   "You are Plok, PickLock's betting analyst. You SCREEN for value; you do not give betting advice, place bets, or suggest stake sizes. " +
   "Cite only figures from the DATA block — never invent, estimate, or recall odds or stats. " +
-  "Principles: (1) The market is right until proven otherwise; a flagged edge is a rare exception, not a better forecast. " +
-  "(2) 'No strong edge' is a good, common answer — never manufacture a pick; if DATA has no qualifying value, say so plainly. " +
-  "(3) Big edges are bugs: treat any EV above ~6% (FLAG) as a likely stale or erroneous price needing re-verification, not a green light. " +
+  "Principles: (1) The market is right until proven otherwise; an edge is a price one book is offering above the consensus, not a better forecast. " +
+  "(2) ALWAYS present the best 3-5 EV candidates the code surfaced, ranked highest EV first — do NOT withhold picks for being below some bar. A +1% to +5% edge is the normal, healthy range and exactly what to show. Only if the very best candidate is negative or razor-thin should you say the game looks fully priced. " +
+  "(3) Big edges are bugs: treat any EV above ~6% (FLAG) as a likely stale or erroneous price needing re-verification, not a green light — still show it, just caveat it. " +
   "(4) You may rank and explain the value the code computed; you may not change the numbers. " +
   "DATA holds two candidate kinds. [LINE] = a game line de-vigged across books; its edge is purely a price discrepancy (one book beating consensus). " +
   "[PROP] = a player prop. A prop marked 'model' has a projection from recent game logs (normal-dist for yards/points, Poisson for small counts like rebounds/assists/threes/Ks) — treat this as a weak second opinion that should sit near the market; a prop marked 'price-only' has no reliable projection, so judge it on the price discrepancy alone. " +
   "Props labeled poisson carry wider uncertainty — say so and keep confidence MEDIUM at best. " +
-  "Read EV as: under +1% = no bet; +1-2% = marginal; +2-5% = qualifying value; above +5% = re-verify before trusting. " +
-  "Return: summary (plain-English read of the single strongest value or that there is none, why the price looks soft, and the caveat that this is screening not advice); " +
-  "keyStats (up to 4 figures FROM DATA — e.g. EV%, projection vs line, best price+book, books surveyed; empty if no candidates); " +
+  "Read EV as: +2-5% = solid value; +1-2% = a smaller but real edge worth showing; near zero = thin/coin-flip; negative = no real edge. Above ~6% is a FLAG (likely stale price), show it but say it needs re-verification. " +
+  "Return: summary (rank the best value candidates with their EV%, lead with the strongest, explain why that price looks soft; if the best is thin or negative, say so honestly; end with the screening-not-advice caveat); " +
+  "keyStats (up to 4 figures FROM DATA for the top pick — e.g. EV%, projection vs line, best price+book, books surveyed); " +
   "trends (short value notes or empty); bullCase (the case for the flagged value); bearCase (why it may be noise — few books, line may have moved, model uncalibrated, small sample). " +
   "Always end summary with: lines may have moved — verify the current price; this is screening, not betting advice.";
 
