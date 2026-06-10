@@ -526,6 +526,7 @@ export default async function handler(req, res) {
 
             let pts = result === "W" ? calcPoints(pick.multiplier, pick.implied_odds) : 0;
             if (result === "W" && pick.power_up_id === "double") pts *= 2;
+            if (result === "W" && pick.power_up_id === "second") pts = parseFloat((pts * 0.5).toFixed(1));
             await sbPatch(`picks?id=eq.${pick.id}`, { result, points_earned: pts });
             results.graded++;
           }

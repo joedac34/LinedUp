@@ -1340,6 +1340,17 @@ export default function App() {
  const [activeSlot, setActiveSlot] = useState(null);
  const [myPUs, setMyPUs] = useState([]); // loaded from league_power_ups table
  const [showPUModal, setShowPUModal] = useState(null); // {context:"picks"|"matchup", slotId, pickIdx}
+ const [secondSwap, setSecondSwap] = useState(null); // {pick, category} — live Second Chance target
+ const doSecondSwap = async (pick, bet) => {
+   const puRow = myPUs.find(p=>p.id==="second");
+   try {
+     await supabase.from("picks").update({ pick_name: bet.pick, game: bet.game||"", odds: bet.odds, implied_odds: bet.impliedOdds, power_up_id: "second" }).eq("id", pick.id);
+     if (puRow && puRow.dbId) await supabase.from("league_power_ups").update({used:true}).eq("id", puRow.dbId);
+     setMyPUs(prev=>{ const i=prev.findIndex(x=>x.id==="second"); if(i<0) return prev; const n=[...prev]; n.splice(i,1); return n; });
+     await fetchWeekPicks(activeLeague.id, activeLeague.current_week||activeLeague.week||1);
+   } catch(e){ alert("Swap failed: "+(e.message||e)); }
+   setSecondSwap(null);
+ };
  const [activatedPUs,setActivatedPUs]= useState({}); // slotId -> pu applied on picks screen
  const [matchupPUs, setMatchupPUs] = useState({}); // pickIdx -> pu applied on live matchup
  const [profTab, setProfTab] = useState("stats");
@@ -3000,7 +3011,36 @@ export default function App() {
  }}/>
 
  {/* ══ POWER-UP MODAL ══ */}
- {showPUModal && (
+ {secondSwap && (
+ <div className="pu-modal-bg" onClick={()=>setSecondSwap(null)}>
+ <div className="pu-modal-sheet" onClick={e=>e.stopPropagation()}>
+ <div className="pu-modal-handle"/>
+ <div className="pu-modal-hdr">
+ <div className="pu-modal-title">Second Chance</div>
+ <div className="pu-modal-sub">Bail your live pick into an unstarted game — scores half points if it hits</div>
+ </div>
+ {(()=>{
+ const cat = secondSwap.category||"ml";
+ const cands = (BETS[cat]||[]).filter(b=> b.game !== secondSwap.pick.game).slice(0,40);
+ return cands.length===0
+ ? <div style={{padding:"28px 20px",textAlign:"center",color:IOS.label3,fontSize:15}}>No unstarted {cat.toUpperCase()} bets available right now</div>
+ : <div style={{maxHeight:380,overflowY:"auto"}}>{cands.map((b,i)=>(
+ <div key={i} className="pu-opt" onClick={()=>doSecondSwap(secondSwap.pick, b)}>
+ <div style={{flex:1,minWidth:0}}>
+ <div className="pu-opt-name">{b.pick}</div>
+ <div className="pu-opt-desc">{b.game}</div>
+ </div>
+ <div style={{fontSize:13,fontWeight:800,color:(b.odds&&b.odds.startsWith("+"))?IOS.green:IOS.blue,flexShrink:0,marginLeft:8}}>{b.odds}</div>
+ </div>
+ ))}</div>;
+ })()}
+ <div style={{padding:"14px 20px 0"}}>
+ <button onClick={()=>setSecondSwap(null)} style={{width:"100%",background:IOS.bg3,border:"none",borderRadius:12,padding:"14px",fontFamily:"Barlow,sans-serif",fontSize:15,fontWeight:600,color:IOS.label2,cursor:"pointer"}}>Cancel</button>
+ </div>
+ </div>
+ </div>
+ )}
+{showPUModal && (
  <div className="pu-modal-bg" onClick={()=>setShowPUModal(null)}>
  <div className="pu-modal-sheet" onClick={e=>e.stopPropagation()}>
  <div className="pu-modal-handle"/>
@@ -3014,7 +3054,7 @@ export default function App() {
  </div>
  {(()=>{
  const filteredPUs = showPUModal?.context==="picks"
- ? myPUs.filter(pu=>puAppliesTo(pu.id, showPUModal.category, showPUModal.isParlay))
+ ? myPUs.filter(pu=>pu.id!=="second" && puAppliesTo(pu.id, showPUModal.category, showPUModal.isParlay))
  : myPUs;
  return filteredPUs.length===0
  ? <div style={{padding:"28px 20px",textAlign:"center",color:IOS.label3,fontSize:15}}>No power-ups apply to this pick</div>
@@ -5314,6 +5354,9 @@ export default function App() {
  <span style={{fontSize:11,fontWeight:800,color:oddsColor}}>{oddsVal}</span>
  <span style={{fontSize:8.5,fontWeight:700,padding:"2px 5px",borderRadius:5,whiteSpace:"nowrap",background:ptsBg,color:ptsColor}}>{ptsLabel}</span>
  </div>
+ {isMe && !isParlay && result==="pending" && myPUs.some(p=>p.id==="second") && (
+ <button onClick={(e)=>{e.stopPropagation(); setSecondSwap({pick:picks[0], category:(picks[0].slot||"ml").split("_")[0]});}} style={{marginTop:5,width:"100%",padding:"4px",borderRadius:6,border:`1px solid ${IOS.orange}55`,background:`${IOS.orange}1a`,color:IOS.orange,fontSize:8.5,fontWeight:800,letterSpacing:0.3,cursor:"pointer"}}>SECOND CHANCE</button>
+ )}
  {isParlay&&<div style={{fontSize:8,color:c,marginTop:3}}>▾ tap to see legs</div>}
  {isParlay&&(
  <div id={expandId} style={{display:"none",marginTop:6,borderTop:"0.5px solid rgba(255,255,255,0.08)",paddingTop:5}}>
