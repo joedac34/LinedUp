@@ -1275,6 +1275,21 @@ export default function App() {
     setAiReturn(screen); setScreen("ai");
     askInsight(buildBetCtx(bet, category), bet.pick, bet, category);
   };
+  const [findBetOpen, setFindBetOpen] = useState(false);
+  const findBetGames = [...new Map(ALL_BETS.filter(b=>b.game).map(b=>[b.game,{game:b.game,sport:b._sport||leagueSports[0]||"nfl"}])).values()];
+  const askFindBet = (g) => {
+    if(!isPro){ setShowPaywall("ai"); return; }
+    setFindBetOpen(false);
+    setAiReturn(screen); setScreen("ai");
+    const label = `Find a bet · ${g.game}`;
+    const item = { role:"ai", label, bet:null, category:null, loading:true };
+    setAiThread(prev=>[...prev, { role:"user", text:`Find me a bet — ${g.game}` }, item]);
+    setAiBusy(true);
+    fetch("/api/findbet", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ sport:g.sport, game:g.game, userId:user?.id }) })
+      .then(async r=>{ const data=await r.json(); setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, data:r.ok?data:null, error:r.ok?null:(data.error||"Couldn't screen this game")} : x)); })
+      .catch(()=> setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, error:"Network error — try again"} : x)))
+      .finally(()=> setAiBusy(false));
+  };
   const renderAiItem = (item, i) => {
     if(item.role==="user"){
       return (<div key={i} style={{alignSelf:"flex-end",maxWidth:"82%",background:IOS.blue,color:"#fff",borderRadius:"14px 14px 4px 14px",padding:"8px 12px",fontSize:13,fontWeight:600,marginLeft:"auto"}}>{item.text}</div>);
@@ -3300,7 +3315,7 @@ export default function App() {
  </div>
  <div className="gh-center"></div>
  <div className="gh-right">
-            <div className="gh-icon" onClick={()=>{ if(!isPro){setShowPaywall("ai");return;} setAiReturn(screen); setScreen("ai"); }} aria-label="PickLock AI"><svg width="18" height="18" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg></div>
+            <div className="gh-icon" onClick={()=>{ if(!isPro){setShowPaywall("ai");return;} setAiReturn(screen); setScreen("ai"); }} aria-label="Plok"><svg width="18" height="18" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg></div>
  {!isSoloMode && <div className="gh-icon" onClick={()=>setScreen("chat")}>
  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
  {unreadChat>0 && <span className="gh-badge">{unreadChat>9?"9+":unreadChat}</span>}
@@ -6937,17 +6952,18 @@ export default function App() {
 
  {/* ══ CHAT ══ */}
  {screen==="ai"&&(
-          <div className="body" style={{display:"flex",flexDirection:"column",height:"100%",background:"#08080A",overflow:"hidden"}}>
+          <div className="body" style={{display:"flex",flexDirection:"column",height:"100%",background:"#08080A",overflow:"hidden",position:"relative"}}>
             <style>{`@keyframes aiRise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}} .ai-rise{animation:aiRise .28s ease both;} @keyframes aiBlink{0%,100%{opacity:1}50%{opacity:0}} .ai-caret{display:inline-block;width:2px;height:0.95em;background:#0A84FF;margin-left:2px;vertical-align:-1px;border-radius:1px;animation:aiBlink .8s steps(1) infinite;} @keyframes aiPulse{0%,100%{opacity:0.25;transform:translateY(0)}50%{opacity:1;transform:translateY(-2px)}} .ai-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.6);display:inline-block;animation:aiPulse .9s ease-in-out infinite;}`}</style>
             <div style={{flexShrink:0,display:"flex",alignItems:"center",gap:11,padding:"12px 16px 10px",borderBottom:"0.5px solid rgba(255,255,255,0.08)"}}>
               <div onClick={()=>setScreen(aiReturn||"home")} style={{width:34,height:34,borderRadius:10,background:"rgba(255,255,255,0.06)",border:"0.5px solid rgba(255,255,255,0.1)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:18,flexShrink:0}}>‹</div>
               <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:0}}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg>
                 <div>
-                  <div style={{fontSize:18,fontWeight:800,letterSpacing:"-0.4px",color:"#fff",lineHeight:1}}>PickLock AI</div>
-                  <div style={{fontSize:10.5,color:"rgba(255,255,255,0.4)",marginTop:2}}>Real stats · your board only</div>
+                  <div style={{fontSize:18,fontWeight:800,letterSpacing:"-0.4px",color:"#fff",lineHeight:1}}>Plok</div>
+                  <div style={{fontSize:10.5,color:"rgba(255,255,255,0.4)",marginTop:2}}>Screening, not advice</div>
                 </div>
               </div>
+              <button onClick={()=>{ if(!isPro){setShowPaywall("ai");return;} setFindBetOpen(true); }} style={{flexShrink:0,display:"inline-flex",alignItems:"center",gap:5,padding:"7px 11px",borderRadius:10,background:`${IOS.blue}1a`,border:`1px solid ${IOS.blue}40`,color:IOS.blue,fontSize:11.5,fontWeight:800,cursor:"pointer"}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Find a bet</button>
             </div>
             <div className="gbx-scroll" style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:10,padding:"14px 14px 16px"}}>
               {aiThread.length===0 && (
@@ -6960,6 +6976,10 @@ export default function App() {
                       <button key={bi} onClick={()=>askFromBet(b,b.category)} style={{padding:"7px 12px",borderRadius:18,background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.1)",color:"rgba(255,255,255,0.85)",fontSize:11.5,fontWeight:700,cursor:"pointer",maxWidth:180,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.pick}</button>
                     ))}
                   </div>
+                  <div style={{marginTop:16,paddingTop:16,borderTop:"0.5px solid rgba(255,255,255,0.07)"}}>
+                    <button onClick={()=>{ if(!isPro){setShowPaywall("ai");return;} setFindBetOpen(true); }} style={{display:"inline-flex",alignItems:"center",gap:7,padding:"10px 16px",borderRadius:12,background:IOS.blue,border:"none",color:"#fff",fontSize:13,fontWeight:800,cursor:"pointer"}}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Find me a bet</button>
+                    <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:8}}>Plok scans the books for the best price on a game.</div>
+                  </div>
                 </div>
               )}
               {aiThread.map((item,i)=> item.role==="user"
@@ -6967,6 +6987,25 @@ export default function App() {
                 : (<AiInsightBubble key={i} item={item} IOS={IOS} onAddToSlip={()=>{ if(aiAddToSlip(item.bet,item.category)){ setAiThread(prev=>prev.map(x=>x===item?{...x,added:true}:x)); } }} />)
               )}
             </div>
+            {findBetOpen && (
+              <div onClick={()=>setFindBetOpen(false)} style={{position:"absolute",inset:0,zIndex:40,background:"rgba(0,0,0,0.55)",display:"flex",flexDirection:"column",justifyContent:"flex-end"}}>
+                <div onClick={(e)=>e.stopPropagation()} style={{background:"#101015",borderTopLeftRadius:18,borderTopRightRadius:18,borderTop:"0.5px solid rgba(255,255,255,0.12)",maxHeight:"70%",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+                  <div style={{padding:"14px 16px 10px",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0,borderBottom:"0.5px solid rgba(255,255,255,0.07)"}}>
+                    <div style={{fontSize:15,fontWeight:800,color:"#fff"}}>Pick a game</div>
+                    <div onClick={()=>setFindBetOpen(false)} style={{fontSize:13,fontWeight:700,color:IOS.blue,cursor:"pointer"}}>Cancel</div>
+                  </div>
+                  <div style={{overflowY:"auto",padding:"6px 0 10px"}}>
+                    {findBetGames.length===0 && (<div style={{padding:"24px 16px",textAlign:"center",fontSize:12.5,color:"rgba(255,255,255,0.45)"}}>No games on your board right now.</div>)}
+                    {findBetGames.map((g,gi)=>(
+                      <div key={gi} onClick={()=>askFindBet(g)} style={{padding:"12px 16px",borderBottom:gi<findBetGames.length-1?"0.5px solid rgba(255,255,255,0.05)":"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+                        <div style={{fontSize:13.5,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{g.game}</div>
+                        <div style={{flexShrink:0,fontSize:9.5,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"rgba(255,255,255,0.4)",background:"rgba(255,255,255,0.06)",borderRadius:6,padding:"3px 7px"}}>{g.sport}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
             <div style={{flexShrink:0,position:"relative",borderTop:"0.5px solid rgba(255,255,255,0.08)",background:"#0B0B0E",padding:"10px 12px"}}>
               {aiSuggestions.length>0 && (
                 <div style={{position:"absolute",left:12,right:12,bottom:"100%",marginBottom:8,background:"#15151A",border:"0.5px solid rgba(255,255,255,0.12)",borderRadius:12,overflow:"hidden",boxShadow:"0 -8px 24px rgba(0,0,0,0.5)"}}>
