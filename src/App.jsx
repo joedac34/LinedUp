@@ -676,13 +676,13 @@ function AiInsightBubble({ item, IOS, onAddToSlip }) {
         ))}
       </div>
     )}
-    {phase>=3 && (
+    {phase>=3 && data.bullCase && (
       <div className="ai-rise" style={{borderLeft:"3px solid "+IOS.green,paddingLeft:9,marginBottom:8}}>
         <div style={{fontSize:9,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:IOS.green,marginBottom:2}}>Bull case</div>
         <div style={{fontSize:12.5,lineHeight:1.45,color:"rgba(255,255,255,0.8)"}}>{data.bullCase}</div>
       </div>
     )}
-    {phase>=4 && (
+    {phase>=4 && data.bearCase && (
       <div className="ai-rise" style={{borderLeft:"3px solid "+IOS.red,paddingLeft:9}}>
         <div style={{fontSize:9,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:IOS.red,marginBottom:2}}>Bear case</div>
         <div style={{fontSize:12.5,lineHeight:1.45,color:"rgba(255,255,255,0.8)"}}>{data.bearCase}</div>
@@ -1306,7 +1306,27 @@ export default function App() {
     askInsight(buildBetCtx(bet, category), bet.pick, bet, category);
   };
   const [findBetOpen, setFindBetOpen] = useState(false);
-  const findBetGames = [...new Map(ALL_BETS.filter(b=>b.game).map(b=>[b.game,{game:b.game,sport:b._sport||leagueSports[0]||"nfl"}])).values()];
+  const findBetGames = (() => {
+    const seen = new Map();
+    const findTime = (away, home) => {
+      const tg = (tickerGames||[]).find(t => (t.away&&away&&(t.away.includes(away)||away.includes(t.away))) || (t.home&&home&&(t.home.includes(home)||home.includes(t.home))));
+      return tg ? tg.time : null;
+    };
+    for (const b of ALL_BETS) {
+      if (!b.game || seen.has(b.game)) continue;
+      const sp = b._sport || leagueSports[0] || "nfl";
+      const parts = String(b.game).split("@");
+      const away = (parts[0]||"").trim(), home = (parts[1]||"").trim();
+      seen.set(b.game, { game:b.game, sport:sp, away, home, time: findTime(away, home) });
+    }
+    return [...seen.values()];
+  })();
+  const findBetGroups = (() => {
+    const m = {};
+    findBetGames.forEach(g=>{ (m[g.sport]=m[g.sport]||[]).push(g); });
+    const sortT = (a,b)=>{ const ta=a.time?new Date(a.time).getTime():Infinity, tb=b.time?new Date(b.time).getTime():Infinity; return ta-tb; };
+    return Object.keys(m).sort().map(sp=>({ sport:sp, games:m[sp].slice().sort(sortT) }));
+  })();
   const askFindBet = (g) => {
     if(!isPro){ setShowPaywall("ai"); return; }
     setFindBetOpen(false);
@@ -7037,16 +7057,32 @@ export default function App() {
             {findBetOpen && (
               <div onClick={()=>setFindBetOpen(false)} style={{position:"absolute",inset:0,zIndex:40,background:"rgba(0,0,0,0.55)",display:"flex",flexDirection:"column",justifyContent:"flex-end"}}>
                 <div onClick={(e)=>e.stopPropagation()} style={{background:"#101015",borderTopLeftRadius:18,borderTopRightRadius:18,borderTop:"0.5px solid rgba(255,255,255,0.12)",maxHeight:"70%",display:"flex",flexDirection:"column",overflow:"hidden"}}>
-                  <div style={{padding:"14px 16px 10px",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0,borderBottom:"0.5px solid rgba(255,255,255,0.07)"}}>
-                    <div style={{fontSize:15,fontWeight:800,color:"#fff"}}>Pick a game</div>
-                    <div onClick={()=>setFindBetOpen(false)} style={{fontSize:13,fontWeight:700,color:IOS.blue,cursor:"pointer"}}>Cancel</div>
+                  <div style={{padding:"14px 16px 11px",flexShrink:0,borderBottom:"0.5px solid rgba(255,255,255,0.07)"}}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                      <div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Find a bet</div>
+                      <div onClick={()=>setFindBetOpen(false)} style={{fontSize:13,fontWeight:700,color:IOS.blue,cursor:"pointer"}}>Cancel</div>
+                    </div>
+                    <div style={{fontSize:11.5,color:"rgba(255,255,255,0.45)",marginTop:3,lineHeight:1.4}}>Plok scans the moneyline, spread, total, and player props on a game and flags the best value.</div>
                   </div>
-                  <div style={{overflowY:"auto",padding:"6px 0 10px"}}>
+                  <div style={{overflowY:"auto",padding:"0 0 10px"}}>
                     {findBetGames.length===0 && (<div style={{padding:"24px 16px",textAlign:"center",fontSize:12.5,color:"rgba(255,255,255,0.45)"}}>No games on your board right now.</div>)}
-                    {findBetGames.map((g,gi)=>(
-                      <div key={gi} onClick={()=>askFindBet(g)} style={{padding:"12px 16px",borderBottom:gi<findBetGames.length-1?"0.5px solid rgba(255,255,255,0.05)":"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
-                        <div style={{fontSize:13.5,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{g.game}</div>
-                        <div style={{flexShrink:0,fontSize:9.5,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"rgba(255,255,255,0.4)",background:"rgba(255,255,255,0.06)",borderRadius:6,padding:"3px 7px"}}>{g.sport}</div>
+                    {findBetGroups.map((grp,si)=>(
+                      <div key={si}>
+                        <div style={{padding:"12px 16px 5px",fontSize:10,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(255,255,255,0.35)"}}>{({nfl:"NFL",nba:"NBA",mlb:"MLB"})[grp.sport]||String(grp.sport).toUpperCase()}</div>
+                        {grp.games.map((g,gi)=>{
+                          const tm = g.time ? new Date(g.time) : null;
+                          const tstr = tm && !isNaN(tm.getTime()) ? tm.toLocaleString([],{weekday:"short",hour:"numeric",minute:"2-digit"}) : null;
+                          return (
+                            <div key={gi} onClick={()=>askFindBet(g)} style={{padding:"11px 16px",borderTop:"0.5px solid rgba(255,255,255,0.05)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+                              <div style={{minWidth:0}}>
+                                <div style={{fontSize:14,fontWeight:800,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{g.away||g.game}</div>
+                                {g.home && <div style={{fontSize:14,fontWeight:800,color:"rgba(255,255,255,0.85)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{g.home}</div>}
+                                {tstr && <div style={{fontSize:10.5,color:"rgba(255,255,255,0.4)",marginTop:3}}>{tstr}</div>}
+                              </div>
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polyline points="9 18 15 12 9 6"/></svg>
+                            </div>
+                          );
+                        })}
                       </div>
                     ))}
                   </div>

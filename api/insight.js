@@ -510,7 +510,7 @@ export default async function handler(req, res) {
     }
 
     const day = new Date().toISOString().slice(0, 10);
-    const key = hashKey(["v2", ctx.sport, ctx.betType, ctx.selection, ctx.line, ctx.game, ctx.question || "", day].join("|"));
+    const key = hashKey(["v3", ctx.sport, ctx.betType, ctx.selection, ctx.line, ctx.game, ctx.question || "", day].join("|"));
 
     const cached = await getCached(key);
     if (cached) return res.status(200).json({ ...cached, cached: true });
