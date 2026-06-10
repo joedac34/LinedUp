@@ -621,10 +621,40 @@ function AiInsightBubble({ item, IOS, onAddToSlip }) {
   const shownSummary = summaryWords.slice(0, words).join(" ");
   const typing = words < summaryWords.length;
   return wrap(<div>
-    <div style={{fontSize:13,lineHeight:1.5,color:"rgba(255,255,255,0.86)",marginBottom:(data.keyStats&&data.keyStats.length)?11:8}}>
+    <div style={{fontSize:13,lineHeight:1.5,color:"rgba(255,255,255,0.86)",marginBottom:(data.matchup||(data.keyStats&&data.keyStats.length))?11:8}}>
       {shownSummary}{typing && <span className="ai-caret"/>}
     </div>
-    {phase>=1 && data.keyStats && data.keyStats.length>0 && (
+    {phase>=1 && data.matchup && (
+      <div className="ai-rise" style={{marginBottom:11,borderRadius:11,overflow:"hidden",border:"0.5px solid rgba(255,255,255,0.09)"}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",alignItems:"center",padding:"8px 12px",background:"rgba(255,255,255,0.05)"}}>
+          <div style={{fontSize:13,fontWeight:800,color:IOS.blue,textAlign:"left",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{data.matchup.away.abbr||data.matchup.away.name}</div>
+          <div style={{fontSize:9,fontWeight:800,color:"rgba(255,255,255,0.3)",letterSpacing:"0.06em",padding:"0 8px"}}>VS</div>
+          <div style={{fontSize:13,fontWeight:800,color:IOS.blue,textAlign:"right",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{data.matchup.home.abbr||data.matchup.home.name}</div>
+        </div>
+        {[
+          {k:"Record",a:data.matchup.away.overall,h:data.matchup.home.overall},
+          {k:"Home",a:data.matchup.away.home,h:data.matchup.home.home},
+          {k:"Road",a:data.matchup.away.away,h:data.matchup.home.away},
+          {k:data.matchup.scoredLabel||"Scored/game",a:data.matchup.away.scored,h:data.matchup.home.scored},
+          {k:data.matchup.allowedLabel||"Allowed/game",a:data.matchup.away.allowed,h:data.matchup.home.allowed},
+          {k:"Streak",a:data.matchup.away.streak,h:data.matchup.home.streak},
+        ].filter(r=>r.a!=null||r.h!=null).map((r,ri)=>(
+          <div key={ri} style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",alignItems:"center",padding:"7px 12px",borderTop:"0.5px solid rgba(255,255,255,0.05)"}}>
+            <div style={{fontSize:13.5,fontWeight:800,color:"#fff",textAlign:"left"}}>{r.a!=null?r.a:"—"}</div>
+            <div style={{fontSize:9.5,fontWeight:700,color:"rgba(255,255,255,0.42)",textTransform:"uppercase",letterSpacing:"0.03em",padding:"0 10px",textAlign:"center",whiteSpace:"nowrap"}}>{r.k}</div>
+            <div style={{fontSize:13.5,fontWeight:800,color:"#fff",textAlign:"right"}}>{r.h!=null?r.h:"—"}</div>
+          </div>
+        ))}
+        {data.matchup.h2h && (
+          <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",alignItems:"center",padding:"7px 12px",borderTop:"0.5px solid rgba(255,255,255,0.09)",background:"rgba(10,132,255,0.06)"}}>
+            <div style={{fontSize:13,fontWeight:800,color:"#fff",textAlign:"left"}}>{data.matchup.h2h.away}</div>
+            <div style={{fontSize:9.5,fontWeight:700,color:"rgba(255,255,255,0.5)",textTransform:"uppercase",letterSpacing:"0.03em",padding:"0 10px",textAlign:"center",whiteSpace:"nowrap"}}>{data.matchup.h2h.label}</div>
+            <div style={{fontSize:13,fontWeight:800,color:"#fff",textAlign:"right"}}>{data.matchup.h2h.home}</div>
+          </div>
+        )}
+      </div>
+    )}
+    {phase>=1 && !data.matchup && data.keyStats && data.keyStats.length>0 && (
       <div className="ai-rise" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7,marginBottom:11}}>
         {data.keyStats.slice(0,4).map((s,si)=>(
           <div key={si} style={{background:"rgba(255,255,255,0.04)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:9,padding:"8px 10px"}}>

@@ -295,10 +295,50 @@ function parseGameTeams(game) {
   return { away: "", home: "" };
 }
 // Rich recent stats for a game bet: splits, scoring, margin, streak, head-to-head.
+// Accurate SEASON splits (overall / home / road / scoring) for every team.
+async function espnStandings(sport) {
+  const em = ESPN_MAP[sport]; if (!em) return [];
+  let json;
+  try { const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/${em.sp}/${em.lg}/standings`); if (!r.ok) return []; json = await r.json(); } catch { return []; }
+  const list = [];
+  const walk = (node) => {
+    if (!node || typeof node !== "object") return;
+    if (Array.isArray(node.entries)) {
+      for (const e of node.entries) {
+        const t = e.team || {}; const stats = {};
+        for (const st of (e.stats || [])) { const nm = (st.name || st.type || "").toLowerCase(); if (nm) stats[nm] = st; }
+        list.push({ norm: normName(t.displayName || t.name || t.shortDisplayName || ""), abbr: t.abbreviation || "", name: t.displayName || "", stats });
+      }
+    }
+    for (const k in node) { if (k !== "team" && k !== "stats") { const v = node[k]; if (v && typeof v === "object") walk(v); } }
+  };
+  walk(json);
+  return list;
+}
+function findTeamStanding(list, teamName) {
+  const t = normName(teamName); if (!t || !list.length) return null;
+  return list.find(e => e.norm && nameMatch(e.norm, t)) || null;
+}
+function recFromStats(stats) {
+  const g = (n) => stats[n];
+  const sum = (n) => { const x = g(n); return x ? (x.summary || x.displayValue || null) : null; };
+  const val = (n) => { const x = g(n); if (!x) return null; if (x.value != null) return x.value; const f = parseFloat(x.displayValue); return isNaN(f) ? null : f; };
+  let overall = sum("overall") || sum("total");
+  if (!overall && val("wins") != null && val("losses") != null) overall = `${val("wins")}-${val("losses")}`;
+  const home = sum("home");
+  const away = sum("road") || sum("away");
+  let streak = sum("streak");
+  if (streak && /^-?\d+(\.0+)?$/.test(String(streak).trim())) streak = null; // bare number != W/L form
+  const gp = val("gamesplayed");
+  let scoredPG = val("avgpointsfor"), allowedPG = val("avgpointsagainst");
+  if (scoredPG == null && val("pointsfor") != null && gp) scoredPG = val("pointsfor") / gp;
+  if (allowedPG == null && val("pointsagainst") != null && gp) allowedPG = val("pointsagainst") / gp;
+  return { overall, home, away, streak, scoredPG, allowedPG };
+}
 async function espnGameStats(sport, ctx) {
-  const em = ESPN_MAP[sport]; if (!em) return { lines: [] };
+  const em = ESPN_MAP[sport]; if (!em) return null;
   const { away, home } = parseGameTeams(ctx.game);
-  const pickHint = teamHintFromSelection(ctx.selection);
+  if (!away && !home) return null;
   const events = await espnEvents(em.sp, em.lg, sport === "nfl" ? 50 : 30);
   const completed = events.filter(e => e.status?.type?.completed);
   const collect = (teamName) => {
@@ -312,51 +352,50 @@ async function espnGameStats(sport, ctx) {
       const opp = cs.find(c => c !== me);
       const pf = parseFloat(me.score), pa = parseFloat(opp?.score);
       if (isNaN(pf) || isNaN(pa)) continue;
-      gs.push({ date: e.date || "", home: me.homeAway === "home", win: me.winner === true || pf > pa, pf, pa, opp: opp?.team?.displayName || "" });
+      gs.push({ date: e.date || "", win: me.winner === true || pf > pa, pf, pa, home: me.homeAway === "home", opp: opp?.team?.displayName || "", abbr: me.team?.abbreviation || "" });
     }
     gs.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
     return gs;
   };
-  const summarize = (teamName) => {
-    const gs = collect(teamName).slice(0, sport === "nfl" ? 12 : 15);
-    if (!gs.length) return null;
-    const n = gs.length, w = gs.filter(g => g.win).length;
-    const rec = (arr) => `${arr.filter(g => g.win).length}-${arr.length - arr.filter(g => g.win).length}`;
-    const avg = (arr, k) => arr.length ? arr.reduce((s, g) => s + g[k], 0) / arr.length : 0;
-    let streak = 0; for (const g of gs) { if (g.win === gs[0].win) streak++; else break; }
-    const pf = avg(gs, "pf"), pa = avg(gs, "pa");
-    return { n, overall: `${w}-${n - w}`, home: rec(gs.filter(g => g.home)), away: rec(gs.filter(g => !g.home)),
-      pf: pf.toFixed(1), pa: pa.toFixed(1), margin: pf - pa, streak: streak > 1 ? `${gs[0].win ? "W" : "L"}${streak}` : null, games: gs };
+  const standings = await espnStandings(sport);
+  const buildTeam = (teamName) => {
+    const gs = collect(teamName).slice(0, sport === "nfl" ? 16 : 20);
+    const winAvg = (k) => gs.length ? (gs.reduce((acc, g) => acc + g[k], 0) / gs.length) : null;
+    let winStreak = null;
+    if (gs.length) { let n = 0; for (const g of gs) { if (g.win === gs[0].win) n++; else break; } if (n > 1) winStreak = `${gs[0].win ? "W" : "L"}${n}`; }
+    const st = findTeamStanding(standings, teamName);
+    const rec = st ? recFromStats(st.stats) : null;
+    const abbr = (st && st.abbr) || (gs[0] && gs[0].abbr) || (teamName || "").split(" ").pop().slice(0, 3).toUpperCase();
+    const scored = (rec && rec.scoredPG != null) ? rec.scoredPG.toFixed(1) : (winAvg("pf") != null ? winAvg("pf").toFixed(1) : null);
+    const allowed = (rec && rec.allowedPG != null) ? rec.allowedPG.toFixed(1) : (winAvg("pa") != null ? winAvg("pa").toFixed(1) : null);
+    return { name: teamName, abbr, overall: (rec && rec.overall) || null, home: (rec && rec.home) || null, away: (rec && rec.away) || null, scored, allowed, streak: (rec && rec.streak) || winStreak || null, _games: gs };
   };
-  let pickIsHome, pickName, oppName;
-  if (ctx.betType === "ou") { pickIsHome = true; pickName = home; oppName = away; }
-  else {
-    pickIsHome = nameMatch(normName(pickHint), normName(home));
-    pickName = pickIsHome ? home : (nameMatch(normName(pickHint), normName(away)) ? away : pickHint);
-    oppName = pickIsHome ? away : home;
+  const awayT = buildTeam(away), homeT = buildTeam(home);
+  let h2h = null;
+  if (away && home) {
+    const hg = awayT._games.filter(g => nameMatch(normName(g.opp), normName(home)));
+    if (hg.length) { const w = hg.filter(g => g.win).length; h2h = { label: `H2H (last ${hg.length})`, away: `${w}-${hg.length - w}`, home: `${hg.length - w}-${w}` }; }
   }
-  const lines = [];
-  const me = summarize(pickName);
-  if (me) {
-    lines.push({ value: me.overall, label: `Record (last ${me.n})` });
-    lines.push({ value: pickIsHome ? me.home : me.away, label: pickIsHome ? "Home record" : "Away record" });
-    if (me.streak) lines.push({ value: me.streak, label: "Current streak" });
-    if (ctx.betType === "spread") lines.push({ value: (me.margin >= 0 ? "+" : "") + me.margin.toFixed(1), label: `Avg margin (last ${me.n})` });
-    lines.push({ value: me.pf, label: "Scored / game" });
-    lines.push({ value: me.pa, label: "Allowed / game" });
-    const h2h = me.games.filter(g => nameMatch(normName(g.opp), normName(oppName)));
-    if (h2h.length) { const hw = h2h.filter(g => g.win).length; lines.push({ value: `${hw}-${h2h.length - hw}`, label: `H2H (last ${h2h.length})` }); }
-  }
-  const opp = summarize(oppName);
-  if (opp) lines.push({ value: opp.overall, label: `${oppName} (last ${opp.n})` });
-  if (ctx.betType === "ou") {
-    if (me) lines.push({ value: (parseFloat(me.pf) + parseFloat(me.pa)).toFixed(1), label: `${pickName} games avg total` });
-    if (opp) lines.push({ value: (parseFloat(opp.pf) + parseFloat(opp.pa)).toFixed(1), label: `${oppName} games avg total` });
-  }
-  const note = ctx.betType === "ou"
-    ? (home && away ? `Total — ${away} @ ${home}` : "")
-    : (pickName ? `${pickName} (${pickIsHome ? "HOME" : "AWAY"}) vs ${oppName}` : "");
-  return { lines, note };
+  const scoredLabel = sport === "mlb" ? "Runs/game" : "Points/game";
+  const allowedLabel = sport === "mlb" ? "Runs allowed/game" : "Points allowed/game";
+  const slim = (t) => ({ name: t.name, abbr: t.abbr, overall: t.overall, home: t.home, away: t.away, scored: t.scored, allowed: t.allowed, streak: t.streak });
+  const matchup = { away: slim(awayT), home: slim(homeT), scoredLabel, allowedLabel, h2h, title: `${awayT.abbr} @ ${homeT.abbr}` };
+
+  const L = [];
+  const push = (lbl, v) => { if (v != null && v !== "") L.push({ label: lbl, value: String(v) }); };
+  push(`${awayT.name} season record`, awayT.overall);
+  push(`${awayT.name} road record`, awayT.away);
+  push(`${homeT.name} season record`, homeT.overall);
+  push(`${homeT.name} home record`, homeT.home);
+  push(`${awayT.name} ${scoredLabel}`, awayT.scored);
+  push(`${awayT.name} ${allowedLabel}`, awayT.allowed);
+  push(`${homeT.name} ${scoredLabel}`, homeT.scored);
+  push(`${homeT.name} ${allowedLabel}`, homeT.allowed);
+  push(`${awayT.name} streak`, awayT.streak);
+  push(`${homeT.name} streak`, homeT.streak);
+  if (h2h) push(h2h.label, `${awayT.name} ${h2h.away}`);
+  const bt = ctx.betType === "ou" ? "total" : (ctx.betType === "spread" ? "spread" : "moneyline");
+  return { matchup, lines: L, note: `${awayT.name} @ ${homeT.name} — ${bt}` };
 }
 function parsePropCtx(ctx) {
   const p = parseProp(ctx.selection || "");
@@ -381,7 +420,7 @@ async function fetchSportsData(ctx) {
       }
     } else if (ctx.betType === "ml" || ctx.betType === "spread" || ctx.betType === "ou") {
       const s = await espnGameStats(ctx.sport, ctx);
-      if (s && s.lines && s.lines.length) { out.lines.push(...s.lines); out.note = s.note; }
+      if (s) { if (s.lines && s.lines.length) out.lines.push(...s.lines); if (s.note) out.note = s.note; if (s.matchup) out.matchup = s.matchup; }
     }
   } catch (e) { /* degrade to qualitative; never block the insight */ }
   return out;
@@ -408,15 +447,15 @@ async function generate(ctx, stats) {
     : "(no live stats were available for this selection)";
 
   const system =
-    "You are PickLock AI, a sharp, concise sports-betting analyst. " +
-    "Use ONLY the figures in the DATA block — never invent, estimate, or recall numbers from memory. " +
-    "If a relevant stat is missing, speak qualitatively and do not state a number. " +
-    "The DATA may include recent splits (overall, home, away records), per-game scoring, average margin, head-to-head, and current streak. " +
-    "Lead with the figures most relevant to THIS bet: a home team's home record, an away team's away record; for a spread emphasize average margin and scoring; for a total emphasize both teams' combined scoring. " +
-    "Do NOT mention against-the-spread (ATS) or cover rates, and never cite any split, streak, or head-to-head that is not present in DATA. " +
-    "Write a grounded read (a short paragraph), then a few sentences each for the bull and bear case. " +
-    "For keyStats, surface up to 4 of the most relevant figures FROM THE DATA block as {value,label}; if DATA is empty, return an empty keyStats array. " +
-    "Be analytical, not a guarantee. This is for entertainment, not financial advice.";
+    "You are Plok, a sharp, concise sports-betting analyst. " +
+    "Use ONLY the figures in the DATA block — never invent, estimate, or recall numbers from memory. If a relevant stat is missing, speak qualitatively without stating a number. " +
+    "DATA gives accurate season figures for BOTH teams: season record, home and road records, per-game scoring and scoring allowed, current streak, and head-to-head. " +
+    "Lead the summary with the single most decisive figure for THIS bet (for a road pick, that team's road record and scoring; for a total, both teams' scoring for and against; for a spread, the scoring margin against the line). Name both teams; interpret, do not just list. " +
+    "Do NOT mention against-the-spread (ATS) or cover rates — they are not in DATA. Never cite a split, streak, or head-to-head not present in DATA. " +
+    "BULL and BEAR cases must be SPECIFIC: each cites at least one concrete number from DATA (a record, a per-game figure, the line, or the odds) and ties it to why this side wins or loses. Forbidden: generic filler such as 'if they play well', 'momentum', 'anything can happen', 'both teams are capable'. Two to three sentences each, no platitudes. " +
+    "trends: up to 3 short notes, each anchored to a specific number. " +
+    "When MATCHUP_PROVIDED is true, a comparison table is already shown to the user, so return keyStats as an EMPTY array (do not duplicate it). When false (e.g. player props), surface up to 4 of the most relevant figures FROM DATA as keyStats {value,label}. " +
+    "Be analytical, not a guarantee. Entertainment, not financial advice.";
 
   const user =
     `BET\n- Sport: ${ctx.sport}\n- Type: ${ctx.betType}\n- Selection: ${ctx.selection}` +
@@ -424,6 +463,7 @@ async function generate(ctx, stats) {
     (ctx.odds ? `\n- Odds: ${ctx.odds}` : "") +
     (ctx.game ? `\n- Game: ${ctx.game}` : "") +
     (stats.note ? `\n- Context: ${stats.note}` : "") +
+    `\n- MATCHUP_PROVIDED: ${stats.matchup ? "true" : "false"}` +
     `\n\nDATA\n${dataBlock}` +
     (ctx.question ? `\n\nUSER QUESTION\n${ctx.question}` : "");
 
@@ -457,13 +497,14 @@ export default async function handler(req, res) {
     }
 
     const day = new Date().toISOString().slice(0, 10);
-    const key = hashKey([ctx.sport, ctx.betType, ctx.selection, ctx.line, ctx.game, ctx.question || "", day].join("|"));
+    const key = hashKey(["v2", ctx.sport, ctx.betType, ctx.selection, ctx.line, ctx.game, ctx.question || "", day].join("|"));
 
     const cached = await getCached(key);
     if (cached) return res.status(200).json({ ...cached, cached: true });
 
     const stats = await fetchSportsData(ctx);
     const out = await generate(ctx, stats);
+    if (stats.matchup) out.matchup = stats.matchup;
     await storeCache(key, out);
 
     return res.status(200).json({ ...out, cached: false });
