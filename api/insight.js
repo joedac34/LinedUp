@@ -161,6 +161,8 @@ const STAT_ALIASES = {
   "earned runs": ["ER", "earnedRuns"], "runs allowed": ["R", "runs"], "runs": ["R", "runs"],
   "walks": ["BB", "walks"], "home runs": ["HR", "homeRuns"], "homers": ["HR", "homeRuns"],
   "rbis": ["RBI", "RBIs"], "rbi": ["RBI", "RBIs"],
+  "stolen bases": ["SB", "stolenBases"], "stolen base": ["SB", "stolenBases"],
+  "doubles": ["2B", "doubles"], "triples": ["3B", "triples"], "total bases": ["TB", "totalBases"],
 };
 function normName(s) {
   return (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
@@ -442,30 +444,41 @@ const SCHEMA = {
 };
 
 async function generate(ctx, stats) {
-  const dataBlock = (stats.lines && stats.lines.length)
-    ? stats.lines.map(l => `- ${l.label}: ${l.value}`).join("\n")
-    : "(no live stats were available for this selection)";
-
-  const system =
-    "You are Plok, a sharp, concise sports-betting analyst. " +
-    "Use ONLY the figures in the DATA block — never invent, estimate, or recall numbers from memory. If a relevant stat is missing, speak qualitatively without stating a number. " +
-    "DATA gives accurate season figures for BOTH teams: season record, home and road records, per-game scoring and scoring allowed, current streak, and head-to-head. " +
-    "Lead the summary with the single most decisive figure for THIS bet (for a road pick, that team's road record and scoring; for a total, both teams' scoring for and against; for a spread, the scoring margin against the line). Name both teams; interpret, do not just list. " +
-    "Do NOT mention against-the-spread (ATS) or cover rates — they are not in DATA. Never cite a split, streak, or head-to-head not present in DATA. " +
-    "BULL and BEAR cases must be SPECIFIC: each cites at least one concrete number from DATA (a record, a per-game figure, the line, or the odds) and ties it to why this side wins or loses. Forbidden: generic filler such as 'if they play well', 'momentum', 'anything can happen', 'both teams are capable'. Two to three sentences each, no platitudes. " +
-    "trends: up to 3 short notes, each anchored to a specific number. " +
-    "When MATCHUP_PROVIDED is true, a comparison table is already shown to the user, so return keyStats as an EMPTY array (do not duplicate it). When false (e.g. player props), surface up to 4 of the most relevant figures FROM DATA as keyStats {value,label}. " +
-    "Be analytical, not a guarantee. Entertainment, not financial advice.";
-
-  const user =
-    `BET\n- Sport: ${ctx.sport}\n- Type: ${ctx.betType}\n- Selection: ${ctx.selection}` +
-    (ctx.line != null ? `\n- Line: ${ctx.line}` : "") +
-    (ctx.odds ? `\n- Odds: ${ctx.odds}` : "") +
-    (ctx.game ? `\n- Game: ${ctx.game}` : "") +
-    (stats.note ? `\n- Context: ${stats.note}` : "") +
-    `\n- MATCHUP_PROVIDED: ${stats.matchup ? "true" : "false"}` +
-    `\n\nDATA\n${dataBlock}` +
-    (ctx.question ? `\n\nUSER QUESTION\n${ctx.question}` : "");
+  let system, user;
+  if (ctx.betType === "chat") {
+    system =
+      "You are Plok, PickLock's friendly betting analyst, chatting with a user. " +
+      "You can discuss betting concepts, strategy, how odds / EV / lines work, and how to use the PickLock app. " +
+      "In this chat you do NOT have live stats, odds, or injuries for any specific game, so NEVER state a specific stat, line, number, or prediction as fact, and never guess a winner. " +
+      "If the user asks who will win, for a number, or for a pick on a real game, tell them you can't pull live data in open chat and point them to: tapping a bet on their board (for a data-backed read of that team or player) or the 'Find a bet' button (for a value scan of a game). " +
+      "Be conversational, warm, and concise (2-4 sentences). Screening and education, not betting advice; never suggest stake sizes. " +
+      "Put your entire reply in the summary field. Return keyStats and trends as empty arrays, and bullCase and bearCase as empty strings.";
+    user = `USER MESSAGE\n${ctx.question || ctx.selection}`;
+  } else {
+    const dataBlock = (stats.lines && stats.lines.length)
+      ? stats.lines.map(l => `- ${l.label}: ${l.value}`).join("\n")
+      : "(no live stats were available for this selection)";
+    system =
+      "You are Plok, a sharp, concise sports-betting analyst. " +
+      "Use ONLY the figures in the DATA block — never invent, estimate, or recall numbers from memory. If a relevant stat is missing, speak qualitatively without stating a number. " +
+      "For a game bet, DATA gives accurate season figures for BOTH teams (records, home/road, per-game scoring and allowed, streak, head-to-head). For a player prop, DATA gives that player's recent game-log stats IF they were found. " +
+      "Lead the summary with the single most decisive figure for THIS bet, name the team(s) or player, and INTERPRET — do not just list. " +
+      "If DATA has no game-log numbers for this player/stat, say plainly that recent game logs for this stat were not available, keep the read brief and qualitative, and do NOT invent or describe metrics (no 'speed', 'matchup dynamics', 'base-running ability' as if measured). " +
+      "Do NOT mention against-the-spread (ATS) or cover rates — they are not in DATA. " +
+      "BULL and BEAR cases must be SPECIFIC: each cites at least one concrete number from DATA (a record, a per-game figure, the line, or the odds) and ties it to why this side wins or loses. Forbidden filler: 'if they play well', 'momentum', 'anything can happen', 'capable'. Two to three sentences each, no platitudes. If there are genuinely no numbers, keep both cases short and honest rather than padded. " +
+      "trends: up to 3 short notes, each anchored to a specific number, or empty if none. " +
+      "ALWAYS return keyStats as an EMPTY array — the app renders factual stats separately. Never imply a metric that is not an explicit number in DATA. " +
+      "Be analytical, not a guarantee. Entertainment, not financial advice.";
+    user =
+      `BET\n- Sport: ${ctx.sport}\n- Type: ${ctx.betType}\n- Selection: ${ctx.selection}` +
+      (ctx.line != null ? `\n- Line: ${ctx.line}` : "") +
+      (ctx.odds ? `\n- Odds: ${ctx.odds}` : "") +
+      (ctx.game ? `\n- Game: ${ctx.game}` : "") +
+      (stats.note ? `\n- Context: ${stats.note}` : "") +
+      `\n- MATCHUP_PROVIDED: ${stats.matchup ? "true" : "false"}` +
+      `\n\nDATA\n${dataBlock}` +
+      (ctx.question ? `\n\nUSER QUESTION\n${ctx.question}` : "");
+  }
 
   const r = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -505,6 +518,7 @@ export default async function handler(req, res) {
     const stats = await fetchSportsData(ctx);
     const out = await generate(ctx, stats);
     if (stats.matchup) out.matchup = stats.matchup;
+    if (ctx.betType === "prop") out.keyStats = (stats.lines && stats.lines.length) ? stats.lines.slice(0, 4) : [];
     await storeCache(key, out);
 
     return res.status(200).json({ ...out, cached: false });

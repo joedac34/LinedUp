@@ -1320,6 +1320,23 @@ export default function App() {
       .catch(()=> setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, error:"Network error — try again"} : x)))
       .finally(()=> setAiBusy(false));
   };
+  const askPlok = (text) => {
+    const q = (text||"").trim(); if(!q) return;
+    if(!isPro){ setShowPaywall("ai"); return; }
+    setAiReturn(screen); setScreen("ai");
+    const item = { role:"ai", label:"Plok", bet:null, category:null, loading:true };
+    setAiThread(prev=>[...prev, { role:"user", text:q }, item]);
+    setAiBusy(true);
+    fetch("/api/insight", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ sport:(leagueSports[0]||"nfl"), betType:"chat", selection:q, question:q, userId:user?.id }) })
+      .then(async r=>{ const data=await r.json(); setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, data:r.ok?data:null, error:r.ok?null:(data.error||"Couldn't reach Plok")} : x)); })
+      .catch(()=> setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, error:"Network error — try again"} : x)))
+      .finally(()=> setAiBusy(false));
+  };
+  const sendAi = () => {
+    const t = aiInput.trim(); if(!t || aiBusy) return;
+    if(aiSuggestions.length>0){ const b=aiSuggestions[0]; setAiInput(""); askFromBet(b,b.category); }
+    else { setAiInput(""); askPlok(t); }
+  };
   const renderAiItem = (item, i) => {
     if(item.role==="user"){
       return (<div key={i} style={{alignSelf:"flex-end",maxWidth:"82%",background:IOS.blue,color:"#fff",borderRadius:"14px 14px 4px 14px",padding:"8px 12px",fontSize:13,fontWeight:600,marginLeft:"auto"}}>{item.text}</div>);
@@ -3345,7 +3362,7 @@ export default function App() {
  </div>
  <div className="gh-center"></div>
  <div className="gh-right">
-            <div className="gh-icon" onClick={()=>{ if(!isPro){setShowPaywall("ai");return;} setAiReturn(screen); setScreen("ai"); }} aria-label="Plok"><svg width="18" height="18" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg></div>
+            <div onClick={()=>{ if(!isPro){setShowPaywall("ai");return;} setAiReturn(screen); setScreen("ai"); }} aria-label="Plok" style={{display:"inline-flex",alignItems:"center",gap:5,height:34,padding:"0 11px",borderRadius:17,background:`${IOS.blue}1f`,border:`1px solid ${IOS.blue}3a`,cursor:"pointer"}}><svg width="15" height="15" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg><span style={{fontSize:13,fontWeight:800,color:IOS.blue,letterSpacing:"-0.2px"}}>Plok</span></div>
  {!isSoloMode && <div className="gh-icon" onClick={()=>setScreen("chat")}>
  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
  {unreadChat>0 && <span className="gh-badge">{unreadChat>9?"9+":unreadChat}</span>}
@@ -7048,11 +7065,11 @@ export default function App() {
                 </div>
               )}
               <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <input value={aiInput} onChange={(e)=>setAiInput(e.target.value)} placeholder="Search a bet on your board…"
-                  onKeyDown={(e)=>{ if(e.key==="Enter" && aiSuggestions.length>0){ const b=aiSuggestions[0]; setAiInput(""); askFromBet(b,b.category); } }}
+                <input value={aiInput} onChange={(e)=>setAiInput(e.target.value)} placeholder="Ask Plok anything, or search a bet…"
+                  onKeyDown={(e)=>{ if(e.key==="Enter"){ sendAi(); } }}
                   style={{flex:1,background:"rgba(255,255,255,0.06)",border:"0.5px solid rgba(255,255,255,0.12)",borderRadius:11,padding:"11px 13px",color:"#fff",fontSize:13.5,outline:"none",fontFamily:"inherit"}}/>
-                <button onClick={()=>{ if(aiSuggestions.length>0){ const b=aiSuggestions[0]; setAiInput(""); askFromBet(b,b.category); } }} disabled={aiBusy||aiSuggestions.length===0}
-                  style={{width:42,height:42,flexShrink:0,borderRadius:11,border:"none",background:(aiSuggestions.length>0&&!aiBusy)?IOS.blue:"rgba(255,255,255,0.08)",color:"#fff",cursor:(aiSuggestions.length>0&&!aiBusy)?"pointer":"default",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <button onClick={sendAi} disabled={aiBusy||!aiInput.trim()}
+                  style={{width:42,height:42,flexShrink:0,borderRadius:11,border:"none",background:(aiInput.trim()&&!aiBusy)?IOS.blue:"rgba(255,255,255,0.08)",color:"#fff",cursor:(aiInput.trim()&&!aiBusy)?"pointer":"default",display:"flex",alignItems:"center",justifyContent:"center"}}>
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
                 </button>
               </div>
