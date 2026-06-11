@@ -589,6 +589,31 @@ function PUBadge({ puId, size=16 }) {
   );
 }
 
+const BETSLIP_ENABLED = false; // flip on once affiliate + compliance (21+, geo, RG) are ready
+function betslipAllowedHere(){ return true; } // TODO: geo-gate to legal states + 21+ age check
+function BetslipButton({ bet, IOS }){
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(()=>{
+    if(!BETSLIP_ENABLED || !betslipAllowedHere() || !bet || !bet.game){ setLoading(false); return; }
+    let alive = true; setLoading(true);
+    fetch("/api/betslip",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ sport:bet._sport||bet.sport, game:bet.game, category:bet.category, pick:bet.pick, point:bet.line })})
+      .then(r=>r.json()).then(d=>{ if(alive){ setData(d); setLoading(false); } })
+      .catch(()=>{ if(alive) setLoading(false); });
+    return ()=>{ alive=false; };
+  },[bet]);
+  if(!BETSLIP_ENABLED || !betslipAllowedHere() || loading || !data || !data.best) return null;
+  const b = data.best;
+  return (
+    <div className="ai-rise" style={{marginTop:8}}>
+      <a href={b.link} target="_blank" rel="noopener noreferrer" style={{textDecoration:"none",width:"100%",padding:"10px",borderRadius:10,border:`1px solid ${IOS.blue}55`,background:`${IOS.blue}14`,color:IOS.blue,fontSize:13,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",gap:7,boxSizing:"border-box"}}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17L17 7"/><path d="M7 7h10v10"/></svg>
+        Bet on {b.title}{b.price!=null?("  ("+(b.price>0?"+":"")+b.price+")"):""}
+      </a>
+      <div style={{fontSize:9.5,color:"rgba(255,255,255,0.4)",textAlign:"center",marginTop:5,lineHeight:1.4}}>21+ · Gambling problem? Call 1-800-GAMBLER · Opens {b.title}</div>
+    </div>
+  );
+}
 function AiInsightBubble({ item, IOS, onAddToSlip }) {
   const data = item.data;
   const [words, setWords] = useState(0);
@@ -695,6 +720,7 @@ function AiInsightBubble({ item, IOS, onAddToSlip }) {
         {item.added ? "Added to slip" : "Add to slip"}
       </button>
     )}
+    {phase>=5 && item.bet && <BetslipButton bet={item.bet} IOS={IOS}/>}
   </div>);
 }
 
