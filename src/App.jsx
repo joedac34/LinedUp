@@ -1216,6 +1216,8 @@ export default function App() {
  const [notifs, setNotifs] = useState([]);
  const [notifUnread, setNotifUnread] = useState(0);
  const [showNotifs, setShowNotifs] = useState(false);
+ const [lockRitual, setLockRitual] = useState(false);
+ useEffect(()=>{ if(lockRitual){ const _t=setTimeout(()=>setLockRitual(false),1700); return ()=>clearTimeout(_t); } },[lockRitual]);
  const fetchNotifs = async ()=>{
    if(!(user&&user.id)){ setNotifs([]); setNotifUnread(0); return; }
    try{
@@ -2680,6 +2682,52 @@ export default function App() {
 
  /* Mini standings */
  .mini-stand{display:flex;align-items:center;padding:12px 16px;position:relative;}
+ .wr-hero{position:relative;overflow:hidden;border-radius:18px;margin:12px 0 0;padding:16px 16px 14px;background:linear-gradient(160deg,#0c1322,#0a0a0e);}
+ .wr-aurora{position:absolute;inset:-60% -25% auto -25%;height:240px;z-index:0;filter:blur(42px);opacity:.5;background:radial-gradient(40% 50% at 25% 30%,#0a84ff,transparent 70%),radial-gradient(40% 50% at 75% 40%,#7a4dff,transparent 70%),radial-gradient(35% 45% at 55% 75%,#00d0a0,transparent 70%);animation:wrDrift 14s ease-in-out infinite alternate;}
+ @keyframes wrDrift{0%{transform:translate(0,0) scale(1);}100%{transform:translate(-6%,4%) scale(1.15);}}
+ .wr-hero>*{position:relative;z-index:1;}
+ .wr-hlabel{font-size:10.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.5);}
+ .wr-hbig{display:flex;align-items:flex-end;gap:9px;margin-top:1px;}
+ .wr-pts{font-size:46px;font-weight:900;letter-spacing:-2px;line-height:.9;}
+ .wr-u{font-size:12px;font-weight:800;color:rgba(255,255,255,.5);margin-bottom:7px;}
+ .wr-chips{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+ .wr-chip{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);padding:6px 10px;border-radius:11px;}
+ .wr-rival{margin:12px 0 0;background:linear-gradient(100deg,rgba(255,69,58,.1),rgba(10,132,255,.12));border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:11px 13px;}
+ .wr-rt{display:flex;justify-content:space-between;font-size:12px;font-weight:800;margin-bottom:8px;}
+ .wr-track{height:7px;border-radius:5px;background:rgba(255,255,255,.1);overflow:hidden;position:relative;}
+ .wr-fill{position:absolute;top:0;bottom:0;left:0;border-radius:5px;background:linear-gradient(90deg,#0a84ff,#6cb6ff);transition:width 1s cubic-bezier(.2,.8,.2,1);}
+ .wr-gap{font-size:11px;color:rgba(255,255,255,.55);margin-top:7px;}
+ .wr-carousel{display:flex;gap:10px;overflow-x:auto;padding:2px 16px 6px;}
+ .wr-carousel::-webkit-scrollbar{display:none;}
+ .wr-gc{flex-shrink:0;width:214px;background:linear-gradient(165deg,#15151c,#0d0d11);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:11px;cursor:pointer;}
+ .wr-gc.picked{border-color:rgba(10,132,255,.45);}
+ .wr-gctop{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+ .wr-gtime{font-size:10px;font-weight:800;color:rgba(255,255,255,.5);}
+ .wr-glive{font-size:9.5px;font-weight:900;color:#30D158;display:flex;align-items:center;gap:4px;}
+ .wr-gsport{font-size:8.5px;font-weight:800;color:rgba(255,255,255,.35);background:rgba(255,255,255,.06);border-radius:5px;padding:2px 6px;}
+ .wr-grow{display:flex;align-items:center;justify-content:space-between;padding:3px 0;}
+ .wr-gl{display:flex;align-items:center;gap:8px;min-width:0;}
+ .wr-glogo{width:22px;height:22px;border-radius:6px;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;flex-shrink:0;overflow:hidden;}
+ .wr-gn{font-size:13px;font-weight:800;}
+ .wr-gsc{font-size:16px;font-weight:900;}
+ .wr-pickbadge{margin-top:8px;display:flex;align-items:center;gap:5px;font-size:10px;font-weight:800;color:#30D158;background:rgba(48,209,88,.1);border-radius:7px;padding:5px 8px;}
+ .wr-dot{width:6px;height:6px;border-radius:50%;background:#30D158;box-shadow:0 0 0 0 rgba(48,209,88,.6);animation:wrPulse 1.6s infinite;}
+ @keyframes wrPulse{0%{box-shadow:0 0 0 0 rgba(48,209,88,.6);}100%{box-shadow:0 0 0 7px rgba(48,209,88,0);}}
+ .lr-bg{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(2,3,8,.78);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);opacity:0;pointer-events:none;transition:opacity .25s;}
+ .lr-bg.on{opacity:1;pointer-events:auto;}
+ .lr-stage{position:relative;width:240px;height:240px;display:flex;align-items:center;justify-content:center;}
+ .lr-vault{position:absolute;width:200px;height:200px;border-radius:24px;border:3px solid rgba(120,150,200,.28);background:radial-gradient(circle at 50% 40%,rgba(30,40,60,.6),rgba(8,10,16,.92));opacity:0;transform:scale(.85);transition:opacity .3s,transform .3s;}
+ .lr-bg.on .lr-vault{opacity:1;transform:scale(1);}
+ .lr-lock{position:absolute;opacity:0;transform:translateY(-30px) scale(.6);transition:opacity .3s,transform .35s cubic-bezier(.2,.8,.2,1);}
+ .lr-bg.on .lr-lock{opacity:1;transform:translateY(0) scale(1);transition-delay:.25s;}
+ .lr-shk{transform:translateY(-13px);transition:transform .35s cubic-bezier(.5,-0.4,.3,1.4);transition-delay:.55s;}
+ .lr-bg.on .lr-shk{transform:translateY(0);}
+ .lr-stamp{position:absolute;border:4px solid #30D158;color:#30D158;font-size:26px;font-weight:900;letter-spacing:3px;padding:5px 16px;border-radius:9px;text-transform:uppercase;opacity:0;transform:rotate(-15deg) scale(2.4);}
+ .lr-bg.on .lr-stamp{animation:lrStamp .45s cubic-bezier(.2,.8,.2,1) forwards;animation-delay:.7s;}
+ @keyframes lrStamp{0%{opacity:0;transform:rotate(-15deg) scale(2.4);}60%{opacity:1;transform:rotate(-15deg) scale(.92);}100%{opacity:1;transform:rotate(-15deg) scale(1);}}
+ .lr-flash{position:absolute;inset:0;background:radial-gradient(circle,rgba(48,209,88,.45),transparent 60%);opacity:0;}
+ .lr-bg.on .lr-flash{animation:lrFlash .5s ease-out;animation-delay:.68s;}
+ @keyframes lrFlash{0%{opacity:.9;}100%{opacity:0;}}
  .mini-stand::after{content:'';position:absolute;bottom:0;left:16px;right:0;height:0.5px;background:${IOS.sep};}
  .mini-stand:last-child::after{display:none;}
  .ms-rank{font-size:15px;font-weight:600;width:24px;flex-shrink:0;color:${IOS.label3};}
@@ -3572,6 +3620,22 @@ export default function App() {
  </div>
  )}
 
+ <div className={"lr-bg"+(lockRitual?" on":"")} onClick={()=>setLockRitual(false)}>
+ <div className="lr-stage">
+ <div className="lr-vault"/>
+ <div className="lr-flash"/>
+ <div className="lr-lock">
+ <svg width="92" height="92" viewBox="0 0 100 100">
+ <path className="lr-shk" d="M30 50 V38 a20 20 0 0 1 40 0 V50" fill="none" stroke="#cfd6e6" strokeWidth="9" strokeLinecap="round"/>
+ <rect x="24" y="48" width="52" height="42" rx="9" fill="#e7ecf5"/>
+ <circle cx="50" cy="66" r="6" fill="#0a84ff"/>
+ <rect x="47.5" y="68" width="5" height="12" rx="2.5" fill="#0a84ff"/>
+ </svg>
+ </div>
+ <div className="lr-stamp">Locked</div>
+ </div>
+ </div>
+
  {/* ══ HOME ══ */}
  {screen==="home"&&(
  <>
@@ -3635,14 +3699,37 @@ export default function App() {
    const me=sorted.find(r=>r.isYou||r.name==="You");
    const myRank=sorted.findIndex(r=>r.isYou||r.name==="You")+1;
    const rec=me?.record||"0-0";
-   const pts=me?.points??0;
-   const Tile=({val,lbl,color})=>(<div style={{flex:1,background:"rgba(255,255,255,0.04)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"10px 8px",textAlign:"center"}}><div style={{fontSize:18,fontWeight:800,letterSpacing:"-0.5px",color}}>{val}</div><div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)",marginTop:3}}>{lbl}</div></div>);
+   const seasonPts=me?.points??0;
+   const myPicks=(weekPicks||[]).filter(p=>p.user_id===user?.id);
+   const weekPts=parseFloat(myPicks.filter(p=>p.result==="W").reduce((su,p)=>su+parseFloat(p.points_earned||0),0).toFixed(1));
+   const hit=myPicks.filter(p=>p.result==="W").length;
+   const total=myPicks.length;
+   const liveCount=myPicks.filter(p=>p.result==="pending").length;
+   const st=me&&me.streak;
+   const leader=sorted[0];
+   const isLeader=myRank===1;
+   const gap=(leader&&me)?parseFloat(((leader.points||0)-(me.points||0)).toFixed(1)):0;
+   const lpts=leader?(leader.points||0):0;
+   const fillPct=isLeader?100:(lpts>0?Math.max(8,Math.min(98,((me?.points||0)/lpts)*100)):8);
    return (
-   <div style={{display:"flex",gap:8,marginTop:12}}>
-     <Tile val={rec} lbl="Record" color={IOS.blue}/>
-     <Tile val={`+${pts}`} lbl="Points" color={IOS.green}/>
-     <Tile val={myRank>0?`#${myRank}`:"—"} lbl="Rank" color={IOS.orange}/>
+   <>
+   <div className="wr-hero">
+     <div className="wr-aurora"/>
+     <div className="wr-hlabel">Your points · Week {activeLeague.current_week||activeLeague.week||1}</div>
+     <div className="wr-hbig"><div className="wr-pts">{total>0?`+${weekPts}`:"+0"}</div><div className="wr-u">{total>0?`pts · ${hit} of ${total} hit`:"no picks yet"}</div></div>
+     <div className="wr-chips">
+       {liveCount>0 && <div className="wr-chip"><span className="wr-dot"/>{liveCount} live</div>}
+       {st&&st.count>=1 && <div className="wr-chip">{st.type==="W"&&st.count>=2?`W${st.count} streak`:`${st.type}${st.count}`}</div>}
+       <div className="wr-chip">{rec} · {seasonPts>=0?`+${seasonPts}`:seasonPts}</div>
+       {myRank>0 && <div className="wr-chip">#{myRank} overall</div>}
+     </div>
    </div>
+   {sorted.length>1 && <div className="wr-rival">
+     <div className="wr-rt"><span>{isLeader?"You lead the league":<>Chasing <span style={{color:"#fff"}}>{(leader.isYou||leader.name==="You")?"the leader":leader.name}</span></>}</span><span style={{color:IOS.blue}}>{myRank>0?`#${myRank}`:""}</span></div>
+     <div className="wr-track"><div className="wr-fill" style={{width:fillPct+"%"}}/></div>
+     <div className="wr-gap">{isLeader?"Top of the standings — keep it locked.":`${gap} pts back of ${(leader.isYou||leader.name==="You")?"1st":leader.name}.`}</div>
+   </div>}
+   </>
    );
  })()}
  </div>
@@ -3742,6 +3829,59 @@ export default function App() {
  ))}
  </div>
  </div>
+ );
+ })()}
+
+ {homeTab==='home' && tickerGames.length>0 && (()=>{
+ const now=new Date();
+ const myList=(weekPicks||[]).filter(p=>p.user_id===user?.id);
+ const myPickNames=myList.map(p=>(p.pick_name||"").toLowerCase());
+ const openG=async(g,away,home,espn,gameTime,isLive)=>{
+ const so=liveOdds[activeLeague?.sport];
+ const gameOdds={ml:(so?.ml||[]).filter(o=>o.game?.includes(away)||o.game?.includes(home)),spread:(so?.spread||[]).filter(o=>o.game?.includes(away)||o.game?.includes(home)),ou:(so?.ou||[]).filter(o=>o.game?.includes(away)||o.game?.includes(home))};
+ setGameSheet({tickerGame:{...g,away,home,isLive,timeStr:gameTime},espnGame:espn,detail:null,odds:gameOdds});
+ setGameTeamTab("matchup");
+ if(espn?.id){ setGameLoading(true); try{ const r=await fetch(`/api/espn?sport=${SPORT_KEYS[activeLeague?.sport]}&gameId=${espn.id}`); if(r.ok){const d=await r.json();setGameSheet(prev=>({...prev,detail:d}));} }catch(e){} finally{setGameLoading(false);} }
+ };
+ return (
+ <>
+ <div className="ios-section" style={{margin:"10px 16px 6px"}}>
+ <div className="ios-section-header" style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+ <span>Today's Games</span>
+ <span onClick={()=>setHomeTab("games")} style={{color:IOS.blue,fontSize:13,textTransform:"none",fontWeight:500,letterSpacing:0,cursor:"pointer"}}>See All</span>
+ </div>
+ </div>
+ <div className="wr-carousel">
+ {tickerGames.slice(0,10).map((g,gi)=>{
+ const away=g.away.split(" ").pop(), home=g.home.split(" ").pop();
+ const espn=espnGames.find(e=>e.awayTeam?.toLowerCase().includes(away.toLowerCase())||e.homeTeam?.toLowerCase().includes(home.toLowerCase()));
+ const t=new Date(g.time);
+ const isLive=now>=t&&now<new Date(t.getTime()+4*60*60*1000);
+ const isDone=espn?.awayScore!=null&&espn?.homeScore!=null&&!isLive;
+ const gameTime=t.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
+ const so=liveOdds[activeLeague?.sport];
+ const ml=(so?.ml||[]).filter(o=>o.game?.includes(away)||o.game?.includes(home));
+ const sp2=(so?.spread||[]).filter(o=>o.game?.includes(away)||o.game?.includes(home));
+ const ou=(so?.ou||[]).filter(o=>o.game?.includes(away)||o.game?.includes(home));
+ const hasPick=myPickNames.some(n=>n.includes(away.toLowerCase())||n.includes(home.toLowerCase()));
+ return (
+ <div key={gi} className={"wr-gc"+(hasPick?" picked":"")} onClick={()=>openG(g,away,home,espn,gameTime,isLive)}>
+ <div className="wr-gctop">{isLive?<span className="wr-glive"><span className="wr-dot"/>LIVE</span>:isDone?<span className="wr-gtime">Final</span>:<span className="wr-gtime">{gameTime}</span>}<span className="wr-gsport">{SPORTS[activeLeague?.sport]?.label||""}</span></div>
+ {[{ab:away,logo:espn?.awayLogo,sc:espn?.awayScore,rec:espn?.awayRecord},{ab:home,logo:espn?.homeLogo,sc:espn?.homeScore,rec:espn?.homeRecord}].map((tm,ti)=>(
+ <div key={ti} className="wr-grow">
+ <div className="wr-gl"><div className="wr-glogo">{tm.logo?<img src={tm.logo} style={{width:22,height:22,objectFit:"contain"}} onError={e=>{e.target.style.display="none";}}/>:tm.ab}</div><div style={{minWidth:0}}><div className="wr-gn">{tm.ab}</div>{tm.rec&&<div style={{fontSize:9.5,color:"rgba(255,255,255,0.4)"}}>{tm.rec}</div>}</div></div>
+ {(isLive||isDone)&&tm.sc!=null&&<div className="wr-gsc">{tm.sc}</div>}
+ </div>
+ ))}
+ {ml.length>0 ? <div style={{display:"flex",gap:5,marginTop:9}}>
+ {[{k:"SP",it:sp2[0]},{k:"TOT",it:ou[0]},{k:"ML",it:ml[0]}].map((c,ci)=>c.it?(<div key={ci} style={{flex:1,textAlign:"center",background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:7,padding:"5px 2px",minWidth:0}}><div style={{fontSize:8,fontWeight:800,color:"rgba(255,255,255,0.4)",textTransform:"uppercase"}}>{c.k}</div><div style={{fontSize:10.5,fontWeight:800,color:"#fff",marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.it.pick?.split(" ").slice(-1)[0]} {c.it.odds}</div></div>):<div key={ci} style={{flex:1}}/>)}
+ </div> : null}
+ {hasPick&&<div className="wr-pickbadge"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#30D158" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>On your slip</div>}
+ </div>
+ );
+ })}
+ </div>
+ </>
  );
  })()}
 
@@ -5007,6 +5147,8 @@ export default function App() {
  try { localStorage.setItem(storageKey, JSON.stringify(locked)); } catch(e) {}
  if(isSoloMode) { setSoloSavedPicks(locked); setSoloSubmitted(true); }
  else { setActiveSavedPicks(locked); setActiveSubmitted(true); }
+ try{ if(navigator.vibrate) navigator.vibrate([0,30,40,30,60]); }catch(e){}
+ setLockRitual(true);
  }}> Lock Your Slip </button>
  : <button className="ios-btn disabled" disabled>
  {(!hasParlay&&!isCustomSlip) ? " Need a Longshot (+400 straight or +400 parlay)" : (activePicks.filter(p=>p.mult!==null&&(p.isParlay?p.parlayLegs.length>=2:p.bet!==null)).length + " / " + activePicks.length + " Slots Filled")}
