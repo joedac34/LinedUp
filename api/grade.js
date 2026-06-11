@@ -104,6 +104,8 @@ async function fetchScoresESPN(sport) {
           away_team: an,
           completed: !!st.completed,
           inProgress: st.state === "in",
+          date: e.date || null,
+          id: e.id || null,
           scores: [{ name: hn, score: home.score }, { name: an, score: away.score }],
         });
       }
@@ -302,9 +304,28 @@ function gradePick(pick, games, playerIndex, info = {}) {
 
   // Find the matching game. Prefer games where BOTH teams are referenced
   // (true for ml/spread/ou because pick.game carries the full matchup).
-  let game = games.find(g => (g.completed || g.inProgress) && teamRef(g.home_team) && teamRef(g.away_team));
-  // Fallback: single-team match (in case pick.game is missing on older picks).
-  if (!game) game = games.find(g => (g.completed || g.inProgress) && (teamRef(g.home_team) || teamRef(g.away_team)));
+  const bothTeams = (g) => teamRef(g.home_team) && teamRef(g.away_team);
+  // A pick stores the start time of the SPECIFIC game it's for (pick.game_date).
+  // In a series the same teams play multiple nights, so we grade against the game
+  // closest to that time — never just the first final we find for those teams.
+  const wantTime = pick.game_date ? Date.parse(pick.game_date) : NaN;
+  let game = null;
+  if (!isNaN(wantTime)) {
+    let best = null;
+    for (const g of games) {
+      if (!bothTeams(g) || !g.date) continue;
+      const diff = Math.abs(Date.parse(g.date) - wantTime);
+      if (best === null || diff < best.diff) best = { g, diff };
+    }
+    if (!best || best.diff > 24 * 3600 * 1000) { info.reason = "intended_game_not_in_feed"; return null; }
+    game = best.g;
+    // The right game exists but hasn't finished — wait for it, don't grade a sibling.
+    if (!game.completed && !game.inProgress) { info.reason = "game_not_started"; return null; }
+  } else {
+    // Legacy picks (no game_date): old team-only match.
+    game = games.find(g => (g.completed || g.inProgress) && bothTeams(g));
+    if (!game) game = games.find(g => (g.completed || g.inProgress) && (teamRef(g.home_team) || teamRef(g.away_team)));
+  }
 
   if (!game) { info.reason = "game_not_found_or_not_live"; return null; }
   if (!game.scores) { info.reason = "no_scores_on_game"; return null; }

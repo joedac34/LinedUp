@@ -1036,6 +1036,7 @@ export default function App() {
  pick: o.name,
  odds: american,
  impliedOdds: o.price,
+ gameTime: game.commence_time,
  });
  // Longshots: +400 or better
  if(o.price >= 400) {
@@ -1045,6 +1046,7 @@ export default function App() {
  pick: `${o.name} ML`,
  odds: american,
  impliedOdds: o.price,
+ gameTime: game.commence_time,
  });
  }
  });
@@ -1059,6 +1061,7 @@ export default function App() {
  pick: `${o.name} ${sign}`,
  odds: american,
  impliedOdds: o.price,
+ gameTime: game.commence_time,
  });
  });
 
@@ -1071,6 +1074,7 @@ export default function App() {
  pick: `${o.name} ${o.point}`,
  odds: american,
  impliedOdds: o.price,
+ gameTime: game.commence_time,
  });
  });
  });
@@ -1445,8 +1449,14 @@ export default function App() {
   useEffect(() => {
     const vv = window.visualViewport; if(!vv) return;
     const apply = () => {
-      document.body.style.height = vv.height + "px";
-      document.body.style.transform = vv.offsetTop ? ("translateY(" + vv.offsetTop + "px)") : "none";
+      const kb = window.innerHeight - vv.height; // approximate keyboard height
+      if (kb > 120) {
+        document.body.style.height = vv.height + "px";
+        document.body.style.transform = vv.offsetTop ? ("translateY(" + vv.offsetTop + "px)") : "none";
+      } else {
+        document.body.style.height = "";
+        document.body.style.transform = "";
+      }
     };
     apply();
     vv.addEventListener("resize", apply);
@@ -3640,6 +3650,87 @@ export default function App() {
  {screen==="home"&&(
  <>
  <div className="body">
+ {tickerGames.length > 0 && (() => {
+ const now = new Date();
+ // Only highlight games from LOCKED slip (weekPicks from DB)
+ const myLockedPickNames = (weekPicks||[])
+ .filter(p=>p.user_id===user?.id)
+ .map(p=>(p.pick_name||'').toLowerCase());
+
+ const gameHasPick = (away, home) => {
+ const a = away.toLowerCase(); const h = home.toLowerCase();
+ return myLockedPickNames.some(n => n.includes(a) || n.includes(h));
+ };
+
+ const items = tickerGames.map(g => {
+ const t = new Date(g.time);
+ const isLive = now >= t && now < new Date(t.getTime() + 4*60*60*1000);
+ const isToday = t.toDateString() === now.toDateString();
+ const timeStr = t.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+ const away = g.away.split(' ').pop();
+ const home = g.home.split(' ').pop();
+ const hasPick = gameHasPick(away, home);
+ return {away, home, isLive, isToday, timeStr, hasPick};
+ });
+ // Duplicate for seamless loop
+ const doubled = [...items, ...items];
+ const openGame = async (g) => {
+ // Match ticker game to ESPN game by team name
+ const espn = espnGames.find(e =>
+ e.awayTeam?.toLowerCase().includes(g.away.toLowerCase()) ||
+ e.homeTeam?.toLowerCase().includes(g.home.toLowerCase()) ||
+ e.awayAbbr?.toLowerCase() === g.away.toLowerCase() ||
+ e.homeAbbr?.toLowerCase() === g.home.toLowerCase()
+ );
+ // Find odds for this game from liveOdds
+ const sport = SPORT_KEYS[activeLeague?.sport];
+ const gameOdds = {
+ ml: (liveOdds[activeLeague?.sport]?.ml||[]).filter(o=>o.game?.includes(g.away)||o.game?.includes(g.home)),
+ spread: (liveOdds[activeLeague?.sport]?.spread||[]).filter(o=>o.game?.includes(g.away)||o.game?.includes(g.home)),
+ ou: (liveOdds[activeLeague?.sport]?.ou||[]).filter(o=>o.game?.includes(g.away)||o.game?.includes(g.home)),
+ };
+ setGameSheet({ tickerGame: g, espnGame: espn, detail: null, odds: gameOdds });
+ setGameTeamTab('matchup');
+ if(espn?.id) {
+ setGameLoading(true);
+ try {
+ const sportKey = SPORT_KEYS[activeLeague?.sport];
+ const r = await fetch(`/api/espn?sport=${sportKey}&gameId=${espn.id}`);
+ if(r.ok) {
+ const d = await r.json();
+ setGameSheet(prev => ({...prev, detail: d}));
+ }
+ } catch(e) { console.warn('Game detail fetch failed:', e); }
+ finally { setGameLoading(false); }
+ }
+ };
+ return (
+ <div className='ticker-wrap' style={{position:"sticky",top:0,zIndex:25,marginBottom:0}}>
+ <div className='ticker-track' style={{animationDuration: Math.max(12, items.length * 5) + 's'}}>
+ {doubled.map((g, i) => (
+ <span key={i} className='ticker-item'
+ onClick={e=>{e.stopPropagation();if(i<items.length)openGame(g);}}
+ onTouchEnd={e=>{e.preventDefault();e.stopPropagation();if(i<items.length)openGame(g);}}
+ style={{cursor:"pointer",WebkitTapHighlightColor:"rgba(255,255,255,0.1)",userSelect:"none",
+ background: g.hasPick ? "rgba(10,132,255,0.18)" : "transparent",
+ borderRadius: g.hasPick ? 8 : 0,
+ padding: g.hasPick ? "2px 10px" : "0 22px",
+ border: g.hasPick ? "1px solid rgba(10,132,255,0.35)" : "none",
+ margin: g.hasPick ? "0 8px" : 0,
+ }}>
+ {g.hasPick && <span style={{fontSize:9,color:IOS.blue,fontWeight:800,marginRight:4,letterSpacing:0.5}}>MY PICK</span>}
+ <span className='ti-teams' style={{color: g.hasPick ? "#fff" : undefined}}>{g.away} @ {g.home}</span>
+ {g.isLive
+ ? <span className='ti-live'>● LIVE</span>
+ : <span className='ti-time'>{g.timeStr}</span>
+ }
+ {!g.hasPick && <span className='ticker-sep'>|</span>}
+ </span>
+ ))}
+ </div>
+ </div>
+ );
+ })()}
  <div className="nav-header large" style={{padding:"0 20px 16px",background:"radial-gradient(130% 90% at 88% -10%, rgba(10,132,255,0.20), transparent 55%), linear-gradient(180deg,#0B1A2E 0%,#000 80%)"}}>
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
  <div className="nav-title-large">PICKLOCK</div>
@@ -3724,7 +3815,7 @@ export default function App() {
        {myRank>0 && <div className="wr-chip">#{myRank} overall</div>}
      </div>
    </div>
-   {sorted.length>1 && <div className="wr-rival">
+   {sorted.length>1 && !isLeader && <div className="wr-rival">
      <div className="wr-rt"><span>{isLeader?"You lead the league":<>Chasing <span style={{color:"#fff"}}>{(leader.isYou||leader.name==="You")?"the leader":leader.name}</span></>}</span><span style={{color:IOS.blue}}>{myRank>0?`#${myRank}`:""}</span></div>
      <div className="wr-track"><div className="wr-fill" style={{width:fillPct+"%"}}/></div>
      <div className="wr-gap">{isLeader?"Top of the standings — keep it locked.":`${gap} pts back of ${(leader.isYou||leader.name==="You")?"1st":leader.name}.`}</div>
@@ -3750,87 +3841,6 @@ export default function App() {
  ))}
  </div>
 
- {tickerGames.length > 0 && (() => {
- const now = new Date();
- // Only highlight games from LOCKED slip (weekPicks from DB)
- const myLockedPickNames = (weekPicks||[])
- .filter(p=>p.user_id===user?.id)
- .map(p=>(p.pick_name||'').toLowerCase());
-
- const gameHasPick = (away, home) => {
- const a = away.toLowerCase(); const h = home.toLowerCase();
- return myLockedPickNames.some(n => n.includes(a) || n.includes(h));
- };
-
- const items = tickerGames.map(g => {
- const t = new Date(g.time);
- const isLive = now >= t && now < new Date(t.getTime() + 4*60*60*1000);
- const isToday = t.toDateString() === now.toDateString();
- const timeStr = t.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
- const away = g.away.split(' ').pop();
- const home = g.home.split(' ').pop();
- const hasPick = gameHasPick(away, home);
- return {away, home, isLive, isToday, timeStr, hasPick};
- });
- // Duplicate for seamless loop
- const doubled = [...items, ...items];
- const openGame = async (g) => {
- // Match ticker game to ESPN game by team name
- const espn = espnGames.find(e =>
- e.awayTeam?.toLowerCase().includes(g.away.toLowerCase()) ||
- e.homeTeam?.toLowerCase().includes(g.home.toLowerCase()) ||
- e.awayAbbr?.toLowerCase() === g.away.toLowerCase() ||
- e.homeAbbr?.toLowerCase() === g.home.toLowerCase()
- );
- // Find odds for this game from liveOdds
- const sport = SPORT_KEYS[activeLeague?.sport];
- const gameOdds = {
- ml: (liveOdds[activeLeague?.sport]?.ml||[]).filter(o=>o.game?.includes(g.away)||o.game?.includes(g.home)),
- spread: (liveOdds[activeLeague?.sport]?.spread||[]).filter(o=>o.game?.includes(g.away)||o.game?.includes(g.home)),
- ou: (liveOdds[activeLeague?.sport]?.ou||[]).filter(o=>o.game?.includes(g.away)||o.game?.includes(g.home)),
- };
- setGameSheet({ tickerGame: g, espnGame: espn, detail: null, odds: gameOdds });
- setGameTeamTab('matchup');
- if(espn?.id) {
- setGameLoading(true);
- try {
- const sportKey = SPORT_KEYS[activeLeague?.sport];
- const r = await fetch(`/api/espn?sport=${sportKey}&gameId=${espn.id}`);
- if(r.ok) {
- const d = await r.json();
- setGameSheet(prev => ({...prev, detail: d}));
- }
- } catch(e) { console.warn('Game detail fetch failed:', e); }
- finally { setGameLoading(false); }
- }
- };
- return (
- <div className='ticker-wrap'>
- <div className='ticker-track' style={{animationDuration: Math.max(12, items.length * 5) + 's'}}>
- {doubled.map((g, i) => (
- <span key={i} className='ticker-item'
- onClick={e=>{e.stopPropagation();if(i<items.length)openGame(g);}}
- onTouchEnd={e=>{e.preventDefault();e.stopPropagation();if(i<items.length)openGame(g);}}
- style={{cursor:"pointer",WebkitTapHighlightColor:"rgba(255,255,255,0.1)",userSelect:"none",
- background: g.hasPick ? "rgba(10,132,255,0.18)" : "transparent",
- borderRadius: g.hasPick ? 8 : 0,
- padding: g.hasPick ? "2px 10px" : "0 22px",
- border: g.hasPick ? "1px solid rgba(10,132,255,0.35)" : "none",
- margin: g.hasPick ? "0 8px" : 0,
- }}>
- {g.hasPick && <span style={{fontSize:9,color:IOS.blue,fontWeight:800,marginRight:4,letterSpacing:0.5}}>MY PICK</span>}
- <span className='ti-teams' style={{color: g.hasPick ? "#fff" : undefined}}>{g.away} @ {g.home}</span>
- {g.isLive
- ? <span className='ti-live'>● LIVE</span>
- : <span className='ti-time'>{g.timeStr}</span>
- }
- {!g.hasPick && <span className='ticker-sep'>|</span>}
- </span>
- ))}
- </div>
- </div>
- );
- })()}
 
  {homeTab==='home' && tickerGames.length>0 && (()=>{
  const now=new Date();
@@ -4646,8 +4656,22 @@ export default function App() {
  <div style={{width:30,height:30,borderRadius:9,background:`${c}1f`,border:`0.5px solid ${c}40`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:c,flexShrink:0}}>{slot.mult}×</div>
  <div style={{flex:1,minWidth:0}}>
  <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:c,marginBottom:2}}>{catLabels[cat]}{slot.isParlay?` · ${slot.parlayLegs.length}-leg parlay`:""}</div>
+ {slot.isParlay ? (
+ <div style={{display:"flex",flexDirection:"column",gap:4,marginTop:2}}>
+ {slot.parlayLegs.map((b,li)=>(
+ <div key={li} style={{display:"flex",alignItems:"baseline",gap:7}}>
+ <span style={{fontSize:9,fontWeight:800,color:c,flexShrink:0,width:13}}>{li+1}.</span>
+ <div style={{minWidth:0,flex:1}}>
+ <div style={{fontSize:12.5,fontWeight:700,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{b.pick}{b.odds?<span style={{color:"rgba(255,255,255,0.42)",fontWeight:600,marginLeft:5}}>{b.odds}</span>:null}</div>
+ {b.game&&<div style={{fontSize:9.5,color:"rgba(255,255,255,0.34)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{b.game}</div>}
+ </div>
+ </div>
+ ))}
+ </div>
+ ) : (<>
  <div style={{fontSize:13.5,fontWeight:700,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{name}</div>
  {game&&<div style={{fontSize:10,color:"rgba(255,255,255,0.36)",marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{game}</div>}
+ </>)}
  </div>
  <div style={{textAlign:"right",flexShrink:0}}>
  <div style={{fontSize:14.5,fontWeight:800,letterSpacing:"-0.3px",color:slot.isParlay?IOS.pink:oddsPos?IOS.green:IOS.blue}}>{odds}</div>
@@ -5108,6 +5132,7 @@ export default function App() {
  game: b.game||"",
  odds: b.odds,
  implied_odds: b.impliedOdds,
+ game_date: b.gameTime||null,
  result: "pending",
  points_earned: 0,
  }));
@@ -5124,6 +5149,7 @@ export default function App() {
  game: slot.bet.game||"",
  odds: slot.bet.odds,
  implied_odds: slot.bet.impliedOdds,
+ game_date: slot.bet.gameTime||null,
  result: "pending",
  points_earned: 0,
  });
