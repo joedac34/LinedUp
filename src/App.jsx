@@ -589,6 +589,40 @@ function PUBadge({ puId, size=16 }) {
   );
 }
 
+function Ticker({ value, decimals=0, prefix="", suffix="", className, style, dur=850 }){
+  const [disp,setDisp]=useState(value||0);
+  const fromRef=useRef(value||0);
+  useEffect(()=>{
+    const from=fromRef.current||0, to=Number(value)||0, t0=performance.now(); let raf;
+    if(from===to){ setDisp(to); return; }
+    const step=(t)=>{ const k=Math.min(1,(t-t0)/dur); const v=from+(to-from)*(1-Math.pow(1-k,3)); setDisp(v); if(k<1){ raf=requestAnimationFrame(step); } else { fromRef.current=to; } };
+    raf=requestAnimationFrame(step);
+    return ()=>cancelAnimationFrame(raf);
+  },[value,dur]);
+  const n = decimals>0 ? (Number(disp)||0).toFixed(decimals) : Math.round(Number(disp)||0);
+  return <span className={className} style={style}>{prefix}{n}{suffix}</span>;
+}
+function Confetti({ show }){
+  const ref=useRef(null);
+  useEffect(()=>{
+    if(!show||!ref.current) return;
+    const cv=ref.current, ctx=cv.getContext("2d");
+    const W=cv.width=cv.offsetWidth||window.innerWidth, H=cv.height=cv.offsetHeight||window.innerHeight;
+    const colors=["#0A84FF","#30D158","#FFD60A","#FF375F","#BF5AF2","#64D2FF"];
+    const parts=[];
+    for(let i=0;i<100;i++) parts.push({x:W/2+(Math.random()-.5)*140, y:H*0.30, vx:(Math.random()-.5)*10, vy:Math.random()*-10-3, g:0.30+Math.random()*0.12, w:5+Math.random()*5, c:colors[i%colors.length], rot:Math.random()*6.28, vr:(Math.random()-.5)*.5});
+    let raf, t0=performance.now();
+    const tick=(t)=>{ const el=t-t0; ctx.clearRect(0,0,W,H);
+      parts.forEach(p=>{ p.vy+=p.g; p.x+=p.vx; p.y+=p.vy; p.rot+=p.vr;
+        ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot); ctx.globalAlpha=Math.max(0,1-el/2600); ctx.fillStyle=p.c; ctx.fillRect(-p.w/2,-p.w/2,p.w,p.w*0.55); ctx.restore(); });
+      if(el<2600) raf=requestAnimationFrame(tick); else ctx.clearRect(0,0,W,H);
+    };
+    raf=requestAnimationFrame(tick);
+    return ()=>cancelAnimationFrame(raf);
+  },[show]);
+  if(!show) return null;
+  return <canvas ref={ref} style={{position:"fixed",inset:0,width:"100%",height:"100%",pointerEvents:"none",zIndex:99990}}/>;
+}
 const PC_TIER_C = { bronze:"#d8965a", silver:"#cdd8e8", gold:"#f5d26e", legend:"#7aa8ff" };
 const PC_TIER_BG = { bronze:["#5a3a22","#241509"], silver:["#5c6573","#202730"], gold:["#7c6320","#2a2009"], legend:["#16284f","#0a1030"] };
 function pcDrawCard(data){
@@ -654,7 +688,7 @@ function PlayerCard({ data, IOS }){
           <div className={"pc-holo"+(data.tier==="legend"?" legend":"")}/><div className="pc-glare"/>
           <div className="pc-pad">
             <div className="pc-toprow">
-              <div className="pc-ovr"><div className="pc-num">{data.ovr}</div><div className="pc-lab">OVR</div></div>
+              <div className="pc-ovr"><div className="pc-num"><Ticker value={data.ovr}/></div><div className="pc-lab">OVR</div></div>
               <div style={{textAlign:"right"}}>
                 <div className="pc-tierbadge" style={{color:TC,borderColor:TC+"99"}}>{(data.tier||"").toUpperCase()}</div>
                 <div className="pc-arch" style={{color:TC}}>{(data.arch||"").toUpperCase()}</div>
@@ -1345,12 +1379,18 @@ export default function App() {
  const [showNotifs, setShowNotifs] = useState(false);
  const [lockRitual, setLockRitual] = useState(false);
  useEffect(()=>{ if(lockRitual){ const _t=setTimeout(()=>setLockRitual(false),1700); return ()=>clearTimeout(_t); } },[lockRitual]);
+ const [celebrate, setCelebrate] = useState(false);
+ const notifSeen = useRef(null);
+ const fireCelebration = ()=>{ setCelebrate(true); try{ if(navigator.vibrate) navigator.vibrate([0,40,30,40]); }catch(e){} setTimeout(()=>setCelebrate(false),2700); };
  const fetchNotifs = async ()=>{
    if(!(user&&user.id)){ setNotifs([]); setNotifUnread(0); return; }
    try{
      const {data} = await supabase.from("notifications").select("*").eq("user_id",user.id).order("created_at",{ascending:false}).limit(50);
      setNotifs(data||[]);
      setNotifUnread((data||[]).filter(n=>!n.read_at).length);
+     const _ids = new Set((data||[]).map(n=>n.id));
+     if(notifSeen.current===null){ notifSeen.current=_ids; }
+     else { const fresh=(data||[]).filter(n=>n.type==="pick_win"&&!notifSeen.current.has(n.id)); notifSeen.current=_ids; if(fresh.length>0) fireCelebration(); }
    }catch(e){}
  };
  const openNotifs = async ()=>{
@@ -2924,6 +2964,10 @@ export default function App() {
  .pc-bs-fill{height:100%;border-radius:5px;}
  .pc-bs-prog{display:flex;justify-content:space-between;font-size:11.5px;font-weight:800;margin-top:8px;color:#fff;}
  .pc-toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:#1c1c22;border:1px solid rgba(255,255,255,.15);border-radius:12px;padding:11px 18px;font-size:13px;font-weight:700;color:#fff;z-index:99999;}
+ .app-grain{position:absolute;inset:0;pointer-events:none;z-index:60;opacity:.04;mix-blend-mode:overlay;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");}
+ .app-glow{position:absolute;top:0;left:0;right:0;height:240px;pointer-events:none;z-index:0;background:radial-gradient(78% 150px at 50% -30px,rgba(10,132,255,0.12),transparent 72%);}
+ .phone{background:radial-gradient(125% 72% at 50% -8%, #0c1426 0%, #060608 52%)!important;}
+ .phone::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:46;opacity:.05;mix-blend-mode:overlay;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");background-size:170px 170px;}
  .mini-stand::after{content:'';position:absolute;bottom:0;left:16px;right:0;height:0.5px;background:${IOS.sep};}
  .mini-stand:last-child::after{display:none;}
  .ms-rank{font-size:15px;font-weight:600;width:24px;flex-shrink:0;color:${IOS.label3};}
@@ -3422,7 +3466,7 @@ export default function App() {
  </div>
  )}
 
- {user && <div className="phone">
+ {user && <div className="phone"><div className="app-glow"/><div className="app-grain"/><Confetti show={celebrate}/>
  {/* Status bar safe area cover — blends iPhone time/battery into app */}
  <div style={{
  position:"fixed",
@@ -3993,7 +4037,7 @@ export default function App() {
    <div className="wr-hero">
      <div className="wr-aurora"/>
      <div className="wr-hlabel">Your points · Week {activeLeague.current_week||activeLeague.week||1}</div>
-     <div className="wr-hbig"><div className="wr-pts">{total>0?`+${weekPts}`:"+0"}</div><div className="wr-u">{total>0?`pts · ${hit} of ${total} hit`:"no picks yet"}</div></div>
+     <div className="wr-hbig"><div className="wr-pts">{total>0?<Ticker value={weekPts} decimals={1} prefix="+"/>:"+0"}</div><div className="wr-u">{total>0?`pts · ${hit} of ${total} hit`:"no picks yet"}</div></div>
      <div className="wr-chips">
        {liveCount>0 && <div className="wr-chip"><span className="wr-dot"/>{liveCount} live</div>}
        {st&&st.count>=1 && <div className="wr-chip">{st.type==="W"&&st.count>=2?`W${st.count} streak`:`${st.type}${st.count}`}</div>}
@@ -4277,7 +4321,7 @@ export default function App() {
  <div style={{fontSize:10.5,color:"rgba(255,255,255,0.4)",marginTop:1}}>{r.record||"0-0"}{st?` · ${st}`:""}</div>
  </div>
  <div style={{textAlign:"right",flexShrink:0}}>
- <div style={{fontSize:big?18:16,fontWeight:900,letterSpacing:"-0.5px",color:"#fff",lineHeight:1}}>{r.points!==undefined?r.points:r.units}</div>
+ <div style={{fontSize:big?18:16,fontWeight:900,letterSpacing:"-0.5px",color:"#fff",lineHeight:1}}>{r.points!==undefined?<Ticker value={r.points} decimals={1}/>:r.units}</div>
  <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.06em",color:"rgba(255,255,255,0.35)",textTransform:"uppercase",marginTop:2}}>pts</div>
  </div>
  </div>
@@ -7731,9 +7775,9 @@ export default function App() {
      <div style={{...SURF,padding:"14px",marginBottom:10,boxShadow:"0 4px 14px rgba(0,0,0,0.35)"}}>
        <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:"rgba(255,255,255,0.4)",marginBottom:10}}>Career</div>
        <div style={{display:"flex",gap:8}}>
-         {[{l:"Record",v:`${s.wins||0}-${s.losses||0}`,c:IOS.blue},{l:"Win %",v:s.winRate||"0%",c:IOS.green},{l:"Total Pts",v:(s.points||0),c:"#fff"}].map((tile,i)=>(
+         {[{l:"Record",v:`${s.wins||0}-${s.losses||0}`,c:IOS.blue},{l:"Win %",v:s.winRate||"0%",c:IOS.green,tick:parseInt(s.winRate)||0,suffix:"%"},{l:"Total Pts",v:(s.points||0),c:"#fff",tick:(s.points||0),dec:1}].map((tile,i)=>(
            <div key={i} style={{flex:1,background:"rgba(0,0,0,0.3)",borderRadius:9,padding:"10px 6px",textAlign:"center"}}>
-             <div style={{fontSize:18,fontWeight:800,color:tile.c,letterSpacing:"-0.5px"}}>{tile.v}</div>
+             <div style={{fontSize:18,fontWeight:800,color:tile.c,letterSpacing:"-0.5px"}}>{tile.tick!==undefined?<Ticker value={tile.tick} decimals={tile.dec||0} suffix={tile.suffix||""}/>:tile.v}</div>
              <div style={{fontSize:8.5,color:IOS.label3,textTransform:"uppercase",letterSpacing:".4px",marginTop:2}}>{tile.l}</div>
            </div>
          ))}
