@@ -2683,7 +2683,7 @@ export default function App() {
  /* Mini standings */
  .mini-stand{display:flex;align-items:center;padding:12px 16px;position:relative;}
  .wr-hero{position:relative;overflow:hidden;border-radius:18px;margin:12px 0 0;padding:16px 16px 14px;background:linear-gradient(160deg,#0c1322,#0a0a0e);}
- .wr-aurora{position:absolute;inset:-60% -25% auto -25%;height:240px;z-index:0;filter:blur(42px);opacity:.5;background:radial-gradient(40% 50% at 25% 30%,#0a84ff,transparent 70%),radial-gradient(40% 50% at 75% 40%,#7a4dff,transparent 70%),radial-gradient(35% 45% at 55% 75%,#00d0a0,transparent 70%);animation:wrDrift 14s ease-in-out infinite alternate;}
+ .wr-hero .wr-aurora{position:absolute;inset:-60% -25% auto -25%;height:240px;z-index:0;filter:blur(42px);opacity:.5;background:radial-gradient(40% 50% at 25% 30%,#0a84ff,transparent 70%),radial-gradient(40% 50% at 75% 40%,#7a4dff,transparent 70%),radial-gradient(35% 45% at 55% 75%,#00d0a0,transparent 70%);animation:wrDrift 14s ease-in-out infinite alternate;}
  @keyframes wrDrift{0%{transform:translate(0,0) scale(1);}100%{transform:translate(-6%,4%) scale(1.15);}}
  .wr-hero>*{position:relative;z-index:1;}
  .wr-hlabel{font-size:10.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.5);}
@@ -3953,27 +3953,6 @@ export default function App() {
  })()}
 
  {homeTab==='home' && <>
- {/* Games available widget — replaces countdown timer */}
- {(()=>{
- const sportBets = liveOdds[activeLeague.sport];
- const gameCount = sportBets ? [...new Set([
- ...(sportBets.ml||[]).map(b=>b.game),
- ...(sportBets.spread||[]).map(b=>b.game),
- ])].length : 0;
- const isLive = !!sportBets;
- return (
- <div className="countdown-bar" style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:isLive?"linear-gradient(135deg,rgba(48,209,88,0.12),rgba(48,209,88,0.04))":"linear-gradient(155deg,#141418,#0B0B0E)",border:`0.5px solid ${isLive?"rgba(48,209,88,0.28)":"rgba(255,255,255,0.08)"}`,position:"relative",overflow:"hidden"}}>
- {isLive&&<div style={{position:"absolute",top:-24,right:-24,width:80,height:80,borderRadius:"50%",background:"radial-gradient(circle,rgba(48,209,88,0.22),transparent 70%)",pointerEvents:"none"}}/>}
- <div>
- <div className="cd-label">{isLive ? `Game${gameCount===1?"":"s"} to bet on` : "No games available"}</div>
- <div style={{fontSize:10,color:IOS.label3,marginTop:2}}>{isLive?"Odds update automatically":"Check back closer to game time"}</div>
- </div>
- <div className="cd-time" style={{fontSize:isLive?28:18,color:isLive?IOS.green:IOS.label3}}>
- {isLive?gameCount:"—"}
- </div>
- </div>
- );
- })()}
  {!savedPicks &&
  <button className="ios-btn" style={{background:`linear-gradient(135deg,${sport.color},${IOS.indigo})`,color:"#fff",marginBottom:6,boxShadow:`0 6px 18px ${sport.color}33`}} onClick={()=>setScreen("picks")}>Build Your {leagueSports.length > 1 ? "Multi-Sport" : sport.label} Slip</button>
  }
@@ -4071,29 +4050,43 @@ export default function App() {
  {/* Standings preview */}
  <div className="ios-section" style={{margin:"12px 16px 6px"}}>
  <div className="ios-section-header" style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
- <span>Standings</span>
+ <span style={{display:"inline-flex",alignItems:"center",gap:7}}>Standings <span style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:9.5,fontWeight:800,color:IOS.green,letterSpacing:"0.06em"}}><span className="wr-dot"/>LIVE</span></span>
  <span onClick={()=>setScreen("league")} style={{color:IOS.blue,fontSize:13,textTransform:"none",fontWeight:500,letterSpacing:0,cursor:"pointer"}}>See All</span>
  </div>
  </div>
- <div style={{background:"linear-gradient(160deg,#141418 0%,#0B0B0E 75%)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:16,margin:"0 16px",overflow:"hidden",boxShadow:"0 4px 16px rgba(0,0,0,0.4)"}}>
+ <div style={{margin:"0 16px"}}>
  {[...baseStandings].sort((a,b)=>{
  const aw=parseInt((a.record||"0-0").split("-")[0])||0;
  const bw=parseInt((b.record||"0-0").split("-")[0])||0;
  if(bw!==aw) return bw-aw;
  return (b.points||0)-(a.points||0);
- }).slice(0,5).map((r,i)=>(
- <div key={r.rank} className="mini-stand" style={r.isYou||r.name==="You"?{background:"rgba(10,132,255,0.08)"}:{}}>
- <div className={`ms-rank ${i===0?"top":""}`}>{i+1}</div>
- <div className={`ms-name ${r.isYou||r.name==="You"?"me":""}`}>{r.isYou||r.name==="You"?"You":r.name}</div>
- {r.streak?.count >= 1 && (
- <div style={{fontSize:10,fontWeight:700,color:r.streak.type==='W'?IOS.green:IOS.red,marginRight:6}}>
- {r.streak.type==='W' && r.streak.count>=2?`W${r.streak.count}`:`${r.streak.type}${r.streak.count}`}
+ }).slice(0,5).map((r,i)=>{
+ const isMe=r.isYou||r.name==="You";
+ const nm=isMe?"You":(r.name||"Player");
+ const inits=nm.trim().split(/\s+/).map(w=>w[0]).join("").slice(0,2).toUpperCase();
+ const top=i===0;
+ const big=i<3;
+ const st=(r.streak&&r.streak.count>=1)?`${r.streak.type}${r.streak.count}`:"";
+ return (
+ <div key={r.rank} style={{display:"flex",alignItems:"center",gap:11,padding:"0 13px",height:big?60:52,marginBottom:8,borderRadius:14,
+ background:isMe?"linear-gradient(180deg,#16223e,#0e1422)":"linear-gradient(180deg,#16161d,#0d0d11)",
+ border:`1px solid ${isMe?"rgba(10,132,255,0.55)":top?"rgba(245,210,110,0.45)":"rgba(255,255,255,0.07)"}`,
+ boxShadow:top?"0 4px 18px -6px rgba(245,210,110,0.28)":isMe?"0 4px 18px -8px rgba(10,132,255,0.4)":"none"}}>
+ <div style={{fontSize:big?18:15,fontWeight:900,width:24,textAlign:"center",flexShrink:0,color:top?"#f5d26e":isMe?IOS.blue:"rgba(255,255,255,0.5)"}}>{i+1}</div>
+ <div style={{width:big?36:30,height:big?36:30,borderRadius:"50%",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:big?13:11,fontWeight:900,color:"#fff",
+ background:isMe?"rgba(10,132,255,0.3)":top?"rgba(245,210,110,0.22)":"rgba(255,255,255,0.1)",
+ border:`1px solid ${isMe?"rgba(10,132,255,0.5)":top?"rgba(245,210,110,0.4)":"rgba(255,255,255,0.12)"}`}}>{inits}</div>
+ <div style={{flex:1,minWidth:0}}>
+ <div style={{fontSize:big?15:13.5,fontWeight:800,letterSpacing:"-0.2px",color:isMe?IOS.blue:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{nm}</div>
+ <div style={{fontSize:10.5,color:"rgba(255,255,255,0.4)",marginTop:1}}>{r.record||"0-0"}{st?` · ${st}`:""}</div>
  </div>
- )}
- <div className="ms-rec">{r.record}</div>
- <div className={`ms-units ${String(r.units).startsWith("+")&&r.units!=="0"?"pos":"neg"}`}>{r.points!==undefined?`${r.points}pts`:r.units}</div>
+ <div style={{textAlign:"right",flexShrink:0}}>
+ <div style={{fontSize:big?18:16,fontWeight:900,letterSpacing:"-0.5px",color:"#fff",lineHeight:1}}>{r.points!==undefined?r.points:r.units}</div>
+ <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.06em",color:"rgba(255,255,255,0.35)",textTransform:"uppercase",marginTop:2}}>pts</div>
  </div>
- ))}
+ </div>
+ );
+ })}
  </div>
  <div style={{height:16}}/>
  </>}
