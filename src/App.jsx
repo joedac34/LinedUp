@@ -2864,8 +2864,11 @@ export default function App() {
  .pc-stage{perspective:1200px;width:300px;height:454px;margin:6px auto 0;}
  .pc-card{position:relative;width:100%;height:100%;border-radius:22px;transform-style:preserve-3d;transition:transform .12s ease-out;cursor:pointer;}
  .pc-card.flip{transition:transform .7s cubic-bezier(.2,.8,.2,1);transform:rotateY(180deg);}
- .pc-face{position:absolute;inset:0;border-radius:22px;overflow:hidden;-webkit-backface-visibility:hidden;backface-visibility:hidden;display:flex;flex-direction:column;}
- .pc-back{transform:rotateY(180deg);}
+ .pc-face{position:absolute;inset:0;border-radius:22px;overflow:hidden;-webkit-backface-visibility:hidden;backface-visibility:hidden;display:flex;flex-direction:column;transition:opacity 0s linear .35s;}
+ .pc-front{opacity:1;}
+ .pc-back{transform:rotateY(180deg);opacity:0;}
+ .pc-card.flip .pc-front{opacity:0;}
+ .pc-card.flip .pc-back{opacity:1;}
  .pc-skin-bronze{background:linear-gradient(160deg,#5a3a22,#241509);}
  .pc-skin-silver{background:linear-gradient(160deg,#5c6573,#202730);}
  .pc-skin-gold{background:linear-gradient(160deg,#7c6320,#2a2009);}
