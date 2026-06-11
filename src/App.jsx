@@ -589,6 +589,129 @@ function PUBadge({ puId, size=16 }) {
   );
 }
 
+const PC_TIER_C = { bronze:"#d8965a", silver:"#cdd8e8", gold:"#f5d26e", legend:"#7aa8ff" };
+const PC_TIER_BG = { bronze:["#5a3a22","#241509"], silver:["#5c6573","#202730"], gold:["#7c6320","#2a2009"], legend:["#16284f","#0a1030"] };
+function pcDrawCard(data){
+  const W=600,H=900,c=document.createElement("canvas"); c.width=W; c.height=H;
+  const x=c.getContext("2d"); const BG=PC_TIER_BG[data.tier]||PC_TIER_BG.bronze; const AC=PC_TIER_C[data.tier]||"#fff";
+  const rr=(a,b,w,h,r)=>{ if(x.roundRect){x.beginPath();x.roundRect(a,b,w,h,r);} else {x.beginPath();x.moveTo(a+r,b);x.arcTo(a+w,b,a+w,b+h,r);x.arcTo(a+w,b+h,a,b+h,r);x.arcTo(a,b+h,a,b,r);x.arcTo(a,b,a+w,b,r);x.closePath();} };
+  const g=x.createLinearGradient(0,0,W,H); g.addColorStop(0,BG[0]); g.addColorStop(1,BG[1]);
+  rr(0,0,W,H,44); x.fillStyle=g; x.fill();
+  x.lineWidth=4; x.strokeStyle=AC; rr(7,7,W-14,H-14,38); x.stroke();
+  x.textBaseline="top"; x.textAlign="left";
+  x.fillStyle="#fff"; x.font="900 118px Barlow, system-ui, sans-serif"; x.fillText(String(data.ovr),46,34);
+  x.fillStyle="rgba(255,255,255,.85)"; x.font="800 22px Barlow, system-ui, sans-serif"; x.fillText("OVR",54,160);
+  x.textAlign="right"; x.fillStyle=AC; x.font="900 22px Barlow, system-ui, sans-serif"; x.fillText((data.tier||"").toUpperCase(),W-50,54);
+  x.font="800 24px Barlow, system-ui, sans-serif"; x.fillText((data.arch||"").toUpperCase(),W-50,92);
+  x.beginPath(); x.arc(W/2,326,94,0,Math.PI*2); x.fillStyle="rgba(255,255,255,.1)"; x.fill(); x.lineWidth=2; x.strokeStyle="rgba(255,255,255,.3)"; x.stroke();
+  x.fillStyle="#fff"; x.textAlign="center"; x.font="900 74px Barlow, system-ui, sans-serif"; x.fillText(data.initials,W/2,290);
+  x.font="900 48px Barlow, system-ui, sans-serif"; x.fillText((data.name||"").toUpperCase(),W/2,448);
+  x.fillStyle="rgba(255,255,255,.25)"; x.fillRect(82,532,W-164,2);
+  const stat=(lbl,val,cx)=>{ x.fillStyle="#fff"; x.font="900 38px Barlow, system-ui, sans-serif"; x.fillText(String(val),cx,560); x.fillStyle="rgba(255,255,255,.6)"; x.font="800 17px Barlow, system-ui, sans-serif"; x.fillText(lbl.toUpperCase(),cx,610); };
+  stat("Record",data.record,158); stat("Streak",(data.streak.count||0)+(data.streak.type||"W"),300); stat("Win",data.winPct,442);
+  x.textAlign="left"; x.fillStyle="rgba(255,255,255,.6)"; x.font="800 20px Barlow, system-ui, sans-serif"; x.fillText(data.serial,48,H-54);
+  x.textAlign="right"; x.fillText("PICKLOCK · 2026 S1",W-48,H-54);
+  return c;
+}
+function PlayerCard({ data, IOS }){
+  const cardRef=useRef(null), stageRef=useRef(null);
+  const [flipped,setFlipped]=useState(false);
+  const [badge,setBadge]=useState(null);
+  const [toast,setToast]=useState("");
+  const TC=PC_TIER_C[data.tier]||"#fff";
+  useEffect(()=>{ if(cardRef.current && flipped) cardRef.current.style.transform=""; },[flipped]);
+  const onMove=(e)=>{ const st=stageRef.current, cd=cardRef.current; if(!st||!cd) return;
+    const r=st.getBoundingClientRect(); const px=((e.clientX-r.left)/r.width-.5)*2, py=((e.clientY-r.top)/r.height-.5)*2;
+    if(!flipped) cd.style.transform="rotateX("+(-py*11).toFixed(2)+"deg) rotateY("+(px*11).toFixed(2)+"deg)";
+    cd.style.setProperty("--mx",(50+px*60)+"%"); cd.style.setProperty("--my",(50+py*60)+"%");
+    cd.style.setProperty("--gx",(50+px*50)+"%"); cd.style.setProperty("--gy",(50+py*50)+"%"); };
+  const onEnter=()=>{ if(cardRef.current) cardRef.current.classList.add("act"); };
+  const onLeave=()=>{ const cd=cardRef.current; if(!cd) return; cd.classList.remove("act"); if(!flipped) cd.style.transform="rotateX(0) rotateY(0)"; };
+  const shareCard=async()=>{
+    try{
+      if(document.fonts&&document.fonts.ready){ try{ await document.fonts.ready; }catch(e){} }
+      const canvas=pcDrawCard(data);
+      const url="https://lined-up-murex.vercel.app";
+      const text=data.ovr+" OVR "+(data.tier||"").toUpperCase()+" — "+data.arch+". My PickLock card. Think you can beat me?";
+      const blob=await new Promise(r=>canvas.toBlob(r,"image/png"));
+      const file=blob?new File([blob],"picklock-card.png",{type:"image/png"}):null;
+      if(file && navigator.canShare && navigator.canShare({files:[file]})){
+        await navigator.share({files:[file],text,title:"My PickLock Card"});
+      } else if(navigator.share){
+        await navigator.share({text,url,title:"My PickLock Card"});
+      } else {
+        const a=document.createElement("a"); a.href=canvas.toDataURL("image/png"); a.download="picklock-card.png"; a.click();
+        try{ await navigator.clipboard.writeText(text+" "+url); }catch(e){}
+        setToast("Card saved — caption copied"); setTimeout(()=>setToast(""),2400);
+      }
+    }catch(e){ /* user cancelled */ }
+  };
+  return (
+  <div style={{position:"relative"}}>
+    <div className="pc-stage" ref={stageRef} onMouseEnter={onEnter} onMouseMove={onMove} onMouseLeave={onLeave}>
+      <div ref={cardRef} className={"pc-card"+(flipped?" flip":"")} onClick={()=>{ if(window.matchMedia("(pointer:coarse)").matches) setFlipped(f=>!f); }}>
+        <div className={"pc-face pc-front pc-skin-"+data.tier+" pc-bd-"+data.tier}>
+          <div className={"pc-holo"+(data.tier==="legend"?" legend":"")}/><div className="pc-glare"/>
+          <div className="pc-pad">
+            <div className="pc-toprow">
+              <div className="pc-ovr"><div className="pc-num">{data.ovr}</div><div className="pc-lab">OVR</div></div>
+              <div style={{textAlign:"right"}}>
+                <div className="pc-tierbadge" style={{color:TC,borderColor:TC+"99"}}>{(data.tier||"").toUpperCase()}</div>
+                <div className="pc-arch" style={{color:TC}}>{(data.arch||"").toUpperCase()}</div>
+              </div>
+            </div>
+            <div className="pc-avatar">{data.initials}</div>
+            <div className="pc-name">{data.name}</div>
+            <div className="pc-divider"/>
+            <div className="pc-stats">
+              <div className="pc-stat"><div className="pc-v">{data.record}</div><div className="pc-k">Record</div></div>
+              <div className="pc-stat"><div className="pc-v" style={{display:"inline-flex",alignItems:"center",gap:4}}>{(data.streak.count||0)}{data.streak.type||"W"} <svg width="10" height="12" viewBox="0 0 24 28" fill="#FF6B35"><path d="M12 0c2 6-3 7-3 12 0 2 1 3 2 3 2 0 2-3 1-5 4 2 6 6 6 9 0 5-4 9-9 9s-9-4-9-9c0-6 7-9 12-19z"/></svg></div><div className="pc-k">Streak</div></div>
+              <div className="pc-stat"><div className="pc-v">{data.winPct}</div><div className="pc-k">Win rate</div></div>
+            </div>
+            <div className="pc-badges">
+              {data.badges.map(b=>(
+                <div key={b.id} className={"pc-bdg "+(b.unlocked?"on":"off")} onClick={(e)=>{e.stopPropagation();setBadge(b);}}>
+                  <div className="pc-ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={b.unlocked?TC:"#fff"} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{__html:b.svg}}/></div>
+                  <div className="pc-nm" style={{color:b.unlocked?"#fff":"rgba(255,255,255,.7)"}}>{b.short}</div>
+                </div>
+              ))}
+            </div>
+            <div className="pc-footrow"><span>{data.serial}</span><span>PICKLOCK · 2026 S1</span></div>
+          </div>
+        </div>
+        <div className={"pc-face pc-back pc-skin-"+data.tier+" pc-bd-"+data.tier}>
+          <div className={"pc-holo"+(data.tier==="legend"?" legend":"")}/><div className="pc-glare"/>
+          <div className="pc-pad">
+            <div className="pc-bh">Season Card</div>
+            {data.backRows.map((r,i)=>(<div key={i} className="pc-brow"><span className="pc-bk">{r[0]}</span><span className="pc-bv">{r[1]}</span></div>))}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div className="pc-actions">
+      <button className="pc-btn share" onClick={shareCard}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg>Share card</button>
+      <button className="pc-btn flip" onClick={()=>setFlipped(f=>!f)}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg>Flip</button>
+    </div>
+    {badge && (
+    <div className="pc-bsheet-bg" onClick={(e)=>{ if(e.currentTarget===e.target) setBadge(null); }}>
+      <div className="pc-bsheet">
+        <div className="pc-grip"/>
+        <div className="pc-bs-top">
+          <div className="pc-bs-ic" style={{background:badge.unlocked?TC+"22":"rgba(255,255,255,.06)",border:"1px solid "+(badge.unlocked?TC+"66":"rgba(255,255,255,.12)")}}>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={badge.unlocked?TC:"#fff"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{__html:badge.svg}}/>
+          </div>
+          <div><div className="pc-bs-nm">{badge.name}</div><div className="pc-bs-st" style={{color:badge.unlocked?IOS.green:"rgba(255,255,255,.4)"}}>{badge.unlocked?"Unlocked":"Locked"}</div></div>
+        </div>
+        <div className="pc-bs-desc">{badge.desc}</div>
+        <div className="pc-bs-track"><div className="pc-bs-fill" style={{width:Math.round(Math.min((badge.cur||0)/badge.goal,1)*100)+"%",background:badge.unlocked?IOS.green:TC}}/></div>
+        <div className="pc-bs-prog"><span>{badge.unlocked?"Complete":((badge.cur||0)+(badge.suffix||"")+" / "+badge.goal+(badge.suffix||""))}</span><span style={{opacity:.5}}>{badge.unlocked?"":(Math.max(0,badge.goal-(badge.cur||0))+(badge.suffix||"")+" to go")}</span></div>
+      </div>
+    </div>
+    )}
+    {toast && <div className="pc-toast">{toast}</div>}
+  </div>
+  );
+}
 const BETSLIP_ENABLED = false; // flip on once affiliate + compliance (21+, geo, RG) are ready
 function betslipAllowedHere(){ return true; } // TODO: geo-gate to legal states + 21+ age check
 function BetslipButton({ bet, IOS }){
@@ -2738,6 +2861,66 @@ export default function App() {
  .lr-flash{position:absolute;inset:0;background:radial-gradient(circle,rgba(48,209,88,.45),transparent 60%);opacity:0;}
  .lr-bg.on .lr-flash{animation:lrFlash .5s ease-out;animation-delay:.68s;}
  @keyframes lrFlash{0%{opacity:.9;}100%{opacity:0;}}
+ .pc-stage{perspective:1200px;width:300px;height:454px;margin:6px auto 0;}
+ .pc-card{position:relative;width:100%;height:100%;border-radius:22px;transform-style:preserve-3d;transition:transform .12s ease-out;cursor:pointer;}
+ .pc-card.flip{transition:transform .7s cubic-bezier(.2,.8,.2,1);transform:rotateY(180deg);}
+ .pc-face{position:absolute;inset:0;border-radius:22px;overflow:hidden;-webkit-backface-visibility:hidden;backface-visibility:hidden;display:flex;flex-direction:column;}
+ .pc-back{transform:rotateY(180deg);}
+ .pc-skin-bronze{background:linear-gradient(160deg,#5a3a22,#241509);}
+ .pc-skin-silver{background:linear-gradient(160deg,#5c6573,#202730);}
+ .pc-skin-gold{background:linear-gradient(160deg,#7c6320,#2a2009);}
+ .pc-skin-legend{background:linear-gradient(160deg,#16284f,#0a1030);}
+ .pc-bd-bronze{border:1.5px solid rgba(220,150,90,.6);}
+ .pc-bd-silver{border:1.5px solid rgba(205,216,232,.55);}
+ .pc-bd-gold{border:1.5px solid rgba(245,210,110,.75);}
+ .pc-bd-legend{border:1.5px solid rgba(120,170,255,.75);box-shadow:0 0 30px -6px rgba(10,132,255,.6);}
+ .pc-holo{position:absolute;inset:0;border-radius:22px;pointer-events:none;mix-blend-mode:color-dodge;opacity:.5;background:repeating-linear-gradient(115deg,rgba(255,0,128,.22) 0%,rgba(0,225,255,.22) 12%,rgba(120,255,120,.22) 24%,rgba(255,235,0,.22) 36%,rgba(255,0,128,.22) 48%);background-size:300% 300%;background-position:0% 50%;animation:pcHolo 6s ease-in-out infinite alternate;}
+ .pc-holo.legend{opacity:.62;}
+ .pc-card.act .pc-holo{animation:none;background-position:calc(var(--mx,50%)) calc(var(--my,50%));}
+ @keyframes pcHolo{0%{background-position:18% 30%;}100%{background-position:82% 70%;}}
+ .pc-glare{position:absolute;inset:0;border-radius:22px;pointer-events:none;mix-blend-mode:overlay;opacity:0;transition:opacity .3s;background:radial-gradient(circle at var(--gx,50%) var(--gy,50%),rgba(255,255,255,.5),transparent 45%);}
+ .pc-card.act .pc-glare{opacity:1;}
+ .pc-pad{position:relative;z-index:2;flex:1;display:flex;flex-direction:column;padding:15px 16px 13px;}
+ .pc-toprow{display:flex;justify-content:space-between;align-items:flex-start;}
+ .pc-ovr{display:flex;flex-direction:column;align-items:center;line-height:.86;}
+ .pc-num{font-size:46px;font-weight:900;letter-spacing:-2px;text-shadow:0 2px 10px rgba(0,0,0,.45);}
+ .pc-lab{font-size:10px;font-weight:800;letter-spacing:.14em;opacity:.85;margin-top:3px;}
+ .pc-tierbadge{font-size:9px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;padding:4px 9px;border-radius:6px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.28);display:inline-block;}
+ .pc-arch{font-size:11px;font-weight:800;letter-spacing:.06em;opacity:.95;margin-top:6px;text-transform:uppercase;}
+ .pc-avatar{margin:6px auto 0;width:104px;height:104px;border-radius:50%;background:radial-gradient(circle at 38% 30%,rgba(255,255,255,.22),rgba(0,0,0,.28));border:1px solid rgba(255,255,255,.28);display:flex;align-items:center;justify-content:center;font-size:38px;font-weight:900;letter-spacing:-1px;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.4);}
+ .pc-name{text-align:center;font-size:23px;font-weight:900;letter-spacing:.04em;margin-top:6px;text-transform:uppercase;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,.4);}
+ .pc-divider{height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.4),transparent);margin:8px 0;}
+ .pc-stats{display:flex;justify-content:space-around;text-align:center;}
+ .pc-v{font-size:17px;font-weight:900;letter-spacing:-.5px;color:#fff;}
+ .pc-k{font-size:8px;font-weight:800;letter-spacing:.08em;opacity:.7;text-transform:uppercase;margin-top:1px;}
+ .pc-badges{display:flex;justify-content:space-between;margin-top:13px;}
+ .pc-bdg{display:flex;flex-direction:column;align-items:center;gap:4px;width:50px;cursor:pointer;}
+ .pc-ic{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;}
+ .pc-bdg.on .pc-ic{background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.32);}
+ .pc-bdg.off .pc-ic{background:rgba(0,0,0,.32);border:1px solid rgba(255,255,255,.08);}
+ .pc-nm{font-size:7.5px;font-weight:800;letter-spacing:.02em;text-transform:uppercase;text-align:center;line-height:1.05;}
+ .pc-bdg.off{opacity:.4;}
+ .pc-footrow{margin-top:auto;display:flex;justify-content:space-between;align-items:center;padding-top:9px;font-size:9px;font-weight:800;letter-spacing:.08em;opacity:.6;color:#fff;}
+ .pc-bh{font-size:12px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;opacity:.85;text-align:center;margin:2px 0 10px;color:#fff;}
+ .pc-brow{display:flex;justify-content:space-between;padding:7px 2px;border-bottom:1px solid rgba(255,255,255,.12);font-size:12.5px;color:#fff;}
+ .pc-bk{font-weight:600;opacity:.8;} .pc-bv{font-weight:900;}
+ .pc-actions{display:flex;gap:10px;margin:16px auto 0;width:300px;}
+ .pc-btn{flex:1;display:flex;align-items:center;justify-content:center;gap:7px;font-size:13px;font-weight:800;padding:11px;border-radius:12px;cursor:pointer;border:none;}
+ .pc-btn.share{background:#0A84FF;color:#fff;box-shadow:0 8px 22px -8px rgba(10,132,255,.7);}
+ .pc-btn.flip{background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(255,255,255,.12);}
+ .pc-bsheet-bg{position:fixed;inset:0;z-index:99998;background:rgba(2,3,8,.6);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);display:flex;align-items:flex-end;justify-content:center;}
+ .pc-bsheet{width:390px;max-width:100vw;background:#15151b;border-top-left-radius:20px;border-top-right-radius:20px;border:1px solid rgba(255,255,255,.1);border-bottom:none;padding:8px 20px 30px;animation:pcSheetUp .25s cubic-bezier(.2,.8,.2,1);}
+ @keyframes pcSheetUp{from{transform:translateY(40px);}to{transform:translateY(0);}}
+ .pc-grip{width:38px;height:4px;border-radius:3px;background:rgba(255,255,255,.2);margin:6px auto 16px;}
+ .pc-bs-top{display:flex;align-items:center;gap:14px;}
+ .pc-bs-ic{width:54px;height:54px;border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+ .pc-bs-nm{font-size:18px;font-weight:900;color:#fff;}
+ .pc-bs-st{font-size:11.5px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;margin-top:2px;}
+ .pc-bs-desc{font-size:13.5px;color:rgba(255,255,255,.65);margin:16px 0 14px;line-height:1.45;}
+ .pc-bs-track{height:8px;border-radius:5px;background:rgba(255,255,255,.1);overflow:hidden;}
+ .pc-bs-fill{height:100%;border-radius:5px;}
+ .pc-bs-prog{display:flex;justify-content:space-between;font-size:11.5px;font-weight:800;margin-top:8px;color:#fff;}
+ .pc-toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:#1c1c22;border:1px solid rgba(255,255,255,.15);border-radius:12px;padding:11px 18px;font-size:13px;font-weight:700;color:#fff;z-index:99999;}
  .mini-stand::after{content:'';position:absolute;bottom:0;left:16px;right:0;height:0.5px;background:${IOS.sep};}
  .mini-stand:last-child::after{display:none;}
  .ms-rank{font-size:15px;font-weight:600;width:24px;flex-shrink:0;color:${IOS.label3};}
@@ -7461,18 +7644,38 @@ export default function App() {
  {screen==="profile"&&(
  <>
  <div className="body">
+ {(()=>{
+ const st=allMyStats||{};
+ const wins=st.wins||0, losses=st.losses||0, total=st.total||0;
+ const winFrac=(wins+losses)>0?wins/(wins+losses):0;
+ const cs=st.currentStreak||{count:0,type:"W"};
+ const lsW=(st.byType&&st.byType.longshot&&st.byType.longshot.wins)||0;
+ const lsRate=((st.byType&&st.byType.longshot&&st.byType.longshot.pct)||0)/100;
+ const mx=st.maxStreak||0;
+ let ovr=40+winFrac*46+Math.min(total/180,1)*7+(cs.type==="W"?Math.min(cs.count,7):0)+lsRate*5;
+ ovr=Math.round(Math.max(40,Math.min(99,ovr)));
+ const tier=ovr<64?"bronze":ovr<77?"silver":ovr<89?"gold":"legend";
+ const arch=(st.personality||"The Rookie").replace(/^The\s+/,"");
+ const uname=userProfile?.username||user?.email?.split("@")[0]||"You";
+ const initials=(uname||"JD").slice(0,2).toUpperCase();
+ const serial="#"+String(1000+Math.round(st.points||0)).slice(-4);
+ const badges=[
+ {id:"hot",name:"Hot Hand",short:"Hot Hand",desc:"Win 5 picks in a row.",svg:'<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.4-.5-2-1-3-1.1-2.1-.2-4 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.2.4-2.3 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>',cur:cs.type==="W"?cs.count:0,goal:5,unlocked:cs.type==="W"&&cs.count>=5},
+ {id:"long",name:"Longshot King",short:"Longshot",desc:"Hit 5 longshot bets (+400 or better).",svg:'<path d="M4.5 16.5c-1.5 1.3-2 5-2 5s3.7-.5 5-2c.7-.8.7-2.1-.1-2.9a2.18 2.18 0 0 0-2.9-.1z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.9 12.9 0 0 1 22 2c0 2.7-.8 7.5-6 11a22 22 0 0 1-4 2z"/><path d="M9 12H4s.6-3 2-4c1.6-1.1 5 0 5 0"/>',cur:lsW,goal:5,unlocked:lsW>=5},
+ {id:"sharp",name:"Sharp",short:"Sharp",desc:"Hold a 60%+ win rate over 40+ graded picks.",svg:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/>',cur:Math.round(winFrac*100),goal:60,suffix:"%",unlocked:winFrac>=0.6&&total>=40},
+ {id:"cent",name:"Centurion",short:"Centurion",desc:"Lock in 100 career picks.",svg:'<circle cx="12" cy="8" r="6"/><path d="M15.5 12.9 17 22l-5-3-5 3 1.5-9.1"/>',cur:total,goal:100,unlocked:total>=100},
+ {id:"iron",name:"Unstoppable",short:"Unstoppable",desc:"Build a 10-pick win streak.",svg:'<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',cur:mx,goal:10,unlocked:mx>=10},
+ ];
+ const backRows=[["Playstyle",arch],["Win rate",st.winRate||"0%"],["Total picks",total],["Longshot rate",Math.round(lsRate*100)+"%"],["Longest streak","W"+mx],["Season points",Math.round(st.points||0)],["Best pick",(st.bestBet&&st.bestBet.pick_name)||"—"]];
+ const cardData={ovr,tier,arch,record:wins+"-"+losses,winPct:st.winRate||"0%",streak:cs,name:uname,initials,serial,badges,backRows};
+ if(editingUsername){
+ return (
  <div className="prof-av-wrap" style={{background:"radial-gradient(120% 120% at 90% -20%, rgba(10,132,255,0.18), transparent 55%), linear-gradient(180deg,#0B1A2E 0%,#000 85%)"}}>
  <div className="prof-av">{(userProfile?.username?.[0]||user?.email?.[0]||"J").toUpperCase()}</div>
  <div>
- {editingUsername ? (
  <div style={{display:"flex",flexDirection:"column",gap:6}}>
- <input
- value={usernameInput}
- onChange={e=>{setUsernameInput(e.target.value);setUsernameError("");}}
- placeholder="Enter username"
- autoFocus
- style={{background:"#2C2C2E",border:`1px solid ${usernameError?IOS.red:IOS.blue}`,borderRadius:10,padding:"8px 12px",color:"#fff",fontSize:15,fontFamily:"'Barlow',sans-serif",outline:"none",width:180}}
- />
+ <input value={usernameInput} onChange={e=>{setUsernameInput(e.target.value);setUsernameError("");}} placeholder="Enter username" autoFocus
+ style={{background:"#2C2C2E",border:`1px solid ${usernameError?IOS.red:IOS.blue}`,borderRadius:10,padding:"8px 12px",color:"#fff",fontSize:15,fontFamily:"'Barlow',sans-serif",outline:"none",width:180}}/>
  {usernameError&&<div style={{fontSize:11,color:IOS.red}}>{usernameError}</div>}
  <div style={{display:"flex",gap:10}}>
  <div onClick={async()=>{
@@ -7485,28 +7688,27 @@ export default function App() {
  if(existing && existing.id!==user.id){ setUsernameError("Already taken"); setUsernameSaving(false); return; }
  await supabase.from("users").upsert({id:user.id, email:user.email, username:val},{onConflict:"id"});
  setUserProfile(prev=>({...prev, username:val}));
- setEditingUsername(false);
- setUsernameSaving(false);
- }} style={{fontSize:13,fontWeight:700,color:usernameSaving?IOS.label3:IOS.green,cursor:"pointer"}}>
- {usernameSaving?"Saving...":"Save"}
- </div>
+ setEditingUsername(false); setUsernameSaving(false);
+ }} style={{fontSize:13,fontWeight:700,color:usernameSaving?IOS.label3:IOS.green,cursor:"pointer"}}>{usernameSaving?"Saving...":"Save"}</div>
  <div onClick={()=>{setEditingUsername(false);setUsernameError("");}} style={{fontSize:13,fontWeight:600,color:IOS.label3,cursor:"pointer"}}>Cancel</div>
  </div>
  </div>
- ) : (
- <div style={{display:"flex",alignItems:"center",gap:8}}>
- <div className="prof-name">{userProfile?.username||user?.email?.split("@")[0]||"You"}</div>
- <div onClick={()=>{setUsernameInput(userProfile?.username||"");setEditingUsername(true);}}
- style={{fontSize:12,fontWeight:600,color:IOS.blue,cursor:"pointer",background:"rgba(10,132,255,0.12)",borderRadius:6,padding:"2px 8px"}}>
- {userProfile?.username?"Edit":"Set"}
+ <div className="prof-league" style={{marginTop:8}}>{realLeagues.length} active league{realLeagues.length!==1?"s":""}</div>
  </div>
  </div>
- )}
- <div className="prof-league">{realLeagues.length} active league{realLeagues.length!==1?"s":""}</div>
- {!userProfile?.username&&<div style={{fontSize:11,color:IOS.orange,marginTop:2}}> Set a username so friends can find you</div>}
- <div className="prof-rank-pill"><span></span><span className="prof-rank-txt">All-league stats</span></div>
+ );
+ }
+ return (
+ <div style={{padding:"8px 0 4px"}}>
+ <PlayerCard data={cardData} IOS={IOS}/>
+ <div style={{textAlign:"center",marginTop:12}}>
+ <span onClick={()=>{setUsernameInput(userProfile?.username||"");setEditingUsername(true);}} style={{fontSize:12.5,fontWeight:700,color:IOS.blue,cursor:"pointer"}}>{userProfile?.username?"Edit name":"Set username"}</span>
+ <span style={{fontSize:12.5,color:IOS.label3,marginLeft:12}}>{realLeagues.length} league{realLeagues.length!==1?"s":""}</span>
  </div>
+ {!userProfile?.username&&<div style={{fontSize:11,color:IOS.orange,textAlign:"center",marginTop:5}}>Set a username so friends can find you</div>}
  </div>
+ );
+ })()}
 
  <div className="seg-control">
  {["stats","power-ups"].map(t=><div key={t} className={`seg-item ${profTab===t?"on":""}`} onClick={()=>setProfTab(t)}>{t.charAt(0).toUpperCase()+t.slice(1)}</div>)}
