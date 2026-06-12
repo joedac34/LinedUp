@@ -66,6 +66,27 @@ export default async function handler(req, res) {
     const used = response.headers.get("x-requests-used");
 
     let games = Array.isArray(data) ? data.filter(g => g.bookmakers?.length > 0).map(collapse) : [];
+
+    // Also pull the upcoming schedule (the /events endpoint is free and does NOT
+    // count against quota) so we can show TOMORROW'S matchups the night before,
+    // even before the books have posted lines. Any event within the next ~36h
+    // that has no odds yet is added with empty bookmakers, so it shows up as an
+    // upcoming matchup (no bets are available until its lines post).
+    try {
+      const evUrl = `https://api.the-odds-api.com/v4/sports/${sport}/events?apiKey=${apiKey}&dateFormat=iso&commenceTimeFrom=${now}`;
+      const evRes = await fetch(evUrl);
+      if (evRes.ok) {
+        const events = await evRes.json();
+        const have = new Set(games.map(g => g.id));
+        const cutoff = Date.now() + 36 * 3600 * 1000;
+        for (const ev of (Array.isArray(events) ? events : [])) {
+          if (!ev || have.has(ev.id)) continue;
+          if (new Date(ev.commence_time).getTime() > cutoff) continue;
+          games.push({ id: ev.id, sport_key: ev.sport_key, commence_time: ev.commence_time, home_team: ev.home_team, away_team: ev.away_team, bookmakers: [] });
+        }
+      }
+    } catch (e) { /* schedule is best-effort; never block odds on it */ }
+
     games.sort((a, b) => new Date(a.commence_time) - new Date(b.commence_time));
 
     res.setHeader("Cache-Control", "no-store");

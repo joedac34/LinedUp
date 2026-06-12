@@ -4115,7 +4115,7 @@ export default function App() {
  ))}
  {ml.length>0 ? <div style={{display:"flex",gap:5,marginTop:9}}>
  {[{k:"SP",it:sp2[0]},{k:"TOT",it:ou[0]},{k:"ML",it:ml[0]}].map((c,ci)=>c.it?(<div key={ci} style={{flex:1,textAlign:"center",background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:7,padding:"5px 2px",minWidth:0}}><div style={{fontSize:8,fontWeight:800,color:"rgba(255,255,255,0.4)",textTransform:"uppercase"}}>{c.k}</div><div style={{fontSize:10.5,fontWeight:800,color:"#fff",marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.it.pick?.split(" ").slice(-1)[0]} {c.it.odds}</div></div>):<div key={ci} style={{flex:1}}/>)}
- </div> : null}
+ </div> : <div style={{marginTop:9,fontSize:9.5,fontWeight:700,color:"rgba(255,255,255,0.38)",textAlign:"center"}}>Lines not posted yet</div>}
  {hasPick&&<div className="wr-pickbadge"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#30D158" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>On your slip</div>}
  </div>
  );
