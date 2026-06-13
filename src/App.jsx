@@ -746,6 +746,133 @@ function PlayerCard({ data, IOS }){
   </div>
   );
 }
+// ── Weekly recap: superlatives, count-up, share card ──
+const WREC_EMB = {
+  trophy:'<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>',
+  rocket:'<path d="M4.5 16.5c-1.5 1.3-2 5-2 5s3.7-.5 5-2c.7-.8.7-2.1-.1-2.9a2.18 2.18 0 0 0-2.9-.1z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.9 12.9 0 0 1 22 2c0 2.7-.8 7.5-6 11a22 22 0 0 1-4 2z"/><path d="M9 12H4s.6-3 2-4c1.6-1.1 5 0 5 0"/>',
+  bolt:'<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+  target:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/>',
+  flame:'<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.4-.5-2-1-3-1.1-2.1-.2-4 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.2.4-2.3 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>',
+  shield:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+  snow:'<line x1="12" y1="2" x2="12" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/>',
+  layers:'<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>',
+};
+function wrecSuperlative(picks, wr, stats){
+  picks = picks || [];
+  const won = picks.filter(p=>p.result==="W"), lost = picks.filter(p=>p.result==="L");
+  const total = picks.length, winRate = total ? won.length/total : 0;
+  const lsHits = won.filter(p=>p.slot==="longshot").length;
+  const myPts = parseFloat(wr&&wr.myPts)||0, oppPts = parseFloat(wr&&wr.oppPts)||0, margin = myPts-oppPts;
+  const streak = (stats&&stats.currentStreak&&stats.currentStreak.type==="W") ? stats.currentStreak.count : 0;
+  const avgMult = total ? picks.reduce((a,p)=>a+(parseFloat(p.multiplier)||1),0)/total : 1;
+  const T=(title,desc,emblem,color)=>({title,desc,emblem,color});
+  if(total>=3 && lost.length===0) return T("Perfect Week","Flawless. "+won.length+"-0 on the week.",WREC_EMB.trophy,"#FFD60A");
+  if(lsHits>=2) return T("Longshot Legend","You cashed "+lsHits+" longshots at +400 or better.",WREC_EMB.rocket,"#BF5AF2");
+  if(wr&&wr.won&&margin>0&&margin<=8) return T("The Closer","You took it by "+margin.toFixed(1)+" in the clutch.",WREC_EMB.bolt,"#0A84FF");
+  if(total>=4 && winRate>=0.75) return T("Sharpshooter",Math.round(winRate*100)+"% of your picks cashed.",WREC_EMB.target,"#30D158");
+  if(streak>=3) return T("On A Heater",streak+" weeks hot and climbing.",WREC_EMB.flame,"#FF6B35");
+  if(avgMult>=2.2) return T("Big Swing","You swung big — "+avgMult.toFixed(1)+"x average multiplier.",WREC_EMB.layers,"#FFD60A");
+  if(total>=8) return T("Volume Shooter",total+" picks this week. Nobody grinds like you.",WREC_EMB.layers,"#0A84FF");
+  if(total>0 && winRate<0.4) return T("Cold Week","Rough one — "+won.length+"-"+lost.length+". Next week's yours.",WREC_EMB.snow,"#8a9098");
+  return T("Mr. Consistent","Steady hand — "+won.length+"-"+lost.length+" on the week.",WREC_EMB.shield,"#0A84FF");
+}
+function WrecCount({ to, dur=900, dec=0, pre="", suf="" }){
+  const [v,setV]=useState(0);
+  useEffect(()=>{ const t0=performance.now(); let raf;
+    const step=(t)=>{ const k=Math.min(1,(t-t0)/dur); setV(to*(1-Math.pow(1-k,3))); if(k<1) raf=requestAnimationFrame(step); else setV(to); };
+    raf=requestAnimationFrame(step); return ()=>cancelAnimationFrame(raf);
+  },[to,dur]);
+  return <>{pre}{dec>0?v.toFixed(dec):Math.round(v)}{suf}</>;
+}
+function wrecDrawCard(d){
+  const W=600,H=900,c=document.createElement("canvas"); c.width=W; c.height=H; const x=c.getContext("2d");
+  const rr=(a,b,w,h,r)=>{ if(x.roundRect){x.beginPath();x.roundRect(a,b,w,h,r);} else {x.beginPath();x.moveTo(a+r,b);x.arcTo(a+w,b,a+w,b+h,r);x.arcTo(a+w,b+h,a,b+h,r);x.arcTo(a,b+h,a,b,r);x.arcTo(a,b,a+w,b,r);x.closePath();} };
+  const g=x.createLinearGradient(0,0,W,H); g.addColorStop(0,"#15294f"); g.addColorStop(1,"#0a1230");
+  rr(0,0,W,H,44); x.fillStyle=g; x.fill(); x.lineWidth=4; x.strokeStyle="#7aa8ff"; rr(7,7,W-14,H-14,38); x.stroke();
+  x.textBaseline="top"; x.textAlign="left";
+  x.fillStyle="rgba(255,255,255,.6)"; x.font="800 24px Barlow, system-ui, sans-serif"; x.fillText("WEEK "+d.week+" RECAP",48,48);
+  x.fillStyle="#fff"; x.font="900 110px Barlow, system-ui, sans-serif"; x.fillText(d.record,46,92);
+  x.font="800 22px Barlow, system-ui, sans-serif"; x.fillStyle="rgba(255,255,255,.7)"; x.fillText("RECORD",52,214);
+  x.textAlign="right"; x.fillStyle="#30D158"; x.font="900 84px Barlow, system-ui, sans-serif"; x.fillText((d.points>=0?"+":"")+d.points.toFixed(0),W-48,108);
+  x.fillStyle="rgba(255,255,255,.7)"; x.font="800 22px Barlow, system-ui, sans-serif"; x.fillText("POINTS",W-50,214);
+  x.textAlign="left"; x.fillStyle="rgba(255,255,255,.25)"; x.fillRect(48,300,W-96,2);
+  x.fillStyle=d.sup.color; x.font="900 26px Barlow, system-ui, sans-serif"; x.fillText(d.sup.title.toUpperCase(),48,340);
+  x.fillStyle="rgba(255,255,255,.6)"; x.font="600 22px Barlow, system-ui, sans-serif";
+  const words=d.sup.desc.split(" "); let line="",yy=384;
+  for(const w of words){ if((line+w).length>34){ x.fillText(line,48,yy); line=w+" "; yy+=30; } else line+=w+" "; }
+  x.fillText(line,48,yy);
+  x.fillStyle="#fff"; x.font="900 56px Barlow, system-ui, sans-serif"; x.fillText((d.name||"YOU").toUpperCase(),48,560);
+  x.fillStyle="rgba(255,255,255,.7)"; x.font="700 24px Barlow, system-ui, sans-serif"; x.fillText("League rank  #"+d.rank+"  ·  "+d.streakLabel,48,640);
+  x.fillStyle="rgba(255,255,255,.5)"; x.font="800 20px Barlow, system-ui, sans-serif"; x.fillText("PICKLOCK · WEEK "+d.week,48,H-56);
+  return c;
+}
+function WeeklyRecap({ data, picks, standings, league, stats, IOS, onClose }){
+  const [i,setI]=useState(0);
+  const [toast,setToast]=useState("");
+  const N=8;
+  const me=(standings||[]).find(z=>z.isYou)||{};
+  const wins=(picks||[]).filter(p=>p.result==="W");
+  const losses=(picks||[]).filter(p=>p.result==="L");
+  const best=[...wins].sort((a,b)=>parseFloat(b.points_earned||0)-parseFloat(a.points_earned||0))[0];
+  const worst=losses[0];
+  const myPts=parseFloat(data.myPts)||0, oppPts=parseFloat(data.oppPts)||0;
+  const won=!!data.won;
+  const sup=wrecSuperlative(picks,data,stats);
+  const streak=me.streak||{type:"W",count:0};
+  const streakLabel=(streak.type||"W")+(streak.count||0);
+  const rank=me.rank||"—";
+  const name=me.name||"You";
+  const next=()=>setI(v=>Math.min(N-1,v+1));
+  const prev=()=>setI(v=>Math.max(0,v-1));
+  const C=IOS;
+  const BG=["radial-gradient(120% 80% at 50% 10%,rgba(10,132,255,.35),#04060c 65%)",
+    won?"radial-gradient(120% 80% at 50% 20%,rgba(48,209,88,.4),#04140a 65%)":"radial-gradient(120% 80% at 50% 20%,rgba(255,69,58,.4),#140404 65%)",
+    "radial-gradient(120% 80% at 50% 15%,rgba(10,132,255,.4),#05101f 70%)",
+    "radial-gradient(120% 80% at 50% 15%,rgba(255,214,10,.32),#140f04 70%)",
+    "radial-gradient(120% 80% at 50% 15%,rgba(120,120,130,.3),#0c0c0e 70%)",
+    "radial-gradient(120% 80% at 50% 15%,"+sup.color+"55,#140420 70%)",
+    "radial-gradient(120% 80% at 50% 15%,rgba(10,132,255,.34),#04060c 68%)",
+    "radial-gradient(120% 80% at 50% 0%,#11131c,#04060c 70%)"][i];
+  const shareCard=async()=>{
+    try{
+      if(document.fonts&&document.fonts.ready){ try{ await document.fonts.ready; }catch(e){} }
+      const cv=wrecDrawCard({week:data.week,record:wins.length+"-"+losses.length,points:myPts,sup,name,rank,streakLabel});
+      const url="https://lined-up-murex.vercel.app";
+      const text="Week "+data.week+": "+wins.length+"-"+losses.length+", "+(myPts>=0?"+":"")+myPts.toFixed(0)+" pts — "+sup.title+". My PickLock week.";
+      const blob=await new Promise(r=>cv.toBlob(r,"image/png"));
+      const file=blob?new File([blob],"picklock-week.png",{type:"image/png"}):null;
+      if(file && navigator.canShare && navigator.canShare({files:[file]})) await navigator.share({files:[file],text,title:"My PickLock Week"});
+      else if(navigator.share) await navigator.share({text,url,title:"My PickLock Week"});
+      else { const a=document.createElement("a"); a.href=cv.toDataURL("image/png"); a.download="picklock-week.png"; a.click(); try{ await navigator.clipboard.writeText(text+" "+url); }catch(e){} setToast("Card saved — caption copied"); setTimeout(()=>setToast(""),2400); }
+    }catch(e){}
+  };
+  const Emb=({d,color})=>(<div className="wrec-emblem wrec-pop" style={{background:color+"22",border:"1px solid "+color+"66"}}><svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{__html:d}}/></div>);
+  let body;
+  if(i===0) body=(<><div className="wrec-kicker wrec-rise wrec-d1">PickLock</div><div className="wrec-huge wrec-rise wrec-d2" style={{marginTop:14}}>WEEK<br/>{data.week}</div><div className="wrec-sub wrec-rise wrec-d3" style={{marginTop:18}}>Your week is in.<br/>Let's see how it went.</div></>);
+  else if(i===1) body=(<><div className="wrec-kicker wrec-rise wrec-d1">The verdict</div><div className="wrec-huge wrec-pop" style={{marginTop:10,color:won?C.green:C.red}}>{won?<>YOU<br/>WON</>:<>YOU<br/>LOST</>}</div>{data.oppName?<><div className="wrec-mid wrec-rise wrec-d4" style={{marginTop:20}}><WrecCount to={myPts} dec={0}/> <span style={{opacity:.4}}>—</span> {oppPts.toFixed(0)}</div><div className="wrec-sub wrec-rise wrec-d5" style={{marginTop:6}}>{won?"def.":"vs"} {data.oppName}</div></>:<div className="wrec-mid wrec-rise wrec-d4" style={{marginTop:20}}><WrecCount to={myPts} dec={1} pre="+"/> pts</div>}</>);
+  else if(i===2) body=(<><div className="wrec-kicker wrec-rise wrec-d1">By the numbers</div><div className="wrec-nums wrec-rise wrec-d2" style={{marginTop:24}}><div className="wrec-ncell"><div className="v" style={{color:C.green}}><WrecCount to={wins.length} dur={700}/></div><div className="k">Wins</div></div><div className="wrec-ncell"><div className="v" style={{color:C.red}}><WrecCount to={losses.length} dur={700}/></div><div className="k">Losses</div></div><div className="wrec-ncell"><div className="v"><WrecCount to={myPts} dec={1} pre="+"/></div><div className="k">Points</div></div></div></>);
+  else if(i===3) body=(best?<><Emb d={WREC_EMB.trophy} color="#FFD60A"/><div className="wrec-kicker wrec-rise wrec-d2">Play of the week</div><div className="wrec-pill wrec-rise wrec-d3" style={{marginTop:14}}><div className="nm">{best.pick_name}</div><div className="meta">{best.multiplier}x · {(best.slot||"").toUpperCase()} · {best.odds}</div></div><div className="wrec-rise wrec-d4" style={{marginTop:16}}><span className="wrec-ptsbadge" style={{background:"rgba(48,209,88,.16)",color:C.green}}>+<WrecCount to={parseFloat(best.points_earned||0)} dec={1}/> pts</span></div></>:<><div className="wrec-kicker wrec-rise wrec-d1">Play of the week</div><div className="wrec-sub wrec-rise wrec-d2" style={{marginTop:14}}>No wins this week — but that just sets up the comeback.</div></>);
+  else if(i===4) body=(worst?<><div className="wrec-kicker wrec-rise wrec-d1">The one that got away</div><div className="wrec-pill wrec-rise wrec-d2" style={{marginTop:16}}><div className="nm">{worst.pick_name}</div><div className="meta">{worst.multiplier}x · {(worst.slot||"").toUpperCase()} · {worst.odds}</div></div><div className="wrec-sub wrec-rise wrec-d3" style={{marginTop:16}}>It happens. Shake it off.</div></>:<><div className="wrec-kicker wrec-rise wrec-d1">Clean sheet</div><div className="wrec-mid wrec-rise wrec-d2" style={{marginTop:14,color:C.green}}>No misses this week.</div></>);
+  else if(i===5) body=(<><Emb d={sup.emblem} color={sup.color}/><div className="wrec-kicker wrec-rise wrec-d2">This week you were</div><div className="wrec-big wrec-rise wrec-d3" style={{marginTop:10,color:sup.color}}>{sup.title}</div><div className="wrec-sub wrec-rise wrec-d4" style={{marginTop:16}}>{sup.desc}</div></>);
+  else if(i===6) body=(<><div className="wrec-kicker wrec-rise wrec-d1">Where you stand</div><div className="wrec-rank wrec-pop" style={{marginTop:16,color:rank===1||rank==="1"?"#FFD60A":"#fff"}}>#{rank}</div><div className="wrec-sub wrec-rise wrec-d3" style={{marginTop:6}}>{me.record||""} · {league&&league.target_size?("of "+league.target_size):""}</div>{streak.type==="W"&&streak.count>=2&&<div className="wrec-mid wrec-rise wrec-d4" style={{marginTop:20,display:"inline-flex",alignItems:"center",gap:8,justifyContent:"center"}}>W{streak.count}<svg width="22" height="26" viewBox="0 0 24 28" fill="#FF6B35"><path d="M12 0c2 6-3 7-3 12 0 2 1 3 2 3 2 0 2-3 1-5 4 2 6 6 6 9 0 5-4 9-9 9s-9-4-9-9c0-6 7-9 12-19z"/></svg></div>}</>);
+  else body=(<><div className="wrec-kicker wrec-rise wrec-d1" style={{marginBottom:18}}>Week {data.week} · sealed</div><div className="wrec-card wrec-pop"><div className="holo"/><div style={{position:"relative",zIndex:2}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}><div><div style={{fontSize:40,fontWeight:900,letterSpacing:"-2px",lineHeight:.9}}>{wins.length}-{losses.length}</div><div style={{fontSize:11,fontWeight:800,letterSpacing:".12em",opacity:.7,marginTop:4}}>RECORD</div></div><div style={{textAlign:"right"}}><div style={{fontSize:40,fontWeight:900,letterSpacing:"-2px",lineHeight:.9,color:C.green}}>{myPts>=0?"+":""}{myPts.toFixed(0)}</div><div style={{fontSize:11,fontWeight:800,letterSpacing:".12em",opacity:.7,marginTop:4}}>POINTS</div></div></div><div style={{height:1,background:"linear-gradient(90deg,transparent,rgba(255,255,255,.35),transparent)",margin:"18px 0"}}/><div style={{fontSize:13,fontWeight:800,letterSpacing:".1em",color:sup.color,textTransform:"uppercase"}}>{sup.title}</div><div style={{fontSize:26,fontWeight:900,letterSpacing:"-1px",marginTop:6}}>{name.toUpperCase()}</div><div style={{display:"flex",justifyContent:"space-between",marginTop:18,fontSize:13,fontWeight:700}}><span style={{opacity:.6}}>League rank</span><span>#{rank} · {streakLabel}</span></div><div style={{marginTop:14,fontSize:9,fontWeight:800,letterSpacing:".1em",opacity:.5,textAlign:"right"}}>PICKLOCK · WEEK {data.week}</div></div></div><div className="wrec-btn"><b className="share" style={{background:C.blue,color:"#fff",boxShadow:"0 8px 24px -8px rgba(10,132,255,.7)"}} onClick={shareCard}>Share</b><b className="done" style={{background:"rgba(255,255,255,.1)",color:"#fff"}} onClick={onClose}>Done</b></div></>);
+  return (
+  <div className="wrec-wrap">
+    <div className="wrec-bars">{Array.from({length:N}).map((_,bi)=>(<div key={bi} className={"wrec-bar"+(bi<i?" done":bi===i?" cur":"")}><i/></div>))}</div>
+    <div className="wrec-x" onClick={onClose}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></div>
+    {i<N-1 && <div className="wrec-skip" onClick={()=>setI(N-1)}>Skip</div>}
+    <div key={i} className="wrec-slide" style={{background:BG}}>
+      <div className="wrec-grain"/>
+      {i===1 && <Confetti show={true}/>}
+      {body}
+    </div>
+    {i>0 && <div className="wrec-zone l" onClick={prev}/>}
+    {i<N-1 && <div className="wrec-zone r" onClick={next}/>}
+    {i<N-1 && <div className="wrec-tap">tap to continue ›</div>}
+    {toast && <div className="pc-toast">{toast}</div>}
+  </div>
+  );
+}
 const BETSLIP_ENABLED = false; // flip on once affiliate + compliance (21+, geo, RG) are ready
 function betslipAllowedHere(){ return true; } // TODO: geo-gate to legal states + 21+ age check
 function BetslipButton({ bet, IOS }){
@@ -2764,6 +2891,44 @@ export default function App() {
  .nt-tg.on .nt-knob{transform:translateX(22px);}
  .nt-knob .lk-on{display:none;} .nt-knob .lk-off{display:block;}
  .nt-tg.on .nt-knob .lk-on{display:block;} .nt-tg.on .nt-knob .lk-off{display:none;}
+ .wrec-wrap{position:fixed;inset:0;z-index:9500;background:#000;overflow:hidden;}
+ .wrec-bars{position:absolute;top:14px;left:14px;right:14px;display:flex;gap:5px;z-index:30;}
+ .wrec-bar{flex:1;height:3px;border-radius:2px;background:rgba(255,255,255,.25);overflow:hidden;}
+ .wrec-bar i{display:block;height:100%;width:0;background:#fff;border-radius:2px;}
+ .wrec-bar.done i{width:100%;}
+ .wrec-bar.cur i{width:100%;transition:width .4s ease;}
+ .wrec-x{position:absolute;top:28px;left:16px;z-index:31;width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;cursor:pointer;}
+ .wrec-skip{position:absolute;top:30px;right:16px;z-index:31;font-size:12.5px;font-weight:800;letter-spacing:.04em;color:rgba(255,255,255,.75);background:rgba(255,255,255,.12);border-radius:14px;padding:7px 15px;cursor:pointer;}
+ .wrec-slide{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:64px 30px 80px;}
+ .wrec-zone{position:absolute;top:70px;bottom:70px;width:38%;z-index:25;cursor:pointer;}
+ .wrec-zone.l{left:0;} .wrec-zone.r{right:0;width:62%;}
+ .wrec-grain{position:absolute;inset:0;pointer-events:none;opacity:.05;mix-blend-mode:overlay;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");}
+ .wrec-kicker{font-size:13px;font-weight:800;letter-spacing:.22em;text-transform:uppercase;opacity:.6;}
+ .wrec-huge{font-size:68px;font-weight:900;letter-spacing:-3px;line-height:.9;}
+ .wrec-big{font-size:46px;font-weight:900;letter-spacing:-2px;line-height:.95;}
+ .wrec-mid{font-size:28px;font-weight:900;letter-spacing:-1px;}
+ .wrec-sub{font-size:15.5px;font-weight:600;opacity:.7;line-height:1.4;}
+ .wrec-rise{opacity:0;transform:translateY(22px);animation:wrecRise .55s cubic-bezier(.2,.8,.2,1) forwards;}
+ .wrec-d1{animation-delay:.05s;}.wrec-d2{animation-delay:.18s;}.wrec-d3{animation-delay:.32s;}.wrec-d4{animation-delay:.46s;}.wrec-d5{animation-delay:.6s;}
+ @keyframes wrecRise{to{opacity:1;transform:translateY(0);}}
+ .wrec-pop{transform:scale(.6);opacity:0;animation:wrecPop .6s cubic-bezier(.34,1.56,.64,1) forwards;}
+ @keyframes wrecPop{to{transform:scale(1);opacity:1;}}
+ .wrec-emblem{width:86px;height:86px;border-radius:24px;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;}
+ .wrec-nums{display:flex;gap:14px;margin-top:8px;width:100%;}
+ .wrec-ncell{flex:1;}
+ .wrec-ncell .v{font-size:44px;font-weight:900;letter-spacing:-2px;}
+ .wrec-ncell .k{font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;opacity:.6;margin-top:2px;}
+ .wrec-pill{display:inline-flex;flex-direction:column;align-items:flex-start;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:14px 18px;}
+ .wrec-pill .nm{font-size:18px;font-weight:800;}
+ .wrec-pill .meta{font-size:12px;opacity:.6;font-weight:600;margin-top:2px;}
+ .wrec-ptsbadge{font-size:17px;font-weight:900;padding:7px 14px;border-radius:11px;}
+ .wrec-rank{font-size:60px;font-weight:900;letter-spacing:-3px;}
+ .wrec-card{width:282px;border-radius:24px;padding:26px 22px;position:relative;overflow:hidden;border:1.5px solid rgba(120,170,255,.6);box-shadow:0 0 40px -10px rgba(10,132,255,.6);background:linear-gradient(165deg,#15294f,#0a1230);}
+ .wrec-card .holo{position:absolute;inset:0;mix-blend-mode:color-dodge;opacity:.4;background:repeating-linear-gradient(115deg,rgba(255,0,128,.2) 0%,rgba(0,225,255,.2) 12%,rgba(120,255,120,.2) 24%,rgba(255,235,0,.2) 36%,rgba(255,0,128,.2) 48%);background-size:300% 300%;animation:wrecHolo 5s ease-in-out infinite alternate;}
+ @keyframes wrecHolo{0%{background-position:10% 20%;}100%{background-position:90% 80%;}}
+ .wrec-btn{margin-top:22px;display:flex;gap:10px;width:282px;}
+ .wrec-btn b{flex:1;text-align:center;font-size:15px;font-weight:800;padding:14px;border-radius:14px;cursor:pointer;}
+ .wrec-tap{position:absolute;bottom:24px;left:0;right:0;text-align:center;font-size:12px;font-weight:700;letter-spacing:.1em;opacity:.4;text-transform:uppercase;z-index:20;}
  .nav-subtitle{font-size:13px;color:${IOS.label3};margin-top:2px;}
 
  /* Scrollable body */
@@ -8042,139 +8207,10 @@ export default function App() {
  </>
  )}
 
- {/* ══ WEEK RESULT MODAL ══ */}
- {weekResult && (
- <div style={{position:"fixed",inset:0,zIndex:9500,display:"flex",alignItems:"flex-end",justifyContent:"center",padding:"0"}} onClick={()=>setWeekResult(null)}>
- <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.85)",backdropFilter:"blur(6px)"}}/>
- <div onClick={e=>e.stopPropagation()} style={{position:"relative",background:"#111",borderRadius:"28px 28px 0 0",width:"100%",maxWidth:480,maxHeight:"90vh",overflowY:"auto",WebkitOverflowScrolling:"touch",paddingBottom:40}}>
+ {/* ══ WEEKLY RECAP ══ */}
+      {weekResult && <WeeklyRecap data={weekResult} picks={recapPicks} standings={realStandings} league={activeLeague} stats={allMyStats} IOS={IOS} onClose={()=>setWeekResult(null)}/>}
 
- {/* Handle */}
- <div style={{display:"flex",justifyContent:"center",padding:"12px 0 0"}}>
- <div style={{width:36,height:4,borderRadius:2,background:"rgba(255,255,255,0.2)"}}/>
- </div>
-
- {/* Header */}
- <div style={{padding:"20px 24px 16px",textAlign:"center",borderBottom:"0.5px solid rgba(255,255,255,0.08)"}}>
- <div style={{fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:"rgba(255,255,255,0.35)",marginBottom:6}}>Week {weekResult.week} Recap</div>
- <div style={{fontSize:32,fontWeight:900,letterSpacing:-1,color:weekResult.won?IOS.green:IOS.red,marginBottom:4}}>
- {weekResult.won?"You Won":"You Lost"}
- </div>
- <div style={{fontSize:15,color:"rgba(255,255,255,0.5)"}}>
- {weekResult.myPts} — {weekResult.oppPts} vs {weekResult.oppName||"Opponent"}
- </div>
- </div>
-
- {/* Stats row */}
- <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",borderBottom:"0.5px solid rgba(255,255,255,0.08)"}}>
- {[
- {label:"Wins", value: recapPicks.filter(p=>p.result==="W").length, color:IOS.green},
- {label:"Losses", value: recapPicks.filter(p=>p.result==="L").length, color:IOS.red},
- {label:"Points", value: parseFloat(weekResult.myPts||0).toFixed(1), color:IOS.blue},
- ].map((s,i)=>(
- <div key={i} style={{padding:"14px 8px",textAlign:"center",borderRight:i<2?"0.5px solid rgba(255,255,255,0.08)":"none"}}>
- <div style={{fontSize:22,fontWeight:800,color:s.color,letterSpacing:-0.5}}>{s.value}</div>
- <div style={{fontSize:11,color:"rgba(255,255,255,0.35)",marginTop:2,fontWeight:500}}>{s.label}</div>
- </div>
- ))}
- </div>
-
- {/* Best pick */}
- {(()=>{
- const won = recapPicks.filter(p=>p.result==="W").sort((a,b)=>parseFloat(b.points_earned||0)-parseFloat(a.points_earned||0));
- const best = won[0];
- if(!best) return null;
- return (
- <div style={{margin:"12px 16px 0",background:"#1C1C1E",borderRadius:14,padding:"12px 16px",border:"0.5px solid rgba(255,255,255,0.06)"}}>
- <div style={{fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:"rgba(255,255,255,0.35)",marginBottom:8}}>Best pick</div>
- <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
- <div>
- <div style={{fontSize:15,fontWeight:700,color:"#fff"}}>{best.pick_name}</div>
- <div style={{fontSize:12,color:"rgba(255,255,255,0.4)",marginTop:2}}>{best.multiplier}× · {best.slot?.toUpperCase()} · {best.odds}</div>
- </div>
- <div style={{fontSize:14,fontWeight:800,color:IOS.green,background:"rgba(48,209,88,0.12)",padding:"4px 12px",borderRadius:8}}>+{parseFloat(best.points_earned||0).toFixed(1)}pts</div>
- </div>
- </div>
- );
- })()}
-
- {/* Worst pick */}
- {(()=>{
- const lost = recapPicks.filter(p=>p.result==="L");
- const worst = lost[0];
- if(!worst) return null;
- return (
- <div style={{margin:"10px 16px 0",background:"#1C1C1E",borderRadius:14,padding:"12px 16px",border:"0.5px solid rgba(255,255,255,0.06)"}}>
- <div style={{fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:"rgba(255,255,255,0.35)",marginBottom:8}}>Miss of the week</div>
- <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
- <div>
- <div style={{fontSize:15,fontWeight:700,color:"#fff"}}>{worst.pick_name}</div>
- <div style={{fontSize:12,color:"rgba(255,255,255,0.4)",marginTop:2}}>{worst.multiplier}× · {worst.slot?.toUpperCase()} · {worst.odds}</div>
- </div>
- <div style={{fontSize:14,fontWeight:800,color:IOS.red,background:"rgba(255,69,58,0.12)",padding:"4px 12px",borderRadius:8}}>0 pts</div>
- </div>
- </div>
- );
- })()}
-
- {/* Pick breakdown by category */}
- {recapPicks.length > 0 && (()=>{
- const slots = ["ml","prop","ou","spread","longshot"];
- const slotLabels = {ml:"ML",prop:"Prop",ou:"O/U",spread:"Spread",longshot:"Longshot"};
- const slotColors = {ml:"#3A9EE0",prop:"#3A9EE0",ou:"#3A9EE0",spread:"#3A9EE0",longshot:"#3A9EE0"};
- return (
- <div style={{margin:"10px 16px 0",background:"#1C1C1E",borderRadius:14,padding:"12px 16px",border:"0.5px solid rgba(255,255,255,0.06)"}}>
- <div style={{fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:"rgba(255,255,255,0.35)",marginBottom:10}}>Pick breakdown</div>
- <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
- {slots.map(s=>{
- const picks = recapPicks.filter(p=>p.slot===s);
- if(!picks.length) return null;
- const w = picks.filter(p=>p.result==="W").length;
- const l = picks.filter(p=>p.result==="L").length;
- const color = w>l?IOS.green:l>w?IOS.red:"rgba(255,255,255,0.3)";
- return (
- <div key={s} style={{background:`${color}15`,border:`0.5px solid ${color}40`,borderRadius:8,padding:"4px 10px",fontSize:12,fontWeight:700,color:color}}>
- {slotLabels[s]} {w}-{l}
- </div>
- );
- })}
- </div>
- </div>
- );
- })()}
-
- {/* Season so far */}
- {(()=>{
- const me = realStandings.find(s=>s.isYou);
- if(!me) return null;
- return (
- <div style={{margin:"10px 16px 0",background:"#1C1C1E",borderRadius:14,padding:"12px 16px",border:"0.5px solid rgba(255,255,255,0.06)"}}>
- <div style={{fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:"rgba(255,255,255,0.35)",marginBottom:8}}>Season so far</div>
- <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
- <div style={{fontSize:13,color:"rgba(255,255,255,0.5)"}}>Record</div>
- <div style={{fontSize:13,fontWeight:700,color:"#fff"}}>{me.record} · #{me.rank} of {activeLeague?.target_size||8}</div>
- </div>
- <div style={{display:"flex",justifyContent:"space-between"}}>
- <div style={{fontSize:13,color:"rgba(255,255,255,0.5)"}}>Streak</div>
- <div style={{fontSize:13,fontWeight:700,color:me.streak?.type==="W"?IOS.green:IOS.red}}>
- {me.streak?.type==="W"&&me.streak?.count>=2?` W${me.streak.count}`:`${me.streak?.type||"W"}${me.streak?.count||0}`}
- </div>
- </div>
- </div>
- );
- })()}
-
- {/* CTA */}
- <div style={{padding:"16px 16px 0",display:"flex",gap:10}}>
- <button onClick={()=>setWeekResult(null)} style={{flex:1,background:weekResult.won?"rgba(48,209,88,0.15)":"rgba(255,69,58,0.15)",border:`1px solid ${weekResult.won?"rgba(48,209,88,0.3)":"rgba(255,69,58,0.3)"}`,borderRadius:14,padding:"14px",fontSize:15,fontWeight:700,color:weekResult.won?IOS.green:IOS.red,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
- {weekResult.won?"Let's Go ":"Get 'Em Next Week"}
- </button>
- </div>
-
- </div>
- </div>
- )}
-
- {/* ══ GAME DETAIL SHEET ══ */}
+      {/* ══ GAME DETAIL SHEET ══ */}
  {gameSheet && (
  <div style={{position:"fixed",inset:0,zIndex:8000,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>setGameSheet(null)}>
  <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.6)",backdropFilter:"blur(4px)"}}/>
