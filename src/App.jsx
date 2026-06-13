@@ -854,7 +854,7 @@ function WeeklyRecap({ data, picks, standings, league, stats, IOS, onClose, user
   const Emb=({d,color})=>(<div className="wrec-emblem wrec-pop" style={{background:color+"22",border:"1px solid "+color+"66"}}><svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{__html:d}}/></div>);
   let body;
   if(i===0) body=(<><div className="wrec-kicker wrec-rise wrec-d1">PickLock</div><div className="wrec-huge wrec-rise wrec-d2" style={{marginTop:14}}>WEEK<br/>{data.week}</div><div className="wrec-sub wrec-rise wrec-d3" style={{marginTop:18}}>Your week is in.<br/>Let's see how it went.</div></>);
-  else if(i===1) body=(<><div className="wrec-kicker wrec-rise wrec-d1">The verdict</div><div className="wrec-huge wrec-pop" style={{marginTop:10,color:won?C.green:C.red}}>{won?<>YOU<br/>WON</>:<>YOU<br/>LOST</>}</div>{data.oppName?<><div className="wrec-mid wrec-rise wrec-d4" style={{marginTop:20}}><WrecCount to={myPts} dec={0}/> <span style={{opacity:.4}}>—</span> {oppPts.toFixed(0)}</div><div className="wrec-sub wrec-rise wrec-d5" style={{marginTop:6}}>{won?"def.":"vs"} {data.oppName}</div></>:<div className="wrec-mid wrec-rise wrec-d4" style={{marginTop:20}}><WrecCount to={myPts} dec={1} pre="+"/> pts</div>}</>);
+  else if(i===1) body=(<><div className="wrec-kicker wrec-rise wrec-d1">The verdict</div>{data.oppName?(<><div className="wrec-huge wrec-pop" style={{marginTop:10,color:won?C.green:C.red}}>{won?<>YOU<br/>WON</>:<>YOU<br/>LOST</>}</div><div className="wrec-mid wrec-rise wrec-d4" style={{marginTop:20}}><WrecCount to={myPts} dec={0}/> <span style={{opacity:.4}}>—</span> {oppPts.toFixed(0)}</div><div className="wrec-sub wrec-rise wrec-d5" style={{marginTop:6}}>{won?"def.":"vs"} {data.oppName}</div></>):(<><div className="wrec-huge wrec-pop" style={{marginTop:10,color:wins>losses?C.green:wins===losses?C.blue:C.orange}}>{wins>losses?<>BIG<br/>WEEK</>:wins===losses?<>EVEN<br/>WEEK</>:<>TOUGH<br/>WEEK</>}</div><div className="wrec-mid wrec-rise wrec-d4" style={{marginTop:20}}><WrecCount to={myPts} dec={1} pre={myPts>=0?"+":""}/> pts</div></>)}</>);
   else if(i===2) body=(<><div className="wrec-kicker wrec-rise wrec-d1">By the numbers</div><div className="wrec-nums wrec-rise wrec-d2" style={{marginTop:24}}><div className="wrec-ncell"><div className="v" style={{color:C.green}}><WrecCount to={wins.length} dur={700}/></div><div className="k">Wins</div></div><div className="wrec-ncell"><div className="v" style={{color:C.red}}><WrecCount to={losses.length} dur={700}/></div><div className="k">Losses</div></div><div className="wrec-ncell"><div className="v"><WrecCount to={myPts} dec={1} pre="+"/></div><div className="k">Points</div></div></div></>);
   else if(i===3) body=(best?<><Emb d={WREC_EMB.trophy} color="#FFD60A"/><div className="wrec-kicker wrec-rise wrec-d2">Play of the week</div><div className="wrec-pill wrec-rise wrec-d3" style={{marginTop:14}}><div className="nm">{best.pick_name}</div><div className="meta">{best.multiplier}x · {(best.slot||"").toUpperCase()} · {best.odds}</div></div><div className="wrec-rise wrec-d4" style={{marginTop:16}}><span className="wrec-ptsbadge" style={{background:"rgba(48,209,88,.16)",color:C.green}}>+<WrecCount to={parseFloat(best.points_earned||0)} dec={1}/> pts</span></div></>:<><div className="wrec-kicker wrec-rise wrec-d1">Play of the week</div><div className="wrec-sub wrec-rise wrec-d2" style={{marginTop:14}}>No wins this week — but that just sets up the comeback.</div></>);
   else if(i===4) body=(worst?<><div className="wrec-kicker wrec-rise wrec-d1">The one that got away</div><div className="wrec-pill wrec-rise wrec-d2" style={{marginTop:16}}><div className="nm">{worst.pick_name}</div><div className="meta">{worst.multiplier}x · {(worst.slot||"").toUpperCase()} · {worst.odds}</div></div><div className="wrec-sub wrec-rise wrec-d3" style={{marginTop:16}}>It happens. Shake it off.</div></>:<><div className="wrec-kicker wrec-rise wrec-d1">Clean sheet</div><div className="wrec-mid wrec-rise wrec-d2" style={{marginTop:14,color:C.green}}>No misses this week.</div></>);
@@ -1533,11 +1533,24 @@ export default function App() {
    setNotifs(prev=>prev.map(n=>n.read_at?n:{...n,read_at:nowIso}));
    setNotifUnread(0);
  };
+ const openRecapFromNotif = async (n)=>{
+   try{
+     const week = n.data && n.data.week, lid = n.data && n.data.league_id;
+     if(!week || !lid || !(user&&user.id)) return;
+     const { data:wk } = await supabase.from("picks").select("*").eq("league_id",lid).eq("user_id",user.id).eq("week",week).in("result",["W","L"]);
+     const arr = wk||[];
+     const wins = arr.filter(p=>p.result==="W").length, losses = arr.filter(p=>p.result==="L").length;
+     const pts = arr.reduce((a,p)=>a+(parseFloat(p.points_earned)||0),0);
+     setRecapPicks(arr);
+     setWeekResult({ week, myPts: parseFloat(pts.toFixed(1)), oppPts: 0, oppName: null, won: wins>losses });
+   }catch(e){}
+ };
  const handleNotifTap = (n)=>{
    setShowNotifs(false);
    const lid = n.data && n.data.league_id;
    if(lid && realLeagues.some(l=>l.id===lid)) setActiveLeagueId(lid);
    if(n.type==="pick_win"||n.type==="pick_loss") setScreen("picks");
+   else if(n.type==="week_recap") openRecapFromNotif(n);
  };
  useEffect(()=>{
    if(!(user&&user.id)) return;

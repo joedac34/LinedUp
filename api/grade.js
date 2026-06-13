@@ -95,6 +95,31 @@ async function stashWeekRanks(league) {
     if (payload.length) await sbUpsert("weekly_ranks?on_conflict=league_id,user_id,week", payload);
   } catch (e) { /* never break grading */ }
 }
+// Fire a one-time "your week is in" tease when a user has no pending picks left
+// for the week. Respects the notif_results ("Weekly Results") toggle and never
+// double-sends (checks for an existing week_recap notification first).
+async function maybeNotifyRecap(userId, league, week) {
+  try {
+    if (!userId) return;
+    let want = true;
+    try { const u = await sbGet(`users?id=eq.${userId}&select=notif_results`); if (Array.isArray(u) && u.length) want = u[0].notif_results !== false; } catch (e) {}
+    if (!want) return;
+    const existing = await sbGet(`notifications?user_id=eq.${userId}&type=eq.week_recap&select=data`);
+    if (Array.isArray(existing) && existing.some(n => n.data && String(n.data.week) === String(week) && n.data.league_id === league.id)) return;
+    const wk = await sbGet(`picks?league_id=eq.${league.id}&week=eq.${week}&user_id=eq.${userId}&result=in.(W,L)&select=result,points_earned`);
+    const arr = Array.isArray(wk) ? wk : [];
+    if (!arr.length) return;
+    const wins = arr.filter(p => p.result === "W").length, losses = arr.filter(p => p.result === "L").length;
+    const pts = arr.reduce((a, p) => a + (parseFloat(p.points_earned) || 0), 0);
+    await sbPost("notifications", {
+      user_id: userId, type: "week_recap",
+      title: `Your Week ${week} recap is in`,
+      body: `You went ${wins}-${losses} for ${pts >= 0 ? "+" : ""}${pts.toFixed(1)} pts — tap to see your week.`,
+      data: { league_id: league.id, week, record: `${wins}-${losses}`, points: parseFloat(pts.toFixed(1)) },
+      created_at: new Date().toISOString(),
+    });
+  } catch (e) { /* never break grading */ }
+}
 
 // ── Scores fetcher ────────────────────────────────────────────────────────────
 async function fetchScores(sportKey) {
@@ -616,7 +641,16 @@ export default async function handler(req, res) {
           }
         }
       }
-      if (results.graded > _gradedAtStart) await stashWeekRanks(league);
+      if (results.graded > _gradedAtStart) {
+        await stashWeekRanks(league);
+        try {
+          const wk = league.current_week;
+          const sp = await sbGet(`picks?league_id=eq.${league.id}&week=eq.${wk}&result=eq.pending&select=user_id`);
+          const pend = new Set((Array.isArray(sp) ? sp : []).map(r => r.user_id));
+          const ran = [...new Set(picks.map(p => p.user_id))];
+          for (const uid of ran) { if (uid && !pend.has(uid)) await maybeNotifyRecap(uid, league, wk); }
+        } catch (e) { /* best-effort */ }
+      }
     }
 
     return res.status(200).json({ ok: true, ...results });
