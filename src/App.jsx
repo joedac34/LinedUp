@@ -806,7 +806,7 @@ function wrecDrawCard(d){
   x.fillStyle="rgba(255,255,255,.5)"; x.font="800 20px Barlow, system-ui, sans-serif"; x.fillText("PICKLOCK · WEEK "+d.week,48,H-56);
   return c;
 }
-function WeeklyRecap({ data, picks, standings, league, stats, IOS, onClose }){
+function WeeklyRecap({ data, picks, standings, league, stats, IOS, onClose, user }){
   const [i,setI]=useState(0);
   const [toast,setToast]=useState("");
   const N=8;
@@ -822,6 +822,11 @@ function WeeklyRecap({ data, picks, standings, league, stats, IOS, onClose }){
   const streakLabel=(streak.type||"W")+(streak.count||0);
   const rank=me.rank||"—";
   const name=me.name||"You";
+  const [prevRank,setPrevRank]=useState(null);
+  useEffect(()=>{ let alive=true; (async()=>{ try{ if(!user||!user.id||!league||!league.id||!data||!data.week) return; const {data:row}=await supabase.from("weekly_ranks").select("rank").eq("user_id",user.id).eq("league_id",league.id).eq("week",data.week-1).maybeSingle(); if(alive&&row&&typeof row.rank==="number") setPrevRank(row.rank); }catch(e){} })(); return ()=>{alive=false;}; },[]);
+  const rankNum = typeof rank==="number"?rank:parseInt(rank);
+  const moved = prevRank!=null && Number.isFinite(rankNum) && prevRank!==rankNum;
+  const up = moved && rankNum < prevRank;
   const next=()=>setI(v=>Math.min(N-1,v+1));
   const prev=()=>setI(v=>Math.max(0,v-1));
   const C=IOS;
@@ -854,7 +859,7 @@ function WeeklyRecap({ data, picks, standings, league, stats, IOS, onClose }){
   else if(i===3) body=(best?<><Emb d={WREC_EMB.trophy} color="#FFD60A"/><div className="wrec-kicker wrec-rise wrec-d2">Play of the week</div><div className="wrec-pill wrec-rise wrec-d3" style={{marginTop:14}}><div className="nm">{best.pick_name}</div><div className="meta">{best.multiplier}x · {(best.slot||"").toUpperCase()} · {best.odds}</div></div><div className="wrec-rise wrec-d4" style={{marginTop:16}}><span className="wrec-ptsbadge" style={{background:"rgba(48,209,88,.16)",color:C.green}}>+<WrecCount to={parseFloat(best.points_earned||0)} dec={1}/> pts</span></div></>:<><div className="wrec-kicker wrec-rise wrec-d1">Play of the week</div><div className="wrec-sub wrec-rise wrec-d2" style={{marginTop:14}}>No wins this week — but that just sets up the comeback.</div></>);
   else if(i===4) body=(worst?<><div className="wrec-kicker wrec-rise wrec-d1">The one that got away</div><div className="wrec-pill wrec-rise wrec-d2" style={{marginTop:16}}><div className="nm">{worst.pick_name}</div><div className="meta">{worst.multiplier}x · {(worst.slot||"").toUpperCase()} · {worst.odds}</div></div><div className="wrec-sub wrec-rise wrec-d3" style={{marginTop:16}}>It happens. Shake it off.</div></>:<><div className="wrec-kicker wrec-rise wrec-d1">Clean sheet</div><div className="wrec-mid wrec-rise wrec-d2" style={{marginTop:14,color:C.green}}>No misses this week.</div></>);
   else if(i===5) body=(<><Emb d={sup.emblem} color={sup.color}/><div className="wrec-kicker wrec-rise wrec-d2">This week you were</div><div className="wrec-big wrec-rise wrec-d3" style={{marginTop:10,color:sup.color}}>{sup.title}</div><div className="wrec-sub wrec-rise wrec-d4" style={{marginTop:16}}>{sup.desc}</div></>);
-  else if(i===6) body=(<><div className="wrec-kicker wrec-rise wrec-d1">Where you stand</div><div className="wrec-rank wrec-pop" style={{marginTop:16,color:rank===1||rank==="1"?"#FFD60A":"#fff"}}>#{rank}</div><div className="wrec-sub wrec-rise wrec-d3" style={{marginTop:6}}>{me.record||""} · {league&&league.target_size?("of "+league.target_size):""}</div>{streak.type==="W"&&streak.count>=2&&<div className="wrec-mid wrec-rise wrec-d4" style={{marginTop:20,display:"inline-flex",alignItems:"center",gap:8,justifyContent:"center"}}>W{streak.count}<svg width="22" height="26" viewBox="0 0 24 28" fill="#FF6B35"><path d="M12 0c2 6-3 7-3 12 0 2 1 3 2 3 2 0 2-3 1-5 4 2 6 6 6 9 0 5-4 9-9 9s-9-4-9-9c0-6 7-9 12-19z"/></svg></div>}</>);
+  else if(i===6) body=(<><div className="wrec-kicker wrec-rise wrec-d1">{moved?(up?"You're climbing":"Holding on"):"Where you stand"}</div>{moved?(<div className="wrec-rise wrec-d2" style={{marginTop:18,display:"flex",alignItems:"center",justifyContent:"center",gap:16}}><div className="wrec-rank" style={{opacity:.32}}>#{prevRank}</div><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={up?C.green:C.red} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{transform:up?"none":"rotate(180deg)"}}><path d="M5 12l7-7 7 7"/><path d="M12 5v14"/></svg><div className="wrec-rank wrec-pop" style={{color:up?C.green:(rankNum===1?"#FFD60A":"#fff")}}>#{rankNum}</div></div>):(<div className="wrec-rank wrec-pop" style={{marginTop:16,color:rankNum===1?"#FFD60A":"#fff"}}>#{rank}</div>)}<div className="wrec-sub wrec-rise wrec-d3" style={{marginTop:8}}>{moved?(up?("Up "+(prevRank-rankNum)+" spot"+((prevRank-rankNum)>1?"s":"")+" this week"):("Down "+(rankNum-prevRank)+" — bounce back")):(me.record||"")}</div>{streak.type==="W"&&streak.count>=2&&<div className="wrec-mid wrec-rise wrec-d4" style={{marginTop:18,display:"inline-flex",alignItems:"center",gap:8,justifyContent:"center"}}>W{streak.count}<svg width="22" height="26" viewBox="0 0 24 28" fill="#FF6B35"><path d="M12 0c2 6-3 7-3 12 0 2 1 3 2 3 2 0 2-3 1-5 4 2 6 6 6 9 0 5-4 9-9 9s-9-4-9-9c0-6 7-9 12-19z"/></svg></div>}</>);
   else body=(<><div className="wrec-kicker wrec-rise wrec-d1" style={{marginBottom:18}}>Week {data.week} · sealed</div><div className="wrec-card wrec-pop"><div className="holo"/><div style={{position:"relative",zIndex:2}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}><div><div style={{fontSize:40,fontWeight:900,letterSpacing:"-2px",lineHeight:.9}}>{wins.length}-{losses.length}</div><div style={{fontSize:11,fontWeight:800,letterSpacing:".12em",opacity:.7,marginTop:4}}>RECORD</div></div><div style={{textAlign:"right"}}><div style={{fontSize:40,fontWeight:900,letterSpacing:"-2px",lineHeight:.9,color:C.green}}>{myPts>=0?"+":""}{myPts.toFixed(0)}</div><div style={{fontSize:11,fontWeight:800,letterSpacing:".12em",opacity:.7,marginTop:4}}>POINTS</div></div></div><div style={{height:1,background:"linear-gradient(90deg,transparent,rgba(255,255,255,.35),transparent)",margin:"18px 0"}}/><div style={{fontSize:13,fontWeight:800,letterSpacing:".1em",color:sup.color,textTransform:"uppercase"}}>{sup.title}</div><div style={{fontSize:26,fontWeight:900,letterSpacing:"-1px",marginTop:6}}>{name.toUpperCase()}</div><div style={{display:"flex",justifyContent:"space-between",marginTop:18,fontSize:13,fontWeight:700}}><span style={{opacity:.6}}>League rank</span><span>#{rank} · {streakLabel}</span></div><div style={{marginTop:14,fontSize:9,fontWeight:800,letterSpacing:".1em",opacity:.5,textAlign:"right"}}>PICKLOCK · WEEK {data.week}</div></div></div><div className="wrec-btn"><b className="share" style={{background:C.blue,color:"#fff",boxShadow:"0 8px 24px -8px rgba(10,132,255,.7)"}} onClick={shareCard}>Share</b><b className="done" style={{background:"rgba(255,255,255,.1)",color:"#fff"}} onClick={onClose}>Done</b></div></>);
   return (
   <div className="wrec-wrap">
@@ -8208,7 +8213,7 @@ export default function App() {
  )}
 
  {/* ══ WEEKLY RECAP ══ */}
-      {weekResult && <WeeklyRecap data={weekResult} picks={recapPicks} standings={realStandings} league={activeLeague} stats={allMyStats} IOS={IOS} onClose={()=>setWeekResult(null)}/>}
+      {weekResult && <WeeklyRecap data={weekResult} picks={recapPicks} standings={realStandings} league={activeLeague} stats={allMyStats} IOS={IOS} user={user} onClose={()=>setWeekResult(null)}/>}
 
       {/* ══ GAME DETAIL SHEET ══ */}
  {gameSheet && (

@@ -44,6 +44,11 @@ async function sbPost(path, body) {
     await fetch(`${SB_URL}/rest/v1/${path}`, { method: "POST", headers: { ...sbHeaders, Prefer: "return=minimal" }, body: JSON.stringify(body) });
   } catch (e) { /* never let a notification failure break grading */ }
 }
+async function sbUpsert(path, body) {
+  try {
+    await fetch(`${SB_URL}/rest/v1/${path}`, { method: "POST", headers: { ...sbHeaders, Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify(body) });
+  } catch (e) { /* swallow */ }
+}
 // Per-run cache of each user's "Picks Graded" notification preference so we only
 // look up each user once. Cleared at the start of every grade run (see handler)
 // so a toggle change is respected on the next run even on a warm container.
@@ -73,6 +78,22 @@ async function notifyPick(pick, league, result, pts, legs) {
       created_at: new Date().toISOString(),
     });
   } catch (e) { /* swallow */ }
+}
+// Snapshot each member's cumulative league rank for the current week, so the
+// weekly recap can show week-over-week movement. Ranks by total points across
+// all graded picks. Service-role upsert (bypasses RLS). Best-effort.
+async function stashWeekRanks(league) {
+  try {
+    if (!league || !league.id || !league.current_week) return;
+    const rows = await sbGet(`picks?league_id=eq.${league.id}&result=in.(W,L)&select=user_id,points_earned`);
+    if (!Array.isArray(rows) || !rows.length) return;
+    const totals = {};
+    for (const r of rows) { if (!r.user_id) continue; totals[r.user_id] = (totals[r.user_id] || 0) + (parseFloat(r.points_earned) || 0); }
+    const ranked = Object.entries(totals).sort((a, b) => b[1] - a[1]);
+    const week = league.current_week;
+    const payload = ranked.map(([user_id, pts], idx) => ({ league_id: league.id, user_id, week, rank: idx + 1, points: parseFloat(pts.toFixed(1)) }));
+    if (payload.length) await sbUpsert("weekly_ranks?on_conflict=league_id,user_id,week", payload);
+  } catch (e) { /* never break grading */ }
 }
 
 // ── Scores fetcher ────────────────────────────────────────────────────────────
@@ -520,6 +541,7 @@ export default async function handler(req, res) {
       };
 
       // Group picks by user and multiplier for parlay handling
+      const _gradedAtStart = results.graded;
       const byUserMult = {};
       picks.forEach(p => {
         const key = `${p.user_id}__${p.multiplier}`;
@@ -594,6 +616,7 @@ export default async function handler(req, res) {
           }
         }
       }
+      if (results.graded > _gradedAtStart) await stashWeekRanks(league);
     }
 
     return res.status(200).json({ ok: true, ...results });
