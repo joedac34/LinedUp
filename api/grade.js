@@ -120,6 +120,79 @@ async function maybeNotifyRecap(userId, league, week) {
     });
   } catch (e) { /* never break grading */ }
 }
+// Tie-break a bracket matchup: more correct picks that week, then the higher
+// seed (user1, which holds the better bracket position).
+async function bracketTiebreak(league, week, u1, u2) {
+  try {
+    const rows = await sbGet(`picks?league_id=eq.${league.id}&week=eq.${week}&result=eq.W&select=user_id`);
+    let c1 = 0, c2 = 0;
+    for (const r of (Array.isArray(rows) ? rows : [])) { if (r.user_id === u1) c1++; else if (r.user_id === u2) c2++; }
+    return c1 >= c2 ? u1 : u2;
+  } catch (e) { return u1; }
+}
+// Single-elimination settlement. When a round's week is fully graded: decide each
+// matchup by weekly points, write winner_id, advance winners into the next round
+// (bracket_match_id W{r}M{k} feeds W{r+1}M{ceil(k/2)}), bump the league's week, and
+// crown a champion when the final resolves. Idempotent + server-authoritative.
+async function settleBracketRound(league, week) {
+  try {
+    if (!league || !league.id || (league.league_type || "h2h") !== "bracket" || !week) return;
+    // Round isn't over until no picks for the week are still pending.
+    const pend = await sbGet(`picks?league_id=eq.${league.id}&week=eq.${week}&result=eq.pending&select=id&limit=1`);
+    if (Array.isArray(pend) && pend.length) return;
+    const ms = await sbGet(`matchups?league_id=eq.${league.id}&week=eq.${week}&select=id,user1_id,user2_id,winner_id,bracket_match_id`);
+    if (!Array.isArray(ms) || !ms.length) return;
+    // Weekly points per user (from winning picks).
+    const won = await sbGet(`picks?league_id=eq.${league.id}&week=eq.${week}&result=eq.W&select=user_id,points_earned`);
+    const totals = {};
+    for (const p of (Array.isArray(won) ? won : [])) { if (p.user_id) totals[p.user_id] = (totals[p.user_id] || 0) + (parseFloat(p.points_earned) || 0); }
+    // Decide winners for any matchup that has both players and no winner yet.
+    const winners = {};
+    for (const m of ms) {
+      if (!m.user1_id || !m.user2_id) continue;
+      let winnerId = m.winner_id;
+      if (!winnerId) {
+        const p1 = totals[m.user1_id] || 0, p2 = totals[m.user2_id] || 0;
+        winnerId = p1 > p2 ? m.user1_id : (p2 > p1 ? m.user2_id : await bracketTiebreak(league, week, m.user1_id, m.user2_id));
+        await sbPatch(`matchups?id=eq.${m.id}`, { winner_id: winnerId, user1_points: parseFloat(p1.toFixed(1)), user2_points: parseFloat(p2.toFixed(1)) });
+      }
+      winners[m.bracket_match_id] = winnerId;
+    }
+    // Advance into the next round, or crown a champion if there is none.
+    const nextWeek = week + 1;
+    const nextMs = await sbGet(`matchups?league_id=eq.${league.id}&week=eq.${nextWeek}&select=id,bracket_match_id,user1_id,user2_id`);
+    if (Array.isArray(nextMs) && nextMs.length) {
+      const nextById = {};
+      for (const nm of nextMs) nextById[nm.bracket_match_id] = nm;
+      for (const m of ms) {
+        const mm = /W(\d+)M(\d+)/.exec(m.bracket_match_id || "");
+        if (!mm) continue;
+        const k = parseInt(mm[2]);
+        const parent = nextById["W" + nextWeek + "M" + Math.ceil(k / 2)];
+        const slot = (k % 2 === 1) ? "user1_id" : "user2_id";
+        const winnerId = winners[m.bracket_match_id];
+        if (parent && winnerId && !parent[slot]) {
+          await sbPatch(`matchups?id=eq.${parent.id}`, { [slot]: winnerId });
+          parent[slot] = winnerId;
+        }
+      }
+      if (league.current_week === week) await sbPatch(`leagues?id=eq.${league.id}`, { current_week: nextWeek });
+    } else if (ms.length === 1) {
+      // Final round — single matchup. Its winner is the champion.
+      const championId = winners[ms[0].bracket_match_id];
+      if (championId) {
+        await sbPatch(`leagues?id=eq.${league.id}`, { champion_id: championId });
+        await sbPost("notifications", {
+          user_id: championId, type: "champion",
+          title: "You won the tournament",
+          body: (league.name ? league.name + " — " : "") + "You're the champion. Tap to see the bracket.",
+          data: { league_id: league.id },
+          created_at: new Date().toISOString(),
+        });
+      }
+    }
+  } catch (e) { /* never break grading */ }
+}
 
 // ── Scores fetcher ────────────────────────────────────────────────────────────
 async function fetchScores(sportKey) {
@@ -515,8 +588,8 @@ export default async function handler(req, res) {
     // league. The cron job (no leagueId) grades every league.
     const onlyLeagueId = req.body?.leagueId;
     const leagues = onlyLeagueId
-      ? await sbGet(`leagues?id=eq.${onlyLeagueId}&select=id,sport,current_week`)
-      : await sbGet("leagues?select=id,sport,current_week");
+      ? await sbGet(`leagues?id=eq.${onlyLeagueId}&select=id,sport,current_week,league_type,name`)
+      : await sbGet("leagues?select=id,sport,current_week,league_type,name");
     if (!Array.isArray(leagues)) throw new Error("Failed to fetch leagues");
 
     for (const league of leagues) {
@@ -651,6 +724,7 @@ export default async function handler(req, res) {
           for (const uid of ran) { if (uid && !pend.has(uid)) await maybeNotifyRecap(uid, league, wk); }
         } catch (e) { /* best-effort */ }
       }
+      await settleBracketRound(league, league.current_week);
     }
 
     return res.status(200).json({ ok: true, ...results });

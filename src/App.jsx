@@ -2001,6 +2001,7 @@ export default function App() {
  };
 
  const checkAutoAdvanceWeek = async (leagueId, league) => {
+ if(league && (league.league_type||"h2h")==="bracket") return; // tournaments settle server-side (grade.js)
  const currentWeek = league.current_week || 1;
  // Get all picks for this week
  const {data:allPicks} = await supabase
@@ -7268,6 +7269,7 @@ export default function App() {
  Run Auto-Grade Now
  </button>
  <button onClick={async()=>{
+ if((activeLeague.league_type||"h2h")==="bracket"){ alert("Tournament rounds advance automatically once all games finish — no manual advance needed."); return; }
  if(!window.confirm(`End Week ${activeLeague.current_week||1} and start Week ${(activeLeague.current_week||1)+1}? Make sure all slips are graded first.`)) return;
  setAdvancingWeek(true);
  const currentWeek = activeLeague.current_week||1;
