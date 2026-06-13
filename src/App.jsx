@@ -2757,6 +2757,13 @@ export default function App() {
  .nav-header.large{padding-bottom:8px;}
  .nav-title-small{font-size:17px;font-weight:600;letter-spacing:-0.4px;color:#fff;text-align:center;padding:12px 0 8px;}
  .nav-title-large{font-size:34px;font-weight:700;letter-spacing:-0.5px;color:#fff;line-height:1.35;padding:1px 0;}
+ .nt-tg{width:54px;height:32px;border-radius:16px;background:#3a3a40;position:relative;cursor:pointer;flex-shrink:0;overflow:hidden;transition:background .3s;}
+ .nt-fill{position:absolute;inset:0;border-radius:16px;background:linear-gradient(90deg,#0A84FF,#48a4ff);transform:scaleX(0);transform-origin:left center;transition:transform .42s cubic-bezier(.34,1.56,.64,1);}
+ .nt-tg.on .nt-fill{transform:scaleX(1);}
+ .nt-knob{position:absolute;top:3px;left:3px;width:26px;height:26px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.35);transition:transform .44s cubic-bezier(.34,1.56,.64,1);display:flex;align-items:center;justify-content:center;z-index:2;}
+ .nt-tg.on .nt-knob{transform:translateX(22px);}
+ .nt-knob .lk-on{display:none;} .nt-knob .lk-off{display:block;}
+ .nt-tg.on .nt-knob .lk-on{display:block;} .nt-tg.on .nt-knob .lk-off{display:none;}
  .nav-subtitle{font-size:13px;color:${IOS.label3};margin-top:2px;}
 
  /* Scrollable body */
@@ -7937,39 +7944,50 @@ export default function App() {
  <div style={{fontSize:11,fontWeight:700,color:IOS.label3,letterSpacing:1,textTransform:"uppercase",marginBottom:8,paddingLeft:4}}>Notifications</div>
  <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",borderRadius:14,overflow:"hidden",border:"0.5px solid rgba(255,255,255,0.08)"}}>
  {[
- {key:"notif_results", label:"Weekly Results", sub:"When your week is graded", icon:""},
- {key:"notif_grades", label:"Picks Graded", sub:"When a pick result comes in", icon:""},
- {key:"notif_reminder", label:"Pick Reminder", sub:"Reminder before slip locks", icon:"clock"},
- {key:"notif_league", label:"League Activity", sub:"New members, chat messages", icon:""},
+ {key:"notif_results", label:"Weekly Results", sub:"When your week is graded", emblem:'<path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/>'},
+ {key:"notif_grades", label:"Picks Graded", sub:"When a pick result comes in", emblem:'<polyline points="20 6 9 17 4 12"/>'},
+ {key:"notif_reminder", label:"Pick Reminder", sub:"Reminder before slip locks", emblem:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'},
+ {key:"notif_league", label:"League Activity", sub:"New members, chat messages", emblem:'<circle cx="9" cy="7" r="3"/><path d="M2 21v-2a5 5 0 0 1 10 0v2"/><circle cx="17" cy="9" r="2.5"/>'},
  ].map((pref,i,arr)=>{
  const val = userProfile?.[pref.key] !== false; // default true
  return (
- <div key={pref.key} style={{display:"flex",alignItems:"center",padding:"12px 16px",borderBottom:i<arr.length-1?`0.5px solid ${IOS.sep}`:"none"}}>
- {pref.icon&&<div style={{marginRight:12,display:"flex",alignItems:"center"}}>{puSVG(pref.icon,"rgba(255,255,255,0.4)")}</div>}
- <div style={{flex:1}}>
- <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>{pref.label}</div>
- <div style={{fontSize:12,color:IOS.label3,marginTop:1}}>{pref.sub}</div>
+ <div key={pref.key} style={{display:"flex",alignItems:"center",padding:"13px 16px",borderBottom:i<arr.length-1?`0.5px solid ${IOS.sep}`:"none"}}>
+ <div style={{width:36,height:36,borderRadius:10,background:"rgba(10,132,255,0.14)",display:"flex",alignItems:"center",justifyContent:"center",marginRight:12,flexShrink:0}}>
+ <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{__html:pref.emblem}}/>
  </div>
- {/* Toggle */}
- <div onClick={async()=>{
+ <div style={{flex:1}}>
+ <div style={{fontSize:14.5,fontWeight:800,color:"#fff"}}>{pref.label}</div>
+ <div style={{fontSize:11.5,color:IOS.label3,marginTop:1}}>{pref.sub}</div>
+ </div>
+ <div className={"nt-tg"+(val?" on":"")} onClick={async()=>{
  const newVal = !val;
  setUserProfile(prev=>({...prev,[pref.key]:newVal}));
+ try{ if(navigator.vibrate) navigator.vibrate(newVal?12:8); }catch(e){}
  await supabase.from("users").update({[pref.key]:newVal}).eq("id",user.id);
- }} style={{width:44,height:26,borderRadius:13,background:val?IOS.green:"rgba(255,255,255,0.15)",cursor:"pointer",position:"relative",transition:"background 0.2s",flexShrink:0}}>
- <div style={{position:"absolute",top:3,left:val?21:3,width:20,height:20,borderRadius:"50%",background:"#fff",transition:"left 0.2s",boxShadow:"0 1px 4px rgba(0,0,0,0.3)"}}/>
+ }}>
+ <div className="nt-fill"/>
+ <div className="nt-knob">
+ <svg className="lk-on" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+ <svg className="lk-off" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8a8a90" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7-1.5"/></svg>
+ </div>
  </div>
  </div>
  );
  })}
  {/* Master push toggle */}
- <div style={{display:"flex",alignItems:"center",padding:"12px 16px",borderTop:`1px solid ${IOS.sep}`,background:"rgba(255,255,255,0.03)"}}>
- <div style={{fontSize:18,marginRight:12}}></div>
- <div style={{flex:1}}>
- <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>Push Notifications</div>
- <div style={{fontSize:12,color:IOS.orange,marginTop:1}}>Coming soon — iOS App Store</div>
+ <div style={{display:"flex",alignItems:"center",padding:"13px 16px",borderTop:`1px solid ${IOS.sep}`,background:"rgba(255,255,255,0.03)"}}>
+ <div style={{width:36,height:36,borderRadius:10,background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",marginRight:12,flexShrink:0}}>
+ <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
  </div>
- <div style={{width:44,height:26,borderRadius:13,background:"rgba(255,255,255,0.1)",position:"relative",opacity:0.4}}>
- <div style={{position:"absolute",top:3,left:3,width:20,height:20,borderRadius:"50%",background:"#fff"}}/>
+ <div style={{flex:1}}>
+ <div style={{fontSize:14.5,fontWeight:800,color:"#fff"}}>Push Notifications</div>
+ <div style={{fontSize:11.5,color:IOS.orange,marginTop:1}}>Coming soon — iOS App Store</div>
+ </div>
+ <div className="nt-tg" style={{opacity:0.4,pointerEvents:"none"}}>
+ <div className="nt-fill"/>
+ <div className="nt-knob">
+ <svg className="lk-off" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8a8a90" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7-1.5"/></svg>
+ </div>
  </div>
  </div>
  </div>
