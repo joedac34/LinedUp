@@ -878,6 +878,114 @@ function WeeklyRecap({ data, picks, standings, league, stats, IOS, onClose, user
   </div>
   );
 }
+const BRK_LOCK = '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>';
+function brkRoundName(count){ return count===1?"Final":count===2?"Semifinals":count===4?"Quarterfinals":count===8?"Round of 16":count===16?"Round of 32":("Round of "+count*2); }
+function BracketView({ matchups, members, uid, IOS, onOpenMatch }){
+  const nameOf = (id)=>{ if(!id) return null; const m=(members||[]).find(x=>x.userId===id); return m?m.name:"Player"; };
+  const byWeek = {};
+  (matchups||[]).forEach(m=>{ (byWeek[m.week]=byWeek[m.week]||[]).push(m); });
+  const weeks = Object.keys(byWeek).map(Number).sort((a,b)=>a-b);
+  if(!weeks.length) return <div style={{padding:"44px 24px",textAlign:"center",color:IOS.label3,fontSize:14,lineHeight:1.6}}>The bracket appears once the league fills and the tournament starts.</div>;
+  weeks.forEach(w=> byWeek[w].sort((a,b)=> (parseInt(((a.bracket_match_id||"").split("M")[1])||0)) - (parseInt(((b.bracket_match_id||"").split("M")[1])||0))));
+  const H=500;
+  const finalRound = byWeek[weeks[weeks.length-1]];
+  const championId = (finalRound && finalRound.length===1) ? finalRound[0].winner_id : null;
+  const seat = (uId, nm, pts, decided, isWin, pos)=>(
+    <div className={"brk-seat"+(uId?"":" tbd")+(decided?(isWin?" win":" lose"):"")}>
+      <span className="brk-sd">{pos||""}</span>
+      <span className="brk-nm">{nm||"TBD"}</span>
+      <span className="brk-pts">{decided&&pts!=null?Number(pts).toFixed(1):""}</span>
+      {decided&&isWin?<svg className="brk-lock" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#30D158" strokeWidth="2.6" dangerouslySetInnerHTML={{__html:BRK_LOCK}}/>:null}
+    </div>
+  );
+  return (
+    <div className="brk-scroll">
+      <div className="brk-tree">
+        {weeks.map((w,ri)=>{
+          const ms = byWeek[w]; const m = ms.length; const elbow = H/(2*m);
+          const isLast = ri===weeks.length-1;
+          return (
+            <div key={w} className="brk-round">
+              <div className="brk-rhead">{brkRoundName(m)}</div>
+              {ms.map((mu,mi)=>{
+                const decided = !!mu.winner_id;
+                const u1=mu.user1_id, u2=mu.user2_id;
+                const both = u1 && u2;
+                const youHere = uid && (u1===uid||u2===uid);
+                const down = (mi % 2 === 0);
+                return (
+                  <div key={mu.id||mi} className="brk-cell">
+                    <div className={"brk-match"+(youHere?" you":"")+(both?"":" dead")} onClick={()=>{ if(both) onOpenMatch(mu); }}>
+                      {ri>0 && <div className="brk-stub"/>}
+                      {seat(u1, nameOf(u1), mu.user1_points, decided, mu.winner_id===u1, ri===0?(mi*2+1):"")}
+                      {seat(u2, nameOf(u2), mu.user2_points, decided, mu.winner_id===u2, ri===0?(mi*2+2):"")}
+                    </div>
+                    {!isLast && <div className={"brk-conn "+(down?"down":"up")} style={{height:elbow}}/>}
+                    {isLast && <div className="brk-connf"/>}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+        <div className="brk-champ">
+          <div className="brk-rhead">Champion</div>
+          <div className="brk-cup"><div className="brk-stub"/>
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#FFD60A" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" style={{display:"block",margin:"0 auto"}}><path d="M2 18h20"/><path d="M3 8l4 4 5-7 5 7 4-4-2 10H5L3 8z"/></svg>
+            <div className="lab">Champion</div>
+            <div className={"cn"+(championId?"":" tbd")}>{championId?nameOf(championId):"TBD"}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+const BMD_CHIP = { ml:"ML", spread:"SPR", ou:"O/U", prop:"PROP", longshot:"LONG" };
+function BracketMatchSheet({ d, IOS, onClose }){
+  if(!d) return null;
+  const resCell = (res, pts)=>{
+    if(res==="W") return <div className="bmd-res"><div className="rp" style={{color:IOS.green}}>+{Number(pts).toFixed(1)}</div><div className="rl" style={{color:IOS.green}}>Win</div></div>;
+    if(res==="L") return <div className="bmd-res"><div className="rp" style={{color:"rgba(255,255,255,.35)"}}>0.0</div><div className="rl" style={{color:IOS.red}}>Loss</div></div>;
+    return <div className="bmd-res"><div className="rp" style={{color:"rgba(255,255,255,.3)"}}>—</div><div className="rl" style={{color:"rgba(255,255,255,.35)"}}>Pending</div></div>;
+  };
+  const section = (p, isWinner)=>(
+    <div className="bmd-sec">
+      <div className="bmd-sech">
+        <span className="nm">{p.name}
+          {p.you?<span className="bmd-tag" style={{background:"rgba(10,132,255,.18)",color:IOS.blue}}>YOU</span>:null}
+          {isWinner?<span className="bmd-tag" style={{background:"rgba(48,209,88,.16)",color:IOS.green}}>ADV</span>:null}
+        </span>
+        <span className="tot">{Number(p.total).toFixed(1)} pts</span>
+      </div>
+      {p.picks.length===0 ? <div style={{fontSize:12,color:"rgba(255,255,255,.35)",padding:"6px 0 12px"}}>No slip submitted</div> :
+        p.picks.map((pk,i)=>(
+          <div key={i} className="bmd-row">
+            <span className="bmd-chip">{BMD_CHIP[pk.slot]||(pk.slot||"").toUpperCase().slice(0,4)}</span>
+            <div className="bmd-pk"><div className="pn">{pk.name}</div><div className="ps">{pk.sub}</div></div>
+            {resCell(pk.res, pk.pts)}
+          </div>
+        ))
+      }
+    </div>
+  );
+  const aWin = d.winnerId && d.winnerId===d.u1;
+  const bWin = d.winnerId && d.winnerId===d.u2;
+  return (
+    <div className="bmd-bg" onClick={(e)=>{ if(e.currentTarget===e.target) onClose(); }}>
+      <div className="bmd">
+        <div className="bmd-grip"/>
+        <div className="bmd-rd">{d.round}</div>
+        <div className="bmd-score">
+          <div className={"bmd-side"+(aWin?" win":(d.winnerId?" lose":""))}><div className="n">{d.a.name}</div><div className="pp">{Number(d.a.total).toFixed(1)}</div></div>
+          <div className="bmd-vs">{d.winnerId?"vs":"LIVE"}</div>
+          <div className={"bmd-side"+(bWin?" win":(d.winnerId?" lose":""))}><div className="n">{d.b.name}</div><div className="pp">{Number(d.b.total).toFixed(1)}</div></div>
+        </div>
+        {section(d.a, aWin)}
+        {section(d.b, bWin)}
+      </div>
+    </div>
+  );
+}
 const BETSLIP_ENABLED = false; // flip on once affiliate + compliance (21+, geo, RG) are ready
 function betslipAllowedHere(){ return true; } // TODO: geo-gate to legal states + 21+ age check
 function BetslipButton({ bet, IOS }){
@@ -1249,6 +1357,8 @@ export default function App() {
  const [realLeagues, setRealLeagues] = useState([]);
  const [leaguesLoading, setLeaguesLoading] = useState(true);
  const [leagueMembers, setLeagueMembers] = useState([]);
+ const [bracketMatchups, setBracketMatchups] = useState([]);
+ const [bracketDetail, setBracketDetail] = useState(null);
  const [weekPicks, setWeekPicks] = useState([]);
  const [liveSchedule, setLiveSchedule] = useState([]);
  const [realStandings, setRealStandings] = useState([]);
@@ -2629,6 +2739,33 @@ export default function App() {
  })));
  };
 
+ const fetchBracket = async (lid) => {
+ try {
+ const { data } = await supabase.from("matchups").select("*").eq("league_id", lid);
+ setBracketMatchups(data||[]);
+ } catch(e) { setBracketMatchups([]); }
+ };
+
+ const openBracketMatch = async (mu) => {
+ try {
+ const u1=mu.user1_id, u2=mu.user2_id; if(!u1||!u2) return;
+ const { data } = await supabase.from("picks").select("user_id,slot,pick_name,odds,multiplier,result,points_earned").eq("league_id",activeLeague.id).eq("week",mu.week).in("user_id",[u1,u2]);
+ const rows = data||[];
+ const build = (id, storedPts) => {
+ const ps = rows.filter(r=>r.user_id===id).map(r=>({ slot:(r.slot||"").split("_")[0], name:r.pick_name||"Pick", sub:(r.multiplier?r.multiplier+"x":"")+(r.odds!=null&&r.odds!==""?" · "+r.odds:""), res:r.result==="W"?"W":(r.result==="L"?"L":"pend"), pts:parseFloat(r.points_earned||0) }));
+ const computed = ps.reduce((a,pk)=>a+(pk.res==="W"?pk.pts:0),0);
+ const mem = leagueMembers.find(x=>x.userId===id);
+ return { name: mem?mem.name:"Player", you:id===(user&&user.id), total:(mu.winner_id!=null && storedPts!=null)?Number(storedPts):computed, picks:ps };
+ };
+ const rn = brkRoundName(((bracketMatchups||[]).filter(x=>x.week===mu.week)).length||1);
+ setBracketDetail({ round: rn+" · Week "+mu.week, week:mu.week, winnerId:mu.winner_id, u1, u2, a:build(u1, mu.user1_points), b:build(u2, mu.user2_points) });
+ } catch(e) {}
+ };
+
+ useEffect(()=>{
+ if(screen==="league" && activeLeague && activeLeague.league_type==="bracket" && (leagueTab==="bracket"||leagueTab==="schedule")){ fetchBracket(activeLeague.id); }
+ }, [screen, leagueTab, activeLeagueId]);
+
  const fetchLeagues = async (uid) => {
  setLeaguesLoading(true);
  const {data:members} = await supabase.from("league_members").select("league_id, is_commissioner").eq("user_id", uid);
@@ -3155,6 +3292,59 @@ export default function App() {
  .pc-bs-fill{height:100%;border-radius:5px;}
  .pc-bs-prog{display:flex;justify-content:space-between;font-size:11.5px;font-weight:800;margin-top:8px;color:#fff;}
  .pc-toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:#1c1c22;border:1px solid rgba(255,255,255,.15);border-radius:12px;padding:11px 18px;font-size:13px;font-weight:700;color:#fff;z-index:99999;}
+ .brk-scroll{overflow-x:auto;overflow-y:hidden;padding:4px 2px 10px;-webkit-overflow-scrolling:touch;}
+ .brk-tree{display:flex;gap:36px;width:max-content;height:500px;}
+ .brk-round{display:flex;flex-direction:column;justify-content:space-around;min-width:150px;position:relative;padding-top:18px;}
+ .brk-rhead{position:absolute;top:0;left:0;right:0;text-align:center;font-size:9.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.4);}
+ .brk-cell{position:relative;display:flex;align-items:center;}
+ .brk-match{position:relative;width:100%;background:linear-gradient(160deg,#16161d,#0e0e13);border:1px solid rgba(255,255,255,.08);border-radius:11px;overflow:hidden;cursor:pointer;transition:transform .12s;}
+ .brk-match:active{transform:scale(.97);}
+ .brk-match.you{border-color:rgba(10,132,255,.55);box-shadow:0 0 16px -6px rgba(10,132,255,.6);}
+ .brk-match.dead{cursor:default;}
+ .brk-seat{display:flex;align-items:center;gap:6px;padding:8px 9px;}
+ .brk-seat+.brk-seat{border-top:1px solid rgba(255,255,255,.07);}
+ .brk-sd{font-size:9px;font-weight:800;color:rgba(255,255,255,.32);width:12px;flex-shrink:0;}
+ .brk-nm{font-size:12px;font-weight:800;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+ .brk-pts{font-size:11.5px;font-weight:800;font-variant-numeric:tabular-nums;}
+ .brk-seat.win .brk-pts{color:#30D158;}
+ .brk-seat.lose{opacity:.4;} .brk-seat.lose .brk-nm{text-decoration:line-through;text-decoration-color:rgba(255,255,255,.3);}
+ .brk-seat.tbd .brk-nm{color:rgba(255,255,255,.3);font-style:italic;font-weight:700;}
+ .brk-lock{margin-left:2px;flex-shrink:0;}
+ .brk-conn{position:absolute;left:100%;width:18px;box-sizing:border-box;border-right:2px solid rgba(255,255,255,.16);}
+ .brk-conn.down{top:50%;border-bottom:2px solid rgba(255,255,255,.16);}
+ .brk-conn.up{bottom:50%;border-top:2px solid rgba(255,255,255,.16);}
+ .brk-connf{position:absolute;left:100%;top:50%;width:18px;height:2px;background:rgba(255,255,255,.16);}
+ .brk-stub{position:absolute;right:100%;top:50%;width:18px;height:2px;background:rgba(255,255,255,.16);}
+ .brk-champ{display:flex;flex-direction:column;justify-content:center;min-width:150px;position:relative;padding-top:18px;}
+ .brk-cup{position:relative;border-radius:15px;padding:18px 12px;text-align:center;border:1.5px solid rgba(255,214,10,.5);background:linear-gradient(165deg,#2a230a,#12100a);box-shadow:0 0 30px -10px rgba(255,214,10,.5);}
+ .brk-cup .lab{font-size:9.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#FFD60A;margin-top:8px;}
+ .brk-cup .cn{font-size:16px;font-weight:900;margin-top:5px;}
+ .brk-cup .cn.tbd{color:rgba(255,255,255,.4);font-style:italic;}
+ .bmd-bg{position:fixed;inset:0;z-index:9600;background:rgba(2,3,8,.72);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);display:flex;align-items:flex-end;justify-content:center;}
+ .bmd{width:390px;max-width:100vw;max-height:88vh;overflow-y:auto;background:#111;border-radius:22px 22px 0 0;border:1px solid rgba(255,255,255,.1);animation:bmdUp .26s cubic-bezier(.2,.8,.2,1);padding-bottom:30px;}
+ @keyframes bmdUp{from{transform:translateY(40px);}to{transform:translateY(0);}}
+ .bmd-grip{width:38px;height:4px;border-radius:3px;background:rgba(255,255,255,.2);margin:10px auto 8px;}
+ .bmd-rd{text-align:center;font-size:10px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:12px;}
+ .bmd-score{display:flex;align-items:center;justify-content:center;gap:10px;padding:0 18px 16px;border-bottom:1px solid rgba(255,255,255,.08);}
+ .bmd-side{flex:1;text-align:center;min-width:0;}
+ .bmd-side .n{font-size:14px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+ .bmd-side .pp{font-size:32px;font-weight:900;letter-spacing:-1px;margin-top:2px;}
+ .bmd-side.win .pp{color:#30D158;} .bmd-side.lose{opacity:.45;}
+ .bmd-vs{font-size:11px;font-weight:800;color:rgba(255,255,255,.3);flex-shrink:0;}
+ .bmd-sec{padding:14px 16px 2px;}
+ .bmd-sech{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+ .bmd-sech .nm{font-size:13px;font-weight:900;display:inline-flex;align-items:center;gap:6px;}
+ .bmd-tag{font-size:8px;font-weight:900;letter-spacing:.06em;padding:2px 6px;border-radius:5px;}
+ .bmd-sech .tot{font-size:14px;font-weight:900;}
+ .bmd-row{display:flex;align-items:center;gap:9px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.06);}
+ .bmd-chip{font-size:8px;font-weight:800;padding:3px 0;border-radius:5px;background:rgba(255,255,255,.08);color:rgba(255,255,255,.55);flex-shrink:0;width:42px;text-align:center;}
+ .bmd-pk{flex:1;min-width:0;}
+ .bmd-pk .pn{font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+ .bmd-pk .ps{font-size:10px;color:rgba(255,255,255,.38);margin-top:1px;}
+ .bmd-res{text-align:right;flex-shrink:0;min-width:52px;}
+ .bmd-res .rp{font-size:13px;font-weight:800;}
+ .bmd-res .rl{font-size:8.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;margin-top:1px;}
+ .bmd-empty{padding:30px 20px;text-align:center;color:rgba(255,255,255,.4);font-size:13px;}
  .app-grain{position:absolute;inset:0;pointer-events:none;z-index:60;opacity:.04;mix-blend-mode:overlay;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");}
  .app-glow{position:absolute;top:0;left:0;right:0;height:240px;pointer-events:none;z-index:0;background:radial-gradient(78% 150px at 50% -30px,rgba(10,132,255,0.12),transparent 72%);}
  .phone{background:radial-gradient(125% 72% at 50% -8%, #0c1426 0%, #060608 52%)!important;}
@@ -7490,8 +7680,30 @@ export default function App() {
 
  {/* Tabs */}
  <div className="seg-control" style={{marginBottom:14}}>
- {["standings","trophies","schedule"].map(t=><div key={t} className={`seg-item ${leagueTab===t?"on":""}`} onClick={()=>setLeagueTab(t)}>{t.charAt(0).toUpperCase()+t.slice(1)}</div>)}
+ {(activeLeague.league_type==="bracket"?["standings","trophies","bracket"]:["standings","trophies","schedule"]).map(t=><div key={t} className={`seg-item ${leagueTab===t?"on":""}`} onClick={()=>setLeagueTab(t)}>{t.charAt(0).toUpperCase()+t.slice(1)}</div>)}
  </div>
+
+ {(leagueTab==="bracket"||(leagueTab==="schedule"&&activeLeague.league_type==="bracket"))&&(
+ <>
+ {(()=>{
+ const targetSize = activeLeague.target_size||activeLeague.max_members||8;
+ const isFull = leagueMembers.length >= targetSize;
+ if(!isFull) return (
+ <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:16,padding:"36px 24px",textAlign:"center"}}>
+ <div style={{fontSize:18,fontWeight:700,color:"#fff",marginBottom:8}}>Bracket Locks When Full</div>
+ <div style={{fontSize:14,color:IOS.label3,lineHeight:1.6,marginBottom:20}}>The tournament bracket generates once you reach {targetSize} players.</div>
+ <div style={{background:"rgba(255,255,255,0.08)",borderRadius:8,height:8,overflow:"hidden",marginBottom:10}}>
+ <div style={{height:"100%",borderRadius:8,background:`linear-gradient(90deg,${IOS.blue},${IOS.purple})`,width:`${(leagueMembers.length/targetSize)*100}%`,transition:"width .4s"}}/>
+ </div>
+ <div style={{fontSize:13,fontWeight:700,color:IOS.blue}}>{leagueMembers.length} / {targetSize} players</div>
+ {activeLeague.isCommissioner && <div style={{marginTop:14,fontSize:12,color:IOS.label3}}>Invite code: <span style={{fontWeight:700,color:"#fff",letterSpacing:2}}>{activeLeague.invite_code||activeLeague.inviteCode}</span></div>}
+ </div>
+ );
+ return <BracketView matchups={bracketMatchups} members={leagueMembers} uid={user&&user.id} IOS={IOS} onOpenMatch={openBracketMatch}/>;
+ })()}
+ {bracketDetail && <BracketMatchSheet d={bracketDetail} IOS={IOS} onClose={()=>setBracketDetail(null)}/>}
+ </>
+ )}
 
  {leagueTab==="standings"&&(
  <>
@@ -7654,7 +7866,7 @@ export default function App() {
  </div>
  )}
 
- {leagueTab==="schedule"&&(
+ {leagueTab==="schedule"&&activeLeague.league_type!=="bracket"&&(
  <>
  {(()=>{
  const targetSize = activeLeague.target_size||activeLeague.max_members||8;
