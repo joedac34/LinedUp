@@ -44,8 +44,24 @@ async function sbPost(path, body) {
     await fetch(`${SB_URL}/rest/v1/${path}`, { method: "POST", headers: { ...sbHeaders, Prefer: "return=minimal" }, body: JSON.stringify(body) });
   } catch (e) { /* never let a notification failure break grading */ }
 }
+// Per-run cache of each user's "Picks Graded" notification preference so we only
+// look up each user once. Cleared at the start of every grade run (see handler)
+// so a toggle change is respected on the next run even on a warm container.
+const _notifPrefCache = new Map();
+async function wantsGradeNotif(userId) {
+  if (!userId) return false;
+  if (_notifPrefCache.has(userId)) return _notifPrefCache.get(userId);
+  let want = true; // default ON when the column is null/missing
+  try {
+    const rows = await sbGet(`users?id=eq.${userId}&select=notif_grades`);
+    if (Array.isArray(rows) && rows.length) want = rows[0].notif_grades !== false;
+  } catch (e) { want = true; }
+  _notifPrefCache.set(userId, want);
+  return want;
+}
 async function notifyPick(pick, league, result, pts, legs) {
   try {
+    if (!(await wantsGradeNotif(pick.user_id))) return; // respects the "Picks Graded" toggle
     const won = result === "W";
     const what = legs > 1 ? `${legs}-leg parlay` : pick.pick_name;
     await sbPost("notifications", {
@@ -444,6 +460,7 @@ export default async function handler(req, res) {
   }
 
   try {
+    _notifPrefCache.clear(); // fresh prefs each run (warm containers reuse module scope)
     const results = { graded: 0, skipped: 0, errors: [], reasons: {}, samples: [], debug: { scoresCompleted: [], scoresTotal: 0, indexedPlayers: 0 } };
     const playerIndexCache = {}; // sport -> { player: stats } (shared across leagues in this run)
     const scoresCacheBySport = {}; // sport -> ESPN games (fetched once per run, fresh each invocation)
