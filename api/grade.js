@@ -598,6 +598,31 @@ async function maybeRemindPicks(league) {
   } catch (e) { /* never let a reminder failure break grading */ }
 }
 
+// Grades PLOK's own recommendations (plok_calls) with the SAME settlement engine
+// as user picks, so PLOK keeps an auditable, self-graded track record. Calls that
+// can't be resolved yet (game not final, player prop without an index) stay pending.
+async function gradePlokCalls() {
+  try {
+    const calls = await sbGet(`plok_calls?result=eq.pending&select=*`);
+    if (!Array.isArray(calls) || !calls.length) return;
+    const scoresBySport = {};
+    for (const call of calls) {
+      const sport = call.sport;
+      if (!sport || !ESPN_MAP[sport]) continue;
+      if (!scoresBySport[sport]) {
+        try { scoresBySport[sport] = await fetchScoresESPN(sport); } catch (e) { scoresBySport[sport] = []; }
+      }
+      const games = scoresBySport[sport];
+      const pseudo = { slot: call.bet_type || "ml", pick_name: call.selection || "", game: call.game || "", game_date: call.game_date || null };
+      let res = null;
+      try { res = gradePick(pseudo, games, {}, {}); } catch (e) { res = null; }
+      if (res === "W" || res === "L") {
+        await sbPatch(`plok_calls?id=eq.${call.id}`, { result: res });
+      }
+    }
+  } catch (e) { /* never let PLOK grading break the run */ }
+}
+
 export default async function handler(req, res) {
   // Auth check — allow GET from Vercel cron (Authorization header) or POST with secret
   const cronSecret = process.env.CRON_SECRET;
@@ -761,6 +786,8 @@ export default async function handler(req, res) {
       }
       await settleBracketRound(league, league.current_week);
     }
+
+    await gradePlokCalls();
 
     return res.status(200).json({ ok: true, ...results });
   } catch (err) {

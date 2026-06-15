@@ -1139,6 +1139,34 @@ function AiInsightBubble({ item, IOS, onAddToSlip }) {
         </div>
       </div>
     )}
+    {phase>=1 && data.verdict && data.verdict!=="none" && (()=>{
+      const v = data.verdict;
+      const conv = Math.max(0, Math.min(100, data.conviction||0));
+      const isPass = v==="pass"||v==="fade";
+      const tc = v==="strong"?IOS.green : v==="lean"?IOS.blue : v==="fade"?IOS.red : IOS.label3;
+      const vlabel = v==="strong"?"Strong lean" : v==="lean"?"Lean" : v==="fade"?"Fade" : "Pass";
+      return (
+        <div className="ai-rise" style={{background:"rgba(255,255,255,0.04)",border:`0.5px solid ${tc}3a`,borderRadius:11,padding:"11px 12px",marginBottom:11}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div style={{fontSize:9,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:"rgba(255,255,255,0.4)"}}>Plok read</div>
+            <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.04em",textTransform:"uppercase",color:tc,background:`${tc}1f`,borderRadius:6,padding:"3px 8px"}}>{vlabel}</div>
+          </div>
+          {!isPass ? (
+            <div style={{display:"flex",alignItems:"center",gap:9,marginTop:8}}>
+              <div style={{flex:1,height:7,borderRadius:5,background:"rgba(255,255,255,0.08)",overflow:"hidden"}}>
+                <div style={{height:"100%",width:`${conv}%`,borderRadius:5,background:`linear-gradient(90deg,${tc},${tc}aa)`,transition:"width .6s ease"}}/>
+              </div>
+              <div style={{fontSize:13,fontWeight:800,color:tc,minWidth:28,textAlign:"right"}}>{conv}</div>
+            </div>
+          ) : (
+            <div style={{display:"flex",alignItems:"flex-start",gap:7,marginTop:7}}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={tc} strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginTop:1}}><circle cx="12" cy="12" r="9"/>{v==="fade"?<path d="M15 9l-6 6M9 9l6 6"/>:<line x1="8" y1="12" x2="16" y2="12"/>}</svg>
+              <div style={{fontSize:11.5,lineHeight:1.4,color:"rgba(255,255,255,0.72)"}}>{v==="fade"?"Plok leans the other way here — this side doesn't have the edge.":"Not enough here to love it. Save your slip for a better spot."}</div>
+            </div>
+          )}
+        </div>
+      );
+    })()}
     {phase>=1 && !data.matchup && data.keyStats && data.keyStats.length>0 && (
       <div className="ai-rise" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7,marginBottom:11}}>
         {data.keyStats.slice(0,4).map((s,si)=>(
@@ -1861,6 +1889,7 @@ export default function App() {
   const [aiInput, setAiInput] = useState("");
   const [aiBusy, setAiBusy] = useState(false);
   const [aiReturn, setAiReturn] = useState("home");
+  const [plokRecord, setPlokRecord] = useState(null);
   const aiSuggestions = aiInput.trim().length>=2
     ? ALL_BETS.filter(b => ((b.pick||"")+" "+(b.game||"")).toLowerCase().includes(aiInput.trim().toLowerCase())).slice(0,6)
     : [];
@@ -1900,6 +1929,21 @@ export default function App() {
     setPicks(prev=>prev.map((pp,i)=> i===dest ? {...pp, bet, category, isParlay:false, parlayLegs:[]} : pp));
     return true;
   };
+  const fetchPlokRecord = async () => {
+    if(!user?.id) return;
+    try{
+      const { data } = await supabase.from("plok_calls").select("*").eq("user_id",user.id).in("result",["W","L"]).order("created_at",{ascending:false});
+      const arr = data||[];
+      let w=0,l=0,units=0;
+      arr.forEach(c=>{
+        const o = parseFloat(String(c.odds||"").replace("+",""));
+        const dec = !isNaN(o) ? (o>0?o/100+1:100/Math.abs(o)+1) : 2;
+        if(c.result==="W"){ w++; units += (dec-1); } else { l++; units -= 1; }
+      });
+      setPlokRecord({ wins:w, losses:l, units:parseFloat(units.toFixed(1)), recent:arr.slice(0,5) });
+    }catch(e){}
+  };
+  useEffect(()=>{ if(screen==="ai" && user?.id) fetchPlokRecord(); },[screen, user]);
   const askInsight = async (ctx, label, bet, category) => {
     const item = { role:"ai", label: label||ctx.selection, bet:bet||null, category:category||null, loading:true };
     setAiThread(prev=>[...prev, { role:"user", text: label||ctx.selection }, item]);
@@ -1908,6 +1952,14 @@ export default function App() {
       const r = await fetch("/api/insight", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(ctx) });
       const data = await r.json();
       setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, data: r.ok?data:null, error: r.ok?null:(data.error||"Couldn't load insight")} : x));
+      if(r.ok && data && (data.verdict==="strong"||data.verdict==="lean") && ctx.betType!=="chat" && ctx.game && user?.id){
+        try{
+          const { data:dup } = await supabase.from("plok_calls").select("id").eq("user_id",user.id).eq("selection",ctx.selection).eq("game",ctx.game).eq("result","pending").limit(1);
+          if(!dup || !dup.length){
+            await supabase.from("plok_calls").insert({ user_id:user.id, sport:ctx.sport, bet_type:ctx.betType, selection:ctx.selection, game:ctx.game, line:ctx.line!=null?String(ctx.line):null, odds:ctx.odds||null, conviction:data.conviction||null, verdict:data.verdict, game_date:(bet&&bet.gameTime)||null });
+          }
+        }catch(e){}
+      }
     }catch(e){
       setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, error:"Network error — try again"} : x));
     }finally{ setAiBusy(false); }
@@ -8121,6 +8173,34 @@ export default function App() {
               <button onClick={()=>{ if(!isPro){setShowPaywall("ai");return;} setFindBetOpen(true); }} style={{flexShrink:0,display:"inline-flex",alignItems:"center",gap:5,padding:"7px 11px",borderRadius:10,background:`${IOS.blue}1a`,border:`1px solid ${IOS.blue}40`,color:IOS.blue,fontSize:11.5,fontWeight:800,cursor:"pointer"}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Find +EV</button>
             </div>
             <div className="gbx-scroll" style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:10,padding:"14px 14px 16px"}}>
+              {aiThread.length===0 && plokRecord && (plokRecord.wins+plokRecord.losses)>0 && (()=>{
+                const w=plokRecord.wins, l=plokRecord.losses, u=plokRecord.units;
+                const pct = (w+l)>0 ? Math.round(w/(w+l)*100) : 0; const up = u>=0;
+                const stat = (val,lab,col)=>(<div><div style={{fontSize:23,fontWeight:900,color:col||"#fff",letterSpacing:-0.5,lineHeight:1}}>{val}</div><div style={{fontSize:9,fontWeight:700,color:"rgba(255,255,255,0.4)",marginTop:3,textTransform:"uppercase",letterSpacing:"0.04em"}}>{lab}</div></div>);
+                return (
+                  <div className="ai-rise" style={{background:`linear-gradient(135deg,${IOS.blue}1a,rgba(255,255,255,0.03))`,border:`0.5px solid ${IOS.blue}33`,borderRadius:14,padding:"13px 14px"}}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                      <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:"rgba(255,255,255,0.5)"}}>Plok's track record</div>
+                      <div style={{fontSize:9.5,fontWeight:700,color:"rgba(255,255,255,0.35)"}}>graded calls</div>
+                    </div>
+                    <div style={{display:"flex",alignItems:"baseline",gap:18}}>
+                      {stat(`${w}-${l}`,"Record")}
+                      {stat(`${pct}%`,"Hit rate")}
+                      {stat(`${up?"+":""}${u}u`,"Units",up?IOS.green:IOS.red)}
+                    </div>
+                    {plokRecord.recent && plokRecord.recent.length>0 && (
+                      <div style={{marginTop:11,paddingTop:10,borderTop:"0.5px solid rgba(255,255,255,0.07)",display:"flex",flexDirection:"column",gap:6}}>
+                        {plokRecord.recent.slice(0,3).map((c,ci)=>(
+                          <div key={ci} style={{display:"flex",alignItems:"center",gap:8,fontSize:11.5}}>
+                            <span style={{width:16,height:16,borderRadius:4,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:900,color:c.result==="W"?IOS.green:IOS.red,background:c.result==="W"?`${IOS.green}1f`:`${IOS.red}1f`}}>{c.result}</span>
+                            <span style={{flex:1,minWidth:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",color:"rgba(255,255,255,0.75)",fontWeight:600}}>{c.selection}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
               {aiThread.length===0 && (
                 <div style={{margin:"auto 0",textAlign:"center",padding:"20px 10px"}}>
                   <svg width="40" height="40" viewBox="0 0 24 24" fill="rgba(255,255,255,0.5)" style={{marginBottom:12}}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg>

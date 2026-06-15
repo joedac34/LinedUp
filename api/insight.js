@@ -440,8 +440,10 @@ const SCHEMA = {
     bullCase: { type: "string" },
     bearCase: { type: "string" },
     yourAngle: { type: "string" },
+    conviction: { type: "integer" },
+    verdict: { type: "string", enum: ["strong", "lean", "pass", "fade", "none"] },
   },
-  required: ["summary", "keyStats", "trends", "bullCase", "bearCase", "yourAngle"],
+  required: ["summary", "keyStats", "trends", "bullCase", "bearCase", "yourAngle", "conviction", "verdict"],
 };
 
 async function generate(ctx, stats) {
@@ -461,7 +463,7 @@ async function generate(ctx, stats) {
       "In this chat you do NOT have live stats, odds, or injuries for any specific game, so NEVER state a specific stat, line, number, or prediction as fact, and never guess a winner. " +
       "If the user asks who will win, for a number, or for a pick on a real game, tell them you can't pull live data in open chat and point them to: tapping a bet on their board (for a data-backed read of that team or player) or the 'Find a bet' button (for a value scan of a game). " +
       "Be conversational, warm, and concise (2-4 sentences). Screening and education, not betting advice; never suggest stake sizes. " +
-      "Put your entire reply in the summary field. Return keyStats and trends as empty arrays, bullCase and bearCase as empty strings, and yourAngle as an empty string. " +
+      "Put your entire reply in the summary field. Return keyStats and trends as empty arrays, bullCase and bearCase as empty strings, yourAngle as an empty string, conviction as 0, and verdict as 'none'. " +
       "You also have the user's own PickLock history in PROFILE (when present) — you MAY reference their archetype, hot/cold streak, or strong/weak bet types to make the chat personal and specific.";
     user = `USER MESSAGE\n${ctx.question || ctx.selection}` + profileBlock;
   } else {
@@ -479,7 +481,8 @@ async function generate(ctx, stats) {
       "trends: up to 3 short notes, each anchored to a specific number, or empty if none. " +
       "ALWAYS return keyStats as an EMPTY array — the app renders factual stats separately. Never imply a metric that is not an explicit number in DATA. " +
       "Be analytical, not a guarantee. Entertainment, not financial advice. " +
-      "You ALSO have the user's own PickLock betting history in the PROFILE block. Set 'yourAngle' to ONE short, specific sentence connecting THIS bet to their tendencies — especially their record in this exact bet type (the line marked 'most relevant') or their archetype/streak. Be a sharp, encouraging coach: flag when this is a spot they are historically weak or strong. Use ONLY numbers from PROFILE, and return yourAngle as an empty string when PROFILE is absent or nothing is genuinely relevant.";
+      "You ALSO have the user's own PickLock betting history in the PROFILE block. Set 'yourAngle' to ONE short, specific sentence connecting THIS bet to their tendencies — especially their record in this exact bet type (the line marked 'most relevant') or their archetype/streak. Be a sharp, encouraging coach: flag when this is a spot they are historically weak or strong. Use ONLY numbers from PROFILE, and return yourAngle as an empty string when PROFILE is absent or nothing is genuinely relevant. " +
+      "Finally, give your verdict on taking THIS bet: set 'conviction' to an integer 0-100 for how strong a play it is based ONLY on DATA (records, scoring, line, odds) — be honest and use the full range, not just 50-70. Set 'verdict' to one of: 'strong' (a clear, well-supported play), 'lean' (mild edge), 'pass' (DATA is thin or there is no real edge — tell them to save their slip), or 'fade' (DATA points to the OTHER side). Never manufacture conviction; a real handicapper passes often. If DATA is largely missing, verdict must be 'pass' with low conviction.";
     user =
       `BET\n- Sport: ${ctx.sport}\n- Type: ${ctx.betType}\n- Selection: ${ctx.selection}` +
       (ctx.line != null ? `\n- Line: ${ctx.line}` : "") +
