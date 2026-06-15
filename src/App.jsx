@@ -1898,6 +1898,8 @@ export default function App() {
     { key:"contrarian", name:"The Contrarian" },
     { key:"professor", name:"The Professor" },
   ];
+  const [plokBuild, setPlokBuild] = useState(null);
+  const [plokBuilding, setPlokBuilding] = useState(false);
   const aiSuggestions = aiInput.trim().length>=2
     ? ALL_BETS.filter(b => ((b.pick||"")+" "+(b.game||"")).toLowerCase().includes(aiInput.trim().toLowerCase())).slice(0,6)
     : [];
@@ -1963,6 +1965,64 @@ export default function App() {
     persona: plokPersona,
     leagueCtx: plokLeagueCtx(),
   });
+  const buildPlokSlip = async () => {
+    if(!isPro){ setShowPaywall("ai"); return; }
+    if(plokBuilding) return;
+    const baseSlots = freshSlots();
+    const hasCfg = baseSlots.every(sl=>sl.category);
+    const slotSpec = hasCfg
+      ? baseSlots.map((sl,i)=>({idx:i, category:sl.category, mult: sl.mult||null}))
+      : [{idx:0,category:"ml",mult:null},{idx:1,category:"spread",mult:null},{idx:2,category:"ou",mult:null},{idx:3,category:"prop",mult:null},{idx:4,category:"longshot",mult:null}];
+    const neededCats = [...new Set(slotSpec.map(z=>z.category))];
+    const candidates = {}; let missing = false;
+    neededCats.forEach(cat=>{
+      const list = (ALL_BETS||[]).filter(b=>b.category===cat).slice(0,6).map(b=>({id:b.id, pick:b.pick, odds:b.odds, game:b.game}));
+      if(!list.length) missing = true;
+      candidates[cat] = list;
+    });
+    if(missing){ setPlokBuild({error:"Odds are still loading for this slate — try again in a moment."}); return; }
+    const L = plokLeagueCtx();
+    let strategy = "balanced";
+    if(L){ if((L.matchupGap!=null&&L.matchupGap<0)||(L.finalWeek&&L.leaderGap!=null&&L.leaderGap>0)) strategy="ceiling"; else if((L.matchupGap!=null&&L.matchupGap>0)||L.leading) strategy="protect"; }
+    setPlokBuilding(true); setPlokBuild(null);
+    try{
+      const r = await fetch("/api/buildslip", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ sport:(leagueSports[0]||"nfl"), userId:user?.id, persona:plokPersona, userStats:plokUserStats(), leagueCtx:L, strategy, slots:slotSpec, candidates })});
+      const data = await r.json();
+      if(!r.ok){ setPlokBuild({error:data.error||"Couldn't build a slip — try again."}); return; }
+      const byId = {}; (ALL_BETS||[]).forEach(b=>{ byId[b.id]=b; });
+      const flex = baseSlots.map(sl=>({...sl}));
+      (data.picks||[]).forEach(pk=>{
+        const idx = pk.idx; if(idx==null || !flex[idx]) return;
+        const cat = slotSpec[idx]?.category;
+        const mult = (slotSpec[idx]?.mult) || pk.mult || (idx+1);
+        if(cat==="longshot"){
+          const legs = (pk.ids||[]).map(id=>byId[id]).filter(Boolean).map(b=>({id:b.id,pick:b.pick,game:b.game||"",odds:b.odds,impliedOdds:b.impliedOdds}));
+          if(legs.length>=2) flex[idx] = {...flex[idx], bet:null, isParlay:true, parlayLegs:legs, category:"longshot", mult, _reason:pk.reason};
+        } else {
+          const b = byId[(pk.ids||[])[0]];
+          if(b) flex[idx] = {...flex[idx], bet:b, isParlay:false, parlayLegs:[], category:cat, mult, _reason:pk.reason};
+        }
+      });
+      if(!hasCfg){
+        const order = flex.map((sl,i)=>i).filter(i=> flex[i].bet || flex[i].isParlay);
+        order.sort((a,b)=> (flex[b].mult||0)-(flex[a].mult||0));
+        order.forEach((i,rank)=>{ flex[i] = {...flex[i], mult: 5-rank}; });
+      }
+      const CATMETA = { ml:{label:"Moneyline",color:IOS.blue}, spread:{label:"Spread",color:IOS.green}, ou:{label:"Over/Under",color:IOS.orange}, prop:{label:"Prop",color:IOS.yellow}, longshot:{label:"Parlay",color:IOS.pink} };
+      const items = flex.map(sl=>({ filled: !!(sl.bet||sl.isParlay), meta: CATMETA[sl.category]||{label:sl.category,color:IOS.blue}, mult: sl.mult, reason: sl._reason||"", name: sl.isParlay ? sl.parlayLegs.map(l=>l.pick).join(" + ") : (sl.bet?.pick||"—"), odds: sl.isParlay ? "" : (sl.bet?.odds||"") }))
+        .filter(it=>it.filled).sort((a,b)=> (b.mult||0)-(a.mult||0));
+      const cleanFlex = flex.map(sl=>{ const c={...sl}; delete c._reason; return c; });
+      if(!items.length){ setPlokBuild({error:"Plok couldn't fill the slip from this slate — try again."}); return; }
+      setPlokBuild({ strategy: data.strategy, items, flex: cleanFlex });
+    }catch(e){ setPlokBuild({error:"Network error — try again."}); }
+    finally{ setPlokBuilding(false); }
+  };
+  const applyPlokSlip = () => {
+    if(!plokBuild || !plokBuild.flex) return;
+    if(isSoloMode) setSoloFlexPicks(plokBuild.flex); else setFlexPicks(plokBuild.flex);
+    setPlokBuild(null);
+    setScreen("picks");
+  };
   const aiAddToSlip = (bet, category) => {
     const picks = isSoloMode ? soloFlexPicks : flexPicks;
     const setPicks = isSoloMode ? setSoloFlexPicks : setFlexPicks;
@@ -8224,6 +8284,42 @@ export default function App() {
               })}
             </div>
             <div className="gbx-scroll" style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:10,padding:"14px 14px 16px"}}>
+              {plokBuilding && (
+                <div className="ai-rise" style={{display:"flex",alignItems:"center",gap:9,background:"rgba(255,255,255,0.04)",border:`0.5px solid ${IOS.blue}33`,borderRadius:12,padding:"14px"}}>
+                  <span className="ai-dot"/><span className="ai-dot" style={{animationDelay:".15s"}}/><span className="ai-dot" style={{animationDelay:".3s"}}/>
+                  <span style={{fontSize:12.5,fontWeight:700,color:"rgba(255,255,255,0.7)"}}>Plok is building your slip…</span>
+                </div>
+              )}
+              {plokBuild && plokBuild.error && (
+                <div className="ai-rise" style={{background:"rgba(255,69,58,0.08)",border:`0.5px solid ${IOS.red}33`,borderRadius:12,padding:"12px 14px",fontSize:12.5,color:"rgba(255,255,255,0.75)"}}>{plokBuild.error}</div>
+              )}
+              {plokBuild && plokBuild.items && (
+                <div className="ai-rise" style={{background:`linear-gradient(135deg,${IOS.blue}1a,rgba(255,255,255,0.03))`,border:`0.5px solid ${IOS.blue}33`,borderRadius:14,padding:"13px 14px"}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                    <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:IOS.blue}}>Plok built your slip</div>
+                    <div onClick={()=>setPlokBuild(null)} style={{cursor:"pointer",color:"rgba(255,255,255,0.4)",fontSize:17,lineHeight:1}}>×</div>
+                  </div>
+                  {plokBuild.strategy && <div style={{fontSize:12.5,lineHeight:1.45,color:"rgba(255,255,255,0.82)",marginBottom:12}}>{plokBuild.strategy}</div>}
+                  <div style={{display:"flex",flexDirection:"column",gap:9}}>
+                    {plokBuild.items.map((it,ii)=>(
+                      <div key={ii} style={{display:"flex",alignItems:"flex-start",gap:9}}>
+                        <div style={{width:30,height:30,flexShrink:0,borderRadius:8,background:`${it.meta.color}1f`,border:`0.5px solid ${it.meta.color}40`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:it.meta.color}}>{it.mult}×</div>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{display:"flex",alignItems:"baseline",gap:6}}>
+                            <span style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.04em",textTransform:"uppercase",color:it.meta.color,flexShrink:0}}>{it.meta.label}</span>
+                            <span style={{fontSize:13,fontWeight:700,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{it.name}{it.odds?<span style={{color:"rgba(255,255,255,0.4)",fontWeight:600,marginLeft:5}}>{it.odds}</span>:null}</span>
+                          </div>
+                          {it.reason && <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",marginTop:2,lineHeight:1.35}}>{it.reason}</div>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{display:"flex",gap:8,marginTop:13}}>
+                    <button onClick={applyPlokSlip} style={{flex:1,background:IOS.blue,border:"none",borderRadius:11,padding:"11px",fontSize:13,fontWeight:800,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Review &amp; lock in slip</button>
+                    <button onClick={buildPlokSlip} style={{background:"rgba(255,255,255,0.08)",border:"none",borderRadius:11,padding:"11px 14px",fontSize:13,fontWeight:800,color:"rgba(255,255,255,0.8)",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Rebuild</button>
+                  </div>
+                </div>
+              )}
               {aiThread.length===0 && plokRecord && (plokRecord.wins+plokRecord.losses)>0 && (()=>{
                 const w=plokRecord.wins, l=plokRecord.losses, u=plokRecord.units;
                 const pct = (w+l)>0 ? Math.round(w/(w+l)*100) : 0; const up = u>=0;
@@ -8265,6 +8361,10 @@ export default function App() {
                   <div style={{marginTop:16,paddingTop:16,borderTop:"0.5px solid rgba(255,255,255,0.07)"}}>
                     <button onClick={()=>{ if(!isPro){setShowPaywall("ai");return;} setFindBetOpen(true); }} style={{display:"inline-flex",alignItems:"center",gap:7,padding:"10px 16px",borderRadius:12,background:IOS.blue,border:"none",color:"#fff",fontSize:13,fontWeight:800,cursor:"pointer"}}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Find a +EV bet</button>
                     <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:8}}>Plok scans the books for the best price on a game.</div>
+                    <div style={{marginTop:12}}>
+                      <button onClick={buildPlokSlip} style={{display:"inline-flex",alignItems:"center",gap:7,padding:"10px 16px",borderRadius:12,background:"rgba(255,255,255,0.06)",border:`1px solid ${IOS.blue}40`,color:IOS.blue,fontSize:13,fontWeight:800,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7h16M4 12h16M4 17h10"/></svg>Build my whole slip</button>
+                      <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:8}}>Plok fills all 5 slots, tuned to your league spot.</div>
+                    </div>
                   </div>
                 </div>
               )}
