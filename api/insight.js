@@ -456,8 +456,15 @@ async function generate(ctx, stats) {
     (ctx.userStats.byType ? "\n- By bet type: " + Object.entries(ctx.userStats.byType).map(([k, v]) => `${k} ${v.record} (${v.pct}%)`).join(", ") : "") +
     (ctx.userSlot ? `\n- THIS bet type (${ctx.userSlot.label}): ${ctx.userSlot.record} (${ctx.userSlot.pct}%)  <- most relevant` : "")
   ) : "";
+  const PERSONAS = {
+    sharp: "PERSONA: THE SHARP. Judge this bet purely on price and expected value. You are risk-averse and unsentimental about names or narratives — the number is everything. Pass quickly and often when the edge isn't there, and skew conviction toward sound prices and away from juice. Tone: clipped, no fluff. ",
+    degen: "PERSONA: THE DEGEN. You hunt ceiling and upside, weight the size of the payoff heavily, and have a real appetite for plus-money and longshots — while staying honest that variance is high. Skew conviction up on high-payoff spots you can justify from DATA. Tone: high-energy, fearless. ",
+    contrarian: "PERSONA: THE CONTRARIAN. You distrust chalk and the popular side. Look for where the crowd is likely overreacting and favor the unpopular side WHEN DATA supports it — never contrarian for its own sake. Tone: skeptical and sharp. ",
+    professor: "PERSONA: THE PROFESSOR. Teach as you analyze — briefly explain the WHY: what the key number means, how the line or odds translate to implied probability. Leave the user a little smarter. Tone: clear, patient, instructive. ",
+  };
+  const personaLine = (ctx.persona && PERSONAS[ctx.persona]) ? PERSONAS[ctx.persona] : "";
   if (ctx.betType === "chat") {
-    system =
+    system = personaLine +
       "You are Plok, PickLock's friendly betting analyst, chatting with a user. " +
       "You can discuss betting concepts, strategy, how odds / EV / lines work, and how to use the PickLock app. " +
       "In this chat you do NOT have live stats, odds, or injuries for any specific game, so NEVER state a specific stat, line, number, or prediction as fact, and never guess a winner. " +
@@ -470,7 +477,7 @@ async function generate(ctx, stats) {
     const dataBlock = (stats.lines && stats.lines.length)
       ? stats.lines.map(l => `- ${l.label}: ${l.value}`).join("\n")
       : "(no live stats were available for this selection)";
-    system =
+    system = personaLine +
       "You are Plok, a sharp, concise sports-betting analyst. " +
       "Use ONLY the figures in the DATA block — never invent, estimate, or recall numbers from memory. If a relevant stat is missing, speak qualitatively without stating a number. " +
       "For a game bet, DATA gives accurate season figures for BOTH teams (records, home/road, per-game scoring and allowed, streak, head-to-head). For a player prop, DATA gives that player's recent game-log stats IF they were found. " +
@@ -524,7 +531,7 @@ export default async function handler(req, res) {
     }
 
     const day = new Date().toISOString().slice(0, 10);
-    const key = hashKey(["v4", ctx.sport, ctx.betType, ctx.selection, ctx.line, ctx.game, ctx.question || "", ctx.userId || "", day].join("|"));
+    const key = hashKey(["v5", ctx.sport, ctx.betType, ctx.selection, ctx.line, ctx.game, ctx.question || "", ctx.userId || "", ctx.persona || "", day].join("|"));
 
     const cached = await getCached(key);
     if (cached) return res.status(200).json({ ...cached, cached: true });

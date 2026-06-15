@@ -1890,6 +1890,14 @@ export default function App() {
   const [aiBusy, setAiBusy] = useState(false);
   const [aiReturn, setAiReturn] = useState("home");
   const [plokRecord, setPlokRecord] = useState(null);
+  const [plokPersona, setPlokPersona] = useState(null);
+  const PLOK_PERSONAS = [
+    { key:null, name:"Balanced" },
+    { key:"sharp", name:"The Sharp" },
+    { key:"degen", name:"The Degen" },
+    { key:"contrarian", name:"The Contrarian" },
+    { key:"professor", name:"The Professor" },
+  ];
   const aiSuggestions = aiInput.trim().length>=2
     ? ALL_BETS.filter(b => ((b.pick||"")+" "+(b.game||"")).toLowerCase().includes(aiInput.trim().toLowerCase())).slice(0,6)
     : [];
@@ -1919,6 +1927,7 @@ export default function App() {
     userId: user?.id,
     userStats: plokUserStats(),
     userSlot: plokUserSlot(category),
+    persona: plokPersona,
   });
   const aiAddToSlip = (bet, category) => {
     const picks = isSoloMode ? soloFlexPicks : flexPicks;
@@ -2011,7 +2020,7 @@ export default function App() {
     const item = { role:"ai", label:"Plok", bet:null, category:null, loading:true };
     setAiThread(prev=>[...prev, { role:"user", text:q }, item]);
     setAiBusy(true);
-    fetch("/api/insight", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ sport:(leagueSports[0]||"nfl"), betType:"chat", selection:q, question:q, userId:user?.id, userStats:plokUserStats() }) })
+    fetch("/api/insight", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ sport:(leagueSports[0]||"nfl"), betType:"chat", selection:q, question:q, userId:user?.id, userStats:plokUserStats(), persona:plokPersona }) })
       .then(async r=>{ const data=await r.json(); setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, data:r.ok?data:null, error:r.ok?null:(data.error||"Couldn't reach Plok")} : x)); })
       .catch(()=> setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, error:"Network error — try again"} : x)))
       .finally(()=> setAiBusy(false));
@@ -8171,6 +8180,14 @@ export default function App() {
                 </div>
               </div>
               <button onClick={()=>{ if(!isPro){setShowPaywall("ai");return;} setFindBetOpen(true); }} style={{flexShrink:0,display:"inline-flex",alignItems:"center",gap:5,padding:"7px 11px",borderRadius:10,background:`${IOS.blue}1a`,border:`1px solid ${IOS.blue}40`,color:IOS.blue,fontSize:11.5,fontWeight:800,cursor:"pointer"}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Find +EV</button>
+            </div>
+            <div className="gbx-scroll" style={{flexShrink:0,display:"flex",gap:6,overflowX:"auto",padding:"9px 12px 10px",borderBottom:"0.5px solid rgba(255,255,255,0.06)"}}>
+              {PLOK_PERSONAS.map(pz=>{
+                const on = plokPersona===pz.key;
+                return (
+                  <button key={pz.name} onClick={()=>setPlokPersona(pz.key)} style={{flexShrink:0,padding:"6px 11px",borderRadius:18,border:on?`1px solid ${IOS.blue}`:"0.5px solid rgba(255,255,255,0.12)",background:on?`${IOS.blue}22`:"rgba(255,255,255,0.04)",color:on?IOS.blue:"rgba(255,255,255,0.6)",fontSize:11.5,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"Barlow,sans-serif"}}>{pz.name}</button>
+                );
+              })}
             </div>
             <div className="gbx-scroll" style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:10,padding:"14px 14px 16px"}}>
               {aiThread.length===0 && plokRecord && (plokRecord.wins+plokRecord.losses)>0 && (()=>{
