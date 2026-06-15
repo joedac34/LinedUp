@@ -1223,6 +1223,31 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
   const lockedPicks = (hasLockedSlip && soloSavedPicks.flexPicks) ? [...soloSavedPicks.flexPicks].filter(s=>s.mult!==null) : [];
   const currentWeekNum = soloWeeks.length + 1;
 
+  // ── Live Slate Challenge (#2) — tracks the most recent slate as it grades ──
+  const gradedSlates = soloWeeks.filter(w=>(w.wins+w.losses)>0);
+  const latestSlate = soloWeeks.length ? soloWeeks.reduce((a,b)=>a.week>=b.week?a:b, soloWeeks[0]) : null;
+  const SLATE_CHALLENGES = [
+    {id:"pts40", label:"Score 40+ points", target:40, val:(w)=> w?w.pts:0, fmt:(v)=>(""+Math.round(v))},
+    {id:"win5",  label:"Win 5+ picks",     target:5,  val:(w)=> w?w.wins:0, fmt:(v)=>(""+v)},
+    {id:"hit70", label:"Hit 70% of your slate", target:70, val:(w)=> (w&&(w.wins+w.losses))?Math.round(w.wins/(w.wins+w.losses)*100):0, fmt:(v)=>(v+"%")},
+  ];
+  const challenge = SLATE_CHALLENGES[(latestSlate?latestSlate.week:0) % SLATE_CHALLENGES.length];
+  const challengeVal = challenge.val(latestSlate);
+  const challengePct = Math.min(100, Math.round((challengeVal/challenge.target)*100));
+  const challengeHit = !!latestSlate && challengeVal >= challenge.target;
+  const latestGraded = !!(latestSlate && (latestSlate.wins+latestSlate.losses)>0);
+
+  // ── Streaks & personal bests (#3) ──────────────────────────────────────────
+  const gradedAsc = [...gradedSlates].sort((a,b)=>a.week-b.week);
+  const isSlateHit = (w)=> w.wins > w.losses;
+  let longestStreak=0, _run=0;
+  gradedAsc.forEach(w=>{ if(isSlateHit(w)){ _run++; if(_run>longestStreak) longestStreak=_run; } else _run=0; });
+  let currentStreak=0;
+  for(let i=gradedAsc.length-1;i>=0;i--){ if(isSlateHit(gradedAsc[i])) currentStreak++; else break; }
+  const bestSlatePts = gradedSlates.length ? Math.max(...gradedSlates.map(w=>w.pts)) : 0;
+  const perfectSlates = gradedSlates.filter(w=>w.losses===0 && w.wins>0).length;
+  const hasRecords = gradedSlates.length > 0;
+
   const sportLabels = {nfl:"NFL",nba:"NBA",mlb:"MLB"};
   const sportColors = {nfl:"#0A84FF",nba:"#FF6B35",mlb:"#30D158"};
 
@@ -1244,18 +1269,54 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
         </div>
       </div>
 
-      {/* Weekly Challenge */}
-      <div style={{background:"rgba(255,159,10,0.07)",border:"0.5px solid rgba(255,159,10,0.25)",borderRadius:12,padding:"12px 14px",marginBottom:12}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
-          <div style={{fontSize:11,fontWeight:700,color:"#FF9F0A"}}>Slate Challenge</div>
+      {/* Slate Challenge — live progress */}
+      <div style={{background:challengeHit?"rgba(48,209,88,0.08)":"rgba(255,159,10,0.07)",border:`0.5px solid ${challengeHit?"rgba(48,209,88,0.3)":"rgba(255,159,10,0.25)"}`,borderRadius:12,padding:"12px 14px",marginBottom:12}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:7}}>
+          <div style={{fontSize:11,fontWeight:700,color:challengeHit?IOS.green:"#FF9F0A"}}>Slate Challenge</div>
           <div style={{fontSize:10,color:IOS.label3}}>This slate</div>
         </div>
-        <div style={{fontSize:13,color:"#ccc",marginBottom:8}}>Score 40+ points</div>
-        <div style={{height:4,background:"#1A1A1A",borderRadius:2,marginBottom:4}}>
-          <div style={{width:"0%",height:"100%",background:"#FF9F0A",borderRadius:2}}/>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+          <div style={{fontSize:13,color:"#ccc"}}>{challenge.label}</div>
+          {latestSlate && <div style={{fontSize:12,fontWeight:800,color:challengeHit?IOS.green:"#FF9F0A"}}>{challenge.fmt(challengeVal)}<span style={{color:IOS.label3,fontWeight:600}}> / {challenge.fmt(challenge.target)}</span></div>}
         </div>
-        <div style={{fontSize:10,color:IOS.label3}}>{hasLockedSlip ? "Slip locked — pending results" : "Lock your slip to start tracking"}</div>
+        <div style={{height:5,background:"#1A1A1A",borderRadius:3,marginBottom:5,overflow:"hidden"}}>
+          <div style={{width:`${latestSlate?challengePct:0}%`,height:"100%",background:challengeHit?IOS.green:"#FF9F0A",borderRadius:3,transition:"width .5s ease"}}/>
+        </div>
+        <div style={{fontSize:10,color:challengeHit?IOS.green:IOS.label3,fontWeight:challengeHit?700:400}}>
+          {!latestSlate ? "Lock a slate to start tracking" : challengeHit ? "Challenge complete — nice slate." : latestGraded ? "In the books — chase it next slate." : "Filling live as your picks settle…"}
+        </div>
       </div>
+
+      {/* Your records — streaks & personal bests */}
+      {hasRecords && (
+      <div style={{background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"12px 14px",marginBottom:12}}>
+        <div style={{fontSize:11,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:10}}>Your Records</div>
+        <div style={{display:"flex",alignItems:"stretch"}}>
+          <div style={{flex:1,textAlign:"center"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:3}}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill={currentStreak>0?"#FF9F0A":"none"} stroke={currentStreak>0?"#FF9F0A":IOS.label3} strokeWidth="1.8" strokeLinejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
+              <span style={{fontSize:17,fontWeight:800,color:currentStreak>0?"#FF9F0A":"#fff"}}>{currentStreak}</span>
+            </div>
+            <div style={{fontSize:9,color:IOS.label3,textTransform:"uppercase",letterSpacing:.3,marginTop:3}}>Streak</div>
+          </div>
+          <div style={{width:"0.5px",background:"rgba(255,255,255,0.08)",margin:"2px 0"}}/>
+          <div style={{flex:1,textAlign:"center"}}>
+            <div style={{fontSize:17,fontWeight:800,color:IOS.green}}>{bestSlatePts>0?"+"+Math.round(bestSlatePts):"—"}</div>
+            <div style={{fontSize:9,color:IOS.label3,textTransform:"uppercase",letterSpacing:.3,marginTop:3}}>Best Slate</div>
+          </div>
+          <div style={{width:"0.5px",background:"rgba(255,255,255,0.08)",margin:"2px 0"}}/>
+          <div style={{flex:1,textAlign:"center"}}>
+            <div style={{fontSize:17,fontWeight:800,color:"#fff"}}>{longestStreak}</div>
+            <div style={{fontSize:9,color:IOS.label3,textTransform:"uppercase",letterSpacing:.3,marginTop:3}}>Longest</div>
+          </div>
+          <div style={{width:"0.5px",background:"rgba(255,255,255,0.08)",margin:"2px 0"}}/>
+          <div style={{flex:1,textAlign:"center"}}>
+            <div style={{fontSize:17,fontWeight:800,color:perfectSlates>0?IOS.gold:"#fff"}}>{perfectSlates}</div>
+            <div style={{fontSize:9,color:IOS.label3,textTransform:"uppercase",letterSpacing:.3,marginTop:3}}>Perfect</div>
+          </div>
+        </div>
+      </div>
+      )}
 
       {/* This week's slip card */}
       <div style={{background:IOS.bg2,border:`0.5px solid ${hasLockedSlip?"rgba(48,209,88,0.25)":"rgba(255,255,255,0.07)"}`,borderRadius:12,padding:"14px",marginBottom:16}}>
@@ -1913,6 +1974,8 @@ export default function App() {
   ];
   const [plokBuild, setPlokBuild] = useState(null);
   const [plokBuilding, setPlokBuilding] = useState(false);
+  const [plokSlate, setPlokSlate] = useState(null);   // freeform solo: {strategy,picks,reasons} | {error}
+  const [plokSlateBusy, setPlokSlateBusy] = useState(false);
   const aiSuggestions = aiInput.trim().length>=2
     ? ALL_BETS.filter(b => ((b.pick||"")+" "+(b.game||"")).toLowerCase().includes(aiInput.trim().toLowerCase())).slice(0,6)
     : [];
@@ -2035,6 +2098,42 @@ export default function App() {
     if(isSoloMode) setSoloFlexPicks(plokBuild.flex); else setFlexPicks(plokBuild.flex);
     setPlokBuild(null);
     setScreen("picks");
+  };
+  // PLOK builds a freeform solo slate: reuse the buildslip engine, then flatten
+  // the chosen bets into a flat list (no mults / no forced parlay).
+  const buildPlokSlate = async () => {
+    if(!isPro){ setShowPaywall("ai"); return; }
+    if(plokSlateBusy) return;
+    const cats = ["ml","spread","ou","prop","longshot"];
+    const candidates = {}; let any=false;
+    cats.forEach(cat=>{
+      const list = (ALL_BETS||[]).filter(b=>b.category===cat).slice(0,6).map(b=>({id:b.id,pick:b.pick,odds:b.odds,game:b.game}));
+      if(list.length) any=true;
+      if(list.length) candidates[cat]=list;
+    });
+    if(!any){ setPlokSlate({error:"Odds are still loading for this slate — try again in a moment."}); return; }
+    const slots = Object.keys(candidates).map((c,i)=>({idx:i,category:c,mult:null}));
+    setPlokSlateBusy(true); setPlokSlate(null);
+    try{
+      const r = await fetch("/api/buildslip",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ sport:soloSport, userId:user?.id, persona:plokPersona, userStats:plokUserStats(), leagueCtx:null, strategy:"balanced", slots, candidates })});
+      const data = await r.json();
+      if(!r.ok){ setPlokSlate({error:data.error||"Couldn't build a slate — try again."}); return; }
+      const byId={}; (ALL_BETS||[]).forEach(b=>{byId[b.id]=b;});
+      const picks=[]; const reasons={};
+      (data.picks||[]).forEach(pk=>{
+        (pk.ids||[]).forEach(id=>{ const b=byId[id]; if(b && !picks.some(x=>x.id===b.id)){ picks.push(b); reasons[b.id]=pk.reason; } });
+      });
+      if(!picks.length){ setPlokSlate({error:"Plok couldn't fill a slate from this board — try again."}); return; }
+      setPlokSlate({ strategy:data.strategy, picks, reasons });
+    }catch(e){ setPlokSlate({error:"Network error — try again."}); }
+    finally{ setPlokSlateBusy(false); }
+  };
+  const applyPlokSlate = () => {
+    if(!plokSlate || !plokSlate.picks) return;
+    const merged=[...soloFreePicks];
+    plokSlate.picks.forEach(b=>{ if(merged.length<12 && !merged.some(x=>x.id===b.id)) merged.push(b); });
+    setSoloFreePicks(merged);
+    setPlokSlate(null);
   };
   const aiAddToSlip = (bet, category) => {
     const picks = isSoloMode ? soloFlexPicks : flexPicks;
@@ -6197,6 +6296,45 @@ export default function App() {
      </>
    ) : (
      <>
+       {plokSlateBusy ? (
+         <div style={{display:"flex",alignItems:"center",gap:9,background:"rgba(255,255,255,0.04)",border:`0.5px solid ${IOS.blue}33`,borderRadius:12,padding:"13px 14px",marginBottom:12}}>
+           <span className="ai-dot"/><span className="ai-dot" style={{animationDelay:".15s"}}/><span className="ai-dot" style={{animationDelay:".3s"}}/>
+           <span style={{fontSize:12.5,fontWeight:700,color:"rgba(255,255,255,0.7)"}}>Plok is building your slate…</span>
+         </div>
+       ) : plokSlate && plokSlate.error ? (
+         <div style={{background:"rgba(255,69,58,0.08)",border:`0.5px solid ${IOS.red}33`,borderRadius:12,padding:"11px 14px",marginBottom:12,fontSize:12.5,color:"rgba(255,255,255,0.75)"}}>{plokSlate.error}</div>
+       ) : plokSlate && plokSlate.picks ? (
+         <div style={{background:`linear-gradient(135deg,${IOS.blue}1a,rgba(255,255,255,0.03))`,border:`0.5px solid ${IOS.blue}33`,borderRadius:14,padding:"13px 14px",marginBottom:12}}>
+           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+             <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:IOS.blue}}>Plok built a slate</div>
+             <div onClick={()=>setPlokSlate(null)} style={{cursor:"pointer",color:"rgba(255,255,255,0.4)",fontSize:17,lineHeight:1}}>×</div>
+           </div>
+           {plokSlate.strategy && <div style={{fontSize:12.5,lineHeight:1.45,color:"rgba(255,255,255,0.82)",marginBottom:11}}>{plokSlate.strategy}</div>}
+           <div style={{display:"flex",flexDirection:"column",gap:9,marginBottom:12}}>
+             {plokSlate.picks.map((b,i)=>{
+               const col=b.categoryColor||IOS.blue;
+               return (
+               <div key={i} style={{display:"flex",alignItems:"flex-start",gap:9}}>
+                 <div style={{fontSize:8.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:col,background:`${col}1c`,borderRadius:5,padding:"3px 6px",flexShrink:0,marginTop:1}}>{b.categoryLabel||b.category}</div>
+                 <div style={{flex:1,minWidth:0}}>
+                   <div style={{display:"flex",alignItems:"baseline",gap:6}}>
+                     <span style={{fontSize:13,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.pick}</span>
+                     <span style={{fontSize:11.5,fontWeight:800,color:(b.odds||"").startsWith("+")?IOS.green:IOS.blue,flexShrink:0}}>{b.odds}</span>
+                   </div>
+                   {plokSlate.reasons&&plokSlate.reasons[b.id] && <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",marginTop:1,lineHeight:1.35}}>{plokSlate.reasons[b.id]}</div>}
+                 </div>
+               </div>
+               );
+             })}
+           </div>
+           <button onClick={applyPlokSlate} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:11,padding:"11px",fontSize:13,fontWeight:800,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Add to my slate</button>
+         </div>
+       ) : (
+         <button onClick={buildPlokSlate} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"rgba(255,255,255,0.05)",border:`1px solid ${IOS.blue}40`,borderRadius:12,padding:"12px",fontSize:13.5,fontWeight:800,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif",marginBottom:12}}>
+           <svg width="16" height="16" viewBox="0 0 24 24" fill={IOS.blue} stroke="none"><path d="M12 2l1.7 5.4L19 9l-5.3 1.6L12 16l-1.7-5.4L5 9l5.3-1.6z"/></svg>
+           Let Plok build my slate
+         </button>
+       )}
        <div style={{marginBottom:12}}>
          {soloFreePicks.length===0 ? (
            <div style={{background:IOS.bg2,border:"0.5px dashed rgba(255,255,255,0.14)",borderRadius:12,padding:"20px 16px",textAlign:"center"}}>
