@@ -2489,13 +2489,17 @@ export default function App() {
    .eq("commissioner_id", user.id)
    .eq("league_type", "solo")
    .single();
- if(existing?.id) { setSoloLeagueId(existing.id); return existing.id; }
+ if(existing?.id) {
+   setSoloLeagueId(existing.id);
+   try{ if(soloSport) await supabase.from("leagues").update({sport: soloSport}).eq("id", existing.id); }catch(e){}
+   return existing.id;
+ }
  // Create one
  const {data:created, error} = await supabase
    .from("leagues")
    .insert({
      name: "Solo",
-     sport: "nfl",
+     sport: soloSport || "nfl",
      commissioner_id: user.id,
      invite_code: Math.random().toString(36).substring(2,8).toUpperCase(),
      max_members: 1,
@@ -6075,6 +6079,7 @@ export default function App() {
  const {error:insertError} = await supabase.from("picks").insert(picksToSave);
  if(insertError) { alert("Error saving picks: " + insertError.message); return; }
  }
+ if(isSoloMode){ const _slid = soloLeagueId || activeLeague.id; if(_slid && _slid!=="solo"){ try{ await supabase.from("leagues").update({sport: soloSport}).eq("id", _slid); }catch(e){} } }
  }
  const weekNum = activeLeague.current_week||activeLeague.week||1;
  const locked = {flexPicks: activePicks, lockedAt: new Date().toISOString()};

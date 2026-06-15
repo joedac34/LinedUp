@@ -656,9 +656,14 @@ export default async function handler(req, res) {
       const espnMap = ESPN_MAP[league.sport];
       if (!espnMap) continue;
 
-      // Get all pending picks for current week
+      // Get all pending picks. Solo leagues are submit-driven and never advance
+      // current_week (it stays 1), so grade EVERY pending week for solo — otherwise
+      // weeks 2+ would never resolve.
+      const _isSolo = (league.league_type || "") === "solo";
       const picks = await sbGet(
-        `picks?league_id=eq.${league.id}&week=eq.${league.current_week}&result=eq.pending&select=*`
+        _isSolo
+          ? `picks?league_id=eq.${league.id}&result=eq.pending&select=*`
+          : `picks?league_id=eq.${league.id}&week=eq.${league.current_week}&result=eq.pending&select=*`
       );
       if (!Array.isArray(picks) || picks.length === 0) continue;
 
@@ -702,7 +707,7 @@ export default async function handler(req, res) {
       const _gradedAtStart = results.graded;
       const byUserMult = {};
       picks.forEach(p => {
-        const key = `${p.user_id}__${p.multiplier}`;
+        const key = `${p.user_id}__${p.week}__${p.multiplier}`;
         if (!byUserMult[key]) byUserMult[key] = [];
         byUserMult[key].push(p);
       });
