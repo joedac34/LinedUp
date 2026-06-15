@@ -880,7 +880,7 @@ function WeeklyRecap({ data, picks, standings, league, stats, IOS, onClose, user
 }
 const BRK_LOCK = '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>';
 function brkRoundName(count){ return count===1?"Final":count===2?"Semifinals":count===4?"Quarterfinals":count===8?"Round of 16":count===16?"Round of 32":("Round of "+count*2); }
-function BracketView({ matchups, members, uid, IOS, onOpenMatch }){
+function BracketView({ matchups, members, uid, IOS, onOpenMatch, live, onChampion }){
   const nameOf = (id)=>{ if(!id) return null; const m=(members||[]).find(x=>x.userId===id); return m?m.name:"Player"; };
   const byWeek = {};
   (matchups||[]).forEach(m=>{ (byWeek[m.week]=byWeek[m.week]||[]).push(m); });
@@ -890,11 +890,11 @@ function BracketView({ matchups, members, uid, IOS, onOpenMatch }){
   const H=500;
   const finalRound = byWeek[weeks[weeks.length-1]];
   const championId = (finalRound && finalRound.length===1) ? finalRound[0].winner_id : null;
-  const seat = (uId, nm, pts, decided, isWin, pos)=>(
+  const seat = (uId, nm, pts, decided, isWin, pos, livePts, showLive)=>(
     <div className={"brk-seat"+(uId?"":" tbd")+(decided?(isWin?" win":" lose"):"")}>
       <span className="brk-sd">{pos||""}</span>
       <span className="brk-nm">{nm||"TBD"}</span>
-      <span className="brk-pts">{decided&&pts!=null?Number(pts).toFixed(1):""}</span>
+      <span className="brk-pts">{decided&&pts!=null?Number(pts).toFixed(1):(showLive&&uId?<span style={{color:IOS.green,display:"inline-flex",alignItems:"center"}}><span className="brk-livedot"/><Ticker value={livePts||0} decimals={1}/></span>:"")}</span>
       {decided&&isWin?<svg className="brk-lock" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#30D158" strokeWidth="2.6" dangerouslySetInnerHTML={{__html:BRK_LOCK}}/>:null}
     </div>
   );
@@ -913,12 +913,14 @@ function BracketView({ matchups, members, uid, IOS, onOpenMatch }){
                 const both = u1 && u2;
                 const youHere = uid && (u1===uid||u2===uid);
                 const down = (mi % 2 === 0);
+                const showLive = !decided && live && w===live.week && both;
+                const lt = (live&&live.totals)||{};
                 return (
-                  <div key={mu.id||mi} className="brk-cell">
-                    <div className={"brk-match"+(youHere?" you":"")+(both?"":" dead")} onClick={()=>{ if(both) onOpenMatch(mu); }}>
+                  <div key={mu.id||mi} className="brk-cell" style={{animationDelay:(ri*0.1 + mi*0.05)+"s"}}>
+                    <div className={"brk-match"+(youHere?" you":"")+(both?"":" dead")+(showLive?" live":"")} onClick={()=>{ if(both) onOpenMatch(mu); }}>
                       {ri>0 && <div className="brk-stub"/>}
-                      {seat(u1, nameOf(u1), mu.user1_points, decided, mu.winner_id===u1, ri===0?(mi*2+1):"")}
-                      {seat(u2, nameOf(u2), mu.user2_points, decided, mu.winner_id===u2, ri===0?(mi*2+2):"")}
+                      {seat(u1, nameOf(u1), mu.user1_points, decided, mu.winner_id===u1, ri===0?(mi*2+1):"", lt[u1], showLive)}
+                      {seat(u2, nameOf(u2), mu.user2_points, decided, mu.winner_id===u2, ri===0?(mi*2+2):"", lt[u2], showLive)}
                     </div>
                     {!isLast && <div className={"brk-conn "+(down?"down":"up")} style={{height:elbow}}/>}
                     {isLast && <div className="brk-connf"/>}
@@ -930,10 +932,11 @@ function BracketView({ matchups, members, uid, IOS, onOpenMatch }){
         })}
         <div className="brk-champ">
           <div className="brk-rhead">Champion</div>
-          <div className="brk-cup"><div className="brk-stub"/>
+          <div className={"brk-cup"+(championId?" live":"")} onClick={()=>{ if(championId&&onChampion) onChampion(championId, nameOf(championId)); }}><div className="brk-stub"/>
             <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#FFD60A" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" style={{display:"block",margin:"0 auto"}}><path d="M2 18h20"/><path d="M3 8l4 4 5-7 5 7 4-4-2 10H5L3 8z"/></svg>
             <div className="lab">Champion</div>
             <div className={"cn"+(championId?"":" tbd")}>{championId?nameOf(championId):"TBD"}</div>
+            {championId?<div className="tap">Tap to celebrate</div>:null}
           </div>
         </div>
       </div>
@@ -983,6 +986,57 @@ function BracketMatchSheet({ d, IOS, onClose }){
         {section(d.a, aWin)}
         {section(d.b, bWin)}
       </div>
+    </div>
+  );
+}
+function brkDrawChampCard(name, leagueName){
+  const W=600, H=760, c=document.createElement("canvas"); c.width=W; c.height=H;
+  const x=c.getContext("2d");
+  const g=x.createLinearGradient(0,0,0,H); g.addColorStop(0,"#2a2208"); g.addColorStop(.55,"#120f0a"); g.addColorStop(1,"#080609");
+  x.fillStyle=g; x.fillRect(0,0,W,H);
+  x.strokeStyle="rgba(255,214,10,.55)"; x.lineWidth=3; x.strokeRect(16,16,W-32,H-32);
+  // crown
+  x.fillStyle="#FFD60A"; x.beginPath();
+  const cx=W/2, cy=210, s=70;
+  x.moveTo(cx-s, cy+s*0.6); x.lineTo(cx-s, cy-s*0.2); x.lineTo(cx-s*0.45, cy+s*0.15);
+  x.lineTo(cx, cy-s*0.7); x.lineTo(cx+s*0.45, cy+s*0.15); x.lineTo(cx+s, cy-s*0.2);
+  x.lineTo(cx+s, cy+s*0.6); x.closePath(); x.fill();
+  x.fillStyle="#1a1500"; x.fillRect(cx-s, cy+s*0.42, s*2, s*0.18);
+  // labels
+  x.textAlign="center"; x.fillStyle="#FFD60A"; x.font="800 26px Barlow, sans-serif";
+  x.fillText("L E A G U E   C H A M P I O N", cx, 360);
+  x.fillStyle="#ffffff"; x.font="900 64px Barlow, sans-serif";
+  x.fillText((name||"Champion").slice(0,16), cx, 440);
+  x.fillStyle="rgba(255,255,255,.55)"; x.font="700 22px Barlow, sans-serif";
+  x.fillText(((leagueName||"Tournament")+" · Champion").slice(0,40), cx, 486);
+  // divider + footer
+  x.strokeStyle="rgba(255,214,10,.3)"; x.lineWidth=2; x.beginPath(); x.moveTo(cx-120,560); x.lineTo(cx+120,560); x.stroke();
+  x.fillStyle="rgba(255,255,255,.4)"; x.font="800 20px Barlow, sans-serif"; x.fillText("PICKLOCK", cx, 660);
+  x.fillStyle="rgba(255,255,255,.28)"; x.font="600 15px Barlow, sans-serif"; x.fillText("single elimination · last lock standing", cx, 690);
+  return c;
+}
+async function champShare(name, leagueName){
+  try{
+    const c = brkDrawChampCard(name, leagueName);
+    const blob = await new Promise(res=>c.toBlob(res,"image/png"));
+    const file = new File([blob], "picklock-champion.png", {type:"image/png"});
+    if(navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({files:[file], title:"PickLock Champion", text:(name||"")+" won the "+(leagueName||"league")+" on PickLock!"}); return; }
+    const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download="picklock-champion.png"; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1500);
+  }catch(e){}
+}
+function ChampCelebrate({ name, leagueName, isYou, IOS, onClose, onShare }){
+  return (
+    <div className="champ-bg">
+      <Confetti show={true}/>
+      <div className="champ-x" onClick={onClose}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></div>
+      <svg className="champ-crown" width="92" height="92" viewBox="0 0 24 24" fill="none" stroke="#FFD60A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2 18h20"/><path d="M3 8l4 4 5-7 5 7 4-4-2 10H5L3 8z"/></svg>
+      <div className="champ-lab">{isYou?"You are the champion":"League Champion"}</div>
+      <div className="champ-name">{name||"Champion"}</div>
+      <div className="champ-sub">{leagueName||"Tournament"} · last lock standing</div>
+      <button className="champ-share" onClick={onShare}>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#1a1500" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+        Share your title
+      </button>
     </div>
   );
 }
@@ -1359,6 +1413,9 @@ export default function App() {
  const [leagueMembers, setLeagueMembers] = useState([]);
  const [bracketMatchups, setBracketMatchups] = useState([]);
  const [bracketDetail, setBracketDetail] = useState(null);
+ const [bracketLive, setBracketLive] = useState({week:0,totals:{}});
+ const [champCelebrate, setChampCelebrate] = useState(null);
+ const champSeenRef = useRef("");
  const [weekPicks, setWeekPicks] = useState([]);
  const [liveSchedule, setLiveSchedule] = useState([]);
  const [realStandings, setRealStandings] = useState([]);
@@ -2742,7 +2799,16 @@ export default function App() {
  const fetchBracket = async (lid) => {
  try {
  const { data } = await supabase.from("matchups").select("*").eq("league_id", lid);
- setBracketMatchups(data||[]);
+ const ms = data||[];
+ setBracketMatchups(ms);
+ const wks = [...new Set(ms.map(m=>m.week))].sort((a,b)=>a-b);
+ const fin = ms.filter(m=>m.week===wks[wks.length-1]);
+ const champ = (fin.length===1)?fin[0].winner_id:null;
+ if(champ && user && champ===user.id && champSeenRef.current!==lid){ champSeenRef.current=lid; const me=leagueMembers.find(x=>x.userId===champ); setChampCelebrate({name: me?me.name:"You", leagueName: activeLeague.name, isYou:true}); }
+ const cw = activeLeague.current_week||1;
+ const { data:lp } = await supabase.from("picks").select("user_id,result,points_earned").eq("league_id",lid).eq("week",cw);
+ const totals={}; (lp||[]).forEach(r=>{ if(r.result==="W") totals[r.user_id]=(totals[r.user_id]||0)+parseFloat(r.points_earned||0); });
+ setBracketLive({week:cw, totals});
  } catch(e) { setBracketMatchups([]); }
  };
 
@@ -2763,7 +2829,11 @@ export default function App() {
  };
 
  useEffect(()=>{
- if(screen==="league" && activeLeague && activeLeague.league_type==="bracket" && (leagueTab==="bracket"||leagueTab==="schedule")){ fetchBracket(activeLeague.id); }
+ if(screen==="league" && activeLeague && activeLeague.league_type==="bracket" && (leagueTab==="bracket"||leagueTab==="schedule")){
+ fetchBracket(activeLeague.id);
+ const _iv=setInterval(()=>fetchBracket(activeLeague.id), 45000);
+ return ()=>clearInterval(_iv);
+ }
  }, [screen, leagueTab, activeLeagueId]);
 
  const fetchLeagues = async (uid) => {
@@ -3345,6 +3415,26 @@ export default function App() {
  .bmd-res .rp{font-size:13px;font-weight:800;}
  .bmd-res .rl{font-size:8.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;margin-top:1px;}
  .bmd-empty{padding:30px 20px;text-align:center;color:rgba(255,255,255,.4);font-size:13px;}
+ @keyframes brkPop{from{opacity:0;transform:translateY(10px) scale(.95);}to{opacity:1;transform:none;}}
+ .brk-cell{animation:brkPop .5s both;}
+ @keyframes brkLockPop{0%{transform:scale(0) rotate(-25deg);}60%{transform:scale(1.35);}100%{transform:scale(1) rotate(0);}}
+ .brk-lock{animation:brkLockPop .55s .2s both;transform-origin:center;}
+ .brk-match.live{border-color:rgba(48,209,88,.5);animation:brkLiveGlow 1.9s ease-in-out infinite;}
+ @keyframes brkLiveGlow{0%,100%{box-shadow:0 0 0 0 rgba(48,209,88,0);}50%{box-shadow:0 0 15px -3px rgba(48,209,88,.6);}}
+ .brk-livedot{display:inline-block;width:5px;height:5px;border-radius:50%;background:#30D158;margin-right:4px;animation:brkPulse 1.2s infinite;}
+ @keyframes brkPulse{0%,100%{opacity:1;}50%{opacity:.25;}}
+ .brk-cup.live{cursor:pointer;animation:brkPop .5s both, brkCupGlow 2.2s ease-in-out infinite 1s;}
+ @keyframes brkCupGlow{0%,100%{box-shadow:0 0 30px -10px rgba(255,214,10,.5);}50%{box-shadow:0 0 44px -6px rgba(255,214,10,.9);}}
+ .brk-cup .tap{font-size:8px;font-weight:800;letter-spacing:.08em;color:rgba(255,214,10,.7);margin-top:7px;text-transform:uppercase;}
+ .champ-bg{position:fixed;inset:0;z-index:9700;background:radial-gradient(120% 80% at 50% 0%,#241d06,#08060a 72%);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center;animation:bmdFade .3s;overflow:hidden;}
+ @keyframes bmdFade{from{opacity:0;}to{opacity:1;}}
+ .champ-x{position:absolute;top:18px;right:18px;width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2;}
+ @keyframes champRise{from{opacity:0;transform:translateY(22px) scale(.7);}to{opacity:1;transform:none;}}
+ .champ-crown{animation:champRise .7s cubic-bezier(.2,.9,.3,1.5) both;}
+ .champ-lab{font-size:13px;font-weight:900;letter-spacing:.22em;color:#FFD60A;text-transform:uppercase;margin-top:18px;animation:champRise .7s .12s both;}
+ .champ-name{font-size:34px;font-weight:900;letter-spacing:-1px;margin-top:8px;animation:champRise .7s .22s both;}
+ .champ-sub{font-size:13px;color:rgba(255,255,255,.5);margin-top:8px;animation:champRise .7s .32s both;}
+ .champ-share{margin-top:32px;background:linear-gradient(90deg,#FFD60A,#ffb800);color:#1a1500;font-size:15px;font-weight:900;border:none;border-radius:14px;padding:14px 32px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;animation:champRise .7s .42s both;}
  .app-grain{position:absolute;inset:0;pointer-events:none;z-index:60;opacity:.04;mix-blend-mode:overlay;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");}
  .app-glow{position:absolute;top:0;left:0;right:0;height:240px;pointer-events:none;z-index:0;background:radial-gradient(78% 150px at 50% -30px,rgba(10,132,255,0.12),transparent 72%);}
  .phone{background:radial-gradient(125% 72% at 50% -8%, #0c1426 0%, #060608 52%)!important;}
@@ -7699,9 +7789,13 @@ export default function App() {
  {activeLeague.isCommissioner && <div style={{marginTop:14,fontSize:12,color:IOS.label3}}>Invite code: <span style={{fontWeight:700,color:"#fff",letterSpacing:2}}>{activeLeague.invite_code||activeLeague.inviteCode}</span></div>}
  </div>
  );
- return <BracketView matchups={bracketMatchups} members={leagueMembers} uid={user&&user.id} IOS={IOS} onOpenMatch={openBracketMatch}/>;
+ return (<>
+ {bracketMatchups.some(mm=>mm.week===bracketLive.week && !mm.winner_id) && <div style={{margin:"0 16px 10px",display:"flex",alignItems:"center",justifyContent:"center",gap:7,background:"rgba(48,209,88,.1)",border:"1px solid rgba(48,209,88,.3)",borderRadius:12,padding:"9px 14px"}}><span className="brk-livedot"/><span style={{fontSize:11,fontWeight:900,letterSpacing:".12em",color:IOS.green}}>WIN OR GO HOME · LIVE ROUND</span></div>}
+ <BracketView matchups={bracketMatchups} members={leagueMembers} uid={user&&user.id} IOS={IOS} onOpenMatch={openBracketMatch} live={bracketLive} onChampion={(id,nm)=>setChampCelebrate({name:nm, leagueName:activeLeague.name, isYou:id===(user&&user.id)})}/>
+ </>);
  })()}
  {bracketDetail && <BracketMatchSheet d={bracketDetail} IOS={IOS} onClose={()=>setBracketDetail(null)}/>}
+ {champCelebrate && <ChampCelebrate name={champCelebrate.name} leagueName={champCelebrate.leagueName} isYou={champCelebrate.isYou} IOS={IOS} onClose={()=>setChampCelebrate(null)} onShare={()=>champShare(champCelebrate.name, champCelebrate.leagueName)}/>}
  </>
  )}
 
