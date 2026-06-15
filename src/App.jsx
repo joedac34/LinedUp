@@ -1709,7 +1709,27 @@ export default function App() {
      const wins = arr.filter(p=>p.result==="W").length, losses = arr.filter(p=>p.result==="L").length;
      const pts = arr.reduce((a,p)=>a+(parseFloat(p.points_earned)||0),0);
      setRecapPicks(arr);
-     setWeekResult({ week, myPts: parseFloat(pts.toFixed(1)), oppPts: 0, oppName: null, won: wins>losses });
+     // For head-to-head leagues, pull the opponent so the recap shows the real matchup verdict.
+     let oppName = null, oppPts = 0, won = wins>losses;
+     try{
+       const lg = realLeagues.find(l=>l.id===lid);
+       if(lg && lg.league_type==="h2h"){
+         const { data:mus } = await supabase.from("matchups").select("*").eq("league_id",lid).eq("week",week).or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`);
+         const mu = (mus||[])[0];
+         if(mu){
+           const oppId = mu.user1_id===user.id ? mu.user2_id : mu.user1_id;
+           if(oppId){
+             const { data:op } = await supabase.from("picks").select("points_earned,result").eq("league_id",lid).eq("user_id",oppId).eq("week",week).in("result",["W","L"]);
+             oppPts = (op||[]).reduce((a,pp)=>a+(parseFloat(pp.points_earned)||0),0);
+             const mem = leagueMembers.find(x=>x.userId===oppId);
+             if(mem){ oppName = mem.name; }
+             else { const { data:u } = await supabase.from("users").select("username,email").eq("id",oppId).maybeSingle(); oppName = (u&&(u.username||(u.email||"").split("@")[0]))||"Opponent"; }
+             won = pts > oppPts;
+           }
+         }
+       }
+     }catch(e){}
+     setWeekResult({ week, myPts: parseFloat(pts.toFixed(1)), oppPts: parseFloat(oppPts.toFixed(1)), oppName, won });
    }catch(e){}
  };
  const handleNotifTap = (n)=>{
@@ -2960,6 +2980,17 @@ export default function App() {
  } catch(e) {}
  }
  },[activeLeagueId, user, screen]);
+
+ // Rehydrate the solo home's locked-slip card after a reload (in-memory state is lost otherwise).
+ // Guarded by week so a slip from a prior, already-graded week never shows as current.
+ useEffect(()=>{
+ if(isSoloMode && !soloSavedPicks){
+ try{
+ const _s = localStorage.getItem("picklock_solo_locked");
+ if(_s){ const _p = JSON.parse(_s); if(_p && _p.flexPicks && _p.week===(soloWeeks.length+1)){ setSoloSavedPicks({flexPicks:_p.flexPicks, lockedAt:_p.lockedAt}); } }
+ }catch(e){}
+ }
+ },[isSoloMode, soloWeeks, soloSavedPicks]);
 
  useEffect(()=>{
  if(!activeLeagueId||!user) return;
@@ -4688,6 +4719,7 @@ export default function App() {
  setFlexPicks(freshSlots());
  setWeekPicks(prev=>prev.filter(p=>p.user_id!==user?.id));
  try { localStorage.removeItem(`linedup_picks_${activeLeague.id}_wk${activeLeague.current_week||activeLeague.week||1}`); } catch(e) {}
+ if(isSoloMode){ setSoloSavedPicks(null); try{ localStorage.removeItem("picklock_solo_locked"); }catch(e){} }
  }
  }}>Clear</div>
  </div>
@@ -5865,7 +5897,7 @@ export default function App() {
  const locked = {flexPicks: activePicks, lockedAt: new Date().toISOString()};
  const storageKey = `linedup_picks_${activeLeague.id}_wk${weekNum}`;
  try { localStorage.setItem(storageKey, JSON.stringify(locked)); } catch(e) {}
- if(isSoloMode) { setSoloSavedPicks(locked); setSoloSubmitted(true); }
+ if(isSoloMode) { setSoloSavedPicks(locked); setSoloSubmitted(true); try{ localStorage.setItem("picklock_solo_locked", JSON.stringify({flexPicks:activePicks, lockedAt:locked.lockedAt, week:weekNum})); }catch(e){} }
  else { setActiveSavedPicks(locked); setActiveSubmitted(true); }
  try{ if(navigator.vibrate) navigator.vibrate([0,30,40,30,60]); }catch(e){}
  setLockRitual(true);

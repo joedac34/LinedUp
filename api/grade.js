@@ -564,6 +564,40 @@ function calcParlayPoints(multiplier, legs) {
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
+// Reminds league members who have NOT locked a slip for the current week.
+// Respects the notif_reminder ("Pick Reminders") toggle and dedupes per league+week
+// so a member is nudged at most once per week. Solo leagues are skipped.
+async function maybeRemindPicks(league) {
+  try {
+    if (!league || !league.id || !league.current_week) return;
+    if (league.league_type === "solo") return;
+    const week = league.current_week;
+    const members = await sbGet(`league_members?league_id=eq.${league.id}&select=user_id`);
+    if (!Array.isArray(members) || !members.length) return;
+    const memberIds = members.map(m => m.user_id);
+    const pickRows = await sbGet(`picks?league_id=eq.${league.id}&week=eq.${week}&select=user_id`);
+    const hasPicks = new Set((Array.isArray(pickRows) ? pickRows : []).map(p => p.user_id));
+    const need = memberIds.filter(id => !hasPicks.has(id));
+    if (!need.length) return;
+    // Preference (defaults on when the column is null)
+    const prefRows = await sbGet(`users?id=in.(${need.join(",")})&select=id,notif_reminder`);
+    const optOut = new Set((Array.isArray(prefRows) ? prefRows : []).filter(u => u.notif_reminder === false).map(u => u.id));
+    // Already reminded for this exact league+week?
+    const already = await sbGet(`notifications?type=eq.pick_reminder&user_id=in.(${need.join(",")})&select=user_id,data`);
+    const reminded = new Set((Array.isArray(already) ? already : []).filter(n => n.data && n.data.league_id === league.id && n.data.week === week).map(n => n.user_id));
+    for (const uid of need) {
+      if (optOut.has(uid) || reminded.has(uid)) continue;
+      await sbPost("notifications", {
+        user_id: uid,
+        type: "pick_reminder",
+        title: `Lock your Week ${week} slip`,
+        body: `You haven't locked your picks for ${league.name || "your league"} yet — don't get left behind.`,
+        data: { league_id: league.id, week },
+      });
+    }
+  } catch (e) { /* never let a reminder failure break grading */ }
+}
+
 export default async function handler(req, res) {
   // Auth check — allow GET from Vercel cron (Authorization header) or POST with secret
   const cronSecret = process.env.CRON_SECRET;
@@ -593,6 +627,7 @@ export default async function handler(req, res) {
     if (!Array.isArray(leagues)) throw new Error("Failed to fetch leagues");
 
     for (const league of leagues) {
+      await maybeRemindPicks(league);
       const espnMap = ESPN_MAP[league.sport];
       if (!espnMap) continue;
 
