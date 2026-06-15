@@ -1130,6 +1130,15 @@ function AiInsightBubble({ item, IOS, onAddToSlip }) {
         )}
       </div>
     )}
+    {phase>=1 && data.yourAngle && (
+      <div className="ai-rise" style={{display:"flex",alignItems:"flex-start",gap:8,background:`linear-gradient(135deg,${IOS.blue}1f,${IOS.indigo}12)`,border:`0.5px solid ${IOS.blue}3a`,borderRadius:11,padding:"10px 12px",marginBottom:11}}>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginTop:1}}><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 12 0v1"/><path d="M17.5 7.5l1.5 1.5 3-3"/></svg>
+        <div>
+          <div style={{fontSize:9,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:IOS.blue,marginBottom:2}}>Your angle</div>
+          <div style={{fontSize:12.5,lineHeight:1.45,color:"rgba(255,255,255,0.88)"}}>{data.yourAngle}</div>
+        </div>
+      </div>
+    )}
     {phase>=1 && !data.matchup && data.keyStats && data.keyStats.length>0 && (
       <div className="ai-rise" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7,marginBottom:11}}>
         {data.keyStats.slice(0,4).map((s,si)=>(
@@ -1855,6 +1864,23 @@ export default function App() {
   const aiSuggestions = aiInput.trim().length>=2
     ? ALL_BETS.filter(b => ((b.pick||"")+" "+(b.game||"")).toLowerCase().includes(aiInput.trim().toLowerCase())).slice(0,6)
     : [];
+  const SLOT_OF = { ml:"ml", moneyline:"ml", spread:"spread", ou:"ou", total:"ou", prop:"prop", longshot:"longshot", parlay:"longshot" };
+  const plokUserStats = () => {
+    const a = allMyStats; if(!a || !a.total) return null;
+    return {
+      archetype: (a.personality||"").replace(/^The /,""),
+      record: `${a.wins}-${a.losses}`,
+      winRate: a.winRate,
+      streak: (a.currentStreak && a.currentStreak.count) ? `${a.currentStreak.type}${a.currentStreak.count}` : null,
+      byType: a.byType ? Object.fromEntries(Object.entries(a.byType).filter(([k,v])=>(v.wins+v.losses)>0).map(([k,v])=>[k, {record:`${v.wins}-${v.losses}`, pct:v.pct}])) : {},
+    };
+  };
+  const plokUserSlot = (category) => {
+    const a = allMyStats; if(!a || !a.byType) return null;
+    const key = SLOT_OF[(category||"").toLowerCase()] || category;
+    const v = a.byType[key]; if(!v || (v.wins+v.losses)<3) return null;
+    return { label: v.label || key, record:`${v.wins}-${v.losses}`, pct: v.pct };
+  };
   const buildBetCtx = (bet, category) => ({
     sport: bet._sport || leagueSports[0] || "nfl",
     betType: category,
@@ -1862,6 +1888,8 @@ export default function App() {
     game: bet.game,
     odds: bet.odds,
     userId: user?.id,
+    userStats: plokUserStats(),
+    userSlot: plokUserSlot(category),
   });
   const aiAddToSlip = (bet, category) => {
     const picks = isSoloMode ? soloFlexPicks : flexPicks;
@@ -1931,7 +1959,7 @@ export default function App() {
     const item = { role:"ai", label:"Plok", bet:null, category:null, loading:true };
     setAiThread(prev=>[...prev, { role:"user", text:q }, item]);
     setAiBusy(true);
-    fetch("/api/insight", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ sport:(leagueSports[0]||"nfl"), betType:"chat", selection:q, question:q, userId:user?.id }) })
+    fetch("/api/insight", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ sport:(leagueSports[0]||"nfl"), betType:"chat", selection:q, question:q, userId:user?.id, userStats:plokUserStats() }) })
       .then(async r=>{ const data=await r.json(); setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, data:r.ok?data:null, error:r.ok?null:(data.error||"Couldn't reach Plok")} : x)); })
       .catch(()=> setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, error:"Network error — try again"} : x)))
       .finally(()=> setAiBusy(false));

@@ -439,12 +439,21 @@ const SCHEMA = {
                   properties: { dir: { type: "string", enum: ["up", "down"] }, text: { type: "string" } }, required: ["dir", "text"] } },
     bullCase: { type: "string" },
     bearCase: { type: "string" },
+    yourAngle: { type: "string" },
   },
-  required: ["summary", "keyStats", "trends", "bullCase", "bearCase"],
+  required: ["summary", "keyStats", "trends", "bullCase", "bearCase", "yourAngle"],
 };
 
 async function generate(ctx, stats) {
   let system, user;
+  const profileBlock = ctx.userStats ? (
+    "\n\nPROFILE (the user's own PickLock history — reference when relevant, never invent)\n" +
+    `- Archetype: ${ctx.userStats.archetype || "unknown"}\n` +
+    `- Overall: ${ctx.userStats.record || "0-0"} (${ctx.userStats.winRate || "—"})` +
+    (ctx.userStats.streak ? `, current streak ${ctx.userStats.streak}` : "") +
+    (ctx.userStats.byType ? "\n- By bet type: " + Object.entries(ctx.userStats.byType).map(([k, v]) => `${k} ${v.record} (${v.pct}%)`).join(", ") : "") +
+    (ctx.userSlot ? `\n- THIS bet type (${ctx.userSlot.label}): ${ctx.userSlot.record} (${ctx.userSlot.pct}%)  <- most relevant` : "")
+  ) : "";
   if (ctx.betType === "chat") {
     system =
       "You are Plok, PickLock's friendly betting analyst, chatting with a user. " +
@@ -452,8 +461,9 @@ async function generate(ctx, stats) {
       "In this chat you do NOT have live stats, odds, or injuries for any specific game, so NEVER state a specific stat, line, number, or prediction as fact, and never guess a winner. " +
       "If the user asks who will win, for a number, or for a pick on a real game, tell them you can't pull live data in open chat and point them to: tapping a bet on their board (for a data-backed read of that team or player) or the 'Find a bet' button (for a value scan of a game). " +
       "Be conversational, warm, and concise (2-4 sentences). Screening and education, not betting advice; never suggest stake sizes. " +
-      "Put your entire reply in the summary field. Return keyStats and trends as empty arrays, and bullCase and bearCase as empty strings.";
-    user = `USER MESSAGE\n${ctx.question || ctx.selection}`;
+      "Put your entire reply in the summary field. Return keyStats and trends as empty arrays, bullCase and bearCase as empty strings, and yourAngle as an empty string. " +
+      "You also have the user's own PickLock history in PROFILE (when present) — you MAY reference their archetype, hot/cold streak, or strong/weak bet types to make the chat personal and specific.";
+    user = `USER MESSAGE\n${ctx.question || ctx.selection}` + profileBlock;
   } else {
     const dataBlock = (stats.lines && stats.lines.length)
       ? stats.lines.map(l => `- ${l.label}: ${l.value}`).join("\n")
@@ -468,7 +478,8 @@ async function generate(ctx, stats) {
       "BULL and BEAR cases must be SPECIFIC: each cites at least one concrete number from DATA (a record, a per-game figure, the line, or the odds) and ties it to why this side wins or loses. Forbidden filler: 'if they play well', 'momentum', 'anything can happen', 'capable'. Two to three sentences each, no platitudes. If there are genuinely no numbers, keep both cases short and honest rather than padded. " +
       "trends: up to 3 short notes, each anchored to a specific number, or empty if none. " +
       "ALWAYS return keyStats as an EMPTY array — the app renders factual stats separately. Never imply a metric that is not an explicit number in DATA. " +
-      "Be analytical, not a guarantee. Entertainment, not financial advice.";
+      "Be analytical, not a guarantee. Entertainment, not financial advice. " +
+      "You ALSO have the user's own PickLock betting history in the PROFILE block. Set 'yourAngle' to ONE short, specific sentence connecting THIS bet to their tendencies — especially their record in this exact bet type (the line marked 'most relevant') or their archetype/streak. Be a sharp, encouraging coach: flag when this is a spot they are historically weak or strong. Use ONLY numbers from PROFILE, and return yourAngle as an empty string when PROFILE is absent or nothing is genuinely relevant.";
     user =
       `BET\n- Sport: ${ctx.sport}\n- Type: ${ctx.betType}\n- Selection: ${ctx.selection}` +
       (ctx.line != null ? `\n- Line: ${ctx.line}` : "") +
@@ -477,7 +488,7 @@ async function generate(ctx, stats) {
       (stats.note ? `\n- Context: ${stats.note}` : "") +
       `\n- MATCHUP_PROVIDED: ${stats.matchup ? "true" : "false"}` +
       `\n\nDATA\n${dataBlock}` +
-      (ctx.question ? `\n\nUSER QUESTION\n${ctx.question}` : "");
+      (ctx.question ? `\n\nUSER QUESTION\n${ctx.question}` : "") + profileBlock;
   }
 
   const r = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -510,7 +521,7 @@ export default async function handler(req, res) {
     }
 
     const day = new Date().toISOString().slice(0, 10);
-    const key = hashKey(["v3", ctx.sport, ctx.betType, ctx.selection, ctx.line, ctx.game, ctx.question || "", day].join("|"));
+    const key = hashKey(["v4", ctx.sport, ctx.betType, ctx.selection, ctx.line, ctx.game, ctx.question || "", ctx.userId || "", day].join("|"));
 
     const cached = await getCached(key);
     if (cached) return res.status(200).json({ ...cached, cached: true });
