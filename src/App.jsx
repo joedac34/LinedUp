@@ -1218,8 +1218,9 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
   const totalPts = soloWeeks.reduce((s,w)=>s+w.pts,0);
   const winPct = totalWins+totalLosses > 0 ? Math.round((totalWins/(totalWins+totalLosses))*100) : 0;
   const bestWeek = soloWeeks.length > 0 ? soloWeeks.reduce((b,w)=>w.pts>b.pts?w:b,soloWeeks[0]) : null;
-  const hasLockedSlip = soloSavedPicks && soloSavedPicks.flexPicks;
-  const lockedPicks = hasLockedSlip ? [...soloSavedPicks.flexPicks].filter(s=>s.mult!==null) : [];
+  const freePicks = (soloSavedPicks && soloSavedPicks.freePicks) || null;
+  const hasLockedSlip = soloSavedPicks && (soloSavedPicks.flexPicks || freePicks);
+  const lockedPicks = (hasLockedSlip && soloSavedPicks.flexPicks) ? [...soloSavedPicks.flexPicks].filter(s=>s.mult!==null) : [];
   const currentWeekNum = soloWeeks.length + 1;
 
   const sportLabels = {nfl:"NFL",nba:"NBA",mlb:"MLB"};
@@ -1246,8 +1247,8 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
       {/* Weekly Challenge */}
       <div style={{background:"rgba(255,159,10,0.07)",border:"0.5px solid rgba(255,159,10,0.25)",borderRadius:12,padding:"12px 14px",marginBottom:12}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
-          <div style={{fontSize:11,fontWeight:700,color:"#FF9F0A"}}>Weekly Challenge</div>
-          <div style={{fontSize:10,color:IOS.label3}}>This week</div>
+          <div style={{fontSize:11,fontWeight:700,color:"#FF9F0A"}}>Slate Challenge</div>
+          <div style={{fontSize:10,color:IOS.label3}}>This slate</div>
         </div>
         <div style={{fontSize:13,color:"#ccc",marginBottom:8}}>Score 40+ points</div>
         <div style={{height:4,background:"#1A1A1A",borderRadius:2,marginBottom:4}}>
@@ -1260,8 +1261,8 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
       <div style={{background:IOS.bg2,border:`0.5px solid ${hasLockedSlip?"rgba(48,209,88,0.25)":"rgba(255,255,255,0.07)"}`,borderRadius:12,padding:"14px",marginBottom:16}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:hasLockedSlip?10:4}}>
           <div>
-            <div style={{fontSize:13,fontWeight:700,color:"#fff"}}>Week {currentWeekNum} picks</div>
-            {!hasLockedSlip && <div style={{fontSize:11,color:IOS.label3,marginTop:2}}>Same bet types, same odds. Just you vs the line.</div>}
+            <div style={{fontSize:13,fontWeight:700,color:"#fff"}}>Slate {currentWeekNum}</div>
+            {!hasLockedSlip && <div style={{fontSize:11,color:IOS.label3,marginTop:2}}>Pick as many as you want. Just you vs the line.</div>}
           </div>
           {hasLockedSlip && (
             <div style={{display:"flex",alignItems:"center",gap:5,background:"rgba(48,209,88,0.1)",border:"0.5px solid rgba(48,209,88,0.3)",borderRadius:8,padding:"4px 9px"}}>
@@ -1275,7 +1276,17 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
         {hasLockedSlip ? (
           <>
             <div style={{marginBottom:10}}>
-              {lockedPicks.sort((a,b)=>a.mult-b.mult).map((slot,i)=>{
+              {freePicks ? freePicks.map((b,i)=>{
+                const fcol = b.categoryColor || IOS.blue;
+                const flabel = (b.categoryLabel||b.category||"PICK");
+                return (
+                  <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:i<freePicks.length-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
+                    <div style={{minWidth:42,textAlign:"center",fontSize:8.5,fontWeight:800,letterSpacing:.3,textTransform:"uppercase",color:fcol,background:`${fcol}18`,borderRadius:5,padding:"2px 5px",flexShrink:0}}>{flabel}</div>
+                    <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.75)",flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.pick}</div>
+                    <div style={{fontSize:11,fontWeight:800,color:(b.odds||"").startsWith("+")?IOS.green:IOS.blue,flexShrink:0}}>{b.odds}</div>
+                  </div>
+                );
+              }) : lockedPicks.sort((a,b)=>a.mult-b.mult).map((slot,i)=>{
                 const catColors = {ml:IOS.blue,prop:IOS.yellow,ou:IOS.orange,spread:IOS.green,longshot:IOS.pink};
                 const catLabels = {ml:"ML",prop:"PROP",ou:"O/U",spread:"SPR",longshot:"PARLAY"};
                 const isParlay = slot.isParlay && slot.parlayLegs?.length >= 2;
@@ -1304,7 +1315,7 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
                 if(setActiveLeagueId) setActiveLeagueId(lgId||"solo");
                 setScreen("picks");
               }} style={{flex:1,background:"rgba(255,255,255,0.08)",border:"none",borderRadius:8,padding:"10px",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
-                View Slip
+                View Slate
               </button>
             </div>
           </>
@@ -1321,7 +1332,7 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
               setShowSoloSportPicker(true);
             }
           }} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:8,padding:"12px",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
-            Build This Week&apos;s Slip
+            Build This Slate
           </button>
         )}
       </div>
@@ -1336,17 +1347,17 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
         </div>
       ) : (
         <div>
-          <div style={{fontSize:11,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Recent Weeks</div>
+          <div style={{fontSize:11,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Recent Slates</div>
           {soloWeeks.map((w,idx2)=>(
             <div key={w.week} style={{background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:10,padding:"11px 14px",marginBottom:6,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
               <div>
-                <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:2}}>Week {w.week}</div>
+                <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:2}}>Slate {w.week}</div>
                 <div style={{fontSize:11,color:IOS.label3}}>{w.wins}W - {w.losses}L - {w.picks.length} picks</div>
               </div>
               <div style={{textAlign:"right"}}>
                 <div style={{fontSize:16,fontWeight:800,color:w.pts>0?IOS.green:"#555"}}>{w.pts > 0 ? "+"+w.pts : "0"} pts</div>
                 {bestWeek && bestWeek.week===w.week && soloWeeks.length>1 && (
-                  <div style={{fontSize:8,fontWeight:700,color:IOS.green,background:"rgba(48,209,88,0.1)",border:"0.5px solid rgba(48,209,88,0.2)",borderRadius:4,padding:"1px 5px",marginTop:2}}>BEST WEEK</div>
+                  <div style={{fontSize:8,fontWeight:700,color:IOS.green,background:"rgba(48,209,88,0.1)",border:"0.5px solid rgba(48,209,88,0.2)",borderRadius:4,padding:"1px 5px",marginTop:2}}>BEST SLATE</div>
                 )}
               </div>
             </div>
@@ -1649,6 +1660,8 @@ export default function App() {
  ];
  const [flexPicks, setFlexPicks] = useState(EMPTY_FLEX);
  const [soloFlexPicks, setSoloFlexPicks] = useState(EMPTY_FLEX);
+ const [soloFreePicks, setSoloFreePicks] = useState([]); // freeform solo slate (variable count)
+ const [freeCat, setFreeCat] = useState("all");
  const parseSlotConfig=(raw)=>{ try{ const a=typeof raw==="string"?JSON.parse(raw):raw; return (Array.isArray(a)&&a.length)?a:null; }catch(e){ return null; } };
  const freshSlots=()=>{ const cfg = !isSoloMode ? parseSlotConfig(activeLeague&&activeLeague.slot_config) : null; return cfg ? cfg.map((c,i)=>({id:i,bet:null,mult:c.mult,category:c.type,isParlay:false,parlayLegs:[],locked:true})) : EMPTY_FLEX.map(s=>({...s})); };
  useEffect(()=>{ if(isSoloMode) return; setFlexPicks(freshSlots()); }, [activeLeagueId, isSoloMode, activeLeague&&activeLeague.slot_config]);
@@ -2555,6 +2568,44 @@ export default function App() {
  setSoloLoading(false);
  };
 
+ // Freeform solo: lock a variable-length slate. Each pick is an independent
+ // straight bet at multiplier 1, so it scores purely on its own odds via the
+ // shared grading engine (no parlay, no forced 5 slots).
+ const lockSoloFreeSlate = async () => {
+ if(!user || !soloFreePicks.length) return;
+ const lgId = soloLeagueId || await getOrCreateSoloLeague();
+ if(!lgId){ alert("Couldn't open your solo league."); return; }
+ const week = soloWeeks.length + 1;
+ try {
+ await supabase.from("picks").delete().eq("league_id", lgId).eq("user_id", user.id).eq("week", week);
+ const rows = soloFreePicks.map((b,i)=>({
+ league_id: lgId, user_id: user.id, week,
+ slot: `free_${i}`, multiplier: 1,
+ pick_name: b.pick, game: b.game||"", odds: b.odds, implied_odds: b.impliedOdds,
+ game_date: b.gameTime||null, result: "pending", points_earned: 0,
+ }));
+ const { error } = await supabase.from("picks").insert(rows);
+ if(error){ alert("Error saving slate: " + error.message); return; }
+ try{ await supabase.from("leagues").update({sport: soloSport}).eq("id", lgId); }catch(e){}
+ const freeSnap = soloFreePicks.map(b=>({pick:b.pick, game:b.game||"", odds:b.odds, impliedOdds:b.impliedOdds, category:b.category, categoryLabel:b.categoryLabel, categoryColor:b.categoryColor}));
+ const lockedAt = new Date().toISOString();
+ setSoloSavedPicks({freePicks: freeSnap, lockedAt});
+ setSoloSubmitted(true);
+ try{ localStorage.setItem("picklock_solo_locked", JSON.stringify({freePicks: freeSnap, lockedAt, week})); }catch(e){}
+ setSoloFreePicks([]);
+ try{ if(navigator.vibrate) navigator.vibrate([0,30,40,30,60]); }catch(e){}
+ setLockRitual(true);
+ } catch(e) { alert("Error: " + e.message); }
+ };
+ const clearSoloSlate = async () => {
+ if(!user) return;
+ const lgId = soloLeagueId || activeLeague.id;
+ const week = soloWeeks.length + 1;
+ try{ if(lgId && lgId!=="solo") await supabase.from("picks").delete().eq("league_id", lgId).eq("user_id", user.id).eq("week", week); }catch(e){}
+ setSoloSavedPicks(null); setSoloSubmitted(false);
+ try{ localStorage.removeItem("picklock_solo_locked"); }catch(e){}
+ };
+
  const fetchPublicLeagues = async () => {
  setBrowseLoading(true);
  try {
@@ -3174,7 +3225,7 @@ export default function App() {
  if(isSoloMode && !soloSavedPicks){
  try{
  const _s = localStorage.getItem("picklock_solo_locked");
- if(_s){ const _p = JSON.parse(_s); if(_p && _p.flexPicks && _p.week===(soloWeeks.length+1)){ setSoloSavedPicks({flexPicks:_p.flexPicks, lockedAt:_p.lockedAt}); } }
+ if(_s){ const _p = JSON.parse(_s); if(_p && _p.week===(soloWeeks.length+1)){ if(_p.freePicks){ setSoloSavedPicks({freePicks:_p.freePicks, lockedAt:_p.lockedAt}); } else if(_p.flexPicks){ setSoloSavedPicks({flexPicks:_p.flexPicks, lockedAt:_p.lockedAt}); } } }
  }catch(e){}
  }
  },[isSoloMode, soloWeeks, soloSavedPicks]);
@@ -5125,7 +5176,7 @@ export default function App() {
  )}
 
  {/* ══ PICKS ══ */}
- {screen==="picks"&&(()=>{
+ {screen==="picks"&&!isSoloMode&&(()=>{
  // Use separate state for solo mode vs league mode
  const activePicks = isSoloMode ? soloFlexPicks : flexPicks;
  const setActivePicks = isSoloMode ? setSoloFlexPicks : setFlexPicks;
@@ -6099,6 +6150,121 @@ export default function App() {
  )}
  </div>
  </>
+ );})()
+ }
+
+ {/* ══ SOLO FREEFORM SLATE BUILDER ══ */}
+ {screen==="picks"&&isSoloMode&&(()=>{
+ const ptsFor=(io)=>{ if(io==null) return 0; const d = io>0 ? (io/100)+1 : (100/Math.abs(io))+1; return parseFloat(((d-1)*10).toFixed(1)); };
+ const locked = (soloSavedPicks && soloSavedPicks.freePicks) ? soloSavedPicks : null;
+ const slateNum = soloWeeks.length + 1;
+ const CATS = [{k:"all",l:"All"},{k:"ml",l:"ML"},{k:"spread",l:"Spread"},{k:"ou",l:"O/U"},{k:"prop",l:"Prop"},{k:"longshot",l:"Longshot"}];
+ const board = (freeCat==="all" ? ALL_BETS : ALL_BETS.filter(b=>b.category===freeCat)).filter(b=>!soloFreePicks.some(p=>p.id===b.id)).slice(0,40);
+ const projTotal = soloFreePicks.reduce((s2,b)=>s2+ptsFor(b.impliedOdds),0);
+ const CAP = 12;
+ const atCap = soloFreePicks.length>=CAP;
+ return (
+ <div className="body" style={{padding:"0 16px 40px"}}>
+   <div style={{padding:"18px 0 12px",display:"flex",alignItems:"flex-start",justifyContent:"space-between"}}>
+     <div>
+       <div style={{fontSize:23,fontWeight:800,color:"#fff",letterSpacing:-0.5}}>{locked?`Slate ${slateNum}`:"Build Your Slate"}</div>
+       <div style={{fontSize:12.5,color:IOS.label3,marginTop:2}}>{locked?"Locked — pending results":"Pick as many as you want. Each scores on its own odds."}</div>
+     </div>
+     <div style={{textAlign:"right",flexShrink:0,marginLeft:12}}>
+       <div style={{fontSize:9.5,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5}}>Slate</div>
+       <div style={{fontSize:20,fontWeight:800,color:IOS.blue,lineHeight:1.1}}>{slateNum}</div>
+     </div>
+   </div>
+
+   {locked ? (
+     <>
+       <div style={{background:IOS.bg2,border:"0.5px solid rgba(48,209,88,0.25)",borderRadius:14,padding:"6px 14px 8px",marginBottom:14}}>
+         {locked.freePicks.map((b,i)=>{
+           const col=b.categoryColor||IOS.blue;
+           return (
+           <div key={i} style={{display:"flex",alignItems:"center",gap:9,padding:"9px 0",borderBottom:i<locked.freePicks.length-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
+             <div style={{fontSize:8.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:col,background:`${col}1c`,borderRadius:5,padding:"3px 6px",flexShrink:0}}>{b.categoryLabel||b.category}</div>
+             <div style={{flex:1,minWidth:0,fontSize:13,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.pick}</div>
+             <div style={{fontSize:12.5,fontWeight:800,color:(b.odds||"").startsWith("+")?IOS.green:IOS.blue,flexShrink:0}}>{b.odds}</div>
+           </div>
+           );
+         })}
+       </div>
+       <div style={{display:"flex",gap:9}}>
+         <button onClick={()=>setScreen("home")} style={{flex:1,background:IOS.blue,border:"none",borderRadius:11,padding:"13px",fontSize:14,fontWeight:800,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Back to Home</button>
+         <button onClick={clearSoloSlate} style={{background:"rgba(255,69,58,0.12)",border:`0.5px solid ${IOS.red}40`,borderRadius:11,padding:"13px 16px",fontSize:14,fontWeight:800,color:IOS.red,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Clear</button>
+       </div>
+     </>
+   ) : (
+     <>
+       <div style={{marginBottom:12}}>
+         {soloFreePicks.length===0 ? (
+           <div style={{background:IOS.bg2,border:"0.5px dashed rgba(255,255,255,0.14)",borderRadius:12,padding:"20px 16px",textAlign:"center"}}>
+             <div style={{fontSize:13,fontWeight:700,color:"rgba(255,255,255,0.8)"}}>No picks yet</div>
+             <div style={{fontSize:11.5,color:IOS.label3,marginTop:3}}>Tap bets below to add them to your slate.</div>
+           </div>
+         ) : (
+           <div style={{background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"4px 12px"}}>
+             {soloFreePicks.map((b,i)=>{
+               const col=b.categoryColor||IOS.blue;
+               return (
+               <div key={b.id} style={{display:"flex",alignItems:"center",gap:9,padding:"9px 0",borderBottom:i<soloFreePicks.length-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
+                 <div style={{fontSize:8.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:col,background:`${col}1c`,borderRadius:5,padding:"3px 6px",flexShrink:0}}>{b.categoryLabel||b.category}</div>
+                 <div style={{flex:1,minWidth:0}}>
+                   <div style={{fontSize:13,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.pick}</div>
+                   <div style={{fontSize:10.5,color:IOS.label3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.game}</div>
+                 </div>
+                 <div style={{textAlign:"right",flexShrink:0}}>
+                   <div style={{fontSize:12.5,fontWeight:800,color:(b.odds||"").startsWith("+")?IOS.green:IOS.blue}}>{b.odds}</div>
+                   <div style={{fontSize:9.5,color:IOS.label3}}>+{ptsFor(b.impliedOdds)} pts</div>
+                 </div>
+                 <div onClick={()=>setSoloFreePicks(soloFreePicks.filter(x=>x.id!==b.id))} style={{width:24,height:24,borderRadius:7,background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",color:"rgba(255,255,255,0.5)",fontSize:15,cursor:"pointer",flexShrink:0}}>×</div>
+               </div>
+               );
+             })}
+           </div>
+         )}
+       </div>
+
+       <button onClick={lockSoloFreeSlate} disabled={soloFreePicks.length===0} style={{width:"100%",background:soloFreePicks.length?IOS.green:"rgba(255,255,255,0.08)",border:"none",borderRadius:12,padding:"14px",fontSize:15,fontWeight:800,color:soloFreePicks.length?"#fff":"rgba(255,255,255,0.35)",cursor:soloFreePicks.length?"pointer":"default",fontFamily:"Barlow,sans-serif",marginBottom:16}}>
+         {soloFreePicks.length ? `Lock Slate · ${soloFreePicks.length} pick${soloFreePicks.length>1?"s":""} · up to ${projTotal.toFixed(1)} pts` : "Add at least 1 pick"}
+       </button>
+
+       <div style={{display:"flex",gap:7,overflowX:"auto",paddingBottom:10,marginBottom:4}}>
+         {CATS.map(c=>(
+           <div key={c.k} onClick={()=>setFreeCat(c.k)} style={{flexShrink:0,padding:"7px 14px",borderRadius:9,fontSize:12.5,fontWeight:700,cursor:"pointer",background:freeCat===c.k?IOS.blue:"rgba(255,255,255,0.06)",color:freeCat===c.k?"#fff":"rgba(255,255,255,0.6)"}}>{c.l}</div>
+         ))}
+       </div>
+
+       {!isLiveOdds ? (
+         <div style={{textAlign:"center",padding:"30px 16px",color:IOS.label3,fontSize:13}}>Odds are still loading for this slate…</div>
+       ) : board.length===0 ? (
+         <div style={{textAlign:"center",padding:"30px 16px",color:IOS.label3,fontSize:13}}>No more bets in this category.</div>
+       ) : (
+         <div style={{display:"flex",flexDirection:"column",gap:7}}>
+           {board.map(b=>{
+             const col=b.categoryColor||IOS.blue;
+             return (
+             <div key={b.id} onClick={()=>{ if(atCap) return; setSoloFreePicks([...soloFreePicks, b]); }} style={{display:"flex",alignItems:"center",gap:10,background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:11,padding:"11px 13px",cursor:atCap?"default":"pointer",opacity:atCap?0.5:1}}>
+               <div style={{fontSize:8.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:col,background:`${col}1c`,borderRadius:5,padding:"3px 6px",flexShrink:0}}>{b.categoryLabel||b.category}</div>
+               <div style={{flex:1,minWidth:0}}>
+                 <div style={{fontSize:13,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.pick}</div>
+                 <div style={{fontSize:10.5,color:IOS.label3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.game}</div>
+               </div>
+               <div style={{textAlign:"right",flexShrink:0}}>
+                 <div style={{fontSize:13,fontWeight:800,color:(b.odds||"").startsWith("+")?IOS.green:IOS.blue}}>{b.odds}</div>
+                 <div style={{fontSize:9.5,color:IOS.label3}}>+{ptsFor(b.impliedOdds)} pts</div>
+               </div>
+               <div style={{width:26,height:26,borderRadius:8,background:atCap?"rgba(255,255,255,0.05)":`${IOS.blue}1f`,border:`0.5px solid ${IOS.blue}40`,display:"flex",alignItems:"center",justifyContent:"center",color:IOS.blue,fontSize:18,fontWeight:700,flexShrink:0}}>+</div>
+             </div>
+             );
+           })}
+           {atCap && <div style={{textAlign:"center",fontSize:11,color:IOS.label3,padding:"8px"}}>Slate cap reached ({CAP}). Remove one to add more.</div>}
+         </div>
+       )}
+     </>
+   )}
+ </div>
  );})()
  }
 
@@ -9401,7 +9567,7 @@ export default function App() {
  <div className="body" style={{padding:"0 16px 40px"}}>
  <div style={{padding:"20px 0 14px"}}>
  <div style={{fontSize:24,fontWeight:800,color:"#fff",letterSpacing:-0.5}}>History</div>
- <div style={{fontSize:13,color:IOS.label3,marginTop:2}}>Your solo pick record</div>
+ <div style={{fontSize:13,color:IOS.label3,marginTop:2}}>Your solo slate record</div>
  </div>
  {soloWeeks.length===0 ? (
  <div style={{textAlign:"center",padding:"40px 20px",background:IOS.bg2,borderRadius:12,border:"0.5px solid rgba(255,255,255,0.07)"}}>
@@ -9425,19 +9591,19 @@ export default function App() {
    ))}
  </div>
  {/* Week list */}
- <div style={{fontSize:11,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>All Weeks</div>
+ <div style={{fontSize:11,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>All Slates</div>
  {soloWeeks.map((w,i)=>{
    const isBest = soloWeeks.length>1 && w.pts===Math.max(...soloWeeks.map(x=>x.pts));
    return (
    <div key={w.week} style={{background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"12px 14px",marginBottom:8}}>
      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
        <div>
-         <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>Week {w.week}</div>
+         <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>Slate {w.week}</div>
          <div style={{fontSize:11,color:IOS.label3,marginTop:2}}>{w.wins}W · {w.losses}L · {w.picks.length} picks</div>
        </div>
        <div style={{textAlign:"right"}}>
          <div style={{fontSize:18,fontWeight:800,color:w.pts>0?IOS.green:"#555"}}>{w.pts>0?"+"+w.pts:"0"} pts</div>
-         {isBest&&<div style={{fontSize:8,fontWeight:700,color:IOS.green,background:"rgba(48,209,88,0.1)",border:"0.5px solid rgba(48,209,88,0.2)",borderRadius:4,padding:"1px 5px",marginTop:2}}>BEST WEEK</div>}
+         {isBest&&<div style={{fontSize:8,fontWeight:700,color:IOS.green,background:"rgba(48,209,88,0.1)",border:"0.5px solid rgba(48,209,88,0.2)",borderRadius:4,padding:"1px 5px",marginTop:2}}>BEST SLATE</div>}
        </div>
      </div>
      {/* Pick breakdown */}
@@ -9497,7 +9663,7 @@ export default function App() {
  );
 
  const LineChartSVG=({vals})=>{
-  if(!vals||vals.length<2) return <div style={{height:150,display:"flex",alignItems:"center",justifyContent:"center",color:CC.l3,fontSize:13}}>Not enough graded weeks yet</div>;
+  if(!vals||vals.length<2) return <div style={{height:150,display:"flex",alignItems:"center",justifyContent:"center",color:CC.l3,fontSize:13}}>{isSoloMode?"Not enough graded slates yet":"Not enough graded weeks yet"}</div>;
   const W=320,H=150,pad=18; const max=Math.max(...vals,1);
   const xs=i=>pad+(i*(W-pad*2)/(vals.length-1));
   const ys=v=>H-pad-(v/max)*(H-pad*2);
@@ -9607,10 +9773,10 @@ export default function App() {
      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
       <Tile lbl="Record" val={(s.wins||0)+"-"+(s.losses||0)} meta={(s.winRate||"0%")+" win"} glow={CC.blue} vcolor="#fff"/>
       <Tile lbl="Avg Odds" val={fmtOdds(s.avgOdds)} meta="across all picks" glow={CC.teal} vcolor={CC.teal}/>
-      <Tile lbl="Best Week" val={s.bestWeek?(s.bestWeek.pts+" pts"):"—"} meta={s.bestWeek?s.bestWeek.label:"—"} glow={CC.yellow} vcolor={CC.green}/>
+      <Tile lbl={isSoloMode?"Best Slate":"Best Week"} val={s.bestWeek?(s.bestWeek.pts+" pts"):"—"} meta={s.bestWeek?s.bestWeek.label:"—"} glow={CC.yellow} vcolor={CC.green}/>
       <Tile lbl="Streak" val={streak.type+streak.count} meta={"best "+(s.maxStreak||0)} glow={CC.pink} vcolor={streak.type==="W"?CC.green:CC.red}/>
      </div>
-     <SecH t="Cumulative Points" sub={byWeek.length+" graded wks"}/>
+     <SecH t="Cumulative Points" sub={byWeek.length+(isSoloMode?" graded slates":" graded wks")}/>
      <div style={{...SURF,padding:"16px 16px 14px"}}><LineChartSVG vals={cumVals}/></div>
     </>)}
 
