@@ -1918,6 +1918,39 @@ export default function App() {
     const v = a.byType[key]; if(!v || (v.wins+v.losses)<3) return null;
     return { label: v.label || key, record:`${v.wins}-${v.losses}`, pct: v.pct };
   };
+  const plokLeagueCtx = () => {
+    try{
+      if(isSoloMode) return null;
+      const lg = activeLeague; if(!lg || !lg.id) return null;
+      const fmt = lg.league_type || "points";
+      const standings = realStandings || [];
+      const idx = standings.findIndex(z=>z.isYou);
+      const me = idx>=0 ? standings[idx] : null;
+      const total = standings.length;
+      const out = { format: fmt, week: lg.current_week||1, players: total||null };
+      if(me){
+        out.myRank = me.rank;
+        const leader = standings[0];
+        if(leader){ if(leader.isYou) out.leading = true; else out.leaderGap = parseFloat((Number(leader.points||0) - Number(me.points||0)).toFixed(1)); }
+        if(idx>0) out.aboveGap = parseFloat((Number(standings[idx-1].points||0) - Number(me.points||0)).toFixed(1));
+        if(idx>=0 && idx<total-1) out.belowGap = parseFloat((Number(me.points||0) - Number(standings[idx+1].points||0)).toFixed(1));
+      }
+      if(lg.season_weeks){ out.weeksLeft = Math.max(0, Number(lg.season_weeks) - (lg.current_week||1)); out.finalWeek = (lg.current_week||1) >= Number(lg.season_weeks); }
+      if(fmt==="h2h"){
+        const cw = lg.current_week||1;
+        const wk = (liveSchedule||[]).find(w=>w.week===cw);
+        if(wk){
+          out.opponent = wk.opp || null;
+          const myWk = (weekPicks||[]).filter(pp=>pp.user_id===(user&&user.id)).reduce((sm,pp)=>sm+parseFloat(pp.points_earned||0),0);
+          const oppWk = Number(wk.oppPts||0);
+          out.myWeekPts = parseFloat(myWk.toFixed(1));
+          out.oppWeekPts = parseFloat(oppWk.toFixed(1));
+          out.matchupGap = parseFloat((myWk - oppWk).toFixed(1));
+        }
+      }
+      return out;
+    }catch(e){ return null; }
+  };
   const buildBetCtx = (bet, category) => ({
     sport: bet._sport || leagueSports[0] || "nfl",
     betType: category,
@@ -1928,6 +1961,7 @@ export default function App() {
     userStats: plokUserStats(),
     userSlot: plokUserSlot(category),
     persona: plokPersona,
+    leagueCtx: plokLeagueCtx(),
   });
   const aiAddToSlip = (bet, category) => {
     const picks = isSoloMode ? soloFlexPicks : flexPicks;
@@ -2020,7 +2054,7 @@ export default function App() {
     const item = { role:"ai", label:"Plok", bet:null, category:null, loading:true };
     setAiThread(prev=>[...prev, { role:"user", text:q }, item]);
     setAiBusy(true);
-    fetch("/api/insight", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ sport:(leagueSports[0]||"nfl"), betType:"chat", selection:q, question:q, userId:user?.id, userStats:plokUserStats(), persona:plokPersona }) })
+    fetch("/api/insight", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ sport:(leagueSports[0]||"nfl"), betType:"chat", selection:q, question:q, userId:user?.id, userStats:plokUserStats(), persona:plokPersona, leagueCtx:plokLeagueCtx() }) })
       .then(async r=>{ const data=await r.json(); setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, data:r.ok?data:null, error:r.ok?null:(data.error||"Couldn't reach Plok")} : x)); })
       .catch(()=> setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, error:"Network error — try again"} : x)))
       .finally(()=> setAiBusy(false));

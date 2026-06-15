@@ -463,6 +463,17 @@ async function generate(ctx, stats) {
     professor: "PERSONA: THE PROFESSOR. Teach as you analyze — briefly explain the WHY: what the key number means, how the line or odds translate to implied probability. Leave the user a little smarter. Tone: clear, patient, instructive. ",
   };
   const personaLine = (ctx.persona && PERSONAS[ctx.persona]) ? PERSONAS[ctx.persona] : "";
+  const leagueBlock = ctx.leagueCtx ? (() => {
+    const L = ctx.leagueCtx; const lines = [];
+    lines.push(`- Format: ${L.format}` + (L.finalWeek ? " (FINAL WEEK)" : (L.weeksLeft != null ? `, ${L.weeksLeft} weeks left` : "")));
+    if (L.myRank) lines.push(`- Your rank: #${L.myRank}${L.players ? ` of ${L.players}` : ""}`);
+    if (L.leading) lines.push("- You currently lead the league.");
+    else if (L.leaderGap != null) lines.push(`- Behind the leader by ${L.leaderGap} pts`);
+    if (L.aboveGap != null) lines.push(`- ${L.aboveGap} pts behind the spot directly above`);
+    if (L.belowGap != null) lines.push(`- ${L.belowGap} pts ahead of the spot directly below`);
+    if (L.opponent) lines.push(`- This week vs ${L.opponent}: ${L.myWeekPts} - ${L.oppWeekPts}` + (L.matchupGap > 0 ? ` (you are UP ${L.matchupGap})` : L.matchupGap < 0 ? ` (you are DOWN ${Math.abs(L.matchupGap)})` : " (even)"));
+    return "\n\nLEAGUE (the user's standing/matchup — use for strategy)\n" + lines.join("\n");
+  })() : "";
   if (ctx.betType === "chat") {
     system = personaLine +
       "You are Plok, PickLock's friendly betting analyst, chatting with a user. " +
@@ -471,8 +482,8 @@ async function generate(ctx, stats) {
       "If the user asks who will win, for a number, or for a pick on a real game, tell them you can't pull live data in open chat and point them to: tapping a bet on their board (for a data-backed read of that team or player) or the 'Find a bet' button (for a value scan of a game). " +
       "Be conversational, warm, and concise (2-4 sentences). Screening and education, not betting advice; never suggest stake sizes. " +
       "Put your entire reply in the summary field. Return keyStats and trends as empty arrays, bullCase and bearCase as empty strings, yourAngle as an empty string, conviction as 0, and verdict as 'none'. " +
-      "You also have the user's own PickLock history in PROFILE (when present) — you MAY reference their archetype, hot/cold streak, or strong/weak bet types to make the chat personal and specific.";
-    user = `USER MESSAGE\n${ctx.question || ctx.selection}` + profileBlock;
+      "You also have the user's own PickLock history in PROFILE and their standing/matchup in LEAGUE (when present) — you MAY reference their archetype, hot/cold streak, strong/weak bet types, or where they sit in the league to make the chat personal, specific, and strategic.";
+    user = `USER MESSAGE\n${ctx.question || ctx.selection}` + profileBlock + leagueBlock;
   } else {
     const dataBlock = (stats.lines && stats.lines.length)
       ? stats.lines.map(l => `- ${l.label}: ${l.value}`).join("\n")
@@ -488,7 +499,7 @@ async function generate(ctx, stats) {
       "trends: up to 3 short notes, each anchored to a specific number, or empty if none. " +
       "ALWAYS return keyStats as an EMPTY array — the app renders factual stats separately. Never imply a metric that is not an explicit number in DATA. " +
       "Be analytical, not a guarantee. Entertainment, not financial advice. " +
-      "You ALSO have the user's own PickLock betting history in the PROFILE block. Set 'yourAngle' to ONE short, specific sentence connecting THIS bet to their tendencies — especially their record in this exact bet type (the line marked 'most relevant') or their archetype/streak. Be a sharp, encouraging coach: flag when this is a spot they are historically weak or strong. Use ONLY numbers from PROFILE, and return yourAngle as an empty string when PROFILE is absent or nothing is genuinely relevant. " +
+      "You ALSO have the user's own PickLock betting history in the PROFILE block. Set 'yourAngle' to ONE short, specific sentence connecting THIS bet to their tendencies — especially their record in this exact bet type (the line marked 'most relevant') or their archetype/streak. Be a sharp, encouraging coach: flag when this is a spot they are historically weak or strong. You ALSO have the user's LEAGUE standing/matchup — when it is decisive for THIS bet, make yourAngle strategic: if they are trailing (in the matchup or standings) and this is a high-ceiling or plus-money play, frame it as the variance they need to catch up; if they are leading and this is a safe play, note that it protects the lead; on the FINAL WEEK while behind, push ceiling. Lead yourAngle with whichever of PROFILE or LEAGUE is more decisive for THIS bet. Use ONLY numbers from PROFILE, and return yourAngle as an empty string when PROFILE is absent or nothing is genuinely relevant. " +
       "Finally, give your verdict on taking THIS bet: set 'conviction' to an integer 0-100 for how strong a play it is based ONLY on DATA (records, scoring, line, odds) — be honest and use the full range, not just 50-70. Set 'verdict' to one of: 'strong' (a clear, well-supported play), 'lean' (mild edge), 'pass' (DATA is thin or there is no real edge — tell them to save their slip), or 'fade' (DATA points to the OTHER side). Never manufacture conviction; a real handicapper passes often. If DATA is largely missing, verdict must be 'pass' with low conviction.";
     user =
       `BET\n- Sport: ${ctx.sport}\n- Type: ${ctx.betType}\n- Selection: ${ctx.selection}` +
@@ -498,7 +509,7 @@ async function generate(ctx, stats) {
       (stats.note ? `\n- Context: ${stats.note}` : "") +
       `\n- MATCHUP_PROVIDED: ${stats.matchup ? "true" : "false"}` +
       `\n\nDATA\n${dataBlock}` +
-      (ctx.question ? `\n\nUSER QUESTION\n${ctx.question}` : "") + profileBlock;
+      (ctx.question ? `\n\nUSER QUESTION\n${ctx.question}` : "") + profileBlock + leagueBlock;
   }
 
   const r = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -531,7 +542,8 @@ export default async function handler(req, res) {
     }
 
     const day = new Date().toISOString().slice(0, 10);
-    const key = hashKey(["v5", ctx.sport, ctx.betType, ctx.selection, ctx.line, ctx.game, ctx.question || "", ctx.userId || "", ctx.persona || "", day].join("|"));
+    const leagueSig = ctx.leagueCtx ? `${ctx.leagueCtx.myRank || ""}_${ctx.leagueCtx.matchupGap != null ? Math.round(ctx.leagueCtx.matchupGap) : ""}` : "";
+    const key = hashKey(["v6", ctx.sport, ctx.betType, ctx.selection, ctx.line, ctx.game, ctx.question || "", ctx.userId || "", ctx.persona || "", leagueSig, day].join("|"));
 
     const cached = await getCached(key);
     if (cached) return res.status(200).json({ ...cached, cached: true });
