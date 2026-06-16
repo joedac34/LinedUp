@@ -1636,6 +1636,8 @@ export default function App() {
  odds: american,
  impliedOdds: o.price,
  gameTime: game.commence_time,
+ eventId: game.id, marketKey: "h2h", outcome: o.name, point: null,
+ selKey: `${game.id}|h2h|${o.name}|`,
  });
  // Longshots: +400 or better
  if(o.price >= 400) {
@@ -1646,6 +1648,8 @@ export default function App() {
  odds: american,
  impliedOdds: o.price,
  gameTime: game.commence_time,
+ eventId: game.id, marketKey: "h2h", outcome: o.name, point: null,
+ selKey: `${game.id}|h2h|${o.name}|`,
  });
  }
  });
@@ -1661,6 +1665,8 @@ export default function App() {
  odds: american,
  impliedOdds: o.price,
  gameTime: game.commence_time,
+ eventId: game.id, marketKey: "spreads", outcome: o.name, point: o.point,
+ selKey: `${game.id}|spreads|${o.name}|${o.point}`,
  });
  });
 
@@ -1674,6 +1680,8 @@ export default function App() {
  odds: american,
  impliedOdds: o.price,
  gameTime: game.commence_time,
+ eventId: game.id, marketKey: "totals", outcome: o.name, point: o.point,
+ selKey: `${game.id}|totals|${o.name}|${o.point}`,
  });
  });
  });
@@ -2715,7 +2723,9 @@ export default function App() {
  league_id: lgId, user_id: user.id, week,
  slot: `free_${i}`, multiplier: 1,
  pick_name: b.pick, game: b.game||"", odds: b.odds, implied_odds: b.impliedOdds,
- game_date: b.gameTime||null, result: "pending", points_earned: 0,
+ game_date: b.gameTime||null,
+ event_id: b.eventId||null, market_key: b.marketKey||null, outcome: b.outcome||null, outcome_point: (b.point!=null?b.point:null), sel_key: b.selKey||null,
+ result: "pending", points_earned: 0,
  }));
  const { error } = await supabase.from("picks").insert(rows);
  if(error){ alert("Error saving slate: " + error.message); return; }
@@ -2958,7 +2968,7 @@ export default function App() {
 
  const fetchAllMyStats = async (uid) => {
  const {data:picks} = await supabase.from("picks").select("*").eq("user_id", uid).neq("result", "pending");
- if(!picks||!picks.length){setAllMyStats({wins:0,losses:0,points:0,total:0,winRate:"0%",bestBet:null,worstBet:null,byType:{},bySport:{},byWeek:[],avgOdds:0,currentStreak:{count:0,type:"W"},maxStreak:0,bestWeek:null,personality:"The Rookie",personalityDesc:"Keep picking and your style will emerge.",longshotStats:[],byMult:[],oddsBands:[]});return;}
+ if(!picks||!picks.length){setAllMyStats({wins:0,losses:0,points:0,total:0,winRate:"0%",bestBet:null,worstBet:null,byType:{},bySport:{},byWeek:[],avgOdds:0,currentStreak:{count:0,type:"W"},maxStreak:0,bestWeek:null,personality:"The Rookie",personalityDesc:"Keep picking and your style will emerge.",longshotStats:[],byMult:[],oddsBands:[],clv:null});return;}
  const wins=picks.filter(p=>p.result==="W").length;
  const losses=picks.filter(p=>p.result==="L").length;
  const points=parseFloat(picks.filter(p=>p.result==="W").reduce((sum,p)=>sum+parseFloat(p.points_earned||0),0).toFixed(1));
@@ -3019,7 +3029,9 @@ export default function App() {
  const bandDefs=[{key:"-200+",test:o=>o<=-200},{key:"-150",test:o=>o>-200&&o<=-140},{key:"-110",test:o=>o>-140&&o<100},{key:"+100",test:o=>o>=100&&o<200},{key:"+200",test:o=>o>=200&&o<400},{key:"+400+",test:o=>o>=400}];
  const bandColors=["#30D158","#5CC85A","#9FBE3E","#FFD60A","#FF9F0A","#FF375F"];
  const oddsBands=bandDefs.map((b,i)=>{const inB=picks.filter(p=>{const o=p.implied_odds||0;return o!==0&&b.test(o);});const w=inB.filter(p=>p.result==="W").length;return{key:b.key,color:bandColors[i],total:inB.length,wins:w,pct:inB.length>0?Math.round(w/inB.length*100):0};});
- setAllMyStats({wins,losses,points,total,winRate,bestBet,worstBet,byType,bySport,byWeek,avgOdds,currentStreak:{count:curStreak,type:curType},maxStreak,bestWeek:bestWeekObj,personality,personalityDesc,longshotStats,byMult,oddsBands});
+ const clvP=picks.filter(p=>p.clv!=null);
+ const clvObj=clvP.length?{count:clvP.length,beatRate:Math.round(clvP.filter(p=>parseFloat(p.clv)>0).length/clvP.length*100),avgClv:parseFloat((clvP.reduce((a,p)=>a+parseFloat(p.clv||0),0)/clvP.length).toFixed(2))}:null;
+ setAllMyStats({wins,losses,points,total,winRate,bestBet,worstBet,byType,bySport,byWeek,avgOdds,currentStreak:{count:curStreak,type:curType},maxStreak,bestWeek:bestWeekObj,personality,personalityDesc,longshotStats,byMult,oddsBands,clv:clvObj});
  };
 
  const fetchStandings = async (leagueId) => {
@@ -6256,6 +6268,11 @@ export default function App() {
  odds: slot.bet.odds,
  implied_odds: slot.bet.impliedOdds,
  game_date: slot.bet.gameTime||null,
+ event_id: slot.bet.eventId||null,
+ market_key: slot.bet.marketKey||null,
+ outcome: slot.bet.outcome||null,
+ outcome_point: (slot.bet.point!=null?slot.bet.point:null),
+ sel_key: slot.bet.selKey||null,
  result: "pending",
  points_earned: 0,
  });
@@ -9973,6 +9990,23 @@ export default function App() {
        </div>
       </>);
      })()}
+     {s.clv && s.clv.count>0 && (<>
+      <SecH t="Closing Line Value" sub={s.clv.count+" graded picks"}/>
+      <div style={{...SURF,padding:"16px",marginBottom:14}}>
+       <div style={{display:"flex",alignItems:"stretch",justifyContent:"space-around"}}>
+        <div style={{textAlign:"center",flex:1}}>
+         <div style={{fontSize:30,fontWeight:800,color:s.clv.beatRate>=50?CC.green:CC.l2,fontVariantNumeric:"tabular-nums"}}>{s.clv.beatRate}%</div>
+         <div style={{fontSize:9.5,textTransform:"uppercase",letterSpacing:"0.08em",color:CC.l3,marginTop:4}}>beat the close</div>
+        </div>
+        <div style={{width:"0.5px",background:"rgba(255,255,255,0.1)",margin:"2px 0"}}/>
+        <div style={{textAlign:"center",flex:1}}>
+         <div style={{fontSize:30,fontWeight:800,color:s.clv.avgClv>0?CC.green:(s.clv.avgClv<0?CC.red:CC.l2),fontVariantNumeric:"tabular-nums"}}>{s.clv.avgClv>0?"+":""}{s.clv.avgClv}%</div>
+         <div style={{fontSize:9.5,textTransform:"uppercase",letterSpacing:"0.08em",color:CC.l3,marginTop:4}}>avg CLV</div>
+        </div>
+       </div>
+       <div style={{fontSize:11,color:CC.l3,marginTop:13,lineHeight:1.45,textAlign:"center"}}>CLV measures whether you locked a better price than the closing line. Consistently positive CLV is the strongest sign you are finding real value.</div>
+      </div>
+     </>)}
      <SecH t="Cumulative Points" sub={byWeek.length+(isSoloMode?" graded slates":" graded wks")}/>
      <div style={{...SURF,padding:"16px 16px 14px"}}><LineChartSVG vals={cumVals}/></div>
     </>)}
