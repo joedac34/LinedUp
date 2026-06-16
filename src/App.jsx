@@ -602,6 +602,38 @@ function Ticker({ value, decimals=0, prefix="", suffix="", className, style, dur
   const n = decimals>0 ? (Number(disp)||0).toFixed(decimals) : Math.round(Number(disp)||0);
   return <span className={className} style={style}>{prefix}{n}{suffix}</span>;
 }
+function StreakFlame({ count=0, size=18 }){
+  if(!count || count<1) return null;
+  const c=Math.min(count,10);
+  const grow=1+c*0.07;
+  const w=size, h=size*grow*1.35;
+  const tip=c>=6?"#FF375F":(c>=3?"#FF6A00":"#FF9F0A");
+  const gid="fl"+count+"_"+size;
+  return (
+    <svg className="flame-flicker" width={w} height={h} viewBox="0 0 24 34" style={{display:"block",overflow:"visible",filter:`drop-shadow(0 0 ${3+c}px ${tip}88)`}}>
+      <defs><linearGradient id={gid} x1="0" y1="1" x2="0" y2="0">
+        <stop offset="0%" stopColor="#FFE08A"/><stop offset="45%" stopColor="#FF9F0A"/><stop offset="100%" stopColor={tip}/>
+      </linearGradient></defs>
+      <path d="M12 33C5.5 31 3 25 6.5 19.5c.8 2.6 2.6 2.8 2.6.6 0-3.2-2.2-5.4 1.1-9.6.6 2.8 2.2 4 3.8 5.6C18 19 18.5 22 18.5 25c0 4.2-3.2 7.2-6.5 8z" fill={`url(#${gid})`}/>
+      {c>=6 && <path d="M12 30c-2.3-.8-3.3-3-2.1-5.1.5 1.3 1.5 1.4 1.5.1 0-1.4-.8-2.5.6-4.2.4 1.3 1.2 1.9 1.9 2.7.9.9 1.1 1.9 1.1 3 0 2.1-1.3 3.1-3 3.5z" fill="#64D2FF" opacity=".7"/>}
+    </svg>
+  );
+}
+function StatRadar({ axes=[], size=210, color="#0A84FF" }){
+  if(!axes.length) return null;
+  const n=axes.length, cx=size/2, cy=size/2, R=size/2-30;
+  const pt=(i,r)=>{const a=-Math.PI/2+i*2*Math.PI/n; return [cx+Math.cos(a)*r, cy+Math.sin(a)*r];};
+  const poly=axes.map((ax,i)=>pt(i,R*Math.max(0.05,ax.value)).join(",")).join(" ");
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{display:"block",margin:"0 auto"}}>
+      {[0.25,0.5,0.75,1].map((g,gi)=><polygon key={"g"+gi} points={axes.map((_,i)=>pt(i,R*g).join(",")).join(" ")} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="1"/>)}
+      {axes.map((_,i)=>{const[x,y]=pt(i,R);return <line key={"l"+i} x1={cx} y1={cy} x2={x} y2={y} stroke="rgba(255,255,255,0.07)" strokeWidth="1"/>;})}
+      <polygon points={poly} fill={color+"30"} stroke={color} strokeWidth="2" strokeLinejoin="round"/>
+      {axes.map((ax,i)=>{const[x,y]=pt(i,R*Math.max(0.05,ax.value));return <circle key={"c"+i} cx={x} cy={y} r="3" fill={ax.color||color}/>;})}
+      {axes.map((ax,i)=>{const[x,y]=pt(i,R+15);return <text key={"t"+i} x={x} y={y} fill="rgba(255,255,255,0.65)" fontSize="9.5" fontWeight="700" textAnchor="middle" dominantBaseline="middle">{ax.tag}</text>;})}
+    </svg>
+  );
+}
 function Confetti({ show }){
   const ref=useRef(null);
   useEffect(()=>{
@@ -1294,7 +1326,9 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
         <div style={{display:"flex",alignItems:"stretch"}}>
           <div style={{flex:1,textAlign:"center"}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:3}}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill={currentStreak>0?"#FF9F0A":"none"} stroke={currentStreak>0?"#FF9F0A":IOS.label3} strokeWidth="1.8" strokeLinejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
+              {currentStreak>0
+                ? <StreakFlame count={currentStreak} size={15}/>
+                : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={IOS.label3} strokeWidth="1.8" strokeLinejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>}
               <span style={{fontSize:17,fontWeight:800,color:currentStreak>0?"#FF9F0A":"#fff"}}>{currentStreak}</span>
             </div>
             <div style={{fontSize:9,color:IOS.label3,textTransform:"uppercase",letterSpacing:.3,marginTop:3}}>Streak</div>
@@ -3507,6 +3541,8 @@ export default function App() {
  @keyframes wrecRise{to{opacity:1;transform:translateY(0);}}
  .wrec-pop{transform:scale(.6);opacity:0;animation:wrecPop .6s cubic-bezier(.34,1.56,.64,1) forwards;}
  @keyframes wrecPop{to{transform:scale(1);opacity:1;}}
+ @keyframes flameFlick{0%,100%{transform:scaleY(1) scaleX(1);opacity:.95;}25%{transform:scaleY(1.09) scaleX(.95);opacity:1;}50%{transform:scaleY(.96) scaleX(1.04);opacity:.9;}75%{transform:scaleY(1.05) scaleX(.98);opacity:1;}}
+ .flame-flicker{transform-origin:50% 100%;animation:flameFlick .85s ease-in-out infinite;}
  .wrec-emblem{width:86px;height:86px;border-radius:24px;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;}
  .wrec-nums{display:flex;gap:14px;margin-top:8px;width:100%;}
  .wrec-ncell{flex:1;}
@@ -9908,12 +9944,35 @@ export default function App() {
 
     {/* OVERVIEW */}
     {analyticsTab==="Overview"&&(<>
+     {streak.type==="W" && streak.count>=2 && (
+      <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:12,marginBottom:14,padding:"12px 14px",borderRadius:16,background:"linear-gradient(135deg,rgba(255,106,0,0.15),rgba(255,55,95,0.05))",border:"0.5px solid rgba(255,106,0,0.32)"}}>
+       <StreakFlame count={streak.count} size={26}/>
+       <div>
+        <div style={{fontSize:17,fontWeight:800,color:"#FF6A00",lineHeight:1.1}}>{streak.count} pick win streak</div>
+        <div style={{fontSize:11,color:CC.l3,marginTop:2}}>Best ever: {Math.max(s.maxStreak||0,streak.count)}</div>
+       </div>
+      </div>
+     )}
      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
       <Tile lbl="Record" val={(s.wins||0)+"-"+(s.losses||0)} meta={(s.winRate||"0%")+" win"} glow={CC.blue} vcolor="#fff"/>
       <Tile lbl="Avg Odds" val={fmtOdds(s.avgOdds)} meta="across all picks" glow={CC.teal} vcolor={CC.teal}/>
       <Tile lbl={isSoloMode?"Best Slate":"Best Week"} val={s.bestWeek?(s.bestWeek.pts+" pts"):"—"} meta={s.bestWeek?s.bestWeek.label:"—"} glow={CC.yellow} vcolor={CC.green}/>
       <Tile lbl="Streak" val={streak.type+streak.count} meta={"best "+(s.maxStreak||0)} glow={CC.pink} vcolor={streak.type==="W"?CC.green:CC.red}/>
      </div>
+     {(()=>{
+      const RT=[["ml","ML"],["spread","SPR"],["ou","O/U"],["prop","PROP"],["longshot","LS"]];
+      const cnts=RT.map(([k])=>{const t=(s.byType||{})[k];return t?(t.wins+t.losses):0;});
+      const mx=Math.max(...cnts,1); const tot=cnts.reduce((a,b)=>a+b,0);
+      if(!tot) return null;
+      const axes=RT.map(([k,tag],i)=>({tag,value:cnts[i]/mx,color:((s.byType||{})[k]||{}).color||CC.blue}));
+      return (<>
+       <SecH t="Betting Fingerprint" sub={s.personality||""}/>
+       <div style={{...SURF,padding:"12px 12px 16px",marginBottom:14}}>
+        <StatRadar axes={axes} size={210} color={CC.blue}/>
+        {s.personalityDesc && <div style={{textAlign:"center",fontSize:11.5,color:CC.l2,marginTop:4,padding:"0 18px",lineHeight:1.45}}>{s.personalityDesc}</div>}
+       </div>
+      </>);
+     })()}
      <SecH t="Cumulative Points" sub={byWeek.length+(isSoloMode?" graded slates":" graded wks")}/>
      <div style={{...SURF,padding:"16px 16px 14px"}}><LineChartSVG vals={cumVals}/></div>
     </>)}
