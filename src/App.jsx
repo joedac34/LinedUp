@@ -1891,6 +1891,23 @@ export default function App() {
  }, [screen, BETS]);
  const [showSwitcher, setShowSwitcher] = useState(false);
  const [showMultPick, setShowMultPick] = useState(false); // bet-browser slot/multiplier picker
+ const [gridFlexMult, setGridFlexMult] = useState(null); // flex leagues: multiplier-first picking
+ const [gridParlayMult, setGridParlayMult] = useState(5); // flex: which multiplier is the parlay
+ const [gridBuildMode, setGridBuildMode] = useState(false); // flex: building parlay legs in the browser
+ useEffect(()=>{
+ if(screen!=="browser"||isSoloMode){ if(gridBuildMode) setGridBuildMode(false); return; }
+ const _cfg = parseSlotConfig(activeLeague&&activeLeague.slot_config);
+ if(_cfg) return; // custom-slot leagues use the slot picker, not mult-first
+ // keep the parlay multiplier in sync with an existing parlay slot
+ const par = (flexPicks||[]).find(p=>p.isParlay && p.mult!=null);
+ if(par && par.mult!==gridParlayMult) setGridParlayMult(par.mult);
+ // default the single-target multiplier to the lowest open one that ISN'T the parlay
+ const used = (flexPicks||[]).filter(p=>p.mult!=null).map(p=>p.mult);
+ if(gridFlexMult===null || gridFlexMult===gridParlayMult || used.includes(gridFlexMult)){
+ const nm=[1,2,3,4,5].find(m=>m!==gridParlayMult && !used.includes(m));
+ setGridFlexMult(nm!=null?nm:([1,2,3,4,5].find(m=>m!==gridParlayMult)||1));
+ }
+ }, [screen, isSoloMode, activeLeagueId, flexPicks, gridFlexMult, gridParlayMult, gridBuildMode]);
  const [showAccountMenu, setShowAccountMenu] = useState(false);
  const [unreadByLeague, setUnreadByLeague] = useState({});
  const markLeagueRead = async (lid)=>{
@@ -6707,8 +6724,54 @@ export default function App() {
  }
 
  if(gridSearch.trim()){ const _q=gridSearch.toLowerCase().trim(); list = list.filter(b=>((b.pick||"")+" "+(b.game||"")).toLowerCase().includes(_q)); }
+ // ── Folded parlay (flex leagues): one multiplier holds a parlay built right here ──
+ const _parIdx = activePicks.findIndex(p=>p.isParlay);
+ const parlayLegs = _parIdx!==-1 ? (activePicks[_parIdx].parlayLegs||[]) : [];
+ const isLeg = (b)=> !!b && parlayLegs.some(l=>String(l.id)===String(b.id)||l.pick===b.pick);
+ const flagParlay = (M)=>{
+ const prior = activePicks.find(p=>p.isParlay);
+ if(prior && prior.mult!==M && (prior.parlayLegs||[]).length>=2){
+ if(typeof window!=="undefined" && !window.confirm("Move the parlay to "+M+"x? This clears the "+prior.parlayLegs.length+" legs on your "+prior.mult+"x slot.")) return;
+ }
+ setActivePicks(prev=>{
+ const next = prev.map(p=> p.isParlay ? {...p, isParlay:false, parlayLegs:[], bet:null, category:undefined} : p);
+ let idx = next.findIndex(p=>p.mult===M);
+ if(idx===-1) idx = next.findIndex(p=>!p.isParlay && p.bet===null && p.mult==null);
+ if(idx===-1) idx = next.findIndex(p=>!p.isParlay && p.bet===null);
+ if(idx===-1) idx = 0;
+ next[idx] = {...next[idx], isParlay:true, bet:null, category:"longshot", mult:M, parlayLegs:(next[idx].parlayLegs||[])};
+ return next;
+ });
+ setGridParlayMult(M);
+ if((gridFlexMult||1)===M){ const nm=[1,2,3,4,5].find(m=>m!==M); if(nm) setGridFlexMult(nm); }
+ };
+ const toggleLeg = (bet)=>{
+ const leg = {id:bet.id, pick:bet.pick, game:bet.game||"", odds:bet.odds, impliedOdds:bet.impliedOdds};
+ setActivePicks(prev=>{
+ let found=false;
+ let next = prev.map(p=>{
+ if(!p.isParlay) return p;
+ found=true;
+ const legs=p.parlayLegs||[];
+ const has=legs.some(l=>String(l.id)===String(bet.id)||l.pick===bet.pick);
+ return {...p, parlayLegs: has ? legs.filter(l=>!(String(l.id)===String(bet.id)||l.pick===bet.pick)) : [...legs, leg]};
+ });
+ if(!found){
+ const M=gridParlayMult;
+ let idx = next.findIndex(p=>p.mult===M);
+ if(idx===-1) idx = next.findIndex(p=>!p.isParlay && p.bet===null);
+ if(idx===-1) idx = next.length-1;
+ next = next.map((p,i)=> i===idx ? {...p, isParlay:true, bet:null, category:"longshot", mult:M, parlayLegs:[leg]} : p);
+ }
+ return next;
+ });
+ setGridJustAdded(bet.id);
+ setTimeout(()=>setGridJustAdded(null), 300);
+ };
+ const enterBuild = ()=>{ if(activePicks.findIndex(p=>p.isParlay)===-1) flagParlay(gridParlayMult); setGridBuildMode(true); setShowMultPick(false); };
  const addCard = (bet, catOverride) => {
  const cat = catOverride || (gridType==="longshot" ? "longshot" : gridType);
+ if(gridBuildMode && !gridCfg && !isSoloMode){ toggleLeg(bet); return; }
  // One bet per type (longshot legs excepted): if this type is already in the
  // slip, replace that slot instead of stacking a second bet of the same type.
  let dest = target;
@@ -6722,16 +6785,31 @@ export default function App() {
  if(idx===-1) return;
  dest = idx;
  }
+ } else if(!isSoloMode && gridFlexMult!=null && cat!=="longshot"){
+ // Flex league, multiplier-first: fill the chosen mult slot (replace if taken),
+ // else the first empty slot. Lets you stack two of a type at different mults.
+ let mi = activePicks.findIndex(p=>!p.isParlay && p.mult===gridFlexMult);
+ if(mi===-1) mi = activePicks.findIndex(p=>!p.isParlay && p.bet===null);
+ if(mi!==-1) dest = mi;
  } else if(cat!=="longshot"){
  const existingIdx = activePicks.findIndex(p=>!p.isParlay && p.bet!==null && p.category===cat);
  if(existingIdx!==-1) dest = existingIdx;
  }
- setActivePicks(prev=>prev.map((p,i)=> i===dest ? {...p, bet, category:cat, isParlay:false, parlayLegs:[]} : p));
+ setActivePicks(prev=>prev.map((p,i)=> i===dest ? {...p, bet, category:cat, isParlay:false, parlayLegs:[], mult:((!gridCfg && !isSoloMode && gridFlexMult!=null && cat!=="longshot") ? gridFlexMult : p.mult)} : p));
  setGridJustAdded(bet.id);
  // Advance to next empty slot, or bounce back to the slip if full
  const nextEmpty = activePicks.findIndex((p,i)=> i!==dest && !p.isParlay && p.bet===null);
+ const flexMode = !gridCfg && !isSoloMode && gridFlexMult!=null && cat!=="longshot";
+ let nextMult = null;
+ if(flexMode){
+ const used = activePicks.map((p,i)=> i===dest ? gridFlexMult : p.mult).filter(m=>m!=null);
+ nextMult = [1,2,3,4,5].find(m=>!used.includes(m));
+ }
  setTimeout(()=>{
- if(nextEmpty===-1){ setScreen("picks"); }
+ if(flexMode){
+ if(nextMult!=null){ setGridFlexMult(nextMult); if(nextEmpty!==-1) setGridTargetSlot(nextEmpty); }
+ else { setScreen("picks"); }
+ } else if(nextEmpty===-1){ setScreen("picks"); }
  else { setGridTargetSlot(nextEmpty); }
  setGridJustAdded(null);
  }, 480);
@@ -6755,7 +6833,7 @@ export default function App() {
  const StatLabel = ({children}) => (<div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:"rgba(255,255,255,0.32)",marginBottom:3}}>{children}</div>);
 
  const renderCard = (bet, idx) => {
- const selected = activePicks.some(p=>p.bet?.id===bet.id);
+ const selected = activePicks.some(p=>p.bet?.id===bet.id) || isLeg(bet);
  const added = gridJustAdded===bet.id;
  const pct = impliedPct(bet.impliedOdds);
  const read = readFor(pct);
@@ -6880,7 +6958,7 @@ export default function App() {
  const Chip = ({b, cat, line, value, mv}) => {
  if(!b) return <div style={{borderRadius:10,border:"1px dashed rgba(255,255,255,0.08)",minHeight:46}}/>;
  const enabled = lineAllowed(cat);
- const sel = activePicks.some(p=>p.bet&&p.bet.id===b.id);
+ const sel = (activePicks.some(p=>p.bet&&p.bet.id===b.id)) || isLeg(b);
  const pts = ptsOf(b);
  return (
  <div onClick={()=>{ if(enabled) addCard(b,cat); }} style={{position:"relative",borderRadius:10,cursor:enabled?"pointer":"default",textAlign:"center",padding:"6px 3px",opacity:enabled?1:0.4,
@@ -7043,6 +7121,70 @@ export default function App() {
  </div>
  );
  })()}
+ {!gridCfg && !isSoloMode && (()=>{
+ const MC = {1:IOS.blue,2:IOS.yellow,3:IOS.orange,4:IOS.green,5:IOS.pink};
+ const cur = gridBuildMode ? gridParlayMult : (gridFlexMult || 1);
+ const curCol = MC[cur] || acc;
+ return (
+ <div style={{position:"relative",flexShrink:0}}>
+ <div onClick={()=>setShowMultPick(v=>!v)} style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1,background:"rgba(255,255,255,0.05)",border:"1px solid "+(showMultPick?curCol+"80":"rgba(255,255,255,0.1)"),borderRadius:10,padding:"5px 10px",cursor:"pointer",minWidth:60}}>
+ <div style={{fontSize:7.5,fontWeight:800,letterSpacing:"0.1em",color:"rgba(255,255,255,0.4)"}}>MULTIPLIER</div>
+ <div style={{display:"flex",alignItems:"center",gap:5}}>
+ <span style={{fontSize:15,fontWeight:900,color:curCol,letterSpacing:"-0.3px"}}>{cur+"×"}</span>
+ <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2.6" strokeLinecap="round" style={{transform:showMultPick?"rotate(180deg)":"none",transition:"transform .15s"}}><polyline points="6 9 12 15 18 9"/></svg>
+ </div>
+ </div>
+ {showMultPick && (<>
+ <div onClick={()=>setShowMultPick(false)} style={{position:"fixed",inset:0,zIndex:40}}/>
+ <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,zIndex:41,width:212,background:"#15151c",border:"1px solid rgba(255,255,255,0.12)",borderRadius:14,padding:6,boxShadow:"0 16px 40px rgba(0,0,0,0.6)"}}>
+ <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.08em",color:"rgba(255,255,255,0.35)",padding:"5px 8px 6px"}}>CHOOSE A MULTIPLIER</div>
+ {[1,2,3,4,5].map(M=>{
+ const sc = MC[M];
+ if(M===gridParlayMult){
+ const par = activePicks.find(p=>p.isParlay);
+ const legs = (par&&par.parlayLegs)||[];
+ const lsd = legs.length>=2 ? calcLS(legs) : null;
+ const am = lsd ? (lsd.decimal>=2?("+"+Math.round((lsd.decimal-1)*100)):(""+Math.round(-100/(lsd.decimal-1)))) : "";
+ return (
+ <div key={M} style={{background:IOS.pink+"14",border:"1px solid "+IOS.pink+"55",borderRadius:11,padding:"8px",marginBottom:3}}>
+ <div onClick={()=>enterBuild()} style={{display:"flex",alignItems:"center",gap:9,cursor:"pointer"}}>
+ <span style={{minWidth:30,textAlign:"center",fontSize:13,fontWeight:900,color:IOS.pink}}>{M+"×"}</span>
+ <div style={{flex:1,minWidth:0}}>
+ <div style={{display:"flex",alignItems:"center",gap:4,fontSize:9.5,fontWeight:900,letterSpacing:"0.03em",color:IOS.pink}}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={IOS.pink} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 0 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>PARLAY</div>
+ <div style={{fontSize:11,fontWeight:600,color:legs.length?"rgba(255,255,255,0.7)":"rgba(255,255,255,0.3)"}}>{legs.length>=2?(legs.length+" legs · "+am):(legs.length===1?"1 leg · need 2+":"Tap to add legs")}</div>
+ </div>
+ {legs.length>=2 && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+ </div>
+ {legs.length>0 && (
+ <div style={{display:"flex",flexWrap:"wrap",gap:5,paddingTop:7,marginTop:6,borderTop:"1px dashed "+IOS.pink+"33"}}>
+ {legs.map((l,i)=>(<span key={i} style={{fontSize:10,fontWeight:700,padding:"4px 8px",borderRadius:7,background:IOS.pink+"22",color:"#ff8aa6"}}>{l.pick}</span>))}
+ </div>
+ )}
+ <div onClick={()=>enterBuild()} style={{marginTop:7,display:"flex",alignItems:"center",justifyContent:"center",gap:6,fontSize:11,fontWeight:800,color:IOS.pink,background:IOS.pink+"1a",border:"1px dashed "+IOS.pink+"80",borderRadius:9,padding:"7px",cursor:"pointer"}}>+ {legs.length?"Add legs":"Build parlay"}</div>
+ </div>
+ );
+ }
+ const slot = activePicks.find(p=>p.mult===M && !p.isParlay);
+ const filled = !!(slot&&slot.bet);
+ const nm = slot&&slot.bet ? slot.bet.pick : "Open";
+ const isT = (gridFlexMult||1)===M && !gridBuildMode;
+ return (
+ <div key={M} onClick={()=>{ setGridFlexMult(M); setGridBuildMode(false); const mi=activePicks.findIndex(p=>!p.isParlay&&p.mult===M); const ei=activePicks.findIndex(p=>!p.isParlay&&p.bet===null); setGridTargetSlot(mi!==-1?mi:(ei!==-1?ei:0)); setShowMultPick(false); }} style={{display:"flex",alignItems:"center",gap:9,padding:"8px",borderRadius:10,cursor:"pointer",background:isT?(sc+"1f"):"transparent",border:"1px solid "+(isT?sc+"66":"transparent"),marginBottom:3}}>
+ <span style={{minWidth:30,textAlign:"center",fontSize:13,fontWeight:900,color:sc}}>{M+"×"}</span>
+ <div style={{flex:1,minWidth:0}}>
+ <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.03em",color:sc,textTransform:"uppercase"}}>{slot&&slot.category?TYPE_LABELS[slot.category]:"Any type"}</div>
+ <div style={{fontSize:11,fontWeight:600,color:filled?"rgba(255,255,255,0.7)":"rgba(255,255,255,0.3)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{nm}</div>
+ </div>
+ {filled && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+ <div onClick={(e)=>{ e.stopPropagation(); flagParlay(M); }} title="Make this the parlay" style={{flexShrink:0,width:24,height:24,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.12)"}}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 0 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg></div>
+ </div>
+ );
+ })}
+ </div>
+ </>)}
+ </div>
+ );
+ })()}
  </div>
 
  {/* Sport switcher */}
@@ -7094,6 +7236,30 @@ export default function App() {
  })}
  </div>
  )}
+ {gridBuildMode && (()=>{
+ const lsd = parlayLegs.length>=2 ? calcLS(parlayLegs) : null;
+ const am = lsd ? (lsd.decimal>=2?("+"+Math.round((lsd.decimal-1)*100)):(""+Math.round(-100/(lsd.decimal-1)))) : "";
+ const ready = parlayLegs.length>=2;
+ return (
+ <div style={{margin:"2px 16px 10px",background:"linear-gradient(135deg,rgba(255,55,95,0.18),rgba(255,55,95,0.06))",border:"1px solid rgba(255,55,95,0.45)",borderRadius:14,padding:"10px 12px"}}>
+ <div style={{display:"flex",alignItems:"center",gap:10}}>
+ <div style={{width:32,height:32,borderRadius:10,background:"rgba(255,55,95,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+ <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={IOS.pink} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 0 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+ </div>
+ <div style={{flex:1,minWidth:0}}>
+ <div style={{fontSize:8.5,fontWeight:900,letterSpacing:"0.08em",color:IOS.pink}}>{gridParlayMult}× PARLAY · {parlayLegs.length} {parlayLegs.length===1?"LEG":"LEGS"}{ready?(" · "+am):""}</div>
+ <div style={{fontSize:10.5,fontWeight:600,color:"rgba(255,255,255,0.5)",marginTop:1}}>{ready?"Tap more to add, or a leg below to remove":"Tap bets below to add legs — need 2+"}</div>
+ </div>
+ <div onClick={()=>setGridBuildMode(false)} style={{fontFamily:"Barlow",fontSize:12,fontWeight:800,color:ready?"#08080B":"rgba(255,255,255,0.4)",background:ready?IOS.pink:"rgba(255,255,255,0.08)",borderRadius:9,padding:"8px 14px",cursor:"pointer",flexShrink:0}}>Done</div>
+ </div>
+ {parlayLegs.length>0 && (
+ <div className="gbx-scroll" style={{display:"flex",gap:6,marginTop:9,overflowX:"auto"}}>
+ {parlayLegs.map((l,i)=>(<div key={i} onClick={()=>toggleLeg(l)} style={{flexShrink:0,fontSize:10.5,fontWeight:700,padding:"5px 9px",borderRadius:8,background:"rgba(255,55,95,0.14)",color:"#ff8aa6",display:"flex",alignItems:"center",gap:6,cursor:"pointer",whiteSpace:"nowrap"}}>{l.pick} <span style={{opacity:0.7,fontWeight:900}}>×</span></div>))}
+ </div>
+ )}
+ </div>
+ );
+ })()}
  <div style={{height:0.5,background:"rgba(255,255,255,0.07)",margin:"0 16px"}}/>
  </div>
 
