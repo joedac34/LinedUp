@@ -7458,6 +7458,22 @@ export default function App() {
  <span style={{fontSize:9,color:"#333"}}>No pick</span>
  </div>
  );
+ // Opponent picks stay hidden ("Locked") until their game starts — revealed at kickoff (or once graded).
+ if(!isMe){
+ const _now=Date.now();
+ const _gd=picks.map(p=>p.game_date?new Date(p.game_date).getTime():0).filter(t=>t>0);
+ const _earliest=_gd.length?Math.min(..._gd):0;
+ const _graded=picks.some(p=>p.result&&p.result!=="pending");
+ const _started=_graded || _earliest===0 || _earliest<=_now; // unknown kickoff -> reveal (never hide forever)
+ if(!_started) return (
+ <div style={{flex:1,position:"relative",overflow:"hidden",borderRadius:12,minHeight:68,background:"linear-gradient(155deg,#16121A,#0B0B0E 75%)",border:`1px solid ${IOS.pink}40`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4}}>
+ <div style={{position:"absolute",top:0,left:0,bottom:0,width:3,background:IOS.pink}}/>
+ <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={IOS.pink} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+ <span style={{fontSize:9.5,fontWeight:800,color:IOS.pink,letterSpacing:0.4}}>LOCKED</span>
+ <span style={{fontSize:8,fontWeight:600,color:"#666"}}>Reveals at kickoff</span>
+ </div>
+ );
+ }
  const isParlay = picks[0]?.slot?.startsWith("longshot_");
  const insured = picks[0]?.power_up_id === "insurance";
  const lostLegs = picks.filter(p=>p.result==="L").length;
