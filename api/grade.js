@@ -242,6 +242,8 @@ async function fetchScoresESPN(sport) {
           date: e.date || null,
           id: e.id || null,
           scores: [{ name: hn, score: home.score }, { name: an, score: away.score }],
+          homeLines: (home.linescores || []).map(l => Number((l && (l.value != null ? l.value : l.displayValue)) || 0)),
+          awayLines: (away.linescores || []).map(l => Number((l && (l.value != null ? l.value : l.displayValue)) || 0)),
         });
       }
     } catch (e) { /* skip this day */ }
@@ -412,6 +414,65 @@ function gradeProp(pickName, gameField, index, info = {}) {
 }
 
 // ── Grade a single straight pick ─────────────────────────────────────────────
+// ── Period markets (1st half, first-5 innings, YRFI/NRFI) ────────────────────
+// Which linescore indices make up the period implied by an Odds API market key.
+function periodIndices(mk) {
+  if (/_h1$/.test(mk)) return [0, 1];
+  if (/_h2$/.test(mk)) return [2, 3];
+  let m = mk.match(/_q([1-4])$/); if (m) return [parseInt(m[1], 10) - 1];
+  m = mk.match(/_p([1-3])$/); if (m) return [parseInt(m[1], 10) - 1];
+  m = mk.match(/_1st_(\d+)_innings$/); if (m) { const n = parseInt(m[1], 10); return Array.from({ length: n }, (_, i) => i); }
+  return null;
+}
+function teamMatchName(team, outcome) {
+  const t = (team || "").toLowerCase().trim(), o = (outcome || "").toLowerCase().trim();
+  if (!t || !o) return false;
+  if (o.includes(t) || t.includes(o)) return true;
+  const tw = t.split(" ");
+  return o.includes(tw[tw.length - 1]);
+}
+// Grade a period pick from the linescores, using the structured fields stored at lock
+// (market_key / outcome / outcome_point). Returns "W" | "L" | "P" | null (not gradable yet).
+function gradePeriod(pick, game, info) {
+  const mk = pick.market_key || "";
+  const idxs = periodIndices(mk);
+  if (!idxs) { info.reason = "period_unrecognized"; return null; }
+  const hl = game.homeLines, al = game.awayLines;
+  if (!Array.isArray(hl) || !Array.isArray(al) || !hl.length || !al.length) { info.reason = "no_linescores"; return null; }
+  const need = Math.max(...idxs);
+  if (need >= hl.length || need >= al.length) { info.reason = "period_incomplete"; return null; }
+  const h = idxs.reduce((sum, i) => sum + (Number(hl[i]) || 0), 0);
+  const a = idxs.reduce((sum, i) => sum + (Number(al[i]) || 0), 0);
+  const pt = pick.outcome_point != null ? parseFloat(pick.outcome_point) : null;
+  const oc = (pick.outcome || pick.pick_name || "").toLowerCase();
+
+  if (mk.startsWith("totals")) {          // includes YRFI/NRFI (totals_1st_1_innings @ 0.5)
+    if (pt == null) return null;
+    const tot = h + a;
+    if (oc.includes("over"))  return tot > pt ? "W" : tot < pt ? "L" : "P";
+    if (oc.includes("under")) return tot < pt ? "W" : tot > pt ? "L" : "P";
+    return null;
+  }
+  if (mk.startsWith("spreads")) {
+    if (pt == null) return null;
+    const isHome = teamMatchName(game.home_team, pick.outcome);
+    const isAway = teamMatchName(game.away_team, pick.outcome);
+    let ps, os;
+    if (isHome) { ps = h; os = a; } else if (isAway) { ps = a; os = h; } else return null;
+    let sp = pt;
+    if (pick.power_up_id && pick.power_up_id.indexOf("enhance") === 0) { const ti = parseFloat(pick.pu_tier); if (!isNaN(ti)) sp += ti; }
+    const ats = ps + sp;
+    return ats > os ? "W" : ats < os ? "L" : "P";
+  }
+  if (mk.startsWith("h2h")) {
+    const winner = h > a ? game.home_team : (a > h ? game.away_team : null);
+    if (!winner) return "P";              // period tie → push
+    return teamMatchName(winner, pick.outcome) ? "W" : "L";
+  }
+  info.reason = "period_basetype_unhandled";
+  return null;
+}
+
 function gradePick(pick, games, playerIndex, info = {}) {
   const slot = pick.slot;
   const baseType = (slot||"").split("_")[0];
@@ -463,6 +524,14 @@ function gradePick(pick, games, playerIndex, info = {}) {
   }
 
   if (!game) { info.reason = "game_not_found_or_not_live"; return null; }
+
+  // Period markets grade off linescores (not the full-game score), using the keys
+  // stored at lock. Dormant for every existing pick (none carry a period market_key).
+  if (pick.market_key && /(_q[1-4]|_h[12]|_p[1-3]|_1st_\d+_innings)$/.test(pick.market_key)) {
+    if (!game.completed) { info.reason = "period_game_in_progress"; return null; }
+    return gradePeriod(pick, game, info);
+  }
+
   if (!game.scores) { info.reason = "no_scores_on_game"; return null; }
 
   const homeScore = parseFloat(game.scores?.find(s => s.name === game.home_team)?.score ?? -1);
