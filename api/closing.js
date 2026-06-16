@@ -26,6 +26,11 @@ async function sbUpsert(table, rows) {
   const r = await fetch(`${SB_URL}/rest/v1/${table}`, { method: "POST", headers: { ...sbHeaders, Prefer: "resolution=merge-duplicates" }, body: JSON.stringify(rows) });
   return r.ok;
 }
+// Insert-once: keep the FIRST row per unique key (opening line), ignore later snapshots.
+async function sbInsertIgnore(table, rows) {
+  const r = await fetch(`${SB_URL}/rest/v1/${table}`, { method: "POST", headers: { ...sbHeaders, Prefer: "resolution=ignore-duplicates" }, body: JSON.stringify(rows) });
+  return r.ok;
+}
 
 async function snapshotSport(sportId) {
   const sk = SPORT_KEYS[sportId]; if (!sk) return 0;
@@ -60,7 +65,10 @@ async function snapshotSport(sportId) {
       });
     }
   }
-  if (rows.length) await sbUpsert("closing_lines", rows);
+  if (rows.length) {
+    await sbUpsert("closing_lines", rows);        // overwrite -> last pre-game = closing
+    await sbInsertIgnore("opening_lines", rows);  // keep first -> opening line for movement/sparkline
+  }
   return rows.length;
 }
 

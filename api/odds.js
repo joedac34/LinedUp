@@ -13,6 +13,8 @@ export default async function handler(req, res) {
 
   // American odds -> decimal payout (used to compare "best price")
   const decimal = (o) => (o > 0 ? o / 100 + 1 : 100 / Math.abs(o) + 1);
+  // American odds -> raw implied probability (with vig)
+  const impliedAm = (o) => (o > 0 ? 100 / (o + 100) : -o / (-o + 100));
 
   // Pick the better of two outcomes for the SAME selection, per market type.
   function pickBetter(marketKey, name, a, b) {
@@ -35,21 +37,48 @@ export default async function handler(req, res) {
   // Collapse all bookmakers of a game into one "best line" bookmaker.
   function collapse(game) {
     const best = {}; // marketKey -> { selectionName -> outcome }
+    // Per-book de-vigged fair probabilities, grouped by exact (name|point) so we
+    // only ever average like-for-like lines. probs[mKey][key] = [fairProb, ...]
+    const probs = {};
     for (const bk of game.bookmakers || []) {
       for (const mk of bk.markets || []) {
         const mKey = mk.key;
         if (!best[mKey]) best[mKey] = {};
-        for (const oc of mk.outcomes || []) {
+        if (!probs[mKey]) probs[mKey] = {};
+        const outs = mk.outcomes || [];
+        for (const oc of outs) {
           const sel = oc.name;
           best[mKey][sel] = best[mKey][sel]
             ? pickBetter(mKey, sel, best[mKey][sel], oc)
             : { ...oc };
         }
+        // De-vig this book's two-way market into a fair probability per side.
+        if (outs.length === 2) {
+          const imp = outs.map((o) => impliedAm(o.price));
+          const sum = imp[0] + imp[1];
+          if (sum > 0) {
+            outs.forEach((oc, i) => {
+              const k = oc.point != null ? `${oc.name}|${oc.point}` : oc.name;
+              (probs[mKey][k] = probs[mKey][k] || []).push(imp[i] / sum);
+            });
+          }
+        }
       }
     }
     const markets = Object.entries(best).map(([key, outs]) => ({
       key,
-      outcomes: Object.values(outs),
+      outcomes: Object.values(outs).map((oc) => {
+        // Attach a real +EV edge: how much the BEST available price beats the
+        // de-vigged consensus fair line (needs >=2 books for a stable read).
+        const k = oc.point != null ? `${oc.name}|${oc.point}` : oc.name;
+        const arr = (probs[key] && probs[key][k]) || [];
+        let edge = null;
+        if (arr.length >= 2) {
+          const fair = arr.reduce((a, b) => a + b, 0) / arr.length;
+          edge = Number((decimal(oc.price) * fair - 1).toFixed(4)); // >0 = +EV
+        }
+        return { ...oc, edge };
+      }),
     }));
     return { ...game, bookmakers: markets.length ? [{ key: "best", title: "Best Line", markets }] : [] };
   }

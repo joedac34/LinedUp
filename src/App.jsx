@@ -1705,6 +1705,7 @@ export default function App() {
  pick: o.name,
  odds: american,
  impliedOdds: o.price,
+ edge: (o.edge!=null?o.edge:null),
  gameTime: game.commence_time,
  eventId: game.id, marketKey: "h2h", outcome: o.name, point: null,
  selKey: `${game.id}|h2h|${o.name}|`,
@@ -1734,6 +1735,7 @@ export default function App() {
  pick: `${o.name} ${sign}`,
  odds: american,
  impliedOdds: o.price,
+ edge: (o.edge!=null?o.edge:null),
  gameTime: game.commence_time,
  eventId: game.id, marketKey: "spreads", outcome: o.name, point: o.point,
  selKey: `${game.id}|spreads|${o.name}|${o.point}`,
@@ -1749,6 +1751,7 @@ export default function App() {
  pick: `${o.name} ${o.point}`,
  odds: american,
  impliedOdds: o.price,
+ edge: (o.edge!=null?o.edge:null),
  gameTime: game.commence_time,
  eventId: game.id, marketKey: "totals", outcome: o.name, point: o.point,
  selKey: `${game.id}|totals|${o.name}|${o.point}`,
@@ -1874,6 +1877,18 @@ export default function App() {
  const [gridPropSub, setGridPropSub] = useState("all"); // prop sub-category filter
  const [gridTargetSlot, setGridTargetSlot] = useState(null); // which flex slot a tapped card fills
  const [gridSearch, setGridSearch] = useState("");
+ const [sheetExpanded, setSheetExpanded] = useState(null); // line-sheet expanded game key
+ const [lineMoves, setLineMoves] = useState({}); // opening line per sel_key (from /api/linemoves)
+ const lineMovesRef = useRef("");
+ useEffect(()=>{
+ if(screen!=="browser") return;
+ const ids=[...new Set((BETS.ml||[]).map(b=>b.eventId).filter(Boolean))].slice(0,40);
+ if(!ids.length) return;
+ const sig=ids.join(",");
+ if(sig===lineMovesRef.current) return;
+ lineMovesRef.current=sig;
+ (async()=>{ try{ const r=await fetch(`/api/linemoves?events=${encodeURIComponent(sig)}`); if(r.ok){ const d=await r.json(); setLineMoves(d.moves||{}); } }catch(e){} })();
+ }, [screen, BETS]);
  const [showSwitcher, setShowSwitcher] = useState(false);
  const [showAccountMenu, setShowAccountMenu] = useState(false);
  const [unreadByLeague, setUnreadByLeague] = useState({});
@@ -6691,12 +6706,22 @@ export default function App() {
  }
 
  if(gridSearch.trim()){ const _q=gridSearch.toLowerCase().trim(); list = list.filter(b=>((b.pick||"")+" "+(b.game||"")).toLowerCase().includes(_q)); }
- const addCard = (bet) => {
- const cat = gridType==="longshot" ? "longshot" : gridType;
+ const addCard = (bet, catOverride) => {
+ const cat = catOverride || (gridType==="longshot" ? "longshot" : gridType);
  // One bet per type (longshot legs excepted): if this type is already in the
  // slip, replace that slot instead of stacking a second bet of the same type.
  let dest = target;
- if(cat!=="longshot" && !gridCfg){
+ if(gridCfg){
+ // Custom league: each slot has a fixed category. Route the tapped bet to a
+ // slot that accepts THIS market (prefer the active target, else first empty).
+ const tgt = activePicks[target];
+ if(!tgt || tgt.isParlay || tgt.category!==cat){
+ let idx = activePicks.findIndex(p=>!p.isParlay && p.category===cat && p.bet===null);
+ if(idx===-1) idx = activePicks.findIndex(p=>!p.isParlay && p.category===cat);
+ if(idx===-1) return;
+ dest = idx;
+ }
+ } else if(cat!=="longshot"){
  const existingIdx = activePicks.findIndex(p=>!p.isParlay && p.bet!==null && p.category===cat);
  if(existingIdx!==-1) dest = existingIdx;
  }
@@ -6820,6 +6845,143 @@ export default function App() {
  );
  };
 
+
+ // --- LINE SHEET (spiced) -- ml/spread/ou grouped by game ---
+ const isGameLine = gridType==="ml"||gridType==="spread"||gridType==="ou";
+ const impFrac = (o)=>{ const p=impliedPct(o); return p?p/100:0; };
+ const ptsOf = (b)=> b ? calcPickPoints(targetMult||1, b.impliedOdds, "W") : 0;
+ const nick = (nm="")=>{ const w=String(nm).trim().split(/\s+/); return w.length>1 ? w[w.length-1] : nm; };
+ const _bg = {};
+ const _ens = (g,t)=>{ if(!_bg[g]){ const pg=parseGame(g); _bg[g]={ game:g, away:pg.away, home:pg.home, time:t||"", ml:{}, spread:{}, ou:{} }; } if(t&&!_bg[g].time)_bg[g].time=t; return _bg[g]; };
+ (BETS.ml||[]).filter(b=>b._sport===gSport).forEach(b=>{ const e=_ens(b.game,b.gameTime); const sd=sideOf(b.outcome||b.pick,b.game); if(sd==="AWAY")e.ml.away=b; else if(sd==="HOME")e.ml.home=b; });
+ (BETS.spread||[]).filter(b=>b._sport===gSport).forEach(b=>{ const e=_ens(b.game,b.gameTime); const sd=sideOf(b.outcome||teamFromSpread(b.pick),b.game); if(sd==="AWAY")e.spread.away=b; else if(sd==="HOME")e.spread.home=b; });
+ (BETS.ou||[]).filter(b=>b._sport===gSport).forEach(b=>{ const e=_ens(b.game,b.gameTime); const o=String(b.outcome||b.pick||"").toLowerCase(); if(o.indexOf("over")===0)e.ou.over=b; else if(o.indexOf("under")===0)e.ou.under=b; });
+ let sheetGames = Object.values(_bg);
+ if(gridSearch.trim()){ const q=gridSearch.toLowerCase().trim(); sheetGames=sheetGames.filter(g=>String(g.game).toLowerCase().includes(q)); }
+ sheetGames.sort((a,b)=> (new Date(a.time||0)) - (new Date(b.time||0)) );
+ const mkOver = (x,y)=>{ if(!x||!y) return 2; return impFrac(x.impliedOdds)+impFrac(y.impliedOdds); };
+ sheetGames.forEach(g=>{ g._ov={ ml:mkOver(g.ml.away,g.ml.home), spread:mkOver(g.spread.away,g.spread.home), ou:mkOver(g.ou.over,g.ou.under) }; g._best=Math.min(g._ov.ml,g._ov.spread,g._ov.ou); });
+ const EDGE_MIN = 0.01; // 1%+ true edge: best price beats the de-vigged consensus (from /api/odds)
+ const fmtAm = (o)=> (o>0?("+"+o):(""+o));
+ const _chips = (g)=>[g.ml.away,g.ml.home,g.spread.away,g.spread.home,g.ou.over,g.ou.under];
+ const haveEdge = sheetGames.some(g=>_chips(g).some(b=>b&&b.edge!=null));
+ const isVal = (b, mktVig)=> !b ? false : (haveEdge ? (b.edge!=null && b.edge>=EDGE_MIN) : (mktVig<1));
+ sheetGames.forEach(g=>{ g._edge = Math.max(-1, ..._chips(g).map(b=>(b&&b.edge!=null)?b.edge:-1)); });
+ let plokGame=null;
+ if(haveEdge){ let mx=EDGE_MIN; sheetGames.forEach(g=>{ if(g._edge>mx){ mx=g._edge; plokGame=g.game; } }); }
+ else { let plokBestOv=1.0; sheetGames.forEach(g=>{ if(g._best<plokBestOv){ plokBestOv=g._best; plokGame=g.game; } }); }
+ const _now=Date.now();
+ const dayLabel=(t)=>{ if(!t) return ""; const d=new Date(t); const n=new Date(); if(d.toDateString()===n.toDateString()) return d.getHours()<17?"Today":"Tonight"; const tmr=new Date(n.getTime()+864e5); if(d.toDateString()===tmr.toDateString()) return "Tomorrow"; return d.toLocaleDateString([], {weekday:"short"}); };
+ const clockLabel=(t)=>{ if(!t) return ""; return new Date(t).toLocaleTimeString([], {hour:"numeric", minute:"2-digit"})+" ET"; };
+ const blockLabel=(t)=>{ if(!t) return "Upcoming"; const d=new Date(t); const h=d.getHours(); const hr=((h+11)%12)+1; const ap=h<12?"AM":"PM"; return hr+":00 "+ap+" ET"; };
+ const countdown=(t)=>{ if(!t) return ""; const ms=new Date(t).getTime()-_now; if(ms<=0) return "Live / started"; const m=Math.floor(ms/60000); const h=Math.floor(m/60); const mm=m%60; return h>0?("starts in "+h+"h "+mm+"m"):("starts in "+mm+"m"); };
+ const lineAllowed = (cat)=> !gridCfg ? true : allowedTypes.includes(cat);
+ const Chip = ({b, cat, line, value, mv}) => {
+ if(!b) return <div style={{borderRadius:10,border:"1px dashed rgba(255,255,255,0.08)",minHeight:46}}/>;
+ const enabled = lineAllowed(cat);
+ const sel = activePicks.some(p=>p.bet&&p.bet.id===b.id);
+ const pts = ptsOf(b);
+ return (
+ <div onClick={()=>{ if(enabled) addCard(b,cat); }} style={{position:"relative",borderRadius:10,cursor:enabled?"pointer":"default",textAlign:"center",padding:"6px 3px",opacity:enabled?1:0.4,
+ border:"1px solid "+(sel?IOS.blue+"a6":value?"rgba(48,209,88,0.55)":"rgba(255,255,255,0.1)"),
+ background:sel?"linear-gradient(160deg,rgba(10,132,255,0.24),rgba(10,132,255,0.05))":value?"linear-gradient(160deg,rgba(48,209,88,0.2),rgba(48,209,88,0.04))":"rgba(255,255,255,0.04)",transition:"all .13s"}}>
+ {value && <div style={{position:"absolute",top:-6,left:"50%",transform:"translateX(-50%)"}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="3" strokeLinecap="round"><polyline points="6 14 12 8 18 14"/></svg></div>}
+ {line ? <div style={{fontSize:10,fontWeight:700,color:"rgba(255,255,255,0.5)"}}>{line}</div> : null}
+ <div style={{fontSize:13,fontWeight:900,color:sel?IOS.blue:"#fff",fontVariantNumeric:"tabular-nums",lineHeight:1.1}}>{b.odds}</div>
+ <div style={{fontSize:8,fontWeight:700,color:IOS.green}}>+{pts}</div>
+ {mv && mv.implied!=null && (()=>{ const cur=impFrac(b.impliedOdds); const op=Number(mv.implied); if(!op) return null; const yy=(v)=>(7-Math.max(0,Math.min(1,v))*6).toFixed(1); const up=cur>op+0.003, dn=cur<op-0.003; const col=up?IOS.green:dn?IOS.red:"rgba(255,255,255,0.3)"; return (<svg viewBox="0 0 40 8" preserveAspectRatio="none" style={{position:"absolute",bottom:1,left:6,width:"calc(100% - 12px)",height:5,opacity:0.55}}><polyline points={"0,"+yy(op)+" 40,"+yy(cur)} fill="none" stroke={col} strokeWidth="1.5"/></svg>); })()}
+ </div>
+ );
+ };
+ const renderLineSheet = () => {
+ if(sheetGames.length===0) return (
+ <div style={{padding:"50px 28px",textAlign:"center"}}>
+ <div style={{fontSize:14,fontWeight:700,color:"rgba(255,255,255,0.45)",marginBottom:6}}>No game lines right now</div>
+ <div style={{fontSize:12,color:"rgba(255,255,255,0.25)",lineHeight:1.5}}>Check back when games are scheduled for this sport.</div>
+ </div>
+ );
+ let lastBlock=null;
+ return (
+ <div style={{padding:"4px 14px 28px"}}>
+ {sheetGames.map((g,gi)=>{
+ const blk=blockLabel(g.time);
+ const showHead = blk!==lastBlock; const headFirst = lastBlock===null; lastBlock=blk;
+ const blockCount = sheetGames.filter(x=>blockLabel(x.time)===blk).length;
+ const isPlok = g.game===plokGame;
+ const exp = sheetExpanded===g.game;
+ const awayRec=recordFor(g.away,g.game), homeRec=recordFor(g.home,g.game);
+ const spLineA=g.spread.away?(lineFromSpread(g.spread.away.pick)||(g.spread.away.point!=null?String(g.spread.away.point):"")):"";
+ const spLineH=g.spread.home?(lineFromSpread(g.spread.home.pick)||(g.spread.home.point!=null?String(g.spread.home.point):"")):"";
+ const totPt=(g.ou.over&&g.ou.over.point!=null)?g.ou.over.point:((g.ou.under&&g.ou.under.point!=null)?g.ou.under.point:"");
+ const gv = isVal(g.ml.away,g._ov.ml)||isVal(g.ml.home,g._ov.ml)||isVal(g.spread.away,g._ov.spread)||isVal(g.spread.home,g._ov.spread)||isVal(g.ou.over,g._ov.ou)||isVal(g.ou.under,g._ov.ou);
+ return (
+ <div key={g.game}>
+ {showHead && (
+ <div style={{position:"sticky",top:0,zIndex:4,display:"flex",alignItems:"center",gap:8,padding:"8px 2px 7px",background:"linear-gradient(180deg,#08080A,rgba(8,8,10,0.7))",backdropFilter:"blur(6px)"}}>
+ <span style={{width:6,height:6,borderRadius:"50%",background:headFirst?IOS.orange:"rgba(255,255,255,0.3)",boxShadow:headFirst?"0 0 7px "+IOS.orange:"none"}}/>
+ <span style={{fontSize:12,fontWeight:800}}>{blk} block</span>
+ <span style={{fontSize:10,color:"rgba(255,255,255,0.32)",fontWeight:700,marginLeft:"auto"}}>{blockCount} game{blockCount>1?"s":""}</span>
+ </div>
+ )}
+ <div style={{border:"1px solid "+(isPlok?"rgba(255,214,10,0.4)":"rgba(255,255,255,0.09)"),borderRadius:16,background:"linear-gradient(165deg,#15151A,#0B0B0E 80%)",overflow:"hidden",margin:"10px 0",boxShadow:isPlok?"0 0 0 1px rgba(255,214,10,0.15),0 10px 28px rgba(0,0,0,0.4)":"0 6px 18px rgba(0,0,0,0.35)"}}>
+ {isPlok && (
+ <div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 13px",background:"rgba(255,214,10,0.1)",borderBottom:"1px solid rgba(255,214,10,0.2)",fontSize:10,fontWeight:800,color:IOS.yellow}}>
+ <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg>PLOK'S BEST · sharpest price on the board
+ </div>
+ )}
+ <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 13px 4px"}}>
+ <div style={{fontSize:11,fontWeight:800}}>{dayLabel(g.time)} · <span style={{color:IOS.teal}}>{clockLabel(g.time)}</span></div>
+ <div style={{fontSize:10,fontWeight:700,color:IOS.orange}}>{countdown(g.time)}</div>
+ </div>
+ <div style={{display:"grid",gridTemplateColumns:"1.45fr 1fr 1fr 1fr",padding:"4px 13px 2px"}}>
+ {["Team","Spread","Total","Money"].map((h,hi)=>(<span key={h} style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"rgba(255,255,255,0.32)",textAlign:hi===0?"left":"center"}}>{h}</span>))}
+ </div>
+ <div style={{display:"grid",gridTemplateColumns:"1.45fr 1fr 1fr 1fr",alignItems:"stretch"}}>
+ <div style={{padding:"8px 13px",display:"flex",flexDirection:"column",justifyContent:"center",gap:9}}>
+ {[{nm:g.away,badge:"away",rec:awayRec},{nm:g.home,badge:"home",rec:homeRec}].map((tm,ti)=>(
+ <div key={ti} style={{display:"flex",alignItems:"center",gap:8}}>
+ <div style={{width:28,height:28,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,background:tm.badge==="home"?"rgba(10,132,255,0.16)":"rgba(255,255,255,0.08)",color:tm.badge==="home"?IOS.teal:"rgba(255,255,255,0.6)"}}>{getAcronym(tm.nm,false)}</div>
+ <div style={{minWidth:0}}>
+ <div style={{fontSize:13.5,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{nick(tm.nm)} <span style={{fontSize:8,fontWeight:800,letterSpacing:"0.05em",padding:"1px 5px",borderRadius:4,background:tm.badge==="home"?"rgba(10,132,255,0.18)":"rgba(255,255,255,0.08)",color:tm.badge==="home"?IOS.teal:"rgba(255,255,255,0.5)"}}>{tm.badge==="home"?"HOME":"AWAY"}</span></div>
+ {tm.rec ? <div style={{fontSize:9.5,color:"rgba(255,255,255,0.34)",fontWeight:600,marginTop:1}}>{tm.rec}</div> : null}
+ </div>
+ </div>
+ ))}
+ </div>
+ <div style={{display:"grid",gridTemplateRows:"1fr 1fr",gap:6,padding:"8px 4px"}}>
+ <Chip b={g.spread.away} cat="spread" line={spLineA} value={isVal(g.spread.away,g._ov.spread)}/>
+ <Chip b={g.spread.home} cat="spread" line={spLineH} value={isVal(g.spread.home,g._ov.spread)}/>
+ </div>
+ <div style={{display:"grid",gridTemplateRows:"1fr 1fr",gap:6,padding:"8px 4px"}}>
+ <Chip b={g.ou.over} cat="ou" line={totPt!==""?("O "+totPt):""} value={isVal(g.ou.over,g._ov.ou)}/>
+ <Chip b={g.ou.under} cat="ou" line={totPt!==""?("U "+totPt):""} value={isVal(g.ou.under,g._ov.ou)}/>
+ </div>
+ <div style={{display:"grid",gridTemplateRows:"1fr 1fr",gap:6,padding:"8px 4px"}}>
+ <Chip b={g.ml.away} cat="ml" line="" value={isVal(g.ml.away,g._ov.ml)} mv={g.ml.away?lineMoves[g.ml.away.selKey]:null}/>
+ <Chip b={g.ml.home} cat="ml" line="" value={isVal(g.ml.home,g._ov.ml)} mv={g.ml.home?lineMoves[g.ml.home.selKey]:null}/>
+ </div>
+ </div>
+ <div onClick={()=>setSheetExpanded(exp?null:g.game)} style={{borderTop:"1px solid rgba(255,255,255,0.07)",padding:"7px 14px",display:"flex",alignItems:"center",gap:6,cursor:"pointer",background:"rgba(255,255,255,0.015)"}}>
+ <span style={{fontSize:10,fontWeight:700,color:"rgba(255,255,255,0.4)"}}>{exp?"Hide detail":"Tap for implied % + read"}</span>
+ <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2.4" strokeLinecap="round" style={{marginLeft:"auto",transform:exp?"rotate(180deg)":"none",transition:"transform .15s"}}><polyline points="6 9 12 15 18 9"/></svg>
+ </div>
+ {exp && (
+ <div style={{padding:"4px 14px 12px",display:"flex",flexWrap:"wrap",gap:"6px 16px",fontSize:10.5,fontWeight:600,color:"rgba(255,255,255,0.6)"}}>
+ {g.ml.away && <div>Implied <b style={{color:"#fff"}}>{impliedPct(g.ml.away.impliedOdds)}%</b> {nick(g.away)}</div>}
+ {g.ml.home && <div>Implied <b style={{color:"#fff"}}>{impliedPct(g.ml.home.impliedOdds)}%</b> {nick(g.home)}</div>}
+ {g.ml.away && lineMoves[g.ml.away.selKey] && <div>{nick(g.away)} <b style={{color:"#fff"}}>{fmtAm(lineMoves[g.ml.away.selKey].odds)} → {g.ml.away.odds}</b></div>}
+ {g.ml.home && lineMoves[g.ml.home.selKey] && <div>{nick(g.home)} <b style={{color:"#fff"}}>{fmtAm(lineMoves[g.ml.home.selKey].odds)} → {g.ml.home.odds}</b></div>}
+ {gv ? <div style={{color:IOS.green,fontWeight:700}}>+EV — best price beats the consensus</div> : <div style={{color:"rgba(255,255,255,0.34)"}}>No standout edge</div>}
+ </div>
+ )}
+ </div>
+ </div>
+ );
+ })}
+ </div>
+ );
+ };
+
  const pillBase = {padding:"7px 13px",borderRadius:20,fontSize:12,fontWeight:700,whiteSpace:"nowrap",cursor:"pointer",border:"1px solid",transition:"all .15s",flexShrink:0};
 
  return (
@@ -6909,7 +7071,7 @@ export default function App() {
  <div style={{width:26,height:26,border:`2.5px solid ${acc}33`,borderTopColor:acc,borderRadius:"50%",margin:"0 auto 14px",animation:"spin .7s linear infinite"}}/>
  <div style={{fontSize:13,color:"rgba(255,255,255,0.4)"}}>Loading live odds…</div>
  </div>
- ) : list.length===0 ? (
+ ) : isGameLine ? renderLineSheet() : list.length===0 ? (
  <div style={{padding:"50px 28px",textAlign:"center"}}>
  <div style={{fontSize:14,fontWeight:700,color:"rgba(255,255,255,0.45)",marginBottom:6}}>
  {gridType==="prop"?"No props live yet":`No ${TYPE_LABELS[gridType]} bets right now`}
