@@ -5236,40 +5236,33 @@ export default function App() {
  );
  })()}
 
- {homeTab==='home' && <>
- {!savedPicks &&
- <button className="ios-btn" style={{background:`linear-gradient(135deg,${sport.color},${IOS.indigo})`,color:"#fff",marginBottom:6,boxShadow:`0 6px 18px ${sport.color}33`}} onClick={()=>setScreen("picks")}>Build Your {leagueSports.length > 1 ? "Multi-Sport" : sport.label} Slip</button>
- }
-
- {/* My Locked Picks card */}
- {savedPicks && savedPicks.flexPicks && (
- <div style={{margin:"0 16px 10px",background:"linear-gradient(160deg,#0A1606 0%,#0B0B0E 70%)",borderRadius:16,overflow:"hidden",border:`1px solid rgba(48,209,88,0.3)`,boxShadow:"0 4px 16px rgba(0,0,0,0.4)"}}>
- <div style={{padding:"12px 16px 8px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:`0.5px solid ${IOS.sep}`}}>
- <div style={{fontSize:12,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.green}}> Week {activeLeague.current_week||activeLeague.week||1} Slip Locked</div>
- <div style={{display:"flex",gap:12,alignItems:"center"}}>
- <div style={{fontSize:12,fontWeight:600,color:IOS.blue,cursor:"pointer"}} onClick={()=>setScreen("picks")}>Edit</div>
- <div style={{fontSize:12,fontWeight:600,color:IOS.red,cursor:"pointer"}} onClick={async()=>{
- if(window.confirm("Clear your slip? This cannot be undone.")){
- if(user){
- const week = activeLeague.current_week||activeLeague.week||1;
- await supabase.from("picks").delete()
- .eq("league_id",activeLeague.id)
- .eq("user_id",user.id)
- .eq("week",week);
- }
- setSavedPicks(null);
- setFlexPicks(freshSlots());
- setWeekPicks(prev=>prev.filter(p=>p.user_id!==user?.id));
- try { localStorage.removeItem(`linedup_picks_${activeLeague.id}_wk${activeLeague.current_week||activeLeague.week||1}`); } catch(e) {}
- if(isSoloMode){ setSoloSavedPicks(null); try{ localStorage.removeItem("picklock_solo_locked"); }catch(e){} }
- }
- }}>Clear</div>
- </div>
- </div>
- {(()=>{
+ {homeTab==='home' && (()=>{
+ const _hasFilled=(arr)=>(arr||[]).some(s=>s.mult&&(s.isParlay?(s.parlayLegs||[]).length>0:!!s.bet));
+ const slipSlots = _hasFilled(flexPicks) ? flexPicks : ((savedPicks&&savedPicks.flexPicks&&_hasFilled(savedPicks.flexPicks)) ? savedPicks.flexPicks : null);
  const catColors={ml:IOS.blue,prop:IOS.yellow,ou:IOS.orange,spread:IOS.green,longshot:IOS.pink};
  const catAbbr={ml:"ML",prop:"PROP",ou:"O/U",spread:"SPREAD",longshot:"LONG"};
- const slots=[...savedPicks.flexPicks].filter(s=>s.mult).sort((a,b)=>a.mult-b.mult);
+ const wk=activeLeague.current_week||activeLeague.week||1;
+ const doClear=async()=>{
+ if(!window.confirm("Clear your unlocked picks? Picks from games that have already started are kept.")) return;
+ if(user){
+ const {data:rows}=await supabase.from("picks").select("id,game_date,result").eq("league_id",activeLeague.id).eq("user_id",user.id).eq("week",wk);
+ const now=Date.now();
+ const clearable=(rows||[]).filter(r=>(r.result==="pending"||!r.result)&&(!r.game_date||new Date(r.game_date).getTime()>now)).map(r=>r.id);
+ if(clearable.length) await supabase.from("picks").delete().in("id",clearable);
+ await fetchMyPicks(activeLeague.id, wk, user.id);
+ fetchWeekPicks(activeLeague.id, wk);
+ } else { setSavedPicks(null); }
+ setFlexPicks(freshSlots());
+ try { localStorage.removeItem(`linedup_picks_${activeLeague.id}_wk${wk}`); } catch(e) {}
+ if(isSoloMode){ setSoloSavedPicks(null); try{ localStorage.removeItem("picklock_solo_locked"); }catch(e){} }
+ };
+ let card=null;
+ if(slipSlots){
+ const slots=[...slipSlots].filter(s=>s.mult&&(s.isParlay?(s.parlayLegs||[]).length>0:!!s.bet)).sort((a,b)=>a.mult-b.mult);
+ const lockedN=slots.filter(s=>s.committed).length;
+ const allLocked=slots.length>0&&lockedN===slots.length;
+ const openN=slots.length-lockedN;
+ const accent=allLocked?IOS.green:IOS.orange;
  let totalPossible=0;
  const pills=slots.map((slot,i)=>{
  const legs=slot.parlayLegs||[];
@@ -5279,33 +5272,48 @@ export default function App() {
  else if(slot.bet){cat=slot.category||"ml";pts=parseFloat(calcPickPoints(slot.mult,slot.bet.impliedOdds,"W").toFixed(1));}
  else return null;
  totalPossible+=pts;
+ const locked=!!slot.committed;
  const c=catColors[cat]||IOS.blue;
  return (
- <div key={i} style={{display:"flex",alignItems:"center",gap:5,padding:"5px 9px",borderRadius:8,background:`${c}1a`,border:`0.5px solid ${c}3d`,flexShrink:0}}>
- <span style={{fontSize:11,fontWeight:800,color:c}}>{slot.mult}×</span>
- <span style={{fontSize:10.5,fontWeight:700,color:"rgba(255,255,255,0.8)",letterSpacing:0.3}}>{catAbbr[cat]||"PICK"}{isParlay&&legs.length>0?` ${legs.length}`:""}</span>
+ <div key={i} style={{display:"flex",alignItems:"center",gap:5,padding:"5px 9px",borderRadius:8,background:locked?`${c}1a`:"rgba(255,255,255,0.03)",border:locked?`0.5px solid ${c}3d`:"0.5px dashed rgba(255,255,255,0.2)",flexShrink:0,opacity:locked?1:0.85}}>
+ {locked&&<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>}
+ <span style={{fontSize:11,fontWeight:800,color:locked?c:"rgba(255,255,255,0.5)"}}>{slot.mult}×</span>
+ <span style={{fontSize:10.5,fontWeight:700,color:locked?"rgba(255,255,255,0.8)":"rgba(255,255,255,0.45)",letterSpacing:0.3}}>{catAbbr[cat]||"PICK"}{isParlay&&legs.length>0?` ${legs.length}`:""}</span>
+ {!locked&&<span style={{fontSize:8.5,fontWeight:800,color:IOS.orange,letterSpacing:0.4}}>OPEN</span>}
  {slot.power_up_id&&<PUBadge puId={slot.power_up_id} size={14} />}
  </div>
  );
  });
- return (
- <>
+ card=(
+ <div style={{margin:"0 16px 10px",background:allLocked?"linear-gradient(160deg,#0A1606 0%,#0B0B0E 70%)":"linear-gradient(160deg,#16130A 0%,#0B0B0E 70%)",borderRadius:16,overflow:"hidden",border:`1px solid ${accent}4d`,boxShadow:"0 4px 16px rgba(0,0,0,0.4)"}}>
+ <div style={{padding:"12px 16px 8px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:`0.5px solid ${IOS.sep}`}}>
+ <div style={{display:"flex",alignItems:"center",gap:7}}>
+ <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+ <div style={{fontSize:12,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:accent}}>{allLocked?`Week ${wk} · Slip Locked`:`Week ${wk} · ${lockedN}/${slots.length} Locked`}</div>
+ </div>
+ <div style={{display:"flex",gap:12,alignItems:"center"}}>
+ <div style={{fontSize:12,fontWeight:600,color:IOS.blue,cursor:"pointer"}} onClick={()=>setScreen("picks")}>{allLocked?"Edit":"Continue"}</div>
+ <div style={{fontSize:12,fontWeight:600,color:IOS.red,cursor:"pointer"}} onClick={doClear}>Clear</div>
+ </div>
+ </div>
  <div style={{display:"flex",gap:6,flexWrap:"wrap",padding:"12px 16px 4px"}}>{pills}</div>
  <div onClick={()=>setScreen("picks")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 14px",margin:"6px 12px 12px",borderRadius:10,background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.08)",cursor:"pointer"}}>
  <div style={{display:"flex",alignItems:"center",gap:8}}>
- <span style={{fontSize:13.5,fontWeight:700,color:"#fff"}}>View your picks</span>
+ <span style={{fontSize:13.5,fontWeight:700,color:"#fff"}}>{allLocked?"View your picks":(openN+" open · tap to lock")}</span>
  <span style={{fontSize:11,fontWeight:700,color:IOS.green}}>+{totalPossible.toFixed(1)} pts</span>
  </div>
  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
  </div>
- </>
- );
- })()}
  </div>
- )}
-
- {/* Power-Ups */}
- </>}
+ );
+ }
+ return (<>
+ {!slipSlots &&
+ <button className="ios-btn" style={{background:`linear-gradient(135deg,${sport.color},${IOS.indigo})`,color:"#fff",marginBottom:6,boxShadow:`0 6px 18px ${sport.color}33`}} onClick={()=>setScreen("picks")}>Build Your {leagueSports.length > 1 ? "Multi-Sport" : sport.label} Slip</button>
+ }
+ {card}
+ </>);
+ })()}
 
  {homeTab==='home' && <>
  <div className="ios-section" style={{margin:"12px 16px 6px"}}>
@@ -6049,19 +6057,19 @@ export default function App() {
  setActiveSavedPicks(null);
  }} style={{fontSize:13,fontWeight:600,color:IOS.blue,cursor:"pointer"}}>Edit</div>
  <div onClick={async()=>{
- if(window.confirm("Clear your slip? This cannot be undone.")){
- // Wipe from Supabase
- if(user) {
+ if(window.confirm("Clear your unlocked picks? Picks from games that have already started are kept.")){
  const week = activeLeague.current_week||activeLeague.week||1;
- await supabase.from("picks").delete()
- .eq("league_id", activeLeague.id)
- .eq("user_id", user.id)
- .eq("week", week);
+ if(user) {
+ const {data:rows}=await supabase.from("picks").select("id,game_date,result").eq("league_id",activeLeague.id).eq("user_id",user.id).eq("week",week);
+ const now=Date.now();
+ const clearable=(rows||[]).filter(r=>(r.result==="pending"||!r.result)&&(!r.game_date||new Date(r.game_date).getTime()>now)).map(r=>r.id);
+ if(clearable.length) await supabase.from("picks").delete().in("id",clearable);
+ await fetchMyPicks(activeLeague.id, week, user.id);
+ fetchWeekPicks(activeLeague.id, week);
  }
- // Wipe local state + localStorage
+ // keep only started+committed slots locally; reset the rest
+ setActivePicks(prev=>prev.map(p=> (p.committed && slotStarted(p)) ? p : (p.locked?{id:p.id,bet:null,mult:p.mult,category:p.category,isParlay:false,parlayLegs:[],locked:true}:{...EMPTY_FLEX[0],id:p.id})));
  setActiveSavedPicks(null);
- setActivePicks(EMPTY_FLEX);
- setWeekPicks(prev=>prev.filter(p=>p.user_id!==user?.id));
  try { localStorage.removeItem(`linedup_picks_${activeLeague.id}_wk${activeLeague.current_week||activeLeague.week||1}`); } catch(e) {}
  }
  }} style={{fontSize:13,fontWeight:600,color:IOS.red,cursor:"pointer"}}>Clear</div>
