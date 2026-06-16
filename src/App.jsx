@@ -1890,6 +1890,7 @@ export default function App() {
  (async()=>{ try{ const r=await fetch(`/api/linemoves?events=${encodeURIComponent(sig)}`); if(r.ok){ const d=await r.json(); setLineMoves(d.moves||{}); } }catch(e){} })();
  }, [screen, BETS]);
  const [showSwitcher, setShowSwitcher] = useState(false);
+ const [showMultPick, setShowMultPick] = useState(false); // bet-browser slot/multiplier picker
  const [showAccountMenu, setShowAccountMenu] = useState(false);
  const [unreadByLeague, setUnreadByLeague] = useState({});
  const markLeagueRead = async (lid)=>{
@@ -7004,6 +7005,44 @@ export default function App() {
  {isLiveOdds?"Live odds":"Sample odds"} · Filling Pick {target+1}{targetMult?` (${targetMult}×)`:""}
  </div>
  </div>
+ {gridCfg && (()=>{
+ const slots = activePicks.map((p,i)=>({i, mult:p.mult, category:p.category, bet:p.bet, isParlay:p.isParlay, parlayLegs:p.parlayLegs}));
+ const tgt = activePicks[target] || {};
+ const tCol = ACC[tgt.category] || acc;
+ return (
+ <div style={{position:"relative",flexShrink:0}}>
+ <div onClick={()=>setShowMultPick(v=>!v)} style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1,background:"rgba(255,255,255,0.05)",border:"1px solid "+(showMultPick?tCol+"80":"rgba(255,255,255,0.1)"),borderRadius:10,padding:"5px 10px",cursor:"pointer",minWidth:60}}>
+ <div style={{fontSize:7.5,fontWeight:800,letterSpacing:"0.1em",color:"rgba(255,255,255,0.4)"}}>MULTIPLIER</div>
+ <div style={{display:"flex",alignItems:"center",gap:5}}>
+ <span style={{fontSize:15,fontWeight:900,color:tCol,letterSpacing:"-0.3px"}}>{tgt.mult?(tgt.mult+"×"):("P"+(target+1))}</span>
+ <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2.6" strokeLinecap="round" style={{transform:showMultPick?"rotate(180deg)":"none",transition:"transform .15s"}}><polyline points="6 9 12 15 18 9"/></svg>
+ </div>
+ </div>
+ {showMultPick && (<>
+ <div onClick={()=>setShowMultPick(false)} style={{position:"fixed",inset:0,zIndex:40}}/>
+ <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,zIndex:41,width:212,background:"#15151c",border:"1px solid rgba(255,255,255,0.12)",borderRadius:14,padding:6,boxShadow:"0 16px 40px rgba(0,0,0,0.6)"}}>
+ <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.08em",color:"rgba(255,255,255,0.35)",padding:"5px 8px 6px"}}>PICK A SLOT TO FILL</div>
+ {slots.map(sl=>{
+ const sc = ACC[sl.category] || acc;
+ const isT = sl.i===target;
+ const filled = sl.isParlay ? (sl.parlayLegs&&sl.parlayLegs.length>=2) : !!sl.bet;
+ const nm = sl.isParlay ? ((sl.parlayLegs||[]).length+"-leg parlay") : (sl.bet ? sl.bet.pick : "Empty");
+ return (
+ <div key={sl.i} onClick={()=>{ setGridTargetSlot(sl.i); if(sl.category) setGridType(sl.category); setShowMultPick(false); }} style={{display:"flex",alignItems:"center",gap:9,padding:"8px",borderRadius:10,cursor:"pointer",background:isT?(sc+"1f"):"transparent",border:"1px solid "+(isT?sc+"66":"transparent"),marginBottom:2}}>
+ <span style={{minWidth:30,textAlign:"center",fontSize:13,fontWeight:900,color:sc}}>{sl.mult?(sl.mult+"×"):("P"+(sl.i+1))}</span>
+ <div style={{flex:1,minWidth:0}}>
+ <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.03em",color:sc,textTransform:"uppercase"}}>{sl.category?TYPE_LABELS[sl.category]:"Any type"}</div>
+ <div style={{fontSize:11,fontWeight:600,color:filled?"rgba(255,255,255,0.7)":"rgba(255,255,255,0.3)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{nm}</div>
+ </div>
+ {filled && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+ </div>
+ );
+ })}
+ </div>
+ </>)}
+ </div>
+ );
+ })()}
  </div>
 
  {/* Sport switcher */}
@@ -7026,7 +7065,7 @@ export default function App() {
  {allowedTypes.map(t=>{
  const on = t===gridType; const tc = ACC[t];
  return (
- <div key={t} onClick={()=>{ setGridType(t); setGridPropSub("all"); }} style={{...pillBase,
+ <div key={t} onClick={()=>{ setGridType(t); setGridPropSub("all"); if(gridCfg){ let _i=activePicks.findIndex(p=>!p.isParlay && p.category===t && p.bet===null); if(_i===-1) _i=activePicks.findIndex(p=>!p.isParlay && p.category===t); if(_i!==-1) setGridTargetSlot(_i); } }} style={{...pillBase,
  background:on?`${tc}26`:"rgba(255,255,255,0.05)", borderColor:on?`${tc}80`:"rgba(255,255,255,0.1)", color:on?tc:"rgba(255,255,255,0.45)"}}>
  {TYPE_LABELS[t]}
  </div>
