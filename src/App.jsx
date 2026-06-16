@@ -3299,7 +3299,7 @@ export default function App() {
  if(data && data.length > 0) {
  // Convert DB picks back into flexPicks format for the locked view
  const groups = {}; const order = [];
- data.forEach(p=>{ const sl=p.slot||""; let key; if(sl.startsWith("longshot")){ const parts=sl.split("_"); key = parts.length>=3 ? "longshot_"+parts[1] : "longshot"; } else { key = sl; } if(!groups[key]){ groups[key]=[]; order.push(key); } groups[key].push(p); });
+ data.forEach(p=>{ const sl=p.slot||""; const key = sl.startsWith("longshot") ? ("longshot_"+p.multiplier) : ("m"+p.multiplier); if(!groups[key]){ groups[key]=[]; order.push(key); } groups[key].push(p); });
  const flexPicks = order.map((key,gi)=>{
  const picks = groups[key];
  const isParlay = key.startsWith("longshot");
