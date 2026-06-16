@@ -838,6 +838,50 @@ function wrecDrawCard(d){
   x.fillStyle="rgba(255,255,255,.5)"; x.font="800 20px Barlow, system-ui, sans-serif"; x.fillText("PICKLOCK · WEEK "+d.week,48,H-56);
   return c;
 }
+function soloDrawCard(d){
+  const W=600,H=900,c=document.createElement("canvas"); c.width=W; c.height=H; const x=c.getContext("2d");
+  const P=50, AC="#BF5AF2", GR="#30D158", RD="#FF453A", MUT="rgba(255,255,255,.52)", MUT2="rgba(255,255,255,.32)";
+  const rr=(a,b,w,h,r)=>{ if(x.roundRect){x.beginPath();x.roundRect(a,b,w,h,r);} else {x.beginPath();x.moveTo(a+r,b);x.arcTo(a+w,b,a+w,b+h,r);x.arcTo(a+w,b+h,a,b+h,r);x.arcTo(a,b+h,a,b,r);x.arcTo(a,b,a+w,b,r);x.closePath();} };
+  const g=x.createLinearGradient(0,0,0,H); g.addColorStop(0,"#141019"); g.addColorStop(.5,"#0c0a12"); g.addColorStop(1,"#08070c");
+  rr(0,0,W,H,46); x.fillStyle=g; x.fill();
+  x.lineWidth=3; x.strokeStyle="rgba(191,90,242,.4)"; rr(8,8,W-16,H-16,40); x.stroke();
+  x.textBaseline="top";
+  x.textAlign="left"; x.fillStyle="#fff"; x.font="800 23px Barlow, system-ui, sans-serif"; x.fillText("PICKLOCK",P,54);
+  x.fillStyle=AC; x.font="800 23px Barlow, system-ui, sans-serif"; x.fillText(".",P+116,54);
+  if(d.name){ x.textAlign="right"; x.fillStyle=MUT; x.font="600 17px Barlow, system-ui, sans-serif"; x.fillText("@"+String(d.name).slice(0,18),W-P,58); }
+  x.fillStyle="rgba(255,255,255,.1)"; x.fillRect(P,92,W-2*P,1);
+  x.textAlign="left"; x.fillStyle=AC; x.font="800 15px Barlow, system-ui, sans-serif"; x.fillText("SLATE "+d.slate+"   ·   SOLO MODE",P,108);
+  x.fillStyle=d.points>=0?GR:RD; x.font="900 128px Barlow, system-ui, sans-serif"; x.fillText((d.points>=0?"+":"")+Math.round(d.points),P-6,132);
+  x.fillStyle=MUT; x.font="800 19px Barlow, system-ui, sans-serif"; x.fillText("POINTS THIS SLATE",P,278);
+  let y=330;
+  if(d.topPct){
+    rr(P,y,W-2*P,90,18); x.fillStyle="rgba(191,90,242,.12)"; x.fill(); x.lineWidth=1.5; x.strokeStyle="rgba(191,90,242,.55)"; rr(P,y,W-2*P,90,18); x.stroke();
+    x.textAlign="left"; x.fillStyle=AC; x.font="900 46px Barlow, system-ui, sans-serif"; x.fillText("TOP "+d.topPct+"%",P+22,y+20);
+    x.textAlign="right"; x.fillStyle="rgba(255,255,255,.72)"; x.font="700 17px Barlow, system-ui, sans-serif"; x.fillText("OF ALL SOLO PICKERS",W-P-22,y+26);
+    x.fillStyle=MUT2; x.font="600 13px Barlow, system-ui, sans-serif"; x.fillText("ranked by win rate",W-P-22,y+50);
+    y+=116;
+  }
+  const cells=[["RECORD",d.record],["SLATE WIN",d.slateWinPct+"%"],["STREAK",d.streak>0?(d.streak+(d.streak===1?" slate":" slates")):"—"]];
+  const cw=(W-2*P)/3;
+  cells.forEach((cl,i)=>{ const cx=P+i*cw;
+    x.textAlign="left"; x.fillStyle=MUT2; x.font="700 13px Barlow, system-ui, sans-serif"; x.fillText(cl[0],cx,y);
+    x.fillStyle="#fff"; x.font="900 36px Barlow, system-ui, sans-serif"; x.fillText(String(cl[1]),cx,y+22);
+  });
+  y+=88;
+  x.textAlign="left"; x.fillStyle=MUT; x.font="600 17px Barlow, system-ui, sans-serif"; x.fillText("All-time "+d.allTimeWinPct+"%   ·   "+d.picksN+" picks this slate",P,y);
+  y+=38; x.fillStyle="rgba(255,255,255,.1)"; x.fillRect(P,y,W-2*P,1); y+=34;
+  if(d.bestPick){
+    x.fillStyle=AC; x.font="800 13px Barlow, system-ui, sans-serif"; x.fillText("PLAY OF THE SLATE",P,y);
+    let nm=String(d.bestPick.name||""); if(nm.length>26) nm=nm.slice(0,25)+"…";
+    x.fillStyle="#fff"; x.font="800 27px Barlow, system-ui, sans-serif"; x.fillText(nm,P,y+24);
+    x.fillStyle=MUT; x.font="600 16px Barlow, system-ui, sans-serif"; x.fillText((d.bestPick.odds||"")+"    ·    +"+Math.round(d.bestPick.pts)+" pts",P,y+58);
+  } else {
+    x.fillStyle=MUT2; x.font="600 16px Barlow, system-ui, sans-serif"; x.fillText("No winning picks this slate — next one is yours.",P,y+10);
+  }
+  x.textBaseline="alphabetic"; x.textAlign="left"; x.fillStyle=MUT2; x.font="800 17px Barlow, system-ui, sans-serif"; x.fillText("PICKLOCK",P,H-44);
+  x.textAlign="right"; x.fillStyle=MUT2; x.font="600 15px Barlow, system-ui, sans-serif"; x.fillText("lined-up-murex.vercel.app",W-P,H-46);
+  return c;
+}
 function WeeklyRecap({ data, picks, standings, league, stats, IOS, onClose, user }){
   const [i,setI]=useState(0);
   const [toast,setToast]=useState("");
@@ -1244,7 +1288,8 @@ function AiInsightBubble({ item, IOS, onAddToSlip }) {
   </div>);
 }
 
-function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeague, setNewLeagueStep, setShowBrowse, fetchPublicLeagues, setIsSoloMode, setActiveLeagueId, getOrCreateSoloLeague, soloSavedPicks, setSoloSavedPicks, soloFlexPicks, setSoloFlexPicks, soloSport, setSoloSport, setShowSoloSportPicker, soloSubmitted, setSoloSubmitted}) {
+function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeague, setNewLeagueStep, setShowBrowse, fetchPublicLeagues, setIsSoloMode, setActiveLeagueId, getOrCreateSoloLeague, soloSavedPicks, setSoloSavedPicks, soloFlexPicks, setSoloFlexPicks, soloSport, setSoloSport, setShowSoloSportPicker, soloSubmitted, setSoloSubmitted, username, soloTopPct}) {
+  const [shareToast,setShareToast]=useState("");
   const totalWins = soloWeeks.reduce((s,w)=>s+w.wins,0);
   const totalLosses = soloWeeks.reduce((s,w)=>s+w.losses,0);
   const totalPts = soloWeeks.reduce((s,w)=>s+w.pts,0);
@@ -1279,6 +1324,22 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
   const bestSlatePts = gradedSlates.length ? Math.max(...gradedSlates.map(w=>w.pts)) : 0;
   const perfectSlates = gradedSlates.filter(w=>w.losses===0 && w.wins>0).length;
   const hasRecords = gradedSlates.length > 0;
+  const shareSlate = async (w) => {
+    try{
+      if(document.fonts&&document.fonts.ready){ try{ await document.fonts.ready; }catch(e){} }
+      const winsArr=(w.picks||[]).filter(pk=>pk.result==="W");
+      const bestPk = winsArr.length ? winsArr.reduce((a,b)=>(parseFloat(b.points_earned||0)>parseFloat(a.points_earned||0)?b:a)) : null;
+      const slateWinPct=(w.wins+w.losses)>0?Math.round(w.wins/(w.wins+w.losses)*100):0;
+      const cv = soloDrawCard({slate:w.week, points:w.pts, record:w.wins+"-"+w.losses, slateWinPct, streak:currentStreak, allTimeWinPct:winPct, picksN:(w.picks?w.picks.length:0), bestPick: bestPk?{name:bestPk.pick_name,odds:bestPk.odds,pts:parseFloat(bestPk.points_earned||0)}:null, topPct:soloTopPct, name:username||""});
+      const url="https://lined-up-murex.vercel.app";
+      const text="Slate "+w.week+": "+w.wins+"-"+w.losses+", "+(w.pts>=0?"+":"")+Math.round(w.pts)+" pts"+(soloTopPct?(" — top "+soloTopPct+"% of all pickers"):"")+" on PickLock Solo.";
+      const blob=await new Promise(r=>cv.toBlob(r,"image/png"));
+      const file=blob?new File([blob],"picklock-slate.png",{type:"image/png"}):null;
+      if(file && navigator.canShare && navigator.canShare({files:[file]})) await navigator.share({files:[file],text,title:"My PickLock Slate"});
+      else if(navigator.share) await navigator.share({text,url,title:"My PickLock Slate"});
+      else { const a=document.createElement("a"); a.href=cv.toDataURL("image/png"); a.download="picklock-slate.png"; a.click(); try{ await navigator.clipboard.writeText(text+" "+url); }catch(e){} setShareToast("Card saved — caption copied"); setTimeout(()=>setShareToast(""),2400); }
+    }catch(e){}
+  };
 
   const sportLabels = {nfl:"NFL",nba:"NBA",mlb:"MLB"};
   const sportColors = {nfl:"#0A84FF",nba:"#FF6B35",mlb:"#30D158"};
@@ -1449,14 +1510,20 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
                 <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:2}}>Slate {w.week}</div>
                 <div style={{fontSize:11,color:IOS.label3}}>{w.wins}W - {w.losses}L - {w.picks.length} picks</div>
               </div>
-              <div style={{textAlign:"right"}}>
-                <div style={{fontSize:16,fontWeight:800,color:w.pts>0?IOS.green:"#555"}}>{w.pts > 0 ? "+"+w.pts : "0"} pts</div>
-                {bestWeek && bestWeek.week===w.week && soloWeeks.length>1 && (
-                  <div style={{fontSize:8,fontWeight:700,color:IOS.green,background:"rgba(48,209,88,0.1)",border:"0.5px solid rgba(48,209,88,0.2)",borderRadius:4,padding:"1px 5px",marginTop:2}}>BEST SLATE</div>
-                )}
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontSize:16,fontWeight:800,color:w.pts>0?IOS.green:"#555"}}>{w.pts > 0 ? "+"+w.pts : "0"} pts</div>
+                  {bestWeek && bestWeek.week===w.week && soloWeeks.length>1 && (
+                    <div style={{fontSize:8,fontWeight:700,color:IOS.green,background:"rgba(48,209,88,0.1)",border:"0.5px solid rgba(48,209,88,0.2)",borderRadius:4,padding:"1px 5px",marginTop:2}}>BEST SLATE</div>
+                  )}
+                </div>
+                <button onClick={()=>shareSlate(w)} aria-label="Share slate" style={{width:32,height:32,borderRadius:9,background:"rgba(191,90,242,0.12)",border:"0.5px solid rgba(191,90,242,0.3)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#BF5AF2" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg>
+                </button>
               </div>
             </div>
           ))}
+          {shareToast && <div style={{position:"fixed",left:"50%",bottom:96,transform:"translateX(-50%)",background:"rgba(20,20,26,0.96)",border:"0.5px solid rgba(255,255,255,0.12)",borderRadius:10,padding:"10px 16px",fontSize:12,fontWeight:700,color:"#fff",zIndex:99999,boxShadow:"0 8px 30px rgba(0,0,0,0.5)"}}>{shareToast}</div>}
         </div>
       )}
 
@@ -1568,6 +1635,7 @@ export default function App() {
  const [leagueTrophies, setLeagueTrophies] = useState([]);
  // solo weeks must be declared before activeLeague since activeLeague uses soloWeeks.length
  const [soloWeeks, setSoloWeeks] = useState([]);
+ const [soloTopPct, setSoloTopPct] = useState(null);
  const [soloLoading, setSoloLoading] = useState(false);
  const [isSoloMode, setIsSoloMode] = useState(false);
  const isSoloModeRef = useRef(false);
@@ -1937,6 +2005,16 @@ export default function App() {
  const eventIds = [...new Set(base.ml.map(b=>b.eventId).filter(Boolean))].slice(0,30);
  if(eventIds.length) fetchPeriodOdds(sp, eventIds, periodTypes);
  }, [activeLeagueId, isSoloMode, liveOdds, activeLeague&&activeLeague.slot_config]);
+
+ // All-user solo percentile for the share card ("Top X%"). Calls an optional Supabase
+ // RPC (solo_top_pct); if it isn't created yet this just no-ops and the badge stays hidden.
+ useEffect(()=>{
+ if(!user||!user.id) return;
+ if(homeMode!=="solo" && !isSoloMode) return;
+ let alive=true;
+ (async()=>{ try{ const {data,error}=await supabase.rpc("solo_top_pct",{uid:user.id}); if(!error && alive && typeof data==="number") setSoloTopPct(data); }catch(e){} })();
+ return ()=>{ alive=false; };
+ }, [user, homeMode, isSoloMode, soloWeeks.length]);
  const [gridJustAdded, setGridJustAdded] = useState(null);   // bet id flashing "added" feedback
  // usedMults / availableMults / hasLongshot / allFlexFilled are derived inside the picks IIFE
  // so they always read from the correct activePicks (solo vs league). Do NOT compute them here.
@@ -4987,7 +5065,7 @@ export default function App() {
  </div>
 
  {/* ══ SOLO MODE HOME SCREEN ══ */}
- {homeMode==="solo" && <SoloHome soloWeeks={soloWeeks} soloLoading={soloLoading} isPro={isPro} IOS={IOS} setScreen={setScreen} setShowNewLeague={setShowNewLeague} setNewLeagueStep={setNewLeagueStep} setShowBrowse={setShowBrowse} fetchPublicLeagues={fetchPublicLeagues} setIsSoloMode={setIsSoloMode} setActiveLeagueId={setActiveLeagueId} getOrCreateSoloLeague={getOrCreateSoloLeague} soloSavedPicks={soloSavedPicks} setSoloSavedPicks={setSoloSavedPicks} soloFlexPicks={soloFlexPicks} setSoloFlexPicks={setSoloFlexPicks} soloSport={soloSport} setSoloSport={setSoloSportPersist} setShowSoloSportPicker={setShowSoloSportPicker} soloSubmitted={soloSubmitted} setSoloSubmitted={setSoloSubmitted}/>}
+ {homeMode==="solo" && <SoloHome soloWeeks={soloWeeks} soloLoading={soloLoading} isPro={isPro} IOS={IOS} setScreen={setScreen} setShowNewLeague={setShowNewLeague} setNewLeagueStep={setNewLeagueStep} setShowBrowse={setShowBrowse} fetchPublicLeagues={fetchPublicLeagues} setIsSoloMode={setIsSoloMode} setActiveLeagueId={setActiveLeagueId} getOrCreateSoloLeague={getOrCreateSoloLeague} soloSavedPicks={soloSavedPicks} setSoloSavedPicks={setSoloSavedPicks} soloFlexPicks={soloFlexPicks} setSoloFlexPicks={setSoloFlexPicks} soloSport={soloSport} setSoloSport={setSoloSportPersist} setShowSoloSportPicker={setShowSoloSportPicker} soloSubmitted={soloSubmitted} setSoloSubmitted={setSoloSubmitted} username={userProfile?.username||""} soloTopPct={soloTopPct}/>}
 
  {/* ══ LEAGUES MODE ══ */}
  <div style={{display:homeMode==="leagues"?"block":"none"}}>
