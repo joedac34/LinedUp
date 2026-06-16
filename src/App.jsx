@@ -1522,6 +1522,8 @@ const trophySVG = (id, color="#fff") => {
   return icons[id] || <svg {...s}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>;
 };
 
+const PERIOD_MARKETS = { ml_h1:"h2h_h1", spread_h1:"spreads_h1", ou_h1:"totals_h1", ml_f5:"h2h_1st_5_innings", spread_f5:"spreads_1st_5_innings", ou_f5:"totals_1st_5_innings", yrfi:"totals_1st_1_innings", nrfi:"totals_1st_1_innings" };
+const PERIOD_CATS = ["ml_h1","spread_h1","ou_h1","ml_f5","spread_f5","ou_f5","yrfi","nrfi"];
 export default function App() {
  const [screen, setScreen] = useState("home");
  const [tutorialStep, setTutorialStep] = useState(-1); // -1 = hidden; only shown on fresh signup
@@ -1729,13 +1731,31 @@ export default function App() {
  }
  };
 
+ // Lazy per-event period-odds fetch (1st half / first-5 / YRFI-NRFI). Only called for
+ // games in a custom league that actually has a period slot. Cached: cats default to []
+ // so a sport isn't re-fetched once attempted.
+ const fetchPeriodOdds = async (sportId, eventIds, periodTypes) => {
+ if(!eventIds.length || !periodTypes.length) return;
+ const sportKey = SPORT_KEYS[sportId]; if(!sportKey) return;
+ const marketKeys = [...new Set(periodTypes.map(t=>PERIOD_MARKETS[t]).filter(Boolean))];
+ if(!marketKeys.length) return;
+ try {
+ const res = await fetch(`/api/eventodds?sport=${sportKey}&events=${eventIds.join(",")}&markets=${marketKeys.join(",")}`);
+ if(!res.ok) return;
+ const data = await res.json();
+ const grouped = {}; periodTypes.forEach(t=>{ grouped[t]=[]; });
+ (data.bets||[]).forEach(b=>{ if(grouped[b.category]) grouped[b.category].push(b); });
+ setLiveOdds(prev=>({ ...prev, [sportId]: { ...(prev[sportId]||{}), ...grouped } }));
+ } catch(e) { console.warn("period odds fetch failed", e); }
+ };
+
  // Use live odds if available, else fall back to hardcoded
  // Multi-sport: merge bets from all sports in the league
  const leagueSports = (activeLeague.sports && activeLeague.sports.length > 0)
    ? activeLeague.sports
    : [activeLeague.sport || "nfl"];
  const BETS = (() => {
-   const merged = {ml:[],spread:[],ou:[],prop:[],longshot:[]};
+   const merged = {ml:[],spread:[],ou:[],prop:[],longshot:[],ml_h1:[],spread_h1:[],ou_h1:[],ml_f5:[],spread_f5:[],ou_f5:[],yrfi:[],nrfi:[]};
    const tag = (arr, sp) => (arr||[]).map(b=>({...b, _sport:sp}));
    leagueSports.forEach(sp => {
      const odds = liveOdds[sp];
@@ -1745,6 +1765,7 @@ export default function App() {
      merged.ou.push(...tag(odds.ou||[], sp));
      merged.prop.push(...tag(odds.prop||[], sp));
      merged.longshot.push(...tag(odds.longshot||[], sp));
+     PERIOD_CATS.forEach(c=>{ merged[c].push(...tag(odds[c]||[], sp)); });
    });
    return merged;
  })();
@@ -1901,6 +1922,21 @@ export default function App() {
    return ()=>{ document.removeEventListener("visibilitychange",onVis); clearInterval(iv); };
  },[user]);
  useEffect(()=>{ if(screen!=="browser"||isSoloMode) return; const _cfg=parseSlotConfig(activeLeague&&activeLeague.slot_config); if(!_cfg) return; const _allowed=[...new Set(_cfg.map(s=>s.type))]; const _ts=flexPicks[gridTargetSlot]; const _tgt=(gridTargetSlot!=null&&_ts&&_ts.locked)?_ts.category:null; const _want=_tgt||(_allowed.includes(gridType)?gridType:_allowed[0]); if(_want&&_want!==gridType) setGridType(_want); }, [screen, gridTargetSlot, activeLeagueId, gridType]);
+
+ // When a custom league has period slots, lazily pull their odds for the slate's games.
+ useEffect(()=>{
+ if(isSoloMode) return;
+ const cfg = parseSlotConfig(activeLeague&&activeLeague.slot_config);
+ if(!cfg) return;
+ const periodTypes = [...new Set(cfg.map(x=>x.type).filter(t=>PERIOD_MARKETS[t]))];
+ if(!periodTypes.length) return;
+ const sp = activeLeague.sport;
+ const base = liveOdds[sp];
+ if(!base || !base.ml || !base.ml.length) return; // wait for base odds (carries event IDs)
+ if(periodTypes.every(t=>Array.isArray(base[t]))) return; // already attempted
+ const eventIds = [...new Set(base.ml.map(b=>b.eventId).filter(Boolean))].slice(0,30);
+ if(eventIds.length) fetchPeriodOdds(sp, eventIds, periodTypes);
+ }, [activeLeagueId, isSoloMode, liveOdds, activeLeague&&activeLeague.slot_config]);
  const [gridJustAdded, setGridJustAdded] = useState(null);   // bet id flashing "added" feedback
  // usedMults / availableMults / hasLongshot / allFlexFilled are derived inside the picks IIFE
  // so they always read from the correct activePicks (solo vs league). Do NOT compute them here.
@@ -2431,6 +2467,14 @@ export default function App() {
   {id:"ou",l:"Over / Under",scope:"Game line",color:"#FF9F0A"},
   {id:"prop",l:"Player Prop",scope:"Props",color:"#FFD60A"},
   {id:"longshot",l:"Longshot / Parlay",scope:"Exotic",color:"#FF375F"},
+  {id:"ml_h1",l:"1st Half ML",scope:"1st Half",color:"#64D2FF",sports:["nfl","nba"]},
+  {id:"spread_h1",l:"1st Half Spread",scope:"1st Half",color:"#64D2FF",sports:["nfl","nba"]},
+  {id:"ou_h1",l:"1st Half O / U",scope:"1st Half",color:"#64D2FF",sports:["nfl","nba"]},
+  {id:"ml_f5",l:"First 5 ML",scope:"First 5 innings",color:"#5E5CE6",sports:["mlb"]},
+  {id:"spread_f5",l:"First 5 Spread",scope:"First 5 innings",color:"#5E5CE6",sports:["mlb"]},
+  {id:"ou_f5",l:"First 5 O / U",scope:"First 5 innings",color:"#5E5CE6",sports:["mlb"]},
+  {id:"yrfi",l:"YRFI",scope:"Yes Run 1st Inning",color:"#FF9F0A",sports:["mlb"]},
+  {id:"nrfi",l:"NRFI",scope:"No Run 1st Inning",color:"#30D158",sports:["mlb"]},
  ];
  const DEFAULT_SLOTS=[{type:"ml",mult:1},{type:"prop",mult:2},{type:"ou",mult:3},{type:"spread",mult:4},{type:"longshot",mult:5}];
  const [newLeagueSlots,setNewLeagueSlots]=useState([{type:"ml",mult:1},{type:"prop",mult:2},{type:"ou",mult:3},{type:"spread",mult:4},{type:"longshot",mult:5}]);
@@ -6465,8 +6509,8 @@ export default function App() {
  const setActivePicks = isSoloMode ? setSoloFlexPicks : setFlexPicks;
 
  // Per-bet-type accent — the screen's accent shifts with the selected type
- const ACC = { ml:IOS.blue, spread:IOS.green, ou:IOS.orange, prop:IOS.yellow, longshot:IOS.pink };
- const TYPE_LABELS = { ml:"Moneyline", spread:"Spread", ou:"Over/Under", prop:"Prop", longshot:"Longshot" };
+ const ACC = { ml:IOS.blue, spread:IOS.green, ou:IOS.orange, prop:IOS.yellow, longshot:IOS.pink, ml_h1:"#64D2FF", spread_h1:"#64D2FF", ou_h1:"#64D2FF", ml_f5:"#5E5CE6", spread_f5:"#5E5CE6", ou_f5:"#5E5CE6", yrfi:"#FF9F0A", nrfi:"#30D158" };
+ const TYPE_LABELS = { ml:"Moneyline", spread:"Spread", ou:"Over/Under", prop:"Prop", longshot:"Longshot", ml_h1:"1H Moneyline", spread_h1:"1H Spread", ou_h1:"1H Over/Under", ml_f5:"F5 Moneyline", spread_f5:"F5 Spread", ou_f5:"F5 Over/Under", yrfi:"YRFI", nrfi:"NRFI" };
  const acc = ACC[gridType] || IOS.blue;
  const gridCfg = !isSoloMode ? parseSlotConfig(activeLeague&&activeLeague.slot_config) : null;
  const allowedTypes = gridCfg ? [...new Set(gridCfg.map(s=>s.type))] : ["ml","spread","ou","prop","longshot"];
@@ -7221,7 +7265,7 @@ export default function App() {
  </div>
  <div style={{overflowY:"auto",padding:"0 16px 26px"}}>
  {slotSheetIdx===-1&&<div style={{fontSize:12,color:"rgba(255,255,255,0.5)",marginBottom:12,lineHeight:1.4}}>Pick one type and every slot becomes that type.</div>}
- {SLOT_TYPES.map(tp=>{const sel=slotSheetIdx>=0&&newLeagueSlots[slotSheetIdx]&&newLeagueSlots[slotSheetIdx].type===tp.id;return (
+ {SLOT_TYPES.filter(tp=>!tp.sports||tp.sports.some(sp=>newLeagueSports.includes(sp))).map(tp=>{const sel=slotSheetIdx>=0&&newLeagueSlots[slotSheetIdx]&&newLeagueSlots[slotSheetIdx].type===tp.id;return (
  <div key={tp.id} onClick={()=>{ if(slotSheetIdx===-1){setNewLeagueSlots(arr=>arr.map(p=>({...p,type:tp.id})));} else {setNewLeagueSlots(arr=>arr.map((p,j)=>j===slotSheetIdx?{...p,type:tp.id}:p));} setSlotSheetIdx(null); }} style={{display:"flex",alignItems:"center",gap:11,background:sel?"rgba(10,132,255,0.1)":"linear-gradient(160deg,#15151A,#0B0B0E 80%)",border:"0.5px solid "+(sel?"rgba(10,132,255,0.6)":"rgba(255,255,255,0.09)"),borderRadius:12,padding:"13px 14px",marginBottom:8,cursor:"pointer"}}>
  <span style={{width:10,height:10,borderRadius:3,background:tp.color,flexShrink:0}}/>
  <div style={{flex:1}}><div style={{fontSize:14,fontWeight:700,color:"#fff"}}>{tp.l}</div><div style={{fontSize:11,color:"#555",marginTop:1}}>{tp.scope}</div></div>
