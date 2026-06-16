@@ -3308,11 +3308,13 @@ export default function App() {
  id: gi,
  mult: picks[0].multiplier,
  isParlay,
- parlayLegs: isParlay ? picks.map(pp=>({id:pp.id, pick:pp.pick_name, game:pp.game||"", odds:pp.odds, impliedOdds:pp.implied_odds})) : [],
- bet: isParlay ? null : {pick:picks[0].pick_name, game:picks[0].game||"", odds:picks[0].odds, impliedOdds:picks[0].implied_odds},
+ parlayLegs: isParlay ? picks.map(pp=>({id:pp.id, pick:pp.pick_name, game:pp.game||"", odds:pp.odds, impliedOdds:pp.implied_odds, gameTime:pp.game_date||null})) : [],
+ bet: isParlay ? null : {pick:picks[0].pick_name, game:picks[0].game||"", odds:picks[0].odds, impliedOdds:picks[0].implied_odds, gameTime:picks[0].game_date||null, eventId:picks[0].event_id||null, marketKey:picks[0].market_key||null, outcome:picks[0].outcome||null, point:(picks[0].outcome_point!=null?picks[0].outcome_point:null), selKey:picks[0].sel_key||null},
  power_up_id: picks[0].power_up_id||null,
  pu_tier: picks[0].pu_tier!=null?picks[0].pu_tier:null,
  category: cat,
+ committed: true,
+ commitIds: picks.map(pp=>pp.id),
  };
  });
  const _isCustom = data.some(pp=>{const s=pp.slot||""; return !s.startsWith("longshot") && /_\d+$/.test(s);});
@@ -5500,6 +5502,44 @@ export default function App() {
  });
  const hasParlay = hasLongshot;
  const allFlexFilled = activePicks.every(p=>p.mult!==null&&(p.isParlay?p.parlayLegs.length>=2:p.bet!==null));
+ // ── Per-pick locking ─────────────────────────────────────────────
+ const _weekNum = activeLeague.current_week||activeLeague.week||1;
+ const slotGameTime = (slot)=>{
+ if(!slot) return 0;
+ if(slot.isParlay){ const ts=(slot.parlayLegs||[]).map(l=>l.gameTime?new Date(l.gameTime).getTime():0).filter(t=>t>0); return ts.length?Math.min(...ts):0; }
+ return slot.bet&&slot.bet.gameTime?new Date(slot.bet.gameTime).getTime():0;
+ };
+ const slotStarted = (slot)=>{ const gt=slotGameTime(slot); return !!gt && gt<=Date.now(); };
+ const buildSlotRows = (slot, slotIdx)=>{
+ const _pu = activatedPUs[slotIdx] || null; const _puId=_pu?_pu.id:null; const _puTier=(_pu&&_pu.tier!=null)?_pu.tier:null;
+ if(slot.isParlay){
+ return (slot.parlayLegs||[]).map((b,legIdx)=>({ league_id:activeLeague.id, user_id:user.id, week:_weekNum, slot: isCustomSlip?`longshot_${slotIdx}_${legIdx}`:`longshot_${legIdx}`, multiplier:slot.mult, power_up_id:_puId, pu_tier:_puTier, pick_name:b.pick, game:b.game||"", odds:b.odds, implied_odds:b.impliedOdds, game_date:b.gameTime||null, result:"pending", points_earned:0 }));
+ }
+ return [{ league_id:activeLeague.id, user_id:user.id, week:_weekNum, slot: isCustomSlip?`${slot.category||"ml"}_${slotIdx}`:(slot.category||"ml"), multiplier:slot.mult, power_up_id:_puId, pu_tier:_puTier, pick_name:slot.bet.pick, game:slot.bet.game||"", odds:slot.bet.odds, implied_odds:slot.bet.impliedOdds, game_date:slot.bet.gameTime||null, event_id:slot.bet.eventId||null, market_key:slot.bet.marketKey||null, outcome:slot.bet.outcome||null, outcome_point:(slot.bet.point!=null?slot.bet.point:null), sel_key:slot.bet.selKey||null, result:"pending", points_earned:0 }];
+ };
+ const lockSlot = async (idx)=>{
+ const slot = activePicks[idx];
+ if(!slot||!slot.mult||slot.committed) return;
+ if(slot.isParlay ? (slot.parlayLegs||[]).length<2 : !slot.bet) return;
+ if(slotStarted(slot)){ alert("That game has already started — this pick can no longer be locked."); return; }
+ if(!user){ alert("Sign in to lock picks."); return; }
+ const rows = buildSlotRows(slot, idx);
+ const { data, error } = await supabase.from("picks").insert(rows).select("id");
+ if(error){ alert("Couldn’t lock that pick: "+error.message); return; }
+ const ids = (data||[]).map(r=>r.id);
+ setActivePicks(prev=>prev.map((p,i)=> i===idx ? {...p, committed:true, commitIds:ids} : p));
+ try{ fetchWeekPicks(activeLeague.id, _weekNum); }catch(e){}
+ try{ if(navigator.vibrate) navigator.vibrate(20); }catch(e){}
+ };
+ const unlockSlot = async (idx)=>{
+ const slot = activePicks[idx];
+ if(!slot||!slot.committed) return;
+ if(slotStarted(slot)){ alert("That game has started — this pick is locked in."); return; }
+ const ids = slot.commitIds||[];
+ if(ids.length){ const { error } = await supabase.from("picks").delete().in("id", ids); if(error){ alert("Couldn’t unlock: "+error.message); return; } }
+ setActivePicks(prev=>prev.map((p,i)=> i===idx ? {...p, committed:false, commitIds:[]} : p));
+ try{ fetchWeekPicks(activeLeague.id, _weekNum); }catch(e){}
+ };
  const isCustomSlip = activePicks.some(p=>p.locked);
  return (
  <>
@@ -6273,7 +6313,7 @@ export default function App() {
  <div onClick={()=>openSlot(idx)} style={{background:"#2a2a2a",borderRadius:7,color:"#bbb",fontSize:11,fontWeight:600,padding:"4px 10px",cursor:"pointer"}}>
  {filled?"Edit":"+ Pick"}
  </div>
- {filled&&<button onClick={e=>{e.stopPropagation();setActivePicks(prev=>prev.map((p,i)=>i===idx?(p.locked?{id:i,bet:null,mult:p.mult,category:p.category,isParlay:false,parlayLegs:[],locked:true}:{...EMPTY_FLEX[0],id:i}):p));}} style={{background:"#2a2a2a",border:"none",borderRadius:7,color:"#555",fontSize:14,width:26,height:26,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>}
+ {filled&&!slot.committed&&<button onClick={e=>{e.stopPropagation();setActivePicks(prev=>prev.map((p,i)=>i===idx?(p.locked?{id:i,bet:null,mult:p.mult,category:p.category,isParlay:false,parlayLegs:[],locked:true}:{...EMPTY_FLEX[0],id:i}):p));}} style={{background:"#2a2a2a",border:"none",borderRadius:7,color:"#555",fontSize:14,width:26,height:26,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>}
  </div>
  </div>
  </div>
@@ -6307,7 +6347,7 @@ export default function App() {
  {/* Bottom bar: multipliers + pts if win */}
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(0,0,0,0.25)",borderTop:"0.5px solid rgba(255,255,255,0.06)",padding:"6px 13px",gap:8}}>
  <div style={{display:"flex",gap:5}}>
- {slot.locked ? [(<div key="lk" style={{width:34,height:26,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",background:(multColors[slot.mult]||"#2a2a2a"),color:"#fff",fontSize:11,fontWeight:700}}>{slot.mult}×</div>)] : [1,2,3,4,5].map(m=>{
+ {(slot.locked||slot.committed) ? [(<div key="lk" style={{width:34,height:26,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",background:(multColors[slot.mult]||"#2a2a2a"),color:"#fff",fontSize:11,fontWeight:700}}>{slot.mult}×</div>)] : [1,2,3,4,5].map(m=>{
  const taken = usedMults.includes(m) && slot.mult!==m;
  const active = slot.mult===m;
  return (
@@ -6324,6 +6364,15 @@ export default function App() {
  </div>
  {/* Pts + power-up */}
  <div style={{display:"flex",alignItems:"center",gap:8}}>
+ {slot.mult&&filled&&(()=>{
+ const started=slotStarted(slot);
+ if(slot.committed) return (<div style={{display:"flex",alignItems:"center",gap:7}}>
+ <span style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:10,fontWeight:800,color:IOS.green,background:"rgba(48,209,88,0.12)",border:"1px solid rgba(48,209,88,0.3)",borderRadius:7,padding:"4px 8px"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>LOCKED</span>
+ {!started && <span onClick={(e)=>{e.stopPropagation();unlockSlot(idx);}} style={{fontSize:10.5,fontWeight:700,color:IOS.blue,cursor:"pointer"}}>Unlock</span>}
+ </div>);
+ if(started) return (<span style={{fontSize:10,fontWeight:700,color:IOS.label3}}>Game started</span>);
+ return (<button onClick={(e)=>{e.stopPropagation();lockSlot(idx);}} style={{fontFamily:"Barlow",display:"inline-flex",alignItems:"center",gap:5,fontSize:11,fontWeight:800,color:"#08080B",background:IOS.green,border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#08080B" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Lock</button>);
+ })()}
  {slot.mult&&filled&&<div style={{fontSize:12,fontWeight:700,color:IOS.green,flexShrink:0}}>
  {isDouble?`+${pts} pts (2⃣ doubled!)`:isEnhance&&slot.bet?`+${pts} pts `:`+${pts} pts if win`}
  </div>}
@@ -6372,70 +6421,23 @@ export default function App() {
  ? <button className="ios-btn green" onClick={async()=>{
  if(user) {
  const week = activeLeague.current_week||activeLeague.week||1;
- // Delete any existing picks for this user/league/week first
- const {data:existing} = await supabase
- .from("picks")
- .select("id")
- .eq("league_id", activeLeague.id)
- .eq("user_id", user.id)
- .eq("week", week);
- // Always delete existing picks first to avoid unique constraint violations
- await supabase.from("picks").delete()
- .eq("league_id", activeLeague.id)
- .eq("user_id", user.id)
- .eq("week", week);
-
- const picksToSave = [];
+ // Solo is a full resubmit; leagues lock ADDITIVELY so already-locked picks
+ // (whose games may have started/graded) are never wiped or re-graded.
+ if(isSoloMode){ await supabase.from("picks").delete().eq("league_id", activeLeague.id).eq("user_id", user.id).eq("week", week); }
+ const picksToSave = []; const lockedIdx = [];
  activePicks.forEach((slot, slotIdx)=>{
  if(!slot.mult) return;
- const _pu = activatedPUs[slotIdx] || null;
- const _puId = _pu ? _pu.id : null;
- const _puTier = (_pu && _pu.tier != null) ? _pu.tier : null;
- if(slot.isParlay) {
- // Give each parlay leg a unique slot name to avoid constraint violations
- slot.parlayLegs.forEach((b, legIdx)=>picksToSave.push({
- league_id: activeLeague.id,
- user_id: user.id,
- week,
- slot: isCustomSlip ? `longshot_${slotIdx}_${legIdx}` : `longshot_${legIdx}`,
- multiplier: slot.mult,
- power_up_id: _puId,
- pu_tier: _puTier,
- pick_name: b.pick,
- game: b.game||"",
- odds: b.odds,
- implied_odds: b.impliedOdds,
- game_date: b.gameTime||null,
- result: "pending",
- points_earned: 0,
- }));
- } else {
- picksToSave.push({
- league_id: activeLeague.id,
- user_id: user.id,
- week,
- slot: isCustomSlip ? `${slot.category||"ml"}_${slotIdx}` : (slot.category||"ml"),
- multiplier: slot.mult,
- power_up_id: _puId,
- pu_tier: _puTier,
- pick_name: slot.bet.pick,
- game: slot.bet.game||"",
- odds: slot.bet.odds,
- implied_odds: slot.bet.impliedOdds,
- game_date: slot.bet.gameTime||null,
- event_id: slot.bet.eventId||null,
- market_key: slot.bet.marketKey||null,
- outcome: slot.bet.outcome||null,
- outcome_point: (slot.bet.point!=null?slot.bet.point:null),
- sel_key: slot.bet.selKey||null,
- result: "pending",
- points_earned: 0,
- });
- }
+ if(!isSoloMode && slot.committed) return; // already locked
+ const filledOk = slot.isParlay ? (slot.parlayLegs||[]).length>=2 : !!slot.bet;
+ if(!filledOk) return;
+ if(!isSoloMode && slotStarted(slot)) return; // can’t lock a started game
+ buildSlotRows(slot, slotIdx).forEach(r=>picksToSave.push(r));
+ lockedIdx.push(slotIdx);
  });
  if(picksToSave.length) {
- const {error:insertError} = await supabase.from("picks").insert(picksToSave);
+ const {data:ins, error:insertError} = await supabase.from("picks").insert(picksToSave).select("id,multiplier");
  if(insertError) { alert("Error saving picks: " + insertError.message); return; }
+ if(!isSoloMode){ setActivePicks(prev=>prev.map((p,i)=>{ if(!lockedIdx.includes(i)) return p; const mine=(ins||[]).filter(r=>r.multiplier===p.mult).map(r=>r.id); return {...p, committed:true, commitIds:mine}; })); }
  }
  if(isSoloMode){ const _slid = soloLeagueId || activeLeague.id; if(_slid && _slid!=="solo"){ try{ await supabase.from("leagues").update({sport: soloSport}).eq("id", _slid); }catch(e){} } }
  }
