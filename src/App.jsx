@@ -1288,8 +1288,18 @@ function AiInsightBubble({ item, IOS, onAddToSlip }) {
   </div>);
 }
 
-function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeague, setNewLeagueStep, setShowBrowse, fetchPublicLeagues, setIsSoloMode, setActiveLeagueId, getOrCreateSoloLeague, soloSavedPicks, setSoloSavedPicks, soloFlexPicks, setSoloFlexPicks, soloSport, setSoloSport, setShowSoloSportPicker, soloSubmitted, setSoloSubmitted, username, soloTopPct}) {
+function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeague, setNewLeagueStep, setShowBrowse, fetchPublicLeagues, setIsSoloMode, setActiveLeagueId, getOrCreateSoloLeague, soloSavedPicks, setSoloSavedPicks, soloFlexPicks, setSoloFlexPicks, soloSport, setSoloSport, setShowSoloSportPicker, soloSubmitted, setSoloSubmitted, username, soloTopPct, onDeleteSlate, onJoinCode, tickerGames=[], espnGames=[]}) {
   const [shareToast,setShareToast]=useState("");
+  const [openSlate,setOpenSlate]=useState(null);
+  const [joinCode,setJoinCode]=useState("");
+  const _MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const slateStamp=(w)=>{
+    const ds=(w.picks||[]).map(p=>p.game_date||p.created_at).filter(Boolean).map(d=>new Date(d)).filter(d=>!isNaN(d));
+    const gs=new Set((w.picks||[]).map(p=>(p.game||"").trim()).filter(Boolean));
+    let dstr=""; if(ds.length){ const d=new Date(Math.min(...ds.map(x=>x.getTime()))); dstr=_MON[d.getMonth()]+" "+d.getDate(); }
+    const gN=gs.size||0;
+    return (dstr||"") + (gN?((dstr?" · ":"")+gN+" game"+(gN>1?"s":"")):"");
+  };
   const totalWins = soloWeeks.reduce((s,w)=>s+w.wins,0);
   const totalLosses = soloWeeks.reduce((s,w)=>s+w.losses,0);
   const totalPts = soloWeeks.reduce((s,w)=>s+w.pts,0);
@@ -1298,7 +1308,7 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
   const freePicks = (soloSavedPicks && soloSavedPicks.freePicks) || null;
   const hasLockedSlip = soloSavedPicks && (soloSavedPicks.flexPicks || freePicks);
   const lockedPicks = (hasLockedSlip && soloSavedPicks.flexPicks) ? [...soloSavedPicks.flexPicks].filter(s=>s.mult!==null) : [];
-  const currentWeekNum = soloWeeks.length + 1;
+  const currentWeekNum = (soloWeeks.length ? Math.max(...soloWeeks.map(w=>w.week)) : 0) + 1;
 
   // ── Live Slate Challenge (#2) — tracks the most recent slate as it grades ──
   const gradedSlates = soloWeeks.filter(w=>(w.wins+w.losses)>0);
@@ -1413,6 +1423,41 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
       </div>
       )}
 
+      {/* Today's games */}
+      {tickerGames && tickerGames.length>0 && (
+        <div style={{marginBottom:16}}>
+          <div style={{fontSize:11,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Today’s Games</div>
+          <div style={{display:"flex",gap:9,overflowX:"auto",paddingBottom:4}}>
+            {tickerGames.slice(0,12).map((g,gi)=>{
+              const away=(g.away||"").split(" ").pop(), home=(g.home||"").split(" ").pop();
+              const espn=(espnGames||[]).find(e=>e.awayTeam?.toLowerCase().includes(away.toLowerCase())||e.homeTeam?.toLowerCase().includes(home.toLowerCase()));
+              const t=g.time?new Date(g.time):null; const now=new Date();
+              const isLive=!!t&&now>=t&&now<new Date(t.getTime()+4*60*60*1000);
+              const isDone=!!espn&&espn.awayScore!=null&&espn.homeScore!=null&&!isLive;
+              const gameTime=t?t.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}):"";
+              return (
+                <div key={gi} onClick={async()=>{ if(setIsSoloMode) setIsSoloMode(true); const lgId=await getOrCreateSoloLeague(); if(setActiveLeagueId) setActiveLeagueId(lgId||"solo"); setScreen("picks"); }} style={{flexShrink:0,width:150,background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:11,padding:"10px 11px",cursor:"pointer"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:7}}>
+                    <span style={{fontSize:8.5,fontWeight:800,letterSpacing:.3,color:isLive?IOS.green:IOS.label3,textTransform:"uppercase"}}>{isLive?"● LIVE":isDone?"FINAL":gameTime}</span>
+                    <span style={{fontSize:8.5,fontWeight:700,color:IOS.label3}}>{sportLabels[soloSport]||""}</span>
+                  </div>
+                  {[{nm:away,sc:espn?.awayScore},{nm:home,sc:espn?.homeScore}].map((tm,ti)=>(
+                    <div key={ti} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"2px 0"}}>
+                      <span style={{fontSize:12.5,fontWeight:800,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tm.nm}</span>
+                      {(isLive||isDone)&&tm.sc!=null&&<span style={{fontSize:12,fontWeight:800,color:"rgba(255,255,255,0.8)",flexShrink:0,marginLeft:6}}>{tm.sc}</span>}
+                    </div>
+                  ))}
+                  <div style={{marginTop:8,display:"flex",alignItems:"center",justifyContent:"center",gap:5,fontSize:10,fontWeight:800,color:IOS.blue,background:"rgba(10,132,255,0.1)",border:"0.5px solid rgba(10,132,255,0.25)",borderRadius:7,padding:"5px"}}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="2.8" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Add to slate
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* This week's slip card */}
       <div style={{background:IOS.bg2,border:`0.5px solid ${hasLockedSlip?"rgba(48,209,88,0.25)":"rgba(255,255,255,0.07)"}`,borderRadius:12,padding:"14px",marginBottom:16}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:hasLockedSlip?10:4}}>
@@ -1504,37 +1549,71 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
       ) : (
         <div>
           <div style={{fontSize:11,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Recent Slates</div>
-          {soloWeeks.map((w,idx2)=>(
-            <div key={w.week} style={{background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:10,padding:"11px 14px",marginBottom:6,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-              <div>
-                <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:2}}>Slate {w.week}</div>
-                <div style={{fontSize:11,color:IOS.label3}}>{w.wins}W - {w.losses}L - {w.picks.length} picks</div>
-              </div>
-              <div style={{display:"flex",alignItems:"center",gap:10}}>
-                <div style={{textAlign:"right"}}>
-                  <div style={{fontSize:16,fontWeight:800,color:w.pts>0?IOS.green:"#555"}}>{w.pts > 0 ? "+"+w.pts : "0"} pts</div>
-                  {bestWeek && bestWeek.week===w.week && soloWeeks.length>1 && (
-                    <div style={{fontSize:8,fontWeight:700,color:IOS.green,background:"rgba(48,209,88,0.1)",border:"0.5px solid rgba(48,209,88,0.2)",borderRadius:4,padding:"1px 5px",marginTop:2}}>BEST SLATE</div>
-                  )}
+          {soloWeeks.map((w)=>{
+            const isOpen=openSlate===w.week;
+            const isBest=bestWeek && bestWeek.week===w.week && bestWeek.pts>0 && soloWeeks.length>1;
+            const stamp=slateStamp(w);
+            return (
+            <div key={w.week} style={{background:IOS.bg2,border:`0.5px solid ${isOpen?"rgba(255,255,255,0.16)":"rgba(255,255,255,0.07)"}`,borderRadius:10,marginBottom:6,overflow:"hidden"}}>
+              <div onClick={()=>setOpenSlate(isOpen?null:w.week)} style={{padding:"11px 14px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}}>
+                <div style={{minWidth:0}}>
+                  <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:2,display:"flex",alignItems:"center",gap:7}}>Slate {w.week}{isBest&&<span style={{fontSize:8,fontWeight:800,color:"#08110a",background:IOS.gold,borderRadius:4,padding:"1px 5px",letterSpacing:.3}}>BEST</span>}</div>
+                  <div style={{fontSize:11,color:IOS.label3}}>{stamp?stamp+" · ":""}<span style={{color:w.wins>0?IOS.green:IOS.label3}}>{w.wins}W</span>-<span style={{color:w.losses>0?IOS.red:IOS.label3}}>{w.losses}L</span> · {w.picks.length} picks</div>
                 </div>
-                <button onClick={()=>shareSlate(w)} aria-label="Share slate" style={{width:32,height:32,borderRadius:9,background:"rgba(191,90,242,0.12)",border:"0.5px solid rgba(191,90,242,0.3)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#BF5AF2" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg>
-                </button>
+                <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+                  <div style={{fontSize:16,fontWeight:800,color:w.pts>0?IOS.green:"#555"}}>{w.pts>0?"+"+w.pts:"0"} pts</div>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{transform:isOpen?"rotate(180deg)":"none",transition:"transform .2s"}}><polyline points="6 9 12 15 18 9"/></svg>
+                </div>
               </div>
+              {isOpen && (
+                <div style={{padding:"0 14px 12px",borderTop:"0.5px dashed rgba(255,255,255,0.08)"}}>
+                  {(w.picks||[]).map((p,pi)=>{
+                    const res=(p.result||"pending");
+                    const rc=res==="W"?IOS.green:res==="L"?IOS.red:res==="P"?IOS.label3:"rgba(255,255,255,0.3)";
+                    const rl=res==="W"?"WON":res==="L"?"LOST":res==="P"?"PUSH":"PENDING";
+                    return (
+                      <div key={pi} style={{display:"flex",alignItems:"center",gap:9,padding:"8px 0",borderBottom:pi<w.picks.length-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
+                        <div style={{width:7,height:7,borderRadius:"50%",background:rc,flexShrink:0}}/>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:12,fontWeight:600,color:"rgba(255,255,255,0.85)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.pick_name}</div>
+                          {p.game && <div style={{fontSize:10,color:IOS.label3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.game}</div>}
+                        </div>
+                        <div style={{fontSize:11,fontWeight:800,color:String(p.odds||"").startsWith("+")?IOS.green:IOS.blue,flexShrink:0}}>{p.odds}</div>
+                        <div style={{fontSize:8.5,fontWeight:800,letterSpacing:.3,color:rc,minWidth:52,textAlign:"right",flexShrink:0}}>{rl}{res==="W"&&p.points_earned?` +${parseFloat(p.points_earned).toFixed(1)}`:""}</div>
+                      </div>
+                    );
+                  })}
+                  <div style={{display:"flex",gap:8,marginTop:11}}>
+                    <button onClick={()=>shareSlate(w)} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:"rgba(191,90,242,0.12)",border:"0.5px solid rgba(191,90,242,0.3)",borderRadius:8,padding:"9px",fontSize:12,fontWeight:700,color:"#BF5AF2",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#BF5AF2" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg>
+                      Share
+                    </button>
+                    <button onClick={async()=>{ if(window.confirm("Delete Slate "+w.week+"? This removes its picks and updates your record.")){ if(onDeleteSlate) await onDeleteSlate(w.week); setOpenSlate(null); } }} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:"rgba(255,69,58,0.1)",border:"0.5px solid rgba(255,69,58,0.3)",borderRadius:8,padding:"9px",fontSize:12,fontWeight:700,color:IOS.red,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FF453A" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-          ))}
+            );
+          })}
           {shareToast && <div style={{position:"fixed",left:"50%",bottom:96,transform:"translateX(-50%)",background:"rgba(20,20,26,0.96)",border:"0.5px solid rgba(255,255,255,0.12)",borderRadius:10,padding:"10px 16px",fontSize:12,fontWeight:700,color:"#fff",zIndex:99999,boxShadow:"0 8px 30px rgba(0,0,0,0.5)"}}>{shareToast}</div>}
         </div>
       )}
 
       {/* Convert to league CTA */}
-      {soloWeeks.length >= 2 && (
+      {soloWeeks.length >= 1 && (
         <div style={{marginTop:12,background:"rgba(10,132,255,0.08)",border:"0.5px solid rgba(10,132,255,0.2)",borderRadius:12,padding:"14px"}}>
           <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:4}}>You&apos;re picking at {winPct}%</div>
           <div style={{fontSize:11,color:IOS.label3,marginBottom:12,lineHeight:1.5}}>Prove it against friends — create a league and see how you stack up.</div>
           <div style={{display:"flex",gap:8}}>
             <button onClick={()=>{setShowNewLeague(true);setNewLeagueStep(0);}} style={{flex:1,background:IOS.blue,border:"none",borderRadius:8,padding:"10px",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Create League</button>
             <button onClick={()=>{setShowBrowse(true);fetchPublicLeagues();}} style={{flex:1,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:8,padding:"10px",fontSize:12,fontWeight:700,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Browse Leagues</button>
+          </div>
+          <div style={{display:"flex",gap:8,marginTop:8}}>
+            <input value={joinCode} onChange={e=>setJoinCode(e.target.value)} placeholder="Join with code" style={{flex:1,background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:8,padding:"10px",color:"#fff",fontFamily:"Barlow,sans-serif",fontSize:13,fontWeight:700,letterSpacing:1.5,textTransform:"uppercase",outline:"none"}}/>
+            <button onClick={async()=>{ const c=(joinCode||"").trim(); if(!c) return; if(onJoinCode) await onJoinCode(c); setJoinCode(""); }} style={{background:joinCode.trim()?IOS.blue:"rgba(255,255,255,0.08)",border:"none",borderRadius:8,padding:"0 18px",fontSize:13,fontWeight:800,color:joinCode.trim()?"#fff":"rgba(255,255,255,0.35)",cursor:joinCode.trim()?"pointer":"default",fontFamily:"Barlow,sans-serif"}}>Join</button>
           </div>
         </div>
       )}
@@ -2871,7 +2950,7 @@ export default function App() {
  if(!user || !soloFreePicks.length) return;
  const lgId = soloLeagueId || await getOrCreateSoloLeague();
  if(!lgId){ alert("Couldn't open your solo league."); return; }
- const week = soloWeeks.length + 1;
+ const week = (soloWeeks.length ? Math.max(...soloWeeks.map(w=>w.week)) : 0) + 1;
  try {
  await supabase.from("picks").delete().eq("league_id", lgId).eq("user_id", user.id).eq("week", week);
  const rows = soloFreePicks.map((b,i)=>({
@@ -2887,7 +2966,7 @@ export default function App() {
  try{ await supabase.from("leagues").update({sport: soloSport}).eq("id", lgId); }catch(e){}
  const freeSnap = soloFreePicks.map(b=>({pick:b.pick, game:b.game||"", odds:b.odds, impliedOdds:b.impliedOdds, category:b.category, categoryLabel:b.categoryLabel, categoryColor:b.categoryColor}));
  const lockedAt = new Date().toISOString();
- setSoloSavedPicks({freePicks: freeSnap, lockedAt});
+ setSoloSavedPicks({freePicks: freeSnap, lockedAt, week});
  setSoloSubmitted(true);
  try{ localStorage.setItem("picklock_solo_locked", JSON.stringify({freePicks: freeSnap, lockedAt, week})); }catch(e){}
  setSoloFreePicks([]);
@@ -2898,10 +2977,38 @@ export default function App() {
  const clearSoloSlate = async () => {
  if(!user) return;
  const lgId = soloLeagueId || activeLeague.id;
- const week = soloWeeks.length + 1;
+ const week = (soloWeeks.length ? Math.max(...soloWeeks.map(w=>w.week)) : 0) + 1;
  try{ if(lgId && lgId!=="solo") await supabase.from("picks").delete().eq("league_id", lgId).eq("user_id", user.id).eq("week", week); }catch(e){}
  setSoloSavedPicks(null); setSoloSubmitted(false);
  try{ localStorage.removeItem("picklock_solo_locked"); }catch(e){}
+ };
+ const deleteSoloSlate = async (week) => {
+   if(!user) return;
+   const lgId = soloLeagueId || await getOrCreateSoloLeague();
+   if(!lgId) return;
+   try { await supabase.from("picks").delete().eq("league_id", lgId).eq("user_id", user.id).eq("week", week); } catch(e){}
+   if(soloSavedPicks && soloSavedPicks.week===week){ setSoloSavedPicks(null); setSoloSubmitted(false); try{ localStorage.removeItem("picklock_solo_locked"); }catch(e){} }
+   await fetchSoloWeeks();
+ };
+ const handleJoinCode = async (code) => {
+   if(!user || !code) return;
+   const {data:league,error}=await supabase.from("leagues").select().eq("invite_code",String(code).toUpperCase().trim()).single();
+   if(error||!league){alert("League not found.");return;}
+   const {data:currentMembers}=await supabase.from("league_members").select("user_id").eq("league_id",league.id);
+   const targetSize = league.target_size||league.max_members||8;
+   if(currentMembers && currentMembers.length >= targetSize){alert("This league is already full ("+targetSize+"/"+targetSize+").");return;}
+   const {error:joinError}=await supabase.from("league_members").insert({league_id:league.id,user_id:user.id,is_commissioner:false});
+   if(joinError){alert("Could not join — you may already be a member.");return;}
+   const {data:allMembers}=await supabase.from("league_members").select("user_id").eq("league_id",league.id);
+   if(allMembers && allMembers.length === targetSize){
+     const memberIds=allMembers.map(m=>m.user_id);
+     if((league.league_type||"h2h")==="bracket") await generateBracket(league.id, memberIds);
+     else if((league.league_type||"h2h")==="h2h") await generateSchedule(league.id, memberIds, league.season_weeks||18);
+     alert("Joined "+league.name+"! League is full — schedule generated.");
+   } else {
+     alert("Joined "+league.name+"! "+(targetSize-allMembers.length)+" more needed.");
+   }
+   fetchLeagues(user.id);
  };
 
  const fetchPublicLeagues = async () => {
@@ -5100,7 +5207,7 @@ export default function App() {
  </div>
 
  {/* ══ SOLO MODE HOME SCREEN ══ */}
- {homeMode==="solo" && <SoloHome soloWeeks={soloWeeks} soloLoading={soloLoading} isPro={isPro} IOS={IOS} setScreen={setScreen} setShowNewLeague={setShowNewLeague} setNewLeagueStep={setNewLeagueStep} setShowBrowse={setShowBrowse} fetchPublicLeagues={fetchPublicLeagues} setIsSoloMode={setIsSoloMode} setActiveLeagueId={setActiveLeagueId} getOrCreateSoloLeague={getOrCreateSoloLeague} soloSavedPicks={soloSavedPicks} setSoloSavedPicks={setSoloSavedPicks} soloFlexPicks={soloFlexPicks} setSoloFlexPicks={setSoloFlexPicks} soloSport={soloSport} setSoloSport={setSoloSportPersist} setShowSoloSportPicker={setShowSoloSportPicker} soloSubmitted={soloSubmitted} setSoloSubmitted={setSoloSubmitted} username={userProfile?.username||""} soloTopPct={soloTopPct}/>}
+ {homeMode==="solo" && <SoloHome soloWeeks={soloWeeks} soloLoading={soloLoading} isPro={isPro} IOS={IOS} setScreen={setScreen} setShowNewLeague={setShowNewLeague} setNewLeagueStep={setNewLeagueStep} setShowBrowse={setShowBrowse} fetchPublicLeagues={fetchPublicLeagues} setIsSoloMode={setIsSoloMode} setActiveLeagueId={setActiveLeagueId} getOrCreateSoloLeague={getOrCreateSoloLeague} soloSavedPicks={soloSavedPicks} setSoloSavedPicks={setSoloSavedPicks} soloFlexPicks={soloFlexPicks} setSoloFlexPicks={setSoloFlexPicks} soloSport={soloSport} setSoloSport={setSoloSportPersist} setShowSoloSportPicker={setShowSoloSportPicker} soloSubmitted={soloSubmitted} setSoloSubmitted={setSoloSubmitted} username={userProfile?.username||""} soloTopPct={soloTopPct} onDeleteSlate={deleteSoloSlate} onJoinCode={handleJoinCode} tickerGames={tickerGames} espnGames={espnGames}/>}
 
  {/* ══ LEAGUES MODE ══ */}
  <div style={{display:homeMode==="leagues"?"block":"none"}}>
