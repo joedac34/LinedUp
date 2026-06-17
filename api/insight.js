@@ -21,6 +21,8 @@
  *   );
  */
 
+import { buildMlbPack } from "./mlbpack.js";
+
 const SB_URL  = process.env.VITE_SUPABASE_URL;
 const SB_KEY  = process.env.SUPABASE_SERVICE_KEY;
 const OPENAI  = process.env.OPENAI_API_KEY;
@@ -421,6 +423,12 @@ async function fetchSportsData(ctx) {
         if (s && s.lines && s.lines.length) { out.lines.push(...s.lines); out.note = s.note; }
       }
     } else if (ctx.betType === "ml" || ctx.betType === "spread" || ctx.betType === "ou") {
+      if (ctx.sport === "mlb") {
+        try {
+          const mp = await buildMlbPack(ctx);
+          if (mp && mp.lines && mp.lines.length) { out.lines.push(...mp.lines); out.note = mp.note; out.matchup = true; return out; }
+        } catch (e) { /* fall back to ESPN below */ }
+      }
       const s = await espnGameStats(ctx.sport, ctx);
       if (s) { if (s.lines && s.lines.length) out.lines.push(...s.lines); if (s.note) out.note = s.note; if (s.matchup) out.matchup = s.matchup; }
     }
@@ -492,6 +500,7 @@ async function generate(ctx, stats) {
       "You are Plok, a sharp, concise sports-betting analyst. " +
       "Use ONLY the figures in the DATA block — never invent, estimate, or recall numbers from memory. If a relevant stat is missing, speak qualitatively without stating a number. " +
       "For a game bet, DATA gives accurate season figures for BOTH teams (records, home/road, per-game scoring and allowed, streak, head-to-head). For a player prop, DATA gives that player's recent game-log stats IF they were found. " +
+      "For MLB game bets, DATA may also include each side's league RANKS, the probable starting pitchers' lines, key hitters, injuries, and weather — name the probable starters and weave the most decisive of these into the read. " +
       "Lead the summary with the single most decisive figure for THIS bet, name the team(s) or player, and INTERPRET — do not just list. " +
       "If DATA has no game-log numbers for this player/stat, say plainly that recent game logs for this stat were not available, keep the read brief and qualitative, and do NOT invent or describe metrics (no 'speed', 'matchup dynamics', 'base-running ability' as if measured). " +
       "Do NOT mention against-the-spread (ATS) or cover rates — they are not in DATA. " +
