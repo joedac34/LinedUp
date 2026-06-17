@@ -337,8 +337,8 @@ export async function buildMlbPack(ctx = {}) {
       (f.streak > 1 ? `, ${f.streak}-game hit streak` : "") + splitStr(f) }); };
   if (aTF) lines.push({ label: `${away.abbrv} last 10`, value: `${aTF.record} · ${aTF.rf} RF / ${aTF.ra} RA` });
   if (hTF) lines.push({ label: `${home.abbrv} last 10`, value: `${hTF.record} · ${hTF.rf} RF / ${hTF.ra} RA` });
-  if (aPF && aSP) lines.push({ label: `${away.abbrv} SP recent`, value: `${aSP.name}: last ${Math.min(aPF.starts,3)} starts ${aPF.last3ERA != null ? aPF.last3ERA + " ERA" : "—"}` + (aPF.nrfiN ? ` · scoreless 1st in ${aPF.nrfiClean} of ${aPF.nrfiN} starts` : "") });
-  if (hPF && hSP) lines.push({ label: `${home.abbrv} SP recent`, value: `${hSP.name}: last ${Math.min(hPF.starts,3)} starts ${hPF.last3ERA != null ? hPF.last3ERA + " ERA" : "—"}` + (hPF.nrfiN ? ` · scoreless 1st in ${hPF.nrfiClean} of ${hPF.nrfiN} starts` : "") });
+  if (aPF && aSP) lines.push({ label: `${away.abbrv} SP recent`, value: `${aSP.name}: last ${Math.min(aPF.starts,3)} starts ${aPF.last3ERA != null ? Number(aPF.last3ERA).toFixed(2) + " ERA" : "—"}` + (aPF.nrfiN ? ` · scoreless 1st in ${aPF.nrfiClean} of ${aPF.nrfiN} starts` : "") });
+  if (hPF && hSP) lines.push({ label: `${home.abbrv} SP recent`, value: `${hSP.name}: last ${Math.min(hPF.starts,3)} starts ${hPF.last3ERA != null ? Number(hPF.last3ERA).toFixed(2) + " ERA" : "—"}` + (hPF.nrfiN ? ` · scoreless 1st in ${hPF.nrfiClean} of ${hPF.nrfiN} starts` : "") });
   if (aHit[0]) pushHForm(`${away.abbrv} form — ${aHit[0].name}`, aH0);
   if (aHit[1]) pushHForm(`${away.abbrv} form — ${aHit[1].name}`, aH1);
   if (hHit[0]) pushHForm(`${home.abbrv} form — ${hHit[0].name}`, hH0);
