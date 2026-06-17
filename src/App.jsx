@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Component } from "react";
 import { supabase } from './supabase';
 
 // iOS System Colors
@@ -1141,6 +1141,12 @@ function BetslipButton({ bet, IOS }){
     </div>
   );
 }
+class ErrorBoundary extends Component {
+ constructor(props){ super(props); this.state={hasError:false}; }
+ static getDerivedStateFromError(){ return {hasError:true}; }
+ componentDidCatch(err){ try{ console.warn("Plok render error:", err); }catch(e){} }
+ render(){ return this.state.hasError ? (this.props.fallback||null) : this.props.children; }
+}
 function AiInsightBubble({ item, IOS, onAddToSlip }) {
   const data = item.data;
   const [words, setWords] = useState(0);
@@ -1176,7 +1182,7 @@ function AiInsightBubble({ item, IOS, onAddToSlip }) {
     <div style={{fontSize:13,lineHeight:1.5,color:"rgba(255,255,255,0.86)",marginBottom:(data.matchup||(data.keyStats&&data.keyStats.length))?11:8}}>
       {shownSummary}{typing && <span className="ai-caret"/>}
     </div>
-    {phase>=1 && data.matchup && (
+    {phase>=1 && data.matchup && data.matchup.away && data.matchup.home && (
       <div className="ai-rise" style={{marginBottom:11,borderRadius:11,overflow:"hidden",border:"0.5px solid rgba(255,255,255,0.09)"}}>
         <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",alignItems:"center",padding:"8px 12px",background:"rgba(255,255,255,0.05)"}}>
           <div style={{fontSize:13,fontWeight:800,color:IOS.blue,textAlign:"left",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{data.matchup.away.abbr||data.matchup.away.name}</div>
@@ -9354,7 +9360,7 @@ export default function App() {
               )}
               {aiThread.map((item,i)=> item.role==="user"
                 ? (<div key={i} style={{alignSelf:"flex-end",maxWidth:"82%",background:IOS.blue,color:"#fff",borderRadius:"14px 14px 4px 14px",padding:"8px 12px",fontSize:13,fontWeight:600,marginLeft:"auto"}}>{item.text}</div>)
-                : (<AiInsightBubble key={i} item={item} IOS={IOS} onAddToSlip={()=>{ if(aiAddToSlip(item.bet,item.category)){ setAiThread(prev=>prev.map(x=>x===item?{...x,added:true}:x)); } }} />)
+                : (<ErrorBoundary key={i} fallback={<div style={{alignSelf:"flex-start",width:"100%",background:"linear-gradient(160deg,#16161B,#0C0C0F)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:"14px 14px 14px 4px",padding:"13px 14px",fontSize:12.5,color:IOS.red,fontWeight:600}}>Couldn't load this read.</div>}><AiInsightBubble item={item} IOS={IOS} onAddToSlip={()=>{ if(aiAddToSlip(item.bet,item.category)){ setAiThread(prev=>prev.map(x=>x===item?{...x,added:true}:x)); } }} /></ErrorBoundary>)
               )}
             </div>
             {findBetOpen && (
