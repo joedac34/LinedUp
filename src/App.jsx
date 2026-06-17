@@ -2651,6 +2651,8 @@ export default function App() {
     askInsight(buildBetCtx(bet, category), bet.pick, bet, category);
   };
   const [findBetOpen, setFindBetOpen] = useState(false);
+  const [plokModel, setPlokModel] = useState("ev");
+  const [modelPicker, setModelPicker] = useState(false);
   const findBetGames = (() => {
     const seen = new Map();
     const findTime = (away, home) => {
@@ -2676,11 +2678,12 @@ export default function App() {
     if(!isPro){ setShowPaywall("ai"); return; }
     setFindBetOpen(false);
     setAiReturn(screen); setScreen("ai");
-    const label = `Find a bet · ${g.game}`;
+    const _m = PLOK_MODELS.find(x=>x.id===plokModel) || PLOK_MODELS[0];
+    const label = `${_m.name} · ${g.game}`;
     const item = { role:"ai", label, bet:null, category:null, loading:true };
-    setAiThread(prev=>[...prev, { role:"user", text:`Find me a bet — ${g.game}` }, item]);
+    setAiThread(prev=>[...prev, { role:"user", text:`${_m.name} — ${g.game}` }, item]);
     setAiBusy(true);
-    fetch("/api/findbet", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ sport:g.sport, game:g.game, userId:user?.id }) })
+    fetch("/api/findbet", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ sport:g.sport, game:g.game, userId:user?.id, model:plokModel }) })
       .then(async r=>{ const data=await r.json(); setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, data:r.ok?data:null, error:r.ok?null:(data.error||"Couldn't screen this game")} : x)); })
       .catch(()=> setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, error:"Network error — try again"} : x)))
       .finally(()=> setAiBusy(false));
@@ -2863,6 +2866,13 @@ export default function App() {
   {id:"ou_f5",l:"First 5 O / U",scope:"First 5 innings",color:"#5E5CE6",sports:["mlb"]},
   {id:"yrfi",l:"YRFI",scope:"Yes Run 1st Inning",color:"#FF9F0A",sports:["mlb"]},
   {id:"nrfi",l:"NRFI",scope:"No Run 1st Inning",color:"#30D158",sports:["mlb"]},
+ ];
+ const PLOK_MODELS=[
+  {id:"ev", name:"+EV Hunter", ready:true, color:IOS.green, desc:"De-vigs the market and flags where the best price beats the true line.", icon:<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg>},
+  {id:"livedog", name:"Live Dog", ready:true, color:IOS.orange, desc:"Hunts underdogs the model gives a better shot than the price implies.", icon:<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={IOS.orange} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/></svg>},
+  {id:"trends", name:"Trends & Form", ready:false, color:IOS.teal, desc:"Last-10 form, hot/cold streaks, home/road splits and situational edges.", icon:<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={IOS.teal} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 4-5"/></svg>},
+  {id:"projection", name:"The Projection", ready:false, color:IOS.blue, desc:"Projects the number from stats and shows it against the line.", icon:<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><line x1="12" y1="1" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="23"/></svg>},
+  {id:"clv", name:"CLV Report Card", ready:false, color:IOS.purple, desc:"Did your locked picks beat the closing line? The pro's scorecard.", icon:<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={IOS.purple} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="6"/><path d="M9 13l-2 8 5-3 5 3-2-8"/></svg>},
  ];
  const PROP_SUBS_BY_SPORT = {
   nfl:[{id:"all",l:"All"},{id:"pass",l:"Pass"},{id:"rush",l:"Rush"},{id:"rec",l:"Receiving"},{id:"td",l:"TDs"}],
@@ -9590,7 +9600,7 @@ export default function App() {
                   <div style={{fontSize:10.5,color:"rgba(255,255,255,0.4)",marginTop:2}}>Screening, not advice</div>
                 </div>
               </div>
-              <button onClick={()=>{ if(!isPro){setShowPaywall("ai");return;} setFindBetOpen(true); }} style={{flexShrink:0,display:"inline-flex",alignItems:"center",gap:5,padding:"7px 11px",borderRadius:10,background:`${IOS.blue}1a`,border:`1px solid ${IOS.blue}40`,color:IOS.blue,fontSize:11.5,fontWeight:800,cursor:"pointer"}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Find +EV</button>
+              <button onClick={()=>{ if(!isPro){setShowPaywall("ai");return;} setModelPicker(true); }} style={{flexShrink:0,display:"inline-flex",alignItems:"center",gap:5,padding:"7px 11px",borderRadius:10,background:`${IOS.blue}1a`,border:`1px solid ${IOS.blue}40`,color:IOS.blue,fontSize:11.5,fontWeight:800,cursor:"pointer"}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Plok Models</button>
             </div>
             <div className="gbx-scroll" style={{flexShrink:0,display:"flex",gap:6,overflowX:"auto",padding:"9px 12px 10px",borderBottom:"0.5px solid rgba(255,255,255,0.06)"}}>
               {PLOK_PERSONAS.map(pz=>{
@@ -9690,15 +9700,40 @@ export default function App() {
                 : (<ErrorBoundary key={i} fallback={<div style={{alignSelf:"flex-start",width:"100%",background:"linear-gradient(160deg,#16161B,#0C0C0F)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:"14px 14px 14px 4px",padding:"13px 14px",fontSize:12.5,color:IOS.red,fontWeight:600}}>Couldn't load this read.</div>}><AiInsightBubble item={item} IOS={IOS} onAddToSlip={()=>{ if(aiAddToSlip(item.bet,item.category)){ setAiThread(prev=>prev.map(x=>x===item?{...x,added:true}:x)); } }} /></ErrorBoundary>)
               )}
             </div>
+            {modelPicker && (
+              <div onClick={()=>setModelPicker(false)} style={{position:"absolute",inset:0,zIndex:41,background:"rgba(0,0,0,0.55)",display:"flex",flexDirection:"column",justifyContent:"flex-end"}}>
+                <div onClick={(e)=>e.stopPropagation()} style={{background:"#101015",borderTopLeftRadius:18,borderTopRightRadius:18,borderTop:"0.5px solid rgba(255,255,255,0.12)",maxHeight:"80%",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+                  <div style={{padding:"14px 16px 11px",flexShrink:0,borderBottom:"0.5px solid rgba(255,255,255,0.07)"}}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                      <div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Plok Models</div>
+                      <div onClick={()=>setModelPicker(false)} style={{fontSize:13,fontWeight:700,color:IOS.blue,cursor:"pointer"}}>Cancel</div>
+                    </div>
+                    <div style={{fontSize:11.5,color:"rgba(255,255,255,0.45)",marginTop:3,lineHeight:1.4}}>Pick a lens. Each one reads the same games a different way.</div>
+                  </div>
+                  <div style={{overflowY:"auto",padding:"10px 12px 16px"}}>
+                    {PLOK_MODELS.map(m=>(
+                      <div key={m.id} onClick={()=>{ if(!m.ready) return; setPlokModel(m.id); setModelPicker(false); setFindBetOpen(true); }} style={{display:"flex",alignItems:"center",gap:12,background:m.ready?"linear-gradient(160deg,#15151A,#0B0B0E 80%)":"rgba(255,255,255,0.02)",border:"0.5px solid "+(m.ready?"rgba(255,255,255,0.09)":"rgba(255,255,255,0.05)"),borderRadius:13,padding:"13px 14px",marginBottom:9,cursor:m.ready?"pointer":"default",opacity:m.ready?1:0.6}}>
+                        <div style={{width:38,height:38,borderRadius:11,background:m.color+"1f",border:"0.5px solid "+m.color+"55",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{m.icon}</div>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{display:"flex",alignItems:"center",gap:7}}><span style={{fontSize:15,fontWeight:800,color:"#fff"}}>{m.name}</span>{!m.ready && <span style={{fontSize:9,fontWeight:800,letterSpacing:"0.06em",color:m.color,background:m.color+"22",borderRadius:5,padding:"2px 6px"}}>SOON</span>}</div>
+                          <div style={{fontSize:11.5,color:"rgba(255,255,255,0.5)",marginTop:2,lineHeight:1.35}}>{m.desc}</div>
+                        </div>
+                        {m.ready && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polyline points="9 18 15 12 9 6"/></svg>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
             {findBetOpen && (
               <div onClick={()=>setFindBetOpen(false)} style={{position:"absolute",inset:0,zIndex:40,background:"rgba(0,0,0,0.55)",display:"flex",flexDirection:"column",justifyContent:"flex-end"}}>
                 <div onClick={(e)=>e.stopPropagation()} style={{background:"#101015",borderTopLeftRadius:18,borderTopRightRadius:18,borderTop:"0.5px solid rgba(255,255,255,0.12)",maxHeight:"70%",display:"flex",flexDirection:"column",overflow:"hidden"}}>
                   <div style={{padding:"14px 16px 11px",flexShrink:0,borderBottom:"0.5px solid rgba(255,255,255,0.07)"}}>
                     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                      <div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Find a +EV bet</div>
+                      <div style={{fontSize:16,fontWeight:800,color:"#fff"}}>{(PLOK_MODELS.find(x=>x.id===plokModel)||{}).name||"Find a bet"} · pick a game</div>
                       <div onClick={()=>setFindBetOpen(false)} style={{fontSize:13,fontWeight:700,color:IOS.blue,cursor:"pointer"}}>Cancel</div>
                     </div>
-                    <div style={{fontSize:11.5,color:"rgba(255,255,255,0.45)",marginTop:3,lineHeight:1.4}}>Plok scans the moneyline, spread, total, and player props on a game and flags the best value.</div>
+                    <div style={{fontSize:11.5,color:"rgba(255,255,255,0.45)",marginTop:3,lineHeight:1.4}}>{(PLOK_MODELS.find(x=>x.id===plokModel)||{}).desc||"Plok scans the game and flags the best value."}</div>
                   </div>
                   <div style={{overflowY:"auto",padding:"0 0 10px"}}>
                     {findBetGames.length===0 && (<div style={{padding:"24px 16px",textAlign:"center",fontSize:12.5,color:"rgba(255,255,255,0.45)"}}>No games on your board right now.</div>)}

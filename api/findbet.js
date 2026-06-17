@@ -450,10 +450,11 @@ export default async function handler(req, res) {
   try {
     const ctx = req.body || {};
     if (!ctx.game || !ctx.sport) return res.status(400).json({ error: "Missing game/sport" });
+    const model = (ctx.model || "ev").toLowerCase();
     if (ctx.userId && !(await isPro(ctx.userId))) return res.status(403).json({ error: "Plok is a Pro feature" });
 
     const day = new Date().toISOString().slice(0, 10);
-    const key = hashKey(["findbet", ctx.sport, ctx.game, day].join("|"));
+    const key = hashKey(["findbet", ctx.sport, ctx.game, model, day].join("|"));
     const cached = await getCached(key);
     if (cached) return res.status(200).json({ ...cached, cached: true });
 
@@ -469,7 +470,13 @@ export default async function handler(req, res) {
     const lineCands = analyzeGame(event);
     let propCands = [];
     try { propCands = await analyzeProps(ctx.sport, event.id); } catch { propCands = []; }
-    const cands = [...lineCands, ...propCands].sort((a, b) => b.evPct - a.evPct).slice(0, 8);
+    let cands;
+    if (model === "livedog") {
+      // Live Dog: best +EV underdogs only (positive American price), game lines.
+      cands = lineCands.filter(c => typeof c.bestOdds === "string" && c.bestOdds.trim().startsWith("+")).sort((a, b) => b.evPct - a.evPct).slice(0, 8);
+    } else {
+      cands = [...lineCands, ...propCands].sort((a, b) => b.evPct - a.evPct).slice(0, 8);
+    }
 
     const out = await generate(ctx.game, cands);
     if (matchup) out.matchup = matchup;
