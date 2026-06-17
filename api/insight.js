@@ -565,7 +565,7 @@ export default async function handler(req, res) {
 
     const day = new Date().toISOString().slice(0, 10);
     const leagueSig = ctx.leagueCtx ? `${ctx.leagueCtx.myRank || ""}_${ctx.leagueCtx.matchupGap != null ? Math.round(ctx.leagueCtx.matchupGap) : ""}` : "";
-    const key = hashKey(["v6", ctx.sport, ctx.betType, ctx.selection, ctx.line, ctx.game, ctx.question || "", ctx.userId || "", ctx.persona || "", leagueSig, day].join("|"));
+    const key = hashKey(["v7", ctx.sport, ctx.betType, ctx.selection, ctx.line, ctx.game, ctx.question || "", ctx.userId || "", ctx.persona || "", leagueSig, day].join("|"));
 
     const cached = await getCached(key);
     if (cached) return res.status(200).json({ ...cached, cached: true });
