@@ -426,7 +426,7 @@ async function fetchSportsData(ctx) {
       if (ctx.sport === "mlb") {
         try {
           const mp = await buildMlbPack(ctx);
-          if (mp && mp.lines && mp.lines.length) { out.lines.push(...mp.lines); out.note = mp.note; out.matchup = true; return out; }
+          if (mp && mp.lines && mp.lines.length) { out.lines.push(...mp.lines); out.note = mp.note; out.matchup = mp.matchup; return out; }
         } catch (e) { /* fall back to ESPN below */ }
       }
       const s = await espnGameStats(ctx.sport, ctx);

@@ -348,8 +348,13 @@ export async function buildMlbPack(ctx = {}) {
     ` at ${home.arena}. Season figures are 2026-to-date` +
     (haveLogs ? "; recent-form / splits / NRFI are from the last ~3 weeks of game logs." : "; recent-form not yet banked (run the backfill).");
 
+  const matchup = {
+    away: { abbr: away.abbrv, name: away.team, overall: aR.record, scored: aR.rpg, allowed: aR.staffERA },
+    home: { abbr: home.abbrv, name: home.team, overall: hR.record, scored: hR.rpg, allowed: hR.staffERA },
+    scoredLabel: "Runs/game", allowedLabel: "Staff ERA", title: `${away.abbrv} @ ${home.abbrv}`,
+  };
   return {
-    lines, note, matchup: true,
+    lines, note, matchup,
     pack: { away: away.team, home: home.team, gameISO, rates: { away: aR, home: hR },
       starters: { away: aSP, home: hSP }, hitters: { away: aHit, home: hHit }, weather,
       injuries: { away: aInj, home: hInj },
