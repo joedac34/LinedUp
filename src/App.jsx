@@ -2683,7 +2683,7 @@ export default function App() {
     const item = { role:"ai", label, bet:null, category:null, loading:true };
     setAiThread(prev=>[...prev, { role:"user", text:`${_m.name} — ${g.game}` }, item]);
     setAiBusy(true);
-    fetch("/api/findbet", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ sport:g.sport, game:g.game, userId:user?.id, model:plokModel }) })
+    fetch(plokModel==="trends"?"/api/trends":"/api/findbet", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ sport:g.sport, game:g.game, userId:user?.id, model:plokModel }) })
       .then(async r=>{ const data=await r.json(); setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, data:r.ok?data:null, error:r.ok?null:(data.error||"Couldn't screen this game")} : x)); })
       .catch(()=> setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, error:"Network error — try again"} : x)))
       .finally(()=> setAiBusy(false));
@@ -2870,7 +2870,7 @@ export default function App() {
  const PLOK_MODELS=[
   {id:"ev", name:"+EV Hunter", ready:true, color:IOS.green, desc:"De-vigs the market and flags where the best price beats the true line.", icon:<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg>},
   {id:"livedog", name:"Live Dog", ready:true, color:IOS.orange, desc:"Hunts underdogs the model gives a better shot than the price implies.", icon:<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={IOS.orange} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/></svg>},
-  {id:"trends", name:"Trends & Form", ready:false, color:IOS.teal, desc:"Last-10 form, hot/cold streaks, home/road splits and situational edges.", icon:<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={IOS.teal} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 4-5"/></svg>},
+  {id:"trends", name:"Trends & Form", ready:true, color:IOS.teal, desc:"Last-10 form, hot/cold streaks, home/road splits and situational edges.", icon:<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={IOS.teal} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 4-5"/></svg>},
   {id:"projection", name:"The Projection", ready:false, color:IOS.blue, desc:"Projects the number from stats and shows it against the line.", icon:<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><line x1="12" y1="1" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="23"/></svg>},
   {id:"clv", name:"CLV Report Card", ready:false, color:IOS.purple, desc:"Did your locked picks beat the closing line? The pro's scorecard.", icon:<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={IOS.purple} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="6"/><path d="M9 13l-2 8 5-3 5 3-2-8"/></svg>},
  ];
