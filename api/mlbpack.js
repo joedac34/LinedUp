@@ -42,6 +42,49 @@ const fmt3 = (x) => x.toFixed(3).replace(/^0/, ""); // .281
 const ord = (i) => { const s = ["th", "st", "nd", "rd"], v = i % 100; return i + (s[(v - 20) % 10] || s[v] || s[0]); };
 const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9 ]/g, "").trim();
 
+// ── Supabase game-log reads (derived recent-form layer) ──
+const SB_URL = process.env.VITE_SUPABASE_URL;
+const SB_KEY = process.env.SUPABASE_SERVICE_KEY;
+const sbH = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` };
+async function sbRows(path) {
+  if (!SB_URL || !SB_KEY) return [];
+  try { const r = await fetch(`${SB_URL}/rest/v1/${path}`, { headers: sbH }); if (!r.ok) return []; const j = await r.json(); return Array.isArray(j) ? j : []; }
+  catch { return []; }
+}
+async function hitterForm(pid) {
+  if (pid == null) return null;
+  const rows = await sbRows(`mlb_player_logs?player_id=eq.${pid}&bat=not.is.null&order=game_date.desc&limit=20&select=is_home,bat`);
+  const games = rows.filter((r) => r.bat && n(r.bat.AB) > 0);
+  if (!games.length) return null;
+  const last7 = games.slice(0, 7);
+  let h = 0, ab = 0, hr = 0, hitG = 0;
+  last7.forEach((g) => { h += n(g.bat.H); ab += n(g.bat.AB); hr += n(g.bat.HR); if (n(g.bat.H) > 0) hitG++; });
+  let streak = 0; for (const g of games) { if (n(g.bat.H) > 0) streak++; else break; }
+  const split = (arr) => { let H = 0, AB = 0; arr.forEach((g) => { H += n(g.bat.H); AB += n(g.bat.AB); }); return AB ? H / AB : null; };
+  const homeG = games.filter((g) => g.is_home), awayG = games.filter((g) => !g.is_home);
+  return { avg: ab ? h / ab : 0, hr, hitG, of: last7.length, streak,
+    homeAvg: split(homeG), awayAvg: split(awayG), homeN: homeG.length, awayN: awayG.length };
+}
+async function pitcherForm(pid) {
+  if (pid == null) return null;
+  const rows = await sbRows(`mlb_player_logs?player_id=eq.${pid}&started=eq.true&order=game_date.desc&limit=15&select=inn1_allowed,pit`);
+  if (!rows.length) return null;
+  const last3 = rows.slice(0, 3);
+  let er = 0, ip = 0; last3.forEach((g) => { er += n(g.pit && g.pit.ER); ip += ipToFloat(g.pit && g.pit.IP); });
+  const inn1 = rows.filter((g) => g.inn1_allowed != null);
+  const clean = inn1.filter((g) => n(g.inn1_allowed) === 0).length;
+  return { last3ERA: ip ? r2(9 * er / ip) : null, last3IP: r1(ip), starts: rows.length, nrfiClean: clean, nrfiN: inn1.length };
+}
+async function teamForm(tid) {
+  if (tid == null) return null;
+  const rows = await sbRows(`mlb_team_logs?team_id=eq.${tid}&order=game_date.desc&limit=10&select=won,runs_for,runs_against`);
+  if (!rows.length) return null;
+  const w = rows.filter((r) => r.won).length;
+  const rf = rows.reduce((s2, r) => s2 + n(r.runs_for), 0) / rows.length;
+  const ra = rows.reduce((s2, r) => s2 + n(r.runs_against), 0) / rows.length;
+  return { record: `${w}-${rows.length - w}`, rf: r1(rf), ra: r1(ra), n: rows.length };
+}
+
 // Resolve a team object from a free-text side ("Baltimore Orioles", "Orioles", "BAL", "@ Mariners")
 function resolveTeam(teams, str) {
   const q = norm(str);
@@ -161,6 +204,7 @@ function keyHitters(depth, teamName, playerById, hurtIds) {
   for (const id of ids) {
     const p = playerById[id]; if (!p) continue;
     const hl = hitterLine(p); if (!hl) continue;
+    hl.id = id;
     hl.out = hurtIds.has(String(id));
     out.push(hl);
   }
@@ -187,7 +231,7 @@ async function weatherFor(team, gameISO) {
     const rain = j.hourly.precipitation_probability ? j.hourly.precipitation_probability[bi] : null;
     const compass = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][Math.round(dir / 45) % 8];
     return { applies: true, tempF: temp, windMph: wind, windDir: compass,
-      rainPct: rain, note: `${temp}\u00b0F, wind ${wind} mph from ${compass}${rain != null ? `, ${rain}% rain` : ""} (open-air)` };
+      rainPct: rain, note: `${temp}°F, wind ${wind} mph from ${compass}${rain != null ? `, ${rain}% rain` : ""} (open-air)` };
   } catch { return { applies: false, note: "" }; }
 }
 
@@ -235,24 +279,26 @@ export async function buildMlbPack(ctx = {}) {
   const awaySP = game ? (game.away_team_ID === away.team_id ? game.away_pitcher : game.home_pitcher) : null;
   const homeSP = game ? (game.home_team_ID === home.team_id ? game.home_pitcher : game.away_pitcher) : null;
 
-  // Injuries by team_id -> [{player, injury, player_id}]
-  const hurtByTeam = {}; const hurtIds = new Set();
+  // Injuries -> ONE "actually out" set (excludes Probable / day-to-day-back) used for
+  // both the hitter INJURED flag and the injuries line, so they never disagree.
+  const isOut = (rt) => /out until at least/i.test(rt || "") || (/\bout\b/i.test(rt || "") && !/probable/i.test(rt || ""));
+  const outByTeam = {}; const outIds = new Set();
   (Array.isArray(injuries) ? injuries : []).forEach((row) => {
-    hurtByTeam[row.team_id] = (row.injuries || []).map((i) => { hurtIds.add(String(i.player_id)); return i; });
+    const outs = (row.injuries || []).filter((i) => isOut(i.returns));
+    outByTeam[row.team_id] = outs;
+    outs.forEach((i) => outIds.add(String(i.player_id)));
   });
 
   const rates = teamRates(teamStats, playerStats, depth, teamInfoById);
   const aR = rates[away.team_id] || {}, hR = rates[home.team_id] || {};
 
-  const aHit = keyHitters(depth, away.team, playerById, hurtIds).slice(0, 3);
-  const hHit = keyHitters(depth, home.team, playerById, hurtIds).slice(0, 3);
+  const aHit = keyHitters(depth, away.team, playerById, outIds).slice(0, 3);
+  const hHit = keyHitters(depth, home.team, playerById, outIds).slice(0, 3);
   const aSP = awaySP ? pitcherLine(playerStats, awaySP.player_id) : null;
   const hSP = homeSP ? pitcherLine(playerStats, homeSP.player_id) : null;
   const weather = await weatherFor(home, gameISO);
 
-  const keyInjStr = (tid) => (hurtByTeam[tid] || [])
-    .filter((i) => /Until At Least (?!.*2027)/.test(i.returns) || /Out|Day-To-Day|Probable/i.test(i.returns))
-    .slice(0, 4).map((i) => `${i.player} (${i.injury})`).join(", ");
+  const keyInjStr = (tid) => (outByTeam[tid] || []).slice(0, 4).map((i) => `${i.player} (${i.injury})`).join(", ");
 
   // ── DATA lines for insight.js (label/value) ──
   const rk = (r) => (r ? ` (${ord(r)})` : "");
@@ -276,14 +322,38 @@ export async function buildMlbPack(ctx = {}) {
   if (hInj) lines.push({ label: `${home.abbrv} injuries`, value: hInj });
   lines.push({ label: "Weather", value: weather.note || "n/a" });
 
+  // ── derived recent-form layer (from banked game logs; silently skipped if empty) ──
+  const [aTF, hTF, aPF, hPF, aH0, aH1, hH0, hH1] = await Promise.all([
+    teamForm(away.team_id), teamForm(home.team_id),
+    pitcherForm(awaySP && awaySP.player_id), pitcherForm(homeSP && homeSP.player_id),
+    hitterForm(aHit[0] && aHit[0].id), hitterForm(aHit[1] && aHit[1].id),
+    hitterForm(hHit[0] && hHit[0].id), hitterForm(hHit[1] && hHit[1].id),
+  ]);
+  const haveLogs = !!(aTF || hTF || aPF || hPF || aH0 || hH0);
+  const splitStr = (f) => (f.homeN >= 3 && f.awayN >= 3 && f.homeAvg != null && f.awayAvg != null)
+    ? ` · home ${fmt3(f.homeAvg)} / away ${fmt3(f.awayAvg)}` : "";
+  const pushHForm = (label, f) => { if (!f) return; lines.push({ label,
+    value: `${fmt3(f.avg)} over last ${f.of}, ${f.hr} HR, hit in ${f.hitG} of ${f.of}` +
+      (f.streak > 1 ? `, ${f.streak}-game hit streak` : "") + splitStr(f) }); };
+  if (aTF) lines.push({ label: `${away.abbrv} last 10`, value: `${aTF.record} · ${aTF.rf} RF / ${aTF.ra} RA` });
+  if (hTF) lines.push({ label: `${home.abbrv} last 10`, value: `${hTF.record} · ${hTF.rf} RF / ${hTF.ra} RA` });
+  if (aPF && aSP) lines.push({ label: `${away.abbrv} SP recent`, value: `${aSP.name}: last ${Math.min(aPF.starts,3)} starts ${aPF.last3ERA != null ? aPF.last3ERA + " ERA" : "—"}` + (aPF.nrfiN ? ` · scoreless 1st in ${aPF.nrfiClean} of ${aPF.nrfiN} starts` : "") });
+  if (hPF && hSP) lines.push({ label: `${home.abbrv} SP recent`, value: `${hSP.name}: last ${Math.min(hPF.starts,3)} starts ${hPF.last3ERA != null ? hPF.last3ERA + " ERA" : "—"}` + (hPF.nrfiN ? ` · scoreless 1st in ${hPF.nrfiClean} of ${hPF.nrfiN} starts` : "") });
+  if (aHit[0]) pushHForm(`${away.abbrv} form — ${aHit[0].name}`, aH0);
+  if (aHit[1]) pushHForm(`${away.abbrv} form — ${aHit[1].name}`, aH1);
+  if (hHit[0]) pushHForm(`${home.abbrv} form — ${hHit[0].name}`, hH0);
+  if (hHit[1]) pushHForm(`${home.abbrv} form — ${hHit[1].name}`, hH1);
+
   const note = `${away.team} @ ${home.team}` + (gameISO ? ` — first pitch ${new Date(gameISO).toUTCString()}` : "") +
-    ` at ${home.arena}. Stats are 2026 season-to-date; no recent-form/splits yet (Phase 2).`;
+    ` at ${home.arena}. Season figures are 2026-to-date` +
+    (haveLogs ? "; recent-form / splits / NRFI are from the last ~3 weeks of game logs." : "; recent-form not yet banked (run the backfill).");
 
   return {
     lines, note, matchup: true,
     pack: { away: away.team, home: home.team, gameISO, rates: { away: aR, home: hR },
       starters: { away: aSP, home: hSP }, hitters: { away: aHit, home: hHit }, weather,
-      injuries: { away: aInj, home: hInj } },
+      injuries: { away: aInj, home: hInj },
+      form: { teamAway: aTF, teamHome: hTF, spAway: aPF, spHome: hPF } },
   };
 }
 

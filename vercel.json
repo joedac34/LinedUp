@@ -1,6 +1,7 @@
 {
   "crons": [
     { "path": "/api/grade",   "schedule": "0 10 * * *" },
-    { "path": "/api/closing", "schedule": "* * * * *" }
+    { "path": "/api/closing", "schedule": "* * * * *" },
+    { "path": "/api/mlbsync?days=2", "schedule": "0 11 * * *" }
   ]
 }
