@@ -22,6 +22,7 @@
  */
 
 import { buildMlbPack } from "./mlbpack.js";
+import { buildMlbProp } from "./mlbprop.js";
 
 const SB_URL  = process.env.VITE_SUPABASE_URL;
 const SB_KEY  = process.env.SUPABASE_SERVICE_KEY;
@@ -419,6 +420,12 @@ async function fetchSportsData(ctx) {
     if (ctx.betType === "prop") {
       const prop = parsePropCtx(ctx);
       if (prop && prop.player) {
+        if (ctx.sport === "mlb") {
+          try {
+            const mpp = await buildMlbProp(ctx, prop);
+            if (mpp && mpp.lines && mpp.lines.length) { out.lines.push(...mpp.lines); if (mpp.note) out.note = mpp.note; return out; }
+          } catch (e) { /* fall back to ESPN below */ }
+        }
         const s = await espnPlayerSeries(ctx.sport, prop.player, prop.stat, prop.line != null ? prop.line : num(ctx.line));
         if (s && s.lines && s.lines.length) { out.lines.push(...s.lines); out.note = s.note; }
       }
