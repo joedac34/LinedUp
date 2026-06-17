@@ -404,7 +404,8 @@ async function espnGameStats(sport, ctx) {
 }
 function parsePropCtx(ctx) {
   const p = parseProp(ctx.selection || "");
-  const player = ctx.player || (p && p.player) || null;
+  const fromGame = (ctx.game && !/@/.test(ctx.game)) ? String(ctx.game).trim() : null; // props carry the player in `game`
+  const player = ctx.player || (p && p.player) || fromGame || null;
   const stat = ctx.market || (p && p.stat) || ctx.selection || "";
   const line = ctx.line != null ? num(ctx.line) : (p ? p.line : null);
   if (!player) return null;
