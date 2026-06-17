@@ -36,7 +36,7 @@ async function sbRows(path) {
 
 const n = (x) => { const v = parseFloat(x); return Number.isFinite(v) ? v : 0; };
 const ipToFloat = (s) => { const p = String(s == null ? "0" : s).split("."); const w = n(p[0]); const f = p[1] ? n(p[1]) : 0; return w + f / 3; };
-const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9 ]/g, "").trim();
+const norm = (s) => String(s == null ? "" : s).toLowerCase().replace(/[^a-z0-9 ]/g, "").trim();
 const tb = (b) => (b ? n(b["1B"]) + 2 * n(b["2B"]) + 3 * n(b["3B"]) + 4 * n(b.HR) : 0);
 const fmt3 = (x) => x.toFixed(3).replace(/^0/, "");
 const pctOf = (a, b) => (b ? Math.round((a / b) * 100) : 0);
@@ -52,7 +52,7 @@ function resolvePlayer(players, name) {
 
 // stat text/market-key -> { kind, label, f(logRow), sf(seasonBlock), perStart }
 function statResolver(text, playerIsPitcher) {
-  const t = (text || "").toLowerCase().replace(/_/g, " ");
+  const t = String(text == null ? "" : text).toLowerCase().replace(/_/g, " ");
   const hintPit = /pitcher/.test(t), hintBat = /batter|hitter/.test(t);
   const isPit = hintPit || (!hintBat && playerIsPitcher);
   if (/earned run/.test(t)) return { kind: "pit", label: "Earned runs", f: (r) => n(r.pit && r.pit.ER), sf: (b) => n(b.ER), perStart: true };
@@ -101,7 +101,8 @@ export async function buildMlbProp(ctx, prop) {
   const rs = ps.regular_season || {};
   const playerIsPitcher = ["P", "S", "R"].includes(ps.position_category) || ps.position === "P";
 
-  const stat = statResolver(prop.stat || ctx.market || ctx.selection || "", playerIsPitcher);
+  const statText = [prop.stat, ctx.market, ctx.selection].find((x) => typeof x === "string" && x.trim()) || "";
+  const stat = statResolver(statText, playerIsPitcher);
   const line = prop.line != null ? prop.line : (ctx.line != null ? n(ctx.line) : null);
   const seasonBlock = (rs && (rs.pitching || rs.batting)) || null;
   const gp = n(rs.games_played);
@@ -111,7 +112,7 @@ export async function buildMlbProp(ctx, prop) {
     const lines = [];
     const ctxStr = playerIsPitcher ? pitcherContext(rs.pitching, gp) : batterContext(rs.batting, gp);
     if (ctxStr) lines.push({ label: "2026 season", value: ctxStr });
-    return { lines, note: `${ps.player}: "${prop.stat || "that stat"}" isn't available in this data feed${/war/i.test(prop.stat || "") ? " (WAR can't be derived from box scores)" : ""}. Read from the season line and overall form; do not state a number for it.` };
+    return { lines, note: `${ps.player}: "${statText || "that stat"}" isn't available in this data feed${/war/i.test(statText) ? " (WAR can't be derived from box scores)" : ""}. Read from the season line and overall form; do not state a number for it.` };
   }
 
   const col = stat.kind === "pit" ? "pit" : "bat";
