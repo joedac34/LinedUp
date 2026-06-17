@@ -236,7 +236,7 @@ const PROP_MARKETS = {
     { key: "batter_hits", stat: "hits", short: "H", tier: "poisson" },
   ],
 };
-async function analyzeProps(sport, eventId) {
+async function analyzeProps(sport, eventId, opts = {}) {
   const markets = PROP_MARKETS[sport]; const sk = SPORT_KEYS[sport];
   if (!markets || !eventId || !sk || !ODDS) return [];
   const confByKey = {}; markets.forEach(m => { confByKey[m.key] = m; });
@@ -298,7 +298,7 @@ async function analyzeProps(sport, eventId) {
       if (model && !model.invalid && model.pOver != null) { pUsed = side === "over" ? model.pOver : (1 - model.pOver); basis = "model"; }
       const evNum = pUsed * s.bestDec - 1;
       out.push({
-        kind: "prop", market: g.market, tier: g.conf.tier, basis,
+        kind: "prop", market: g.market, tier: g.conf.tier, basis, player: g.player, short: g.conf.short, side,
         label: `${g.player} ${side === "over" ? "o" : "u"}${g.line} ${g.conf.short}`,
         evPct: +(evNum * 100).toFixed(1), fairPct: +(consensus * 100).toFixed(1),
         modelPct: basis === "model" ? +(pUsed * 100).toFixed(1) : null,
@@ -307,6 +307,24 @@ async function analyzeProps(sport, eventId) {
         suspicious: evNum > 0.06,
       });
     }
+  }
+  if (opts.projection) {
+    // Dedupe to one row per player+line, keep the model's leaning side, rank by model-vs-market disagreement.
+    const byKey = {};
+    for (const c of out) {
+      if (c.basis !== "model" || c.mu == null || c.modelPct == null) continue;
+      const k = `${c.market}|${c.player}|${c.line}`;
+      (byKey[k] = byKey[k] || {})[c.side] = c;
+    }
+    const rows = Object.values(byKey).map((p) => {
+      const base = p.over || p.under;
+      const pOver = p.over ? p.over.modelPct : (p.under ? +(100 - p.under.modelPct).toFixed(1) : null);
+      const lean = pOver != null && pOver >= 50 ? "over" : "under";
+      const sideCand = lean === "over" ? (p.over || base) : (p.under || base);
+      return { player: base.player, short: base.short, mu: base.mu, line: base.line, market: base.market, pOver, lean, marketPct: sideCand.fairPct };
+    }).filter((r) => r.pOver != null);
+    rows.sort((a, b) => Math.abs(b.pOver - b.marketPct) - Math.abs(a.pOver - a.marketPct));
+    return rows.slice(0, 6);
   }
   return out.sort((a, b) => b.evPct - a.evPct).slice(0, 6);
 }
@@ -443,6 +461,21 @@ async function buildMatchup(sport, ctx) {
   return { away: slim(A), home: slim(H), scoredLabel: sport === "mlb" ? "Runs/game" : "Points/game", allowedLabel: sport === "mlb" ? "Runs allowed/game" : "Points allowed/game", h2h, title: `${A.abbr} @ ${H.abbr}` };
 }
 
+async function narrateProjection(game, facts) {
+  if (!OPENAI) return "";
+  const sys = "You are Plok's Projection lens for a sports pick'em app. You are given player props, each with the model's projected number, the betting line, the model's over%, and the market's implied over%. Write a tight 2-3 sentence read focused on where the model most disagrees with the line. Rules: use ONLY the numbers provided; never invent a stat; do not give a price or a specific bet; you MAY say a prop 'leans over' or 'leans under'. Be plain and sharp, and honest that a projection is a weak second opinion from recent game logs, not certainty.";
+  try {
+    const r = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENAI}` },
+      body: JSON.stringify({ model: "gpt-4o-mini", temperature: 0.4, max_tokens: 220, messages: [{ role: "system", content: sys }, { role: "user", content: `Matchup: ${game}\n\nProjections:\n${facts}` }] }),
+    });
+    if (!r.ok) return "";
+    const d = await r.json();
+    return ((d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content) || "").trim();
+  } catch { return ""; }
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
   if (!OPENAI) return res.status(500).json({ error: "OPENAI_API_KEY not set" });
@@ -464,6 +497,23 @@ export default async function handler(req, res) {
     const event = await fetchGameOdds(ctx.sport, ctx);
     if (!event) {
       const out = { summary: "No live odds are posted for this game yet, so there's no value to screen right now — the matchup data below is current. Check back closer to game time. This is screening, not betting advice.", keyStats: [], trends: [], bullCase: "", bearCase: "", matchup };
+      await storeCache(key, out);
+      return res.status(200).json({ ...out, cached: false });
+    }
+    if (model === "projection") {
+      let projRows = [];
+      try { projRows = await analyzeProps(ctx.sport, event.id, { projection: true }); } catch { projRows = []; }
+      if (!projRows.length) {
+        const out = { summary: "No model-grade projections for this game yet — these props don't have enough recent game-log history to project reliably. Props like points, rebounds, threes, total bases or strikeouts on established players model best. This is modeling, not betting advice.", keyStats: [], trends: [], matchup: null, model: "projection" };
+        await storeCache(key, out);
+        return res.status(200).json({ ...out, cached: false });
+      }
+      const keyStats = projRows.slice(0, 4).map((r) => ({ value: String(r.mu), label: `${r.player} ${r.short} · line ${r.line}` }));
+      const trends = projRows.slice(0, 6).map((r) => ({ dir: r.lean === "over" ? "up" : "down", text: `${r.player} ${r.short}: model projects ${r.mu} vs a ${r.line} line — ${Math.round(r.pOver)}% to clear it (market implies ${Math.round(r.marketPct)}%). Leans ${r.lean}.` }));
+      const factText = projRows.map((r) => `${r.player} ${r.short}: projection ${r.mu}, line ${r.line}, model over% ${Math.round(r.pOver)}, market implied over% ${Math.round(r.marketPct)}`).join("\n");
+      let summary = await narrateProjection(ctx.game, factText);
+      if (!summary) summary = projRows.slice(0, 2).map((r) => `${r.player} ${r.short}: model ${r.mu} vs ${r.line} line.`).join(" ");
+      const out = { summary, keyStats, trends, matchup: null, conviction: null, verdict: "none", model: "projection" };
       await storeCache(key, out);
       return res.status(200).json({ ...out, cached: false });
     }
