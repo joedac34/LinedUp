@@ -882,6 +882,140 @@ function soloDrawCard(d){
   x.textAlign="right"; x.fillStyle=MUT2; x.font="600 15px Barlow, system-ui, sans-serif"; x.fillText("lined-up-murex.vercel.app",W-P,H-46);
   return c;
 }
+function leagueDrawCard(d){
+  const W=600,H=900,c=document.createElement("canvas"); c.width=W; c.height=H; const x=c.getContext("2d");
+  const P=50, GR="#30D158", MUT="rgba(255,255,255,.55)", MUT2="rgba(255,255,255,.32)";
+  const tw=(str,nn)=>{ str=String(str||""); return str.length>nn? str.slice(0,nn-1)+"…":str; };
+  const rr=(a,b,w,h,r)=>{ if(x.roundRect){x.beginPath();x.roundRect(a,b,w,h,r);} else {x.beginPath();x.moveTo(a+r,b);x.arcTo(a+w,b,a+w,b+h,r);x.arcTo(a+w,b+h,a,b+h,r);x.arcTo(a,b+h,a,b,r);x.arcTo(a,b,a+w,b,r);x.closePath();} };
+  const g=x.createLinearGradient(0,0,W,H); g.addColorStop(0,"#16244d"); g.addColorStop(1,"#0a1024");
+  rr(0,0,W,H,46); x.fillStyle=g; x.fill(); x.lineWidth=3; x.strokeStyle="rgba(122,168,255,.5)"; rr(8,8,W-16,H-16,40); x.stroke();
+  x.textBaseline="top"; x.textAlign="left";
+  x.fillStyle="#fff"; x.font="800 22px Barlow, system-ui, sans-serif"; x.fillText("PICKLOCK",P,52);
+  x.fillStyle="#0A84FF"; x.font="800 22px Barlow, system-ui, sans-serif"; x.fillText(".",P+112,52);
+  x.textAlign="right"; x.fillStyle=MUT; x.font="700 17px Barlow, system-ui, sans-serif"; x.fillText("WEEK "+d.week,W-P,56);
+  x.textAlign="left"; x.fillStyle="rgba(255,255,255,.1)"; x.fillRect(P,90,W-2*P,1);
+  x.fillStyle="#7aa8ff"; x.font="800 15px Barlow, system-ui, sans-serif"; x.fillText(tw(String(d.leagueName||"League").toUpperCase(),24),P,108);
+  const h2h = d.mode==="h2h" && d.matchups && d.matchups.length;
+  x.fillStyle="#FFD60A"; x.font="900 14px Barlow, system-ui, sans-serif"; x.fillText(h2h?"TOP SCORER":"WINNER OF THE WEEK",P,142);
+  let wn=String((d.winner&&d.winner.name)||"").toUpperCase(); if(wn.length>16) wn=wn.slice(0,15)+"…";
+  x.fillStyle="#fff"; x.font="900 58px Barlow, system-ui, sans-serif"; x.fillText(wn,P-2,166);
+  x.fillStyle=GR; x.font="900 40px Barlow, system-ui, sans-serif"; x.fillText("+"+(d.winner?d.winner.pts:0).toFixed(0)+" pts",P,234);
+  x.fillStyle=MUT; x.font="700 18px Barlow, system-ui, sans-serif"; x.fillText((d.winner?d.winner.w:0)+"-"+(d.winner?d.winner.l:0)+" on the week",P,288);
+  x.fillStyle="rgba(255,255,255,.1)"; x.fillRect(P,320,W-2*P,1);
+  let y;
+  if(h2h){
+    x.fillStyle=MUT2; x.font="800 13px Barlow, system-ui, sans-serif"; x.fillText("MATCHUPS",P,342);
+    y=378;
+    d.matchups.slice(0,6).forEach(m=>{
+      const tie=!m.winId, aWin=m.winId===m.aId;
+      const wName=tie?m.aName:(aWin?m.aName:m.bName), lName=tie?m.bName:(aWin?m.bName:m.aName);
+      const wP=tie?m.aPts:(aWin?m.aPts:m.bPts), lP=tie?m.bPts:(aWin?m.bPts:m.aPts);
+      x.textAlign="left"; x.fillStyle="#fff"; x.font="700 21px Barlow, system-ui, sans-serif";
+      x.fillText(tw(wName,11)+(tie?"  tied  ":"  def.  ")+tw(lName,11),P,y);
+      x.textAlign="right"; x.fillStyle=GR; x.font="800 21px Barlow, system-ui, sans-serif"; x.fillText(Math.round(wP)+"–"+Math.round(lP),W-P,y);
+      y+=52;
+    });
+  } else {
+    x.fillStyle=MUT2; x.font="800 13px Barlow, system-ui, sans-serif"; x.fillText("WEEKLY LEADERBOARD",P,342);
+    y=378; const rows=(d.rows||[]).slice(0,5);
+    rows.forEach((r,i)=>{
+      x.textAlign="left"; x.fillStyle=i===0?"#FFD60A":MUT2; x.font="900 22px Barlow, system-ui, sans-serif"; x.fillText(String(i+1),P,y);
+      x.fillStyle="#fff"; x.font="700 24px Barlow, system-ui, sans-serif"; x.fillText(tw(r.name,18),P+42,y);
+      x.textAlign="right"; x.fillStyle=MUT; x.font="600 16px Barlow, system-ui, sans-serif"; x.fillText(r.w+"-"+r.l,W-P-118,y+4);
+      x.fillStyle=GR; x.font="800 24px Barlow, system-ui, sans-serif"; x.fillText((r.pts>=0?"+":"")+r.pts.toFixed(0),W-P,y);
+      y+=60;
+    });
+  }
+  x.textAlign="left"; x.fillStyle="rgba(255,255,255,.1)"; x.fillRect(P,y+4,W-2*P,1);
+  x.fillStyle=MUT; x.font="600 18px Barlow, system-ui, sans-serif"; x.fillText("League hit "+d.hitPct+"%   ·   "+d.totalPicks+" picks this week",P,y+26);
+  x.textBaseline="alphabetic"; x.fillStyle=MUT2; x.font="800 16px Barlow, system-ui, sans-serif"; x.fillText("PICKLOCK",P,H-42);
+  x.textAlign="right"; x.fillStyle=MUT2; x.font="600 14px Barlow, system-ui, sans-serif"; x.fillText("lined-up-murex.vercel.app",W-P,H-44);
+  return c;
+}
+function LeagueWeekRecap({ data, IOS, onClose }){
+  const C=IOS; const [toast,setToast]=useState("");
+  const weeks=data.weeks||[];
+  const [idx,setIdx]=useState(Math.max(0,weeks.length-1));
+  const week=weeks[idx];
+  const cur=(data.byWeek&&data.byWeek[week]) || {rows:[],matchups:[],winner:{name:"—",pts:0,w:0,l:0},hitPct:0,totalPicks:0};
+  const rows=(cur.rows||[]).slice(0,5); const w=cur.winner||{name:"—",pts:0,w:0,l:0};
+  const isH2H=(cur.matchups&&cur.matchups.length>0);
+  const GOLD=C.gold||"#FFD60A";
+  const canPrev=idx>0, canNext=idx<weeks.length-1;
+  const tw=(str,n)=>{ str=String(str||""); return str.length>n?str.slice(0,n-1)+"…":str; };
+  const navBtn=(on)=>({width:26,height:26,borderRadius:7,border:"none",background:on?"rgba(255,255,255,.12)":"rgba(255,255,255,.04)",color:on?"#fff":"rgba(255,255,255,.22)",cursor:on?"pointer":"default",fontSize:15,fontWeight:800,lineHeight:1,display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontFamily:"Barlow,sans-serif"});
+  const shareCard=async()=>{
+    try{
+      if(document.fonts&&document.fonts.ready){ try{ await document.fonts.ready; }catch(e){} }
+      const payload={ leagueName:data.leagueName, week, rows:cur.rows, matchups:cur.matchups, mode:isH2H?"h2h":"points", winner:cur.winner, hitPct:cur.hitPct, totalPicks:cur.totalPicks };
+      const cv=leagueDrawCard(payload);
+      const url="https://lined-up-murex.vercel.app";
+      const text=data.leagueName+" — Week "+week+": "+w.name+(isH2H?" was top scorer with +":" took the week with +")+w.pts.toFixed(0)+" pts. "+cur.hitPct+"% league hit rate. My PickLock league.";
+      const blob=await new Promise(r=>cv.toBlob(r,"image/png"));
+      const file=blob?new File([blob],"picklock-league-week.png",{type:"image/png"}):null;
+      if(file && navigator.canShare && navigator.canShare({files:[file]})) await navigator.share({files:[file],text,title:"League Week Recap"});
+      else if(navigator.share) await navigator.share({text,url,title:"League Week Recap"});
+      else { const a=document.createElement("a"); a.href=cv.toDataURL("image/png"); a.download="picklock-league-week.png"; a.click(); try{ await navigator.clipboard.writeText(text+" "+url); }catch(e){} setToast("Card saved — caption copied"); setTimeout(()=>setToast(""),2400); }
+    }catch(e){}
+  };
+  const MatchRow=({m,i,last})=>{
+    const tie=!m.winId, aWin=m.winId===m.aId;
+    const wName=tie?m.aName:(aWin?m.aName:m.bName), lName=tie?m.bName:(aWin?m.bName:m.aName);
+    const wP=tie?m.aPts:(aWin?m.aPts:m.bPts), lP=tie?m.bPts:(aWin?m.bPts:m.aPts);
+    const wYou=tie?false:(aWin?m.youA:m.youB), lYou=tie?false:(aWin?m.youB:m.youA);
+    return (
+      <div style={{display:"flex",alignItems:"center",padding:"8px 0",borderBottom:last?"none":"0.5px solid rgba(255,255,255,.06)"}}>
+        <div style={{flex:1,fontSize:13.5,fontWeight:700}}>
+          {tie
+            ? <span><span style={{color:"#fff"}}>{tw(m.aName,12)}</span><span style={{color:"rgba(255,255,255,.4)",fontWeight:600}}> tied </span><span style={{color:"#fff"}}>{tw(m.bName,12)}</span></span>
+            : <span><span style={{color:wYou?C.blue:"#fff"}}>{tw(wName,12)}{wYou?" (you)":""}</span><span style={{color:"rgba(255,255,255,.4)",fontWeight:600}}> def. </span><span style={{color:lYou?C.blue:"rgba(255,255,255,.5)"}}>{tw(lName,12)}{lYou?" (you)":""}</span></span>}
+        </div>
+        <div style={{fontSize:13.5,fontWeight:800,color:C.green,textAlign:"right"}}>{Math.round(wP)}–{Math.round(lP)}</div>
+      </div>
+    );
+  };
+  return (
+    <div style={{position:"fixed",inset:0,zIndex:9000,background:"radial-gradient(120% 80% at 50% 12%,rgba(10,132,255,.34),#04060c 68%)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 18px"}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:360,background:"linear-gradient(160deg,#16244d,#0a1024)",border:"1px solid rgba(122,168,255,.45)",borderRadius:24,padding:"22px 20px",position:"relative",overflow:"hidden",boxShadow:"0 30px 80px -20px rgba(0,0,0,.8)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{fontSize:15,fontWeight:800,color:"#fff"}}>PickLock<span style={{color:C.blue}}>.</span></div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <button onClick={()=>canPrev&&setIdx(idx-1)} disabled={!canPrev} style={navBtn(canPrev)}>‹</button>
+            <div style={{fontSize:12,fontWeight:700,color:"rgba(255,255,255,.7)",minWidth:52,textAlign:"center"}}>Week {week}</div>
+            <button onClick={()=>canNext&&setIdx(idx+1)} disabled={!canNext} style={navBtn(canNext)}>›</button>
+          </div>
+        </div>
+        <div style={{height:1,background:"rgba(255,255,255,.1)",margin:"12px 0 14px"}}/>
+        <div style={{fontSize:11,fontWeight:800,letterSpacing:".08em",color:"#7aa8ff",textTransform:"uppercase"}}>{data.leagueName}</div>
+        <div style={{fontSize:10,fontWeight:900,letterSpacing:".12em",color:GOLD,marginTop:14}}>{isH2H?"TOP SCORER":"WINNER OF THE WEEK"}</div>
+        <div style={{fontSize:34,fontWeight:900,letterSpacing:"-1px",color:"#fff",marginTop:2,lineHeight:1}}>{w.name}</div>
+        <div style={{display:"flex",alignItems:"baseline",gap:9,marginTop:8}}>
+          <div style={{fontSize:30,fontWeight:900,color:C.green}}>+{w.pts.toFixed(0)}</div>
+          <div style={{fontSize:13,fontWeight:700,color:"rgba(255,255,255,.55)"}}>pts · {w.w}-{w.l} on the week</div>
+        </div>
+        <div style={{height:1,background:"rgba(255,255,255,.1)",margin:"16px 0 12px"}}/>
+        <div style={{fontSize:10,fontWeight:800,letterSpacing:".08em",color:"rgba(255,255,255,.35)",textTransform:"uppercase",marginBottom:8}}>{isH2H?"Matchups":"Weekly Leaderboard"}</div>
+        {isH2H
+          ? cur.matchups.slice(0,6).map((m,i)=><MatchRow key={i} m={m} i={i} last={i>=Math.min(cur.matchups.length,6)-1}/>)
+          : rows.map((r,i)=>(
+            <div key={r.userId||i} style={{display:"flex",alignItems:"center",padding:"7px 0",borderBottom:i<rows.length-1?"0.5px solid rgba(255,255,255,.06)":"none"}}>
+              <div style={{width:22,fontSize:14,fontWeight:900,color:i===0?GOLD:"rgba(255,255,255,.4)"}}>{i+1}</div>
+              <div style={{flex:1,fontSize:14,fontWeight:700,color:r.isYou?C.blue:"#fff"}}>{r.isYou?r.name+" (you)":r.name}</div>
+              <div style={{width:46,fontSize:11,color:"rgba(255,255,255,.5)",textAlign:"right"}}>{r.w}-{r.l}</div>
+              <div style={{width:54,fontSize:14,fontWeight:800,color:C.green,textAlign:"right"}}>{r.pts>=0?"+":""}{r.pts.toFixed(0)}</div>
+            </div>
+          ))}
+        <div style={{height:1,background:"rgba(255,255,255,.1)",margin:"12px 0"}}/>
+        <div style={{fontSize:12,fontWeight:600,color:"rgba(255,255,255,.55)"}}>League hit {cur.hitPct}% · {cur.totalPicks} picks this week</div>
+      </div>
+      <div style={{display:"flex",gap:10,marginTop:18,width:"100%",maxWidth:360}}>
+        <button onClick={shareCard} style={{flex:1,background:C.blue,color:"#fff",border:"none",borderRadius:12,padding:"13px",fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"Barlow,sans-serif",boxShadow:"0 8px 24px -8px rgba(10,132,255,.7)"}}>Share</button>
+        <button onClick={onClose} style={{flex:1,background:"rgba(255,255,255,.1)",color:"#fff",border:"none",borderRadius:12,padding:"13px",fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Done</button>
+      </div>
+      {toast&&<div style={{marginTop:12,fontSize:12,color:"rgba(255,255,255,.7)"}}>{toast}</div>}
+    </div>
+  );
+}
 function WeeklyRecap({ data, picks, standings, league, stats, IOS, onClose, user }){
   const [i,setI]=useState(0);
   const [toast,setToast]=useState("");
@@ -1742,6 +1876,9 @@ export default function App() {
  const [espnGames, setEspnGames] = useState([]); // ESPN scoreboard with IDs
  const [weekResult, setWeekResult] = useState(null);
  const [recapPicks, setRecapPicks] = useState([]); // {won, myPts, oppPts, oppName, week}
+ const [leagueRecap, setLeagueRecap] = useState(null);
+ const [strayPicks, setStrayPicks] = useState([]);
+ const [leagueRecapLoading, setLeagueRecapLoading] = useState(false);
  const [gameSheet, setGameSheet] = useState(null); // { tickerGame, espnGame, detail }
  const [gameTeamTab, setGameTeamTab] = useState('matchup'); // 'matchup' | 'away' | 'home' 
  const [gameLoading, setGameLoading] = useState(false);
@@ -1943,7 +2080,7 @@ export default function App() {
  const [soloFreePicks, setSoloFreePicks] = useState([]); // freeform solo slate (variable count)
  const [freeCat, setFreeCat] = useState("all");
  const parseSlotConfig=(raw)=>{ try{ const a=typeof raw==="string"?JSON.parse(raw):raw; return (Array.isArray(a)&&a.length)?a:null; }catch(e){ return null; } };
- const freshSlots=()=>{ const cfg = !isSoloMode ? parseSlotConfig(activeLeague&&activeLeague.slot_config) : null; return cfg ? cfg.map((c,i)=>({id:i,bet:null,mult:c.mult,category:c.type,isParlay:false,parlayLegs:[],locked:true})) : EMPTY_FLEX.map(s=>({...s})); };
+ const freshSlots=()=>{ const cfg = !isSoloMode ? parseSlotConfig(activeLeague&&activeLeague.slot_config) : null; return cfg ? cfg.map((c,i)=>({id:i,bet:null,mult:c.mult,category:c.type,market:c.market||null,isParlay:false,parlayLegs:[],locked:true})) : EMPTY_FLEX.map(s=>({...s})); };
  useEffect(()=>{ if(isSoloMode) return; setFlexPicks(freshSlots()); }, [activeLeagueId, isSoloMode, activeLeague&&activeLeague.slot_config]);
  const [soloSavedPicks, setSoloSavedPicks] = useState(null);
  const [soloSubmitted, setSoloSubmitted] = useState(false);
@@ -2061,6 +2198,59 @@ export default function App() {
    setNotifs(prev=>prev.map(n=>n.read_at?n:{...n,read_at:nowIso}));
    setNotifUnread(0);
  };
+ const openLeagueRecap = async ()=>{
+   try{
+     const lg = activeLeague; if(!lg||!lg.id) return;
+     setLeagueRecapLoading(true);
+     const { data:members } = await supabase.from("league_members").select("user_id").eq("league_id", lg.id);
+     const ids = (members||[]).map(m=>m.user_id);
+     const { data:us } = await supabase.from("users").select("id,username,email").in("id", ids.length?ids:["00000000-0000-0000-0000-000000000000"]);
+     const nameOf = (id)=>{ const u=(us||[]).find(z=>z.id===id); return (u&&u.username) || ((u&&u.email)||"").split("@")[0] || "Player"; };
+     const { data:picks } = await supabase.from("picks").select("user_id,week,result,points_earned").eq("league_id", lg.id).neq("result","pending");
+     if(!picks||!picks.length){ setLeagueRecapLoading(false); return; }
+     const { data:mus } = await supabase.from("matchups").select("user1_id,user2_id,winner_id,week").eq("league_id", lg.id);
+     const muByWeek = {}; (mus||[]).forEach(m=>{ const wk=m.week||0; (muByWeek[wk]=muByWeek[wk]||[]).push(m); });
+     const weeks = [...new Set(picks.map(p=>p.week||0))].filter(w=>w>0).sort((a,b)=>a-b);
+     if(!weeks.length){ setLeagueRecapLoading(false); return; }
+     const byWeek = {};
+     weeks.forEach(week=>{
+       const wkPicks = picks.filter(p=>(p.week||0)===week);
+       const byUser = {};
+       wkPicks.forEach(p=>{ const b=byUser[p.user_id]||(byUser[p.user_id]={pts:0,w:0,l:0,n:0}); b.n++; if(p.result==="W"){ b.w++; b.pts+=parseFloat(p.points_earned||0); } else if(p.result==="L"){ b.l++; } });
+       const rows = Object.keys(byUser).map(id=>({ userId:id, name:nameOf(id), pts:parseFloat(byUser[id].pts.toFixed(1)), w:byUser[id].w, l:byUser[id].l, picks:byUser[id].n, isYou:id===(user&&user.id) })).sort((a,b)=>b.pts-a.pts);
+       const ptsOf = (id)=> (byUser[id]? parseFloat(byUser[id].pts.toFixed(1)) : 0);
+       const matchups = (muByWeek[week]||[]).map(m=>{
+         const aId=m.user1_id, bId=m.user2_id, aPts=ptsOf(aId), bPts=ptsOf(bId);
+         let winId=m.winner_id; if(!winId){ winId = aPts===bPts ? null : (aPts>bPts?aId:bId); }
+         return { aId, bId, aName:nameOf(aId), bName:nameOf(bId), aPts, bPts, winId, youA:aId===(user&&user.id), youB:bId===(user&&user.id) };
+       });
+       const correct = wkPicks.filter(p=>p.result==="W").length;
+       byWeek[week] = { week, rows, winner: rows[0], matchups, hitPct: wkPicks.length?Math.round(correct/wkPicks.length*100):0, totalPicks: wkPicks.length };
+     });
+     setLeagueRecap({ leagueName: lg.name||"League", weeks, byWeek });
+     setLeagueRecapLoading(false);
+   }catch(e){ setLeagueRecapLoading(false); }
+ };
+ useEffect(()=>{
+   let alive=true;
+   (async()=>{
+     try{
+       if(isSoloMode||!user||!user.id||!activeLeague||!activeLeague.id||activeLeague.id==="solo"){ if(alive) setStrayPicks([]); return; }
+       const ts=activeLeague.target_size||activeLeague.max_members||8;
+       if(!(leagueMembers.length>0 && leagueMembers.length<ts)){ if(alive) setStrayPicks([]); return; }
+       const { data } = await supabase.from("picks").select("id,pick_name,result,game").eq("league_id",activeLeague.id).eq("user_id",user.id);
+       if(alive) setStrayPicks(data||[]);
+     }catch(e){ if(alive) setStrayPicks([]); }
+   })();
+   return ()=>{ alive=false; };
+ }, [activeLeagueId, isSoloMode, leagueMembers.length, user]);
+ const clearStrayPicks = async ()=>{
+   try{
+     const ids=(strayPicks||[]).map(p=>p.id).filter(Boolean);
+     if(ids.length) await supabase.from("picks").delete().in("id", ids);
+   }catch(e){}
+   setStrayPicks([]);
+ };
  const openRecapFromNotif = async (n)=>{
    try{
      const week = n.data && n.data.week, lid = n.data && n.data.league_id;
@@ -2109,7 +2299,7 @@ export default function App() {
    const iv=setInterval(()=>{ if(document.visibilityState==="visible") fetchNotifs(); },30000);
    return ()=>{ document.removeEventListener("visibilitychange",onVis); clearInterval(iv); };
  },[user]);
- useEffect(()=>{ if(screen!=="browser"||isSoloMode) return; const _cfg=parseSlotConfig(activeLeague&&activeLeague.slot_config); if(!_cfg) return; const _allowed=[...new Set(_cfg.map(s=>s.type))]; const _ts=flexPicks[gridTargetSlot]; const _tgt=(gridTargetSlot!=null&&_ts&&_ts.locked)?_ts.category:null; const _want=_tgt||(_allowed.includes(gridType)?gridType:_allowed[0]); if(_want&&_want!==gridType) setGridType(_want); }, [screen, gridTargetSlot, activeLeagueId, gridType]);
+ useEffect(()=>{ if(screen!=="browser"||isSoloMode) return; const _cfg=parseSlotConfig(activeLeague&&activeLeague.slot_config); if(!_cfg) return; const _allowed=[...new Set(_cfg.map(s=>s.type))]; const _ts=flexPicks[gridTargetSlot]; const _tgt=(gridTargetSlot!=null&&_ts&&_ts.locked)?_ts.category:null; const _want=_tgt||(_allowed.includes(gridType)?gridType:_allowed[0]); if(_want&&_want!==gridType) setGridType(_want); const _mkt=(gridTargetSlot!=null&&_ts&&_ts.locked&&_ts.category==="prop")?(_ts.market||"all"):null; if(_mkt!==null) setGridPropSub(_mkt); }, [screen, gridTargetSlot, activeLeagueId, gridType]);
 
  // When a custom league has period slots, lazily pull their odds for the slate's games.
  useEffect(()=>{
@@ -2674,8 +2864,26 @@ export default function App() {
   {id:"yrfi",l:"YRFI",scope:"Yes Run 1st Inning",color:"#FF9F0A",sports:["mlb"]},
   {id:"nrfi",l:"NRFI",scope:"No Run 1st Inning",color:"#30D158",sports:["mlb"]},
  ];
+ const PROP_SUBS_BY_SPORT = {
+  nfl:[{id:"all",l:"All"},{id:"pass",l:"Pass"},{id:"rush",l:"Rush"},{id:"rec",l:"Receiving"},{id:"td",l:"TDs"}],
+  nba:[{id:"all",l:"All"},{id:"pts",l:"Points"},{id:"reb",l:"Rebounds"},{id:"ast",l:"Assists"},{id:"3pt",l:"Threes"}],
+  mlb:[{id:"all",l:"All"},{id:"k",l:"Strikeouts"},{id:"hits",l:"Hits"},{id:"hr",l:"Home Runs"},{id:"bases",l:"Bases"}],
+ };
  const DEFAULT_SLOTS=[{type:"ml",mult:1},{type:"prop",mult:2},{type:"ou",mult:3},{type:"spread",mult:4},{type:"longshot",mult:5}];
+ const LAYOUT_PRESETS=[
+  {id:"classic", name:"Classic", desc:"The all-rounder — one of each, escalating multipliers.", slots:[{type:"ml",mult:1},{type:"spread",mult:2},{type:"ou",mult:3},{type:"prop",mult:4},{type:"longshot",mult:5}]},
+  {id:"chalk", name:"Chalk", desc:"Pure game lines. No props, no parlays — just sides and totals.", slots:[{type:"ml",mult:1},{type:"spread",mult:2},{type:"ou",mult:3},{type:"ml",mult:4},{type:"spread",mult:5}]},
+  {id:"props", name:"Prop Scramble", desc:"Five player props. Load up on HR, TD scorers, 3PM, goals — the splashy stuff.", slots:[{type:"prop",mult:1},{type:"prop",mult:2},{type:"prop",mult:3},{type:"prop",mult:4},{type:"prop",mult:5}]},
+  {id:"longshot", name:"Longshot Lottery", desc:"Two safe props, then three swings at big-odds parlays and longshots.", slots:[{type:"prop",mult:1},{type:"prop",mult:2},{type:"longshot",mult:3},{type:"longshot",mult:4},{type:"longshot",mult:5}]},
+  {id:"firsthalf", name:"First-Half Frenzy", desc:"1st-half lines, then a prop and a longshot to finish.", sports:["nfl","nba"], slots:[{type:"ml_h1",mult:1},{type:"spread_h1",mult:2},{type:"ou_h1",mult:3},{type:"prop",mult:4},{type:"longshot",mult:5}]},
+  {id:"smallball", name:"Small Ball", desc:"A baseball special — first-5 innings, NRFI/YRFI, and a prop.", sports:["mlb"], slots:[{type:"nrfi",mult:1},{type:"yrfi",mult:2},{type:"ou_f5",mult:3},{type:"ml_f5",mult:4},{type:"prop",mult:5}]},
+  {id:"endzone", name:"Find the End Zone", desc:"All scoring — TD scorers, receiving, rushing, passing yards.", sports:["nfl"], slots:[{type:"prop",mult:1,market:"td"},{type:"prop",mult:2,market:"td"},{type:"prop",mult:3,market:"rec"},{type:"prop",mult:4,market:"rush"},{type:"prop",mult:5,market:"pass"}]},
+  {id:"buckets", name:"Bucket Getters", desc:"Points, threes, boards and dimes — a hooper's prop slate.", sports:["nba"], slots:[{type:"prop",mult:1,market:"pts"},{type:"prop",mult:2,market:"3pt"},{type:"prop",mult:3,market:"reb"},{type:"prop",mult:4,market:"ast"},{type:"prop",mult:5,market:"pts"}]},
+  {id:"goingyard", name:"Going Yard", desc:"Home runs, hits, total bases and strikeouts — swing big.", sports:["mlb"], slots:[{type:"prop",mult:1,market:"hr"},{type:"prop",mult:2,market:"hr"},{type:"prop",mult:3,market:"hits"},{type:"prop",mult:4,market:"bases"},{type:"prop",mult:5,market:"k"}]},
+ ];
  const [newLeagueSlots,setNewLeagueSlots]=useState([{type:"ml",mult:1},{type:"prop",mult:2},{type:"ou",mult:3},{type:"spread",mult:4},{type:"longshot",mult:5}]);
+ const [presetSheet,setPresetSheet]=useState(false);
+ const [marketSheet,setMarketSheet]=useState(null);
  const [slotSheetIdx,setSlotSheetIdx]=useState(null);
  const [advancingWeek, setAdvancingWeek] = useState(false);
  const [creatingLeague, setCreatingLeague] = useState(false);
@@ -5637,6 +5845,45 @@ export default function App() {
  });
  const hasParlay = hasLongshot;
  const allFlexFilled = activePicks.every(p=>p.mult!==null&&(p.isParlay?p.parlayLegs.length>=2:p.bet!==null));
+ const _ts = activeLeague.target_size||activeLeague.max_members||8;
+ const leagueNotStarted = !isSoloMode && leagueMembers.length>0 && leagueMembers.length < _ts;
+ const _need = Math.max(0, _ts - leagueMembers.length);
+ if(leagueNotStarted){
+   return (
+     <div style={{padding:"16px 16px 90px"}}>
+       <div style={{background:"linear-gradient(160deg,#16181d,#0c0d10)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:16,padding:"22px 18px",textAlign:"center"}}>
+         <div style={{width:46,height:46,borderRadius:13,background:"rgba(255,159,10,0.14)",border:"0.5px solid rgba(255,159,10,0.3)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px"}}>
+           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={IOS.orange} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+         </div>
+         <div style={{fontSize:17,fontWeight:800,color:"#fff"}}>{activeLeague.name} hasn't started yet</div>
+         <div style={{fontSize:13,color:IOS.label3,marginTop:6,lineHeight:1.45}}>Picks open once all {_ts} spots are filled. {_need} more {_need===1?"player":"players"} to go.</div>
+         <div style={{height:6,background:"rgba(255,255,255,0.08)",borderRadius:3,overflow:"hidden",margin:"14px 0 6px"}}>
+           <div style={{height:"100%",borderRadius:3,background:`linear-gradient(90deg,${IOS.orange},${IOS.yellow})`,width:`${Math.min(100,(leagueMembers.length/_ts)*100)}%`,transition:"width .4s"}}/>
+         </div>
+         <div style={{fontSize:11,color:IOS.label3}}>{leagueMembers.length}/{_ts} joined</div>
+         {(activeLeague.invite_code||activeLeague.inviteCode) && <button onClick={()=>shareInvite(activeLeague.invite_code||activeLeague.inviteCode, activeLeague.name)} style={{marginTop:14,width:"100%",background:"rgba(255,255,255,0.08)",border:"0.5px solid rgba(255,255,255,0.14)",color:"#fff",borderRadius:10,padding:"11px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Invite players</button>}
+       </div>
+       <div style={{background:"linear-gradient(160deg,#161019,#0c0a12)",border:`0.5px solid ${(IOS.purple||"#BF5AF2")}4d`,borderRadius:16,padding:"18px",marginTop:12}}>
+         <div style={{fontSize:14,fontWeight:800,color:"#fff"}}>Want to pick right now?</div>
+         <div style={{fontSize:12.5,color:IOS.label3,marginTop:4,lineHeight:1.45}}>No need to wait for a full league. Solo Mode lets you build a slate against today's live lines right now.</div>
+         <button onClick={async()=>{ setSoloModeWithRef(true); try{ const lid=await getOrCreateSoloLeague(); setActiveLeagueId(lid||"solo"); }catch(e){} setScreen("picks"); }} style={{marginTop:12,width:"100%",background:(IOS.purple||"#BF5AF2"),color:"#fff",border:"none",borderRadius:10,padding:"12px",fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Make picks in Solo Mode</button>
+       </div>
+       {strayPicks.length>0 && (
+         <div style={{background:IOS.bg2,border:"0.5px solid rgba(255,69,58,0.25)",borderRadius:16,padding:"16px",marginTop:12}}>
+           <div style={{fontSize:13,fontWeight:800,color:"#fff"}}>Picks from before the league started</div>
+           <div style={{fontSize:12,color:IOS.label3,marginTop:3,marginBottom:10,lineHeight:1.4}}>These were locked before {activeLeague.name} filled up, so they don't count toward anything. Clear them to tidy up.</div>
+           {strayPicks.map((p,i)=>(
+             <div key={p.id||i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 0",borderBottom:i<strayPicks.length-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
+               <div style={{fontSize:12.5,color:"#ccc",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginRight:8}}>{p.pick_name}</div>
+               <div style={{fontSize:11,fontWeight:800,color:p.result==="W"?IOS.green:p.result==="L"?IOS.red:IOS.label3}}>{p.result==="W"?"WON":p.result==="L"?"LOST":p.result==="PUSH"?"PUSH":"PENDING"}</div>
+             </div>
+           ))}
+           <button onClick={clearStrayPicks} style={{marginTop:12,width:"100%",background:"rgba(255,69,58,0.12)",border:"0.5px solid rgba(255,69,58,0.3)",color:IOS.red,borderRadius:10,padding:"10px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Clear these picks</button>
+         </div>
+       )}
+     </div>
+   );
+ }
  // ── Per-pick locking ─────────────────────────────────────────────
  const _weekNum = activeLeague.current_week||activeLeague.week||1;
  const slotGameTime = (slot)=>{
@@ -5655,6 +5902,7 @@ export default function App() {
  const lockSlot = async (idx)=>{
  const slot = activePicks[idx];
  if(!slot||!slot.mult||slot.committed) return;
+ { const _tsz=activeLeague.target_size||activeLeague.max_members||8; if(!isSoloMode && leagueMembers.length>0 && leagueMembers.length<_tsz){ alert("Your league hasn't started yet — it needs all "+_tsz+" players first. You can make picks in Solo Mode until then."); return; } }
  if(slot.isParlay ? (slot.parlayLegs||[]).length<2 : !slot.bet) return;
  if(slotStarted(slot)){ alert("That game has already started — this pick can no longer be locked."); return; }
  if(!user){ alert("Sign in to lock picks."); return; }
@@ -6833,11 +7081,7 @@ export default function App() {
  }
 
  // Prop sub-category filter
- const propSubsBySport = {
- nfl:[{id:"all",l:"All"},{id:"pass",l:"Pass"},{id:"rush",l:"Rush"},{id:"rec",l:"Receiving"},{id:"td",l:"TDs"}],
- nba:[{id:"all",l:"All"},{id:"pts",l:"Points"},{id:"reb",l:"Rebounds"},{id:"ast",l:"Assists"},{id:"3pt",l:"Threes"}],
- mlb:[{id:"all",l:"All"},{id:"k",l:"Strikeouts"},{id:"hits",l:"Hits"},{id:"hr",l:"Home Runs"},{id:"bases",l:"Bases"}],
- };
+ const propSubsBySport = PROP_SUBS_BY_SPORT;
  const propSubs = propSubsBySport[gSport] || [{id:"all",l:"All"}];
  if(gridType==="prop" && gridPropSub!=="all") {
  list = list.filter(b=>{
@@ -7360,19 +7604,23 @@ export default function App() {
  </div>
 </div>
  {/* Prop sub-filter */}
- {gridType==="prop" && (
- <div className="gbx-scroll" style={{display:"flex",gap:6,padding:"0 16px 10px",overflowX:"auto"}}>
- {propSubs.map(s=>{
- const on = s.id===gridPropSub;
+ {gridType==="prop" && (()=>{
+ const _tslot=(gridTargetSlot!=null)?activePicks[gridTargetSlot]:null;
+ const _lockMkt=(_tslot&&_tslot.locked&&_tslot.category==="prop"&&_tslot.market)?_tslot.market:null;
+ if(_lockMkt){ const _ml=(propSubs.find(x=>x.id===_lockMkt)||{l:_lockMkt}).l; return (
+ <div style={{display:"flex",alignItems:"center",gap:8,padding:"0 16px 10px"}}>
+ <div style={{padding:"5px 11px",borderRadius:16,fontSize:11,fontWeight:800,whiteSpace:"nowrap",border:"1px solid",background:`${acc}1f`,borderColor:`${acc}66`,color:acc}}>{_ml}</div>
+ <span style={{fontSize:10.5,color:"rgba(255,255,255,0.4)",fontWeight:600}}>locked by this slot</span>
+ </div>
+ ); }
  return (
- <div key={s.id} onClick={()=>setGridPropSub(s.id)} style={{padding:"5px 11px",borderRadius:16,fontSize:11,fontWeight:700,whiteSpace:"nowrap",cursor:"pointer",border:"1px solid",flexShrink:0,
- background:on?`${acc}1f`:"rgba(255,255,255,0.04)", borderColor:on?`${acc}66`:"rgba(255,255,255,0.08)", color:on?acc:"rgba(255,255,255,0.35)"}}>
- {s.l}
+ <div className="gbx-scroll" style={{display:"flex",gap:6,padding:"0 16px 10px",overflowX:"auto"}}>
+ {propSubs.map(s=>{ const on = s.id===gridPropSub; return (
+ <div key={s.id} onClick={()=>setGridPropSub(s.id)} style={{padding:"5px 11px",borderRadius:16,fontSize:11,fontWeight:700,whiteSpace:"nowrap",cursor:"pointer",border:"1px solid",flexShrink:0, background:on?`${acc}1f`:"rgba(255,255,255,0.04)", borderColor:on?`${acc}66`:"rgba(255,255,255,0.08)", color:on?acc:"rgba(255,255,255,0.35)"}}>{s.l}</div>
+ );})}
  </div>
  );
- })}
- </div>
- )}
+ })()}
  {gridBuildMode && (()=>{
  const lsd = parlayLegs.length>=2 ? calcLS(parlayLegs) : null;
  const am = lsd ? (lsd.decimal>=2?("+"+Math.round((lsd.decimal-1)*100)):(""+Math.round(-100/(lsd.decimal-1)))) : "";
@@ -7816,6 +8064,12 @@ export default function App() {
  <div style={{fontSize:18,fontWeight:800,color:"#fff",marginBottom:4}}>Design the slip</div>
  <div style={{fontSize:13,color:"#555",marginBottom:16}}>Set each player's weekly picks — how many, what type, and the points multiplier.</div>
 
+ <div onClick={()=>setPresetSheet(true)} style={{display:"flex",alignItems:"center",gap:11,background:"linear-gradient(135deg,rgba(10,132,255,0.14),rgba(100,210,255,0.08))",border:"0.5px solid rgba(10,132,255,0.32)",borderRadius:13,padding:"12px 14px",marginBottom:14,cursor:"pointer"}}>
+ <div style={{width:32,height:32,borderRadius:9,background:"rgba(10,132,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
+ <div style={{flex:1}}><div style={{fontSize:13,fontWeight:800,color:"#fff"}}>Start from a layout</div><div style={{fontSize:11,color:"rgba(255,255,255,0.55)",marginTop:1}}>Pick a preset, then tweak</div></div>
+ <div style={{color:"#555",fontSize:18}}>›</div>
+ </div>
+
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"linear-gradient(160deg,#15151A,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.09)",borderRadius:14,padding:"13px 15px",marginBottom:14}}>
  <div style={{fontSize:13,fontWeight:700,color:"#fff"}}>Picks per week<div style={{fontSize:11,color:"#555",fontWeight:600,marginTop:2}}>How many slots in the slip</div></div>
  <div style={{display:"flex",alignItems:"center",gap:12}}>
@@ -7837,6 +8091,7 @@ export default function App() {
  <div style={{flex:1,minWidth:0}}>
  <div style={{fontSize:15,fontWeight:800,color:tt?"#fff":"#666",display:"flex",alignItems:"center",gap:8}}>{tt&&<span style={{width:9,height:9,borderRadius:3,background:tt.color}}/>}{tt?tt.l:"Tap to choose type"}</div>
  <div style={{fontSize:11,color:"#555",fontWeight:600,marginTop:2}}>{tt?tt.scope:"any bet type"}</div>
+ {s.type==="prop" && (()=>{ let _lbl="Any prop"; if(s.market){ for(const sp of newLeagueSports){ const f=(PROP_SUBS_BY_SPORT[sp]||[]).find(x=>x.id===s.market); if(f){ _lbl=f.l; break; } } } return (<div onClick={(e)=>{e.stopPropagation(); setMarketSheet(i);}} style={{display:"inline-flex",alignItems:"center",gap:4,marginTop:6,background:"rgba(255,214,10,0.12)",border:"0.5px solid rgba(255,214,10,0.3)",borderRadius:7,padding:"3px 8px",cursor:"pointer"}}><span style={{fontSize:10.5,fontWeight:700,color:"#FFD60A"}}>{_lbl}</span><span style={{fontSize:9,color:"#FFD60A"}}>▾</span></div>); })()}
  </div>
  <div onClick={e=>e.stopPropagation()} style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
  <div onClick={()=>setNewLeagueSlots(arr=>arr.map((p,j)=>j===i?{...p,mult:Math.max(1,p.mult-1)}:p))} style={{width:24,height:24,borderRadius:7,background:"rgba(255,255,255,0.08)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer"}}>−</div>
@@ -7852,6 +8107,61 @@ export default function App() {
  <button disabled={!ready} onClick={()=>{if(ready)createLeague(newLeagueName.trim(), newLeagueSports[0]);}} style={{width:"100%",background:ready?IOS.blue:"rgba(255,255,255,0.08)",border:"none",borderRadius:12,padding:"15px",fontFamily:"Barlow,sans-serif",fontSize:16,fontWeight:800,color:ready?"#fff":"rgba(255,255,255,0.25)",cursor:ready?"pointer":"default",marginBottom:4}}>{creatingLeague?"Creating...":"Create League"}</button>
  </>);})()}
 
+ {presetSheet&&(
+ <div style={{position:"fixed",inset:0,zIndex:200,display:"flex",flexDirection:"column",justifyContent:"flex-end"}}>
+ <div onClick={()=>setPresetSheet(false)} style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.6)"}}/>
+ <div style={{position:"relative",background:"#0C0C10",borderTopLeftRadius:22,borderTopRightRadius:22,border:"0.5px solid rgba(255,255,255,0.09)",maxHeight:"80vh",display:"flex",flexDirection:"column"}}>
+ <div style={{width:38,height:4,borderRadius:2,background:"rgba(255,255,255,0.2)",margin:"10px auto 4px"}}/>
+ <div style={{padding:"6px 18px 12px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+ <div style={{fontSize:17,fontWeight:800,color:"#fff"}}>Slip layouts</div>
+ <div onClick={()=>setPresetSheet(false)} style={{fontSize:13,fontWeight:700,color:IOS.blue,cursor:"pointer"}}>Done</div>
+ </div>
+ <div style={{overflowY:"auto",padding:"0 16px 26px"}}>
+ {LAYOUT_PRESETS.filter(p=>!p.sports||p.sports.some(sp=>newLeagueSports.includes(sp))).map(p=>{const tot=p.slots.reduce((a,b)=>a+b.mult,0);return (
+ <div key={p.id} onClick={()=>{ setNewLeagueSlots(p.slots.map(x=>({...x}))); setPresetSheet(false); }} style={{background:"linear-gradient(160deg,#15151A,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.09)",borderRadius:13,padding:"13px 14px",marginBottom:9,cursor:"pointer"}}>
+ <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+ <div style={{fontSize:15,fontWeight:800,color:"#fff"}}>{p.name}</div>
+ <div style={{fontSize:11,fontWeight:700,color:"#555"}}>{p.slots.length} picks · {tot}× max</div>
+ </div>
+ <div style={{fontSize:12,color:"rgba(255,255,255,0.55)",marginTop:3,lineHeight:1.4}}>{p.desc}</div>
+ <div style={{display:"flex",flexWrap:"wrap",gap:5,marginTop:9}}>
+ {p.slots.map((sl,i)=>{const tt=SLOT_TYPES.find(x=>x.id===sl.type);return (
+ <div key={i} style={{display:"flex",alignItems:"center",gap:5,background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:7,padding:"3px 7px"}}>
+ <span style={{width:7,height:7,borderRadius:2,background:tt?tt.color:"#555"}}/>
+ <span style={{fontSize:10.5,fontWeight:700,color:"#ccc"}}>{tt?tt.l:sl.type}</span>
+ <span style={{fontSize:10.5,fontWeight:800,color:"#FFD60A"}}>{sl.mult}×</span>
+ </div>
+ );})}
+ </div>
+ </div>
+ );})}
+ </div>
+ </div>
+ </div>
+ )}
+
+ {marketSheet!==null&&(()=>{ const _opts=[{id:null,l:"Any prop"}, ...[...new Map(newLeagueSports.flatMap(sp=>(PROP_SUBS_BY_SPORT[sp]||[]).filter(x=>x.id!=="all").map(x=>[x.id,x]))).values()]]; return (
+ <div style={{position:"fixed",inset:0,zIndex:210,display:"flex",flexDirection:"column",justifyContent:"flex-end"}}>
+ <div onClick={()=>setMarketSheet(null)} style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.6)"}}/>
+ <div style={{position:"relative",background:"#0C0C10",borderTopLeftRadius:22,borderTopRightRadius:22,border:"0.5px solid rgba(255,255,255,0.09)",maxHeight:"80vh",display:"flex",flexDirection:"column"}}>
+ <div style={{width:38,height:4,borderRadius:2,background:"rgba(255,255,255,0.2)",margin:"10px auto 4px"}}/>
+ <div style={{padding:"6px 18px 12px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+ <div style={{fontSize:17,fontWeight:800,color:"#fff"}}>Prop market</div>
+ <div onClick={()=>setMarketSheet(null)} style={{fontSize:13,fontWeight:700,color:IOS.blue,cursor:"pointer"}}>Done</div>
+ </div>
+ <div style={{fontSize:12,color:"rgba(255,255,255,0.5)",padding:"0 18px 12px",lineHeight:1.4}}>Lock this slot to a specific prop. Players only see that market when filling it.</div>
+ <div style={{overflowY:"auto",padding:"0 16px 26px"}}>
+ {_opts.map(o=>{ const sel=(newLeagueSlots[marketSheet]&&(newLeagueSlots[marketSheet].market||null))===o.id; return (
+ <div key={o.id||"any"} onClick={()=>{ setNewLeagueSlots(arr=>arr.map((p,j)=>j===marketSheet?{...p,market:o.id}:p)); setMarketSheet(null); }} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:sel?"rgba(10,132,255,0.1)":"linear-gradient(160deg,#15151A,#0B0B0E 80%)",border:"0.5px solid "+(sel?"rgba(10,132,255,0.6)":"rgba(255,255,255,0.09)"),borderRadius:12,padding:"13px 14px",marginBottom:8,cursor:"pointer"}}>
+ <span style={{fontSize:15,fontWeight:700,color:"#fff"}}>{o.l}</span>
+ {sel&&<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+ </div>
+ );})}
+ </div>
+ </div>
+ </div>
+ );})()}
+
  {slotSheetIdx!==null&&(
  <div style={{position:"fixed",inset:0,zIndex:200,display:"flex",flexDirection:"column",justifyContent:"flex-end"}}>
  <div onClick={()=>setSlotSheetIdx(null)} style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.6)"}}/>
@@ -7864,7 +8174,7 @@ export default function App() {
  <div style={{overflowY:"auto",padding:"0 16px 26px"}}>
  {slotSheetIdx===-1&&<div style={{fontSize:12,color:"rgba(255,255,255,0.5)",marginBottom:12,lineHeight:1.4}}>Pick one type and every slot becomes that type.</div>}
  {SLOT_TYPES.filter(tp=>!tp.sports||tp.sports.some(sp=>newLeagueSports.includes(sp))).map(tp=>{const sel=slotSheetIdx>=0&&newLeagueSlots[slotSheetIdx]&&newLeagueSlots[slotSheetIdx].type===tp.id;return (
- <div key={tp.id} onClick={()=>{ if(slotSheetIdx===-1){setNewLeagueSlots(arr=>arr.map(p=>({...p,type:tp.id})));} else {setNewLeagueSlots(arr=>arr.map((p,j)=>j===slotSheetIdx?{...p,type:tp.id}:p));} setSlotSheetIdx(null); }} style={{display:"flex",alignItems:"center",gap:11,background:sel?"rgba(10,132,255,0.1)":"linear-gradient(160deg,#15151A,#0B0B0E 80%)",border:"0.5px solid "+(sel?"rgba(10,132,255,0.6)":"rgba(255,255,255,0.09)"),borderRadius:12,padding:"13px 14px",marginBottom:8,cursor:"pointer"}}>
+ <div key={tp.id} onClick={()=>{ if(slotSheetIdx===-1){setNewLeagueSlots(arr=>arr.map(p=>({...p,type:tp.id,market:tp.id==="prop"?p.market:null})));} else {setNewLeagueSlots(arr=>arr.map((p,j)=>j===slotSheetIdx?{...p,type:tp.id,market:tp.id==="prop"?p.market:null}:p));} setSlotSheetIdx(null); }} style={{display:"flex",alignItems:"center",gap:11,background:sel?"rgba(10,132,255,0.1)":"linear-gradient(160deg,#15151A,#0B0B0E 80%)",border:"0.5px solid "+(sel?"rgba(10,132,255,0.6)":"rgba(255,255,255,0.09)"),borderRadius:12,padding:"13px 14px",marginBottom:8,cursor:"pointer"}}>
  <span style={{width:10,height:10,borderRadius:3,background:tp.color,flexShrink:0}}/>
  <div style={{flex:1}}><div style={{fontSize:14,fontWeight:700,color:"#fff"}}>{tp.l}</div><div style={{fontSize:11,color:"#555",marginTop:1}}>{tp.scope}</div></div>
  {sel&&<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
@@ -8222,7 +8532,10 @@ export default function App() {
    )}
 
    {/* Standings mini */}
-   <div style={{fontSize:9,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Standings</div>
+   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+     <div style={{fontSize:9,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5}}>Standings</div>
+     {realStandings.length>0 && <button onClick={()=>openLeagueRecap()} disabled={leagueRecapLoading} style={{display:"flex",alignItems:"center",gap:5,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.3)",color:IOS.blue,fontSize:10,fontWeight:700,padding:"4px 9px",borderRadius:7,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg>{leagueRecapLoading?"…":"Week recap"}</button>}
+   </div>
    <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:12,overflow:"hidden",marginBottom:10}}>
      <div style={{display:"flex",padding:"5px 12px",borderBottom:`0.5px solid ${IOS.sep}`}}>
        <div style={{width:22}}/>
@@ -9831,6 +10144,7 @@ export default function App() {
 
  {/* ══ WEEKLY RECAP ══ */}
       {weekResult && <WeeklyRecap data={weekResult} picks={recapPicks} standings={realStandings} league={activeLeague} stats={allMyStats} IOS={IOS} user={user} onClose={()=>setWeekResult(null)}/>}
+      {leagueRecap && <LeagueWeekRecap data={leagueRecap} IOS={IOS} onClose={()=>setLeagueRecap(null)}/>}
 
       {/* ══ GAME DETAIL SHEET ══ */}
  {gameSheet && (
@@ -10353,23 +10667,9 @@ export default function App() {
                <div style={{fontSize:13,color:"#ccc"}}>{f}</div>
              </div>
            ))}
-          <div style={{marginTop:18,display:"flex",flexDirection:"column",gap:10}}>
-             <button onClick={()=>startCheckout("annual")} disabled={!!checkoutLoading} style={{position:"relative",width:"100%",background:IOS.blue,color:"#fff",border:"none",borderRadius:11,padding:"14px 16px",cursor:checkoutLoading?"default":"pointer",fontFamily:"Barlow,sans-serif",textAlign:"left",opacity:checkoutLoading&&checkoutLoading!=="annual"?0.5:1}}>
-               <div style={{position:"absolute",top:-9,right:12,background:IOS.green,color:"#000",fontSize:9,fontWeight:800,letterSpacing:"0.4px",padding:"2px 7px",borderRadius:6,textTransform:"uppercase"}}>Best value · 2 months free</div>
-               <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
-                 <span style={{fontSize:15,fontWeight:800}}>Annual</span>
-                 <span style={{fontSize:15,fontWeight:800}}>$60<span style={{fontSize:11,fontWeight:600,opacity:0.8}}>/yr</span></span>
-               </div>
-               <div style={{fontSize:11,fontWeight:600,opacity:0.85,marginTop:2}}>{checkoutLoading==="annual"?"Opening secure checkout…":"Just $5/mo, billed yearly"}</div>
-             </button>
-             <button onClick={()=>startCheckout("monthly")} disabled={!!checkoutLoading} style={{width:"100%",background:"rgba(255,255,255,0.06)",color:"#fff",border:"0.5px solid rgba(255,255,255,0.14)",borderRadius:11,padding:"13px 16px",cursor:checkoutLoading?"default":"pointer",fontFamily:"Barlow,sans-serif",textAlign:"left",opacity:checkoutLoading&&checkoutLoading!=="monthly"?0.5:1}}>
-               <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
-                 <span style={{fontSize:14,fontWeight:700}}>Monthly</span>
-                 <span style={{fontSize:14,fontWeight:700}}>$10<span style={{fontSize:11,fontWeight:600,opacity:0.7}}>/mo</span></span>
-               </div>
-               <div style={{fontSize:11,fontWeight:600,color:"#888",marginTop:2}}>{checkoutLoading==="monthly"?"Opening secure checkout…":"Cancel anytime"}</div>
-             </button>
-           </div>
+          <button onClick={()=>{setProStatus(true);setShowPaywall(null);}} style={{display:"block",width:"100%",background:IOS.blue,color:"#fff",border:"none",borderRadius:8,padding:13,fontSize:14,fontWeight:700,textAlign:"center",marginTop:16,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
+             Unlock Pro
+           </button>
            <button onClick={()=>setShowPaywall(null)} style={{display:"block",width:"100%",background:"none",border:"none",color:"#555",fontSize:12,textAlign:"center",marginTop:10,cursor:"pointer",fontFamily:"Barlow,sans-serif",padding:4}}>
              Not now
            </button>
