@@ -1949,6 +1949,7 @@ export default function App() {
  const [soloSubmitted, setSoloSubmitted] = useState(false);
  const [isPro, setIsPro] = useState(()=>{ try { return localStorage.getItem("picklock_is_pro")==="true"; } catch(e){ return false; } });
  const [showPaywall, setShowPaywall] = useState(null);
+ const [checkoutLoading, setCheckoutLoading] = useState(null);
  const [showPostLeagueUpsell, setShowPostLeagueUpsell] = useState(false);
  const [activeFlexSlot, setActiveFlexSlot] = useState(null); // index of slot being edited
  const [flexCategory, setFlexCategory] = useState(null); // category being browsed
@@ -2098,6 +2099,7 @@ export default function App() {
    if(lid && realLeagues.some(l=>l.id===lid)) setActiveLeagueId(lid);
    if(n.type==="pick_win"||n.type==="pick_loss") setScreen("picks");
    else if(n.type==="week_recap") openRecapFromNotif(n);
+   else if(n.type==="plok_call"){ if(isPro){ setAiReturn(screen); setScreen("ai"); } else { setShowPaywall("ai"); } }
  };
  useEffect(()=>{
    if(!(user&&user.id)) return;
@@ -3208,7 +3210,7 @@ export default function App() {
  };
 
  const fetchUserProfile = async (uid) => {
- const {data} = await supabase.from("users").select("id,username,email,is_pro,push_enabled,notif_results,notif_grades,notif_reminder,notif_league").eq("id",uid).maybeSingle();
+ const {data} = await supabase.from("users").select("id,username,email,is_pro,push_enabled,notif_results,notif_grades,notif_reminder,notif_league,notif_plok").eq("id",uid).maybeSingle();
  if(data) {
  setUserProfile(data);
  // DB is source of truth for pro status
@@ -3232,6 +3234,17 @@ export default function App() {
  if(user) {
  await supabase.from("users").update({is_pro: val}).eq("id", user.id);
  }
+ };
+ const startCheckout = async (plan) => {
+ if(!user || !user.id){ setShowPaywall(null); setScreen("auth"); return; }
+ try {
+ setCheckoutLoading(plan);
+ const r = await fetch("/api/checkout", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ plan, userId:user.id, email:(userProfile&&userProfile.email)||user.email||null }) });
+ const d = await r.json();
+ if(r.ok && d.url){ window.location.href = d.url; return; }
+ setCheckoutLoading(null);
+ console.warn("checkout error:", d && d.error);
+ } catch(e){ setCheckoutLoading(null); console.warn("checkout failed:", e); }
  };
 
  const fetchAllMyStats = async (uid) => {
@@ -5002,6 +5015,7 @@ export default function App() {
    <div className="gh-od" style={{background:accent+"1f"}}>
    {won?<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
     :lost?<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    :n.type==="plok_call"?<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15 9 22 9.3 16.5 14 18.5 21 12 17 5.5 21 7.5 14 2 9.3 9 9"/></svg>
     :<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/></svg>}
    </div>
    <div style={{flex:1,minWidth:0}}>
@@ -9720,6 +9734,7 @@ export default function App() {
  {key:"notif_grades", label:"Picks Graded", sub:"When a pick result comes in", emblem:'<polyline points="20 6 9 17 4 12"/>'},
  {key:"notif_reminder", label:"Pick Reminder", sub:"Reminder before slip locks", emblem:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'},
  {key:"notif_league", label:"League Activity", sub:"New members, chat messages", emblem:'<circle cx="9" cy="7" r="3"/><path d="M2 21v-2a5 5 0 0 1 10 0v2"/><circle cx="17" cy="9" r="2.5"/>'},
+ {key:"notif_plok", label:"Plok's Calls", sub:"When Plok finds a high-value bet", emblem:'<polygon points="12 2 15 9 22 9.3 16.5 14 18.5 21 12 17 5.5 21 7.5 14 2 9.3 9 9"/>'},
  ].map((pref,i,arr)=>{
  const val = userProfile?.[pref.key] !== false; // default true
  return (
@@ -10312,6 +10327,7 @@ export default function App() {
  {/* ══ PAYWALL SHEET ══ */}
  {showPaywall && (()=>{
    const configs = {
+     ai:{icon:"star",title:"Unlock Plok + Pro",sub:"Plok is your AI betting analyst — data-backed reads on every game and prop, a +EV bet finder, and unlimited insights.",features:["Plok AI analyst on every bet & prop","+EV bet finder","Recent form, splits, matchup & injuries","Multi-sport leagues & custom settings"]},
      picks:{icon:"ti-plus",title:"Unlimited picks",sub:"Commish Pro lets you add as many pick slots as you want each week.",features:["Unlimited pick slots per week","Custom multipliers on any slot","NFL, NBA, MLB, NHL","Power-ups and custom bet types"]},
      settings:{icon:"settings",title:"Custom league settings",sub:"Set your own pick counts, multiplier ranges, and allowed bet types.",features:["Custom pick count per week","Custom multiplier ranges","Restrict or expand bet types","Multi-sport leagues"]},
      sport:{icon:"world",title:"Multi-sport leagues",sub:"Run your league across NFL, NBA, MLB, and NHL — all in one place.",features:["NFL, NBA, MLB, NHL support","Custom pick counts and bet types","Custom multiplier ranges","Power-ups for your league"]},
@@ -10337,9 +10353,23 @@ export default function App() {
                <div style={{fontSize:13,color:"#ccc"}}>{f}</div>
              </div>
            ))}
-          <button onClick={()=>{setProStatus(true);setShowPaywall(null);}} style={{display:"block",width:"100%",background:IOS.blue,color:"#fff",border:"none",borderRadius:8,padding:13,fontSize:14,fontWeight:700,textAlign:"center",marginTop:16,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
-             Upgrade to Commish Pro — $5/mo
-           </button>
+          <div style={{marginTop:18,display:"flex",flexDirection:"column",gap:10}}>
+             <button onClick={()=>startCheckout("annual")} disabled={!!checkoutLoading} style={{position:"relative",width:"100%",background:IOS.blue,color:"#fff",border:"none",borderRadius:11,padding:"14px 16px",cursor:checkoutLoading?"default":"pointer",fontFamily:"Barlow,sans-serif",textAlign:"left",opacity:checkoutLoading&&checkoutLoading!=="annual"?0.5:1}}>
+               <div style={{position:"absolute",top:-9,right:12,background:IOS.green,color:"#000",fontSize:9,fontWeight:800,letterSpacing:"0.4px",padding:"2px 7px",borderRadius:6,textTransform:"uppercase"}}>Best value · 2 months free</div>
+               <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
+                 <span style={{fontSize:15,fontWeight:800}}>Annual</span>
+                 <span style={{fontSize:15,fontWeight:800}}>$60<span style={{fontSize:11,fontWeight:600,opacity:0.8}}>/yr</span></span>
+               </div>
+               <div style={{fontSize:11,fontWeight:600,opacity:0.85,marginTop:2}}>{checkoutLoading==="annual"?"Opening secure checkout…":"Just $5/mo, billed yearly"}</div>
+             </button>
+             <button onClick={()=>startCheckout("monthly")} disabled={!!checkoutLoading} style={{width:"100%",background:"rgba(255,255,255,0.06)",color:"#fff",border:"0.5px solid rgba(255,255,255,0.14)",borderRadius:11,padding:"13px 16px",cursor:checkoutLoading?"default":"pointer",fontFamily:"Barlow,sans-serif",textAlign:"left",opacity:checkoutLoading&&checkoutLoading!=="monthly"?0.5:1}}>
+               <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
+                 <span style={{fontSize:14,fontWeight:700}}>Monthly</span>
+                 <span style={{fontSize:14,fontWeight:700}}>$10<span style={{fontSize:11,fontWeight:600,opacity:0.7}}>/mo</span></span>
+               </div>
+               <div style={{fontSize:11,fontWeight:600,color:"#888",marginTop:2}}>{checkoutLoading==="monthly"?"Opening secure checkout…":"Cancel anytime"}</div>
+             </button>
+           </div>
            <button onClick={()=>setShowPaywall(null)} style={{display:"block",width:"100%",background:"none",border:"none",color:"#555",fontSize:12,textAlign:"center",marginTop:10,cursor:"pointer",fontFamily:"Barlow,sans-serif",padding:4}}>
              Not now
            </button>
