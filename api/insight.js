@@ -426,7 +426,12 @@ async function fetchSportsData(ctx) {
       if (ctx.sport === "mlb") {
         try {
           const mp = await buildMlbPack(ctx);
-          if (mp && mp.lines && mp.lines.length) { out.lines.push(...mp.lines); out.note = mp.note; out.matchup = mp.matchup; return out; }
+          if (mp && mp.lines && mp.lines.length) {
+            out.lines.push(...mp.lines); out.note = mp.note; out.matchup = mp.matchup;
+            // rich DATA stays DataFeeds; use ESPN's complete card (season home/road/streak/H2H) when available
+            try { const es = await espnGameStats(ctx.sport, ctx); if (es && es.matchup && es.matchup.away && es.matchup.home) out.matchup = es.matchup; } catch (e2) { /* keep DataFeeds matchup */ }
+            return out;
+          }
         } catch (e) { /* fall back to ESPN below */ }
       }
       const s = await espnGameStats(ctx.sport, ctx);
