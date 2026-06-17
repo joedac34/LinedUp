@@ -475,7 +475,25 @@ function gradePeriod(pick, game, info) {
 
 function gradePick(pick, games, playerIndex, info = {}) {
   const slot = pick.slot;
-  const baseType = (slot||"").split("_")[0];
+  let baseType = (slot||"").split("_")[0];
+  // Solo freeform picks are saved as slot "free_N" with no bet type in the slot,
+  // so recover the real type — otherwise they match no grading branch and never settle.
+  if (baseType === "free") {
+    if (parseProp(pick.pick_name)) {
+      baseType = "prop";
+    } else {
+      const mk = pick.market_key || "";
+      if (mk.startsWith("spreads")) baseType = "spread";
+      else if (mk.startsWith("totals")) baseType = "ou";
+      else if (mk.startsWith("h2h")) baseType = "ml";
+      else {
+        const nm = (pick.pick_name || "").trim();
+        if (/^(over|under)\b/i.test(nm)) baseType = "ou";
+        else if (/[+-]\d+(\.\d+)?$/.test(nm)) baseType = "spread";
+        else baseType = "ml";
+      }
+    }
+  }
   const name = (pick.pick_name || "").trim();
   // The matchup ("Away @ Home") lives in pick.game. O/U pick_names have NO team
   // in them (e.g. "Over 217.5"), so we MUST use pick.game to find the game.
@@ -751,7 +769,9 @@ export default async function handler(req, res) {
 
       // Build the player box-score index once per sport, only if props are pending.
       const needProps = picks.some(p =>
-        (p.slot||"").split("_")[0] === "prop" || (p.slot?.startsWith("longshot_") && !((p.game || "").includes("@")))
+        (p.slot||"").split("_")[0] === "prop"
+        || (p.slot?.startsWith("longshot_") && !((p.game || "").includes("@")))
+        || ((p.slot||"").split("_")[0] === "free" && parseProp(p.pick_name))
       );
       let playerIndex = {};
       if (needProps) {
