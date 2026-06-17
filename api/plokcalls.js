@@ -10,7 +10,7 @@
  * ENV: ODDS_API_KEY, VITE_SUPABASE_URL, SUPABASE_SERVICE_KEY
  * Reuses: analyzeGame + SPORT_KEYS from ./findbet.js (single source for the odds math).
  */
-import { analyzeGame, SPORT_KEYS } from "./findbet.js";
+import { analyzeGame, analyzeProps, SPORT_KEYS } from "./findbet.js";
 
 export const maxDuration = 60;
 
@@ -42,9 +42,11 @@ export default async function handler(req, res) {
   const sports = String(q.sports || "mlb").split(",").map((s) => s.trim()).filter((s) => SPORT_KEYS[s]);
   const minEv = Number.isFinite(parseFloat(q.min)) ? parseFloat(q.min) : 2.5;
   const top = Math.min(Math.max(parseInt(q.top || "2", 10) || 2, 1), 5);
+  const propGames = Math.min(Math.max(parseInt(q.propgames || "8", 10) || 8, 0), 20);
   const dry = q.dry === "1" || q.dry === "true";
 
-  // 1) Scan each sport's slate for +EV line candidates on not-yet-started games.
+  // 1) Scan each sport's slate for +EV on not-yet-started games: game lines (1 bulk
+  //    call) + player props (one per-event call each, capped at propGames to bound cost).
   const now = Date.now();
   const horizon = now + 30 * 3600 * 1000; // next ~30h
   const cands = [];
@@ -53,13 +55,26 @@ export default async function handler(req, res) {
       const url = `https://api.the-odds-api.com/v4/sports/${SPORT_KEYS[sport]}/odds?apiKey=${ODDS}&regions=us&markets=h2h,spreads,totals&oddsFormat=american`;
       const r = await fetch(url); if (!r.ok) continue;
       const events = await r.json();
-      for (const ev of (Array.isArray(events) ? events : [])) {
+      const upcoming = (Array.isArray(events) ? events : []).filter((ev) => {
         const start = ev.commence_time ? Date.parse(ev.commence_time) : null;
-        if (start && (start < now || start > horizon)) continue; // only today's upcoming games
+        return !start || (start >= now && start <= horizon);
+      }).sort((a, b) => Date.parse(a.commence_time || 0) - Date.parse(b.commence_time || 0));
+      // game lines (cheap: already in the bulk payload)
+      for (const ev of upcoming) {
         const game = `${ev.away_team} @ ${ev.home_team}`;
         for (const c of analyzeGame(ev)) {
           if (c.suspicious || c.evPct < minEv || c.books < 4) continue;
           cands.push({ ...c, sport, game, commence_time: ev.commence_time || null, betType: betTypeFor(c.market) });
+        }
+      }
+      // player props (softer markets = more real edges; one odds call per game, capped)
+      for (const ev of upcoming.slice(0, propGames)) {
+        const game = `${ev.away_team} @ ${ev.home_team}`;
+        let props = [];
+        try { props = await analyzeProps(sport, ev.id); } catch (e) { props = []; }
+        for (const c of (props || [])) {
+          if (c.suspicious || c.evPct < minEv || c.books < 3) continue;
+          cands.push({ ...c, sport, game, commence_time: ev.commence_time || null, betType: "prop" });
         }
       }
     } catch (e) { /* skip sport on error */ }

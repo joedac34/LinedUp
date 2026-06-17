@@ -480,4 +480,4 @@ export default async function handler(req, res) {
   }
 }
 
-export { analyzeGame, SPORT_KEYS };
+export { analyzeGame, analyzeProps, SPORT_KEYS };
