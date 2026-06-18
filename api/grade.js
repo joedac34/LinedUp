@@ -120,6 +120,32 @@ async function maybeNotifyRecap(userId, league, week) {
     });
   } catch (e) { /* never break grading */ }
 }
+// When a league's week is fully sealed, nudge the COMMISH (once) to share the league
+// recap card to the group. Skips solo leagues and one-person leagues. Dedup per week.
+async function maybeNotifyCommishShare(league, week) {
+  try {
+    if (!league || !league.id) return;
+    if (league.league_type === "solo") return;
+    const lg = await sbGet(`leagues?id=eq.${league.id}&select=commissioner_id,name`);
+    const commish = Array.isArray(lg) && lg[0] ? lg[0].commissioner_id : null;
+    if (!commish) return;
+    const mem = await sbGet(`league_members?league_id=eq.${league.id}&select=user_id`);
+    if (!Array.isArray(mem) || mem.length < 2) return; // not a real group
+    let want = true;
+    try { const u = await sbGet(`users?id=eq.${commish}&select=notif_results`); if (Array.isArray(u) && u.length) want = u[0].notif_results !== false; } catch (e) {}
+    if (!want) return;
+    const existing = await sbGet(`notifications?user_id=eq.${commish}&type=eq.league_recap_share&select=data`);
+    if (Array.isArray(existing) && existing.some(n => n.data && String(n.data.week) === String(week) && n.data.league_id === league.id)) return;
+    const lname = (Array.isArray(lg) && lg[0] && lg[0].name) || league.name || "your league";
+    await sbPost("notifications", {
+      user_id: commish, type: "league_recap_share",
+      title: `Week ${week} is in the books`,
+      body: `Share the ${lname} recap — tap to post the week to your group.`,
+      data: { league_id: league.id, week, league_name: lname },
+      created_at: new Date().toISOString(),
+    });
+  } catch (e) { /* never break grading */ }
+}
 // Tie-break a bracket matchup: more correct picks that week, then the higher
 // seed (user1, which holds the better bracket position).
 async function bracketTiebreak(league, week, u1, u2) {
@@ -876,6 +902,7 @@ export default async function handler(req, res) {
           const pend = new Set((Array.isArray(sp) ? sp : []).map(r => r.user_id));
           const ran = [...new Set(picks.map(p => p.user_id))];
           for (const uid of ran) { if (uid && !pend.has(uid)) await maybeNotifyRecap(uid, league, wk); }
+          if (pend.size === 0) await maybeNotifyCommishShare(league, wk);
         } catch (e) { /* best-effort */ }
       }
       await settleBracketRound(league, league.current_week);

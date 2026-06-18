@@ -2198,9 +2198,9 @@ export default function App() {
    setNotifs(prev=>prev.map(n=>n.read_at?n:{...n,read_at:nowIso}));
    setNotifUnread(0);
  };
- const openLeagueRecap = async ()=>{
+ const openLeagueRecap = async (lgArg)=>{
    try{
-     const lg = activeLeague; if(!lg||!lg.id) return;
+     const lg = lgArg || activeLeague; if(!lg||!lg.id) return;
      setLeagueRecapLoading(true);
      const { data:members } = await supabase.from("league_members").select("user_id").eq("league_id", lg.id);
      const ids = (members||[]).map(m=>m.user_id);
@@ -2290,6 +2290,7 @@ export default function App() {
    if(n.type==="pick_win"||n.type==="pick_loss") setScreen("picks");
    else if(n.type==="week_recap") openRecapFromNotif(n);
    else if(n.type==="plok_call"){ if(isPro){ setAiReturn(screen); setScreen("ai"); } else { setShowPaywall("ai"); } }
+   else if(n.type==="league_recap_share"){ const _lg=(realLeagues||[]).find(l=>l.id===(n.data&&n.data.league_id)); if(_lg){ setActiveLeagueId(_lg.id); openLeagueRecap(_lg); } }
  };
  useEffect(()=>{
    if(!(user&&user.id)) return;
@@ -5234,6 +5235,7 @@ export default function App() {
    {won?<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
     :lost?<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
     :n.type==="plok_call"?<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15 9 22 9.3 16.5 14 18.5 21 12 17 5.5 21 7.5 14 2 9.3 9 9"/></svg>
+    :n.type==="league_recap_share"?<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg>
     :<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/></svg>}
    </div>
    <div style={{flex:1,minWidth:0}}>
