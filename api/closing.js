@@ -33,13 +33,17 @@ async function sbInsertIgnore(table, rows) {
 }
 
 async function snapshotSport(sportId) {
-  const sk = SPORT_KEYS[sportId]; if (!sk) return 0;
-  const now = new Date().toISOString();
+  const sk = SPORT_KEYS[sportId]; if (!sk) return { sport: sportId, n: 0, err: "no sport key" };
+  // The Odds API requires seconds-precision ISO8601 (NO milliseconds) for commenceTimeFrom.
+  const now = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
   const url = `https://api.the-odds-api.com/v4/sports/${sk}/odds/?apiKey=${ODDS_KEY}&regions=us&markets=h2h,spreads,totals&oddsFormat=american&dateFormat=iso&commenceTimeFrom=${now}`;
-  const res = await fetch(url); if (!res.ok) return 0;
+  let res;
+  try { res = await fetch(url); } catch (e) { return { sport: sportId, n: 0, err: "fetch failed: " + e.message }; }
+  if (!res.ok) { let t = ""; try { t = (await res.text()).slice(0, 180); } catch {} return { sport: sportId, n: 0, err: `odds ${res.status}: ${t}` }; }
   const games = await res.json();
   const rows = [];
   const nowMs = Date.now();
+  const gameCount = Array.isArray(games) ? games.length : 0;
   for (const g of (Array.isArray(games) ? games : [])) {
     if (!g || !g.id) continue;
     if (new Date(g.commence_time).getTime() <= nowMs) continue; // only not-yet-started: keep the latest pre-game line
@@ -67,9 +71,9 @@ async function snapshotSport(sportId) {
   }
   if (rows.length) {
     await sbUpsert("closing_lines", rows);        // overwrite -> last pre-game = closing
-    await sbInsertIgnore("opening_lines", rows);  // keep first -> opening line for movement/sparkline
+    await sbInsertIgnore("opening_lines", rows);  // keep first -> opening line for movement/sparkline (optional table)
   }
-  return rows.length;
+  return { sport: sportId, n: rows.length, games: gameCount };
 }
 
 async function applyCLV() {
@@ -96,9 +100,10 @@ export default async function handler(req, res) {
   try {
     const only = (req.query && req.query.sport) ? [req.query.sport] : ["nfl", "nba", "mlb"];
     let snapshotted = 0;
-    for (const sp of only) snapshotted += await snapshotSport(sp);
+    const debug = [];
+    for (const sp of only) { const r = await snapshotSport(sp); snapshotted += r.n; debug.push(r); }
     const clv_applied = await applyCLV();
-    return res.status(200).json({ ok: true, snapshotted, clv_applied });
+    return res.status(200).json({ ok: true, snapshotted, clv_applied, debug });
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }
