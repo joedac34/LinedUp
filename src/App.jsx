@@ -3748,11 +3748,12 @@ export default function App() {
  const ids = [...new Set(members.map(m=>m.league_id))];
  const {data:leagues} = await supabase.from("leagues").select("*").in("id", ids);
  if(leagues && leagues.length > 0) {
- const mapped = leagues.map(lg=>({
+ const mapped = leagues.filter(lg=>lg.league_type!=="solo").map(lg=>({
  ...lg,
  isCommissioner: members.find(m=>m.league_id===lg.id)?.is_commissioner||false
  }));
  setRealLeagues(mapped);
+ if(mapped.length>0){
  // Preserve the current / last-active league across re-fetches (auth refresh on
  // app re-focus was snapping the user back to whatever league sorted first).
  let savedId=null; try{ savedId=localStorage.getItem("picklock_active_league"); }catch(e){}
@@ -3763,6 +3764,7 @@ export default function App() {
  fetchMyPicks(tl.id, tl.current_week||tl.week||1, uid);
  return target;
  });
+ }
  }
  setLeaguesLoading(false);
  };
@@ -6873,6 +6875,7 @@ export default function App() {
      <div>
        <div style={{fontSize:23,fontWeight:800,color:"#fff",letterSpacing:-0.5}}>{locked?`Slate ${slateNum}`:"Build Your Slate"}</div>
        <div style={{fontSize:12.5,color:IOS.label3,marginTop:2}}>{locked?"Locked — pending results":"Pick as many as you want. Each scores on its own odds."}</div>
+       {!locked && <div onClick={()=>setShowSoloSportPicker(true)} style={{display:"inline-flex",alignItems:"center",gap:6,marginTop:10,background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:9,padding:"5px 10px",cursor:"pointer"}}><span style={{width:7,height:7,borderRadius:2,background:(SPORTS[soloSport]&&SPORTS[soloSport].color)||IOS.blue}}/><span style={{fontSize:12,fontWeight:800,color:"#fff"}}>{(SPORTS[soloSport]&&SPORTS[soloSport].label)||String(soloSport).toUpperCase()}</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={IOS.label3} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>}
      </div>
      <div style={{textAlign:"right",flexShrink:0,marginLeft:12}}>
        <div style={{fontSize:9.5,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5}}>Slate</div>
