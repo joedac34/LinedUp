@@ -7090,7 +7090,7 @@ export default function App() {
  // ─── Build the bet list for the selected sport + type ───
  let list = [];
  if(gridType==="longshot") {
- list = (ALL_BETS||[]).filter(b=> b._sport===gSport && b.impliedOdds>=400);
+ list = gridBuildMode ? (ALL_BETS||[]).filter(b=> b._sport===gSport) : (ALL_BETS||[]).filter(b=> b._sport===gSport && b.impliedOdds>=400);
  } else {
  list = (BETS[gridType]||[]).filter(b=> b._sport===gSport);
  }
@@ -7165,10 +7165,16 @@ export default function App() {
  setGridJustAdded(bet.id);
  setTimeout(()=>setGridJustAdded(null), 300);
  };
- const enterBuild = ()=>{ if(activePicks.findIndex(p=>p.isParlay)===-1) flagParlay(gridParlayMult); setGridBuildMode(true); setShowMultPick(false); };
+ const enterBuild = ()=>{
+ if(gridCfg && !isSoloMode){
+ const ti = (gridTargetSlot!=null && activePicks[gridTargetSlot] && activePicks[gridTargetSlot].category==="longshot") ? gridTargetSlot : activePicks.findIndex(p=>p.category==="longshot");
+ if(ti!==-1) setActivePicks(prev=>prev.map((p,i)=> i===ti ? {...p, isParlay:true, bet:null, parlayLegs:(p.parlayLegs||[])} : p));
+ } else if(activePicks.findIndex(p=>p.isParlay)===-1){ flagParlay(gridParlayMult); }
+ setGridBuildMode(true); setShowMultPick(false);
+ };
  const addCard = (bet, catOverride) => {
  const cat = catOverride || (gridType==="longshot" ? "longshot" : gridType);
- if(gridBuildMode && !gridCfg && !isSoloMode){ toggleLeg(bet); return; }
+ if(gridBuildMode && !isSoloMode){ toggleLeg(bet); return; }
  // One bet per type (longshot legs excepted): if this type is already in the
  // slip, replace that slot instead of stacking a second bet of the same type.
  let dest = target;
@@ -7648,7 +7654,7 @@ export default function App() {
  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={IOS.pink} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 0 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
  </div>
  <div style={{flex:1,minWidth:0}}>
- <div style={{fontSize:8.5,fontWeight:900,letterSpacing:"0.08em",color:IOS.pink}}>{gridParlayMult}× PARLAY · {parlayLegs.length} {parlayLegs.length===1?"LEG":"LEGS"}{ready?(" · "+am):""}</div>
+ <div style={{fontSize:8.5,fontWeight:900,letterSpacing:"0.08em",color:IOS.pink}}>{((activePicks.find(p=>p.isParlay)||{}).mult)||gridParlayMult}× PARLAY · {parlayLegs.length} {parlayLegs.length===1?"LEG":"LEGS"}{ready?(" · "+am):""}</div>
  <div style={{fontSize:10.5,fontWeight:600,color:"rgba(255,255,255,0.5)",marginTop:1}}>{ready?"Tap more to add, or a leg below to remove":"Tap bets below to add legs — need 2+"}</div>
  </div>
  <div onClick={()=>setGridBuildMode(false)} style={{fontFamily:"Barlow",fontSize:12,fontWeight:800,color:ready?"#08080B":"rgba(255,255,255,0.4)",background:ready?IOS.pink:"rgba(255,255,255,0.08)",borderRadius:9,padding:"8px 14px",cursor:"pointer",flexShrink:0}}>Done</div>
@@ -7668,6 +7674,15 @@ export default function App() {
  {slotsLeft===0 && (
  <div style={{margin:"10px 16px 0",background:"rgba(255,159,10,0.1)",border:"0.5px solid rgba(255,159,10,0.3)",borderRadius:12,padding:"10px 14px",fontSize:11.5,color:IOS.orange,lineHeight:1.5}}>
  All slots filled — tapping a card replaces Pick {target+1}. Manage picks from your slip.
+ </div>
+ )}
+
+ {gridType==="longshot" && !isSoloMode && (
+ <div style={{display:"flex",background:"rgba(255,255,255,0.06)",borderRadius:10,padding:2,margin:"4px 16px 0",gap:2}}>
+ {[{m:"straight",l:"Straight (+400)"},{m:"parlay",l:"Parlay · build legs"}].map(o=>{
+ const on=(o.m==="parlay")===gridBuildMode;
+ return (<div key={o.m} onClick={()=>{ if(o.m==="parlay") enterBuild(); else { setGridBuildMode(false); if(gridCfg) setActivePicks(prev=>prev.map(p=> (p.category==="longshot"&&p.isParlay) ? {...p, isParlay:false, parlayLegs:[]} : p)); } }} style={{flex:1,textAlign:"center",padding:"8px 4px",borderRadius:8,fontSize:12.5,fontWeight:800,cursor:"pointer",transition:"all .15s",background:on?(o.m==="parlay"?IOS.pink:IOS.green):"transparent",color:on?"#fff":"rgba(255,255,255,0.45)"}}>{o.l}</div>);
+ })}
  </div>
  )}
 
@@ -10868,6 +10883,29 @@ export default function App() {
   </svg>);
  };
 
+ const WeeklyBarsSVG=({weeks})=>{
+  if(!weeks||weeks.length<1) return <div style={{height:150,display:"flex",alignItems:"center",justifyContent:"center",color:CC.l3,fontSize:13}}>{isSoloMode?"Not enough graded slates yet":"Not enough graded weeks yet"}</div>;
+  const W=320,H=150,pad=16,bpad=24; const vals=weeks.map(w=>Math.max(0,w.pts||0)); const max=Math.max(...vals,1);
+  const n=weeks.length; const slot=(W-pad*2)/n; const bw=Math.min(34,slot*0.62);
+  const avg=vals.reduce((a,b)=>a+b,0)/n; const ay=H-bpad-(avg/max)*(H-bpad-pad);
+  const showLbl=n<=14;
+  return (<svg viewBox={"0 0 "+W+" "+H} style={{width:"100%",height:"auto",display:"block"}}>
+   <defs><linearGradient id="wbg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={CC.blue}/><stop offset="100%" stopColor="rgba(10,132,255,0.4)"/></linearGradient></defs>
+   {[0.5,1].map((g,i)=><line key={i} x1={pad} x2={W-pad} y1={pad+(H-bpad-pad)*(1-g)} y2={pad+(H-bpad-pad)*(1-g)} stroke="rgba(255,255,255,0.05)" strokeWidth="1"/>)}
+   {avg>0&&<line x1={pad} x2={W-pad} y1={ay} y2={ay} stroke="rgba(255,255,255,0.22)" strokeWidth="1" strokeDasharray="4 4"/>}
+   {avg>0&&<text x={W-pad} y={ay-4} textAnchor="end" fontSize="8.5" fill={CC.l3} fontWeight="700">{"avg "+avg.toFixed(1)}</text>}
+   {weeks.map((w,i)=>{
+    const v=Math.max(0,w.pts||0); const bh=(v/max)*(H-bpad-pad); const x=pad+i*slot+(slot-bw)/2; const y=H-bpad-bh;
+    const best=v===max&&v>0;
+    return (<g key={i}>
+     <rect x={x} y={y} width={bw} height={Math.max(bh,1.5)} rx="3" fill={best?CC.green:"url(#wbg)"}/>
+     {bw>=15&&v>0&&<text x={x+bw/2} y={y-3} textAnchor="middle" fontSize="8.5" fill={best?CC.green:CC.l2} fontWeight="800">{v.toFixed(0)}</text>}
+     {showLbl&&<text x={x+bw/2} y={H-bpad+12} textAnchor="middle" fontSize="8" fill={CC.l3} fontWeight="700">{String(w.label||("W"+(i+1))).replace(/^Week\s*/i,"W").slice(0,4)}</text>}
+    </g>);
+   })}
+  </svg>);
+ };
+
  const Donut=({segs})=>{
   const tot=segs.reduce((a,b)=>a+Math.max(0,b.value),0)||1;
   const r=58,cx=80,cy=80,sw=22,c=2*Math.PI*r; let acc=0;
@@ -11006,8 +11044,8 @@ export default function App() {
        <div style={{fontSize:11,color:CC.l3,marginTop:13,lineHeight:1.45,textAlign:"center"}}>CLV measures whether you locked a better price than the closing line. Consistently positive CLV is the strongest sign you are finding real value.</div>
       </div>
      </>)}
-     <SecH t="Cumulative Points" sub={byWeek.length+(isSoloMode?" graded slates":" graded wks")}/>
-     <div style={{...SURF,padding:"16px 16px 14px"}}><LineChartSVG vals={cumVals}/></div>
+     <SecH t="Points by Week" sub={byWeek.length+(isSoloMode?" graded slates":" graded wks")}/>
+     <div style={{...SURF,padding:"16px 16px 14px"}}><WeeklyBarsSVG weeks={byWeek}/></div>
     </>)}
 
     {/* BET TYPES */}
