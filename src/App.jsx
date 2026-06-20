@@ -4016,7 +4016,7 @@ export default function App() {
  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
  ::-webkit-scrollbar{display:none;}
 
- html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;position:fixed;width:100%;top:0;left:0;} #root{height:100%;overflow:hidden;} .phone{width:390px;height:100%;max-height:100%;background:#000;position:relative;overflow:hidden;display:flex;flex-direction:column;font-family:'Barlow',system-ui,-apple-system,sans-serif;color:#fff;-webkit-font-smoothing:antialiased;padding-top:env(safe-area-inset-top,0px);box-sizing:border-box;}
+ html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;position:fixed;width:100%;top:0;left:0;} #root{height:100%;overflow:hidden;} .phone{width:100%;max-width:480px;margin:0 auto;height:100%;max-height:100%;background:#000;position:relative;overflow:hidden;display:flex;flex-direction:column;font-family:'Barlow',system-ui,-apple-system,sans-serif;color:#fff;-webkit-font-smoothing:antialiased;padding-top:env(safe-area-inset-top,0px);box-sizing:border-box;}
 
  /* iOS Status Bar */
 
@@ -4778,7 +4778,7 @@ export default function App() {
 
  {/* ══ AUTH SCREEN ══ */}
  {!user && (
- <div style={{position:"relative",width:390,minHeight:"100vh",overflow:"hidden",background:"radial-gradient(120% 70% at 50% -10%, rgba(10,132,255,0.18), transparent 55%), radial-gradient(85% 50% at 85% 112%, rgba(94,92,230,0.16), transparent 60%), #07070C",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"40px 30px",fontFamily:"'Barlow',sans-serif"}}>
+ <div style={{position:"relative",width:"100%",maxWidth:480,margin:"0 auto",boxSizing:"border-box",minHeight:"100dvh",overflowY:"auto",overflowX:"hidden",background:"radial-gradient(120% 70% at 50% -10%, rgba(10,132,255,0.18), transparent 55%), radial-gradient(85% 50% at 85% 112%, rgba(94,92,230,0.16), transparent 60%), #07070C",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"calc(env(safe-area-inset-top) + 30px) 28px calc(env(safe-area-inset-bottom) + 30px)",fontFamily:"'Barlow',sans-serif"}}>
 
  {/* Floating odds chips */}
  <div style={{position:"absolute",inset:0,overflow:"hidden",pointerEvents:"none"}}>
@@ -4795,7 +4795,7 @@ export default function App() {
  </div>
 
  {/* Scrolling odds ticker */}
- <div style={{position:"absolute",top:52,left:0,right:0,overflow:"hidden",opacity:0.5,pointerEvents:"none",WebkitMaskImage:"linear-gradient(90deg,transparent,#000 14%,#000 86%,transparent)",maskImage:"linear-gradient(90deg,transparent,#000 14%,#000 86%,transparent)"}}>
+ <div style={{position:"absolute",top:"calc(env(safe-area-inset-top) + 22px)",left:0,right:0,overflow:"hidden",opacity:0.5,pointerEvents:"none",WebkitMaskImage:"linear-gradient(90deg,transparent,#000 14%,#000 86%,transparent)",maskImage:"linear-gradient(90deg,transparent,#000 14%,#000 86%,transparent)"}}>
  <div style={{display:"inline-flex",gap:24,whiteSpace:"nowrap",animation:"ticker-scroll 26s linear infinite"}}>
  {[{t:"NBA FINALS · NYK +120",c:"#0A84FF"},{t:"MLB · LAD -145",c:"#30D158"},{t:"NFL · KC -3.5",c:"#FF9F0A"},{t:"PARLAY HIT +1240",c:"#FF375F"},{t:"NHL · BOS ML -130",c:"#64D2FF"},{t:"O/U 47.5",c:"#FFD60A"},
  {t:"NBA FINALS · NYK +120",c:"#0A84FF"},{t:"MLB · LAD -145",c:"#30D158"},{t:"NFL · KC -3.5",c:"#FF9F0A"},{t:"PARLAY HIT +1240",c:"#FF375F"},{t:"NHL · BOS ML -130",c:"#64D2FF"},{t:"O/U 47.5",c:"#FFD60A"}
