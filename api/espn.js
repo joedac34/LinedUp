@@ -4,14 +4,13 @@ const SPORT_MAP = {
   baseball_mlb:         { sport: "baseball",   league: "mlb" },
 };
 
-// Season stat labels to surface per sport
-const SEASON_STATS = {
-  football: ["Points Per Game", "Total Yards Per Game", "Passing Yards Per Game",
-             "Rushing Yards Per Game", "Points Allowed Per Game", "Sacks"],
-  basketball: ["Points Per Game", "Rebounds Per Game", "Assists Per Game",
-               "Field Goal %", "3-Point %", "Turnovers Per Game"],
-  baseball: ["Batting Average", "Home Runs", "ERA", "WHIP",
-             "Runs Per Game", "Strikeouts Per Game"],
+// Season "tape" stats, by ESPN standings stat name (present for every sport in
+// team.record.items[0].stats). Batting/pitching splits (AVG/ERA) live on a
+// different endpoint; these standings-derived stats are reliable cross-sport.
+const TAPE_STATS = {
+  football:   [["avgPointsFor", "Points / Game"], ["avgPointsAgainst", "Points Allowed"], ["winPercent", "Win %"]],
+  basketball: [["avgPointsFor", "Points / Game"], ["avgPointsAgainst", "Points Allowed"], ["winPercent", "Win %"]],
+  baseball:   [["avgPointsFor", "Runs / Game"],   ["avgPointsAgainst", "Runs Allowed"],   ["winPercent", "Win %"]],
 };
 
 // ESPN scores come back either as a plain number/string or as {value, displayValue}.
@@ -35,12 +34,18 @@ async function fetchTeamMeta(sp, league, teamId) {
     const data = await r.json();
     const team = data.team || {};
     const stats = team.record?.items?.[0]?.stats || [];
-    const wantedLabels = SEASON_STATS[sp] || [];
-    const seasonStats = stats
-      .filter(s => wantedLabels.some(w => s.name?.toLowerCase().includes(w.toLowerCase()) ||
-                                          s.displayName?.toLowerCase().includes(w.toLowerCase())))
-      .slice(0, 6)
-      .map(s => ({ label: s.displayName || s.name, value: s.displayValue }));
+    const byName = {};
+    stats.forEach(st => { if (st && st.name) byName[st.name] = st; });
+    const seasonStats = (TAPE_STATS[sp] || []).map(([name, label]) => {
+      const st = byName[name];
+      if (!st) return null;
+      let value = st.displayValue;
+      if (name === "winPercent") {
+        const f = parseFloat(st.value != null ? st.value : st.displayValue);
+        if (!isNaN(f)) value = Math.round(f * 100) + "%";
+      }
+      return (value != null && value !== "") ? { label, value: String(value) } : null;
+    }).filter(Boolean);
     return {
       seasonStats,
       standing: team.standingSummary || "",
@@ -116,6 +121,10 @@ export default async function handler(req, res) {
         Promise.all(teamIds.map(id => fetchTeamMeta(sp, league, id))),
         Promise.all(teamIds.map(id => fetchTeamForm(sp, league, id))),
       ]);
+      // Align meta + form to boxscore teams by team id (ESPN's competitor order
+      // can differ from the boxscore team order, which otherwise swaps the data).
+      const metaById = {}, formById = {};
+      teamIds.forEach((id, i) => { metaById[id] = metaPairs[i] || {}; formById[id] = formPairs[i] || []; });
       const meta0 = metaPairs[0] || {}, meta1 = metaPairs[1] || {};
       const [form0, form1] = formPairs;
 
@@ -129,10 +138,10 @@ export default async function handler(req, res) {
           label: s.label,
           value: s.displayValue,
         })),
-        seasonStats: ti === 0 ? (meta0.seasonStats || []) : (meta1.seasonStats || []),
-        standing:    ti === 0 ? (meta0.standing || "")    : (meta1.standing || ""),
-        record:      ti === 0 ? (meta0.record || "")      : (meta1.record || ""),
-        form:        ti === 0 ? (form0 || [])             : (form1 || []),
+        seasonStats: (metaById[t.team?.id] || (ti === 0 ? meta0 : meta1)).seasonStats || [],
+        standing:    (metaById[t.team?.id] || (ti === 0 ? meta0 : meta1)).standing || "",
+        record:      (metaById[t.team?.id] || (ti === 0 ? meta0 : meta1)).record || "",
+        form:        formById[t.team?.id] || (ti === 0 ? form0 : form1) || [],
       }));
 
       // Head-to-head — current-season series (seasonseries is already in the summary).

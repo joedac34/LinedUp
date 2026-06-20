@@ -2627,18 +2627,6 @@ export default function App() {
     }catch(e){}
   };
   useEffect(()=>{ if(screen==="ai" && user?.id) fetchPlokRecord(); },[screen, user]);
-  useEffect(()=>{
-    const eg = gameSheet && gameSheet.espnGame; const gid = eg && eg.id;
-    if(!gid || !isPro) return;
-    if(gameRead[gid]) return;
-    const tg = (gameSheet && gameSheet.tickerGame) || {};
-    const away = eg.awayTeam || tg.away || "Away", home = eg.homeTeam || tg.home || "Home";
-    const sp = (activeLeague && activeLeague.sport) || "nfl";
-    setGameRead(prev=>({...prev,[gid]:{loading:true}}));
-    fetch("/api/insight",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ sport:sp, betType:"chat", selection:(away+" vs "+home), question:("Give me a sharp 1-2 sentence betting read on this matchup: "+away+" at "+home+". Lead with the single biggest edge or angle."), game:(away+" @ "+home), userId:user&&user.id, persona:plokPersona })})
-      .then(async r=>{ const d=await r.json().catch(()=>null); setGameRead(prev=>({...prev,[gid]: (r.ok && d && d.summary) ? {text:d.summary} : {error:true}})); })
-      .catch(()=> setGameRead(prev=>({...prev,[gid]:{error:true}})));
-  },[gameSheet, isPro]);
   const askInsight = async (ctx, label, bet, category) => {
     const item = { role:"ai", label: label||ctx.selection, bet:bet||null, category:category||null, loading:true };
     setAiThread(prev=>[...prev, { role:"user", text: label||ctx.selection }, item]);
@@ -10301,21 +10289,21 @@ export default function App() {
  </div>
 
  <div style={{padding:"0 16px"}}>
- {/* Plok read — auto-loaded inline for Pro, else CTA */}
- {(isPro && read && (read.text || read.loading)) ? (
- <div onClick={()=>{ setGameSheet(null); askPlok("Tell me more about "+away+" at "+home+" — best bet and why."); }} style={{background:"linear-gradient(135deg,rgba(10,132,255,0.16),rgba(94,92,230,0.08))",border:"0.5px solid rgba(10,132,255,0.34)",borderRadius:16,padding:"13px 15px",marginBottom:2,cursor:"pointer"}}>
+ {/* Plok read — tap to load a real game read via Find-a-bet (saves credits) */}
+ {(read && (read.text || read.loading)) ? (
+ <div onClick={()=>{ if(read.loading) return; setGameSheet(null); askFindBet({sport:(activeLeague&&activeLeague.sport)||"nfl", game:away+" @ "+home}); }} style={{background:"linear-gradient(135deg,rgba(10,132,255,0.16),rgba(94,92,230,0.08))",border:"0.5px solid rgba(10,132,255,0.34)",borderRadius:16,padding:"13px 15px",marginBottom:2,cursor:"pointer"}}>
  <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:read.loading?6:8}}>
  <div style={{width:28,height:28,borderRadius:9,background:"rgba(10,132,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="16" height="16" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg></div>
  <span style={{fontSize:11,fontWeight:800,letterSpacing:1.4,textTransform:"uppercase",color:IOS.blue}}>Plok Read</span>
  </div>
  {read.loading
  ? <div style={{display:"flex",gap:5,alignItems:"center",height:16,paddingLeft:2}}><span className="ai-dot"/><span className="ai-dot" style={{animationDelay:"0.15s"}}/><span className="ai-dot" style={{animationDelay:"0.3s"}}/></div>
- : <div style={{fontSize:13.5,lineHeight:1.5,color:"rgba(255,255,255,0.88)"}}>{read.text}</div>}
+ : <div><div style={{fontSize:13.5,lineHeight:1.5,color:"rgba(255,255,255,0.88)"}}>{read.text}</div><div style={{fontSize:11,fontWeight:700,color:IOS.blue,marginTop:9}}>See full breakdown ›</div></div>}
  </div>
  ) : (
- <div onClick={()=>{ if(!isPro){ setShowPaywall("ai"); return; } setGameSheet(null); askPlok("Give me your read on "+away+" vs "+home+" — who has the edge and what is the best bet?"); }} style={{display:"flex",alignItems:"center",gap:12,background:"linear-gradient(135deg,rgba(10,132,255,0.16),rgba(94,92,230,0.10))",border:"0.5px solid rgba(10,132,255,0.35)",borderRadius:16,padding:"13px 15px",marginBottom:2,cursor:"pointer"}}>
+ <div onClick={()=>{ if(!isPro){ setShowPaywall("ai"); return; } if(read&&read.loading) return; const sp=(activeLeague&&activeLeague.sport)||"nfl"; setGameRead(prev=>({...prev,[gid]:{loading:true}})); fetch("/api/findbet",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sport:sp,game:away+" @ "+home,userId:user&&user.id})}).then(async r=>{ const d=await r.json().catch(()=>null); setGameRead(prev=>({...prev,[gid]: (r.ok&&d&&d.summary)?{text:d.summary}:{error:true}})); }).catch(()=> setGameRead(prev=>({...prev,[gid]:{error:true}}))); }} style={{display:"flex",alignItems:"center",gap:12,background:"linear-gradient(135deg,rgba(10,132,255,0.16),rgba(94,92,230,0.10))",border:"0.5px solid rgba(10,132,255,0.35)",borderRadius:16,padding:"13px 15px",marginBottom:2,cursor:"pointer"}}>
  <div style={{width:36,height:36,borderRadius:11,background:"rgba(10,132,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="19" height="19" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg></div>
- <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:800,color:"#fff"}}>Ask Plok about this game</div><div style={{fontSize:11.5,color:IOS.label2,marginTop:1}}>Get an AI read on the matchup{isPro?"":" · Pro"}</div></div>
+ <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:800,color:"#fff"}}>{read&&read.error?"Read unavailable — tap to retry":"Get Plok's read on this matchup"}</div><div style={{fontSize:11.5,color:IOS.label2,marginTop:1}}>Data-backed matchup read{isPro?"":" · Pro"}</div></div>
  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={IOS.label3} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6"/></svg>
  </div>
  )}
@@ -10391,24 +10379,6 @@ export default function App() {
  </div>
  </>)}
 
- {leaders.length>0 && (<>
- <div style={{fontSize:10.5,fontWeight:800,letterSpacing:1.8,textTransform:"uppercase",color:IOS.label3,margin:"20px 4px 10px"}}>Player Leaders</div>
- {leaders.slice(0,4).map((cat,ci)=>(
- <div key={ci} style={{background:"#2C2C2E",border:"0.5px solid rgba(255,255,255,0.06)",borderRadius:14,padding:"10px 13px",marginBottom:8}}>
- <div style={{fontSize:9.5,fontWeight:800,color:IOS.blue,letterSpacing:0.6,textTransform:"uppercase",marginBottom:8}}>{cat.category}</div>
- {cat.leaders.map((l,li)=>(
- <div key={li} style={{display:"flex",alignItems:"center",gap:11,marginBottom:li<cat.leaders.length-1?9:0}}>
- {l.photo? <img src={l.photo} style={{width:34,height:34,borderRadius:"50%",objectFit:"cover",background:"#3A3A3C",flexShrink:0}} onError={e=>{e.target.style.display="none";}}/> : <div style={{width:34,height:34,borderRadius:"50%",background:"#3A3A3C",flexShrink:0}}/>}
- <div style={{flex:1,minWidth:0}}>
- <div style={{fontSize:13.5,fontWeight:800,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{l.name}</div>
- <div style={{fontSize:10.5,color:IOS.label3,fontWeight:700}}>{l.team}</div>
- </div>
- <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:16,color:IOS.green,flexShrink:0}}>{l.stat}</div>
- </div>
- ))}
- </div>
- ))}
- </>)}
 
  {injuries.length>0 && (<>
  <div style={{fontSize:10.5,fontWeight:800,letterSpacing:1.8,textTransform:"uppercase",color:IOS.label3,margin:"20px 4px 10px"}}>Injury Report</div>
