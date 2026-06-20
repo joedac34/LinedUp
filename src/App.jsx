@@ -1573,7 +1573,7 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
               const espn=(espnGames||[]).find(e=>e.awayTeam?.toLowerCase().includes(away.toLowerCase())||e.homeTeam?.toLowerCase().includes(home.toLowerCase()));
               const t=g.time?new Date(g.time):null; const now=new Date();
               const isLive=!!t&&now>=t&&now<new Date(t.getTime()+4*60*60*1000);
-              const isDone=!!espn&&espn.awayScore!=null&&espn.homeScore!=null&&!isLive;
+              const isDone=!!espn&&espn.awayScore!=null&&espn.homeScore!=null&&!isLive&&!!t&&now>=t;
               const gameTime=t?t.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}):"";
               return (
                 <div key={gi} onClick={async()=>{ if(setIsSoloMode) setIsSoloMode(true); const lgId=await getOrCreateSoloLeague(); if(setActiveLeagueId) setActiveLeagueId(lgId||"solo"); setScreen("picks"); }} style={{flexShrink:0,width:150,background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:11,padding:"10px 11px",cursor:"pointer"}}>
@@ -5490,7 +5490,7 @@ export default function App() {
  const espn=espnGames.find(e=>e.awayTeam?.toLowerCase().includes(away.toLowerCase())||e.homeTeam?.toLowerCase().includes(home.toLowerCase()));
  const t=new Date(g.time);
  const isLive=now>=t&&now<new Date(t.getTime()+4*60*60*1000);
- const isDone=espn?.awayScore!=null&&espn?.homeScore!=null&&!isLive;
+ const isDone=espn?.awayScore!=null&&espn?.homeScore!=null&&!isLive&&!!t&&now>=t;
  const gameTime=t.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
  const so=liveOdds[activeLeague?.sport];
  const ml=(so?.ml||[]).filter(o=>o.game?.includes(away)||o.game?.includes(home));
@@ -5756,7 +5756,7 @@ export default function App() {
  const t = new Date(g.time);
  const now = new Date();
  const isLive = now >= t && now < new Date(t.getTime() + 4*60*60*1000);
- const isDone = espn?.awayScore && espn?.homeScore && !isLive;
+ const isDone = espn?.awayScore && espn?.homeScore && !isLive && !!t && now>=t;
  const gameTime = t.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
  // Get odds for this game
  const sportOdds = liveOdds[activeLeague?.sport];
@@ -7094,6 +7094,7 @@ export default function App() {
  } else {
  list = (BETS[gridType]||[]).filter(b=> b._sport===gSport);
  }
+ { const _seen=new Set(); list = list.filter(b=>{ const k=(b.game||"")+"|"+(b.pick||b.label||b.id||""); if(_seen.has(k)) return false; _seen.add(k); return true; }); }
 
  // Prop sub-category filter
  const propSubsBySport = PROP_SUBS_BY_SPORT;
