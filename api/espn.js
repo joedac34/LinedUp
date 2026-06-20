@@ -26,20 +26,27 @@ function scoreVal(s) {
   return isNaN(n) ? null : n;
 }
 
-async function fetchTeamSeasonStats(sp, league, teamId) {
+async function fetchTeamMeta(sp, league, teamId) {
+  const empty = { seasonStats: [], standing: "", record: "" };
   try {
     const url = `https://site.api.espn.com/apis/site/v2/sports/${sp}/${league}/teams/${teamId}?enable=stats`;
     const r = await fetch(url);
-    if (!r.ok) return [];
+    if (!r.ok) return empty;
     const data = await r.json();
-    const stats = data.team?.record?.items?.[0]?.stats || [];
+    const team = data.team || {};
+    const stats = team.record?.items?.[0]?.stats || [];
     const wantedLabels = SEASON_STATS[sp] || [];
-    return stats
+    const seasonStats = stats
       .filter(s => wantedLabels.some(w => s.name?.toLowerCase().includes(w.toLowerCase()) ||
                                           s.displayName?.toLowerCase().includes(w.toLowerCase())))
       .slice(0, 6)
       .map(s => ({ label: s.displayName || s.name, value: s.displayValue }));
-  } catch { return []; }
+    return {
+      seasonStats,
+      standing: team.standingSummary || "",
+      record: team.record?.items?.[0]?.summary || "",
+    };
+  } catch { return empty; }
 }
 
 // Last-5 form for a team (most recent first). lastFiveGames isn't in the game
@@ -105,11 +112,11 @@ export default async function handler(req, res) {
       // Fetch season stats AND last-5 form for both teams in parallel.
       // Both are kept in teamIds order and assigned by the same ti index below,
       // so a team's form always lines up with its own season stats.
-      const [seasonStatsPairs, formPairs] = await Promise.all([
-        Promise.all(teamIds.map(id => fetchTeamSeasonStats(sp, league, id))),
+      const [metaPairs, formPairs] = await Promise.all([
+        Promise.all(teamIds.map(id => fetchTeamMeta(sp, league, id))),
         Promise.all(teamIds.map(id => fetchTeamForm(sp, league, id))),
       ]);
-      const [seasonStats0, seasonStats1] = seasonStatsPairs;
+      const meta0 = metaPairs[0] || {}, meta1 = metaPairs[1] || {};
       const [form0, form1] = formPairs;
 
       // Game boxscore stats (in-game, pre-game will be empty)
@@ -122,8 +129,10 @@ export default async function handler(req, res) {
           label: s.label,
           value: s.displayValue,
         })),
-        seasonStats: ti === 0 ? (seasonStats0 || []) : (seasonStats1 || []),
-        form:        ti === 0 ? (form0 || []) : (form1 || []),
+        seasonStats: ti === 0 ? (meta0.seasonStats || []) : (meta1.seasonStats || []),
+        standing:    ti === 0 ? (meta0.standing || "")    : (meta1.standing || ""),
+        record:      ti === 0 ? (meta0.record || "")      : (meta1.record || ""),
+        form:        ti === 0 ? (form0 || [])             : (form1 || []),
       }));
 
       // Head-to-head — current-season series (seasonseries is already in the summary).
@@ -185,8 +194,25 @@ export default async function handler(req, res) {
         }))
       );
 
+      // Venue, broadcast (TV) and weather for the matchup header.
+      const venue = data.gameInfo?.venue?.fullName || header?.competitions?.[0]?.venue?.fullName || "";
+      let broadcast = "";
+      const bcasts = header?.competitions?.[0]?.broadcasts || data.broadcasts || [];
+      if (bcasts.length) {
+        const b0 = bcasts[0];
+        broadcast = (b0.names && b0.names[0]) || b0.shortName || b0.media?.shortName || b0.market?.media?.shortName || "";
+      }
+      let weather = null;
+      const w = data.gameInfo?.weather || data.weather;
+      if (w && (w.temperature != null || w.displayValue)) {
+        weather = {
+          temp: w.temperature != null ? w.temperature : (w.highTemperature != null ? w.highTemperature : null),
+          summary: w.displayValue || "",
+        };
+      }
+
       res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate");
-      return res.status(200).json({ teams, statLeaders, teamRecords, injuries, h2h, h2hSummary });
+      return res.status(200).json({ teams, statLeaders, teamRecords, injuries, h2h, h2hSummary, venue, broadcast, weather });
     }
 
     // Scoreboard — for ticker matching
