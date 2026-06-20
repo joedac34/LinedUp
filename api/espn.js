@@ -14,6 +14,18 @@ const SEASON_STATS = {
              "Runs Per Game", "Strikeouts Per Game"],
 };
 
+// ESPN scores come back either as a plain number/string or as {value, displayValue}.
+function scoreVal(s) {
+  if (s == null) return null;
+  if (typeof s === "object") {
+    if (s.value != null) return Number(s.value);
+    const n = parseFloat(s.displayValue);
+    return isNaN(n) ? null : n;
+  }
+  const n = parseFloat(s);
+  return isNaN(n) ? null : n;
+}
+
 async function fetchTeamSeasonStats(sp, league, teamId) {
   try {
     const url = `https://site.api.espn.com/apis/site/v2/sports/${sp}/${league}/teams/${teamId}?enable=stats`;
@@ -30,22 +42,38 @@ async function fetchTeamSeasonStats(sp, league, teamId) {
   } catch { return []; }
 }
 
-async function fetchTeamRoster(sp, league, teamId) {
+// Last-5 form for a team (most recent first). lastFiveGames isn't in the game
+// summary, so we read the team's schedule and take its most recent completed games.
+async function fetchTeamForm(sp, league, teamId) {
   try {
-    const url = `https://site.api.espn.com/apis/site/v2/sports/${sp}/${league}/teams/${teamId}/roster`;
+    const url = `https://site.api.espn.com/apis/site/v2/sports/${sp}/${league}/teams/${teamId}/schedule`;
     const r = await fetch(url);
     if (!r.ok) return [];
     const data = await r.json();
-    // Return top players with position + jersey
-    return (data.athletes || [])
-      .flatMap(group => group.items || [])
-      .slice(0, 8)
-      .map(p => ({
-        name: p.displayName || p.fullName,
-        position: p.position?.abbreviation,
-        jersey: p.jersey,
-        photo: p.headshot?.href,
-      }));
+    const events = data.events || [];
+    const completed = events.filter(e => {
+      const comp = e.competitions?.[0];
+      return comp?.status?.type?.completed === true;
+    });
+    completed.sort((a, b) => new Date(b.date) - new Date(a.date)); // most recent first
+    return completed.slice(0, 5).map(e => {
+      const comp = e.competitions[0];
+      const cs = comp.competitors || [];
+      const me = cs.find(c => String(c.team?.id) === String(teamId));
+      const opp = cs.find(c => c !== me);
+      const myScore = scoreVal(me?.score);
+      const oppScore = scoreVal(opp?.score);
+      let r = "";
+      if (me?.winner === true) r = "W";
+      else if (me?.winner === false) r = "L";
+      else if (myScore != null && oppScore != null) r = myScore > oppScore ? "W" : (myScore < oppScore ? "L" : "T");
+      return {
+        r,
+        opp: opp?.team?.abbreviation || "",
+        home: me?.homeAway === "home",
+        score: (myScore != null && oppScore != null) ? `${myScore}-${oppScore}` : "",
+      };
+    }).filter(g => g.r);
   } catch { return []; }
 }
 
@@ -74,10 +102,15 @@ export default async function handler(req, res) {
       const competitors = header?.competitions?.[0]?.competitors || [];
       const teamIds = competitors.map(c => c.team?.id).filter(Boolean);
 
-      // Fetch season stats for both teams in parallel
-      const [seasonStats0, seasonStats1] = await Promise.all(
-        teamIds.map(id => fetchTeamSeasonStats(sp, league, id))
-      );
+      // Fetch season stats AND last-5 form for both teams in parallel.
+      // Both are kept in teamIds order and assigned by the same ti index below,
+      // so a team's form always lines up with its own season stats.
+      const [seasonStatsPairs, formPairs] = await Promise.all([
+        Promise.all(teamIds.map(id => fetchTeamSeasonStats(sp, league, id))),
+        Promise.all(teamIds.map(id => fetchTeamForm(sp, league, id))),
+      ]);
+      const [seasonStats0, seasonStats1] = seasonStatsPairs;
+      const [form0, form1] = formPairs;
 
       // Game boxscore stats (in-game, pre-game will be empty)
       const teams = (boxscore?.teams || []).map((t, ti) => ({
@@ -90,7 +123,33 @@ export default async function handler(req, res) {
           value: s.displayValue,
         })),
         seasonStats: ti === 0 ? (seasonStats0 || []) : (seasonStats1 || []),
+        form:        ti === 0 ? (form0 || []) : (form1 || []),
       }));
+
+      // Head-to-head — current-season series (seasonseries is already in the summary).
+      // Only completed prior meetings (those with scores) are surfaced.
+      let h2h = [];
+      let h2hSummary = "";
+      const series = (data.seasonseries || [])[0];
+      if (series) {
+        h2hSummary = series.summary || "";
+        h2h = (series.events || []).map(ev => {
+          const cs = ev.competitors || ev.competitions?.[0]?.competitors || [];
+          const away = cs.find(c => c.homeAway === "away");
+          const home = cs.find(c => c.homeAway === "home");
+          const d = ev.date ? new Date(ev.date) : null;
+          const dateStr = (d && !isNaN(d.getTime()))
+            ? d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+            : "";
+          return {
+            date: dateStr,
+            a: away?.team?.abbreviation || "",
+            h: home?.team?.abbreviation || "",
+            as: scoreVal(away?.score),
+            hs: scoreVal(home?.score),
+          };
+        }).filter(m => m.as != null && m.hs != null);
+      }
 
       // Stat leaders
       const statLeaders = leaders.map(cat => ({
@@ -127,7 +186,7 @@ export default async function handler(req, res) {
       );
 
       res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate");
-      return res.status(200).json({ teams, statLeaders, teamRecords, injuries });
+      return res.status(200).json({ teams, statLeaders, teamRecords, injuries, h2h, h2hSummary });
     }
 
     // Scoreboard — for ticker matching
