@@ -10235,6 +10235,9 @@ export default function App() {
  const probAway=(pa!=null&&ph!=null)?Math.round(pa/(pa+ph)*100):null; const probHome=probAway!=null?100-probAway:null;
  const ss0=(T0&&T0.seasonStats)||[]; const ss1=(T1&&T1.seasonStats)||[];
  const leaders=det.statLeaders||[]; const injuries=det.injuries||[];
+ const normForm=(arr)=>(arr||[]).slice(0,5).map(x=> typeof x==="string"?{r:x}:(x||{}));
+ const form0=normForm((T0&&T0.form)||(det.form&&det.form.away)); const form1=normForm((T1&&T1.form)||(det.form&&det.form.home));
+ const h2h=det.h2h||det.seasonSeries||[]; const h2hSummary=det.h2hSummary||"";
  const injAway=injuries.filter(p=>{ const t=(p.team||"").toUpperCase(); return t.includes(String(awayAbbr).toUpperCase())||t.includes(String(away).toUpperCase().split(" ").pop()); });
  const injHome=injuries.filter(p=>injAway.indexOf(p)===-1);
  const injTag=(st)=>{ const x=(st||"").toLowerCase(); const out=x.includes("out")||x.includes("ir")||x.includes("reserve"); const q=x.includes("quest")||x.includes("doubt"); return {bg:out?"rgba(255,69,58,0.16)":q?"rgba(255,159,10,0.16)":"rgba(48,209,88,0.14)",col:out?IOS.red:q?IOS.orange:IOS.green}; };
@@ -10280,6 +10283,18 @@ export default function App() {
  </div>
 
  <div style={{padding:"0 16px"}}>
+ {/* Ask Plok */}
+ <div onClick={()=>{ if(!isPro){ setShowPaywall("ai"); return; } setGameSheet(null); askPlok("Give me your read on "+away+" vs "+home+" — who has the edge and what is the best bet?"); }} style={{display:"flex",alignItems:"center",gap:12,background:"linear-gradient(135deg,rgba(10,132,255,0.16),rgba(94,92,230,0.10))",border:"0.5px solid rgba(10,132,255,0.35)",borderRadius:16,padding:"13px 15px",marginBottom:2,cursor:"pointer"}}>
+ <div style={{width:36,height:36,borderRadius:11,background:"rgba(10,132,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+ <svg width="19" height="19" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg>
+ </div>
+ <div style={{flex:1,minWidth:0}}>
+ <div style={{fontSize:14,fontWeight:800,color:"#fff"}}>Ask Plok about this game</div>
+ <div style={{fontSize:11.5,color:IOS.label2,marginTop:1}}>Get an AI read on the matchup{isPro?"":" · Pro"}</div>
+ </div>
+ <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={IOS.label3} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+ </div>
+
  {probAway!=null && (
  <div style={{background:"#2C2C2E",border:"0.5px solid rgba(255,255,255,0.06)",borderRadius:16,padding:"14px 16px",marginBottom:2}}>
  <div style={{fontSize:9.5,fontWeight:800,letterSpacing:1.4,textTransform:"uppercase",color:IOS.label3,textAlign:"center",marginBottom:10}}>Win probability</div>
@@ -10301,6 +10316,41 @@ export default function App() {
  <div style={{display:"flex",height:7,borderRadius:4,overflow:"hidden",background:"rgba(255,255,255,0.05)",gap:2}}>
  <div style={{width:w0+"%",background:awayColor,borderRadius:"4px 0 0 4px"}}/>
  <div style={{width:w1+"%",background:homeColor,borderRadius:"0 4px 4px 0",marginLeft:"auto"}}/>
+ </div>
+ </div>
+ ); })}
+ </div>
+ </>)}
+
+ {/* Form · Last 5 */}
+ {(form0.length>0||form1.length>0) && (<>
+ <div style={{fontSize:10.5,fontWeight:800,letterSpacing:1.8,textTransform:"uppercase",color:IOS.label3,margin:"20px 4px 10px"}}>Form · Last 5</div>
+ <div style={{background:"#2C2C2E",border:"0.5px solid rgba(255,255,255,0.06)",borderRadius:16,padding:"8px 14px"}}>
+ {[{abbr:awayAbbr,color:awayColor,f:form0},{abbr:homeAbbr,color:homeColor,f:form1}].map((t,ti)=>(
+ <div key={ti} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderTop:ti>0?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
+ <div style={{width:38,fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:14,fontWeight:800,color:t.color,flexShrink:0}}>{t.abbr}</div>
+ <div style={{display:"flex",gap:5,flex:1,flexWrap:"wrap"}}>
+ {t.f.length===0 ? <span style={{fontSize:11,color:IOS.label3}}>No recent games</span> : t.f.map((g,gi)=>{ const r=String(g.r||"").toUpperCase(); const win=r==="W"; const loss=r==="L"; return (
+ <div key={gi} title={g.opp?(((g.home?"vs ":"@ ")+g.opp)+(g.score?(" "+g.score):"")):""} style={{width:22,height:22,borderRadius:7,background:win?"rgba(48,209,88,0.16)":loss?"rgba(255,69,58,0.16)":"rgba(255,255,255,0.08)",color:win?IOS.green:loss?IOS.red:IOS.label3,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800}}>{r||"·"}</div>
+ ); })}
+ </div>
+ </div>
+ ))}
+ </div>
+ </>)}
+
+ {/* Head to Head */}
+ {(h2h.length>0||h2hSummary) && (<>
+ <div style={{fontSize:10.5,fontWeight:800,letterSpacing:1.8,textTransform:"uppercase",color:IOS.label3,margin:"20px 4px 10px"}}>Head to Head</div>
+ <div style={{background:"#2C2C2E",border:"0.5px solid rgba(255,255,255,0.06)",borderRadius:16,padding:"4px 14px"}}>
+ {h2hSummary && <div style={{fontSize:11.5,color:IOS.label2,fontWeight:700,padding:"9px 0 7px",textAlign:"center"}}>{h2hSummary}</div>}
+ {h2h.slice(0,4).map((m,mi)=>{ const as=parseFloat(m.as), hs=parseFloat(m.hs); const aWon=!isNaN(as)&&!isNaN(hs)&&as>hs; const hWon=!isNaN(as)&&!isNaN(hs)&&hs>as; return (
+ <div key={mi} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 0",borderTop:(mi>0||h2hSummary)?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
+ <div style={{fontSize:11,color:IOS.label3,width:54,flexShrink:0}}>{m.date||""}</div>
+ <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:8,fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:14,fontWeight:700}}>
+ <span style={{color:aWon?"#fff":IOS.label3,fontWeight:aWon?800:700}}>{m.a||awayAbbr} {!isNaN(as)?as:""}</span>
+ <span style={{color:IOS.label3,fontSize:10}}>—</span>
+ <span style={{color:hWon?"#fff":IOS.label3,fontWeight:hWon?800:700}}>{!isNaN(hs)?hs:""} {m.h||homeAbbr}</span>
  </div>
  </div>
  ); })}
