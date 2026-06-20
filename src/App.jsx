@@ -10207,222 +10207,164 @@ export default function App() {
  <div style={{position:"fixed",inset:0,zIndex:8000,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>setGameSheet(null)}>
  <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.6)",backdropFilter:"blur(4px)"}}/>
  <div onClick={e=>e.stopPropagation()} style={{position:"relative",background:"#1C1C1E",borderRadius:"24px 24px 0 0",maxHeight:"85vh",overflowY:"auto",paddingBottom:40}}>
+ {/* Close — always visible, clears the notch */}
+ <div onClick={()=>setGameSheet(null)} style={{position:"absolute",top:12,right:14,zIndex:20,width:32,height:32,borderRadius:"50%",background:"rgba(255,255,255,0.14)",border:"0.5px solid rgba(255,255,255,0.16)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
+ <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+ </div>
  {/* Handle */}
  <div style={{display:"flex",justifyContent:"center",padding:"12px 0 0"}}>
  <div style={{width:36,height:4,borderRadius:2,background:"rgba(255,255,255,0.2)"}}/>
  </div>
 
- {/* Teams header + tab bar */}
- {(() => {
- const eg = gameSheet.espnGame;
- const tg = gameSheet.tickerGame;
- const away = eg?.awayTeam || tg?.away;
- const home = eg?.homeTeam || tg?.home;
- const awayRec = eg?.awayRecord;
- const homeRec = eg?.homeRecord;
- const awayLogo = eg?.awayLogo;
- const homeLogo = eg?.homeLogo;
- const gameTime = (() => {
- if(!tg?.time) return "";
- const d = new Date(tg.time);
- if(isNaN(d.getTime())) return tg.time || "";
- return d.toLocaleTimeString([],{hour:"numeric",minute:"2-digit",timeZoneName:"short"});
- })();
- const awayColor = gameSheet.detail?.teams?.[0]?.color || IOS.blue;
- const homeColor = gameSheet.detail?.teams?.[1]?.color || IOS.orange;
+ {(()=>{
+ const eg=gameSheet.espnGame; const tg=gameSheet.tickerGame||{}; const det=gameSheet.detail||{};
+ const T0=det.teams&&det.teams[0]; const T1=det.teams&&det.teams[1];
+ const away=eg?.awayTeam||tg.away||(T0&&T0.abbrev)||"Away";
+ const home=eg?.homeTeam||tg.home||(T1&&T1.abbrev)||"Home";
+ const awayAbbr=(T0&&T0.abbrev)||String(away).slice(0,3).toUpperCase();
+ const homeAbbr=(T1&&T1.abbrev)||String(home).slice(0,3).toUpperCase();
+ const awayNick=String(away).split(" ").pop(); const homeNick=String(home).split(" ").pop();
+ const awayRec=eg?.awayRecord; const homeRec=eg?.homeRecord;
+ const awayLogo=eg?.awayLogo; const homeLogo=eg?.homeLogo;
+ const awayColor=(T0&&T0.color)||IOS.blue; const homeColor=(T1&&T1.color)||IOS.orange;
+ const tint=(c,a)=>{ try{ let h=String(c||"").replace("#",""); if(h.length===3) h=h.split("").map(x=>x+x).join(""); if(h.length!==6) return "rgba(255,255,255,"+a+")"; return "rgba("+parseInt(h.slice(0,2),16)+","+parseInt(h.slice(2,4),16)+","+parseInt(h.slice(4,6),16)+","+a+")"; }catch(e){ return "rgba(255,255,255,"+a+")"; } };
+ const gameTime=(()=>{ if(!tg.time) return ""; const d=new Date(tg.time); if(isNaN(d.getTime())) return tg.time||""; return d.toLocaleString([],{weekday:"short",hour:"numeric",minute:"2-digit",timeZoneName:"short"}); })();
+ const odds=gameSheet.odds||det.odds||{};
+ const impl=(o)=>{ const n=parseFloat(String(o==null?"":o).replace("+","")); if(isNaN(n)) return null; return n>0?100/(n+100):(-n)/((-n)+100); };
+ const pa=impl(odds.ml&&odds.ml[0]&&odds.ml[0].odds); const ph=impl(odds.ml&&odds.ml[1]&&odds.ml[1].odds);
+ const probAway=(pa!=null&&ph!=null)?Math.round(pa/(pa+ph)*100):null; const probHome=probAway!=null?100-probAway:null;
+ const ss0=(T0&&T0.seasonStats)||[]; const ss1=(T1&&T1.seasonStats)||[];
+ const leaders=det.statLeaders||[]; const injuries=det.injuries||[];
+ const injAway=injuries.filter(p=>{ const t=(p.team||"").toUpperCase(); return t.includes(String(awayAbbr).toUpperCase())||t.includes(String(away).toUpperCase().split(" ").pop()); });
+ const injHome=injuries.filter(p=>injAway.indexOf(p)===-1);
+ const injTag=(st)=>{ const x=(st||"").toLowerCase(); const out=x.includes("out")||x.includes("ir")||x.includes("reserve"); const q=x.includes("quest")||x.includes("doubt"); return {bg:out?"rgba(255,69,58,0.16)":q?"rgba(255,159,10,0.16)":"rgba(48,209,88,0.14)",col:out?IOS.red:q?IOS.orange:IOS.green}; };
+ const Logo=({src,abbr,color})=> src
+ ? <img src={src} style={{width:58,height:58,objectFit:"contain",margin:"0 auto 9px",display:"block",filter:"drop-shadow(0 8px 18px rgba(0,0,0,0.6))"}} onError={e=>{e.target.style.display="none";}}/>
+ : <div style={{width:58,height:58,borderRadius:16,margin:"0 auto 9px",background:tint(color,0.9),display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:22,color:"#fff"}}>{abbr}</div>;
+ const InjCol=({list,color,abbr})=> (
+ <div style={{flex:1,minWidth:0}}>
+ <div style={{fontSize:10,fontWeight:800,letterSpacing:0.6,textTransform:"uppercase",color:color,marginBottom:7,textAlign:"center"}}>{abbr}</div>
+ {list.length===0 ? <div style={{fontSize:11,color:IOS.label3,textAlign:"center",padding:"10px 0"}}>No injuries</div>
+ : list.map((p,pi)=>{ const tg2=injTag(p.status); return (
+ <div key={pi} style={{padding:"8px 6px",borderTop:pi>0?"0.5px solid rgba(255,255,255,0.05)":"none",textAlign:"center"}}>
+ <div style={{fontSize:12.5,fontWeight:700,color:"#fff",lineHeight:1.15,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.name}</div>
+ {p.detail && <div style={{fontSize:10,color:IOS.label3,marginTop:1}}>{p.detail}</div>}
+ <div style={{display:"inline-block",marginTop:5,fontSize:9,fontWeight:800,letterSpacing:0.3,textTransform:"uppercase",padding:"3px 7px",borderRadius:6,background:tg2.bg,color:tg2.col}}>{p.status}</div>
+ </div>
+ ); })}
+ </div>
+ );
  return (
  <div>
- <div style={{padding:"16px 20px 8px"}}>
- <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
- {/* Away — clickable */}
- <div style={{flex:1,textAlign:"center",cursor:"pointer",opacity:gameTeamTab==='away'?1:0.7,transition:"opacity 0.15s"}}
- onClick={()=>setGameTeamTab(t=>t==='away'?'matchup':'away')}>
- {awayLogo && <img src={awayLogo} style={{width:52,height:52,objectFit:"contain",marginBottom:6,filter:gameTeamTab==='away'?'none':'grayscale(0.3)'}} onError={e=>e.target.style.display="none"}/>}
- <div style={{fontSize:14,fontWeight:800,color:gameTeamTab==='away'?awayColor:"#fff"}}>{away}</div>
- {awayRec && <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>{awayRec}</div>}
- {gameTeamTab==='away' && <div style={{width:24,height:3,borderRadius:2,background:awayColor,margin:"4px auto 0"}}/>}
+ {/* Tale of the Tape hero */}
+ <div style={{position:"relative",padding:"2px 16px 18px",overflow:"hidden"}}>
+ <div style={{position:"absolute",inset:0,background:"linear-gradient(105deg,"+tint(awayColor,0.32)+" 0%,transparent 42%,transparent 58%,"+tint(homeColor,0.32)+" 100%)"}}/>
+ <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,transparent 35%,#1C1C1E 100%)"}}/>
+ <div style={{position:"relative",display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8}}>
+ <div style={{flex:1,textAlign:"center"}}>
+ <Logo src={awayLogo} abbr={awayAbbr} color={awayColor}/>
+ <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:23,letterSpacing:0.3,lineHeight:0.95,color:"#fff",textTransform:"uppercase"}}>{awayNick}</div>
+ {awayRec && <div style={{fontSize:11.5,fontWeight:700,color:IOS.label2,marginTop:3}}>{awayRec}</div>}
  </div>
- {/* VS */}
- <div style={{textAlign:"center"}}>
- <div style={{fontSize:13,fontWeight:700,color:IOS.label3}}>VS</div>
- <div style={{fontSize:11,color:IOS.label3,marginTop:4}}>{tg.isLive ? <span style={{color:IOS.green,fontWeight:700}}>● LIVE</span> : gameTime}</div>
+ <div style={{textAlign:"center",paddingTop:20}}>
+ <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:IOS.label3}}>{tg.isLive?"":"AT"}</div>
+ {tg.isLive && <div style={{fontSize:11,fontWeight:800,color:IOS.green}}>\u25cf LIVE</div>}
  </div>
- {/* Home — clickable */}
- <div style={{flex:1,textAlign:"center",cursor:"pointer",opacity:gameTeamTab==='home'?1:0.7,transition:"opacity 0.15s"}}
- onClick={()=>setGameTeamTab(t=>t==='home'?'matchup':'home')}>
- {homeLogo && <img src={homeLogo} style={{width:52,height:52,objectFit:"contain",marginBottom:6,filter:gameTeamTab==='home'?'none':'grayscale(0.3)'}} onError={e=>e.target.style.display="none"}/>}
- <div style={{fontSize:14,fontWeight:800,color:gameTeamTab==='home'?homeColor:"#fff"}}>{home}</div>
- {homeRec && <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>{homeRec}</div>}
- {gameTeamTab==='home' && <div style={{width:24,height:3,borderRadius:2,background:homeColor,margin:"4px auto 0"}}/>}
+ <div style={{flex:1,textAlign:"center"}}>
+ <Logo src={homeLogo} abbr={homeAbbr} color={homeColor}/>
+ <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:23,letterSpacing:0.3,lineHeight:0.95,color:"#fff",textTransform:"uppercase"}}>{homeNick}</div>
+ {homeRec && <div style={{fontSize:11.5,fontWeight:700,color:IOS.label2,marginTop:3}}>{homeRec}</div>}
  </div>
  </div>
- {gameTeamTab==='matchup' && (
- <div style={{textAlign:"center",fontSize:11,color:IOS.label3,marginTop:8}}>Tap a team to see their stats</div>
- )}
+ {gameTime && <div style={{position:"relative",textAlign:"center",marginTop:14,fontSize:12,fontWeight:700,color:IOS.label2}}>{gameTime}</div>}
  </div>
 
- {/* Team stats panel */}
- {gameTeamTab!=='matchup' && (() => {
- const idx = gameTeamTab==='away' ? 0 : 1;
- const teamData = gameSheet.detail?.teams?.[idx];
- const teamColor = idx===0 ? awayColor : homeColor;
- const teamName = idx===0 ? away : home;
- const seasonStats = teamData?.seasonStats || [];
- const gameStats = teamData?.gameStats || [];
- return (
- <div style={{margin:"0 16px 16px",background:"#2C2C2E",borderRadius:14,overflow:"hidden"}}>
- <div style={{padding:"10px 14px",borderBottom:"0.5px solid rgba(255,255,255,0.06)",display:"flex",alignItems:"center",gap:8}}>
- <div style={{width:6,height:6,borderRadius:"50%",background:teamColor}}/>
- <div style={{fontSize:12,fontWeight:700,color:teamColor,letterSpacing:0.5,textTransform:"uppercase"}}>{teamName} Stats</div>
- </div>
- {gameLoading ? (
- <div style={{padding:"20px",textAlign:"center",color:IOS.label3,fontSize:13}}>Loading...</div>
- ) : seasonStats.length > 0 ? (
- seasonStats.map((s,si)=>(
- <div key={si} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 16px",borderBottom:si<seasonStats.length-1?"0.5px solid rgba(255,255,255,0.04)":"none"}}>
- <div style={{fontSize:13,color:"rgba(255,255,255,0.6)"}}>{s.label}</div>
- <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>{s.value}</div>
- </div>
- ))
- ) : gameStats.length > 0 ? (
- gameStats.map((s,si)=>(
- <div key={si} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 16px",borderBottom:si<gameStats.length-1?"0.5px solid rgba(255,255,255,0.04)":"none"}}>
- <div style={{fontSize:13,color:"rgba(255,255,255,0.6)"}}>{s.label}</div>
- <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>{s.value}</div>
- </div>
- ))
- ) : (
- <div style={{padding:"24px 16px",textAlign:"center"}}>
- <div style={{fontSize:24,marginBottom:8}}></div>
- <div style={{fontSize:13,color:IOS.label3,lineHeight:1.5}}>Season stats will appear here once the season is underway.</div>
+ <div style={{padding:"0 16px"}}>
+ {probAway!=null && (
+ <div style={{background:"#2C2C2E",border:"0.5px solid rgba(255,255,255,0.06)",borderRadius:16,padding:"14px 16px",marginBottom:2}}>
+ <div style={{fontSize:9.5,fontWeight:800,letterSpacing:1.4,textTransform:"uppercase",color:IOS.label3,textAlign:"center",marginBottom:10}}>Win probability</div>
+ <div style={{height:13,borderRadius:8,background:awayColor,overflow:"hidden",display:"flex"}}><div style={{height:"100%",width:probHome+"%",marginLeft:"auto",background:homeColor}}/></div>
+ <div style={{display:"flex",justifyContent:"space-between",marginTop:8,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15}}><span style={{color:awayColor}}>{probAway}%</span><span style={{color:homeColor}}>{probHome}%</span></div>
  </div>
  )}
- </div>
- );
- })()}
- </div>
- );
- })()}
 
- {/* Odds */}
- {gameSheet.odds && (gameSheet.odds.ml?.length > 0 || gameSheet.odds.spread?.length > 0 || gameSheet.odds.ou?.length > 0) && (
- <div style={{margin:"0 16px 16px",background:"#2C2C2E",borderRadius:14,overflow:"hidden"}}>
- <div style={{padding:"10px 14px",borderBottom:"0.5px solid rgba(255,255,255,0.06)",fontSize:11,fontWeight:700,color:IOS.label3,letterSpacing:1,textTransform:"uppercase"}}>DraftKings Odds</div>
- <div style={{display:"flex",gap:0}}>
- {[
- {label:"Moneyline", items: gameSheet.odds.ml.slice(0,2)},
- {label:"Spread", items: gameSheet.odds.spread.slice(0,2)},
- {label:"Total", items: gameSheet.odds.ou.slice(0,2)},
- ].map((col,ci) => (
+ {ss0.length>0 && (<>
+ <div style={{fontSize:10.5,fontWeight:800,letterSpacing:1.8,textTransform:"uppercase",color:IOS.label3,margin:"20px 4px 10px"}}>The Tape</div>
+ <div style={{background:"#2C2C2E",border:"0.5px solid rgba(255,255,255,0.06)",borderRadius:16,padding:"4px 14px"}}>
+ {ss0.map((st,i)=>{ const v0=st.value, v1=(ss1[i]&&ss1[i].value)||"\u2014"; const n0=parseFloat(v0), n1=parseFloat(v1); const a=isNaN(n0)?0:n0, b=isNaN(n1)?0:n1; const sum=(a+b)||1; const w0=Math.max(4,Math.round(a/sum*100)), w1=Math.max(4,Math.round(b/sum*100)); return (
+ <div key={i} style={{padding:"11px 0",borderBottom:i<ss0.length-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
+ <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:7}}>
+ <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:awayColor}}>{v0||"\u2014"}</span>
+ <span style={{fontSize:9.5,fontWeight:800,letterSpacing:1,textTransform:"uppercase",color:IOS.label3,textAlign:"center",flex:1,padding:"0 8px"}}>{st.label}</span>
+ <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:homeColor}}>{v1||"\u2014"}</span>
+ </div>
+ <div style={{display:"flex",height:7,borderRadius:4,overflow:"hidden",background:"rgba(255,255,255,0.05)",gap:2}}>
+ <div style={{width:w0+"%",background:awayColor,borderRadius:"4px 0 0 4px"}}/>
+ <div style={{width:w1+"%",background:homeColor,borderRadius:"0 4px 4px 0",marginLeft:"auto"}}/>
+ </div>
+ </div>
+ ); })}
+ </div>
+ </>)}
+
+ {((odds.ml&&odds.ml.length>0)||(odds.spread&&odds.spread.length>0)||(odds.ou&&odds.ou.length>0)) && (<>
+ <div style={{fontSize:10.5,fontWeight:800,letterSpacing:1.8,textTransform:"uppercase",color:IOS.label3,margin:"20px 4px 10px"}}>DraftKings Odds</div>
+ <div style={{background:"#2C2C2E",border:"0.5px solid rgba(255,255,255,0.06)",borderRadius:16,overflow:"hidden",display:"flex"}}>
+ {[{label:"Moneyline",items:(odds.ml||[]).slice(0,2)},{label:"Spread",items:(odds.spread||[]).slice(0,2)},{label:"Total",items:(odds.ou||[]).slice(0,2)}].map((col,ci)=>(
  <div key={ci} style={{flex:1,borderRight:ci<2?"0.5px solid rgba(255,255,255,0.06)":"none"}}>
- <div style={{fontSize:10,fontWeight:700,color:IOS.label3,textAlign:"center",padding:"6px 4px 4px",letterSpacing:0.5}}>{col.label}</div>
- {col.items.map((item,ii) => (
- <div key={ii} style={{textAlign:"center",padding:"4px 4px 8px"}}>
- <div style={{fontSize:11,color:"rgba(255,255,255,0.7)",marginBottom:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",padding:"0 4px"}}>{item.pick}</div>
- <div style={{fontSize:14,fontWeight:800,color:item.odds?.startsWith("+")?IOS.green:IOS.blue}}>{item.odds}</div>
+ <div style={{fontSize:9.5,fontWeight:800,color:IOS.label3,textAlign:"center",padding:"9px 4px 5px",letterSpacing:0.5,textTransform:"uppercase"}}>{col.label}</div>
+ {col.items.map((it,ii)=>(
+ <div key={ii} style={{textAlign:"center",padding:"3px 4px 9px"}}>
+ <div style={{fontSize:10.5,color:IOS.label2,marginBottom:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",padding:"0 4px"}}>{it.pick}</div>
+ <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:14,color:(it.odds||"").startsWith("+")?IOS.green:IOS.blue}}>{it.odds}</div>
  </div>
  ))}
  </div>
  ))}
  </div>
- </div>
- )}
+ </>)}
 
- {/* Loading */}
- {gameLoading && (
- <div style={{textAlign:"center",padding:"24px",color:IOS.label3,fontSize:13}}>Loading stats...</div>
- )}
-
- {/* ── Season Stats ── */}
- {gameSheet.detail?.teams?.length > 0 && gameSheet.detail.teams.some(t=>t.seasonStats?.length>0) && (
- <div style={{margin:"0 16px 16px"}}>
- <div style={{fontSize:11,fontWeight:700,color:IOS.label3,letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Season Stats</div>
- <div style={{background:"#2C2C2E",borderRadius:12,overflow:"hidden"}}>
- {/* Header */}
- <div style={{display:"flex",borderBottom:"0.5px solid rgba(255,255,255,0.08)"}}>
- <div style={{flex:1,textAlign:"center",padding:"8px 4px",fontSize:12,fontWeight:700,color:gameSheet.detail.teams[0]?.color||IOS.blue}}>{gameSheet.detail.teams[0]?.abbrev}</div>
- <div style={{flex:1.4,textAlign:"center",padding:"8px 4px",fontSize:10,fontWeight:600,color:IOS.label3,letterSpacing:0.5}}>STAT</div>
- <div style={{flex:1,textAlign:"center",padding:"8px 4px",fontSize:12,fontWeight:700,color:gameSheet.detail.teams[1]?.color||IOS.orange}}>{gameSheet.detail.teams[1]?.abbrev}</div>
+ {leaders.length>0 && (<>
+ <div style={{fontSize:10.5,fontWeight:800,letterSpacing:1.8,textTransform:"uppercase",color:IOS.label3,margin:"20px 4px 10px"}}>Player Leaders</div>
+ {leaders.slice(0,4).map((cat,ci)=>(
+ <div key={ci} style={{background:"#2C2C2E",border:"0.5px solid rgba(255,255,255,0.06)",borderRadius:14,padding:"10px 13px",marginBottom:8}}>
+ <div style={{fontSize:9.5,fontWeight:800,color:IOS.blue,letterSpacing:0.6,textTransform:"uppercase",marginBottom:8}}>{cat.category}</div>
+ {cat.leaders.map((l,li)=>(
+ <div key={li} style={{display:"flex",alignItems:"center",gap:11,marginBottom:li<cat.leaders.length-1?9:0}}>
+ {l.photo? <img src={l.photo} style={{width:34,height:34,borderRadius:"50%",objectFit:"cover",background:"#3A3A3C",flexShrink:0}} onError={e=>{e.target.style.display="none";}}/> : <div style={{width:34,height:34,borderRadius:"50%",background:"#3A3A3C",flexShrink:0}}/>}
+ <div style={{flex:1,minWidth:0}}>
+ <div style={{fontSize:13.5,fontWeight:800,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{l.name}</div>
+ <div style={{fontSize:10.5,color:IOS.label3,fontWeight:700}}>{l.team}</div>
  </div>
- {(gameSheet.detail.teams[0]?.seasonStats||[]).map((stat,si)=>{
- const v0 = stat.value;
- const v1 = gameSheet.detail.teams[1]?.seasonStats?.[si]?.value||"—";
- const n0 = parseFloat(v0); const n1 = parseFloat(v1);
- const t0better = !isNaN(n0)&&!isNaN(n1)&&n0>n1;
- const t1better = !isNaN(n0)&&!isNaN(n1)&&n1>n0;
- return (
- <div key={si} style={{display:"flex",borderBottom:si<(gameSheet.detail.teams[0]?.seasonStats?.length||0)-1?"0.5px solid rgba(255,255,255,0.04)":"none"}}>
- <div style={{flex:1,textAlign:"center",padding:"8px 4px",fontSize:13,fontWeight:700,color:t0better?IOS.green:"#fff"}}>{v0||"—"}</div>
- <div style={{flex:1.4,textAlign:"center",padding:"8px 4px",fontSize:10,color:IOS.label3,lineHeight:1.3}}>{stat.label}</div>
- <div style={{flex:1,textAlign:"center",padding:"8px 4px",fontSize:13,fontWeight:700,color:t1better?IOS.green:"#fff"}}>{v1}</div>
+ <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:16,color:IOS.green,flexShrink:0}}>{l.stat}</div>
+ </div>
+ ))}
+ </div>
+ ))}
+ </>)}
+
+ {injuries.length>0 && (<>
+ <div style={{fontSize:10.5,fontWeight:800,letterSpacing:1.8,textTransform:"uppercase",color:IOS.label3,margin:"20px 4px 10px"}}>Injury Report</div>
+ <div style={{background:"#2C2C2E",border:"0.5px solid rgba(255,255,255,0.06)",borderRadius:16,padding:"12px 8px",display:"flex",gap:4,marginBottom:8}}>
+ <InjCol list={injAway} color={awayColor} abbr={awayAbbr}/>
+ <div style={{width:"0.5px",background:"rgba(255,255,255,0.08)",alignSelf:"stretch"}}/>
+ <InjCol list={injHome} color={homeColor} abbr={homeAbbr}/>
+ </div>
+ </>)}
+
+ {gameLoading && <div style={{textAlign:"center",padding:"24px",color:IOS.label3,fontSize:13}}>Loading stats\u2026</div>}
+ {!gameLoading && !det.teams && !eg && <div style={{textAlign:"center",padding:"16px 8px 8px",color:IOS.label3,fontSize:13,lineHeight:1.6}}>Detailed stats not available yet \u2014 check back closer to game time.</div>}
+ </div>
+
+ {/* Footer CTA */}
+ <div style={{padding:"16px 16px calc(20px + env(safe-area-inset-bottom))"}}>
+ <div onClick={()=>{ setGameSheet(null); setScreen("picks"); }} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"linear-gradient(135deg,"+IOS.blue+",#5e5ce6)",borderRadius:14,padding:14,fontWeight:800,fontSize:15,color:"#fff",cursor:"pointer",boxShadow:"0 10px 26px -8px rgba(10,132,255,0.6)"}}>
+ <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg> Add a pick from this game
+ </div>
+ </div>
  </div>
  );
- })}
- </div>
- </div>
- )}
-
- {/* ── Stat Leaders ── */}
- {gameSheet.detail?.statLeaders?.length > 0 && (
- <div style={{margin:"0 16px 16px"}}>
- <div style={{fontSize:11,fontWeight:700,color:IOS.label3,letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Player Leaders</div>
- {gameSheet.detail.statLeaders.slice(0,5).map((cat,ci) => (
- <div key={ci} style={{background:"#2C2C2E",borderRadius:12,padding:"10px 14px",marginBottom:8}}>
- <div style={{fontSize:10,fontWeight:700,color:IOS.blue,letterSpacing:0.5,textTransform:"uppercase",marginBottom:8}}>{cat.category}</div>
- {cat.leaders.map((l,li) => (
- <div key={li} style={{display:"flex",alignItems:"center",gap:10,marginBottom:li<cat.leaders.length-1?8:0}}>
- {l.photo
- ? <img src={l.photo} style={{width:34,height:34,borderRadius:"50%",objectFit:"cover",background:"#3A3A3C",flexShrink:0}} onError={e=>e.target.style.display="none"}/>
- : <div style={{width:34,height:34,borderRadius:"50%",background:"#3A3A3C",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,color:IOS.label3}}>?</div>
- }
- <div style={{flex:1,minWidth:0}}>
- <div style={{fontSize:13,fontWeight:600,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{l.name}</div>
- <div style={{fontSize:11,color:IOS.label3}}>{l.team}</div>
- </div>
- <div style={{fontSize:15,fontWeight:800,color:IOS.green,flexShrink:0}}>{l.stat}</div>
- </div>
- ))}
- </div>
- ))}
- </div>
- )}
-
- {/* ── Injury Report ── */}
- {gameSheet.detail?.injuries?.length > 0 && (
- <div style={{margin:"0 16px 16px"}}>
- <div style={{fontSize:11,fontWeight:700,color:IOS.label3,letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Injury Report</div>
- <div style={{background:"#2C2C2E",borderRadius:12,overflow:"hidden"}}>
- {gameSheet.detail.injuries.map((p,pi)=>(
- <div key={pi} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px",borderBottom:pi<gameSheet.detail.injuries.length-1?"0.5px solid rgba(255,255,255,0.04)":"none"}}>
- {p.photo
- ? <img src={p.photo} style={{width:30,height:30,borderRadius:"50%",objectFit:"cover",background:"#3A3A3C",flexShrink:0}} onError={e=>e.target.style.display="none"}/>
- : <div style={{width:30,height:30,borderRadius:"50%",background:"#3A3A3C",flexShrink:0}}/>
- }
- <div style={{flex:1,minWidth:0}}>
- <div style={{fontSize:13,fontWeight:600,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.name}</div>
- <div style={{fontSize:11,color:IOS.label3}}>{p.team} · {p.detail}</div>
- </div>
- <div style={{fontSize:11,fontWeight:700,padding:"3px 8px",borderRadius:6,
- background: p.status?.toLowerCase().includes("out") ? "rgba(255,69,58,0.2)"
- : p.status?.toLowerCase().includes("quest") ? "rgba(255,159,10,0.2)"
- : "rgba(48,209,88,0.15)",
- color: p.status?.toLowerCase().includes("out") ? IOS.red
- : p.status?.toLowerCase().includes("quest") ? IOS.orange
- : IOS.green,
- flexShrink:0,
- }}>{p.status}</div>
- </div>
- ))}
- </div>
- </div>
- )}
-
- {/* No detail fallback */}
- {!gameLoading && !gameSheet.detail && !gameSheet.espnGame && (
- <div style={{textAlign:"center",padding:"16px 24px",color:IOS.label3,fontSize:13,lineHeight:1.6}}>
- Detailed stats not available yet — check back closer to game time.
- </div>
- )}
+ })()}
  </div>
  </div>
  )}
