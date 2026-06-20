@@ -1882,6 +1882,7 @@ export default function App() {
  const [gameSheet, setGameSheet] = useState(null); // { tickerGame, espnGame, detail }
  const [gameTeamTab, setGameTeamTab] = useState('matchup'); // 'matchup' | 'away' | 'home' 
  const [gameLoading, setGameLoading] = useState(false);
+ const [gameRead, setGameRead] = useState({});
  const [oddsLoading, setOddsLoading] = useState(false);
  const [oddsError, setOddsError] = useState(false);
  // oddsLastFetched persisted in localStorage so cache survives page refreshes
@@ -2626,6 +2627,18 @@ export default function App() {
     }catch(e){}
   };
   useEffect(()=>{ if(screen==="ai" && user?.id) fetchPlokRecord(); },[screen, user]);
+  useEffect(()=>{
+    const eg = gameSheet && gameSheet.espnGame; const gid = eg && eg.id;
+    if(!gid || !isPro) return;
+    if(gameRead[gid]) return;
+    const tg = (gameSheet && gameSheet.tickerGame) || {};
+    const away = eg.awayTeam || tg.away || "Away", home = eg.homeTeam || tg.home || "Home";
+    const sp = (activeLeague && activeLeague.sport) || "nfl";
+    setGameRead(prev=>({...prev,[gid]:{loading:true}}));
+    fetch("/api/insight",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ sport:sp, betType:"chat", selection:(away+" vs "+home), question:("Give me a sharp 1-2 sentence betting read on this matchup: "+away+" at "+home+". Lead with the single biggest edge or angle."), game:(away+" @ "+home), userId:user&&user.id, persona:plokPersona })})
+      .then(async r=>{ const d=await r.json().catch(()=>null); setGameRead(prev=>({...prev,[gid]: (r.ok && d && d.summary) ? {text:d.summary} : {error:true}})); })
+      .catch(()=> setGameRead(prev=>({...prev,[gid]:{error:true}})));
+  },[gameSheet, isPro]);
   const askInsight = async (ctx, label, bet, category) => {
     const item = { role:"ai", label: label||ctx.selection, bet:bet||null, category:category||null, loading:true };
     setAiThread(prev=>[...prev, { role:"user", text: label||ctx.selection }, item]);
@@ -10224,11 +10237,15 @@ export default function App() {
  const awayAbbr=(T0&&T0.abbrev)||String(away).slice(0,3).toUpperCase();
  const homeAbbr=(T1&&T1.abbrev)||String(home).slice(0,3).toUpperCase();
  const awayNick=String(away).split(" ").pop(); const homeNick=String(home).split(" ").pop();
- const awayRec=eg?.awayRecord; const homeRec=eg?.homeRecord;
+ const awayRec=eg?.awayRecord||(T0&&T0.record)||""; const homeRec=eg?.homeRecord||(T1&&T1.record)||"";
+ const awaySt=((T0&&T0.standing)||"").replace(" in "," "); const homeSt=((T1&&T1.standing)||"").replace(" in "," ");
  const awayLogo=eg?.awayLogo; const homeLogo=eg?.homeLogo;
  const awayColor=(T0&&T0.color)||IOS.blue; const homeColor=(T1&&T1.color)||IOS.orange;
+ const AC=IOS.red; const HC=IOS.green;
+ const venue=det.venue||""; const tv=det.broadcast||""; const wx=det.weather||null;
+ const gid=eg&&eg.id; const read=(gid&&gameRead[gid])||null;
  const tint=(c,a)=>{ try{ let h=String(c||"").replace("#",""); if(h.length===3) h=h.split("").map(x=>x+x).join(""); if(h.length!==6) return "rgba(255,255,255,"+a+")"; return "rgba("+parseInt(h.slice(0,2),16)+","+parseInt(h.slice(2,4),16)+","+parseInt(h.slice(4,6),16)+","+a+")"; }catch(e){ return "rgba(255,255,255,"+a+")"; } };
- const gameTime=(()=>{ if(!tg.time) return ""; const d=new Date(tg.time); if(isNaN(d.getTime())) return tg.time||""; return d.toLocaleString([],{weekday:"short",hour:"numeric",minute:"2-digit",timeZoneName:"short"}); })();
+ const gameTime=(()=>{ if(!tg.time) return ""; const d=new Date(tg.time); if(isNaN(d.getTime())) return tg.time||""; return d.toLocaleDateString([],{weekday:"short"})+" "+d.toLocaleTimeString([],{hour:"numeric",minute:"2-digit",timeZoneName:"short"}); })();
  const odds=gameSheet.odds||det.odds||{};
  const impl=(o)=>{ const n=parseFloat(String(o==null?"":o).replace("+","")); if(isNaN(n)) return null; return n>0?100/(n+100):(-n)/((-n)+100); };
  const pa=impl(odds.ml&&odds.ml[0]&&odds.ml[0].odds); const ph=impl(odds.ml&&odds.ml[1]&&odds.ml[1].odds);
@@ -10261,61 +10278,61 @@ export default function App() {
  <div>
  {/* Tale of the Tape hero */}
  <div style={{position:"relative",padding:"2px 16px 18px",overflow:"hidden"}}>
- <div style={{position:"absolute",inset:0,background:"linear-gradient(105deg,"+tint(awayColor,0.32)+" 0%,transparent 42%,transparent 58%,"+tint(homeColor,0.32)+" 100%)"}}/>
+ <div style={{position:"absolute",inset:0,background:"linear-gradient(105deg,"+tint(AC,0.30)+" 0%,transparent 40%,transparent 60%,"+tint(HC,0.30)+" 100%)"}}/>
  <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,transparent 35%,#1C1C1E 100%)"}}/>
  <div style={{position:"relative",display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8}}>
  <div style={{flex:1,textAlign:"center"}}>
- <Logo src={awayLogo} abbr={awayAbbr} color={awayColor}/>
+ <div style={{width:64,height:64,borderRadius:18,margin:"0 auto 10px",background:awayColor,border:"1px solid rgba(255,255,255,0.14)",boxShadow:"0 8px 20px -6px rgba(0,0,0,0.55)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:21,color:"#fff",letterSpacing:0.5}}>{awayAbbr}</div>
  <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:23,letterSpacing:0.3,lineHeight:0.95,color:"#fff",textTransform:"uppercase"}}>{awayNick}</div>
- {awayRec && <div style={{fontSize:11.5,fontWeight:700,color:IOS.label2,marginTop:3}}>{awayRec}</div>}
+ {(awayRec||awaySt) && <div style={{fontSize:11,fontWeight:700,color:IOS.label2,marginTop:3}}>{[awayRec,awaySt].filter(Boolean).join(" · ")}</div>}
  </div>
  <div style={{textAlign:"center",paddingTop:20}}>
  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:IOS.label3}}>{tg.isLive?"":"AT"}</div>
  {tg.isLive && <div style={{fontSize:11,fontWeight:800,color:IOS.green}}>\u25cf LIVE</div>}
  </div>
  <div style={{flex:1,textAlign:"center"}}>
- <Logo src={homeLogo} abbr={homeAbbr} color={homeColor}/>
+ <div style={{width:64,height:64,borderRadius:18,margin:"0 auto 10px",background:homeColor,border:"1px solid rgba(255,255,255,0.14)",boxShadow:"0 8px 20px -6px rgba(0,0,0,0.55)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:21,color:"#fff",letterSpacing:0.5}}>{homeAbbr}</div>
  <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:23,letterSpacing:0.3,lineHeight:0.95,color:"#fff",textTransform:"uppercase"}}>{homeNick}</div>
- {homeRec && <div style={{fontSize:11.5,fontWeight:700,color:IOS.label2,marginTop:3}}>{homeRec}</div>}
+ {(homeRec||homeSt) && <div style={{fontSize:11,fontWeight:700,color:IOS.label2,marginTop:3}}>{[homeRec,homeSt].filter(Boolean).join(" · ")}</div>}
  </div>
  </div>
- {gameTime && <div style={{position:"relative",textAlign:"center",marginTop:14,fontSize:12,fontWeight:700,color:IOS.label2}}>{gameTime}</div>}
+ {(gameTime||venue||tv) && <div style={{position:"relative",textAlign:"center",marginTop:15,fontSize:12.5,fontWeight:700,color:"#fff"}}>{[gameTime,venue,tv].filter(Boolean).join("  ·  ")}</div>}
+ {wx && (wx.temp!=null||wx.summary) && <div style={{position:"relative",textAlign:"center",marginTop:5,fontSize:11.5,fontWeight:600,color:IOS.label2,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={IOS.label2} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>{[wx.temp!=null?(wx.temp+"°F"):"",wx.summary].filter(Boolean).join(" · ")}</div>}
  </div>
 
  <div style={{padding:"0 16px"}}>
- {/* Ask Plok */}
+ {/* Plok read — auto-loaded inline for Pro, else CTA */}
+ {(isPro && read && (read.text || read.loading)) ? (
+ <div onClick={()=>{ setGameSheet(null); askPlok("Tell me more about "+away+" at "+home+" — best bet and why."); }} style={{background:"linear-gradient(135deg,rgba(10,132,255,0.16),rgba(94,92,230,0.08))",border:"0.5px solid rgba(10,132,255,0.34)",borderRadius:16,padding:"13px 15px",marginBottom:2,cursor:"pointer"}}>
+ <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:read.loading?6:8}}>
+ <div style={{width:28,height:28,borderRadius:9,background:"rgba(10,132,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="16" height="16" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg></div>
+ <span style={{fontSize:11,fontWeight:800,letterSpacing:1.4,textTransform:"uppercase",color:IOS.blue}}>Plok Read</span>
+ </div>
+ {read.loading
+ ? <div style={{display:"flex",gap:5,alignItems:"center",height:16,paddingLeft:2}}><span className="ai-dot"/><span className="ai-dot" style={{animationDelay:"0.15s"}}/><span className="ai-dot" style={{animationDelay:"0.3s"}}/></div>
+ : <div style={{fontSize:13.5,lineHeight:1.5,color:"rgba(255,255,255,0.88)"}}>{read.text}</div>}
+ </div>
+ ) : (
  <div onClick={()=>{ if(!isPro){ setShowPaywall("ai"); return; } setGameSheet(null); askPlok("Give me your read on "+away+" vs "+home+" — who has the edge and what is the best bet?"); }} style={{display:"flex",alignItems:"center",gap:12,background:"linear-gradient(135deg,rgba(10,132,255,0.16),rgba(94,92,230,0.10))",border:"0.5px solid rgba(10,132,255,0.35)",borderRadius:16,padding:"13px 15px",marginBottom:2,cursor:"pointer"}}>
- <div style={{width:36,height:36,borderRadius:11,background:"rgba(10,132,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
- <svg width="19" height="19" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg>
- </div>
- <div style={{flex:1,minWidth:0}}>
- <div style={{fontSize:14,fontWeight:800,color:"#fff"}}>Ask Plok about this game</div>
- <div style={{fontSize:11.5,color:IOS.label2,marginTop:1}}>Get an AI read on the matchup{isPro?"":" · Pro"}</div>
- </div>
+ <div style={{width:36,height:36,borderRadius:11,background:"rgba(10,132,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="19" height="19" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg></div>
+ <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:800,color:"#fff"}}>Ask Plok about this game</div><div style={{fontSize:11.5,color:IOS.label2,marginTop:1}}>Get an AI read on the matchup{isPro?"":" · Pro"}</div></div>
  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={IOS.label3} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6"/></svg>
- </div>
-
- {probAway!=null && (
- <div style={{background:"#2C2C2E",border:"0.5px solid rgba(255,255,255,0.06)",borderRadius:16,padding:"14px 16px",marginBottom:2}}>
- <div style={{fontSize:9.5,fontWeight:800,letterSpacing:1.4,textTransform:"uppercase",color:IOS.label3,textAlign:"center",marginBottom:10}}>Win probability</div>
- <div style={{height:13,borderRadius:8,background:awayColor,overflow:"hidden",display:"flex"}}><div style={{height:"100%",width:probHome+"%",marginLeft:"auto",background:homeColor}}/></div>
- <div style={{display:"flex",justifyContent:"space-between",marginTop:8,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15}}><span style={{color:awayColor}}>{probAway}%</span><span style={{color:homeColor}}>{probHome}%</span></div>
  </div>
  )}
 
  {ss0.length>0 && (<>
- <div style={{fontSize:10.5,fontWeight:800,letterSpacing:1.8,textTransform:"uppercase",color:IOS.label3,margin:"20px 4px 10px"}}>The Tape</div>
+ <div style={{display:"flex",alignItems:"center",gap:12,margin:"22px 4px 12px"}}><span style={{fontSize:11,fontWeight:800,letterSpacing:1.8,textTransform:"uppercase",color:IOS.label3}}>The Tape</span><div style={{flex:1,height:1,background:"rgba(255,255,255,0.09)"}}/></div>
  <div style={{background:"#2C2C2E",border:"0.5px solid rgba(255,255,255,0.06)",borderRadius:16,padding:"4px 14px"}}>
  {ss0.map((st,i)=>{ const v0=st.value, v1=(ss1[i]&&ss1[i].value)||"\u2014"; const n0=parseFloat(v0), n1=parseFloat(v1); const a=isNaN(n0)?0:n0, b=isNaN(n1)?0:n1; const sum=(a+b)||1; const w0=Math.max(4,Math.round(a/sum*100)), w1=Math.max(4,Math.round(b/sum*100)); return (
  <div key={i} style={{padding:"11px 0",borderBottom:i<ss0.length-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:7}}>
- <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:awayColor}}>{v0||"\u2014"}</span>
+ <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:AC}}>{v0||"\u2014"}</span>
  <span style={{fontSize:9.5,fontWeight:800,letterSpacing:1,textTransform:"uppercase",color:IOS.label3,textAlign:"center",flex:1,padding:"0 8px"}}>{st.label}</span>
- <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:homeColor}}>{v1||"\u2014"}</span>
+ <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:HC}}>{v1||"\u2014"}</span>
  </div>
  <div style={{display:"flex",height:7,borderRadius:4,overflow:"hidden",background:"rgba(255,255,255,0.05)",gap:2}}>
- <div style={{width:w0+"%",background:awayColor,borderRadius:"4px 0 0 4px"}}/>
- <div style={{width:w1+"%",background:homeColor,borderRadius:"0 4px 4px 0",marginLeft:"auto"}}/>
+ <div style={{width:w0+"%",background:AC,borderRadius:"4px 0 0 4px"}}/>
+ <div style={{width:w1+"%",background:HC,borderRadius:"0 4px 4px 0",marginLeft:"auto"}}/>
  </div>
  </div>
  ); })}
