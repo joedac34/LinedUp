@@ -3023,70 +3023,37 @@ export default function App() {
  setPastMatchupLoading(false);
  };
 
- const checkAutoAdvanceWeek = async (leagueId, league) => {
+  const checkAutoAdvanceWeek = async (leagueId, league) => {
  if(league && (league.league_type||"h2h")==="bracket") return; // tournaments settle server-side (grade.js)
- const currentWeek = league.current_week || 1;
- // Get all picks for this week
- const {data:allPicks} = await supabase
- .from('picks')
- .select('user_id, result')
- .eq('league_id', leagueId)
- .eq('week', currentWeek);
- if(!allPicks || allPicks.length === 0) return;
- // Check if every pick is graded (not pending)
- const allGraded = allPicks.every(p => p.result !== 'pending');
- if(!allGraded) return;
- // All graded — auto advance
- const nextWeek = currentWeek + 1;
- // Tally points per user
- const {data:wonPicks} = await supabase
- .from('picks')
- .select('user_id, points_earned')
- .eq('league_id', leagueId)
- .eq('week', currentWeek)
- .eq('result', 'W');
- const totals = {};
- (wonPicks||[]).forEach(p => {
- totals[p.user_id] = (totals[p.user_id]||0) + parseFloat(p.points_earned||0);
- });
- // Write winner_id to matchups
- const {data:weekMatchups} = await supabase
- .from('matchups')
- .select('id,user1_id,user2_id')
- .eq('league_id', leagueId)
- .eq('week', currentWeek)
- .is('winner_id', null);
+ if(!league || !league.season_start) return; // league hasn't started yet
+ const WEEK_MS = 7*24*60*60*1000;
+ const GRACE_MS = 3*60*60*1000; // buffer so late finals grade before a week closes
+ const start = new Date(league.season_start).getTime();
+ if(isNaN(start)) return;
+ const seasonWeeks = Number(league.season_weeks||18);
+ const derived = Math.min(seasonWeeks, Math.floor((Date.now()-start-GRACE_MS)/WEEK_MS)+1);
+ const cw = league.current_week || 1;
+ if(derived <= cw) return; // current week isn't over yet
+ for(let wk=cw; wk<derived; wk++){ await finalizeWeekMatchups(leagueId, wk); }
+ await supabase.from('leagues').update({current_week: derived}).eq('id', leagueId);
+ };
+
+ // Decide W/L for a closed week from graded picks. Idempotent: only touches unfinalized matchups.
+ const finalizeWeekMatchups = async (leagueId, week) => {
+ const {data:wonPicks} = await supabase.from('picks').select('user_id, points_earned').eq('league_id', leagueId).eq('week', week).eq('result','W');
+ const totals = {}; (wonPicks||[]).forEach(p => { totals[p.user_id] = (totals[p.user_id]||0) + parseFloat(p.points_earned||0); });
+ const {data:weekMatchups} = await supabase.from('matchups').select('id,user1_id,user2_id').eq('league_id', leagueId).eq('week', week).is('winner_id', null);
  for(const m of (weekMatchups||[])) {
- const p1 = totals[m.user1_id]||0;
- const p2 = totals[m.user2_id]||0;
- await supabase.from('matchups').update({
- winner_id: p1 >= p2 ? m.user1_id : m.user2_id,
- user1_points: parseFloat(p1.toFixed(1)),
- user2_points: parseFloat(p2.toFixed(1)),
- }).eq('id', m.id);
- // Store pending_result for each user
+ const p1 = totals[m.user1_id]||0; const p2 = totals[m.user2_id]||0;
+ const winner = p1 >= p2 ? m.user1_id : m.user2_id;
+ await supabase.from('matchups').update({ winner_id: winner, user1_points: parseFloat(p1.toFixed(1)), user2_points: parseFloat(p2.toFixed(1)) }).eq('id', m.id);
  for(const [uid, myPts, oppPts] of [[m.user1_id,p1,p2],[m.user2_id,p2,p1]]) {
- await supabase.from('users').update({
- pending_result: JSON.stringify({
- won: (p1>=p2?m.user1_id:m.user2_id)===uid,
- myPts: parseFloat(myPts.toFixed(1)),
- oppPts: parseFloat(oppPts.toFixed(1)),
- week: currentWeek,
- })
- }).eq('id', uid);
+ await supabase.from('users').update({ pending_result: JSON.stringify({ won: winner===uid, myPts: parseFloat(myPts.toFixed(1)), oppPts: parseFloat(oppPts.toFixed(1)), week }) }).eq('id', uid);
  }
- }
- // Advance week
- // Don't advance past the final week — a finished season stays on its last (graded) week.
- if(nextWeek <= (league.season_weeks||18)){
- await supabase.from('leagues').update({current_week: nextWeek}).eq('id', leagueId);
- console.log('Auto-advanced to week', nextWeek);
- } else {
- console.log('Season complete — final week graded; holding on week', currentWeek);
  }
  };
 
- // ─── SCHEDULE GENERATION ────────────────────────────────────────
+  // ─── SCHEDULE GENERATION ────────────────────────────────────────
  const generateSchedule = async (leagueId, memberIds, seasonWeeks) => {
  // Round-robin algorithm: generates matchups so everyone plays everyone else
  // before repeating. For N players, each round has N/2 matchups.
@@ -3131,6 +3098,8 @@ export default function App() {
  }
 
  await supabase.from("matchups").insert(matchupsToInsert);
+    // Stamp the league start the first time a schedule is built — drives the 7-day week math.
+    await supabase.from("leagues").update({ season_start: new Date().toISOString(), current_week: 1 }).eq("id", leagueId).is("season_start", null);
  };
 
  const getOrCreateSoloLeague = async () => {
@@ -3359,6 +3328,8 @@ export default function App() {
    week++;
  }
  await supabase.from("matchups").insert(matchupsToInsert);
+    // Stamp the league start the first time a schedule is built — drives the 7-day week math.
+    await supabase.from("leagues").update({ season_start: new Date().toISOString(), current_week: 1 }).eq("id", leagueId).is("season_start", null);
  };
 
  const fetchPuLeagueData = async (leagueId, userId) => {
