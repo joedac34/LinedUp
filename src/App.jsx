@@ -4849,7 +4849,7 @@ export default function App() {
  <svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{filter:"drop-shadow(0 0 10px rgba(10,132,255,0.6))"}}><rect x="3" y="11" width="18" height="11" rx="2.5"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
  <div style={{fontSize:40,fontWeight:900,letterSpacing:-1.5,lineHeight:1.1,display:"inline-block",padding:"6px 12px 12px",backgroundImage:"linear-gradient(135deg,#0A84FF,#64D2FF)",WebkitBackgroundClip:"text",backgroundClip:"text",WebkitTextFillColor:"transparent",animation:"authGlow 3.6s ease-in-out infinite"}}>PICKLOCK</div>
  </div>
- <div style={{fontSize:14,color:"rgba(255,255,255,0.5)",fontWeight:500}}>Make your picks. Climb the board. Talk trash.</div>
+ <div style={{fontSize:14,color:"rgba(255,255,255,0.5)",fontWeight:500}}>Where fantasy meets betting</div>
  </div>
 
  {/* Glass form card */}
