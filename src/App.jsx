@@ -1954,7 +1954,7 @@ export default function App() {
  });
 
  // Fetch live player props from separate endpoint
- let prop = sport.bets.prop; // fallback to hardcoded
+ let prop = []; // live props only — blank if the feed has none for this sport
  try {
  const propsRes = await fetch(`/api/props?sport=${sportKey}`);
  if(propsRes.ok) {
@@ -1964,7 +1964,7 @@ export default function App() {
  }
  }
  } catch(e) {
- console.warn("Props fetch failed, using hardcoded:", e);
+ console.warn("Props fetch failed — leaving props empty:", e);
  }
 
  // Fetch ESPN scoreboard to get event IDs for game detail sheet
