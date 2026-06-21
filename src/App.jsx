@@ -4835,7 +4835,7 @@ export default function App() {
  </div>
 
  {/* Scrolling odds ticker */}
- <div style={{position:"absolute",top:"calc(env(safe-area-inset-top) + 22px)",left:0,right:0,overflow:"hidden",opacity:0.5,pointerEvents:"none",WebkitMaskImage:"linear-gradient(90deg,transparent,#000 14%,#000 86%,transparent)",maskImage:"linear-gradient(90deg,transparent,#000 14%,#000 86%,transparent)"}}>
+ <div style={{position:"relative",width:"100%",marginBottom:22,overflow:"hidden",opacity:0.5,pointerEvents:"none",WebkitMaskImage:"linear-gradient(90deg,transparent,#000 14%,#000 86%,transparent)",maskImage:"linear-gradient(90deg,transparent,#000 14%,#000 86%,transparent)"}}>
  <div style={{display:"inline-flex",gap:24,whiteSpace:"nowrap",animation:"ticker-scroll 26s linear infinite"}}>
  {[{t:"NBA FINALS · NYK +120",c:"#0A84FF"},{t:"MLB · LAD -145",c:"#30D158"},{t:"NFL · KC -3.5",c:"#FF9F0A"},{t:"PARLAY HIT +1240",c:"#FF375F"},{t:"NHL · BOS ML -130",c:"#64D2FF"},{t:"O/U 47.5",c:"#FFD60A"},
  {t:"NBA FINALS · NYK +120",c:"#0A84FF"},{t:"MLB · LAD -145",c:"#30D158"},{t:"NFL · KC -3.5",c:"#FF9F0A"},{t:"PARLAY HIT +1240",c:"#FF375F"},{t:"NHL · BOS ML -130",c:"#64D2FF"},{t:"O/U 47.5",c:"#FFD60A"}
@@ -4847,7 +4847,7 @@ export default function App() {
  <div style={{position:"relative",textAlign:"center",marginBottom:30}}>
  <div style={{display:"inline-flex",alignItems:"center",gap:9,marginBottom:9}}>
  <svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{filter:"drop-shadow(0 0 10px rgba(10,132,255,0.6))"}}><rect x="3" y="11" width="18" height="11" rx="2.5"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
- <div style={{fontSize:40,fontWeight:900,letterSpacing:-1.5,backgroundImage:"linear-gradient(135deg,#0A84FF,#64D2FF)",WebkitBackgroundClip:"text",backgroundClip:"text",WebkitTextFillColor:"transparent",animation:"authGlow 3.6s ease-in-out infinite"}}>PICKLOCK</div>
+ <div style={{fontSize:40,fontWeight:900,letterSpacing:-1.5,lineHeight:1.1,display:"inline-block",padding:"6px 12px 12px",backgroundImage:"linear-gradient(135deg,#0A84FF,#64D2FF)",WebkitBackgroundClip:"text",backgroundClip:"text",WebkitTextFillColor:"transparent",animation:"authGlow 3.6s ease-in-out infinite"}}>PICKLOCK</div>
  </div>
  <div style={{fontSize:14,color:"rgba(255,255,255,0.5)",fontWeight:500}}>Make your picks. Climb the board. Talk trash.</div>
  </div>
@@ -6350,7 +6350,7 @@ export default function App() {
  </div>
  );
  return (
- <div className="lsx-scroll" style={{position:"absolute",inset:0,zIndex:10,background:"#07070A",overflowY:"auto",WebkitOverflowScrolling:"touch",paddingBottom:28}}>
+ <div className="lsx-scroll" style={{position:"absolute",inset:0,zIndex:10,background:"#07070A",overflowY:"auto",WebkitOverflowScrolling:"touch",paddingTop:"calc(env(safe-area-inset-top, 44px) + 52px)",paddingBottom:"calc(env(safe-area-inset-bottom, 0px) + 76px)"}}>
  <style>{`
  @keyframes lsxRise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
  @keyframes lsxPulse{0%,100%{opacity:1}50%{opacity:.3}}
@@ -8593,7 +8593,7 @@ export default function App() {
        <div key={p.id||i} style={{display:"flex",alignItems:"center",padding:"7px 12px",borderBottom:i<Math.min(myPicksThisWeek.length,5)-1?`0.5px solid ${IOS.sep}`:"none",background:won?"rgba(48,209,88,0.04)":lost?"rgba(255,59,48,0.04)":"transparent"}}>
          {(()=>{const cc={ml:IOS.blue,prop:IOS.yellow,ou:IOS.orange,spread:IOS.green,longshot:IOS.pink};const k=(p.slot||"ml").split("_")[0];return <div style={{fontSize:8,fontWeight:800,color:cc[k]||IOS.blue,textTransform:"uppercase",width:30,flexShrink:0}}>{p.slot?.replace("_0","")?.replace("longshot","LS")||"ML"}</div>;})()}
          <div style={{flex:1,fontSize:11,color:"#ccc",padding:"0 8px"}}>{p.pick_name}</div>
-         <div style={{fontSize:10,fontWeight:700,color:won?IOS.green:lost?IOS.red:"#555"}}>{won?"+"+parseFloat(p.points_earned||0).toFixed(1)+" pts":lost?"L":"pending"}</div>
+         <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0,whiteSpace:"nowrap",fontSize:10,fontWeight:700,color:won?IOS.green:lost?IOS.red:"#555"}}>{won?(<><span>+{parseFloat(p.points_earned||0).toFixed(1)} pts</span><span style={{fontSize:8,fontWeight:800,color:IOS.green,background:"rgba(48,209,88,0.16)",borderRadius:4,padding:"1px 4px",letterSpacing:"0.03em"}}>W</span></>):lost?(<span>0 pts</span>):(<span>pending</span>)}</div>
        </div>
        );
      })}
