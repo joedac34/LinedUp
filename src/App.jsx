@@ -2627,6 +2627,19 @@ export default function App() {
     }catch(e){}
   };
   useEffect(()=>{ if(screen==="ai" && user?.id) fetchPlokRecord(); },[screen, user]);
+  // Load Find-a-bet data once per game on open (Pro, cached) -> powers Plok Read + The Tape.
+  useEffect(()=>{
+    const eg = gameSheet && gameSheet.espnGame; const gid = eg && eg.id;
+    if(!gid || !isPro) return;
+    if(gameRead[gid]) return;
+    const tg = (gameSheet && gameSheet.tickerGame) || {};
+    const away = eg.awayTeam || tg.away || "Away", home = eg.homeTeam || tg.home || "Home";
+    const sp = (activeLeague && activeLeague.sport) || "nfl";
+    setGameRead(prev=>({...prev,[gid]:{loading:true}}));
+    fetch("/api/findbet",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ sport:sp, game:(away+" @ "+home), userId:user&&user.id })})
+      .then(async r=>{ const d=await r.json().catch(()=>null); setGameRead(prev=>({...prev,[gid]: (r.ok && d) ? {data:d} : {error:true}})); })
+      .catch(()=> setGameRead(prev=>({...prev,[gid]:{error:true}})));
+  },[gameSheet, isPro]);
   const askInsight = async (ctx, label, bet, category) => {
     const item = { role:"ai", label: label||ctx.selection, bet:bet||null, category:category||null, loading:true };
     setAiThread(prev=>[...prev, { role:"user", text: label||ctx.selection }, item]);
@@ -10239,6 +10252,9 @@ export default function App() {
  const pa=impl(odds.ml&&odds.ml[0]&&odds.ml[0].odds); const ph=impl(odds.ml&&odds.ml[1]&&odds.ml[1].odds);
  const probAway=(pa!=null&&ph!=null)?Math.round(pa/(pa+ph)*100):null; const probHome=probAway!=null?100-probAway:null;
  const ss0=(T0&&T0.seasonStats)||[]; const ss1=(T1&&T1.seasonStats)||[];
+ const fbData=(read&&read.data)||null;
+ const mu=(fbData&&fbData.matchup&&fbData.matchup.away&&fbData.matchup.home)?fbData.matchup:null;
+ const tapeRows=mu ? [{k:"Record",a:mu.away.overall,h:mu.home.overall,bar:false},{k:"Home",a:mu.away.home,h:mu.home.home,bar:false},{k:"Road",a:mu.away.away,h:mu.home.away,bar:false},{k:(mu.scoredLabel||"Scored / Game"),a:mu.away.scored,h:mu.home.scored,bar:true},{k:(mu.allowedLabel||"Allowed / Game"),a:mu.away.allowed,h:mu.home.allowed,bar:true},{k:"Streak",a:mu.away.streak,h:mu.home.streak,bar:false}].filter(r=>(r.a!=null&&r.a!=="")||(r.h!=null&&r.h!=="")) : ss0.map((st,i)=>({k:st.label,a:st.value,h:(ss1[i]&&ss1[i].value)||"",bar:true}));
  const leaders=det.statLeaders||[]; const injuries=det.injuries||[];
  const normForm=(arr)=>(arr||[]).slice(0,5).map(x=> typeof x==="string"?{r:x}:(x||{}));
  const form0=normForm((T0&&T0.form)||(det.form&&det.form.away)); const form1=normForm((T1&&T1.form)||(det.form&&det.form.home));
@@ -10289,8 +10305,8 @@ export default function App() {
  </div>
 
  <div style={{padding:"0 16px"}}>
- {/* Plok read — tap to load a real game read via Find-a-bet (saves credits) */}
- {(read && (read.text || read.loading)) ? (
+ {/* Plok read + matchup data (auto-loaded once per game for Pro, cached) */}
+ {(read && (read.loading || (read.data && read.data.summary))) ? (
  <div onClick={()=>{ if(read.loading) return; setGameSheet(null); askFindBet({sport:(activeLeague&&activeLeague.sport)||"nfl", game:away+" @ "+home}); }} style={{background:"linear-gradient(135deg,rgba(10,132,255,0.16),rgba(94,92,230,0.08))",border:"0.5px solid rgba(10,132,255,0.34)",borderRadius:16,padding:"13px 15px",marginBottom:2,cursor:"pointer"}}>
  <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:read.loading?6:8}}>
  <div style={{width:28,height:28,borderRadius:9,background:"rgba(10,132,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="16" height="16" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg></div>
@@ -10298,30 +10314,30 @@ export default function App() {
  </div>
  {read.loading
  ? <div style={{display:"flex",gap:5,alignItems:"center",height:16,paddingLeft:2}}><span className="ai-dot"/><span className="ai-dot" style={{animationDelay:"0.15s"}}/><span className="ai-dot" style={{animationDelay:"0.3s"}}/></div>
- : <div><div style={{fontSize:13.5,lineHeight:1.5,color:"rgba(255,255,255,0.88)"}}>{read.text}</div><div style={{fontSize:11,fontWeight:700,color:IOS.blue,marginTop:9}}>See full breakdown ›</div></div>}
+ : <div><div style={{fontSize:13.5,lineHeight:1.5,color:"rgba(255,255,255,0.88)"}}>{read.data.summary}</div><div style={{fontSize:11,fontWeight:700,color:IOS.blue,marginTop:9}}>See full breakdown ›</div></div>}
  </div>
  ) : (
- <div onClick={()=>{ if(!isPro){ setShowPaywall("ai"); return; } if(read&&read.loading) return; const sp=(activeLeague&&activeLeague.sport)||"nfl"; setGameRead(prev=>({...prev,[gid]:{loading:true}})); fetch("/api/findbet",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sport:sp,game:away+" @ "+home,userId:user&&user.id})}).then(async r=>{ const d=await r.json().catch(()=>null); setGameRead(prev=>({...prev,[gid]: (r.ok&&d&&d.summary)?{text:d.summary}:{error:true}})); }).catch(()=> setGameRead(prev=>({...prev,[gid]:{error:true}}))); }} style={{display:"flex",alignItems:"center",gap:12,background:"linear-gradient(135deg,rgba(10,132,255,0.16),rgba(94,92,230,0.10))",border:"0.5px solid rgba(10,132,255,0.35)",borderRadius:16,padding:"13px 15px",marginBottom:2,cursor:"pointer"}}>
+ <div onClick={()=>{ if(!isPro){ setShowPaywall("ai"); return; } if(read&&read.loading) return; const sp=(activeLeague&&activeLeague.sport)||"nfl"; setGameRead(prev=>({...prev,[gid]:{loading:true}})); fetch("/api/findbet",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sport:sp,game:away+" @ "+home,userId:user&&user.id})}).then(async r=>{ const d=await r.json().catch(()=>null); setGameRead(prev=>({...prev,[gid]: (r.ok&&d)?{data:d}:{error:true}})); }).catch(()=> setGameRead(prev=>({...prev,[gid]:{error:true}}))); }} style={{display:"flex",alignItems:"center",gap:12,background:"linear-gradient(135deg,rgba(10,132,255,0.16),rgba(94,92,230,0.10))",border:"0.5px solid rgba(10,132,255,0.35)",borderRadius:16,padding:"13px 15px",marginBottom:2,cursor:"pointer"}}>
  <div style={{width:36,height:36,borderRadius:11,background:"rgba(10,132,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="19" height="19" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg></div>
  <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:800,color:"#fff"}}>{read&&read.error?"Read unavailable — tap to retry":"Get Plok's read on this matchup"}</div><div style={{fontSize:11.5,color:IOS.label2,marginTop:1}}>Data-backed matchup read{isPro?"":" · Pro"}</div></div>
  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={IOS.label3} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6"/></svg>
  </div>
  )}
 
- {ss0.length>0 && (<>
+ {tapeRows.length>0 && (<>
  <div style={{display:"flex",alignItems:"center",gap:12,margin:"22px 4px 12px"}}><span style={{fontSize:11,fontWeight:800,letterSpacing:1.8,textTransform:"uppercase",color:IOS.label3}}>The Tape</span><div style={{flex:1,height:1,background:"rgba(255,255,255,0.09)"}}/></div>
  <div style={{background:"#2C2C2E",border:"0.5px solid rgba(255,255,255,0.06)",borderRadius:16,padding:"4px 14px"}}>
- {ss0.map((st,i)=>{ const v0=st.value, v1=(ss1[i]&&ss1[i].value)||"\u2014"; const n0=parseFloat(v0), n1=parseFloat(v1); const a=isNaN(n0)?0:n0, b=isNaN(n1)?0:n1; const sum=(a+b)||1; const w0=Math.max(4,Math.round(a/sum*100)), w1=Math.max(4,Math.round(b/sum*100)); return (
- <div key={i} style={{padding:"11px 0",borderBottom:i<ss0.length-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
- <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:7}}>
- <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:AC}}>{v0||"\u2014"}</span>
- <span style={{fontSize:9.5,fontWeight:800,letterSpacing:1,textTransform:"uppercase",color:IOS.label3,textAlign:"center",flex:1,padding:"0 8px"}}>{st.label}</span>
- <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:HC}}>{v1||"\u2014"}</span>
+ {tapeRows.map((row,i)=>{ const v0=(row.a==null||row.a==="")?"—":String(row.a), v1=(row.h==null||row.h==="")?"—":String(row.h); const n0=parseFloat(v0), n1=parseFloat(v1); const showBar=row.bar && !isNaN(n0) && !isNaN(n1); const a=isNaN(n0)?0:n0, b=isNaN(n1)?0:n1; const sum=(a+b)||1; const w0=Math.max(4,Math.round(a/sum*100)), w1=Math.max(4,Math.round(b/sum*100)); return (
+ <div key={i} style={{padding:"11px 0",borderBottom:i<tapeRows.length-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
+ <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:showBar?7:0}}>
+ <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:AC,minWidth:52,textAlign:"left"}}>{v0}</span>
+ <span style={{fontSize:9.5,fontWeight:800,letterSpacing:1,textTransform:"uppercase",color:IOS.label3,textAlign:"center",flex:1,padding:"0 8px"}}>{row.k}</span>
+ <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:HC,minWidth:52,textAlign:"right"}}>{v1}</span>
  </div>
- <div style={{display:"flex",height:7,borderRadius:4,overflow:"hidden",background:"rgba(255,255,255,0.05)",gap:2}}>
+ {showBar && <div style={{display:"flex",height:7,borderRadius:4,overflow:"hidden",background:"rgba(255,255,255,0.05)",gap:2}}>
  <div style={{width:w0+"%",background:AC,borderRadius:"4px 0 0 4px"}}/>
  <div style={{width:w1+"%",background:HC,borderRadius:"0 4px 4px 0",marginLeft:"auto"}}/>
- </div>
+ </div>}
  </div>
  ); })}
  </div>
