@@ -6929,6 +6929,10 @@ export default function App() {
          )}
        </div>
 
+       <div onClick={()=>{ setGridTargetSlot(null); setGridType("ml"); setGridPropSub("all"); setScreen("browser"); }} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"rgba(10,132,255,0.1)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:12,padding:"13px",fontSize:14,fontWeight:800,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif",marginBottom:12}}>
+         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+         Browse all games
+       </div>
        <button onClick={lockSoloFreeSlate} disabled={soloFreePicks.length===0} style={{width:"100%",background:soloFreePicks.length?IOS.green:"rgba(255,255,255,0.08)",border:"none",borderRadius:12,padding:"14px",fontSize:15,fontWeight:800,color:soloFreePicks.length?"#fff":"rgba(255,255,255,0.35)",cursor:soloFreePicks.length?"pointer":"default",fontFamily:"Barlow,sans-serif",marginBottom:16}}>
          {soloFreePicks.length ? `Lock Slate · ${soloFreePicks.length} pick${soloFreePicks.length>1?"s":""} · up to ${projTotal.toFixed(1)} pts` : "Add at least 1 pick"}
        </button>
@@ -6985,7 +6989,7 @@ export default function App() {
 
  // Resolve active sport (default to league's first sport)
  const sportsList = leagueSports && leagueSports.length ? leagueSports : ["nfl"];
- const gSport = (gridSport && sportsList.includes(gridSport)) ? gridSport : sportsList[0];
+ const gSport = isSoloMode ? (soloSport||sportsList[0]) : ((gridSport && sportsList.includes(gridSport)) ? gridSport : sportsList[0]);
 
  // Resolve which slot a tapped card fills
  const resolveTarget = () => {
@@ -7131,6 +7135,13 @@ export default function App() {
  };
  const addCard = (bet, catOverride) => {
  const cat = catOverride || (gridType==="longshot" ? "longshot" : gridType);
+ if(isSoloMode){
+   const _CL={ml:"Moneyline",spread:"Spread",ou:"Over/Under",prop:"Prop",longshot:"Longshot"};
+   const _CC={ml:IOS.blue,spread:IOS.green,ou:IOS.orange,prop:IOS.yellow,longshot:IOS.pink};
+   setSoloFreePicks(prev=> prev.some(p=>String(p.id)===String(bet.id)) ? prev : [...prev, {...bet, category:cat, categoryLabel:_CL[cat]||cat, categoryColor:_CC[cat]||IOS.blue}]);
+   setGridJustAdded(bet.id); setTimeout(()=>setGridJustAdded(null),480);
+   return;
+ }
  if(gridBuildMode && !isSoloMode){ toggleLeg(bet); return; }
  // One bet per type (longshot legs excepted): if this type is already in the
  // slip, replace that slot instead of stacking a second bet of the same type.
@@ -7193,7 +7204,7 @@ export default function App() {
  const StatLabel = ({children}) => (<div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:"rgba(255,255,255,0.32)",marginBottom:3}}>{children}</div>);
 
  const renderCard = (bet, idx) => {
- const selected = activePicks.some(p=>p.bet?.id===bet.id) || isLeg(bet);
+ const selected = isSoloMode ? soloFreePicks.some(p=>String(p.id)===String(bet.id)) : (activePicks.some(p=>p.bet?.id===bet.id) || isLeg(bet));
  const added = gridJustAdded===bet.id;
  const pct = impliedPct(bet.impliedOdds);
  const read = readFor(pct);
@@ -7318,7 +7329,7 @@ export default function App() {
  const Chip = ({b, cat, line, value, mv}) => {
  if(!b) return <div style={{borderRadius:10,border:"1px dashed rgba(255,255,255,0.08)",minHeight:46}}/>;
  const enabled = lineAllowed(cat);
- const sel = (activePicks.some(p=>p.bet&&p.bet.id===b.id)) || isLeg(b);
+ const sel = isSoloMode ? soloFreePicks.some(p=>String(p.id)===String(b.id)) : ((activePicks.some(p=>p.bet&&p.bet.id===b.id)) || isLeg(b));
  const pts = ptsOf(b);
  return (
  <div onClick={()=>{ if(enabled) addCard(b,cat); }} style={{position:"relative",borderRadius:10,cursor:enabled?"pointer":"default",textAlign:"center",padding:"6px 3px",opacity:enabled?1:0.4,
@@ -7440,7 +7451,7 @@ export default function App() {
  <div style={{fontSize:21,fontWeight:800,letterSpacing:"-0.6px",color:"#fff",lineHeight:1}}>Bet Browser</div>
  <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:3,display:"flex",alignItems:"center",gap:5}}>
  <span style={{width:6,height:6,borderRadius:"50%",background:isLiveOdds?IOS.green:IOS.orange,display:"inline-block",boxShadow:isLiveOdds?`0 0 6px ${IOS.green}`:"none"}}/>
- {isLiveOdds?"Live odds":"Sample odds"} · Filling Pick {target+1}{targetMult?` (${targetMult}×)`:""}
+ {isLiveOdds?"Live odds":"Sample odds"} · {isSoloMode ? (soloFreePicks.length+" pick"+(soloFreePicks.length===1?"":"s")+" added") : ("Filling Pick "+(target+1)+(targetMult?(" ("+targetMult+"×)"):""))}
  </div>
  </div>
  {gridCfg && (()=>{
