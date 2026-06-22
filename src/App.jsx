@@ -2863,7 +2863,7 @@ export default function App() {
  const PROP_SUBS_BY_SPORT = {
   nfl:[{id:"all",l:"All"},{id:"pass",l:"Pass"},{id:"rush",l:"Rush"},{id:"rec",l:"Receiving"},{id:"td",l:"TDs"}],
   nba:[{id:"all",l:"All"},{id:"pts",l:"Points"},{id:"reb",l:"Rebounds"},{id:"ast",l:"Assists"},{id:"3pt",l:"Threes"}],
-  mlb:[{id:"all",l:"All"},{id:"k",l:"Strikeouts"},{id:"hits",l:"Hits"},{id:"hr",l:"Home Runs"},{id:"bases",l:"Bases"}],
+  mlb:[{id:"all",l:"All"},{id:"hr",l:"HR"},{id:"hits",l:"Hits"},{id:"bases",l:"Total Bases"},{id:"rbi",l:"RBIs"},{id:"k",l:"K"}],
  };
  const DEFAULT_SLOTS=[{type:"ml",mult:1},{type:"prop",mult:2},{type:"ou",mult:3},{type:"spread",mult:4},{type:"longshot",mult:5}];
  const LAYOUT_PRESETS=[
@@ -6904,7 +6904,7 @@ export default function App() {
          {soloFreePicks.length===0 ? (
            <div style={{background:IOS.bg2,border:"0.5px dashed rgba(255,255,255,0.14)",borderRadius:12,padding:"20px 16px",textAlign:"center"}}>
              <div style={{fontSize:13,fontWeight:700,color:"rgba(255,255,255,0.8)"}}>No picks yet</div>
-             <div style={{fontSize:11.5,color:IOS.label3,marginTop:3}}>Tap bets below to add them to your slate.</div>
+             <div style={{fontSize:11.5,color:IOS.label3,marginTop:3}}>Tap “Browse all games” to add picks to your slate.</div>
            </div>
          ) : (
            <div style={{background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"4px 12px"}}>
@@ -6937,38 +6937,6 @@ export default function App() {
          {soloFreePicks.length ? `Lock Slate · ${soloFreePicks.length} pick${soloFreePicks.length>1?"s":""} · up to ${projTotal.toFixed(1)} pts` : "Add at least 1 pick"}
        </button>
 
-       <div style={{display:"flex",gap:7,overflowX:"auto",paddingBottom:10,marginBottom:4}}>
-         {CATS.map(c=>(
-           <div key={c.k} onClick={()=>setFreeCat(c.k)} style={{flexShrink:0,padding:"7px 14px",borderRadius:9,fontSize:12.5,fontWeight:700,cursor:"pointer",background:freeCat===c.k?IOS.blue:"rgba(255,255,255,0.06)",color:freeCat===c.k?"#fff":"rgba(255,255,255,0.6)"}}>{c.l}</div>
-         ))}
-       </div>
-
-       {!isLiveOdds ? (
-         <div style={{textAlign:"center",padding:"30px 16px",color:IOS.label3,fontSize:13}}>Odds are still loading for this slate…</div>
-       ) : board.length===0 ? (
-         <div style={{textAlign:"center",padding:"30px 16px",color:IOS.label3,fontSize:13}}>No more bets in this category.</div>
-       ) : (
-         <div style={{display:"flex",flexDirection:"column",gap:7}}>
-           {board.map(b=>{
-             const col=b.categoryColor||IOS.blue;
-             return (
-             <div key={b.id} onClick={()=>{ if(atCap) return; setSoloFreePicks([...soloFreePicks, b]); }} style={{display:"flex",alignItems:"center",gap:10,background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:11,padding:"11px 13px",cursor:atCap?"default":"pointer",opacity:atCap?0.5:1}}>
-               <div style={{fontSize:8.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:col,background:`${col}1c`,borderRadius:5,padding:"3px 6px",flexShrink:0}}>{b.categoryLabel||b.category}</div>
-               <div style={{flex:1,minWidth:0}}>
-                 <div style={{fontSize:13,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.pick}</div>
-                 <div style={{fontSize:10.5,color:IOS.label3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.game}</div>
-               </div>
-               <div style={{textAlign:"right",flexShrink:0}}>
-                 <div style={{fontSize:13,fontWeight:800,color:(b.odds||"").startsWith("+")?IOS.green:IOS.blue}}>{b.odds}</div>
-                 <div style={{fontSize:9.5,color:IOS.label3}}>+{ptsFor(b.impliedOdds)} pts</div>
-               </div>
-               <div style={{width:26,height:26,borderRadius:8,background:atCap?"rgba(255,255,255,0.05)":`${IOS.blue}1f`,border:`0.5px solid ${IOS.blue}40`,display:"flex",alignItems:"center",justifyContent:"center",color:IOS.blue,fontSize:18,fontWeight:700,flexShrink:0}}>+</div>
-             </div>
-             );
-           })}
-           {atCap && <div style={{textAlign:"center",fontSize:11,color:IOS.label3,padding:"8px"}}>Slate cap reached ({CAP}). Remove one to add more.</div>}
-         </div>
-       )}
      </>
    )}
  </div>
@@ -7061,7 +7029,16 @@ export default function App() {
  const propSubsBySport = PROP_SUBS_BY_SPORT;
  const propSubs = propSubsBySport[gSport] || [{id:"all",l:"All"}];
  if(gridType==="prop" && gridPropSub!=="all") {
+ const SUB_MK = {
+ pass:["player_pass_yds","player_pass_tds"], rush:["player_rush_yds","player_rush_tds"],
+ rec:["player_receptions","player_reception_yds","player_reception_tds"],
+ td:["player_anytime_td","player_first_td","player_rush_tds","player_reception_tds","player_pass_tds"],
+ pts:["player_points","player_points_rebounds_assists"], reb:["player_rebounds"], ast:["player_assists"], "3pt":["player_threes"],
+ hr:["batter_home_runs"], hits:["batter_hits"], bases:["batter_total_bases"], rbi:["batter_rbis"], k:["pitcher_strikeouts"],
+ };
+ const mk = SUB_MK[gridPropSub];
  list = list.filter(b=>{
+ if(b.market && mk) return mk.includes(b.market);
  const s = ((b.pick||"")+" "+(b.game||"")).toLowerCase();
  switch(gridPropSub){
  case "pass": return s.includes("pass");
@@ -7072,10 +7049,11 @@ export default function App() {
  case "reb": return s.includes("rebound")||s.includes("reb");
  case "ast": return s.includes("assist")||s.includes("ast");
  case "3pt": return s.includes("three")||s.includes("3pt")||s.includes("3-point");
- case "k": return s.includes("strikeout")||s.includes(" k");
+ case "k": return s.includes("strikeout");
  case "hits": return s.includes("hit");
- case "hr": return s.includes("home run")||s.includes("hr")||s.includes("homer");
+ case "hr": return s.includes("home run")||s.includes("homer");
  case "bases": return s.includes("base");
+ case "rbi": return s.includes("rbi");
  default: return true;
  }
  });

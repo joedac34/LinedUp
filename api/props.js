@@ -7,8 +7,7 @@ const PROP_MARKETS = {
     "player_points","player_rebounds","player_assists","player_threes","player_points_rebounds_assists",
   ],
   baseball_mlb: [
-    "batter_hits","batter_home_runs","batter_rbis","batter_runs_scored",
-    "batter_stolen_bases","batter_walks","pitcher_strikeouts","pitcher_hits_allowed","pitcher_walks",
+    "batter_home_runs","batter_hits","batter_total_bases","batter_rbis","pitcher_strikeouts",
   ],
 };
 
@@ -19,9 +18,8 @@ const MARKET_LABELS = {
   player_rush_tds:"Rush TDs", player_reception_tds:"Rec TDs",
   player_points:"Points", player_rebounds:"Rebounds", player_assists:"Assists",
   player_threes:"3-Pointers", player_points_rebounds_assists:"Pts+Reb+Ast",
-  batter_hits:"Hits", batter_home_runs:"Home Runs", batter_rbis:"RBIs",
-  batter_runs_scored:"Runs Scored", batter_stolen_bases:"Stolen Bases", batter_walks:"Walks",
-  pitcher_strikeouts:"Strikeouts", pitcher_hits_allowed:"Hits Allowed", pitcher_walks:"Walks Allowed",
+  batter_home_runs:"Home Runs", batter_hits:"Hits", batter_total_bases:"Total Bases",
+  batter_rbis:"RBIs", pitcher_strikeouts:"Strikeouts",
 };
 
 export default async function handler(req, res) {
@@ -54,33 +52,39 @@ export default async function handler(req, res) {
         const r = await fetch(url);
         if (!r.ok) continue;
         const data = await r.json();
-        const bk = data.bookmakers?.[0];
-        if (!bk) continue;
+        if (!data.bookmakers || !data.bookmakers.length) continue;
 
-        bk.markets?.forEach(market => {
-          const marketLabel = MARKET_LABELS[market.key] || market.key;
-          const isTD = market.key === "player_anytime_td" || market.key === "player_first_td";
-
-          market.outcomes?.forEach((outcome, oi) => {
-            const american = outcome.price >= 0 ? `+${outcome.price}` : `${outcome.price}`;
-            let label;
-            if (isTD) {
-              // TD: name = player name, no over/under
-              label = `${outcome.name} - ${marketLabel}`;
-            } else {
-              // Props: description = player name, name = Over/Under, point = line
-              const player = outcome.description || outcome.name;
-              const direction = outcome.name === "Over" || outcome.name === "Under" ? outcome.name : "";
-              const line = outcome.point != null ? outcome.point : "";
-              label = `${player} ${direction} ${line} ${marketLabel}`.replace(/\s+/g, " ").trim();
-            }
-            props.push({
-              id: `prop_${event.id}_${market.key}_${oi}`,
-              game: gameLabel,
-              pick: label,
-              market: market.key,
-              odds: american,
-              impliedOdds: outcome.price,
+        // Merge markets across ALL books (each book carries a different subset),
+        // de-duping the same player+market+line+side so we don't triple-list it.
+        const seen = new Set();
+        data.bookmakers.forEach(bk => {
+          bk.markets?.forEach(market => {
+            const marketLabel = MARKET_LABELS[market.key] || market.key;
+            const isTD = market.key === "player_anytime_td" || market.key === "player_first_td";
+            market.outcomes?.forEach(outcome => {
+              let label, dedupKey;
+              if (isTD) {
+                const player = outcome.name;
+                label = `${player} - ${marketLabel}`;
+                dedupKey = `${market.key}|${player}`;
+              } else {
+                // Props: description = player name, name = Over/Under, point = line
+                const player = outcome.description || outcome.name;
+                const direction = outcome.name === "Over" || outcome.name === "Under" ? outcome.name : "";
+                const line = outcome.point != null ? outcome.point : "";
+                label = `${player} ${direction} ${line} ${marketLabel}`.replace(/\s+/g, " ").trim();
+                dedupKey = `${market.key}|${player}|${direction}|${line}`;
+              }
+              if (seen.has(dedupKey)) return;
+              seen.add(dedupKey);
+              props.push({
+                id: `prop_${event.id}_${market.key}_${props.length}`,
+                game: gameLabel,
+                pick: label,
+                market: market.key,
+                odds: outcome.price >= 0 ? `+${outcome.price}` : `${outcome.price}`,
+                impliedOdds: outcome.price,
+              });
             });
           });
         });
