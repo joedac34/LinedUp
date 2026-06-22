@@ -1781,6 +1781,11 @@ const trophySVG = (id, color="#fff") => {
 
 const PERIOD_MARKETS = { ml_h1:"h2h_h1", spread_h1:"spreads_h1", ou_h1:"totals_h1", ml_f5:"h2h_1st_5_innings", spread_f5:"spreads_1st_5_innings", ou_f5:"totals_1st_5_innings", yrfi:"totals_1st_1_innings", nrfi:"totals_1st_1_innings" };
 const PERIOD_CATS = ["ml_h1","spread_h1","ou_h1","ml_f5","spread_f5","ou_f5","yrfi","nrfi"];
+const PERIOD_SUBS_BY_SPORT = {
+ mlb:[{id:"ml_f5",l:"F5 ML"},{id:"spread_f5",l:"F5 Spread"},{id:"ou_f5",l:"F5 O/U"},{id:"yrfi",l:"YRFI"},{id:"nrfi",l:"NRFI"}],
+ nfl:[{id:"ml_h1",l:"1H ML"},{id:"spread_h1",l:"1H Spread"},{id:"ou_h1",l:"1H O/U"}],
+ nba:[{id:"ml_h1",l:"1H ML"},{id:"spread_h1",l:"1H Spread"},{id:"ou_h1",l:"1H O/U"}],
+};
 export default function App() {
  const [screen, setScreen] = useState("home");
  const [tutorialStep, setTutorialStep] = useState(-1); // -1 = hidden; only shown on fresh signup
@@ -2070,6 +2075,7 @@ export default function App() {
  const [gridSport, setGridSport] = useState(null);     // null = follow league default sport
  const [gridType, setGridType] = useState("ml");        // ml | spread | ou | prop | longshot
  const [gridPropSub, setGridPropSub] = useState("all"); // prop sub-category filter
+ const [gridPeriodSub, setGridPeriodSub] = useState(""); // period sub-type (solo browser)
  const [gridTargetSlot, setGridTargetSlot] = useState(null); // which flex slot a tapped card fills
  const [gridSearch, setGridSearch] = useState("");
  const [sheetExpanded, setSheetExpanded] = useState(null); // line-sheet expanded game key
@@ -2288,6 +2294,19 @@ export default function App() {
  const eventIds = [...new Set(base.ml.map(b=>b.eventId).filter(Boolean))].slice(0,30);
  if(eventIds.length) fetchPeriodOdds(sp, eventIds, periodTypes);
  }, [activeLeagueId, isSoloMode, liveOdds, activeLeague&&activeLeague.slot_config]);
+
+ // Lazy solo period-odds fetch: only when the Periods view is open (per-event endpoint = cost).
+ useEffect(()=>{
+ if(!isSoloMode || screen!=="browser" || gridType!=="period") return;
+ const sp = soloSport || "mlb";
+ const subs = PERIOD_SUBS_BY_SPORT[sp]; if(!subs) return;
+ const periodTypes = subs.map(s=>s.id);
+ const base = liveOdds[sp];
+ if(!base || !base.ml || !base.ml.length) return; // wait for base odds (carries event IDs)
+ if(periodTypes.every(t=>Array.isArray(base[t]))) return; // already attempted
+ const eventIds = [...new Set(base.ml.map(b=>b.eventId).filter(Boolean))].slice(0,30);
+ if(eventIds.length) fetchPeriodOdds(sp, eventIds, periodTypes);
+ }, [isSoloMode, screen, gridType, soloSport, liveOdds]);
 
  // All-user solo percentile for the share card ("Top X%"). Calls an optional Supabase
  // RPC (solo_top_pct); if it isn't created yet this just no-ops and the badge stays hidden.
@@ -6949,11 +6968,11 @@ export default function App() {
  const setActivePicks = isSoloMode ? setSoloFlexPicks : setFlexPicks;
 
  // Per-bet-type accent — the screen's accent shifts with the selected type
- const ACC = { ml:IOS.blue, spread:IOS.green, ou:IOS.orange, prop:IOS.yellow, longshot:IOS.pink, ml_h1:"#64D2FF", spread_h1:"#64D2FF", ou_h1:"#64D2FF", ml_f5:"#5E5CE6", spread_f5:"#5E5CE6", ou_f5:"#5E5CE6", yrfi:"#FF9F0A", nrfi:"#30D158" };
- const TYPE_LABELS = { ml:"Moneyline", spread:"Spread", ou:"Over/Under", prop:"Prop", longshot:"Longshot", ml_h1:"1H Moneyline", spread_h1:"1H Spread", ou_h1:"1H Over/Under", ml_f5:"F5 Moneyline", spread_f5:"F5 Spread", ou_f5:"F5 Over/Under", yrfi:"YRFI", nrfi:"NRFI" };
+ const ACC = { ml:IOS.blue, spread:IOS.green, ou:IOS.orange, prop:IOS.yellow, longshot:IOS.pink, ml_h1:"#64D2FF", spread_h1:"#64D2FF", ou_h1:"#64D2FF", ml_f5:"#5E5CE6", spread_f5:"#5E5CE6", ou_f5:"#5E5CE6", yrfi:"#FF9F0A", nrfi:"#30D158", period:"#5E5CE6" };
+ const TYPE_LABELS = { ml:"Moneyline", spread:"Spread", ou:"Over/Under", prop:"Prop", longshot:"Longshot", ml_h1:"1H Moneyline", spread_h1:"1H Spread", ou_h1:"1H Over/Under", ml_f5:"F5 Moneyline", spread_f5:"F5 Spread", ou_f5:"F5 Over/Under", yrfi:"YRFI", nrfi:"NRFI", period:"Periods" };
  const acc = ACC[gridType] || IOS.blue;
  const gridCfg = !isSoloMode ? parseSlotConfig(activeLeague&&activeLeague.slot_config) : null;
- const allowedTypes = gridCfg ? [...new Set(gridCfg.map(s=>s.type))] : ["ml","spread","ou","prop","longshot"];
+ const allowedTypes = gridCfg ? [...new Set(gridCfg.map(s=>s.type))] : (isSoloMode ? ["ml","spread","ou","prop","period","longshot"] : ["ml","spread","ou","prop","longshot"]);
 
  // Resolve active sport (default to league's first sport)
  const sportsList = leagueSports && leagueSports.length ? leagueSports : ["nfl"];
@@ -7020,6 +7039,9 @@ export default function App() {
  let list = [];
  if(gridType==="longshot") {
  list = gridBuildMode ? (ALL_BETS||[]).filter(b=> b._sport===gSport) : (ALL_BETS||[]).filter(b=> b._sport===gSport && b.impliedOdds>=400);
+ } else if(gridType==="period") {
+ const _psub = gridPeriodSub || ((PERIOD_SUBS_BY_SPORT[gSport]||[])[0]||{}).id;
+ list = (BETS[_psub]||[]).filter(b=> b._sport===gSport);
  } else {
  list = (BETS[gridType]||[]).filter(b=> b._sport===gSport);
  }
@@ -7556,7 +7578,7 @@ export default function App() {
  {allowedTypes.map(t=>{
  const on = t===gridType; const tc = ACC[t];
  return (
- <div key={t} onClick={()=>{ setGridType(t); setGridPropSub("all"); if(gridCfg){ let _i=activePicks.findIndex(p=>!p.isParlay && p.category===t && p.bet===null); if(_i===-1) _i=activePicks.findIndex(p=>!p.isParlay && p.category===t); if(_i!==-1) setGridTargetSlot(_i); } }} style={{...pillBase,
+ <div key={t} onClick={()=>{ setGridType(t); setGridPropSub("all"); if(t==="period"){ const _ps=PERIOD_SUBS_BY_SPORT[gSport]; setGridPeriodSub(_ps&&_ps.length?_ps[0].id:""); } if(gridCfg){ let _i=activePicks.findIndex(p=>!p.isParlay && p.category===t && p.bet===null); if(_i===-1) _i=activePicks.findIndex(p=>!p.isParlay && p.category===t); if(_i!==-1) setGridTargetSlot(_i); } }} style={{...pillBase,
  background:on?`${tc}26`:"rgba(255,255,255,0.05)", borderColor:on?`${tc}80`:"rgba(255,255,255,0.1)", color:on?tc:"rgba(255,255,255,0.45)"}}>
  {TYPE_LABELS[t]}
  </div>
@@ -7585,6 +7607,19 @@ export default function App() {
  <div className="gbx-scroll" style={{display:"flex",gap:6,padding:"0 16px 10px",overflowX:"auto"}}>
  {propSubs.map(s=>{ const on = s.id===gridPropSub; return (
  <div key={s.id} onClick={()=>setGridPropSub(s.id)} style={{padding:"5px 11px",borderRadius:16,fontSize:11,fontWeight:700,whiteSpace:"nowrap",cursor:"pointer",border:"1px solid",flexShrink:0, background:on?`${acc}1f`:"rgba(255,255,255,0.04)", borderColor:on?`${acc}66`:"rgba(255,255,255,0.08)", color:on?acc:"rgba(255,255,255,0.35)"}}>{s.l}</div>
+ );})}
+ </div>
+ );
+ })()}
+ {/* Period sub-filter (solo) */}
+ {gridType==="period" && (()=>{
+ const _subs = PERIOD_SUBS_BY_SPORT[gSport] || [];
+ if(!_subs.length) return null;
+ const _cur = gridPeriodSub || _subs[0].id;
+ return (
+ <div className="gbx-scroll" style={{display:"flex",gap:6,padding:"0 16px 10px",overflowX:"auto"}}>
+ {_subs.map(s=>{ const on = s.id===_cur; return (
+ <div key={s.id} onClick={()=>setGridPeriodSub(s.id)} style={{padding:"5px 11px",borderRadius:16,fontSize:11,fontWeight:700,whiteSpace:"nowrap",cursor:"pointer",border:"1px solid",flexShrink:0, background:on?`${acc}1f`:"rgba(255,255,255,0.04)", borderColor:on?`${acc}66`:"rgba(255,255,255,0.08)", color:on?acc:"rgba(255,255,255,0.35)"}}>{s.l}</div>
  );})}
  </div>
  );
