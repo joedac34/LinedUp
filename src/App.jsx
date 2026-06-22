@@ -2487,10 +2487,19 @@ export default function App() {
       return out;
     }catch(e){ return null; }
   };
+  const PERIOD_SCOPE = { ml_f5:"First 5", spread_f5:"First 5", ou_f5:"First 5", ml_h1:"1st Half", spread_h1:"1st Half", ou_h1:"1st Half", yrfi:"1st Inning", nrfi:"1st Inning" };
+  const periodSelLabel = (bet) => {
+    const c = bet.category||""; const scope = PERIOD_SCOPE[c]||"Period"; const pt = bet.point;
+    if(c==="yrfi") return "YRFI — a run scored in the 1st inning";
+    if(c==="nrfi") return "NRFI — no run in the 1st inning";
+    if(c==="ou_f5"||c==="ou_h1"){ const side=bet.outcome||bet.pick||""; return `${scope} total: ${side}${pt!=null?" "+pt:""} runs`; }
+    if(c==="spread_f5"||c==="spread_h1"){ const team=bet.outcome||bet.pick||""; const sign=pt!=null?(pt>=0?`+${pt}`:`${pt}`):""; return `${scope} spread: ${team} ${sign}`.trim(); }
+    const team=bet.outcome||bet.pick||""; return `${scope} moneyline: ${team}`;
+  };
   const buildBetCtx = (bet, category) => ({
     sport: bet._sport || leagueSports[0] || "nfl",
-    betType: category,
-    selection: bet.pick,
+    betType: (category==="period" ? (bet.category||"period") : category),
+    selection: (category==="period" ? periodSelLabel(bet) : bet.pick),
     game: bet.game,
     odds: bet.odds,
     userId: user?.id,
@@ -7229,6 +7238,14 @@ export default function App() {
  title = bet.game; subtitle = bet.pick; sideChip = bet.pick?.toLowerCase().startsWith("over")?"OVER":bet.pick?.toLowerCase().startsWith("under")?"UNDER":null; formSeed = bet.game;
  } else if(gridType==="prop"){
  title = bet.game || bet.pick; subtitle = bet.pick; sideChip = bet.pick?.toLowerCase().includes("over")?"OVER":bet.pick?.toLowerCase().includes("under")?"UNDER":null; formSeed = (bet.game||"")+bet.pick;
+ } else if(gridType==="period"){
+ const c = bet.category || gridPeriodSub; const pt = bet.point;
+ const scope = (c&&c.indexOf("_f5")>-1)?"First 5":(c&&c.indexOf("_h1")>-1)?"1st Half":"";
+ if(c==="yrfi"){ title=bet.game; subtitle="Yes run · 1st inning"; sideChip="YES"; formSeed=bet.game; }
+ else if(c==="nrfi"){ title=bet.game; subtitle="No run · 1st inning"; sideChip="NO"; formSeed=bet.game; }
+ else if(c==="ou_f5"||c==="ou_h1"){ const side=String(bet.outcome||bet.pick||""); title=bet.game; subtitle=`${scope} ${side}${pt!=null?" "+pt:""}`.trim(); sideChip=side.toLowerCase().startsWith("over")?"OVER":side.toLowerCase().startsWith("under")?"UNDER":null; formSeed=bet.game; }
+ else if(c==="spread_f5"||c==="spread_h1"){ const team=bet.outcome||bet.pick; const sign=pt!=null?(pt>=0?`+${pt}`:`${pt}`):""; const side=sideOf(team,bet.game); const {away,home}=parseGame(bet.game); const opp=side==="HOME"?away:home; title=team; subtitle=`${scope} ${sign}${opp?`  ·  vs ${opp}`:""}`.trim(); sideChip=side; formSeed=team; }
+ else { const team=bet.outcome||bet.pick; const side=sideOf(team,bet.game); const {away,home}=parseGame(bet.game); const opp=side==="HOME"?away:home; title=team; subtitle=`${scope} ML${opp?`  ·  vs ${opp}`:""}`.trim(); sideChip=side; formSeed=team; }
  } else { // longshot
  title = teamFromLongshot(bet.pick)||bet.pick; subtitle = bet.game; formSeed = bet.pick;
  }
