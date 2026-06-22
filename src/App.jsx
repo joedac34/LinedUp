@@ -2662,6 +2662,20 @@ export default function App() {
   const askFromBet = (bet, category) => {
     if(!isPro){ setShowPaywall("ai"); return; }
     setAiReturn(screen); setScreen("ai");
+    // Period bets (F5 / YRFI / NRFI / 1H): the EV screener does not price these, but the
+    // Trends lens already carries NRFI rates + first-5 starter form — route there for real data.
+    const isPeriod = category==="period" || !!(bet && PERIOD_MARKETS[bet.category]);
+    if(isPeriod && bet && bet.game){
+      const sport = bet._sport || leagueSports[0] || "mlb";
+      const item = { role:"ai", label:`Trends · ${bet.game}`, bet, category, loading:true };
+      setAiThread(prev=>[...prev, { role:"user", text: periodSelLabel(bet) }, item]);
+      setAiBusy(true);
+      fetch("/api/trends", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ sport, game: bet.game, userId: user?.id }) })
+        .then(async r=>{ const data=await r.json(); setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, data:r.ok?data:null, error:r.ok?null:(data.error||"Couldn't load trends")} : x)); })
+        .catch(()=> setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, error:"Network error — try again"} : x)))
+        .finally(()=> setAiBusy(false));
+      return;
+    }
     askInsight(buildBetCtx(bet, category), bet.pick, bet, category);
   };
   const [findBetOpen, setFindBetOpen] = useState(false);
