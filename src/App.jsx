@@ -3124,7 +3124,7 @@ export default function App() {
  const _slotBase = (_existWk && _existWk.length) || 0; // append to this week — do not wipe earlier locks
  const rows = soloFreePicks.map((b,i)=>({
  league_id: lgId, user_id: user.id, week,
- slot: `free_${_slotBase+i}`, multiplier: 1,
+ slot: `free_${_slotBase+i}`, multiplier: b.mult||1,
  pick_name: b.pick, game: b.game||"", odds: b.odds, implied_odds: b.impliedOdds,
  game_date: b.gameTime||null,
  event_id: b.eventId||null, market_key: b.marketKey||null, outcome: b.outcome||null, outcome_point: (b.point!=null?b.point:null), sel_key: b.selKey||null,
@@ -6810,7 +6810,7 @@ export default function App() {
  const slateNum = soloWeeks.length + 1;
  const CATS = [{k:"all",l:"All"},{k:"ml",l:"ML"},{k:"spread",l:"Spread"},{k:"ou",l:"O/U"},{k:"prop",l:"Prop"},{k:"longshot",l:"Longshot"}];
  const board = (freeCat==="all" ? ALL_BETS : ALL_BETS.filter(b=>b.category===freeCat)).filter(b=>!soloFreePicks.some(p=>p.id===b.id)).slice(0,40);
- const projTotal = soloFreePicks.reduce((s2,b)=>s2+ptsFor(b.impliedOdds),0);
+ const projTotal = soloFreePicks.reduce((s2,b)=>s2+(b.mult||1)*ptsFor(b.impliedOdds),0);
  const CAP = 12;
  const atCap = soloFreePicks.length>=CAP;
  return (
@@ -6904,9 +6904,12 @@ export default function App() {
                    <div style={{fontSize:13,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.pick}</div>
                    <div style={{fontSize:10.5,color:IOS.label3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.game}</div>
                  </div>
-                 <div style={{textAlign:"right",flexShrink:0}}>
-                   <div style={{fontSize:12.5,fontWeight:800,color:(b.odds||"").startsWith("+")?IOS.green:IOS.blue}}>{b.odds}</div>
-                   <div style={{fontSize:9.5,color:IOS.label3}}>+{ptsFor(b.impliedOdds)} pts</div>
+                 <div style={{textAlign:"right",flexShrink:0,display:"flex",alignItems:"center",gap:7}}>
+                   {(b.mult||1)>1 && <div style={{fontSize:10,fontWeight:800,color:IOS.blue,background:"rgba(10,132,255,0.14)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:5,padding:"2px 5px"}}>{b.mult}×</div>}
+                   <div>
+                     <div style={{fontSize:12.5,fontWeight:800,color:(b.odds||"").startsWith("+")?IOS.green:IOS.blue}}>{b.odds}</div>
+                     <div style={{fontSize:9.5,color:IOS.label3}}>+{((b.mult||1)*ptsFor(b.impliedOdds)).toFixed(1)} pts</div>
+                   </div>
                  </div>
                  <div onClick={()=>setSoloFreePicks(soloFreePicks.filter(x=>x.id!==b.id))} style={{width:24,height:24,borderRadius:7,background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",color:"rgba(255,255,255,0.5)",fontSize:15,cursor:"pointer",flexShrink:0}}>×</div>
                </div>
@@ -7106,7 +7109,7 @@ export default function App() {
  if(isSoloMode){
    const _CL={ml:"Moneyline",spread:"Spread",ou:"Over/Under",prop:"Prop",longshot:"Longshot"};
    const _CC={ml:IOS.blue,spread:IOS.green,ou:IOS.orange,prop:IOS.yellow,longshot:IOS.pink};
-   setSoloFreePicks(prev=> prev.some(p=>String(p.id)===String(bet.id)) ? prev : [...prev, {...bet, category:cat, categoryLabel:_CL[cat]||cat, categoryColor:_CC[cat]||IOS.blue}]);
+   setSoloFreePicks(prev=> prev.some(p=>String(p.id)===String(bet.id)) ? prev : [...prev, {...bet, category:cat, categoryLabel:_CL[cat]||cat, categoryColor:_CC[cat]||IOS.blue, mult:1}]);
    setGridJustAdded(bet.id); setTimeout(()=>setGridJustAdded(null),480);
    return;
  }
@@ -7177,7 +7180,8 @@ export default function App() {
  const pct = impliedPct(bet.impliedOdds);
  const read = readFor(pct);
  const pos = bet.odds?.startsWith("+");
- const pts = calcPickPoints(targetMult||1, bet.impliedOdds, "W");
+ const _myMult = isSoloMode ? ((soloFreePicks.find(p=>String(p.id)===String(bet.id))||{}).mult||1) : (targetMult||1);
+ const pts = calcPickPoints(_myMult, bet.impliedOdds, "W");
  const ret = decReturn(bet.impliedOdds);
 
  // Header line + body vary by type
@@ -7245,6 +7249,14 @@ export default function App() {
  </div>
  <div style={{fontSize:10,fontWeight:700,color:read.c,marginBottom:10}}>{read.t}</div>
 
+ {isSoloMode && selected && (<>
+ <StatLabel>Multiplier · units</StatLabel>
+ <div onClick={(e)=>e.stopPropagation()} style={{display:"flex",gap:5,marginBottom:10,marginTop:1}}>
+ {[1,2,3,4,5].map(m=>{ const on=_myMult===m; return (
+ <div key={m} onClick={(e)=>{ e.stopPropagation(); setSoloFreePicks(prev=>prev.map(p=>String(p.id)===String(bet.id)?{...p,mult:m}:p)); }} style={{flex:1,textAlign:"center",padding:"5px 0",borderRadius:7,fontSize:11,fontWeight:800,cursor:"pointer", background:on?`${acc}28`:"rgba(255,255,255,0.04)", border:`1px solid ${on?acc:"rgba(255,255,255,0.08)"}`, color:on?acc:"rgba(255,255,255,0.4)"}}>{m}×</div>
+ );})}
+ </div>
+ </>)}
  {/* Bottom row: recent form + reward */}
  <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:6}}>
  <button onClick={(e)=>{e.stopPropagation(); askFromBet(bet, gridType==="longshot"?"longshot":gridType);}} aria-label="Ask AI" style={{display:"inline-flex",alignItems:"center",gap:4,padding:"4px 8px",borderRadius:8,background:`${acc}1a`,border:`1px solid ${acc}33`,color:acc,fontSize:9.5,fontWeight:800,cursor:"pointer",flexShrink:0,alignSelf:"flex-end"}}><svg width="11" height="11" viewBox="0 0 24 24" fill={acc}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg>AI</button>
