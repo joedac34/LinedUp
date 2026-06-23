@@ -2977,6 +2977,7 @@ export default function App() {
  if(derived <= cw) return; // current week isn't over yet
  for(let wk=cw; wk<derived; wk++){ await finalizeWeekMatchups(leagueId, wk); }
  await supabase.from('leagues').update({current_week: derived}).eq('id', leagueId);
+ await advancePlayoffBracket(leagueId);
  };
 
  // Decide W/L for a closed week from graded picks. Idempotent: only touches unfinalized matchups.
@@ -3181,6 +3182,7 @@ export default function App() {
      const memberIds=allMembers.map(m=>m.user_id);
      if((league.league_type||"h2h")==="bracket") await generateBracket(league.id, memberIds);
      else if((league.league_type||"h2h")==="h2h") await generateSchedule(league.id, memberIds, league.season_weeks||18);
+     else if(league.league_type==="points") await supabase.from("leagues").update({ season_start: new Date().toISOString(), current_week: 1 }).eq("id", league.id).is("season_start", null);
      alert("Joined "+league.name+"! League is full — schedule generated.");
    } else {
      alert("Joined "+league.name+"! "+(targetSize-allMembers.length)+" more needed.");
@@ -3236,6 +3238,7 @@ export default function App() {
      const memberIds = allMembers.map(m=>m.user_id);
      if((league.league_type||"h2h")==="bracket") await generateBracket(league.id, memberIds);
      else if((league.league_type||"h2h")==="h2h") await generateSchedule(league.id, memberIds, league.season_weeks||18);
+     else if(league.league_type==="points") await supabase.from("leagues").update({ season_start: new Date().toISOString(), current_week: 1 }).eq("id", league.id).is("season_start", null);
    }
    await fetchLeagues(user.id);
    setShowBrowse(false);
@@ -3297,6 +3300,40 @@ export default function App() {
    }
    const { error } = await supabase.from("matchups").insert(rows);
    return !error;
+ };
+
+ // Client-side playoff advancement (h2h & points; standalone bracket type settles in grade.js).
+ // Ascending pass: finalize each closed playoff round, then propagate winners into the next round's seats.
+ const advancePlayoffBracket = async (leagueId) => {
+   const { data:lg } = await supabase.from("leagues").select("current_week").eq("id",leagueId).maybeSingle();
+   const cw = (lg&&lg.current_week)||1;
+   let { data } = await supabase.from("matchups").select("*").eq("league_id",leagueId);
+   let pw = (data||[]).filter(m=>String(m.bracket_match_id||"").startsWith("PW"));
+   if(!pw.length) return;
+   const parse = id => { const t=String(id||""); if(t.slice(0,2)!=="PW") return null; const mi=t.indexOf("M"); if(mi<0) return null; const w=parseInt(t.slice(2,mi),10); const i=parseInt(t.slice(mi+1),10); return (w&&i)?{w,i}:null; };
+   const weeks = [...new Set(pw.map(m=>m.week))].sort((a,b)=>a-b);
+   for(const w of weeks){
+     if(w < cw){
+       const open = pw.filter(m=>m.week===w && !m.winner_id && m.user1_id && m.user2_id);
+       if(open.length){
+         await finalizeWeekMatchups(leagueId, w);
+         const { data:d2 } = await supabase.from("matchups").select("*").eq("league_id",leagueId);
+         pw = (d2||[]).filter(m=>String(m.bracket_match_id||"").startsWith("PW"));
+       }
+     }
+     const byKey = {}; pw.forEach(m=>{ const k=parse(m.bracket_match_id); if(k) byKey[k.w+"_"+k.i]=m; });
+     const decided = pw.filter(m=>m.week===w && m.winner_id);
+     for(const m of decided){
+       const k = parse(m.bracket_match_id); if(!k) continue;
+       const nextM = byKey[(w+1)+"_"+Math.ceil(k.i/2)];
+       if(!nextM) continue;
+       const seat = (k.i%2===1) ? "user1_id" : "user2_id";
+       if(nextM[seat]!==m.winner_id){
+         await supabase.from("matchups").update({ [seat]: m.winner_id }).eq("id", nextM.id);
+         nextM[seat] = m.winner_id;
+       }
+     }
+   }
  };
 
  const fetchPuLeagueData = async (leagueId, userId) => {
