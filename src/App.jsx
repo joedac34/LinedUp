@@ -1090,6 +1090,10 @@ function WeeklyRecap({ data, picks, standings, league, stats, IOS, onClose, user
 }
 const BRK_LOCK = '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>';
 function brkRoundName(count){ return count===1?"Final":count===2?"Semifinals":count===4?"Quarterfinals":count===8?"Round of 16":count===16?"Round of 32":("Round of "+count*2); }
+// Playoff field size — power of 2 so the bracket is clean. <4 players = no playoff (standings title).
+function playoffSeeds(total){ const t=Number(total)||0; return t>=6?4 : t>=4?2 : 0; }
+function playoffWeeksFor(n){ return n>=2 ? Math.ceil(Math.log2(n)) : 0; }
+
 function BracketView({ matchups, members, uid, IOS, onOpenMatch, live, onChampion }){
   const nameOf = (id)=>{ if(!id) return null; const m=(members||[]).find(x=>x.userId===id); return m?m.name:"Player"; };
   const byWeek = {};
@@ -3271,6 +3275,30 @@ export default function App() {
     await supabase.from("leagues").update({ season_start: new Date().toISOString(), current_week: 1 }).eq("id", leagueId).is("season_start", null);
  };
 
+ // Seed a single-elim playoff from final standings order (1 vs N, 2 vs N-1 ...).
+ // Tagged PW{week}M{i} so playoff rows coexist with round-robin rows. Reused by BOTH h2h & points.
+ const generatePlayoffBracket = async (leagueId, seededIds, startWeek) => {
+   const n = (seededIds||[]).length;
+   if(![2,4,8,16].includes(n)) return false;
+   let order=[1,2];
+   while(order.length < n){ const size=order.length*2; const nx=[]; for(const sd of order){ nx.push(sd); nx.push(size+1-sd); } order=nx; }
+   const sw = Math.max(1, startWeek);
+   // Clear anything from the playoff window onward (round-robin filler or a prior seeding), then rebuild.
+   await supabase.from("matchups").delete().eq("league_id", leagueId).gte("week", sw);
+   const rows=[]; let week=sw; let roundSize=n;
+   while(roundSize>1){
+     const matches=roundSize/2;
+     for(let i=0;i<matches;i++){
+       let u1=null,u2=null;
+       if(week===sw){ const sA=order[i*2], sB=order[i*2+1]; u1=seededIds[sA-1]||null; u2=seededIds[sB-1]||null; }
+       rows.push({ league_id:leagueId, week, user1_id:u1, user2_id:u2, user1_points:0, user2_points:0, winner_id:null, bracket_match_id:`PW${week}M${i+1}` });
+     }
+     roundSize=matches; week++;
+   }
+   const { error } = await supabase.from("matchups").insert(rows);
+   return !error;
+ };
+
  const fetchPuLeagueData = async (leagueId, userId) => {
  const {data} = await supabase
  .from("league_power_ups")
@@ -3683,7 +3711,7 @@ export default function App() {
  };
 
  useEffect(()=>{
- if(screen==="league" && activeLeague && activeLeague.league_type==="bracket" && (leagueTab==="bracket"||leagueTab==="schedule")){
+ if(screen==="league" && activeLeague && ((activeLeague.league_type==="bracket" && (leagueTab==="bracket"||leagueTab==="schedule")) || leagueTab==="playoff")){
  fetchBracket(activeLeague.id);
  const _iv=setInterval(()=>fetchBracket(activeLeague.id), 45000);
  return ()=>clearInterval(_iv);
@@ -5487,7 +5515,7 @@ export default function App() {
    if(!leagueIsFull) return null;
    const ms = realStandings||[];
    const total = ms.length || targetSize;
-   const playoffN = total>=4 ? Math.min(4, Math.ceil(total/2)) : 0;
+   const playoffN = playoffSeeds(total);
    const me = ms.find(z=>z.isYou)||{};
    const myRank = me.rank || (ms.findIndex(z=>z.isYou)+1) || "—";
    const myWk = parseFloat(myPicks.filter(p=>p.result==="W").reduce((sm,p)=>sm+parseFloat(p.points_earned||0),0).toFixed(1));
@@ -7755,7 +7783,7 @@ export default function App() {
  const cw = activeLeague.current_week||activeLeague.week||1;
  const ms = realStandings||[];
  const total = ms.length || (activeLeague.target_size||activeLeague.max_members||8);
- const playoffN = total>=4 ? Math.min(4, Math.ceil(total/2)) : 0;
+ const playoffN = playoffSeeds(total);
  const TCOL=[IOS.orange,IOS.pink,IOS.indigo,"#40E0C0","#BF5AF2","#64D2FF",IOS.yellow,IOS.green];
  return (
  <div className="body">
@@ -9447,7 +9475,7 @@ export default function App() {
 
  {/* Tabs */}
  <div className="seg-control" style={{marginBottom:14}}>
- {(activeLeague.league_type==="bracket"?["standings","trophies","bracket"]:["standings","trophies","schedule"]).map(t=><div key={t} className={`seg-item ${leagueTab===t?"on":""}`} onClick={()=>setLeagueTab(t)}>{t.charAt(0).toUpperCase()+t.slice(1)}</div>)}
+ {(activeLeague.league_type==="bracket"?["standings","trophies","bracket"]:activeLeague.league_type==="points"?["standings","trophies","playoff"]:["standings","trophies","schedule","playoff"]).map(t=><div key={t} className={`seg-item ${leagueTab===t?"on":""}`} onClick={()=>setLeagueTab(t)}>{t.charAt(0).toUpperCase()+t.slice(1)}</div>)}
  </div>
 
  {(leagueTab==="bracket"||(leagueTab==="schedule"&&activeLeague.league_type==="bracket"))&&(
@@ -9476,12 +9504,76 @@ export default function App() {
  </>
  )}
 
+ {leagueTab==="playoff"&&(()=>{
+   const ms = realStandings||[];
+   const total = ms.length || (activeLeague.target_size||activeLeague.max_members||0);
+   const N = playoffSeeds(total);
+   const pWeeks = playoffWeeksFor(N);
+   const sw = Number(activeLeague.season_weeks)||18;
+   const startWeek = Math.max(1, sw - pWeeks + 1);
+   const cw = activeLeague.current_week||1;
+   const regDone = cw >= startWeek;
+   const playoffMs = (bracketMatchups||[]).filter(m=>String(m.bracket_match_id||"").startsWith("P"));
+   const seeded = ms.slice(0,N);
+   const seededIds = seeded.map(z=>z.userId);
+   const doSeed = async ()=>{ if(seededIds.length!==N) return; const ok = await generatePlayoffBracket(activeLeague.id, seededIds, startWeek); if(ok) fetchBracket(activeLeague.id); };
+   if(N===0) return (
+     <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:16,padding:"36px 24px",textAlign:"center"}}>
+       <div style={{fontSize:18,fontWeight:700,color:"#fff",marginBottom:8}}>No playoff in this league</div>
+       <div style={{fontSize:14,color:IOS.label3,lineHeight:1.6}}>Playoffs need at least 4 players. With a smaller group, the top of the standings takes the title.</div>
+     </div>
+   );
+   if(playoffMs.length) return (
+     <>
+       {playoffMs.some(mm=>mm.week===bracketLive.week && !mm.winner_id) && <div style={{margin:"0 16px 10px",display:"flex",alignItems:"center",justifyContent:"center",gap:7,background:"rgba(48,209,88,.1)",border:"1px solid rgba(48,209,88,.3)",borderRadius:12,padding:"9px 14px"}}><span className="brk-livedot"/><span style={{fontSize:11,fontWeight:900,letterSpacing:".12em",color:IOS.green}}>PLAYOFFS · LIVE ROUND</span></div>}
+       <div style={{margin:"0 16px 12px",fontSize:11,fontWeight:800,letterSpacing:".5px",textTransform:"uppercase",color:IOS.yellow}}>Top {N} seeds · single-elim · Wk {startWeek}–{sw}</div>
+       <BracketView matchups={playoffMs} members={leagueMembers} uid={user&&user.id} IOS={IOS} onOpenMatch={openBracketMatch} live={bracketLive} onChampion={(id,nm)=>setChampCelebrate({name:nm, leagueName:activeLeague.name, isYou:id===(user&&user.id)})}/>
+       {bracketDetail && <BracketMatchSheet d={bracketDetail} IOS={IOS} onClose={()=>setBracketDetail(null)}/>}
+       {champCelebrate && <ChampCelebrate name={champCelebrate.name} leagueName={champCelebrate.leagueName} isYou={champCelebrate.isYou} IOS={IOS} onClose={()=>setChampCelebrate(null)} onShare={()=>champShare(champCelebrate.name, champCelebrate.leagueName)}/>}
+     </>
+   );
+   return (
+     <div style={{margin:"0 16px"}}>
+       <div style={{borderRadius:16,padding:"16px",background:"linear-gradient(160deg,#19191e,#141417)",border:`0.5px solid ${IOS.sep}`,marginBottom:12}}>
+         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+           <div style={{fontSize:17,fontWeight:800,color:"#fff"}}>Playoff bracket</div>
+           <div style={{fontSize:10.5,fontWeight:800,letterSpacing:".4px",textTransform:"uppercase",color:regDone?IOS.green:IOS.label3,background:regDone?"rgba(48,209,88,.12)":"rgba(255,255,255,.05)",border:`0.5px solid ${regDone?"rgba(48,209,88,.35)":IOS.sep}`,borderRadius:20,padding:"4px 10px"}}>{regDone?"Ready to seed":`Locks after Wk ${startWeek-1}`}</div>
+         </div>
+         <div style={{fontSize:13,color:IOS.label2,lineHeight:1.55}}>Top {N} seeds make a {pWeeks}-week single-elimination playoff (Wk {startWeek}–{sw}). Seeds lock from the final standings, 1 vs {N}.</div>
+       </div>
+       <div style={{fontSize:11,fontWeight:800,letterSpacing:".5px",textTransform:"uppercase",color:IOS.label3,margin:"0 4px 8px"}}>{regDone?"Seeds":"Projected seeds"}</div>
+       <div style={{background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:16,overflow:"hidden"}}>
+         {seeded.length===0 ? (<div style={{padding:"22px 16px",textAlign:"center",color:IOS.label3,fontSize:14}}>No graded picks yet</div>) : seeded.map((r,i)=>(
+           <div key={r.userId||i} style={{display:"flex",alignItems:"center",gap:11,padding:"12px 14px",background:r.isYou?"rgba(10,132,255,0.10)":"transparent",borderBottom:i<seeded.length-1?`0.5px solid ${IOS.sep}`:"none"}}>
+             <div style={{width:24,height:24,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:13,color:"#0c0c0e",background:IOS.yellow}}>{i+1}</div>
+             <div style={{flex:1,minWidth:0}}>
+               <div style={{fontSize:14,fontWeight:800,color:r.isYou?IOS.blue:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.isYou?"You":r.name}</div>
+               <div style={{fontSize:10.5,color:IOS.label3,fontWeight:600,marginTop:1}}>{r.record||"0-0"} · {r.points!=null?r.points:0} pts</div>
+             </div>
+             <div style={{fontSize:10,fontWeight:800,letterSpacing:".4px",textTransform:"uppercase",color:IOS.label3}}>vs #{N-i}</div>
+           </div>
+         ))}
+       </div>
+       {regDone && activeLeague.isCommissioner && seededIds.length===N && (
+         <div onClick={doSeed} style={{marginTop:14,background:IOS.blue,borderRadius:12,padding:"14px",textAlign:"center",fontSize:15,fontWeight:800,color:"#fff",cursor:"pointer"}}>Seed the playoff bracket</div>
+       )}
+       {regDone && !activeLeague.isCommissioner && (
+         <div style={{marginTop:14,textAlign:"center",fontSize:12.5,color:IOS.label3}}>Waiting for the commissioner to seed the playoff.</div>
+       )}
+       {!regDone && (
+         <div style={{marginTop:14,textAlign:"center",fontSize:12.5,color:IOS.label3,lineHeight:1.5}}>Seeds are projected from the current standings and lock in after Week {startWeek-1}.</div>
+       )}
+       <div style={{height:24}}/>
+     </div>
+   );
+ })()}
+
  {leagueTab==="standings"&&(
  <>
 {activeLeague.league_type==="points" ? (()=>{
  const _ms = realStandings||[];
  const total = _ms.length || (activeLeague.target_size||activeLeague.max_members||8);
- const playoffN = total>=4 ? Math.min(4, Math.ceil(total/2)) : 0;
+ const playoffN = playoffSeeds(total);
  const me = _ms.find(z=>z.isYou) || {};
  const myRank = me.rank || (_ms.findIndex(z=>z.isYou)+1) || "—";
  const cw = activeLeague.current_week||activeLeague.week||1;
