@@ -850,9 +850,9 @@ function soloDrawCard(d){
   x.fillStyle=AC; x.font="800 23px Barlow, system-ui, sans-serif"; x.fillText(".",P+116,54);
   if(d.name){ x.textAlign="right"; x.fillStyle=MUT; x.font="600 17px Barlow, system-ui, sans-serif"; x.fillText("@"+String(d.name).slice(0,18),W-P,58); }
   x.fillStyle="rgba(255,255,255,.1)"; x.fillRect(P,92,W-2*P,1);
-  x.textAlign="left"; x.fillStyle=AC; x.font="800 15px Barlow, system-ui, sans-serif"; x.fillText("SLATE "+d.slate+"   ·   SOLO MODE",P,108);
+  x.textAlign="left"; x.fillStyle=AC; x.font="800 15px Barlow, system-ui, sans-serif"; x.fillText(d.slate+"   ·   SOLO MODE",P,108);
   x.fillStyle=d.points>=0?GR:RD; x.font="900 128px Barlow, system-ui, sans-serif"; x.fillText((d.points>=0?"+":"")+Math.round(d.points),P-6,132);
-  x.fillStyle=MUT; x.font="800 19px Barlow, system-ui, sans-serif"; x.fillText("POINTS THIS SLATE",P,278);
+  x.fillStyle=MUT; x.font="800 19px Barlow, system-ui, sans-serif"; x.fillText("POINTS THIS WEEK",P,278);
   let y=330;
   if(d.topPct){
     rr(P,y,W-2*P,90,18); x.fillStyle="rgba(191,90,242,.12)"; x.fill(); x.lineWidth=1.5; x.strokeStyle="rgba(191,90,242,.55)"; rr(P,y,W-2*P,90,18); x.stroke();
@@ -861,7 +861,7 @@ function soloDrawCard(d){
     x.fillStyle=MUT2; x.font="600 13px Barlow, system-ui, sans-serif"; x.fillText("ranked by win rate",W-P-22,y+50);
     y+=116;
   }
-  const cells=[["RECORD",d.record],["SLATE WIN",d.slateWinPct+"%"],["STREAK",d.streak>0?(d.streak+(d.streak===1?" slate":" slates")):"—"]];
+  const cells=[["RECORD",d.record],["WEEK WIN",d.slateWinPct+"%"],["STREAK",d.streak>0?(d.streak+(d.streak===1?" week":" weeks")):"—"]];
   const cw=(W-2*P)/3;
   cells.forEach((cl,i)=>{ const cx=P+i*cw;
     x.textAlign="left"; x.fillStyle=MUT2; x.font="700 13px Barlow, system-ui, sans-serif"; x.fillText(cl[0],cx,y);
@@ -1476,7 +1476,8 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
   const curPending = _cur.length - curGraded;
   const curPts = _cur.reduce((s,p)=>s+parseFloat((p&&p.points_earned)||0),0);
   const buildingCount = (soloFlexPicks && soloFlexPicks.length) || 0;
-  const featGame = (tickerGames||[]).find(g=>{ const t=g&&g.time?new Date(g.time):null; return t && t>new Date(); }) || (tickerGames && tickerGames[0]) || null;
+  const _okSport = (g)=> !soloSport || !g.sport || g.sport===soloSport;
+ const featGame = (tickerGames||[]).find(g=>{ const t=g&&g.time?new Date(g.time):null; return _okSport(g) && t && t>new Date(); }) || (tickerGames||[]).find(_okSport) || null;
 
   // ── Streaks & personal bests (#3) ──────────────────────────────────────────
   const gradedAsc = [...gradedSlates].sort((a,b)=>a.week-b.week);
@@ -1494,7 +1495,7 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
       const winsArr=(w.picks||[]).filter(pk=>pk.result==="W");
       const bestPk = winsArr.length ? winsArr.reduce((a,b)=>(parseFloat(b.points_earned||0)>parseFloat(a.points_earned||0)?b:a)) : null;
       const slateWinPct=(w.wins+w.losses)>0?Math.round(w.wins/(w.wins+w.losses)*100):0;
-      const cv = soloDrawCard({slate:w.week, points:w.pts, record:w.wins+"-"+w.losses, slateWinPct, streak:currentStreak, allTimeWinPct:winPct, picksN:(w.picks?w.picks.length:0), bestPick: bestPk?{name:bestPk.pick_name,odds:bestPk.odds,pts:parseFloat(bestPk.points_earned||0)}:null, topPct:soloTopPct, name:username||""});
+      const cv = soloDrawCard({slate:soloWeekRange(w.week), points:w.pts, record:w.wins+"-"+w.losses, slateWinPct, streak:currentStreak, allTimeWinPct:winPct, picksN:(w.picks?w.picks.length:0), bestPick: bestPk?{name:bestPk.pick_name,odds:bestPk.odds,pts:parseFloat(bestPk.points_earned||0)}:null, topPct:soloTopPct, name:username||""});
       const url="https://lined-up-murex.vercel.app";
       const text="Week "+soloWeekRange(w.week)+": "+w.wins+"-"+w.losses+", "+(w.pts>=0?"+":"")+Math.round(w.pts)+" pts"+(soloTopPct?(" — top "+soloTopPct+"% of all pickers"):"")+" on PickLock Solo.";
       const blob=await new Promise(r=>cv.toBlob(r,"image/png"));
@@ -1931,6 +1932,7 @@ export default function App() {
  away: g.away_team,
  home: g.home_team,
  time: g.commence_time,
+ sport: sportId,
  })));
 
  setLiveOdds(prev => ({
@@ -3131,7 +3133,7 @@ export default function App() {
  result: "pending", points_earned: 0,
  }));
  const { error } = await supabase.from("picks").insert(rows);
- if(error){ alert("Error saving slate: " + error.message); return; }
+ if(error){ alert("Error saving picks: " + error.message); return; }
  try{ await supabase.from("leagues").update({sport: soloSport}).eq("id", lgId); }catch(e){}
  const freeSnap = soloFreePicks.map(b=>({pick:b.pick, game:b.game||"", odds:b.odds, impliedOdds:b.impliedOdds, category:b.category, categoryLabel:b.categoryLabel, categoryColor:b.categoryColor}));
  const lockedAt = new Date().toISOString();
@@ -3141,6 +3143,7 @@ export default function App() {
  setSoloFreePicks([]);
  try{ if(navigator.vibrate) navigator.vibrate([0,30,40,30,60]); }catch(e){}
  setLockRitual(true);
+ try{ await fetchSoloWeeks(); }catch(e2){}
  } catch(e) { alert("Error: " + e.message); }
  };
  const clearSoloSlate = async () => {
@@ -3782,6 +3785,12 @@ export default function App() {
  const t=setInterval(()=>setTimeLeft(p=>{let{h,m,s}=p;s--;if(s<0){s=59;m--;}if(m<0){m=59;h--;}if(h<0){h=0;m=0;s=0;}return{h,m,s};}),1000);
  return()=>clearInterval(t);
  },[]);
+
+ // Solo home: fetch the live solo sport so the ticker + Plok's Play of the Day reflect the real live sport, not stale league data.
+ useEffect(()=>{
+ if(!isSoloMode || !user) return;
+ fetchLiveOdds(soloSport||"mlb");
+ }, [isSoloMode, soloSport, user]);
 
  useEffect(()=>{
  if(!activeLeagueId||!user) return;
@@ -6817,13 +6826,13 @@ export default function App() {
  <div className="body" style={{padding:"0 16px 40px"}}>
    <div style={{padding:"18px 0 12px",display:"flex",alignItems:"flex-start",justifyContent:"space-between"}}>
      <div>
-       <div style={{fontSize:23,fontWeight:800,color:"#fff",letterSpacing:-0.5}}>{locked?`Slate ${slateNum}`:"Build Your Slate"}</div>
+       <div style={{fontSize:23,fontWeight:800,color:"#fff",letterSpacing:-0.5}}>{locked?"This Week":"Build This Week"}</div>
        <div style={{fontSize:12.5,color:IOS.label3,marginTop:2}}>{locked?"Locked — pending results":"Pick as many as you want. Each scores on its own odds."}</div>
        {!locked && <div onClick={()=>setShowSoloSportPicker(true)} style={{display:"inline-flex",alignItems:"center",gap:6,marginTop:10,background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:9,padding:"5px 10px",cursor:"pointer"}}><span style={{width:7,height:7,borderRadius:2,background:(SPORTS[soloSport]&&SPORTS[soloSport].color)||IOS.blue}}/><span style={{fontSize:12,fontWeight:800,color:"#fff"}}>{(SPORTS[soloSport]&&SPORTS[soloSport].label)||String(soloSport).toUpperCase()}</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={IOS.label3} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>}
      </div>
      <div style={{textAlign:"right",flexShrink:0,marginLeft:12}}>
-       <div style={{fontSize:9.5,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5}}>Slate</div>
-       <div style={{fontSize:20,fontWeight:800,color:IOS.blue,lineHeight:1.1}}>{slateNum}</div>
+       <div style={{fontSize:9.5,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5}}>Week</div>
+       <div style={{fontSize:13,fontWeight:800,color:IOS.blue,lineHeight:1.2,marginTop:2}}>{soloWeekRange(soloWeekNum())}</div>
      </div>
    </div>
 
@@ -6851,14 +6860,14 @@ export default function App() {
        {plokSlateBusy ? (
          <div style={{display:"flex",alignItems:"center",gap:9,background:"rgba(255,255,255,0.04)",border:`0.5px solid ${IOS.blue}33`,borderRadius:12,padding:"13px 14px",marginBottom:12}}>
            <span className="ai-dot"/><span className="ai-dot" style={{animationDelay:".15s"}}/><span className="ai-dot" style={{animationDelay:".3s"}}/>
-           <span style={{fontSize:12.5,fontWeight:700,color:"rgba(255,255,255,0.7)"}}>Plok is building your slate…</span>
+           <span style={{fontSize:12.5,fontWeight:700,color:"rgba(255,255,255,0.7)"}}>Plok is building your picks…</span>
          </div>
        ) : plokSlate && plokSlate.error ? (
          <div style={{background:"rgba(255,69,58,0.08)",border:`0.5px solid ${IOS.red}33`,borderRadius:12,padding:"11px 14px",marginBottom:12,fontSize:12.5,color:"rgba(255,255,255,0.75)"}}>{plokSlate.error}</div>
        ) : plokSlate && plokSlate.picks ? (
          <div style={{background:`linear-gradient(135deg,${IOS.blue}1a,rgba(255,255,255,0.03))`,border:`0.5px solid ${IOS.blue}33`,borderRadius:14,padding:"13px 14px",marginBottom:12}}>
            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-             <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:IOS.blue}}>Plok built a slate</div>
+             <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:IOS.blue}}>Plok built your picks</div>
              <div onClick={()=>setPlokSlate(null)} style={{cursor:"pointer",color:"rgba(255,255,255,0.4)",fontSize:17,lineHeight:1}}>×</div>
            </div>
            {plokSlate.strategy && <div style={{fontSize:12.5,lineHeight:1.45,color:"rgba(255,255,255,0.82)",marginBottom:11}}>{plokSlate.strategy}</div>}
@@ -6879,12 +6888,12 @@ export default function App() {
                );
              })}
            </div>
-           <button onClick={applyPlokSlate} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:11,padding:"11px",fontSize:13,fontWeight:800,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Add to my slate</button>
+           <button onClick={applyPlokSlate} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:11,padding:"11px",fontSize:13,fontWeight:800,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Add to my picks</button>
          </div>
        ) : (
          <button onClick={buildPlokSlate} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"rgba(255,255,255,0.05)",border:`1px solid ${IOS.blue}40`,borderRadius:12,padding:"12px",fontSize:13.5,fontWeight:800,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif",marginBottom:12}}>
            <svg width="16" height="16" viewBox="0 0 24 24" fill={IOS.blue} stroke="none"><path d="M12 2l1.7 5.4L19 9l-5.3 1.6L12 16l-1.7-5.4L5 9l5.3-1.6z"/></svg>
-           Let Plok build my slate
+           Let Plok build my picks
          </button>
        )}
        <div style={{marginBottom:12}}>
@@ -6898,20 +6907,25 @@ export default function App() {
              {soloFreePicks.map((b,i)=>{
                const col=b.categoryColor||IOS.blue;
                return (
-               <div key={b.id} style={{display:"flex",alignItems:"center",gap:9,padding:"9px 0",borderBottom:i<soloFreePicks.length-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
-                 <div style={{fontSize:8.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:col,background:`${col}1c`,borderRadius:5,padding:"3px 6px",flexShrink:0}}>{b.categoryLabel||b.category}</div>
-                 <div style={{flex:1,minWidth:0}}>
-                   <div style={{fontSize:13,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.pick}</div>
-                   <div style={{fontSize:10.5,color:IOS.label3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.game}</div>
-                 </div>
-                 <div style={{textAlign:"right",flexShrink:0,display:"flex",alignItems:"center",gap:7}}>
-                   {(b.mult||1)>1 && <div style={{fontSize:10,fontWeight:800,color:IOS.blue,background:"rgba(10,132,255,0.14)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:5,padding:"2px 5px"}}>{b.mult}×</div>}
-                   <div>
+               <div key={b.id} style={{padding:"9px 0",borderBottom:i<soloFreePicks.length-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
+                 <div style={{display:"flex",alignItems:"center",gap:9}}>
+                   <div style={{fontSize:8.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:col,background:`${col}1c`,borderRadius:5,padding:"3px 6px",flexShrink:0}}>{b.categoryLabel||b.category}</div>
+                   <div style={{flex:1,minWidth:0}}>
+                     <div style={{fontSize:13,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.pick}</div>
+                     <div style={{fontSize:10.5,color:IOS.label3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.game}</div>
+                   </div>
+                   <div style={{textAlign:"right",flexShrink:0}}>
                      <div style={{fontSize:12.5,fontWeight:800,color:(b.odds||"").startsWith("+")?IOS.green:IOS.blue}}>{b.odds}</div>
                      <div style={{fontSize:9.5,color:IOS.label3}}>+{((b.mult||1)*ptsFor(b.impliedOdds)).toFixed(1)} pts</div>
                    </div>
+                   <div onClick={()=>setSoloFreePicks(soloFreePicks.filter(x=>x.id!==b.id))} style={{width:24,height:24,borderRadius:7,background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",color:"rgba(255,255,255,0.5)",fontSize:15,cursor:"pointer",flexShrink:0}}>×</div>
                  </div>
-                 <div onClick={()=>setSoloFreePicks(soloFreePicks.filter(x=>x.id!==b.id))} style={{width:24,height:24,borderRadius:7,background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",color:"rgba(255,255,255,0.5)",fontSize:15,cursor:"pointer",flexShrink:0}}>×</div>
+                 <div style={{display:"flex",alignItems:"center",gap:5,marginTop:8}}>
+                   <span style={{fontSize:8.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:IOS.label3,marginRight:1,flexShrink:0}}>Units</span>
+                   {[1,2,3,4,5].map(m=>{ const on=(b.mult||1)===m; return (
+                     <div key={m} onClick={()=>setSoloFreePicks(prev=>prev.map(x=>x.id===b.id?{...x,mult:m}:x))} style={{flex:1,textAlign:"center",padding:"4px 0",borderRadius:6,fontSize:11,fontWeight:800,cursor:"pointer", background:on?"rgba(10,132,255,0.18)":"rgba(255,255,255,0.04)", border:`1px solid ${on?IOS.blue:"rgba(255,255,255,0.08)"}`, color:on?IOS.blue:"rgba(255,255,255,0.4)"}}>{m}×</div>
+                   );})}
+                 </div>
                </div>
                );
              })}
@@ -6924,7 +6938,7 @@ export default function App() {
          Browse all games
        </div>
        <button onClick={lockSoloFreeSlate} disabled={soloFreePicks.length===0} style={{width:"100%",background:soloFreePicks.length?IOS.green:"rgba(255,255,255,0.08)",border:"none",borderRadius:12,padding:"14px",fontSize:15,fontWeight:800,color:soloFreePicks.length?"#fff":"rgba(255,255,255,0.35)",cursor:soloFreePicks.length?"pointer":"default",fontFamily:"Barlow,sans-serif",marginBottom:16}}>
-         {soloFreePicks.length ? `Lock Slate · ${soloFreePicks.length} pick${soloFreePicks.length>1?"s":""} · up to ${projTotal.toFixed(1)} pts` : "Add at least 1 pick"}
+         {soloFreePicks.length ? `Lock Picks · ${soloFreePicks.length} pick${soloFreePicks.length>1?"s":""} · up to ${projTotal.toFixed(1)} pts` : "Add at least 1 pick"}
        </button>
 
      </>
@@ -10753,7 +10767,7 @@ export default function App() {
    <div key={w.week} style={{background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"12px 14px",marginBottom:8}}>
      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
        <div>
-         <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>Slate {w.week}</div>
+         <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>{soloWeekRange(w.week)}</div>
          <div style={{fontSize:11,color:IOS.label3,marginTop:2}}>{w.wins}W · {w.losses}L · {w.picks.length} picks</div>
        </div>
        <div style={{textAlign:"right"}}>
