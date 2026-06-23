@@ -1452,6 +1452,16 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
   const [openSlate,setOpenSlate]=useState(null);
   const [joinCode,setJoinCode]=useState("");
   const [dayPlay,setDayPlay]=useState(null); // Plok Play of the Day: {loading|data|error}
+  const [heroCollapsed, setHeroCollapsed] = useState(()=>{ try{return localStorage.getItem("picklock_lobby_collapsed")==="1";}catch(e){return false;} });
+  const collapseHero=()=>{ setHeroCollapsed(true); try{localStorage.setItem("picklock_lobby_collapsed","1");}catch(e){} };
+  const expandHero=()=>{ setHeroCollapsed(false); try{localStorage.setItem("picklock_lobby_collapsed","0");}catch(e){} };
+  const _gradedDesc=[...(soloWeeks||[])].filter(w=>(w.wins+w.losses)>0).sort((a,b)=>b.week-a.week);
+  const _hotWk=(_gradedDesc[0] && ((_gradedDesc[0].losses===0 && _gradedDesc[0].wins>=2) || _gradedDesc[0].pts>=30)) ? _gradedDesc[0] : null;
+  useEffect(()=>{
+    if(!_hotWk) return;
+    let last=0; try{last=parseInt(localStorage.getItem("picklock_lobby_milestone")||"0",10);}catch(e){}
+    if(_hotWk.week>last){ try{localStorage.setItem("picklock_lobby_milestone",String(_hotWk.week));localStorage.setItem("picklock_lobby_collapsed","0");}catch(e){} setHeroCollapsed(false); }
+  }, [_hotWk && _hotWk.week]);
   const _MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const slateStamp=(w)=>{
     const ds=(w.picks||[]).map(p=>p.game_date||p.created_at).filter(Boolean).map(d=>new Date(d)).filter(d=>!isNaN(d));
@@ -1517,6 +1527,51 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
 
   return (
     <div style={{padding:"0 16px 40px"}}>
+      {!heroCollapsed ? (
+      <div style={{position:"relative",borderRadius:22,padding:"20px 18px 18px",overflow:"hidden",marginBottom:12,background:"radial-gradient(130% 120% at 8% -10%, rgba(10,132,255,0.4), rgba(94,92,230,0.16) 42%, rgba(12,12,16,0) 72%),linear-gradient(160deg,#10204a 0%,#0a0a12 78%)",border:"1px solid rgba(10,132,255,0.32)",boxShadow:"0 22px 60px -26px rgba(10,132,255,0.7)"}}>
+        <div style={{position:"absolute",top:-50,right:-40,width:200,height:200,borderRadius:"50%",background:IOS.indigo,filter:"blur(70px)",opacity:0.34}}/>
+        <div onClick={collapseHero} style={{position:"absolute",top:12,right:12,width:28,height:28,borderRadius:"50%",background:"rgba(255,255,255,0.1)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",zIndex:2}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2.4" strokeLinecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+        </div>
+        <div style={{position:"relative",display:"inline-flex",alignItems:"center",gap:6,background:"rgba(255,255,255,0.1)",border:"0.5px solid rgba(255,255,255,0.16)",borderRadius:20,padding:"4px 11px",fontSize:10.5,fontWeight:800,letterSpacing:0.4,color:"#fff"}}>
+          <span style={{width:6,height:6,borderRadius:"50%",background:IOS.green,boxShadow:`0 0 8px ${IOS.green}`}}/>{(tickerGames||[]).length>0?`${(tickerGames||[]).length} games on the board`:"Live odds, every game"}
+        </div>
+        {_hotWk ? (
+          <div style={{position:"relative",marginTop:13,fontSize:24,fontWeight:900,letterSpacing:-0.5,lineHeight:1.06}}>You just went {_hotWk.wins}-{_hotWk.losses}.<br/><span style={{color:"#64D2FF"}}>Put it on the line.</span></div>
+        ) : (
+          <div style={{position:"relative",marginTop:13,fontSize:26,fontWeight:900,letterSpacing:-0.6,lineHeight:1.04}}>PickLock's better<br/>with <span style={{color:"#64D2FF"}}>your crew</span>.</div>
+        )}
+        <div style={{position:"relative",fontSize:13.5,color:"rgba(255,255,255,0.72)",lineHeight:1.5,marginTop:7,maxWidth:300}}>Run a league with your group — weekly matchups, playoff brackets, and a season of bragging rights.</div>
+        <div style={{position:"relative",display:"flex",alignItems:"center",marginTop:14}}>
+          {[["MK",IOS.orange],["SR",IOS.pink],["TP",IOS.indigo],["DV",IOS.green]].map((a,i)=>(
+            <div key={i} style={{width:30,height:30,borderRadius:"50%",border:"2px solid #0c1430",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,color:"#06101f",background:`linear-gradient(150deg,${a[1]},${a[1]}bb)`,marginLeft:i?-9:0}}>{a[0]}</div>
+          ))}
+          <span style={{marginLeft:8,fontSize:11.5,color:IOS.label2,fontWeight:600}}>matchups · playoffs · trophies</span>
+        </div>
+        <button onClick={()=>{setShowNewLeague(true);setNewLeagueStep(0);}} style={{position:"relative",marginTop:16,width:"100%",background:"linear-gradient(180deg,#0a84ff,#0066d6)",border:"none",borderRadius:13,padding:"15px",fontSize:15.5,fontWeight:800,color:"#fff",fontFamily:"Barlow,sans-serif",cursor:"pointer",boxShadow:"0 8px 24px -8px rgba(10,132,255,0.8)",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Create a league
+        </button>
+        <div style={{position:"relative",display:"flex",gap:9,marginTop:9}}>
+          <div onClick={()=>{setShowBrowse(true);fetchPublicLeagues();}} style={{flex:1,background:"rgba(255,255,255,0.07)",border:"0.5px solid rgba(255,255,255,0.14)",borderRadius:12,padding:"12px",fontSize:13.5,fontWeight:800,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>Browse public
+          </div>
+          <div onClick={()=>{ const c=(window.prompt("Enter invite code")||"").trim(); if(c&&onJoinCode) onJoinCode(c); }} style={{flex:1,background:"rgba(255,255,255,0.07)",border:"0.5px solid rgba(255,255,255,0.14)",borderRadius:12,padding:"12px",fontSize:13.5,fontWeight:800,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>Join code
+          </div>
+        </div>
+      </div>
+      ) : (
+      <div onClick={expandHero} style={{display:"flex",alignItems:"center",gap:10,background:"linear-gradient(180deg,#12203f,#0b0f1c)",border:"0.5px solid rgba(10,132,255,0.28)",borderRadius:12,padding:"11px 14px",marginBottom:12,cursor:"pointer"}}>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2"><circle cx="9" cy="8" r="3.2"/><circle cx="17" cy="9" r="2.6"/><path d="M3 20c0-3 3-5 6-5s6 2 6 5"/></svg>
+        <div style={{flex:1,minWidth:0,fontSize:13,fontWeight:800,color:"#fff"}}>PickLock's better with friends</div>
+        <div onClick={(e)=>{e.stopPropagation();setShowNewLeague(true);setNewLeagueStep(0);}} style={{fontSize:12,fontWeight:800,color:IOS.blue,background:"rgba(10,132,255,0.14)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:8,padding:"6px 12px",cursor:"pointer"}}>Create</div>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2.4" strokeLinecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      )}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",margin:"4px 4px 10px"}}>
+        <div style={{fontSize:13,fontWeight:800,color:IOS.label2,textTransform:"uppercase",letterSpacing:0.5}}>{heroCollapsed?"Your solo season":"Warm up solo"}</div>
+        <div style={{fontSize:11,color:IOS.label3,fontWeight:600}}>{heroCollapsed?"just you vs the line":"sharpen up while the league fills"}</div>
+      </div>
       {/* Stats row */}
       <div style={{display:"flex",gap:8,marginBottom:12}}>
         <div style={{flex:1,background:IOS.bg2,borderRadius:10,padding:"10px 12px",border:"0.5px solid rgba(255,255,255,0.07)"}}>
@@ -1666,10 +1721,10 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
       )}
 
       {/* Convert to league CTA */}
-      {soloWeeks.length >= 1 && (
+      {!heroCollapsed && (
         <div style={{marginTop:12,background:"rgba(10,132,255,0.08)",border:"0.5px solid rgba(10,132,255,0.2)",borderRadius:12,padding:"14px"}}>
-          <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:4}}>You&apos;re picking at {winPct}%</div>
-          <div style={{fontSize:11,color:IOS.label3,marginBottom:12,lineHeight:1.5}}>Prove it against friends — create a league and see how you stack up.</div>
+          <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:4}}>{(totalWins+totalLosses)>0 ? `You’re picking at ${winPct}%` : "Solo’s just practice"}</div>
+          <div style={{fontSize:11,color:IOS.label3,marginBottom:12,lineHeight:1.5}}>{(totalWins+totalLosses)>0 ? "The real fun is beating people you know. Put that record on the line." : "Round up your group and make it count — weekly matchups and a playoff."}</div>
           <div style={{display:"flex",gap:8}}>
             <button onClick={()=>{setShowNewLeague(true);setNewLeagueStep(0);}} style={{flex:1,background:IOS.blue,border:"none",borderRadius:8,padding:"10px",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Create League</button>
             <button onClick={()=>{setShowBrowse(true);fetchPublicLeagues();}} style={{flex:1,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:8,padding:"10px",fontSize:12,fontWeight:700,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Browse Leagues</button>
@@ -1800,6 +1855,8 @@ export default function App() {
  const [liveOdds, setLiveOdds] = useState({});
  const [homeTab, setHomeTab] = useState('home');
  const [homeMode, setHomeMode] = useState('leagues');
+ // No leagues yet -> route into the Solo lobby (never the phantom NFL league).
+ useEffect(()=>{ if(!leaguesLoading && realLeagues.length===0 && !isSoloModeRef.current){ setHomeMode('solo'); setSoloModeWithRef(true); } }, [leaguesLoading, realLeagues.length]);
  const [leagueSubTab, setLeagueSubTab] = useState("overview");
  const [tickerGames, setTickerGames] = useState([]); // raw games for the ticker
  const [espnGames, setEspnGames] = useState([]); // ESPN scoreboard with IDs
@@ -3245,6 +3302,7 @@ export default function App() {
    }
    await fetchLeagues(user.id);
    setShowBrowse(false);
+   setHomeMode("leagues"); setSoloModeWithRef(false); setActiveLeagueId(league.id);
    alert(`Joined ${league.name}!`);
  } catch(e) { alert("Something went wrong."); }
  setJoiningLeagueId(null);
@@ -8206,6 +8264,7 @@ export default function App() {
  </div>
  <button onClick={()=>{
  setActiveLeagueId(newLeagueCreated.id);
+ setHomeMode("leagues"); setSoloModeWithRef(false);
  setShowNewLeague(false);
  setNewLeagueCreated(null);
  setNewLeagueSport(null);
@@ -8564,6 +8623,10 @@ export default function App() {
  <button onClick={()=>{setShowNewLeague(true);setNewLeagueCreated(null);setNewLeagueSport(null);setNewLeagueName("");setNewLeagueSize(8);}}
  style={{marginTop:8,background:IOS.blue,border:"none",borderRadius:14,padding:"14px 32px",fontFamily:"Barlow,sans-serif",fontSize:16,fontWeight:700,color:"#fff",cursor:"pointer"}}>
  + Create a League
+ </button>
+ <button onClick={()=>{setShowBrowse(true);fetchPublicLeagues();}}
+ style={{background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:14,padding:"13px 32px",fontFamily:"Barlow,sans-serif",fontSize:15,fontWeight:700,color:IOS.blue,cursor:"pointer"}}>
+ Browse Public Leagues
  </button>
  <div style={{fontSize:13,color:IOS.label3}}>or</div>
  <div onClick={async()=>{
@@ -10642,7 +10705,7 @@ export default function App() {
  </div>
  <div style={{textAlign:"center",paddingTop:20}}>
  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:IOS.label3}}>{tg.isLive?"":"AT"}</div>
- {tg.isLive && <div style={{fontSize:11,fontWeight:800,color:IOS.green}}>\u25cf LIVE</div>}
+ {tg.isLive && <div style={{fontSize:11,fontWeight:800,color:IOS.green}}>● LIVE</div>}
  </div>
  <div style={{flex:1,textAlign:"center"}}>
  <div style={{width:64,height:64,borderRadius:18,margin:"0 auto 10px",background:homeColor,border:"1px solid rgba(255,255,255,0.14)",boxShadow:"0 8px 20px -6px rgba(0,0,0,0.55)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:21,color:"#fff",letterSpacing:0.5}}>{homeAbbr}</div>
@@ -10755,8 +10818,8 @@ export default function App() {
  </div>
  </>)}
 
- {gameLoading && <div style={{textAlign:"center",padding:"24px",color:IOS.label3,fontSize:13}}>Loading stats\u2026</div>}
- {!gameLoading && !det.teams && !eg && <div style={{textAlign:"center",padding:"16px 8px 8px",color:IOS.label3,fontSize:13,lineHeight:1.6}}>Detailed stats not available yet \u2014 check back closer to game time.</div>}
+ {gameLoading && <div style={{textAlign:"center",padding:"24px",color:IOS.label3,fontSize:13}}>Loading stats…</div>}
+ {!gameLoading && !det.teams && !eg && <div style={{textAlign:"center",padding:"16px 8px 8px",color:IOS.label3,fontSize:13,lineHeight:1.6}}>Detailed stats not available yet — check back closer to game time.</div>}
  </div>
 
  {/* Footer CTA */}
@@ -11013,23 +11076,25 @@ export default function App() {
            const sport = SPORTS[lg.sport]||{label:lg.sport?.toUpperCase()||"?",color:IOS.blue};
            const isJoining = joiningLeagueId===lg.id;
            return (
-             <div key={lg.id} style={{margin:"0 16px 8px",background:"#0D0D0D",borderRadius:12,padding:"13px 14px",border:"0.5px solid #1E1E1E",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
-               <div style={{flex:1,minWidth:0}}>
-                 <div style={{fontSize:14,fontWeight:700,color:"#fff",marginBottom:3}}>{lg.name}</div>
-                 <div style={{fontSize:11,color:"#555",marginBottom:4}}>
-                   {sport.label} · {typeLabels[lg.league_type||"h2h"]||"H2H"} · Wk {lg.season_weeks||18} season
+             <div key={lg.id} style={{position:"relative",margin:"0 16px 10px",background:IOS.bg2,borderRadius:16,padding:"14px",border:"0.5px solid rgba(255,255,255,0.07)",overflow:"hidden"}}>
+               <div style={{position:"absolute",left:0,top:0,bottom:0,width:3,background:sport.color}}/>
+               <div style={{display:"flex",alignItems:"flex-start",gap:11}}>
+                 <div style={{width:40,height:40,borderRadius:11,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:14,flexShrink:0,background:`${sport.color}22`,color:sport.color,border:`0.5px solid ${sport.color}55`}}>{sport.label}</div>
+                 <div style={{flex:1,minWidth:0}}>
+                   <div style={{fontSize:15.5,fontWeight:800,color:"#fff"}}>{lg.name}</div>
+                   <div style={{fontSize:11,color:IOS.label3,marginTop:2}}>{typeLabels[lg.league_type||"h2h"]||"H2H"} · {maxSize}-player · {sport.label}</div>
                  </div>
-                 <div style={{display:"flex",alignItems:"center",gap:8}}>
-                   <div style={{fontSize:10,fontWeight:700,color:IOS.green,background:"rgba(48,209,88,0.1)",border:"0.5px solid rgba(48,209,88,0.25)",borderRadius:5,padding:"2px 7px"}}>
-                     {spotsLeft} spot{spotsLeft!==1?"s":""} left
-                   </div>
-                   <div style={{fontSize:10,color:"#444"}}>{memberCount}/{maxSize} members</div>
+                 <button onClick={()=>joinPublicLeague(lg)} disabled={isJoining} style={{alignSelf:"center",background:isJoining?"#1A1A1A":IOS.blue,border:"none",borderRadius:10,padding:"10px 17px",fontSize:13.5,fontWeight:800,color:isJoining?"#555":"#fff",cursor:isJoining?"default":"pointer",fontFamily:"Barlow,sans-serif",flexShrink:0,whiteSpace:"nowrap"}}>{isJoining?"Joining…":"Join"}</button>
+               </div>
+               <div style={{marginTop:12}}>
+                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
+                   <div style={{fontSize:10.5,fontWeight:700,color:IOS.label2}}>{memberCount}/{maxSize} joined</div>
+                   <div style={{fontSize:10,fontWeight:800,letterSpacing:0.3,borderRadius:5,padding:"2px 7px",color:spotsLeft<=2?IOS.orange:IOS.green,background:spotsLeft<=2?"rgba(255,159,10,0.12)":"rgba(48,209,88,0.1)",border:`0.5px solid ${spotsLeft<=2?"rgba(255,159,10,0.3)":"rgba(48,209,88,0.25)"}`}}>{spotsLeft<=2?`${spotsLeft} spot${spotsLeft!==1?"s":""} left`:"open"}</div>
+                 </div>
+                 <div style={{height:6,borderRadius:4,background:"#222",overflow:"hidden"}}>
+                   <div style={{height:"100%",width:`${Math.round(memberCount/maxSize*100)}%`,borderRadius:4,background:spotsLeft<=2?"linear-gradient(90deg,#FF9F0A,#FF375F)":`linear-gradient(90deg,${IOS.blue},${IOS.indigo})`}}/>
                  </div>
                </div>
-               <button onClick={()=>joinPublicLeague(lg)} disabled={isJoining}
-               style={{background:isJoining?"#1A1A1A":IOS.blue,border:"none",borderRadius:8,padding:"9px 16px",fontSize:13,fontWeight:700,color:isJoining?"#555":"#fff",cursor:isJoining?"default":"pointer",fontFamily:"Barlow,sans-serif",flexShrink:0,whiteSpace:"nowrap"}}>
-                 {isJoining?"Joining...":"Join"}
-               </button>
              </div>
            );
          });
