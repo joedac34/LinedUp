@@ -1092,6 +1092,8 @@ const BRK_LOCK = '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 
 function brkRoundName(count){ return count===1?"Final":count===2?"Semifinals":count===4?"Quarterfinals":count===8?"Round of 16":count===16?"Round of 32":("Round of "+count*2); }
 // Playoff field size — power of 2 so the bracket is clean. <4 players = no playoff (standings title).
 function playoffSeeds(total){ const t=Number(total)||0; return t>=6?4 : t>=4?2 : 0; }
+// A wildcard slot accepts ANY of these (all gradeable) bet types.
+const WILDCARD_TYPES=["ml","spread","ou","prop","longshot"];
 function playoffWeeksFor(n){ return n>=2 ? Math.ceil(Math.log2(n)) : 0; }
 
 function BracketView({ matchups, members, uid, IOS, onOpenMatch, live, onChampion }){
@@ -2009,7 +2011,7 @@ export default function App() {
  const [soloFreePicks, setSoloFreePicks] = useState([]); // freeform solo slate (variable count)
  const [freeCat, setFreeCat] = useState("all");
  const parseSlotConfig=(raw)=>{ try{ const a=typeof raw==="string"?JSON.parse(raw):raw; return (Array.isArray(a)&&a.length)?a:null; }catch(e){ return null; } };
- const freshSlots=()=>{ const cfg = !isSoloMode ? parseSlotConfig(activeLeague&&activeLeague.slot_config) : null; return cfg ? cfg.map((c,i)=>({id:i,bet:null,mult:c.mult,category:c.type,market:c.market||null,isParlay:false,parlayLegs:[],locked:true})) : EMPTY_FLEX.map(s=>({...s})); };
+ const freshSlots=()=>{ const cfg = !isSoloMode ? parseSlotConfig(activeLeague&&activeLeague.slot_config) : null; return cfg ? cfg.map((c,i)=>({id:i,bet:null,mult:c.mult,category:c.type,slotType:c.type,market:c.market||null,isParlay:false,parlayLegs:[],locked:true})) : EMPTY_FLEX.map(s=>({...s})); };
  useEffect(()=>{ if(isSoloMode) return; setFlexPicks(freshSlots()); }, [activeLeagueId, isSoloMode, activeLeague&&activeLeague.slot_config]);
  const [soloSavedPicks, setSoloSavedPicks] = useState(null);
  const [soloSubmitted, setSoloSubmitted] = useState(false);
@@ -2230,7 +2232,7 @@ export default function App() {
    const iv=setInterval(()=>{ if(document.visibilityState==="visible") fetchNotifs(); },30000);
    return ()=>{ document.removeEventListener("visibilitychange",onVis); clearInterval(iv); };
  },[user]);
- useEffect(()=>{ if(screen!=="browser"||isSoloMode) return; const _cfg=parseSlotConfig(activeLeague&&activeLeague.slot_config); if(!_cfg) return; const _allowed=[...new Set(_cfg.map(s=>s.type))]; const _ts=flexPicks[gridTargetSlot]; const _tgt=(gridTargetSlot!=null&&_ts&&_ts.locked)?_ts.category:null; const _want=_tgt||(_allowed.includes(gridType)?gridType:_allowed[0]); if(_want&&_want!==gridType) setGridType(_want); const _mkt=(gridTargetSlot!=null&&_ts&&_ts.locked&&_ts.category==="prop")?(_ts.market||"all"):null; if(_mkt!==null) setGridPropSub(_mkt); }, [screen, gridTargetSlot, activeLeagueId, gridType]);
+ useEffect(()=>{ if(screen!=="browser"||isSoloMode) return; const _cfg=parseSlotConfig(activeLeague&&activeLeague.slot_config); if(!_cfg) return; const _allowed=[...new Set(_cfg.flatMap(s=>s.type==="wildcard"?WILDCARD_TYPES:[s.type]))]; const _ts=flexPicks[gridTargetSlot]; const _isWild=_ts&&(_ts.slotType||_ts.category)==="wildcard"; const _tgt=(gridTargetSlot!=null&&_ts&&_ts.locked&&!_isWild)?_ts.category:null; const _want=_tgt||(_allowed.includes(gridType)?gridType:_allowed[0]); if(_want&&_want!==gridType) setGridType(_want); const _mkt=(gridTargetSlot!=null&&_ts&&_ts.locked&&!_isWild&&_ts.category==="prop")?(_ts.market||"all"):null; if(_mkt!==null) setGridPropSub(_mkt); }, [screen, gridTargetSlot, activeLeagueId, gridType]);
 
  // When a custom league has period slots, lazily pull their odds for the slate's games.
  useEffect(()=>{
@@ -2838,6 +2840,7 @@ export default function App() {
   {id:"ou",l:"Over / Under",scope:"Game line",color:"#FF9F0A"},
   {id:"prop",l:"Player Prop",scope:"Props",color:"#FFD60A"},
   {id:"longshot",l:"Longshot / Parlay",scope:"Exotic",color:"#FF375F"},
+  {id:"wildcard",l:"Wildcard",scope:"Any bet type",color:"#BF5AF2"},
   {id:"ml_h1",l:"1st Half ML",scope:"1st Half",color:"#64D2FF",sports:["nfl","nba"]},
   {id:"spread_h1",l:"1st Half Spread",scope:"1st Half",color:"#64D2FF",sports:["nfl","nba"]},
   {id:"ou_h1",l:"1st Half O / U",scope:"1st Half",color:"#64D2FF",sports:["nfl","nba"]},
@@ -7074,7 +7077,7 @@ export default function App() {
  const TYPE_LABELS = { ml:"Moneyline", spread:"Spread", ou:"Over/Under", prop:"Prop", longshot:"Longshot", ml_h1:"1H Moneyline", spread_h1:"1H Spread", ou_h1:"1H Over/Under", ml_f5:"F5 Moneyline", spread_f5:"F5 Spread", ou_f5:"F5 Over/Under", yrfi:"YRFI", nrfi:"NRFI", period:"Periods" };
  const acc = ACC[gridType] || IOS.blue;
  const gridCfg = !isSoloMode ? parseSlotConfig(activeLeague&&activeLeague.slot_config) : null;
- const allowedTypes = gridCfg ? [...new Set(gridCfg.map(s=>s.type))] : (isSoloMode ? ["ml","spread","ou","prop","period","longshot"] : ["ml","spread","ou","prop","longshot"]);
+ const allowedTypes = gridCfg ? [...new Set(gridCfg.flatMap(s=>s.type==="wildcard"?WILDCARD_TYPES:[s.type]))] : (isSoloMode ? ["ml","spread","ou","prop","period","longshot"] : ["ml","spread","ou","prop","longshot"]);
 
  // Resolve active sport (default to league's first sport)
  const sportsList = leagueSports && leagueSports.length ? leagueSports : ["nfl"];
@@ -7252,9 +7255,12 @@ export default function App() {
  // Custom league: each slot has a fixed category. Route the tapped bet to a
  // slot that accepts THIS market (prefer the active target, else first empty).
  const tgt = activePicks[target];
- if(!tgt || tgt.isParlay || tgt.category!==cat){
- let idx = activePicks.findIndex(p=>!p.isParlay && p.category===cat && p.bet===null);
- if(idx===-1) idx = activePicks.findIndex(p=>!p.isParlay && p.category===cat);
+ const _acc=(p)=>p&&!p.isParlay&&(((p.slotType||p.category)===cat)||((p.slotType||p.category)==="wildcard"));
+ if(!_acc(tgt)){
+ let idx = activePicks.findIndex(p=>!p.isParlay && (p.slotType||p.category)===cat && p.bet===null);
+ if(idx===-1) idx = activePicks.findIndex(p=>!p.isParlay && (p.slotType||p.category)==="wildcard" && p.bet===null);
+ if(idx===-1) idx = activePicks.findIndex(p=>!p.isParlay && (p.slotType||p.category)===cat);
+ if(idx===-1) idx = activePicks.findIndex(p=>!p.isParlay && (p.slotType||p.category)==="wildcard");
  if(idx===-1) return;
  dest = idx;
  }
