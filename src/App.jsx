@@ -1754,6 +1754,7 @@ export default function App() {
  const [timeLeft, setTimeLeft] = useState({h:0,m:0,s:0});
  const [submitted, setSubmitted] = useState(false);
  const [leagueTab, setLeagueTab] = useState("standings");
+ const [fieldPlayer, setFieldPlayer] = useState(null);
  const [expanded, setExpanded] = useState(null);
  const [sortBy, setSortBy] = useState("rank");
  const [chatMsg, setChatMsg] = useState("");
@@ -3556,6 +3557,7 @@ export default function App() {
  streakByUser[uid] = {count, type:last};
  });
 
+ const isCume = (((realLeagues||[]).find(l=>l.id===leagueId))||activeLeague||{}).league_type==="points";
  const standings = userIds.map(uid=>{
  const u = users?.find(x=>x.id===uid);
  const s = statsByUser[uid]||{wins:0,losses:0,points:0};
@@ -3567,13 +3569,13 @@ export default function App() {
  wins: s.wins,
  losses: s.losses,
  points: parseFloat(s.points.toFixed(1)),
- record: `${mr.mw}-${mr.ml}`,
+ record: isCume ? `${s.wins}-${s.losses}` : `${mr.mw}-${mr.ml}`,
  wpct: total > 0 ? `${Math.round(s.wins/total*100)}%` : "0%",
  isYou: uid === user?.id,
  streak: streakByUser[uid] || {count:0, type:'W'},
  };
  }).sort((a,b)=>{
- // Wins first, then points as tiebreaker
+ if(isCume){ if(b.points!==a.points) return b.points-a.points; return b.wins-a.wins; }
  if(b.wins !== a.wins) return b.wins - a.wins;
  return b.points - a.points;
  })
@@ -5480,6 +5482,56 @@ export default function App() {
  const targetSize = activeLeague.target_size||activeLeague.max_members||8;
  const leagueIsFull = activeLeagueId==="solo" || leagueMembers.length >= targetSize;
  const hasOpponent = leagueMembers.filter(m=>!m.isYou).length > 0;
+
+ if(activeLeague.league_type==="points"){
+   if(!leagueIsFull) return null;
+   const ms = realStandings||[];
+   const total = ms.length || targetSize;
+   const playoffN = total>=4 ? Math.min(4, Math.ceil(total/2)) : 0;
+   const me = ms.find(z=>z.isYou)||{};
+   const myRank = me.rank || (ms.findIndex(z=>z.isYou)+1) || "—";
+   const myWk = parseFloat(myPicks.filter(p=>p.result==="W").reduce((sm,p)=>sm+parseFloat(p.points_earned||0),0).toFixed(1));
+   const leaderPts = ms[0]?ms[0].points:0;
+   const linePts = (playoffN>0 && ms[playoffN-1]) ? ms[playoffN-1].points : null;
+   const myPts = me.points!=null?me.points:0;
+   const fillPct = leaderPts>0 ? Math.min(100, Math.round(myPts/leaderPts*100)) : 0;
+   const linePct = (leaderPts>0 && linePts!=null) ? Math.min(100, Math.round(linePts/leaderPts*100)) : null;
+   return (
+   <>
+   <div className="ios-section" style={{margin:"0 16px 6px"}}>
+     <div className="ios-section-header" style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+       <span>Your season · Cumulative</span>
+       <span onClick={()=>setScreen("matchup")} style={{color:sport.color,fontSize:13,textTransform:"none",fontWeight:500,letterSpacing:0,cursor:"pointer"}}>The Field</span>
+     </div>
+   </div>
+   <div onClick={()=>setScreen("league")} style={{margin:"0 16px 10px",borderRadius:16,padding:"16px",cursor:"pointer",position:"relative",overflow:"hidden",background:"linear-gradient(155deg,#10183a 0%,#0B0B0E 72%)",border:`1px solid ${IOS.indigo}38`,boxShadow:"0 4px 16px rgba(0,0,0,0.4)"}}>
+     <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${IOS.blue},${IOS.indigo})`}}/>
+     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+       <div>
+         <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,letterSpacing:.7,textTransform:"uppercase",fontSize:11,color:"#64D2FF"}}>Your season</div>
+         <div style={{display:"flex",alignItems:"flex-end",gap:9,marginTop:3}}>
+           <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:44,lineHeight:.85}}>{myPts}<span style={{fontSize:14,color:IOS.label3,fontWeight:700}}> pts</span></div>
+           <div style={{paddingBottom:4,fontSize:13,fontWeight:800,color:IOS.yellow}}>{playoffN>0?`#${myRank} seed`:`#${myRank}`}</div>
+         </div>
+       </div>
+       <div style={{textAlign:"right"}}>
+         <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:22,color:IOS.green}}>+{myWk}</div>
+         <div style={{fontSize:9,color:IOS.label3,textTransform:"uppercase",fontWeight:700}}>this week</div>
+       </div>
+     </div>
+     <div style={{height:7,borderRadius:4,background:"#222",marginTop:14,overflow:"hidden",position:"relative"}}>
+       <div style={{height:"100%",width:`${fillPct}%`,background:`linear-gradient(90deg,${IOS.blue},${IOS.indigo})`,borderRadius:4}}/>
+       {linePct!=null && <div style={{position:"absolute",left:`${linePct}%`,top:-3,bottom:-3,width:2,background:IOS.yellow}}/>}
+     </div>
+     <div style={{display:"flex",justifyContent:"space-between",marginTop:7,fontSize:10.5,fontWeight:700,color:IOS.label3}}>
+       <span>You · {myPts}</span>
+       {linePts!=null && <span style={{color:IOS.yellow}}>Line · {linePts}</span>}
+       <span>1st · {leaderPts}</span>
+     </div>
+   </div>
+   </>
+   );
+ }
 
  if(!leagueIsFull || !hasOpponent) return null;
 
@@ -7699,6 +7751,84 @@ export default function App() {
  {/* ══ MATCHUP ══ */}
  {screen==="matchup"&&(
  <>
+{activeLeague&&activeLeague.league_type==="points" ? (()=>{
+ const cw = activeLeague.current_week||activeLeague.week||1;
+ const ms = realStandings||[];
+ const total = ms.length || (activeLeague.target_size||activeLeague.max_members||8);
+ const playoffN = total>=4 ? Math.min(4, Math.ceil(total/2)) : 0;
+ const TCOL=[IOS.orange,IOS.pink,IOS.indigo,"#40E0C0","#BF5AF2","#64D2FF",IOS.yellow,IOS.green];
+ return (
+ <div className="body">
+   <div style={{padding:"10px 20px 14px",background:"radial-gradient(120% 90% at 90% -10%, rgba(94,92,230,0.18), transparent 55%), linear-gradient(180deg,#0B1430 0%,#000 80%)"}}>
+     <div style={{fontSize:11,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(255,255,255,0.42)"}}>Week {cw} · {activeLeague.name}</div>
+     <div style={{fontSize:30,fontWeight:800,letterSpacing:"-0.7px",color:"#fff",lineHeight:1.05,marginTop:2}}>The Field</div>
+     <div style={{fontSize:12.5,color:IOS.label3,marginTop:3,fontWeight:500}}>{ms.length} players · tap a tile to see their picks</div>
+   </div>
+   {ms.length===0 ? (<div style={{margin:"0 16px",background:IOS.bg2,borderRadius:16,padding:"36px 24px",textAlign:"center",color:IOS.label3,fontSize:14,lineHeight:1.6}}>The field fills in once players join and lock picks.</div>) : (
+   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:11,padding:"4px 16px 0"}}>
+     {ms.map((sp,i)=>{
+       const wkPicks=(weekPicks||[]).filter(p=>p.user_id===sp.userId && p.week===cw);
+       const wkPts=Math.round(wkPicks.filter(p=>p.result==="W").reduce((a,p)=>a+parseFloat(p.points_earned||0),0)*10)/10;
+       const col=sp.isYou?IOS.blue:TCOL[i%8];
+       const initials=sp.isYou?"You":(sp.name||"?").slice(0,2).toUpperCase();
+       const playoff=playoffN>0 && i<playoffN;
+       return (
+       <div key={sp.userId||i} onClick={()=>setFieldPlayer({...sp, rank:i+1, wkPicks, wkPts})} style={{position:"relative",borderRadius:18,padding:13,cursor:"pointer",overflow:"hidden",background:"linear-gradient(160deg,rgba(255,255,255,0.05),rgba(255,255,255,0.015))",border:`0.5px solid ${sp.isYou?IOS.blue+"80":IOS.sep}`,boxShadow:sp.isYou?`0 10px 30px -12px ${IOS.blue}66`:"none"}}>
+         <div style={{position:"absolute",top:"-40%",left:"-10%",width:"70%",height:"80%",borderRadius:"50%",filter:"blur(30px)",opacity:.32,background:col}}/>
+         {playoff && <div style={{position:"absolute",top:9,right:9,fontSize:7.5,fontWeight:900,letterSpacing:.5,color:"#0c0c0e",background:IOS.yellow,borderRadius:4,padding:"2px 5px"}}>PLAYOFF</div>}
+         <div style={{display:"flex",alignItems:"center",gap:9,position:"relative"}}>
+           <div style={{width:38,height:38,borderRadius:11,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:"#0c0c0e",background:`linear-gradient(150deg,${col},${col}bb)`,flexShrink:0}}>{initials}</div>
+           <div style={{minWidth:0}}>
+             <div style={{fontSize:14,fontWeight:800,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:sp.isYou?IOS.blue:"#fff"}}>{sp.isYou?"You":sp.name}</div>
+             <div style={{fontSize:10,color:IOS.label3,fontWeight:700}}>#{i+1} · {wkPicks.length} picks</div>
+           </div>
+         </div>
+         <div style={{display:"flex",justifyContent:"space-between",marginTop:12,position:"relative"}}>
+           <div><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:17}}>{sp.record||"0-0"}</div><div style={{fontSize:8.5,color:IOS.label3,textTransform:"uppercase",letterSpacing:.3,fontWeight:700}}>W-L</div></div>
+           <div style={{textAlign:"center"}}><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:17,color:IOS.green}}>{wkPts}</div><div style={{fontSize:8.5,color:IOS.label3,textTransform:"uppercase",letterSpacing:.3,fontWeight:700}}>Wk pts</div></div>
+           <div style={{textAlign:"right"}}><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:17,color:IOS.blue}}>{sp.points!=null?sp.points:0}</div><div style={{fontSize:8.5,color:IOS.label3,textTransform:"uppercase",letterSpacing:.3,fontWeight:700}}>Szn pts</div></div>
+         </div>
+         <div style={{fontSize:9.5,color:IOS.label3,marginTop:9,fontWeight:600,position:"relative",display:"flex",alignItems:"center",justifyContent:"space-between"}}><span>Tap to view picks</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={IOS.label3} strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg></div>
+       </div>
+       );
+     })}
+   </div>
+   )}
+   <div style={{height:24}}/>
+   {fieldPlayer && (
+   <div onClick={()=>setFieldPlayer(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",backdropFilter:"blur(3px)",display:"flex",alignItems:"flex-end",zIndex:200}}>
+     <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:440,margin:"0 auto",background:"#161618",borderRadius:"22px 22px 0 0",borderTop:`0.5px solid ${IOS.sep}`,padding:"8px 16px 30px",maxHeight:"80%",overflow:"auto"}}>
+       <div style={{width:40,height:4,borderRadius:3,background:"rgba(255,255,255,0.18)",margin:"6px auto 14px"}}/>
+       <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}>
+         <div style={{width:46,height:46,borderRadius:13,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:18,color:"#0c0c0e",background:`linear-gradient(150deg,${fieldPlayer.isYou?IOS.blue:IOS.indigo},${fieldPlayer.isYou?IOS.blue:IOS.indigo}bb)`}}>{fieldPlayer.isYou?"You":(fieldPlayer.name||"?").slice(0,2).toUpperCase()}</div>
+         <div style={{flex:1,minWidth:0}}>
+           <div style={{fontSize:19,fontWeight:900,color:fieldPlayer.isYou?IOS.blue:"#fff"}}>{fieldPlayer.isYou?"You":fieldPlayer.name}</div>
+           <div style={{fontSize:12,color:IOS.label2,fontWeight:600,marginTop:1}}>#{fieldPlayer.rank} · {fieldPlayer.record||"0-0"} picks · {fieldPlayer.points!=null?fieldPlayer.points:0} szn pts</div>
+         </div>
+         <div style={{textAlign:"right"}}><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:24,color:IOS.green}}>+{fieldPlayer.wkPts}</div><div style={{fontSize:9,color:IOS.label3,textTransform:"uppercase",fontWeight:700}}>this week</div></div>
+       </div>
+       <div style={{fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",color:IOS.indigo,margin:"14px 0 4px"}}>Picks this week</div>
+       {(!fieldPlayer.wkPicks||fieldPlayer.wkPicks.length===0) ? (<div style={{padding:"18px 0",textAlign:"center",color:IOS.label3,fontSize:13}}>No picks locked this week</div>) : fieldPlayer.wkPicks.map((p,pi)=>{
+         const res=p.result==="W"?"WON":p.result==="L"?"LOST":"LIVE";
+         const rc=p.result==="W"?IOS.green:p.result==="L"?IOS.red:IOS.orange;
+         return (
+         <div key={pi} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 2px",borderBottom:pi<fieldPlayer.wkPicks.length-1?`0.5px solid ${IOS.sep}`:"none"}}>
+           <div style={{width:8,height:8,borderRadius:"50%",background:rc,flexShrink:0}}/>
+           <div style={{flex:1,minWidth:0}}>
+             <div style={{fontSize:13,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.pick_name}{p.multiplier>1?` (${p.multiplier}x)`:""}</div>
+             <div style={{fontSize:10.5,color:IOS.label3}}>{p.game||""}</div>
+           </div>
+           <div style={{fontSize:12,fontWeight:800,color:IOS.label2}}>{p.odds}</div>
+           <div style={{fontSize:9,fontWeight:900,letterSpacing:.3,width:58,textAlign:"right",color:rc}}>{res}{p.result==="W"&&p.points_earned?` +${parseFloat(p.points_earned).toFixed(1)}`:""}</div>
+         </div>
+         );
+       })}
+     </div>
+   </div>
+   )}
+ </div>
+ );
+ })() : (<>
  <div className="body">
  {/* Header */}
  <div style={{padding:"10px 20px 14px",background:"radial-gradient(120% 90% at 90% -10%, rgba(10,132,255,0.18), transparent 55%), linear-gradient(180deg,#0B1A2E 0%,#000 80%)"}}>
@@ -7965,6 +8095,7 @@ export default function App() {
  );
  })()}
  </div>
+ </>)}
  </>
  )}
 
@@ -8031,7 +8162,7 @@ export default function App() {
    <div style={{fontSize:13,color:"#555",marginBottom:16}}>Choose a format for your league</div>
    {[
      {id:"h2h",icon:"ti-users",label:"Head-to-head",desc:"Weekly matchups + seeded playoffs"},
-     {id:"points",icon:"ti-chart-bar",label:"Total points",desc:"Everyone competes simultaneously, ranked by cumulative points"},
+     {id:"points",icon:"ti-chart-bar",label:"Total points",desc:"Everyone competes at once · cumulative points · top seeds make the playoff"},
      {id:"bracket",icon:"ti-tournament",label:"Tournament",desc:"Single-elimination bracket. 4, 8, 16, or 32 players only.",badge:"New"},
    ].map(t=>(
      <div key={t.id} onClick={()=>{
@@ -9347,18 +9478,132 @@ export default function App() {
 
  {leagueTab==="standings"&&(
  <>
+{activeLeague.league_type==="points" ? (()=>{
+ const _ms = realStandings||[];
+ const total = _ms.length || (activeLeague.target_size||activeLeague.max_members||8);
+ const playoffN = total>=4 ? Math.min(4, Math.ceil(total/2)) : 0;
+ const me = _ms.find(z=>z.isYou) || {};
+ const myRank = me.rank || (_ms.findIndex(z=>z.isYou)+1) || "—";
+ const cw = activeLeague.current_week||activeLeague.week||1;
+ const sw = activeLeague.season_weeks || 14;
+ const linePts = (playoffN>0 && _ms[playoffN-1]) ? _ms[playoffN-1].points : null;
+ const inPlayoff = playoffN>0 && typeof myRank==="number" && myRank<=playoffN;
+ const gap = (linePts!=null && me.points!=null) ? Math.round((me.points - linePts)*10)/10 : null;
+ return (<>
+ <div style={{margin:"14px 16px 0",background:"linear-gradient(180deg,#19191e,#141417)",border:`0.5px solid ${IOS.sep}`,borderRadius:16,padding:"14px 15px"}}>
+   <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:9}}>
+     <div style={{fontSize:13,fontWeight:800}}>Regular season</div>
+     <div style={{fontSize:11,color:IOS.label3,fontWeight:700}}>{playoffN>0?`Top ${playoffN} make the playoff`:"Most points wins"}</div>
+   </div>
+   <div style={{height:8,borderRadius:5,background:"#222",overflow:"hidden",position:"relative"}}>
+     <div style={{height:"100%",width:`${Math.min(100,Math.round(cw/sw*100))}%`,background:`linear-gradient(90deg,${IOS.blue},${IOS.indigo})`,borderRadius:5}}/>
+     {playoffN>0 && <div style={{position:"absolute",right:0,top:0,bottom:0,width:"24%",background:`linear-gradient(90deg,rgba(255,214,10,0),${IOS.yellow}38)`,borderLeft:`1.5px dashed ${IOS.yellow}99`}}/>}
+   </div>
+   <div style={{display:"flex",justifyContent:"space-between",fontSize:10.5,color:IOS.label3,marginTop:7,fontWeight:600}}>
+     <span>Wk {cw} of {sw}</span>{playoffN>0 && <span style={{color:IOS.yellow,fontWeight:800}}>Playoff after Wk {sw}</span>}
+   </div>
+ </div>
+ <div style={{position:"relative",margin:"14px 16px 0",borderRadius:20,padding:18,overflow:"hidden",background:`radial-gradient(120% 120% at 50% -10%, ${IOS.indigo}3d, ${IOS.blue}10 45%, rgba(20,20,22,0) 72%),linear-gradient(180deg,#1a1a1f,#141416)`,border:`1px solid ${IOS.indigo}4d`,boxShadow:`0 18px 50px -22px ${IOS.indigo}99`}}>
+   <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${IOS.blue},${IOS.indigo},#64D2FF)`}}/>
+   <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,letterSpacing:.7,textTransform:"uppercase",fontSize:12,color:"#64D2FF"}}>Your total</div>
+   <div style={{display:"flex",alignItems:"flex-end",gap:13,marginTop:4}}>
+     <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:58,lineHeight:.85,color:"#fff",textShadow:`0 0 36px ${IOS.blue}66`}}>{me.points!=null?me.points:0}<span style={{fontSize:19,color:IOS.label3,fontWeight:700}}> pts</span></div>
+     <div style={{paddingBottom:6}}>
+       <div style={{fontSize:21,fontWeight:900,lineHeight:1}}>You {"·"} #{myRank}</div>
+       <div style={{fontSize:12,color:inPlayoff?IOS.green:IOS.label2,fontWeight:700,marginTop:5}}>{playoffN<=0?"Most points wins":inPlayoff?(gap!=null?`In the hunt · +${gap} above the line`:"In playoff position"):(gap!=null?`${Math.abs(gap)} pts back of the line`:"Chasing the playoff")}</div>
+     </div>
+   </div>
+   <div style={{display:"flex",marginTop:16,background:"rgba(255,255,255,0.03)",border:`0.5px solid ${IOS.sep}`,borderRadius:13,overflow:"hidden"}}>
+     {[[me.record||"0-0","Picks W-L","#fff"],[me.wpct||"0%","Hit %",IOS.green],[String(me.points!=null?me.points:0),"Points",IOS.blue],[playoffN>0?("#"+myRank):"—","Seed",IOS.yellow]].map((c,ci)=>(
+       <div key={ci} style={{flex:1,textAlign:"center",padding:"10px 4px",borderLeft:ci>0?`1px solid ${IOS.sep}`:"none"}}>
+         <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:19,color:c[2]}}>{c[0]}</div>
+         <div style={{fontSize:9,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4,fontWeight:700,marginTop:2}}>{c[1]}</div>
+       </div>
+     ))}
+   </div>
+ </div>
+ <div style={{fontSize:17,fontWeight:800,color:"#fff",margin:"22px 20px 12px"}}>Season Standings</div>
+ <div style={{margin:"0 16px 16px",background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:16,overflow:"hidden"}}>
+   {_ms.length===0 ? (<div style={{padding:"22px 16px",textAlign:"center",color:IOS.label3,fontSize:14}}>No graded picks yet</div>) : _ms.map((r,i)=>{
+     const initials=(r.name==="You"||r.isYou)?"You":(r.name||"?").slice(0,2).toUpperCase();
+     const col=i===0?IOS.yellow:i===1?"#C7CBD1":i===2?"#E0915A":IOS.blue;
+     return (
+     <div key={r.userId||i}>
+       {playoffN>0 && i===playoffN && (
+         <div style={{display:"flex",alignItems:"center",gap:9,padding:"7px 14px",background:`linear-gradient(90deg,${IOS.yellow}1f,${IOS.yellow}05)`}}>
+           <span style={{fontSize:9.5,fontWeight:900,letterSpacing:1,color:IOS.yellow,textTransform:"uppercase"}}>Playoff line</span>
+           <span style={{flex:1,height:1,background:`repeating-linear-gradient(90deg,${IOS.yellow}80 0 6px,transparent 6px 11px)`}}/>
+           <span style={{fontSize:9.5,fontWeight:900,letterSpacing:1,color:IOS.yellow,textTransform:"uppercase"}}>Top {playoffN}</span>
+         </div>
+       )}
+       <div style={{display:"flex",alignItems:"center",gap:11,padding:"12px 14px",background:r.isYou?"rgba(10,132,255,0.10)":"transparent",borderBottom:i<_ms.length-1?`0.5px solid ${IOS.sep}`:"none",position:"relative"}}>
+         {r.isYou && <div style={{position:"absolute",left:0,top:0,bottom:0,width:3,background:IOS.blue}}/>}
+         <div style={{width:22,textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:i<3?col:IOS.label3}}>{i+1}</div>
+         <div style={{width:34,height:34,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:13,color:"#0c0c0e",background:`linear-gradient(150deg,${col},${col}bb)`,flexShrink:0}}>{initials}</div>
+         <div style={{flex:1,minWidth:0}}>
+           <div style={{fontSize:14,fontWeight:800,color:r.isYou?IOS.blue:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.isYou?"You":r.name}</div>
+           <div style={{fontSize:10.5,color:IOS.label3,marginTop:1,fontWeight:600}}>{r.record||"0-0"} picks {"·"} {r.wpct||"0%"} hit</div>
+         </div>
+         <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:18,color:r.isYou?IOS.blue:"#fff"}}>{r.points!=null?r.points:0}</div>
+       </div>
+     </div>
+     );
+   })}
+ </div>
+ <div style={{height:16}}/>
+ </>);
+ })() : (<>
  {/* Hero — your stats */}
- <div className="league-hero">
- <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${IOS.blue},${IOS.indigo})`}}/>
- <div className="lh-rank"> Your Rank — #{realStandings.find(s=>s.isYou)?.rank||"?"} of {activeLeague.target_size||activeLeague.max_members||8}</div>
- <div className="lh-name">You</div>
- <div className="lh-stats">
- <div className="lh-stat"><div className="lh-stat-val" style={{color:IOS.blue}}>{realStandings.find(s=>s.isYou)?.record||"0-0"}</div><div className="lh-stat-lbl">Record</div></div>
- <div className="lh-stat"><div className="lh-stat-val" style={{color:IOS.green}}>{realStandings.find(s=>s.isYou)?.wpct||"0%"}</div><div className="lh-stat-lbl">Win %</div></div>
- <div className="lh-stat"><div className="lh-stat-val" style={{color:IOS.green}}>{realStandings.find(s=>s.isYou)?.points||0}pts</div><div className="lh-stat-lbl">Points</div></div>
- <div className="lh-stat"><div className="lh-stat-val" style={{color:IOS.green}}>Wk {activeLeague.current_week||activeLeague.week||1}</div><div className="lh-stat-lbl">Current</div></div>
- </div>
- </div>
+      {/* Hero rank card */}
+      <div style={{position:"relative",margin:"0 16px 4px",borderRadius:20,padding:"20px 18px 16px",overflow:"hidden",background:`radial-gradient(120% 120% at 50% -10%, ${IOS.indigo}38, ${IOS.blue}10 45%, rgba(20,20,22,0) 70%), linear-gradient(180deg,#1a1a1f,#141416)`,border:`1px solid ${IOS.indigo}47`,boxShadow:`0 18px 50px -20px ${IOS.indigo}80`}}>
+        <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${IOS.blue},${IOS.indigo},#64D2FF)`}}/>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,letterSpacing:1,textTransform:"uppercase",fontSize:12,color:"#64D2FF"}}>Your rank</div>
+        <div style={{display:"flex",alignItems:"flex-end",gap:13,marginTop:4}}>
+          <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:70,lineHeight:.85,color:"#fff",textShadow:`0 0 38px ${IOS.blue}66`}}>{realStandings.find(s=>s.isYou)?.rank||"—"}<span style={{fontSize:28,color:IOS.label3,fontWeight:700}}>/{activeLeague.target_size||activeLeague.max_members||8}</span></div>
+          <div style={{paddingBottom:7}}>
+            <div style={{fontSize:24,fontWeight:900,letterSpacing:-.3,lineHeight:1}}>You</div>
+            <div style={{fontSize:12.5,color:IOS.label2,fontWeight:600,marginTop:4}}>{realStandings.find(s=>s.isYou)?.rank===1?"Leading the league":`of ${activeLeague.target_size||activeLeague.max_members||8} players`}</div>
+          </div>
+        </div>
+        <div style={{display:"flex",marginTop:18,background:"rgba(255,255,255,0.03)",border:`0.5px solid ${IOS.sep}`,borderRadius:14,overflow:"hidden"}}>
+          {[[realStandings.find(s=>s.isYou)?.record||"0-0","Record","#fff"],[realStandings.find(s=>s.isYou)?.wpct||"0%","Win %",IOS.green],[String(realStandings.find(s=>s.isYou)?.points||0),"Points",IOS.blue],["Wk "+(activeLeague.current_week||activeLeague.week||1),"Current",IOS.label2]].map((c,ci)=>(
+            <div key={ci} style={{flex:1,textAlign:"center",padding:"11px 4px",borderLeft:ci>0?`1px solid ${IOS.sep}`:"none"}}>
+              <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:20,color:c[2]}}>{c[0]}</div>
+              <div style={{fontSize:9.5,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4,fontWeight:700,marginTop:2}}>{c[1]}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {sorted.length>=3 ? (
+        <div style={{padding:"18px 16px 0"}}>
+          <div style={{fontSize:17,fontWeight:800,color:"#fff",margin:"0 4px 14px"}}>Top of the table</div>
+          <div style={{display:"flex",alignItems:"flex-end",justifyContent:"center",gap:10}}>
+            {[sorted[1],sorted[0],sorted[2]].map((p,idx)=>{ if(!p) return null; const place=idx===0?2:idx===1?1:3; const col=place===1?IOS.yellow:place===2?"#C7CBD1":"#E0915A"; const h=place===1?92:place===2?66:50; const av=place===1?64:52; const initials=(p.name==="You"?"You":(p.name||"?").slice(0,2)).toUpperCase(); return (
+              <div key={idx} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
+                <div style={{position:"relative",width:av,height:av,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:place===1?22:18,color:"#0c0c0e",background:`linear-gradient(150deg,${col},${col}bb)`,boxShadow:`0 0 22px ${col}55`}}>
+                  {place===1 && <svg width="24" height="24" viewBox="0 0 24 24" fill={IOS.yellow} style={{position:"absolute",top:-17,left:"50%",transform:"translateX(-50%)"}}><path d="M3 7l4 4 5-7 5 7 4-4-2 12H5z"/></svg>}
+                  {initials}
+                </div>
+                <div style={{fontSize:12.5,fontWeight:800,maxWidth:100,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:p.isYou?IOS.blue:"#fff"}}>{p.name}</div>
+                <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:16,color:col}}>{p.points}</div>
+                <div style={{width:"100%",height:h,borderRadius:"12px 12px 0 0",background:`linear-gradient(180deg,${col}33,${col}08)`,border:`0.5px solid ${col}44`,borderBottom:"none",display:"flex",justifyContent:"center",paddingTop:9,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:20,color:"rgba(255,255,255,0.85)"}}>{place}</div>
+              </div>
+            );})}
+          </div>
+        </div>
+      ) : sorted.length>0 ? (
+        <div style={{padding:"16px 16px 0"}}>
+          <div style={{borderRadius:16,padding:"15px",background:`linear-gradient(135deg,${IOS.yellow}1a,rgba(255,255,255,0.02))`,border:`0.5px solid ${IOS.yellow}33`,display:"flex",alignItems:"center",gap:13}}>
+            <div style={{width:48,height:48,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:18,color:"#0c0c0e",background:`linear-gradient(150deg,${IOS.yellow},#FFB300)`,boxShadow:`0 0 20px ${IOS.yellow}55`,flexShrink:0}}>{(sorted[0].name==="You"?"You":(sorted[0].name||"?").slice(0,2)).toUpperCase()}</div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",color:IOS.yellow}}>League leader</div>
+              <div style={{fontSize:17,fontWeight:800,color:sorted[0].isYou?IOS.blue:"#fff",marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{sorted[0].name}</div>
+            </div>
+            <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:26,color:IOS.yellow,flexShrink:0}}>{sorted[0].points}<span style={{fontSize:12,color:IOS.label3,fontWeight:700}}> pts</span></div>
+          </div>
+        </div>
+      ) : null}
 
  {/* This Week section */}
  <div style={{padding:"16px 20px 8px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
@@ -9383,12 +9628,12 @@ export default function App() {
  else if(p.result==="L") byUser[p.user_id].losses++;
  });
  // Include all league members even if no picks yet
- const allMembers = leagueMembers.map(m=>({
- userId: m.userId||m.user_id||m.id,
- name: m.isYou?"You":m.name||m.username||"Unknown",
- isYou: m.isYou,
- ...(byUser[m.userId||m.user_id||m.id]||{wins:0,losses:0,points:0}),
- }));
+ const allMembers = leagueMembers.map(m=>{
+ const mid = m.userId||m.user_id||m.id;
+ const nm = m.isYou?"You":m.name||m.username||"Unknown";
+ const sr = ((realStandings||[]).find(x=> m.isYou ? x.isYou : (x.name===nm)) || {}).record || "0-0";
+ return { userId: mid, name: nm, isYou: m.isYou, record: sr, ...(byUser[mid]||{wins:0,losses:0,points:0}) };
+ });
  const sorted = [...allMembers].sort((a,b)=>b.points-a.points);
  return (
  <div style={{background:IOS.bg2,borderRadius:16,margin:"0 16px 16px",overflow:"hidden"}}>
@@ -9404,7 +9649,7 @@ export default function App() {
  </div>
  <div style={{flex:1}}>
  <div style={{fontSize:15,fontWeight:600,color:isMe?IOS.blue:"#fff"}}>{isMe?"You ":row.name}</div>
- <div style={{fontSize:12,color:IOS.label3,marginTop:1}}>{row.wins}W · {row.losses}L this week</div>
+ <div style={{fontSize:12,color:IOS.label3,marginTop:1}}>{row.record} season · {row.wins}W-{row.losses}L this wk</div>
  </div>
  <div style={{textAlign:"right"}}>
  <div style={{fontSize:20,fontWeight:800,letterSpacing:-0.5,color:pts>0?IOS.green:IOS.label3}}>{pts}pts</div>
@@ -9468,6 +9713,7 @@ export default function App() {
  })}
  </div>
  <div style={{height:16}}/>
+ </>)}
  </>
  )}
 
@@ -11085,7 +11331,7 @@ export default function App() {
  ] : [
  {icon:"home",label:"Home",id:"home"},
  {icon:"picks",label:"Picks",id:"picks"},
- {icon:"matchup",label:"Matchup",id:"matchup"},
+ (activeLeague&&activeLeague.league_type==="points"?{icon:"field",label:"Field",id:"matchup"}:{icon:"matchup",label:"Matchup",id:"matchup"}),
  {icon:"leagues",label:"Leagues",id:"leagues"},
  {icon:"profile",label:"Profile",id:"profile"},
  ]).map(t=>{
@@ -11095,6 +11341,7 @@ export default function App() {
  home:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
  picks:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>,
  matchup:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="18 13 12 19 6 13"/><polyline points="18 11 12 5 6 11"/></svg>,
+ field:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>,
  leagues:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
  standings:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
  history:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.51"/></svg>,
