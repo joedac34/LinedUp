@@ -6006,7 +6006,7 @@ export default function App() {
  const _need = Math.max(0, _ts - leagueMembers.length);
  if(leagueNotStarted){
    return (
-     <div style={{padding:"16px 16px 90px"}}>
+     <div className="body" style={{padding:"16px 16px 90px"}}>
        <div style={{background:"linear-gradient(160deg,#16181d,#0c0d10)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:16,padding:"22px 18px",textAlign:"center"}}>
          <div style={{width:46,height:46,borderRadius:13,background:"rgba(255,159,10,0.14)",border:"0.5px solid rgba(255,159,10,0.3)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px"}}>
            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={IOS.orange} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
@@ -10060,14 +10060,6 @@ export default function App() {
                 </div>
               </div>
               <button onClick={()=>{ if(!isPro){setShowPaywall("ai");return;} setModelPicker(true); }} style={{flexShrink:0,display:"inline-flex",alignItems:"center",gap:5,padding:"7px 11px",borderRadius:10,background:`${IOS.blue}1a`,border:`1px solid ${IOS.blue}40`,color:IOS.blue,fontSize:11.5,fontWeight:800,cursor:"pointer"}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Plok Models</button>
-            </div>
-            <div className="gbx-scroll" style={{flexShrink:0,display:"flex",gap:6,overflowX:"auto",padding:"9px 12px 10px",borderBottom:"0.5px solid rgba(255,255,255,0.06)"}}>
-              {PLOK_PERSONAS.map(pz=>{
-                const on = plokPersona===pz.key;
-                return (
-                  <button key={pz.name} onClick={()=>setPlokPersona(pz.key)} style={{flexShrink:0,padding:"6px 11px",borderRadius:18,border:on?`1px solid ${IOS.blue}`:"0.5px solid rgba(255,255,255,0.12)",background:on?`${IOS.blue}22`:"rgba(255,255,255,0.04)",color:on?IOS.blue:"rgba(255,255,255,0.6)",fontSize:11.5,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"Barlow,sans-serif"}}>{pz.name}</button>
-                );
-              })}
             </div>
             <div className="gbx-scroll" style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:10,padding:"14px 14px 16px"}}>
               {plokBuilding && (
