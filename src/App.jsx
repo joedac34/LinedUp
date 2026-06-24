@@ -8581,13 +8581,13 @@ export default function App() {
 )}
  {newLeagueStep===1&&(
    <>
-   <button onClick={()=>setNewLeagueStep(0)} style={{background:"none",border:"none",color:"#555",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"Barlow,sans-serif",padding:"0 0 14px",display:"flex",alignItems:"center",gap:4}}>
+   <button onClick={()=>setNewLeagueStep(0)} style={{background:"none",border:"none",color:"rgba(255,255,255,0.6)",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"Barlow,sans-serif",padding:"0 0 14px",display:"flex",alignItems:"center",gap:4}}>
      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg> Back
    </button>
 
    {/* Sports */}
    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-     <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"#555"}}>Sport{isPro?" (select all that apply)":""}</div>
+     <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"rgba(255,255,255,0.6)"}}>Sport{isPro?" (select all that apply)":""}</div>
      {isPro && <div style={{fontSize:9,fontWeight:700,color:IOS.blue,background:"rgba(10,132,255,0.1)",border:"0.5px solid rgba(10,132,255,0.25)",borderRadius:4,padding:"2px 6px"}}>MULTI-SPORT</div>}
    </div>
    <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:isPro?4:16}}>
@@ -8600,7 +8600,7 @@ export default function App() {
      style={{padding:"7px 14px",borderRadius:6,fontSize:12,fontWeight:600,cursor:"pointer",transition:"all .15s",
        background:isSelected?"rgba(10,132,255,0.12)":"#111",
        border:`0.5px solid ${isSelected?"rgba(10,132,255,0.4)":"#222"}`,
-       color:isSelected?IOS.blue:"#666",
+       color:isSelected?IOS.blue:"rgba(255,255,255,0.55)",
        display:"flex",alignItems:"center",gap:5,
      }}>
        {isSelected && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
@@ -8620,7 +8620,7 @@ export default function App() {
    )}
 
    {/* League name */}
-   <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"#555",marginBottom:8}}>League name</div>
+   <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"rgba(255,255,255,0.6)",marginBottom:8}}>League name</div>
    <input
      value={newLeagueName}
      onChange={e=>setNewLeagueName(e.target.value)}
@@ -8629,7 +8629,7 @@ export default function App() {
    />
 
    {/* Size */}
-   <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"#555",marginBottom:8}}>
+   <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"rgba(255,255,255,0.6)",marginBottom:8}}>
      {newLeagueType==="bracket"?"Tournament size":"League size"}
    </div>
    {newLeagueType==="points"?(
@@ -8637,7 +8637,7 @@ export default function App() {
        <div onClick={()=>setNewLeagueSize(s=>Math.max(2,s-1))} style={{width:28,height:28,borderRadius:6,background:"#1A1A1A",border:"0.5px solid #2A2A2A",color:"#ccc",fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>−</div>
        <div style={{fontSize:16,fontWeight:700,color:"#fff",minWidth:28,textAlign:"center"}}>{newLeagueSize}</div>
        <div onClick={()=>setNewLeagueSize(s=>Math.min(32,s+1))} style={{width:28,height:28,borderRadius:6,background:"#1A1A1A",border:"0.5px solid #2A2A2A",color:"#ccc",fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>+</div>
-       <div style={{fontSize:12,color:"#555",marginLeft:4}}>players (2–32)</div>
+       <div style={{fontSize:12,color:"rgba(255,255,255,0.6)",marginLeft:4}}>players (2–32)</div>
      </div>
    ):(
      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:4}}>
@@ -8647,8 +8647,8 @@ export default function App() {
          background:newLeagueSize===sz?"rgba(10,132,255,0.12)":"#111",
          border:`0.5px solid ${newLeagueSize===sz?"rgba(10,132,255,0.4)":"#222"}`,
        }}>
-         <div style={{fontSize:18,fontWeight:800,color:newLeagueSize===sz?IOS.blue:"#666"}}>{sz}</div>
-         <div style={{fontSize:10,color:"#555",marginTop:2}}>players</div>
+         <div style={{fontSize:18,fontWeight:800,color:newLeagueSize===sz?IOS.blue:"rgba(255,255,255,0.55)"}}>{sz}</div>
+         <div style={{fontSize:10,color:"rgba(255,255,255,0.6)",marginTop:2}}>players</div>
        </div>
      ))}
      </div>
@@ -8664,14 +8664,14 @@ export default function App() {
    {/* Season weeks — h2h and points only */}
    {newLeagueType!=="bracket"&&(
      <>
-     <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"#555",marginBottom:8,marginTop:12}}>Season length</div>
+     <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"rgba(255,255,255,0.6)",marginBottom:8,marginTop:12}}>Season length</div>
      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
        <div onClick={()=>setNewLeagueWeeks(w=>Math.max(1,w-1))} style={{width:28,height:28,borderRadius:6,background:"#1A1A1A",border:"0.5px solid #2A2A2A",color:"#ccc",fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>−</div>
        <div style={{fontSize:16,fontWeight:700,color:"#fff",minWidth:28,textAlign:"center"}}>{newLeagueWeeks}</div>
        <div onClick={()=>setNewLeagueWeeks(w=>Math.min(30,w+1))} style={{width:28,height:28,borderRadius:6,background:"#1A1A1A",border:"0.5px solid #2A2A2A",color:"#ccc",fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>+</div>
-       <div style={{fontSize:12,color:"#555",marginLeft:4}}>weeks</div>
+       <div style={{fontSize:12,color:"rgba(255,255,255,0.6)",marginLeft:4}}>weeks</div>
      </div>
-     <div style={{fontSize:11,color:"#444",marginBottom:16}}>{newLeagueType==="points"?"Ranked by total points at the end":"NFL regular season is 18 weeks"}</div>
+     <div style={{fontSize:11,color:"rgba(255,255,255,0.45)",marginBottom:16}}>{newLeagueType==="points"?"Ranked by total points at the end":"NFL regular season is 18 weeks"}</div>
      </>
    )}
 
@@ -8683,7 +8683,7 @@ export default function App() {
      return (
      <>
      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8,marginTop:12}}>
-       <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"#555"}}>Playoffs</div>
+       <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"rgba(255,255,255,0.6)"}}>Playoffs</div>
        <div onClick={()=>setNewLeaguePlayoffs(v=>!v)} style={{width:44,height:26,borderRadius:13,background:newLeaguePlayoffs?IOS.blue:"#2A2A2A",border:`1px solid ${newLeaguePlayoffs?IOS.blue:"#3A3A3A"}`,position:"relative",cursor:"pointer",transition:"background .2s"}}>
          <div style={{position:"absolute",top:2,left:newLeaguePlayoffs?18:2,width:22,height:22,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
        </div>
@@ -8692,33 +8692,33 @@ export default function App() {
        <>
        <div style={{display:"flex",gap:6,marginBottom:6}}>
        {[2,4,6,8].map(v=>{ const dis=v>newLeagueSize; const on=eff===v; return (
-         <div key={v} onClick={()=>{ if(!dis) setNewLeaguePlayoffSize(v); }} style={{flex:1,borderRadius:8,padding:"10px 4px",textAlign:"center",cursor:dis?"default":"pointer",opacity:dis?0.3:1,transition:"all .15s",background:on?"rgba(10,132,255,0.12)":"#111",border:`0.5px solid ${on?"rgba(10,132,255,0.4)":"#222"}`}}>
-           <div style={{fontSize:18,fontWeight:800,color:on?IOS.blue:"#666"}}>{v}</div>
-           <div style={{fontSize:9,color:"#555",marginTop:2}}>teams</div>
+         <div key={v} onClick={()=>{ if(!dis) setNewLeaguePlayoffSize(v); }} style={{flex:1,borderRadius:8,padding:"10px 4px",textAlign:"center",cursor:dis?"default":"pointer",opacity:dis?0.42:1,transition:"all .15s",background:on?"rgba(10,132,255,0.12)":"#111",border:`0.5px solid ${on?"rgba(10,132,255,0.4)":"#222"}`}}>
+           <div style={{fontSize:18,fontWeight:800,color:on?IOS.blue:"rgba(255,255,255,0.55)"}}>{v}</div>
+           <div style={{fontSize:9,color:"rgba(255,255,255,0.6)",marginTop:2}}>teams</div>
          </div>
        );})}
        </div>
-       <div style={{fontSize:11,color:"#444",marginBottom:16}}>Top {eff} seeds · {wk[eff]}-week single-elim{eff===6?" · top 2 get a bye":""}. Runs the final {wk[eff]} week{wk[eff]>1?"s":""}.</div>
+       <div style={{fontSize:11,color:"rgba(255,255,255,0.45)",marginBottom:16}}>Top {eff} seeds · {wk[eff]}-week single-elim{eff===6?" · top 2 get a bye":""}. Runs the final {wk[eff]} week{wk[eff]>1?"s":""}.</div>
        </>
      ):(
-       <div style={{fontSize:11,color:"#444",marginBottom:16}}>No bracket — {newLeagueType==="points"?"most total points":"best record"} takes the title.</div>
+       <div style={{fontSize:11,color:"rgba(255,255,255,0.45)",marginBottom:16}}>No bracket — {newLeagueType==="points"?"most total points":"best record"} takes the title.</div>
      )}
      </>
      );
    })()}
 
    {/* Visibility */}
-   <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"#555",marginBottom:8}}>Visibility</div>
+   <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"rgba(255,255,255,0.6)",marginBottom:8}}>Visibility</div>
    <div style={{display:"flex",gap:6,marginBottom:16}}>
    {[{id:"private",l:"Private",d:"Invite code only"},{id:"public",l:"Public",d:"Anyone can find & join"}].map(v=>(
      <div key={v.id} onClick={()=>setNewLeaguePrivacy(v.id)}
      style={{flex:1,borderRadius:8,padding:"11px 10px",border:`0.5px solid ${newLeaguePrivacy===v.id?"rgba(10,132,255,0.4)":"#222"}`,background:newLeaguePrivacy===v.id?"rgba(10,132,255,0.1)":"#111",cursor:"pointer",textAlign:"center",transition:"all .15s"}}>
        {v.id==="private"
-         ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={newLeaguePrivacy===v.id?IOS.blue:"#555"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{display:"block",marginBottom:4}}><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-         : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={newLeaguePrivacy===v.id?IOS.blue:"#555"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{display:"block",marginBottom:4}}><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+         ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={newLeaguePrivacy===v.id?IOS.blue:"rgba(255,255,255,0.6)"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{display:"block",marginBottom:4}}><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+         : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={newLeaguePrivacy===v.id?IOS.blue:"rgba(255,255,255,0.6)"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{display:"block",marginBottom:4}}><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
        }
-       <div style={{fontSize:12,fontWeight:700,color:newLeaguePrivacy===v.id?IOS.blue:"#555"}}>{v.l}</div>
-       <div style={{fontSize:10,color:"#444",marginTop:2}}>{v.d}</div>
+       <div style={{fontSize:12,fontWeight:700,color:newLeaguePrivacy===v.id?IOS.blue:"rgba(255,255,255,0.6)"}}>{v.l}</div>
+       <div style={{fontSize:10,color:"rgba(255,255,255,0.45)",marginTop:2}}>{v.d}</div>
      </div>
    ))}
    </div>
@@ -8727,7 +8727,7 @@ export default function App() {
    <div style={{background:"#111",borderRadius:10,padding:"11px 13px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",border:"0.5px solid #1E1E1E"}}>
      <div>
        <div style={{fontSize:13,fontWeight:600,color:"#fff"}}>Commish Pro</div>
-       <div style={{fontSize:11,color:"#555",marginTop:2}}>Custom picks, multi-sport, power-ups</div>
+       <div style={{fontSize:11,color:"rgba(255,255,255,0.6)",marginTop:2}}>Custom picks, multi-sport, power-ups</div>
      </div>
      <div onClick={()=>isPro?setProStatus(false):setShowPaywall("settings")} style={{width:44,height:26,borderRadius:13,background:isPro?IOS.blue:"#2A2A2A",border:`1px solid ${isPro?IOS.blue:"#3A3A3A"}`,position:"relative",cursor:"pointer",transition:"background .2s"}}>
        <div style={{position:"absolute",top:2,left:isPro?18:2,width:22,height:22,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
