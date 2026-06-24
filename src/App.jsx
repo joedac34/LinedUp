@@ -3261,7 +3261,7 @@ export default function App() {
      if((league.league_type||"h2h")==="bracket") await generateBracket(league.id, memberIds);
      else if((league.league_type||"h2h")==="h2h") await generateSchedule(league.id, memberIds, league.season_weeks||18);
      else if(league.league_type==="points") await supabase.from("leagues").update({ season_start: new Date().toISOString(), current_week: 1 }).eq("id", league.id).is("season_start", null);
-     alert("Joined "+league.name+"! League is full — schedule generated.");
+     alert("Joined "+league.name+"! League is full"+((league.league_type||'h2h')==='points'?" — standings are live!":(league.league_type||'h2h')==='bracket'?" — bracket generated!":" — schedule generated."));
    } else {
      alert("Joined "+league.name+"! "+(targetSize-allMembers.length)+" more needed.");
    }
@@ -3908,7 +3908,7 @@ export default function App() {
  const fetchLeagues = async (uid) => {
  setLeaguesLoading(true);
  const {data:members} = await supabase.from("league_members").select("league_id, is_commissioner").eq("user_id", uid);
- if(!members || members.length===0) { setLeaguesLoading(false); return; }
+ if(!members || members.length===0) { setRealLeagues([]); setLeaguesLoading(false); return; }
  const ids = [...new Set(members.map(m=>m.league_id))];
  const {data:leagues} = await supabase.from("leagues").select("*").in("id", ids);
  if(leagues && leagues.length > 0) {
@@ -3929,7 +3929,7 @@ export default function App() {
  return target;
  });
  }
- }
+ } else { setRealLeagues([]); }
  setLeaguesLoading(false);
  };
 
@@ -4917,7 +4917,7 @@ export default function App() {
    <div style={{width:"100%",display:"flex",flexDirection:"column",gap:10}}>
      <button onClick={()=>{dismissOnboard();setScreen("leagues");setShowNewLeague(true);setNewLeagueCreated(null);setNewLeagueSport(null);setNewLeagueName("");setNewLeagueSize(8);setNewLeagueStep(0);}} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:14,padding:"15px",fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Create a League</button>
      <button onClick={()=>{dismissOnboard();setShowBrowse(true);fetchPublicLeagues();}} style={{width:"100%",background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:14,padding:"15px",fontSize:15,fontWeight:700,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Browse Public Leagues</button>
-     <button onClick={dismissOnboard} style={{width:"100%",background:"none",border:"none",padding:"12px",fontSize:14,fontWeight:600,color:"rgba(255,255,255,0.35)",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Go Solo for now</button>
+     <button onClick={()=>{dismissOnboard();setHomeMode("solo");setSoloModeWithRef(true);try{fetchSoloWeeks();}catch(e){}setScreen("home");}} style={{width:"100%",background:"none",border:"none",padding:"12px",fontSize:14,fontWeight:600,color:"rgba(255,255,255,0.35)",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Go Solo for now</button>
    </div>
  </div>
  ),
@@ -8799,7 +8799,7 @@ export default function App() {
      await generateSchedule(league.id, memberIds, league.season_weeks||18);
    }
    // points-only: no schedule generated
- alert(`Joined ${league.name}! League is full — schedule generated!`);
+ alert(`Joined ${league.name}! League is full${(league.league_type||'h2h')==='points'?' — standings are live!':(league.league_type||'h2h')==='bracket'?' — bracket generated!':' — schedule generated!'}`);
  } else {
  alert(`Joined ${league.name}! Welcome. ${targetSize-allMembers.length} more player${targetSize-allMembers.length!==1?"s":""} needed.`);
  }
@@ -9078,7 +9078,7 @@ export default function App() {
        const memberIds = allMems2.map(m=>m.user_id);
        if((league.league_type||'h2h')==='bracket') await generateBracket(league.id, memberIds);
        else if((league.league_type||'h2h')==='h2h') await generateSchedule(league.id, memberIds, league.season_weeks||18);
-       alert("Joined "+league.name+"! League is full — schedule generated!");
+       alert("Joined "+league.name+"! League is full"+((league.league_type||'h2h')==='points'?" — standings are live!":(league.league_type||'h2h')==='bracket'?" — bracket generated!":" — schedule generated!"));
      } else {
        alert("Joined "+league.name+"!");
      }
@@ -9434,18 +9434,14 @@ export default function App() {
  </div>
 
  {/* ── Generate Schedule (if league full but no schedule yet) ── */}
- {leagueMembers.length >= (activeLeague.target_size||activeLeague.max_members||8) && liveSchedule.length === 0 && (
+ {(activeLeague.league_type||"h2h")==="h2h" && leagueMembers.length >= (activeLeague.target_size||activeLeague.max_members||8) && liveSchedule.length === 0 && (
    <div style={{margin:"0 16px 12px",background:"rgba(48,209,88,0.08)",borderRadius:16,padding:"14px 16px",border:"0.5px solid rgba(48,209,88,0.25)"}}>
      <div style={{fontSize:14,fontWeight:700,color:"#fff",marginBottom:4}}>League is full — no schedule yet</div>
      <div style={{fontSize:12,color:IOS.label3,marginBottom:12}}>Generate matchups for all {activeLeague.season_weeks||18} weeks of the season.</div>
      <button onClick={async()=>{
        const memberIds = leagueMembers.map(m=>m.userId).filter(Boolean);
        if(memberIds.length === 0) { alert("Could not load member IDs. Try refreshing."); return; }
-       if((activeLeague.league_type||"h2h")==="bracket") {
-         await generateBracket(activeLeague.id, memberIds);
-       } else {
-         await generateSchedule(activeLeague.id, memberIds, activeLeague.season_weeks||18);
-       }
+       await generateSchedule(activeLeague.id, memberIds, activeLeague.season_weeks||18);
        await fetchSchedule(activeLeague.id, user.id);
        await fetchStandings(activeLeague.id);
        alert("Schedule generated!");
