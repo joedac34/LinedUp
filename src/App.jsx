@@ -3467,6 +3467,24 @@ export default function App() {
  if(finals.length===1 && finals[0].winner_id){ await supabase.from("leagues").update({ champion_id: finals[0].winner_id }).eq("id", leagueId); }
  };
 
+ // Dev-only: drive the real season pipeline (season_start backdate -> checkAutoAdvanceWeek) to test playoffs end to end.
+ const devJumpToWeek = async (tgt) => {
+ if(!activeLeague || !activeLeague.id) return;
+ const WEEK_MS=7*24*60*60*1000;
+ const sw=Number(activeLeague.season_weeks)||18;
+ const t=Math.max(1, Math.min(sw+1, tgt));
+ const newStart=new Date(Date.now()-t*WEEK_MS).toISOString();
+ await supabase.from("leagues").update({ season_start:newStart }).eq("id", activeLeague.id);
+ await checkAutoAdvanceWeek(activeLeague.id, {...activeLeague, season_start:newStart});
+ await fetchLeagues(user.id); await fetchStandings(activeLeague.id); await fetchBracket(activeLeague.id);
+ };
+ const devResetPlayoffs = async () => {
+ if(!activeLeague || !activeLeague.id) return;
+ await supabase.from("matchups").delete().eq("league_id", activeLeague.id).like("bracket_match_id","PW%");
+ await supabase.from("leagues").update({ current_week:1, champion_id:null, season_start:new Date().toISOString() }).eq("id", activeLeague.id);
+ await fetchLeagues(user.id); await fetchStandings(activeLeague.id); await fetchBracket(activeLeague.id);
+ };
+
  const fetchPuLeagueData = async (leagueId, userId) => {
  const {data} = await supabase
  .from("league_power_ups")
@@ -9723,6 +9741,29 @@ export default function App() {
  </div>
  );
  })()}
+
+ {((user&&user.id==="769f7ebe-90c2-45f5-99f4-b98b54622f52")||(typeof localStorage!=="undefined"&&localStorage.getItem("picklock_dev")==="1")) && activeLeague.isCommissioner && activeLeague.league_type!=="bracket" && (()=>{
+   const sw=Number(activeLeague.season_weeks)||18;
+   const N=playoffFieldFor(activeLeague, leagueMembers.length||0);
+   const pw=playoffWeeksFor(N);
+   const startWk=N>=2?Math.max(1,sw-pw+1):sw;
+   const cw=activeLeague.current_week||1;
+   const DEVBTN={flex:"1 1 auto",minWidth:62,textAlign:"center",padding:"8px 6px",borderRadius:8,fontSize:12,fontWeight:800,color:IOS.orange,background:"rgba(255,159,10,0.1)",border:"1px solid rgba(255,159,10,0.3)",cursor:"pointer"};
+   return (
+   <div style={{margin:"0 16px 14px",borderRadius:12,padding:"12px 14px",background:"rgba(255,159,10,0.06)",border:"1px dashed rgba(255,159,10,0.4)"}}>
+     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:9}}>
+       <div style={{fontSize:10,fontWeight:800,letterSpacing:".12em",color:IOS.orange}}>DEV · WK {cw}/{sw}</div>
+       <div style={{fontSize:10,color:IOS.label3}}>{N>=2?(N+"-team · seeds Wk "+startWk):"no playoff"}</div>
+     </div>
+     <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+       <div onClick={()=>devJumpToWeek(cw+1)} style={DEVBTN}>+1 wk</div>
+       {N>=2 && <div onClick={()=>devJumpToWeek(startWk)} style={DEVBTN}>→ Playoffs</div>}
+       <div onClick={()=>devJumpToWeek(sw+1)} style={DEVBTN}>→ Crown</div>
+       <div onClick={devResetPlayoffs} style={{...DEVBTN,color:IOS.red,background:"rgba(255,59,48,0.08)",border:"1px solid rgba(255,59,48,0.35)"}}>Reset</div>
+     </div>
+   </div>
+   );
+   })()}
 
  {/* Tabs */}
  <div className="seg-control" style={{marginBottom:14}}>
