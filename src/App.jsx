@@ -5788,14 +5788,25 @@ export default function App() {
  );
  }
  return (<>
- {!slipSlots &&
+ {realLeagues.length>0 && !slipSlots &&
  <button className="ios-btn" style={{background:`linear-gradient(135deg,${sport.color},${IOS.indigo})`,color:"#fff",marginBottom:6,boxShadow:`0 6px 18px ${sport.color}33`}} onClick={()=>setScreen("picks")}>Build Your {leagueSports.length > 1 ? "Multi-Sport" : sport.label} Slip</button>
  }
  {card}
  </>);
  })()}
 
- {homeTab==='home' && <>
+{realLeagues.length===0 && (
+ <div style={{margin:"6px 16px 4px",borderRadius:18,padding:"18px",position:"relative",overflow:"hidden",background:"radial-gradient(130% 120% at 10% -10%, rgba(10,132,255,0.32), rgba(94,92,230,0.12) 45%, rgba(12,12,16,0) 75%),linear-gradient(160deg,#10204a 0%,#0c0c12 78%)",border:"1px solid rgba(10,132,255,0.3)",boxShadow:"0 18px 50px -26px rgba(10,132,255,0.6)"}}>
+   <div style={{fontSize:20,fontWeight:900,letterSpacing:-0.4,color:"#fff"}}>Get in a league</div>
+   <div style={{fontSize:13,color:"rgba(255,255,255,0.72)",lineHeight:1.5,marginTop:6}}>You’re browsing games solo. Create or join a league to put your picks up against friends — weekly matchups, playoffs, bragging rights.</div>
+   <button onClick={()=>{setShowNewLeague(true);setNewLeagueStep(0);}} style={{marginTop:14,width:"100%",background:"linear-gradient(180deg,#0a84ff,#0066d6)",border:"none",borderRadius:12,padding:"14px",fontSize:15,fontWeight:800,color:"#fff",fontFamily:"Barlow,sans-serif",cursor:"pointer",boxShadow:"0 8px 24px -10px rgba(10,132,255,0.8)"}}>Create a league</button>
+   <div style={{display:"flex",gap:9,marginTop:9}}>
+     <div onClick={()=>{setShowBrowse(true);fetchPublicLeagues();}} style={{flex:1,textAlign:"center",background:"rgba(255,255,255,0.07)",border:"0.5px solid rgba(255,255,255,0.14)",borderRadius:11,padding:"11px",fontSize:13.5,fontWeight:800,color:"#fff",cursor:"pointer"}}>Browse public</div>
+     <div onClick={()=>{const c=(window.prompt("Enter invite code")||"").trim(); if(c) handleJoinCode(c);}} style={{flex:1,textAlign:"center",background:"rgba(255,255,255,0.07)",border:"0.5px solid rgba(255,255,255,0.14)",borderRadius:11,padding:"11px",fontSize:13.5,fontWeight:800,color:"#fff",cursor:"pointer"}}>Join code</div>
+   </div>
+ </div>
+ )}
+ {homeTab==='home' && realLeagues.length>0 && <>
  <div className="ios-section" style={{margin:"12px 16px 6px"}}>
  <div className="ios-section-header" style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
  <span>Power-Ups</span>
@@ -11549,7 +11560,7 @@ export default function App() {
  profile:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
  };
  return (
- <div key={t.id} className={"tab-item "+(isOn?"on":"")} onClick={()=>setScreen(t.id)}>
+ <div key={t.id} className={"tab-item "+(isOn?"on":"")} onClick={()=>{ if(t.id==="picks" && realLeagues.length===0 && !isSoloMode){ setHomeMode("solo"); setSoloModeWithRef(true); try{fetchSoloWeeks();}catch(e){} } setScreen(t.id); }}>
  <div className="tab-icon" style={{display:"flex",alignItems:"center",justifyContent:"center"}}>{svgs[t.icon]}</div>
  <div className="tab-label" style={isOn?{color:IOS.blue}:{}}>{t.label}</div>
  </div>
