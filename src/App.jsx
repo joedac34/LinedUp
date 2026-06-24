@@ -1548,7 +1548,7 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
           ))}
           <span style={{marginLeft:8,fontSize:11.5,color:IOS.label2,fontWeight:600}}>matchups · playoffs · trophies</span>
         </div>
-        <button onClick={()=>{setShowNewLeague(true);setNewLeagueStep(0);}} style={{position:"relative",marginTop:16,width:"100%",background:"linear-gradient(180deg,#0a84ff,#0066d6)",border:"none",borderRadius:13,padding:"15px",fontSize:15.5,fontWeight:800,color:"#fff",fontFamily:"Barlow,sans-serif",cursor:"pointer",boxShadow:"0 8px 24px -8px rgba(10,132,255,0.8)",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+        <button onClick={()=>{setScreen("leagues");setShowNewLeague(true);setNewLeagueStep(0);}} style={{position:"relative",marginTop:16,width:"100%",background:"linear-gradient(180deg,#0a84ff,#0066d6)",border:"none",borderRadius:13,padding:"15px",fontSize:15.5,fontWeight:800,color:"#fff",fontFamily:"Barlow,sans-serif",cursor:"pointer",boxShadow:"0 8px 24px -8px rgba(10,132,255,0.8)",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Create a league
         </button>
         <div style={{position:"relative",display:"flex",gap:9,marginTop:9}}>
@@ -1564,7 +1564,7 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
       <div onClick={expandHero} style={{display:"flex",alignItems:"center",gap:10,background:"linear-gradient(180deg,#12203f,#0b0f1c)",border:"0.5px solid rgba(10,132,255,0.28)",borderRadius:12,padding:"11px 14px",marginBottom:12,cursor:"pointer"}}>
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2"><circle cx="9" cy="8" r="3.2"/><circle cx="17" cy="9" r="2.6"/><path d="M3 20c0-3 3-5 6-5s6 2 6 5"/></svg>
         <div style={{flex:1,minWidth:0,fontSize:13,fontWeight:800,color:"#fff"}}>PickLock's better with friends</div>
-        <div onClick={(e)=>{e.stopPropagation();setShowNewLeague(true);setNewLeagueStep(0);}} style={{fontSize:12,fontWeight:800,color:IOS.blue,background:"rgba(10,132,255,0.14)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:8,padding:"6px 12px",cursor:"pointer"}}>Create</div>
+        <div onClick={(e)=>{e.stopPropagation();setScreen("leagues");setShowNewLeague(true);setNewLeagueStep(0);}} style={{fontSize:12,fontWeight:800,color:IOS.blue,background:"rgba(10,132,255,0.14)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:8,padding:"6px 12px",cursor:"pointer"}}>Create</div>
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2.4" strokeLinecap="round"><polyline points="6 9 12 15 18 9"/></svg>
       </div>
       )}
@@ -1726,7 +1726,7 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
           <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:4}}>{(totalWins+totalLosses)>0 ? `You’re picking at ${winPct}%` : "Solo’s just practice"}</div>
           <div style={{fontSize:11,color:IOS.label3,marginBottom:12,lineHeight:1.5}}>{(totalWins+totalLosses)>0 ? "The real fun is beating people you know. Put that record on the line." : "Round up your group and make it count — weekly matchups and a playoff."}</div>
           <div style={{display:"flex",gap:8}}>
-            <button onClick={()=>{setShowNewLeague(true);setNewLeagueStep(0);}} style={{flex:1,background:IOS.blue,border:"none",borderRadius:8,padding:"10px",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Create League</button>
+            <button onClick={()=>{setScreen("leagues");setShowNewLeague(true);setNewLeagueStep(0);}} style={{flex:1,background:IOS.blue,border:"none",borderRadius:8,padding:"10px",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Create League</button>
             <button onClick={()=>{setShowBrowse(true);fetchPublicLeagues();}} style={{flex:1,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:8,padding:"10px",fontSize:12,fontWeight:700,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Browse Leagues</button>
           </div>
           <div style={{display:"flex",gap:8,marginTop:8}}>
@@ -5799,7 +5799,7 @@ export default function App() {
  <div style={{margin:"6px 16px 4px",borderRadius:18,padding:"18px",position:"relative",overflow:"hidden",background:"radial-gradient(130% 120% at 10% -10%, rgba(10,132,255,0.32), rgba(94,92,230,0.12) 45%, rgba(12,12,16,0) 75%),linear-gradient(160deg,#10204a 0%,#0c0c12 78%)",border:"1px solid rgba(10,132,255,0.3)",boxShadow:"0 18px 50px -26px rgba(10,132,255,0.6)"}}>
    <div style={{fontSize:20,fontWeight:900,letterSpacing:-0.4,color:"#fff"}}>Get in a league</div>
    <div style={{fontSize:13,color:"rgba(255,255,255,0.72)",lineHeight:1.5,marginTop:6}}>You’re browsing games solo. Create or join a league to put your picks up against friends — weekly matchups, playoffs, bragging rights.</div>
-   <button onClick={()=>{setShowNewLeague(true);setNewLeagueStep(0);}} style={{marginTop:14,width:"100%",background:"linear-gradient(180deg,#0a84ff,#0066d6)",border:"none",borderRadius:12,padding:"14px",fontSize:15,fontWeight:800,color:"#fff",fontFamily:"Barlow,sans-serif",cursor:"pointer",boxShadow:"0 8px 24px -10px rgba(10,132,255,0.8)"}}>Create a league</button>
+   <button onClick={()=>{setScreen("leagues");setShowNewLeague(true);setNewLeagueStep(0);}} style={{marginTop:14,width:"100%",background:"linear-gradient(180deg,#0a84ff,#0066d6)",border:"none",borderRadius:12,padding:"14px",fontSize:15,fontWeight:800,color:"#fff",fontFamily:"Barlow,sans-serif",cursor:"pointer",boxShadow:"0 8px 24px -10px rgba(10,132,255,0.8)"}}>Create a league</button>
    <div style={{display:"flex",gap:9,marginTop:9}}>
      <div onClick={()=>{setShowBrowse(true);fetchPublicLeagues();}} style={{flex:1,textAlign:"center",background:"rgba(255,255,255,0.07)",border:"0.5px solid rgba(255,255,255,0.14)",borderRadius:11,padding:"11px",fontSize:13.5,fontWeight:800,color:"#fff",cursor:"pointer"}}>Browse public</div>
      <div onClick={()=>{const c=(window.prompt("Enter invite code")||"").trim(); if(c) handleJoinCode(c);}} style={{flex:1,textAlign:"center",background:"rgba(255,255,255,0.07)",border:"0.5px solid rgba(255,255,255,0.14)",borderRadius:11,padding:"11px",fontSize:13.5,fontWeight:800,color:"#fff",cursor:"pointer"}}>Join code</div>
