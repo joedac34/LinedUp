@@ -3045,12 +3045,17 @@ export default function App() {
  const start = new Date(league.season_start).getTime();
  if(isNaN(start)) return;
  const seasonWeeks = Number(league.season_weeks||18);
- const derived = Math.min(seasonWeeks, Math.floor((Date.now()-start-GRACE_MS)/WEEK_MS)+1);
+ const derived = Math.min(seasonWeeks+1, Math.floor((Date.now()-start-GRACE_MS)/WEEK_MS)+1); // +1 lets the final week finalize
  const cw = league.current_week || 1;
  if(derived <= cw) return; // current week isn't over yet
- for(let wk=cw; wk<derived; wk++){ await finalizeWeekMatchups(leagueId, wk); }
- await supabase.from('leagues').update({current_week: derived}).eq('id', leagueId);
+ for(let wk=cw; wk<derived; wk++){
+ await maybeSeedPlayoff(leagueId, league, wk);
+ await finalizeWeekMatchups(leagueId, wk);
+ await supabase.from('leagues').update({current_week: Math.min(seasonWeeks, wk+1)}).eq('id', leagueId);
  await advancePlayoffBracket(leagueId);
+ }
+ await maybeSeedPlayoff(leagueId, league, Math.min(seasonWeeks, derived));
+ await maybeCrownChampion(leagueId, league);
  };
 
  // Decide W/L for a closed week from graded picks. Idempotent: only touches unfinalized matchups.
@@ -3415,6 +3420,51 @@ export default function App() {
        }
      }
    }
+ };
+
+ // Rank members for playoff seeding: h2h by matchup wins (tiebreak pts), points by total pts.
+ const computeSeedOrder = async (leagueId, leagueType, n) => {
+ const { data:mem } = await supabase.from("league_members").select("user_id").eq("league_id", leagueId);
+ const ids = (mem||[]).map(m=>m.user_id);
+ if(ids.length < 2) return [];
+ const { data:picks } = await supabase.from("picks").select("user_id,result,points_earned").eq("league_id", leagueId).eq("result","W");
+ const pts={}; ids.forEach(id=>pts[id]=0); (picks||[]).forEach(p=>{ if(pts[p.user_id]!=null) pts[p.user_id]+=parseFloat(p.points_earned||0); });
+ let rank;
+ if((leagueType||"h2h")==="h2h"){
+ const { data:ms } = await supabase.from("matchups").select("winner_id,bracket_match_id").eq("league_id", leagueId);
+ const wins={}; ids.forEach(id=>wins[id]=0);
+ (ms||[]).forEach(m=>{ if(!String(m.bracket_match_id||"").startsWith("PW") && m.winner_id && wins[m.winner_id]!=null) wins[m.winner_id]++; });
+ rank = ids.slice().sort((a,b)=> (wins[b]-wins[a]) || (pts[b]-pts[a]));
+ } else {
+ rank = ids.slice().sort((a,b)=> (pts[b]-pts[a]));
+ }
+ return rank.slice(0, n);
+ };
+
+ // Auto-seed the playoff bracket once the season reaches the playoff window. Idempotent.
+ const maybeSeedPlayoff = async (leagueId, league, curWeek) => {
+ if((league.league_type||"h2h")==="bracket") return;
+ const { data:mem } = await supabase.from("league_members").select("user_id").eq("league_id", leagueId);
+ const N = playoffFieldFor(league, (mem||[]).length);
+ if(N<2) return;
+ const pWeeks = playoffWeeksFor(N);
+ const sw = Math.max(1, (Number(league.season_weeks)||18) - pWeeks + 1);
+ if(curWeek < sw) return;
+ const { data:ex } = await supabase.from("matchups").select("bracket_match_id").eq("league_id", leagueId).gte("week", sw);
+ if((ex||[]).some(m=>String(m.bracket_match_id||"").startsWith("PW"))) return;
+ const seeded = await computeSeedOrder(leagueId, league.league_type, N);
+ if(seeded.length===N){ await generatePlayoffBracket(leagueId, seeded, sw); }
+ };
+
+ // Persist the champion when the final resolves (h2h & points). Idempotent.
+ const maybeCrownChampion = async (leagueId, league) => {
+ if(league && league.champion_id) return;
+ const { data:ms } = await supabase.from("matchups").select("week,winner_id,bracket_match_id").eq("league_id", leagueId);
+ const pw=(ms||[]).filter(m=>String(m.bracket_match_id||"").startsWith("PW"));
+ if(!pw.length) return;
+ const lastWk=Math.max.apply(null, pw.map(m=>m.week));
+ const finals=pw.filter(m=>m.week===lastWk);
+ if(finals.length===1 && finals[0].winner_id){ await supabase.from("leagues").update({ champion_id: finals[0].winner_id }).eq("id", leagueId); }
  };
 
  const fetchPuLeagueData = async (leagueId, userId) => {
@@ -3805,6 +3855,7 @@ export default function App() {
  const fin = ms.filter(m=>m.week===wks[wks.length-1]);
  const champ = (fin.length===1)?fin[0].winner_id:null;
  if(champ && user && champ===user.id && champSeenRef.current!==lid){ champSeenRef.current=lid; const me=leagueMembers.find(x=>x.userId===champ); setChampCelebrate({name: me?me.name:"You", leagueName: activeLeague.name, isYou:true}); }
+ if(champ){ const _lg=(realLeagues||[]).find(l=>l.id===lid); if(_lg && !_lg.champion_id){ await supabase.from("leagues").update({champion_id:champ}).eq("id",lid); } }
  const cw = activeLeague.current_week||1;
  const { data:lp } = await supabase.from("picks").select("user_id,result,points_earned").eq("league_id",lid).eq("week",cw);
  const totals={}; (lp||[]).forEach(r=>{ if(r.result==="W") totals[r.user_id]=(totals[r.user_id]||0)+parseFloat(r.points_earned||0); });
@@ -5675,6 +5726,24 @@ export default function App() {
        <span>1st · {leaderPts}</span>
      </div>
    </div>
+   {(()=>{
+     if(playoffN<2) return null;
+     const _pw=playoffWeeksFor(playoffN);
+     const _sw=Math.max(1,(Number(activeLeague.season_weeks)||18)-_pw+1);
+     const _cw=activeLeague.current_week||1;
+     if(_cw<_sw) return null;
+     const _in=(typeof myRank==="number")&&myRank<=playoffN;
+     return (
+     <div onClick={()=>{setLeagueTab("playoff");setScreen("league");}} style={{margin:"0 16px 10px",borderRadius:14,padding:"12px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:11,background:_in?"linear-gradient(135deg,#1A1606,#0B0B0E 72%)":"#141417",border:`1px solid ${_in?"rgba(255,214,10,0.35)":IOS.sep}`}}>
+       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={_in?IOS.yellow:IOS.label3} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+       <div style={{flex:1,minWidth:0}}>
+         <div style={{fontSize:13,fontWeight:800,color:_in?"#fff":IOS.label2}}>{_in?"You're in the playoff":"Just missed the playoff"}</div>
+         <div style={{fontSize:11,color:IOS.label3,marginTop:1}}>{_in?"Win or go home — tap to view your bracket":("Top "+playoffN+" advanced — tap to watch the bracket")}</div>
+       </div>
+       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={IOS.label3} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+     </div>
+     );
+   })()}
    </>
    );
  }
@@ -9618,12 +9687,25 @@ export default function App() {
  {(()=>{
  const _sw=activeLeague.season_weeks||18;
  const _cw=activeLeague.current_week||activeLeague.week||1;
+ const _total=realStandings.length||(activeLeague.target_size||activeLeague.max_members||0);
+ const _hasPlayoff=playoffFieldFor(activeLeague,_total)>=2;
+ const _cid=activeLeague.champion_id;
+ let champ=null, champName=null, youWon=false;
+ if(_cid){
+ youWon = _cid===(user&&user.id);
+ champ = realStandings.find(z=>z.userId===_cid) || null;
+ const _m = leagueMembers.find(z=>z.userId===_cid);
+ champName = youWon ? "You" : ((champ&&(champ.name||champ.username)) || (_m&&_m.name) || "Champion");
+ } else {
+ if(isSoloMode) return null;
+ if(_hasPlayoff) return null; // playoff league: wait for the bracket champion
  const finalPicks=weekPicks.filter(p=>p.week===_cw);
- const done=!isSoloMode && _cw>=_sw && finalPicks.length>0 && finalPicks.every(p=>p.result&&p.result!=="pending");
+ const done=_cw>=_sw && finalPicks.length>0 && finalPicks.every(p=>p.result&&p.result!=="pending");
  if(!done) return null;
- const champ=realStandings[0];
- const champName=champ?(champ.isYou?"You":(champ.name||champ.username||"Champion")):null;
- const youWon=champ&&champ.isYou;
+ champ=realStandings[0]; if(!champ) return null;
+ youWon=!!champ.isYou;
+ champName=champ.isYou?"You":(champ.name||champ.username||"Champion");
+ }
  return (
  <div style={{margin:"0 16px 14px",borderRadius:16,overflow:"hidden",position:"relative",background:"linear-gradient(135deg,#1A1606 0%,#0B0B0E 70%)",border:"0.5px solid rgba(255,193,7,0.35)",animation:"champGlow 3.2s ease-in-out infinite"}}>
  <div style={{position:"absolute",top:0,bottom:0,width:"45%",background:"linear-gradient(100deg,transparent,rgba(255,214,10,0.16),transparent)",animation:"champSweep 3.8s ease-in-out infinite",pointerEvents:"none"}}/>
