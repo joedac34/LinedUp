@@ -1104,6 +1104,8 @@ function playoffFieldFor(league, total){
 // A wildcard slot accepts ANY of these (all gradeable) bet types.
 const WILDCARD_TYPES=["ml","spread","ou","prop","longshot"];
 function playoffWeeksFor(n){ return n>=2 ? Math.ceil(Math.log2(n)) : 0; }
+// Regular-season weeks = season_weeks minus the reserved playoff rounds (last N weeks).
+function regularSeasonWeeksFor(league, total){ const sw=Number(league&&league.season_weeks||18); const N=playoffFieldFor(league, total); const pw=N>=2?playoffWeeksFor(N):0; return Math.max(1, sw-pw); }
 
 function BracketView({ matchups, members, uid, IOS, onOpenMatch, live, onChampion }){
   const nameOf = (id)=>{ if(!id) return null; const m=(members||[]).find(x=>x.userId===id); return m?m.name:"Player"; };
@@ -3259,7 +3261,7 @@ export default function App() {
    if(allMembers && allMembers.length === targetSize){
      const memberIds=allMembers.map(m=>m.user_id);
      if((league.league_type||"h2h")==="bracket") await generateBracket(league.id, memberIds);
-     else if((league.league_type||"h2h")==="h2h") await generateSchedule(league.id, memberIds, league.season_weeks||18);
+     else if((league.league_type||"h2h")==="h2h") await generateSchedule(league.id, memberIds, regularSeasonWeeksFor(league, memberIds.length));
      else if(league.league_type==="points") await supabase.from("leagues").update({ season_start: new Date().toISOString(), current_week: 1 }).eq("id", league.id).is("season_start", null);
      alert("Joined "+league.name+"! League is full"+((league.league_type||'h2h')==='points'?" — standings are live!":(league.league_type||'h2h')==='bracket'?" — bracket generated!":" — schedule generated."));
    } else {
@@ -3315,7 +3317,7 @@ export default function App() {
    if(allMembers && allMembers.length === targetSize) {
      const memberIds = allMembers.map(m=>m.user_id);
      if((league.league_type||"h2h")==="bracket") await generateBracket(league.id, memberIds);
-     else if((league.league_type||"h2h")==="h2h") await generateSchedule(league.id, memberIds, league.season_weeks||18);
+     else if((league.league_type||"h2h")==="h2h") await generateSchedule(league.id, memberIds, regularSeasonWeeksFor(league, memberIds.length));
      else if(league.league_type==="points") await supabase.from("leagues").update({ season_start: new Date().toISOString(), current_week: 1 }).eq("id", league.id).is("season_start", null);
    }
    await fetchLeagues(user.id);
@@ -8796,7 +8798,7 @@ export default function App() {
    if((league.league_type||'h2h')==='bracket') {
      await generateBracket(league.id, memberIds);
    } else if((league.league_type||'h2h')==='h2h') {
-     await generateSchedule(league.id, memberIds, league.season_weeks||18);
+     await generateSchedule(league.id, memberIds, regularSeasonWeeksFor(league, memberIds.length));
    }
    // points-only: no schedule generated
  alert(`Joined ${league.name}! League is full${(league.league_type||'h2h')==='points'?' — standings are live!':(league.league_type||'h2h')==='bracket'?' — bracket generated!':' — schedule generated!'}`);
@@ -9077,7 +9079,7 @@ export default function App() {
      if(allMems2 && allMems2.length >= targetSize) {
        const memberIds = allMems2.map(m=>m.user_id);
        if((league.league_type||'h2h')==='bracket') await generateBracket(league.id, memberIds);
-       else if((league.league_type||'h2h')==='h2h') await generateSchedule(league.id, memberIds, league.season_weeks||18);
+       else if((league.league_type||'h2h')==='h2h') await generateSchedule(league.id, memberIds, regularSeasonWeeksFor(league, memberIds.length));
        alert("Joined "+league.name+"! League is full"+((league.league_type||'h2h')==='points'?" — standings are live!":(league.league_type||'h2h')==='bracket'?" — bracket generated!":" — schedule generated!"));
      } else {
        alert("Joined "+league.name+"!");
@@ -9437,11 +9439,11 @@ export default function App() {
  {(activeLeague.league_type||"h2h")==="h2h" && leagueMembers.length >= (activeLeague.target_size||activeLeague.max_members||8) && liveSchedule.length === 0 && (
    <div style={{margin:"0 16px 12px",background:"rgba(48,209,88,0.08)",borderRadius:16,padding:"14px 16px",border:"0.5px solid rgba(48,209,88,0.25)"}}>
      <div style={{fontSize:14,fontWeight:700,color:"#fff",marginBottom:4}}>League is full — no schedule yet</div>
-     <div style={{fontSize:12,color:IOS.label3,marginBottom:12}}>Generate matchups for all {activeLeague.season_weeks||18} weeks of the season.</div>
+     <div style={{fontSize:12,color:IOS.label3,marginBottom:12}}>Generate the regular-season matchups — playoff weeks are reserved automatically.</div>
      <button onClick={async()=>{
        const memberIds = leagueMembers.map(m=>m.userId).filter(Boolean);
        if(memberIds.length === 0) { alert("Could not load member IDs. Try refreshing."); return; }
-       await generateSchedule(activeLeague.id, memberIds, activeLeague.season_weeks||18);
+       await generateSchedule(activeLeague.id, memberIds, regularSeasonWeeksFor(activeLeague, memberIds.length));
        await fetchSchedule(activeLeague.id, user.id);
        await fetchStandings(activeLeague.id);
        alert("Schedule generated!");
@@ -10167,7 +10169,7 @@ export default function App() {
  <div style={{fontSize:15,fontWeight:600,color:"#fff",marginBottom:6}}>Schedule Coming Soon</div>
  <div style={{fontSize:13}}>Join a full league to auto-generate your schedule.</div>
  </div>
- ) : liveSchedule.map(wk=>{
+ ) : (()=>{ const _sw=Number(activeLeague.season_weeks)||18; const _N=playoffFieldFor(activeLeague, leagueMembers.length||0); const _start=_N>=2?Math.max(1,_sw-playoffWeeksFor(_N)+1):(_sw+1); return Array.from({length:_sw},(_,_i)=>_i+1).map(_wknum=>{ const wk=liveSchedule.find(w=>w.week===_wknum); const _isPO=_wknum>=_start; if(!wk){ return (<div key={"ph"+_wknum} className="sch-item" style={{opacity:0.7}}><div className="sch-wk">W{_wknum}</div><div className="sch-opp up" style={_isPO?{color:(IOS.purple||"#BF5AF2"),fontWeight:700}:{}}>{_isPO?"Playoffs":"Bye week"}</div><div className="sch-score" style={{width:70,fontSize:12}}>—</div><div style={{display:"flex",alignItems:"center",gap:6}}><div className="sch-badge up">{_isPO?"TBD":"BYE"}</div></div></div>); }
  const live=wk.result==="live";const done=wk.result==="W"||wk.result==="L";
  const myPts = wk.myPts > 0 ? wk.myPts : null;
  const oppPts = wk.oppPts > 0 ? wk.oppPts : null;
@@ -10207,7 +10209,7 @@ export default function App() {
  </div>
  </div>
  );
- })}
+ }); })()}
  </div>
  </>
  )}
