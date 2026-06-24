@@ -1091,7 +1091,16 @@ function WeeklyRecap({ data, picks, standings, league, stats, IOS, onClose, user
 const BRK_LOCK = '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>';
 function brkRoundName(count){ return count===1?"Final":count===2?"Semifinals":count===4?"Quarterfinals":count===8?"Round of 16":count===16?"Round of 32":("Round of "+count*2); }
 // Playoff field size — power of 2 so the bracket is clean. <4 players = no playoff (standings title).
-function playoffSeeds(total){ const t=Number(total)||0; return t>=6?4 : t>=4?2 : 0; }
+function playoffSeeds(total){ const t=Number(total)||0; return t>=12?8 : t>=8?6 : t>=6?4 : t>=4?2 : 0; }
+// Resolve a league's playoff field: explicit config (playoffs_enabled/playoff_size) wins; else smart default. Clamped to {2,4,6,8} and to participant count.
+function playoffFieldFor(league, total){
+ const t=Number(total)||0;
+ if(league && league.playoffs_enabled===false) return 0;
+ const cfg = league ? (Number(league.playoff_size)||0) : 0;
+ const cap = cfg>0 ? Math.min(cfg, t) : t;
+ if(cfg>0){ const allowed=[2,4,6,8].filter(v=>v<=cap); return allowed.length?allowed[allowed.length-1]:0; }
+ return playoffSeeds(t);
+}
 // A wildcard slot accepts ANY of these (all gradeable) bet types.
 const WILDCARD_TYPES=["ml","spread","ou","prop","longshot"];
 function playoffWeeksFor(n){ return n>=2 ? Math.ceil(Math.log2(n)) : 0; }
@@ -1127,6 +1136,7 @@ function BracketView({ matchups, members, uid, IOS, onOpenMatch, live, onChampio
                 const decided = !!mu.winner_id;
                 const u1=mu.user1_id, u2=mu.user2_id;
                 const both = u1 && u2;
+                const isBye = ri===0 && decided && !both;
                 const youHere = uid && (u1===uid||u2===uid);
                 const down = (mi % 2 === 0);
                 const showLive = !decided && live && w===live.week && both;
@@ -1135,8 +1145,8 @@ function BracketView({ matchups, members, uid, IOS, onOpenMatch, live, onChampio
                   <div key={mu.id||mi} className="brk-cell" style={{animationDelay:(ri*0.1 + mi*0.05)+"s"}}>
                     <div className={"brk-match"+(youHere?" you":"")+(both?"":" dead")+(showLive?" live":"")} onClick={()=>{ if(both) onOpenMatch(mu); }}>
                       {ri>0 && <div className="brk-stub"/>}
-                      {seat(u1, nameOf(u1), mu.user1_points, decided, mu.winner_id===u1, ri===0?(mi*2+1):"", lt[u1], showLive)}
-                      {seat(u2, nameOf(u2), mu.user2_points, decided, mu.winner_id===u2, ri===0?(mi*2+2):"", lt[u2], showLive)}
+                      {seat(u1, u1?nameOf(u1):(isBye?"BYE":null), isBye?null:mu.user1_points, decided, mu.winner_id===u1, ri===0?(mi*2+1):"", lt[u1], showLive)}
+                      {seat(u2, u2?nameOf(u2):(isBye?"BYE":null), isBye?null:mu.user2_points, decided, mu.winner_id===u2, ri===0?(mi*2+2):"", lt[u2], showLive)}
                     </div>
                     {!isLast && <div className={"brk-conn "+(down?"down":"up")} style={{height:elbow}}/>}
                     {isLast && <div className="brk-connf"/>}
@@ -2891,6 +2901,8 @@ export default function App() {
  const [newLeagueWeeks, setNewLeagueWeeks] = useState(18);
  const [newLeagueStep, setNewLeagueStep] = useState(0); // 0=type, 1=details
  const [newLeaguePrivacy, setNewLeaguePrivacy] = useState('private');
+ const [newLeaguePlayoffs, setNewLeaguePlayoffs] = useState(true);
+ const [newLeaguePlayoffSize, setNewLeaguePlayoffSize] = useState(4);
  const SLOT_TYPES=[
   {id:"ml",l:"Moneyline",scope:"Game line",color:"#0A84FF"},
   {id:"spread",l:"Spread",scope:"Game line",color:"#30D158"},
@@ -2960,6 +2972,7 @@ export default function App() {
    max_members:newLeagueSize, target_size:newLeagueSize, pick_deadline:"Sun 1PM ET",
    season_weeks:seasonWeeks, current_week:1, privacy:newLeaguePrivacy||"private",
    scoring_type:"multiplier_odds", league_type:newLeagueType||"h2h",
+   playoffs_enabled:(newLeagueType==='bracket')?false:!!newLeaguePlayoffs, playoff_size:(newLeagueType==='bracket'||!newLeaguePlayoffs)?0:Math.min(newLeaguePlayoffSize,([2,4,6,8].filter(v=>v<=newLeagueSize).pop()||2)),
  }).select().single();
  if(error){alert(`leagues error: ${error.message} | code: ${error.code} | details: ${error.details}`);setCreatingLeague(false);return;}
  const {error:memberError} = await supabase.from("league_members").insert({league_id:data.id,user_id:user.id,is_commissioner:true});
@@ -3343,21 +3356,28 @@ export default function App() {
  // Tagged PW{week}M{i} so playoff rows coexist with round-robin rows. Reused by BOTH h2h & points.
  const generatePlayoffBracket = async (leagueId, seededIds, startWeek) => {
    const n = (seededIds||[]).length;
-   if(![2,4,8,16].includes(n)) return false;
+   if(n < 2) return false;
+   const P = 1 << Math.ceil(Math.log2(n)); // next power of 2 (6 -> 8, with byes)
    let order=[1,2];
-   while(order.length < n){ const size=order.length*2; const nx=[]; for(const sd of order){ nx.push(sd); nx.push(size+1-sd); } order=nx; }
+   while(order.length < P){ const size=order.length*2; const nx=[]; for(const sd of order){ nx.push(sd); nx.push(size+1-sd); } order=nx; }
    const sw = Math.max(1, startWeek);
-   // Clear anything from the playoff window onward (round-robin filler or a prior seeding), then rebuild.
    await supabase.from("matchups").delete().eq("league_id", leagueId).gte("week", sw);
-   const rows=[]; let week=sw; let roundSize=n;
+   const idOf = (k)=> (k>=1 && k<=n) ? (seededIds[k-1]||null) : null;
+   const rows=[]; const r2={}; const r1=P/2;
+   for(let i=0;i<r1;i++){
+     const a=idOf(order[i*2]), b=idOf(order[i*2+1]);
+     let win=null; if(a&&!b) win=a; else if(b&&!a) win=b;
+     rows.push({ league_id:leagueId, week:sw, user1_id:a, user2_id:b, user1_points:0, user2_points:0, winner_id:win, bracket_match_id:`PW${sw}M${i+1}` });
+     if(win){ const ni=Math.ceil((i+1)/2); const seat=((i+1)%2===1)?"user1_id":"user2_id"; (r2[ni]=r2[ni]||{})[seat]=win; }
+   }
+   let roundSize=r1, week=sw+1, ridx=2;
    while(roundSize>1){
      const matches=roundSize/2;
      for(let i=0;i<matches;i++){
-       let u1=null,u2=null;
-       if(week===sw){ const sA=order[i*2], sB=order[i*2+1]; u1=seededIds[sA-1]||null; u2=seededIds[sB-1]||null; }
-       rows.push({ league_id:leagueId, week, user1_id:u1, user2_id:u2, user1_points:0, user2_points:0, winner_id:null, bracket_match_id:`PW${week}M${i+1}` });
+       const seed=(ridx===2)?(r2[i+1]||{}):{};
+       rows.push({ league_id:leagueId, week, user1_id:seed.user1_id||null, user2_id:seed.user2_id||null, user1_points:0, user2_points:0, winner_id:null, bracket_match_id:`PW${week}M${i+1}` });
      }
-     roundSize=matches; week++;
+     roundSize=matches; week++; ridx++;
    }
    const { error } = await supabase.from("matchups").insert(rows);
    return !error;
@@ -5613,7 +5633,7 @@ export default function App() {
    if(!leagueIsFull) return null;
    const ms = realStandings||[];
    const total = ms.length || targetSize;
-   const playoffN = playoffSeeds(total);
+   const playoffN = playoffFieldFor(activeLeague, total);
    const me = ms.find(z=>z.isYou)||{};
    const myRank = me.rank || (ms.findIndex(z=>z.isYou)+1) || "—";
    const myWk = parseFloat(myPicks.filter(p=>p.result==="W").reduce((sm,p)=>sm+parseFloat(p.points_earned||0),0).toFixed(1));
@@ -7895,7 +7915,7 @@ export default function App() {
  const cw = activeLeague.current_week||activeLeague.week||1;
  const ms = realStandings||[];
  const total = ms.length || (activeLeague.target_size||activeLeague.max_members||8);
- const playoffN = playoffSeeds(total);
+ const playoffN = playoffFieldFor(activeLeague, total);
  const TCOL=[IOS.orange,IOS.pink,IOS.indigo,"#40E0C0","#BF5AF2","#64D2FF",IOS.yellow,IOS.green];
  return (
  <div className="body">
@@ -8248,7 +8268,7 @@ export default function App() {
  {showNewLeague && (
  <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.7)",zIndex:50,display:"flex",flexDirection:"column",justifyContent:"flex-end",backdropFilter:"blur(8px)"}}
  onClick={()=>{if(!newLeagueCreated){setShowNewLeague(false);setNewLeagueSport(null);setNewLeagueSports([]);setNewLeagueName("");setNewLeagueSize(8);setNewLeagueType(null);setNewLeagueStep(0);setNewLeagueWeeks(18);
- setNewLeagueSlots(DEFAULT_SLOTS); setSlotSheetIdx(null);setNewLeaguePrivacy('private');}}}>
+ setNewLeagueSlots(DEFAULT_SLOTS); setSlotSheetIdx(null);setNewLeaguePrivacy('private');setNewLeaguePlayoffs(true);setNewLeaguePlayoffSize(4);}}}>
  <div style={{background:IOS.bg2,borderRadius:"20px 20px 0 0",padding:"0 0 40px",maxHeight:"90vh",overflowY:"auto",WebkitOverflowScrolling:"touch",overscrollBehavior:"contain"}} onClick={e=>e.stopPropagation()}>
  <div style={{position:"sticky",top:0,zIndex:5,background:IOS.bg2,paddingTop:1}}><div style={{width:36,height:5,borderRadius:3,background:"rgba(255,255,255,0.2)",margin:"10px auto 8px"}}/></div>
 
@@ -8567,6 +8587,38 @@ export default function App() {
      <div style={{fontSize:11,color:"#444",marginBottom:16}}>{newLeagueType==="points"?"Ranked by total points at the end":"NFL regular season is 18 weeks"}</div>
      </>
    )}
+
+   {/* Playoffs — h2h and points only */}
+   {(newLeagueType==="h2h"||newLeagueType==="points")&&(()=>{
+     const opts=[2,4,6,8].filter(v=>v<=newLeagueSize);
+     const eff=Math.min(newLeaguePlayoffSize, opts.length?opts[opts.length-1]:2);
+     const wk={2:1,4:2,6:3,8:3};
+     return (
+     <>
+     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8,marginTop:12}}>
+       <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"#555"}}>Playoffs</div>
+       <div onClick={()=>setNewLeaguePlayoffs(v=>!v)} style={{width:44,height:26,borderRadius:13,background:newLeaguePlayoffs?IOS.blue:"#2A2A2A",border:`1px solid ${newLeaguePlayoffs?IOS.blue:"#3A3A3A"}`,position:"relative",cursor:"pointer",transition:"background .2s"}}>
+         <div style={{position:"absolute",top:2,left:newLeaguePlayoffs?18:2,width:22,height:22,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
+       </div>
+     </div>
+     {newLeaguePlayoffs?(
+       <>
+       <div style={{display:"flex",gap:6,marginBottom:6}}>
+       {[2,4,6,8].map(v=>{ const dis=v>newLeagueSize; const on=eff===v; return (
+         <div key={v} onClick={()=>{ if(!dis) setNewLeaguePlayoffSize(v); }} style={{flex:1,borderRadius:8,padding:"10px 4px",textAlign:"center",cursor:dis?"default":"pointer",opacity:dis?0.3:1,transition:"all .15s",background:on?"rgba(10,132,255,0.12)":"#111",border:`0.5px solid ${on?"rgba(10,132,255,0.4)":"#222"}`}}>
+           <div style={{fontSize:18,fontWeight:800,color:on?IOS.blue:"#666"}}>{v}</div>
+           <div style={{fontSize:9,color:"#555",marginTop:2}}>teams</div>
+         </div>
+       );})}
+       </div>
+       <div style={{fontSize:11,color:"#444",marginBottom:16}}>Top {eff} seeds · {wk[eff]}-week single-elim{eff===6?" · top 2 get a bye":""}. Runs the final {wk[eff]} week{wk[eff]>1?"s":""}.</div>
+       </>
+     ):(
+       <div style={{fontSize:11,color:"#444",marginBottom:16}}>No bracket — {newLeagueType==="points"?"most total points":"best record"} takes the title.</div>
+     )}
+     </>
+     );
+   })()}
 
    {/* Visibility */}
    <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"#555",marginBottom:8}}>Visibility</div>
@@ -9624,7 +9676,7 @@ export default function App() {
  {leagueTab==="playoff"&&(()=>{
    const ms = realStandings||[];
    const total = ms.length || (activeLeague.target_size||activeLeague.max_members||0);
-   const N = playoffSeeds(total);
+   const N = playoffFieldFor(activeLeague, total);
    const pWeeks = playoffWeeksFor(N);
    const sw = Number(activeLeague.season_weeks)||18;
    const startWeek = Math.max(1, sw - pWeeks + 1);
@@ -9690,7 +9742,7 @@ export default function App() {
 {activeLeague.league_type==="points" ? (()=>{
  const _ms = realStandings||[];
  const total = _ms.length || (activeLeague.target_size||activeLeague.max_members||8);
- const playoffN = playoffSeeds(total);
+ const playoffN = playoffFieldFor(activeLeague, total);
  const me = _ms.find(z=>z.isYou) || {};
  const myRank = me.rank || (_ms.findIndex(z=>z.isYou)+1) || "—";
  const cw = activeLeague.current_week||activeLeague.week||1;
