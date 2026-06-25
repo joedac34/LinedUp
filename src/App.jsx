@@ -3363,7 +3363,7 @@ export default function App() {
  // Tagged PW{week}M{i} so playoff rows coexist with round-robin rows. Reused by BOTH h2h & points.
  const generatePlayoffBracket = async (leagueId, seededIds, startWeek) => {
    const n = (seededIds||[]).length;
-   if(n < 2) return false;
+   if(n < 2) return {ok:false, error:null};
    const P = 1 << Math.ceil(Math.log2(n)); // next power of 2 (6 -> 8, with byes)
    let order=[1,2];
    while(order.length < P){ const size=order.length*2; const nx=[]; for(const sd of order){ nx.push(sd); nx.push(size+1-sd); } order=nx; }
@@ -3387,7 +3387,8 @@ export default function App() {
      roundSize=matches; week++; ridx++;
    }
    const { error } = await supabase.from("matchups").insert(rows);
-   return !error;
+   if(error) console.warn("[playoff seed] insert failed:", error.message||error);
+   return { ok: !error, error };
  };
 
  // Client-side playoff advancement (h2h & points; standalone bracket type settles in grade.js).
@@ -9806,7 +9807,7 @@ export default function App() {
    const playoffMs = (bracketMatchups||[]).filter(m=>String(m.bracket_match_id||"").startsWith("P"));
    const seeded = ms.slice(0,N);
    const seededIds = seeded.map(z=>z.userId);
-   const doSeed = async ()=>{ if(seededIds.length!==N) return; const ok = await generatePlayoffBracket(activeLeague.id, seededIds, startWeek); if(ok) fetchBracket(activeLeague.id); };
+   const doSeed = async ()=>{ if(seededIds.length!==N) return; const res = await generatePlayoffBracket(activeLeague.id, seededIds, startWeek); if(res&&res.ok){ await fetchBracket(activeLeague.id); } else { alert("Couldn't seed the bracket: "+((res&&res.error&&(res.error.message||res.error.hint))||"the matchups insert was rejected — run the SQL fix (add bracket_match_id column + make user1_id/user2_id nullable).")); } };
    if(N===0) return (
      <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:16,padding:"36px 24px",textAlign:"center"}}>
        <div style={{fontSize:18,fontWeight:700,color:"#fff",marginBottom:8}}>No playoff in this league</div>
