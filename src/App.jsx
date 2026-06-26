@@ -2352,6 +2352,7 @@ export default function App() {
  return ()=>{ alive=false; };
  }, [user, homeMode, isSoloMode, soloWeeks.length]);
  const [gridJustAdded, setGridJustAdded] = useState(null);   // bet id flashing "added" feedback
+ const [pickConflict, setPickConflict] = useState(""); // contradictory-pick notice
  // usedMults / availableMults / hasLongshot / allFlexFilled are derived inside the picks IIFE
  // so they always read from the correct activePicks (solo vs league). Do NOT compute them here.
  // ─── TEAM ACRONYM HELPER ─────────────────────────────────────────
@@ -7485,6 +7486,9 @@ export default function App() {
  const addCard = (bet, catOverride) => {
  const cat = catOverride || (gridType==="longshot" ? "longshot" : gridType);
  if(isSoloMode){
+   const _gl=["ml","spread","ou"].includes(cat);
+   const _gk=bet.eventId||bet.game||"";
+   if(_gl && _gk && soloFreePicks.some(p=>String(p.id)!==String(bet.id) && p.category===cat && (p.eventId||p.game||"")===_gk)){ setPickConflict("You already picked this game's "+(cat==="ou"?"total":(cat==="ml"?"moneyline":"spread"))+". You can't take both sides of the same line."); setTimeout(()=>setPickConflict(""),2600); setGridJustAdded(null); return; }
    const _CL={ml:"Moneyline",spread:"Spread",ou:"Over/Under",prop:"Prop",longshot:"Longshot"};
    const _CC={ml:IOS.blue,spread:IOS.green,ou:IOS.orange,prop:IOS.yellow,longshot:IOS.pink};
    setSoloFreePicks(prev=> prev.some(p=>String(p.id)===String(bet.id)) ? prev : [...prev, {...bet, category:cat, categoryLabel:_CL[cat]||cat, categoryColor:_CC[cat]||IOS.blue, mult:1}]);
@@ -11791,6 +11795,7 @@ export default function App() {
  );})()}
 
 
+ {pickConflict && <div style={{position:"fixed",left:"50%",bottom:96,transform:"translateX(-50%)",maxWidth:"86%",background:"rgba(28,16,16,0.97)",border:"0.5px solid rgba(255,69,58,0.45)",borderRadius:11,padding:"11px 16px",fontSize:12.5,fontWeight:700,color:"#fff",zIndex:99999,boxShadow:"0 8px 30px rgba(0,0,0,0.5)",textAlign:"center",lineHeight:1.4}}>{pickConflict}</div>}
  <div className="tab-bar">
  {(homeMode==="solo" ? [
  {icon:"home",label:"Home",id:"home"},
