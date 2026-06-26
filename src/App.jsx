@@ -9472,37 +9472,47 @@ export default function App() {
  )}
 
  {/* SETTINGS tab */}
- {commishTab==="settings"&&(
- <>
- {/* ── Commish Pro toggle ── */}
- <div style={{margin:"0 16px 12px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",borderRadius:16,overflow:"hidden",border:"0.5px solid rgba(255,255,255,0.08)",boxShadow:"0 4px 14px rgba(0,0,0,0.35)"}}>
-   <div style={{padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-     <div>
-       <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>Commish Pro</div>
-       <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>{isPro?"Active — full league control":"Unlock custom picks, sports, and more"}</div>
+ {commishTab==="settings"&&(()=>{
+   const _isBracket=(activeLeague.league_type||"h2h")==="bracket";
+   const _target=activeLeague.target_size||activeLeague.max_members||8;
+   const _poOn=activeLeague.playoffs_enabled!==false && !_isBracket;
+   const _poSize=Number(activeLeague.playoff_size)||0;
+   const _field=playoffFieldFor(activeLeague,_target);
+   const _poWeeks=_field>=2?playoffWeeksFor(_field):0;
+   const _regWeeks=regularSeasonWeeksFor(activeLeague,_target);
+   const _sc=parseSlotConfig(activeLeague&&activeLeague.slot_config);
+   const _slotN=_sc?_sc.length:5;
+   const _tLabel=(t)=>({ml:"Moneyline",spread:"Spread",ou:"Total",prop:"Player prop",longshot:"Parlay",wildcard:"Wildcard"}[t]||(t?(""+t).toUpperCase():"Pick"));
+   const _privacy=activeLeague.privacy||"private";
+   const _code=activeLeague.invite_code||activeLeague.inviteCode||"";
+   const _sportLbl=(SPORTS[activeLeague.sport]&&SPORTS[activeLeague.sport].label)||(activeLeague.sport?(""+activeLeague.sport).toUpperCase():"\u2014");
+   const _panel={background:"#0B0B10",border:"1px solid rgba(255,255,255,0.08)",borderRadius:16,overflow:"hidden",margin:"0 16px 12px"};
+   const _eye={fontSize:10,letterSpacing:"0.13em",color:"rgba(255,255,255,0.3)",fontWeight:700,textTransform:"uppercase",margin:"2px 18px 6px"};
+   const _crow={padding:14,display:"flex",alignItems:"center",gap:12};
+   const _ic={width:30,height:30,borderRadius:9,border:"1px solid rgba(255,255,255,0.14)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"rgba(255,255,255,0.6)"};
+   const _tt={fontSize:14,fontWeight:700,color:"#fff"};
+   const _dd={fontSize:11.5,color:"rgba(255,255,255,0.3)",marginTop:2,lineHeight:1.4};
+   const _hair="1px solid rgba(255,255,255,0.08)";
+   const _stepBtn={width:30,height:30,borderRadius:8,background:"rgba(255,255,255,0.07)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,color:"#fff",fontWeight:700,cursor:"pointer"};
+   const _lbl9={fontSize:9,letterSpacing:"0.12em",color:"rgba(255,255,255,0.3)",fontWeight:700,textTransform:"uppercase"};
+   return (
+   <>
+   <div style={{position:"relative",border:"1px solid rgba(255,255,255,0.14)",borderRadius:16,overflow:"hidden",margin:"0 16px 14px",background:"radial-gradient(120% 140% at 0% 0%, rgba(10,132,255,0.10), transparent 55%), #0B0B10"}}>
+     <div style={{position:"absolute",left:0,top:0,right:0,bottom:0,backgroundImage:"repeating-linear-gradient(0deg,rgba(255,255,255,0.025) 0px,rgba(255,255,255,0.025) 1px,transparent 1px,transparent 4px)",pointerEvents:"none",opacity:0.5}}/>
+     <div style={{position:"relative",display:"grid",gridTemplateColumns:"repeat(4,1fr)"}}>
+       <div style={{padding:"13px 10px"}}><div style={_lbl9}>Week</div><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:700,fontSize:21,lineHeight:1,marginTop:6}}>{activeLeague.current_week||1}<span style={{color:"rgba(255,255,255,0.3)",fontSize:13}}> /{activeLeague.season_weeks||18}</span></div></div>
+       <div style={{padding:"13px 10px",borderLeft:_hair}}><div style={_lbl9}>Members</div><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:700,fontSize:21,lineHeight:1,marginTop:6}}>{leagueMembers.length}<span style={{color:"rgba(255,255,255,0.3)",fontSize:13}}> /{_target}</span></div></div>
+       <div style={{padding:"13px 10px",borderLeft:_hair}}><div style={_lbl9}>Sport</div><div style={{fontSize:15,fontWeight:700,marginTop:8}}>{_sportLbl}</div></div>
+       <div style={{padding:"13px 10px",borderLeft:_hair}}><div style={_lbl9}>Format</div><div style={{fontSize:15,fontWeight:700,marginTop:8}}>{_slotN} pick{_slotN===1?"":"s"}</div></div>
      </div>
-     <div onClick={()=>isPro?setProStatus(false):setShowPaywall("settings")} style={{width:51,height:31,borderRadius:16,background:isPro?IOS.blue:"#2A2A2A",border:`1px solid ${isPro?IOS.blue:"#3A3A3A"}`,position:"relative",cursor:"pointer",transition:"background .2s"}}>
-       <div style={{position:"absolute",top:3,left:isPro?22:3,width:25,height:25,borderRadius:"50%",background:"#fff",transition:"left .2s",boxShadow:"0 1px 3px rgba(0,0,0,0.4)"}}/>
+     <div style={{position:"relative",display:"flex",alignItems:"center",gap:7,borderTop:_hair,padding:"9px 12px",fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.6)"}}>
+       <span style={{width:6,height:6,borderRadius:"50%",background:isPro?IOS.green:"rgba(255,255,255,0.3)",boxShadow:isPro?"0 0 7px "+IOS.green:"none"}}/>
+       <span style={{color:"#fff"}}>Commish Pro</span>{isPro?" \u00b7 full control":" \u00b7 limited"}
+       <span onClick={()=>isPro?setProStatus(false):setShowPaywall("settings")} style={{marginLeft:"auto",color:IOS.blue,fontWeight:700,cursor:"pointer"}}>{isPro?"Manage":"Unlock"}</span>
      </div>
    </div>
-   {isPro&&(
-     <div style={{padding:"0 16px 12px",borderTop:`0.5px solid ${IOS.sep}`}}>
-       {[{label:"Max picks per week",val:"Unlimited"},
-         {label:"Sports",val:"NFL, NBA, MLB, NHL"},
-         {label:"Multiplier range",val:"Custom"},
-         {label:"Power-ups",val:"Enabled"},
-       ].map((r,i)=>(
-         <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:i<3?`0.5px solid ${IOS.sep}`:"none"}}>
-           <div style={{fontSize:13,color:IOS.label3}}>{r.label}</div>
-           <div style={{fontSize:13,fontWeight:600,color:IOS.blue}}>{r.val}</div>
-         </div>
-       ))}
-     </div>
-   )}
- </div>
 
- {/* ── Generate Schedule (if league full but no schedule yet) ── */}
- {(activeLeague.league_type||"h2h")==="h2h" && leagueMembers.length >= (activeLeague.target_size||activeLeague.max_members||8) && liveSchedule.length === 0 && (
+   {(activeLeague.league_type||"h2h")==="h2h" && leagueMembers.length >= (activeLeague.target_size||activeLeague.max_members||8) && liveSchedule.length === 0 && (
    <div style={{margin:"0 16px 12px",background:"rgba(48,209,88,0.08)",borderRadius:16,padding:"14px 16px",border:"0.5px solid rgba(48,209,88,0.25)"}}>
      <div style={{fontSize:14,fontWeight:700,color:"#fff",marginBottom:4}}>League is full — no schedule yet</div>
      <div style={{fontSize:12,color:IOS.label3,marginBottom:12}}>Generate the regular-season matchups — playoff weeks are reserved automatically.</div>
@@ -9519,42 +9529,102 @@ export default function App() {
    </div>
  )}
 
- {/* ── Season Length ── */}
- <div style={{margin:"0 16px 12px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",borderRadius:16,overflow:"hidden",border:"0.5px solid rgba(255,255,255,0.08)",boxShadow:"0 4px 14px rgba(0,0,0,0.35)"}}>
-   <div style={{padding:"12px 16px",borderBottom:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-     <div>
-       <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>Season Length</div>
-       <div style={{fontSize:12,color:IOS.label3,marginTop:1}}>Total weeks in this league's season</div>
+   <div style={_eye}>Season {"&"} Playoffs</div>
+   <div style={_panel}>
+     <div style={_crow}>
+       <div style={_ic}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18M8 2v4M16 2v4"/></svg></div>
+       <div style={{flex:1,minWidth:0}}><div style={_tt}>Season length</div><div style={_dd}>Total weeks, playoffs included</div></div>
+       <div style={{display:"flex",alignItems:"center",gap:10}}>
+         <div onClick={async()=>{const nv=Math.min(52,Math.max(1,(activeLeague.season_weeks||18)-1));await supabase.from("leagues").update({season_weeks:nv}).eq("id",activeLeague.id);await fetchLeagues(user.id);}} style={_stepBtn}>{"\u2212"}</div>
+         <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:20,color:IOS.blue,minWidth:24,textAlign:"center"}}>{activeLeague.season_weeks||18}</div>
+         <div onClick={async()=>{const nv=Math.min(52,(activeLeague.season_weeks||18)+1);await supabase.from("leagues").update({season_weeks:nv}).eq("id",activeLeague.id);await fetchLeagues(user.id);}} style={_stepBtn}>+</div>
+       </div>
      </div>
-     <div style={{display:"flex",alignItems:"center",gap:10}}>
-       <div onClick={async(e)=>{
-         e.stopPropagation();
-         const newVal = Math.min(52, Math.max(1,(activeLeague.season_weeks||18)-1));
-         await supabase.from("leagues").update({season_weeks:newVal}).eq("id",activeLeague.id);
-         await fetchLeagues(user.id);
-       }} style={{width:32,height:32,borderRadius:8,background:"rgba(255,255,255,0.08)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:18,color:"#fff",fontWeight:700}}>−</div>
-       <div style={{fontSize:18,fontWeight:800,color:IOS.blue,minWidth:28,textAlign:"center"}}>{activeLeague.season_weeks||18}</div>
-       <div onClick={async(e)=>{
-         e.stopPropagation();
-         const newVal = Math.min(52,(activeLeague.season_weeks||18)+1);
-         await supabase.from("leagues").update({season_weeks:newVal}).eq("id",activeLeague.id);
-         await fetchLeagues(user.id);
-       }} style={{width:32,height:32,borderRadius:8,background:"rgba(255,255,255,0.08)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:18,color:"#fff",fontWeight:700}}>+</div>
+     {!_isBracket&&(
+     <div style={{borderTop:_hair}}>
+       <div style={_crow}>
+         <div style={_ic}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16v5a8 8 0 0 1-16 0z"/><path d="M12 17v3M8 21h8"/></svg></div>
+         <div style={{flex:1,minWidth:0}}><div style={_tt}>Playoffs</div><div style={_dd}>Bracket finale for the top seeds</div></div>
+         <div onClick={async()=>{ if(_isBracket) return; const newOn=!_poOn; if(!window.confirm((newOn?"Turn playoffs ON":"Turn playoffs OFF")+"? This wipes the current schedule and regenerates it when the league fills.")) return; const _sz=newOn?(_poSize>0?_poSize:([2,4,6,8].filter(v=>v<=_target).pop()||2)):0; await supabase.from("leagues").update({playoffs_enabled:newOn,playoff_size:_sz}).eq("id",activeLeague.id); await supabase.from("matchups").delete().eq("league_id",activeLeague.id); await fetchLeagues(user.id); }} style={{width:48,height:29,borderRadius:15,background:_poOn?IOS.blue:"#2A2A2E",border:"1px solid "+(_poOn?IOS.blue:"#3A3A3E"),position:"relative",cursor:"pointer",flexShrink:0,transition:"background .2s"}}>
+           <div style={{position:"absolute",top:3,left:_poOn?22:3,width:23,height:23,borderRadius:"50%",background:"#fff",transition:"left .2s",boxShadow:"0 1px 3px rgba(0,0,0,0.4)"}}/>
+         </div>
+       </div>
+       {_poOn&&(
+       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,padding:"0 14px 14px"}}>
+         {[2,4,6,8].map(sz=>{ const on=sz===_field; const dis=sz>_target; return (
+           <div key={sz} onClick={async()=>{ if(dis||sz===_field) return; if(!window.confirm("Set playoffs to top "+sz+"? This wipes the current schedule and regenerates it when the league fills.")) return; await supabase.from("leagues").update({playoff_size:sz,playoffs_enabled:true}).eq("id",activeLeague.id); await supabase.from("matchups").delete().eq("league_id",activeLeague.id); await fetchLeagues(user.id); }} style={{border:"1.5px solid "+(on?IOS.blue:"rgba(255,255,255,0.08)"),background:on?"rgba(10,132,255,0.12)":"rgba(255,255,255,0.04)",borderRadius:10,padding:"10px 4px",textAlign:"center",cursor:dis?"default":"pointer",opacity:dis?0.3:1}}>
+             <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:18,color:on?IOS.blue:"rgba(255,255,255,0.4)"}}>{sz}</div>
+             <div style={{fontSize:9.5,color:on?IOS.blue:"rgba(255,255,255,0.3)",marginTop:2,fontWeight:600}}>teams</div>
+           </div>
+         );})}
+       </div>
+       )}
+       {_poOn&&(
+       <div style={{display:"flex",alignItems:"center",gap:8,padding:"11px 14px",borderTop:_hair,fontSize:12,color:"rgba(255,255,255,0.6)"}}>
+         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={IOS.purple} strokeWidth="2"><path d="M4 4h16v5a8 8 0 0 1-16 0z"/><path d="M12 17v3M8 21h8"/></svg>
+         <span><span style={{color:"#fff"}}>{_regWeeks}</span> regular {"\u00b7"} <span style={{color:"#fff"}}>{_poWeeks}</span> playoff week{_poWeeks===1?"":"s"} {"\u00b7"} top <span style={{color:"#fff"}}>{_field}</span> make it</span>
+       </div>
+       )}
      </div>
+     )}
    </div>
- </div>
 
- {/* ── Week Management ── */}
- <div style={{margin:"0 16px 12px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",borderRadius:16,overflow:"hidden",border:"0.5px solid rgba(255,255,255,0.08)",boxShadow:"0 4px 14px rgba(0,0,0,0.35)"}}>
- <div style={{padding:"12px 16px",borderBottom:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
- <div style={{fontSize:13,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3}}>Week Management</div>
- <div style={{fontSize:22,fontWeight:800,color:IOS.blue}}>Wk {activeLeague.current_week||1}</div>
- </div>
- <div style={{padding:"14px 16px"}}>
- <div style={{fontSize:14,color:"#fff",marginBottom:4}}>Week {activeLeague.current_week||1} of {activeLeague.season_weeks||18}</div>
- <div style={{fontSize:12,color:IOS.orange,marginBottom:14}}> Auto-grade runs daily at 10am. You can also trigger it manually below.</div>
- {/* Auto-grade button */}
- <button onClick={async()=>{
+   <div style={_eye}>Access {"&"} Members</div>
+   <div style={_panel}>
+     <div style={_crow}>
+       <div style={_ic}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg></div>
+       <div style={{flex:1,minWidth:0}}><div style={_tt}>League size</div><div style={_dd}>{leagueMembers.length} of {_target}{leagueMembers.length>=_target?" \u00b7 full":(" \u00b7 "+(_target-leagueMembers.length)+" spots left")}</div></div>
+     </div>
+     <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,padding:"0 14px 14px"}}>
+       {[6,8,10,12].map(sz=>{ const on=sz===_target; return (
+         <div key={sz} onClick={async()=>{ if(sz===_target) return; if(!window.confirm("Change league size to "+sz+"? This will wipe the current schedule and regenerate it when the league fills.")) return; await supabase.from("leagues").update({target_size:sz,max_members:sz}).eq("id",activeLeague.id); await supabase.from("matchups").delete().eq("league_id",activeLeague.id); await fetchLeagues(user.id); }} style={{border:"1.5px solid "+(on?IOS.blue:"rgba(255,255,255,0.08)"),background:on?"rgba(10,132,255,0.12)":"rgba(255,255,255,0.04)",borderRadius:10,padding:"10px 4px",textAlign:"center",cursor:on?"default":"pointer"}}>
+           <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:18,color:on?IOS.blue:"rgba(255,255,255,0.4)"}}>{sz}</div>
+           <div style={{fontSize:9.5,color:on?IOS.blue:"rgba(255,255,255,0.3)",marginTop:2,fontWeight:600}}>players</div>
+         </div>
+       );})}
+     </div>
+     <div style={{...(_crow),borderTop:_hair}}>
+       <div style={_ic}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+       <div style={{flex:1,minWidth:0}}><div style={_tt}>Who can join</div><div style={_dd}>Invite-only keeps it to your code</div></div>
+     </div>
+     <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6,padding:"0 14px 14px"}}>
+       {[{v:"invite",l:"Invite"},{v:"private",l:"Private"},{v:"public",l:"Public"}].map(o=>{ const on=o.v===_privacy; return (
+         <div key={o.v} onClick={async()=>{ if(o.v===_privacy) return; await supabase.from("leagues").update({privacy:o.v}).eq("id",activeLeague.id); await fetchLeagues(user.id); }} style={{border:"1.5px solid "+(on?IOS.blue:"rgba(255,255,255,0.08)"),background:on?"rgba(10,132,255,0.12)":"rgba(255,255,255,0.04)",borderRadius:10,padding:"10px 4px",textAlign:"center",cursor:"pointer",fontSize:12,fontWeight:700,color:on?"#fff":"rgba(255,255,255,0.4)"}}>{o.l}</div>
+       );})}
+     </div>
+     {_code&&(
+     <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderTop:_hair}}>
+       <div><div style={{fontSize:9,letterSpacing:"0.12em",color:"rgba(255,255,255,0.3)",fontWeight:700,textTransform:"uppercase",marginBottom:3}}>Invite code</div><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:20,letterSpacing:"0.18em",color:"#fff"}}>{_code}</div></div>
+       <button onClick={()=>shareInvite(_code,activeLeague.name)} style={{marginLeft:"auto",display:"inline-flex",alignItems:"center",gap:6,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.14)",color:"#fff",fontWeight:700,fontSize:12.5,padding:"9px 13px",borderRadius:9,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M16 6l-4-4-4 4M12 2v13"/></svg>Invite players</button>
+     </div>
+     )}
+   </div>
+
+   <div style={_eye}>Slip Format</div>
+   <div style={_panel}>
+     <div style={_crow}>
+       <div style={_ic}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></div>
+       <div style={{flex:1,minWidth:0}}><div style={_tt}>{_slotN} pick{_slotN===1?"":"s"} per week</div><div style={_dd}>Set in the League Builder</div></div>
+     </div>
+     {_sc&&(
+     <div style={{display:"flex",flexWrap:"wrap",gap:6,padding:"0 14px 14px"}}>
+       {_sc.map((c,i)=>(<span key={i} style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.6)",background:"rgba(255,255,255,0.05)",border:_hair,borderRadius:7,padding:"5px 9px"}}><span style={{color:"#fff",fontWeight:700}}>{c.mult}{"\u00d7"}</span> {_tLabel(c.type)}</span>))}
+     </div>
+     )}
+   </div>
+
+   <div style={_eye}>Week Control</div>
+   <div style={_panel}>
+     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 14px",borderBottom:_hair}}>
+       <div style={_lbl9}>Live ops {"\u00b7"} Week {activeLeague.current_week||1} of {activeLeague.season_weeks||18}</div>
+       <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:22,color:IOS.blue}}>Wk {activeLeague.current_week||1}</div>
+     </div>
+     <div style={{padding:14}}>
+       <div style={{display:"flex",alignItems:"flex-start",gap:9,fontSize:12,color:"rgba(255,255,255,0.3)",lineHeight:1.45,marginBottom:11}}>
+         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64D2FF" strokeWidth="2" style={{flexShrink:0,marginTop:1}}><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+         <span><span style={{color:"rgba(255,255,255,0.6)",fontWeight:600}}>Slips auto-grade every few minutes</span> as games go final. Force a pass now if you can't wait.</span>
+       </div>
+       <button onClick={async()=>{
  try {
  const r = await fetch("/api/grade", {
  method:"POST",
@@ -9570,10 +9640,12 @@ export default function App() {
  alert("Grade error: " + (d.error||"Unknown"));
  }
  } catch(e) { alert("Failed to reach grade API: " + e.message); }
- }} style={{width:"100%",background:"rgba(10,132,255,0.15)",border:"1px solid rgba(10,132,255,0.3)",borderRadius:12,padding:"12px",fontFamily:"Barlow,sans-serif",fontSize:14,fontWeight:700,color:IOS.blue,cursor:"pointer",marginBottom:10}}>
- Run Auto-Grade Now
- </button>
- <button onClick={async()=>{
+ }} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"rgba(10,132,255,0.12)",border:"1px solid rgba(10,132,255,0.3)",borderRadius:11,padding:12,fontFamily:"Barlow,sans-serif",fontSize:14,fontWeight:700,color:IOS.blue,cursor:"pointer",marginBottom:12}}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>Run grading now</button>
+       <div style={{display:"flex",alignItems:"flex-start",gap:9,fontSize:12,color:"rgba(255,255,255,0.3)",lineHeight:1.45,marginBottom:11}}>
+         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64D2FF" strokeWidth="2" style={{flexShrink:0,marginTop:1}}><path d="M5 4l8 8-8 8M14 4l6 8-6 8"/></svg>
+         <span><span style={{color:"rgba(255,255,255,0.6)",fontWeight:600}}>Weeks roll over on their own</span> after each one ends. Force the next week early if everyone's done.</span>
+       </div>
+       <button onClick={async()=>{
  if((activeLeague.league_type||"h2h")==="bracket"){ alert("Tournament rounds advance automatically once all games finish — no manual advance needed."); return; }
  if(!window.confirm(`End Week ${activeLeague.current_week||1} and start Week ${(activeLeague.current_week||1)+1}? Make sure all slips are graded first.`)) return;
  setAdvancingWeek(true);
@@ -9678,58 +9750,13 @@ export default function App() {
  setFlexPicks(freshSlots());
  try { localStorage.removeItem(`linedup_picks_${activeLeague.id}_wk${currentWeek}`); } catch(e) {}
  setAdvancingWeek(false);
- }} style={{width:"100%",background:advancingWeek?"rgba(255,255,255,0.08)":IOS.green,border:"none",borderRadius:12,padding:"14px",fontFamily:"Barlow,sans-serif",fontSize:15,fontWeight:700,color:advancingWeek?"rgba(255,255,255,0.3)":"#000",cursor:advancingWeek?"default":"pointer"}}>
- {advancingWeek ? "Advancing..." : `⏭ End Week ${activeLeague.current_week||1} · Start Week ${(activeLeague.current_week||1)+1}`}
- </button>
- </div>
- </div>
+ }} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:advancingWeek?"rgba(255,255,255,0.08)":IOS.green,border:"none",borderRadius:11,padding:13,fontFamily:"Barlow,sans-serif",fontSize:14,fontWeight:700,color:advancingWeek?"rgba(255,255,255,0.3)":"#04210f",cursor:advancingWeek?"default":"pointer"}}>{advancingWeek?"Advancing...":(<span style={{display:"inline-flex",alignItems:"center",gap:8}}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M5 4l8 8-8 8M14 4l6 8-6 8"/></svg>End Week {activeLeague.current_week||1} {"\u00b7"} Start Week {(activeLeague.current_week||1)+1}</span>)}</button>
+     </div>
+   </div>
 
- {/* ── League Size ── */}
- <div style={{margin:"0 16px 12px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",borderRadius:16,overflow:"hidden",border:"0.5px solid rgba(255,255,255,0.08)",boxShadow:"0 4px 14px rgba(0,0,0,0.35)"}}>
- <div style={{padding:"12px 16px",borderBottom:`0.5px solid ${IOS.sep}`}}>
- <div style={{fontSize:13,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3}}>League Size</div>
- <div style={{fontSize:12,color:IOS.label3,marginTop:4}}>
- {leagueMembers.length} / {activeLeague.target_size||activeLeague.max_members||8} members
- {leagueMembers.length >= (activeLeague.target_size||activeLeague.max_members||8)
- ? <span style={{color:IOS.green,fontWeight:700}}> · Full </span>
- : <span style={{color:IOS.orange}}> · {(activeLeague.target_size||activeLeague.max_members||8)-leagueMembers.length} spots left</span>
- }
- </div>
- </div>
- <div style={{padding:"14px 16px"}}>
- <div style={{fontSize:11,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:IOS.label3,marginBottom:10}}>Change Target Size</div>
- <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8,marginBottom:10}}>
- {[6,8,10,12].map(sz=>{
- const cur = activeLeague.target_size||activeLeague.max_members||8;
- return (
- <div key={sz} onClick={async()=>{
- if(sz===cur) return;
- if(!window.confirm(`Change league size to ${sz}? This will wipe the current schedule and regenerate it when the league fills.`)) return;
- await supabase.from("leagues").update({target_size:sz, max_members:sz}).eq("id", activeLeague.id);
- // Only wipe matchups/schedule — keep picks intact
- await supabase.from("matchups").delete().eq("league_id", activeLeague.id);
- await fetchLeagues(user.id);
- alert(`League size updated to ${sz}. Schedule will regenerate when the league is full. Existing picks are preserved.`);
- }}
- style={{borderRadius:12,padding:"12px 4px",textAlign:"center",cursor:sz===cur?"default":"pointer",transition:"all .15s",
- background:sz===cur?`${IOS.blue}20`:"rgba(255,255,255,0.05)",
- border:`1.5px solid ${sz===cur?IOS.blue:"rgba(255,255,255,0.08)"}`,
- }}>
- <div style={{fontSize:20,fontWeight:800,color:sz===cur?IOS.blue:"rgba(255,255,255,0.5)"}}>{sz}</div>
- <div style={{fontSize:10,color:IOS.label3,marginTop:2}}>players</div>
- </div>
- );
- })}
- </div>
- <div style={{fontSize:11,color:IOS.label3}}>Changing size wipes the current schedule. It regenerates automatically when the league fills.</div>
- </div>
- </div>
-
- {/* ── Danger Zone ── */}
- <div style={{margin:"0 16px 24px"}}>
- <div style={{fontSize:11,fontWeight:600,letterSpacing:1,textTransform:"uppercase",color:IOS.red,padding:"0 4px",marginBottom:6}}>Danger Zone</div>
- <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:14,overflow:"hidden"}}>
- <div onClick={async()=>{
+   <div style={{...(_eye),color:IOS.red}}>Danger Zone</div>
+   <div style={{background:"#0B0B10",border:"1px solid rgba(255,69,58,0.25)",borderRadius:16,overflow:"hidden",margin:"0 16px 24px"}}>
+     <div onClick={async()=>{
  if(!window.confirm(`Delete "${activeLeague.name}" permanently? This cannot be undone. All picks, matchups and members will be removed.`)) return;
  // Delete all related data first
  await supabase.from("picks").delete().eq("league_id", activeLeague.id);
@@ -9744,14 +9771,15 @@ export default function App() {
  setActiveLeagueId(null);
  setScreen("home");
  alert(`"${activeLeague.name}" has been deleted.`);
- }} style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}}>
- <div style={{fontSize:15,fontWeight:600,color:IOS.red}}>End League</div>
- <div style={{fontSize:16,color:IOS.label3}}>›</div>
- </div>
- </div>
- </div>
- </>
- )}
+ }} style={{padding:14,display:"flex",alignItems:"center",gap:12,cursor:"pointer"}}>
+       <div style={{width:30,height:30,borderRadius:9,border:"1px solid rgba(255,69,58,0.3)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:IOS.red}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></div>
+       <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:700,color:IOS.red}}>Delete league</div><div style={_dd}>Removes all picks, matchups and members. Permanent.</div></div>
+       <div style={{color:"rgba(255,255,255,0.3)",fontSize:18}}>{"\u203a"}</div>
+     </div>
+   </div>
+   </>
+   );
+})()}
  </div>
  </>
  )}
