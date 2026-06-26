@@ -1825,6 +1825,7 @@ export default function App() {
  };
  const [user, setUser] = useState(null);
  const [userProfile, setUserProfile] = useState(null); // { username, email }
+ const [refStats, setRefStats] = useState({signups:0, paying:0});
  const [editingUsername, setEditingUsername] = useState(false);
  const [showUsernamePrompt, setShowUsernamePrompt] = useState(false);
  const [usernamePromptInput, setUsernamePromptInput] = useState("");
@@ -3636,8 +3637,14 @@ export default function App() {
  setLeagueTrophies(trophies);
  };
 
+ useEffect(()=>{
+   const code=userProfile&&userProfile.referral_code; if(!code){ setRefStats({signups:0,paying:0}); return; }
+   let cancelled=false;
+   (async()=>{ try{ const {data}=await supabase.from("users").select("id,is_pro").eq("referred_by",code); if(cancelled) return; const rows=data||[]; setRefStats({signups:rows.length, paying:rows.filter(r=>r.is_pro===true).length}); }catch(e){} })();
+   return ()=>{cancelled=true;};
+ }, [userProfile&&userProfile.referral_code]);
  const fetchUserProfile = async (uid) => {
- const {data} = await supabase.from("users").select("id,username,email,is_pro,push_enabled,notif_results,notif_grades,notif_reminder,notif_league,notif_plok").eq("id",uid).maybeSingle();
+ const {data} = await supabase.from("users").select("id,username,email,is_pro,push_enabled,notif_results,notif_grades,notif_reminder,notif_league,notif_plok,referral_code,referred_by").eq("id",uid).maybeSingle();
  if(data) {
  setUserProfile(data);
  // DB is source of truth for pro status
@@ -5042,7 +5049,8 @@ export default function App() {
  <input id="auth-email" className="auth-input" type="email" placeholder="Email" style={{marginBottom:11}}/>
  <input id="auth-password" className="auth-input" type="password" placeholder="Password" style={{marginBottom:11}}/>
  {authScreen==="signup"&&<input id="auth-username" className="auth-input" type="text" placeholder="Username (e.g. sharpshooter99)" style={{marginBottom:7}}/>}
- {authScreen==="signup"&&<div style={{fontSize:11,color:"rgba(255,255,255,0.32)",marginBottom:15,paddingLeft:4}}>This is how you'll appear to other players</div>}
+ {authScreen==="signup"&&<div style={{fontSize:11,color:"rgba(255,255,255,0.32)",marginBottom:7,paddingLeft:4}}>This is how you'll appear to other players</div>}
+ {authScreen==="signup"&&<input id="auth-referral" className="auth-input" type="text" placeholder="Referral code (optional)" defaultValue={(new URLSearchParams(window.location.search).get("ref")||"").toUpperCase()} style={{marginBottom:15}}/>}
  {authScreen==="login"&&<div style={{height:16}}/>}
  <button className="auth-cta" onClick={async()=>{
  const email=document.getElementById("auth-email").value.trim();
@@ -5061,7 +5069,8 @@ export default function App() {
  if(error){ alert(error.message); return; }
  const uid = data?.user?.id;
  if(uid){
- await supabase.from("users").upsert({id:uid, email, username}, {onConflict:"id"});
+ const refCode=((document.getElementById("auth-referral")?.value||"").trim().toUpperCase())||null; const myRef=Math.random().toString(36).substring(2,8).toUpperCase();
+ await supabase.from("users").upsert({id:uid, email, username, referral_code:myRef, referred_by:refCode}, {onConflict:"id"});
  }
  setTutorialStep(0);
  }}}>{authScreen==="login"?"Sign In":"Create Account"}</button>
@@ -10796,8 +10805,39 @@ export default function App() {
  );
  })()}
 
+ {(()=>{
+   const code=(userProfile&&userProfile.referral_code)||"";
+   const link="https://picklockapp.com/?ref="+code;
+   return (
+   <div style={{margin:"2px 0 16px",background:"linear-gradient(135deg,rgba(10,132,255,0.13),rgba(94,92,230,0.05))",border:"0.5px solid rgba(10,132,255,0.28)",borderRadius:16,padding:"15px 16px"}}>
+     <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
+       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+       <div style={{fontSize:15,fontWeight:800,color:"#fff"}}>Invite friends</div>
+     </div>
+     <div style={{fontSize:12,color:IOS.label2,lineHeight:1.5,marginBottom:13}}>Share your code. Everyone who signs up with it counts toward you.</div>
+     {code ? (
+       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:13}}>
+         <div style={{flex:1,background:"rgba(0,0,0,0.32)",border:"0.5px solid rgba(255,255,255,0.12)",borderRadius:10,padding:"11px 14px",fontSize:18,fontWeight:800,letterSpacing:3,color:"#fff",fontFamily:"'Barlow Semi Condensed',sans-serif"}}>{code}</div>
+         <button onClick={async()=>{ try{ await navigator.clipboard.writeText(code); alert("Code copied!"); }catch(e){ alert(code); } }} style={{background:IOS.blue,border:"none",borderRadius:10,padding:"11px 15px",fontSize:13,fontWeight:800,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Copy</button>
+         <button onClick={async()=>{ const msg="Join me on PickLock — use my code "+code+" when you sign up: "+link; try{ if(navigator.share){ await navigator.share({title:"PickLock",text:msg,url:link}); } else { await navigator.clipboard.writeText(msg); alert("Invite copied!"); } }catch(e){} }} style={{background:"rgba(255,255,255,0.08)",border:"0.5px solid rgba(255,255,255,0.14)",borderRadius:10,padding:"11px 15px",fontSize:13,fontWeight:800,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Share</button>
+       </div>
+     ) : <div style={{fontSize:12,color:IOS.label3,marginBottom:13}}>Your code appears here once your profile loads.</div>}
+     <div style={{display:"flex",gap:9}}>
+       <div style={{flex:1,background:"rgba(255,255,255,0.04)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:11,padding:"11px 13px"}}>
+         <div style={{fontSize:22,fontWeight:800,color:"#fff",fontFamily:"'Barlow Semi Condensed',sans-serif",lineHeight:1}}>{refStats.signups}</div>
+         <div style={{fontSize:10,color:IOS.label3,fontWeight:700,textTransform:"uppercase",letterSpacing:.4,marginTop:3}}>Signups</div>
+       </div>
+       <div style={{flex:1,background:"rgba(255,255,255,0.04)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:11,padding:"11px 13px"}}>
+         <div style={{fontSize:22,fontWeight:800,color:IOS.green,fontFamily:"'Barlow Semi Condensed',sans-serif",lineHeight:1}}>{refStats.paying}</div>
+         <div style={{fontSize:10,color:IOS.label3,fontWeight:700,textTransform:"uppercase",letterSpacing:.4,marginTop:3}}>Paying</div>
+       </div>
+     </div>
+   </div>
+   );
+   })()}
+
  <div className="seg-control">
- {["stats","power-ups"].map(t=><div key={t} className={`seg-item ${profTab===t?"on":""}`} onClick={()=>setProfTab(t)}>{t.charAt(0).toUpperCase()+t.slice(1)}</div>)}
+   {["stats","power-ups"].map(t=><div key={t} className={`seg-item ${profTab===t?"on":""}`} onClick={()=>setProfTab(t)}>{t.charAt(0).toUpperCase()+t.slice(1)}</div>)}
  </div>
 
  {profTab==="stats"&&(
