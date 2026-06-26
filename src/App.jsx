@@ -1240,7 +1240,7 @@ function brkDrawChampCard(name, leagueName){
   // divider + footer
   x.strokeStyle="rgba(255,214,10,.3)"; x.lineWidth=2; x.beginPath(); x.moveTo(cx-120,560); x.lineTo(cx+120,560); x.stroke();
   x.fillStyle="rgba(255,255,255,.4)"; x.font="800 20px Barlow, sans-serif"; x.fillText("PICKLOCK", cx, 660);
-  x.fillStyle="rgba(255,255,255,.28)"; x.font="600 15px Barlow, sans-serif"; x.fillText("single elimination · last lock standing", cx, 690);
+  x.fillStyle="rgba(255,255,255,.28)"; x.font="600 15px Barlow, sans-serif"; x.fillText("single-elimination champion", cx, 690);
   return c;
 }
 async function champShare(name, leagueName){
@@ -1252,7 +1252,8 @@ async function champShare(name, leagueName){
     const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download="picklock-champion.png"; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1500);
   }catch(e){}
 }
-function ChampCelebrate({ name, leagueName, isYou, IOS, onClose, onShare }){
+function ChampCelebrate({ name, leagueName, isYou, members, record, points, runnerUp, IOS, onClose, onShare }){
+  const stats=[]; if(record) stats.push(["Record",record]); if(points!=null&&points!=="") stats.push(["Points",points]); if(runnerUp) stats.push(["Runner-up",runnerUp]);
   return (
     <div className="champ-bg">
       <Confetti show={true}/>
@@ -1260,7 +1261,17 @@ function ChampCelebrate({ name, leagueName, isYou, IOS, onClose, onShare }){
       <svg className="champ-crown" width="92" height="92" viewBox="0 0 24 24" fill="none" stroke="#FFD60A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2 18h20"/><path d="M3 8l4 4 5-7 5 7 4-4-2 10H5L3 8z"/></svg>
       <div className="champ-lab">{isYou?"You are the champion":"League Champion"}</div>
       <div className="champ-name">{name||"Champion"}</div>
-      <div className="champ-sub">{leagueName||"Tournament"} · last lock standing</div>
+      <div className="champ-sub">{(leagueName||"Tournament")+(members?(" · "+members+" players"):"")}</div>
+      {stats.length>0 && (
+        <div style={{display:"flex",marginTop:20,marginBottom:4,border:"1px solid rgba(255,255,255,0.12)",borderRadius:14,overflow:"hidden",maxWidth:340,width:"86%"}}>
+          {stats.map((sx,i)=>(
+            <div key={i} style={{flex:1,padding:"12px 10px",textAlign:"center",borderLeft:i?"1px solid rgba(255,255,255,0.10)":"none"}}>
+              <div style={{fontSize:16,fontWeight:800,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{sx[1]}</div>
+              <div style={{fontSize:9,fontWeight:700,letterSpacing:".08em",color:"rgba(255,255,255,0.45)",marginTop:3,textTransform:"uppercase"}}>{sx[0]}</div>
+            </div>
+          ))}
+        </div>
+      )}
       <button className="champ-share" onClick={onShare}>
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#1a1500" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
         Share your title
@@ -3481,9 +3492,20 @@ export default function App() {
  await checkAutoAdvanceWeek(activeLeague.id, {...activeLeague, season_start:newStart});
  await fetchLeagues(user.id); await fetchStandings(activeLeague.id); await fetchBracket(activeLeague.id);
  };
+ const champPayload = (id, nm) => {
+   const std = realStandings||[];
+   const cr = std.find(r=>r.userId===id) || {};
+   const pw = (bracketMatchups||[]).filter(m=>String(m.bracket_match_id||"").startsWith("PW"));
+   let runnerUp=null;
+   if(pw.length){ const lw=Math.max.apply(null,pw.map(m=>m.week)); const fin=pw.find(m=>m.week===lw&&m.winner_id); if(fin){ const lid=fin.winner_id===fin.user1_id?fin.user2_id:fin.user1_id; const lm=(leagueMembers||[]).find(x=>x.userId===lid); if(lm) runnerUp=lm.name; } }
+   if(!runnerUp && std[1]) runnerUp = std[1].isYou?"You":std[1].name;
+   return { name:nm, leagueName:activeLeague&&activeLeague.name, isYou:id===(user&&user.id), members:(leagueMembers&&leagueMembers.length)||std.length||0, record:cr.record||null, points:(cr.points!=null?cr.points:null), runnerUp };
+ };
  const devResetPlayoffs = async () => {
  if(!activeLeague || !activeLeague.id) return;
  await supabase.from("matchups").delete().eq("league_id", activeLeague.id).like("bracket_match_id","PW%");
+ await supabase.from("matchups").update({ winner_id:null, user1_points:0, user2_points:0 }).eq("league_id", activeLeague.id);
+ await supabase.from("picks").update({ result:null, points_earned:0 }).eq("league_id", activeLeague.id);
  await supabase.from("leagues").update({ current_week:1, champion_id:null, season_start:new Date().toISOString() }).eq("id", activeLeague.id);
  await fetchLeagues(user.id); await fetchStandings(activeLeague.id); await fetchBracket(activeLeague.id);
  };
@@ -3875,7 +3897,7 @@ export default function App() {
  const wks = [...new Set(ms.map(m=>m.week))].sort((a,b)=>a-b);
  const fin = ms.filter(m=>m.week===wks[wks.length-1]);
  const champ = (fin.length===1)?fin[0].winner_id:null;
- if(champ && user && champ===user.id && champSeenRef.current!==lid){ champSeenRef.current=lid; const me=leagueMembers.find(x=>x.userId===champ); setChampCelebrate({name: me?me.name:"You", leagueName: activeLeague.name, isYou:true}); }
+ if(champ && user && champ===user.id && champSeenRef.current!==lid){ champSeenRef.current=lid; const me=leagueMembers.find(x=>x.userId===champ); setChampCelebrate(champPayload(champ, me?me.name:"You")); }
  if(champ){ const _lg=(realLeagues||[]).find(l=>l.id===lid); if(_lg && !_lg.champion_id){ await supabase.from("leagues").update({champion_id:champ}).eq("id",lid); } }
  const cw = activeLeague.current_week||1;
  const { data:lp } = await supabase.from("picks").select("user_id,result,points_earned").eq("league_id",lid).eq("week",cw);
@@ -9787,11 +9809,11 @@ export default function App() {
  );
  return (<>
  {bracketMatchups.some(mm=>mm.week===bracketLive.week && !mm.winner_id) && <div style={{margin:"0 16px 10px",display:"flex",alignItems:"center",justifyContent:"center",gap:7,background:"rgba(48,209,88,.1)",border:"1px solid rgba(48,209,88,.3)",borderRadius:12,padding:"9px 14px"}}><span className="brk-livedot"/><span style={{fontSize:11,fontWeight:900,letterSpacing:".12em",color:IOS.green}}>WIN OR GO HOME · LIVE ROUND</span></div>}
- <BracketView matchups={bracketMatchups} members={leagueMembers} uid={user&&user.id} IOS={IOS} onOpenMatch={openBracketMatch} live={bracketLive} onChampion={(id,nm)=>setChampCelebrate({name:nm, leagueName:activeLeague.name, isYou:id===(user&&user.id)})}/>
+ <BracketView matchups={bracketMatchups} members={leagueMembers} uid={user&&user.id} IOS={IOS} onOpenMatch={openBracketMatch} live={bracketLive} onChampion={(id,nm)=>setChampCelebrate(champPayload(id,nm))}/>
  </>);
  })()}
  {bracketDetail && <BracketMatchSheet d={bracketDetail} IOS={IOS} onClose={()=>setBracketDetail(null)}/>}
- {champCelebrate && <ChampCelebrate name={champCelebrate.name} leagueName={champCelebrate.leagueName} isYou={champCelebrate.isYou} IOS={IOS} onClose={()=>setChampCelebrate(null)} onShare={()=>champShare(champCelebrate.name, champCelebrate.leagueName)}/>}
+ {champCelebrate && <ChampCelebrate name={champCelebrate.name} leagueName={champCelebrate.leagueName} isYou={champCelebrate.isYou} members={champCelebrate.members} record={champCelebrate.record} points={champCelebrate.points} runnerUp={champCelebrate.runnerUp} IOS={IOS} onClose={()=>setChampCelebrate(null)} onShare={()=>champShare(champCelebrate.name, champCelebrate.leagueName)}/>}
  </>
  )}
 
@@ -9818,9 +9840,9 @@ export default function App() {
      <>
        {playoffMs.some(mm=>mm.week===bracketLive.week && !mm.winner_id) && <div style={{margin:"0 16px 10px",display:"flex",alignItems:"center",justifyContent:"center",gap:7,background:"rgba(48,209,88,.1)",border:"1px solid rgba(48,209,88,.3)",borderRadius:12,padding:"9px 14px"}}><span className="brk-livedot"/><span style={{fontSize:11,fontWeight:900,letterSpacing:".12em",color:IOS.green}}>PLAYOFFS · LIVE ROUND</span></div>}
        <div style={{margin:"0 16px 12px",fontSize:11,fontWeight:800,letterSpacing:".5px",textTransform:"uppercase",color:IOS.yellow}}>Top {N} seeds · single-elim · Wk {startWeek}–{sw}</div>
-       <BracketView matchups={playoffMs} members={leagueMembers} uid={user&&user.id} IOS={IOS} onOpenMatch={openBracketMatch} live={bracketLive} onChampion={(id,nm)=>setChampCelebrate({name:nm, leagueName:activeLeague.name, isYou:id===(user&&user.id)})}/>
+       <BracketView matchups={playoffMs} members={leagueMembers} uid={user&&user.id} IOS={IOS} onOpenMatch={openBracketMatch} live={bracketLive} onChampion={(id,nm)=>setChampCelebrate(champPayload(id,nm))}/>
        {bracketDetail && <BracketMatchSheet d={bracketDetail} IOS={IOS} onClose={()=>setBracketDetail(null)}/>}
-       {champCelebrate && <ChampCelebrate name={champCelebrate.name} leagueName={champCelebrate.leagueName} isYou={champCelebrate.isYou} IOS={IOS} onClose={()=>setChampCelebrate(null)} onShare={()=>champShare(champCelebrate.name, champCelebrate.leagueName)}/>}
+       {champCelebrate && <ChampCelebrate name={champCelebrate.name} leagueName={champCelebrate.leagueName} isYou={champCelebrate.isYou} members={champCelebrate.members} record={champCelebrate.record} points={champCelebrate.points} runnerUp={champCelebrate.runnerUp} IOS={IOS} onClose={()=>setChampCelebrate(null)} onShare={()=>champShare(champCelebrate.name, champCelebrate.leagueName)}/>}
      </>
    );
    return (
