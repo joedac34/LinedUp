@@ -7346,7 +7346,7 @@ export default function App() {
  if(pct>=62) return {t:"Strong lean",c:IOS.green};
  if(pct>=52) return {t:"Slight lean",c:acc};
  if(pct>=48) return {t:"Coin flip",c:IOS.label2};
- return {t:"Live dog",c:IOS.orange};
+ return {t:"Long odds",c:IOS.orange};
  }
  if(pct>=70) return {t:"Heavy favorite",c:IOS.green};
  if(pct>=58) return {t:"Favored",c:acc};
@@ -7669,6 +7669,87 @@ export default function App() {
  };
 
 
+   // --- OPTION A: prop/period/longshot as grouped-by-game rows (same pill language as game lines) ---
+   const renderRow = (bet, idx, isFirst) => {
+   const selected = isSoloMode ? soloFreePicks.some(p=>String(p.id)===String(bet.id)) : (activePicks.some(p=>p.bet&&p.bet.id===bet.id) || isLeg(bet));
+   const added = gridJustAdded===bet.id;
+   const pct = impliedPct(bet.impliedOdds);
+   const read = readFor(pct);
+   const pos = bet.odds && String(bet.odds).charAt(0)==="+";
+   const _myMult = isSoloMode ? ((soloFreePicks.find(p=>String(p.id)===String(bet.id))||{}).mult||1) : (targetMult||1);
+   const pts = calcPickPoints(_myMult, bet.impliedOdds, "W");
+   const ret = decReturn(bet.impliedOdds);
+   let title="", subtitle="", sideChip=null;
+   if(gridType==="prop"){ title=bet.game||bet.pick; subtitle=bet.pick; const lp=String(bet.pick||"").toLowerCase(); sideChip=lp.includes("over")?"OVER":lp.includes("under")?"UNDER":null; }
+   else if(gridType==="longshot"){ title=teamFromLongshot(bet.pick)||bet.pick; subtitle=""; }
+   else if(gridType==="period"){
+   const c=bet.category||gridPeriodSub; const pt=bet.point;
+   const scope=(c&&c.indexOf("_f5")>-1)?"First 5":(c&&c.indexOf("_h1")>-1)?"1st Half":"";
+   if(c==="yrfi"){ title=bet.game; subtitle="Yes run \u00b7 1st inning"; sideChip="YES"; }
+   else if(c==="nrfi"){ title=bet.game; subtitle="No run \u00b7 1st inning"; sideChip="NO"; }
+   else if(c==="ou_f5"||c==="ou_h1"){ const side=String(bet.outcome||bet.pick||""); title=bet.game; subtitle=(scope+" "+side+(pt!=null?(" "+pt):"")).trim(); const ls=side.toLowerCase(); sideChip=ls.startsWith("over")?"OVER":ls.startsWith("under")?"UNDER":null; }
+   else if(c==="spread_f5"||c==="spread_h1"){ const team=bet.outcome||bet.pick; const sign=pt!=null?(pt>=0?("+"+pt):(""+pt)):""; title=team; subtitle=(scope+" "+sign).trim(); sideChip=sideOf(team,bet.game); }
+   else { const team=bet.outcome||bet.pick; title=team; subtitle=(scope+" ML").trim(); sideChip=sideOf(team,bet.game); }
+   }
+   else { title=bet.pick; subtitle=bet.game; }
+   const titleIsGame=(title===bet.game);
+   const primary=titleIsGame?(subtitle||title):title;
+   const secondary=titleIsGame?"":(subtitle && subtitle!==bet.game ? subtitle : "");
+   const chipBn=sideChip==="HOME"||sideChip==="OVER"||sideChip==="YES";
+   return (
+   <div key={bet.id} onClick={()=>addCard(bet)} style={{position:"relative",display:"flex",alignItems:"center",gap:11,padding:"11px 13px",borderTop:isFirst?"none":"1px solid rgba(255,255,255,0.07)",cursor:"pointer",background:(selected||added)?(acc+"14"):"transparent",transition:"background .13s"}}>
+   <button onClick={(e)=>{ e.stopPropagation(); askFromBet(bet, gridType==="longshot"?"longshot":gridType); }} aria-label="Ask AI" style={{flexShrink:0,width:27,height:27,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",background:acc+"1a",border:"1px solid "+acc+"33",color:acc,cursor:"pointer"}}><svg width="12" height="12" viewBox="0 0 24 24" fill={acc}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg></button>
+   <div style={{flex:1,minWidth:0}}>
+   <div style={{display:"flex",alignItems:"center",gap:7}}>
+   <span style={{fontSize:13.5,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",letterSpacing:"-0.2px"}}>{primary}</span>
+   {sideChip && <span style={{flexShrink:0,fontSize:8,fontWeight:800,letterSpacing:"0.05em",borderRadius:4,padding:"1px 6px",color:chipBn?acc:"rgba(255,255,255,0.5)",background:chipBn?(acc+"1f"):"rgba(255,255,255,0.06)"}}>{sideChip}</span>}
+   </div>
+   <div style={{display:"flex",alignItems:"center",gap:7,marginTop:4}}>
+   {secondary && <span style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.42)",whiteSpace:"nowrap",flexShrink:0}}>{secondary}</span>}
+   <span style={{flexShrink:0,width:48,height:4,borderRadius:2,background:"rgba(255,255,255,0.1)",overflow:"hidden"}}><span style={{display:"block",height:"100%",width:Math.max(0,Math.min(100,pct))+"%",background:acc}}/></span>
+   <span style={{fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.6)",flexShrink:0}}>{pct}%</span>
+   <span style={{fontSize:11,fontWeight:700,color:read.c,whiteSpace:"nowrap"}}>{read.t}</span>
+   </div>
+   {isSoloMode && selected && (
+   <div onClick={(e)=>e.stopPropagation()} style={{display:"flex",gap:5,marginTop:8}}>
+   {[1,2,3,4,5].map(m=>{ const on=_myMult===m; return (
+   <div key={m} onClick={(e)=>{ e.stopPropagation(); setSoloFreePicks(prev=>prev.map(pp=>String(pp.id)===String(bet.id)?{...pp,mult:m}:pp)); }} style={{flex:1,textAlign:"center",padding:"5px 0",borderRadius:7,fontSize:11,fontWeight:800,cursor:"pointer",background:on?(acc+"28"):"rgba(255,255,255,0.04)",border:"1px solid "+(on?acc:"rgba(255,255,255,0.08)"),color:on?acc:"rgba(255,255,255,0.4)"}}>{m}×</div>
+   );})}
+   </div>
+   )}
+   </div>
+   <div style={{flexShrink:0,width:74,borderRadius:10,border:"1px solid "+(selected?acc:"rgba(255,255,255,0.12)"),background:selected?(acc+"1f"):"rgba(255,255,255,0.04)",textAlign:"center",padding:"7px 3px"}}>
+   <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:17,color:pos?IOS.green:"#fff",lineHeight:1.05}}>{bet.odds}</div>
+   <div style={{fontSize:10,fontWeight:800,color:IOS.green,lineHeight:1.1,marginTop:1}}>{gridType==="longshot"?(ret.toFixed(1)+"\u00d7"):("+"+pts+" pts")}</div>
+   </div>
+   {added && <div style={{position:"absolute",top:0,right:0,bottom:0,left:0,background:acc+"1a",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{display:"flex",alignItems:"center",gap:5,background:acc,color:"#fff",borderRadius:20,padding:"5px 12px",fontSize:11,fontWeight:800}}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Added</div></div>}
+   </div>
+   );
+   };
+   const renderGroupedRows = () => {
+   const groups={};
+   list.forEach(b=>{ const g=b.game||"Other"; if(!groups[g]) groups[g]=[]; groups[g].push(b); });
+   const keys=Object.keys(groups).sort((a,b)=> (new Date(groups[a][0].gameTime||0)) - (new Date(groups[b][0].gameTime||0)) );
+   const tag=(gSport?String(gSport).toUpperCase():"")+" \u00b7 "+String(TYPE_LABELS[gridType]||"").toUpperCase();
+   return (
+   <div style={{padding:"6px 14px 28px"}}>
+   {keys.map((gk)=>{
+   const bets=groups[gk]; const t=bets[0].gameTime;
+   return (
+   <div key={gk} style={{border:"1px solid rgba(255,255,255,0.09)",borderRadius:16,background:"linear-gradient(165deg,#15151A,#0B0B0E 80%)",overflow:"hidden",margin:"10px 0",boxShadow:"0 6px 18px rgba(0,0,0,0.35)"}}>
+   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 13px 5px"}}>
+   <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.07em",textTransform:"uppercase",color:acc}}>{tag}</div>
+   {t && <div style={{fontSize:10,fontWeight:700,color:IOS.orange}}>{countdown(t)}</div>}
+   </div>
+   <div style={{fontSize:13,fontWeight:800,padding:"0 13px 7px",letterSpacing:"-0.2px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{gk}</div>
+   <div>{bets.map((bet,idx)=>renderRow(bet,idx,idx===0))}</div>
+   </div>
+   );
+   })}
+   </div>
+   );
+   };
+
  // --- LINE SHEET (spiced) -- ml/spread/ou grouped by game ---
  const isGameLine = gridType==="ml"||gridType==="spread"||gridType==="ou";
  const impFrac = (o)=>{ const p=impliedPct(o); return p?p/100:0; };
@@ -7700,18 +7781,18 @@ export default function App() {
  const countdown=(t)=>{ if(!t) return ""; const ms=new Date(t).getTime()-_now; if(ms<=0) return "Live / started"; const m=Math.floor(ms/60000); const h=Math.floor(m/60); const mm=m%60; return h>0?("starts in "+h+"h "+mm+"m"):("starts in "+mm+"m"); };
  const lineAllowed = (cat)=> !gridCfg ? true : allowedTypes.includes(cat);
  const Chip = ({b, cat, line, value, mv}) => {
- if(!b) return <div style={{borderRadius:10,border:"1px dashed rgba(255,255,255,0.08)",minHeight:46}}/>;
+ if(!b) return <div style={{borderRadius:10,border:"1px dashed rgba(255,255,255,0.08)",minHeight:52}}/>;
  const enabled = lineAllowed(cat);
  const sel = isSoloMode ? soloFreePicks.some(p=>String(p.id)===String(b.id)) : ((activePicks.some(p=>p.bet&&p.bet.id===b.id)) || isLeg(b));
  const pts = ptsOf(b);
  return (
- <div onClick={()=>{ if(enabled) addCard(b,cat); }} style={{position:"relative",borderRadius:10,cursor:enabled?"pointer":"default",textAlign:"center",padding:"6px 3px",opacity:enabled?1:0.4,
+ <div onClick={()=>{ if(enabled) addCard(b,cat); }} style={{position:"relative",borderRadius:10,cursor:enabled?"pointer":"default",textAlign:"center",padding:"8px 3px",opacity:enabled?1:0.4,
  border:"1px solid "+(sel?IOS.blue+"a6":value?"rgba(48,209,88,0.55)":"rgba(255,255,255,0.1)"),
  background:sel?"linear-gradient(160deg,rgba(10,132,255,0.24),rgba(10,132,255,0.05))":value?"linear-gradient(160deg,rgba(48,209,88,0.2),rgba(48,209,88,0.04))":"rgba(255,255,255,0.04)",transition:"all .13s"}}>
  {value && <div style={{position:"absolute",top:-6,left:"50%",transform:"translateX(-50%)"}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="3" strokeLinecap="round"><polyline points="6 14 12 8 18 14"/></svg></div>}
- {line ? <div style={{fontSize:10,fontWeight:700,color:"rgba(255,255,255,0.5)"}}>{line}</div> : null}
- <div style={{fontSize:13,fontWeight:900,color:sel?IOS.blue:"#fff",fontVariantNumeric:"tabular-nums",lineHeight:1.1}}>{b.odds}</div>
- <div style={{fontSize:8,fontWeight:700,color:IOS.green}}>+{pts}</div>
+ {line ? <div style={{fontSize:12,fontWeight:700,color:"rgba(255,255,255,0.55)"}}>{line}</div> : null}
+ <div style={{fontSize:18,fontWeight:900,color:sel?IOS.blue:"#fff",fontVariantNumeric:"tabular-nums",lineHeight:1.1}}>{b.odds}</div>
+ <div style={{fontSize:11,fontWeight:800,color:IOS.green}}>+{pts}</div>
  {mv && mv.implied!=null && (()=>{ const cur=impFrac(b.impliedOdds); const op=Number(mv.implied); if(!op) return null; const yy=(v)=>(7-Math.max(0,Math.min(1,v))*6).toFixed(1); const up=cur>op+0.003, dn=cur<op-0.003; const col=up?IOS.green:dn?IOS.red:"rgba(255,255,255,0.3)"; return (<svg viewBox="0 0 40 8" preserveAspectRatio="none" style={{position:"absolute",bottom:1,left:6,width:"calc(100% - 12px)",height:5,opacity:0.55}}><polyline points={"0,"+yy(op)+" 40,"+yy(cur)} fill="none" stroke={col} strokeWidth="1.5"/></svg>); })()}
  </div>
  );
@@ -8058,9 +8139,7 @@ export default function App() {
  </div>
  </div>
  ) : (
- <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,padding:"12px 16px 28px"}}>
- {list.map((bet,idx)=>renderCard(bet,idx))}
- </div>
+ renderGroupedRows()
  )}
  </div>
  );
