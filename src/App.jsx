@@ -4896,7 +4896,7 @@ export default function App() {
  <div style={{flex:1,display:"flex",flexDirection:"column",padding:"0 24px 48px"}}>
    <div style={{textAlign:"center",marginBottom:24}}>
      <div style={{fontSize:26,fontWeight:800,color:"#fff",letterSpacing:-.5,marginBottom:8}}>Build your slip every week</div>
-     <div style={{fontSize:14,color:"rgba(255,255,255,0.45)",lineHeight:1.6}}>5 picks. 5 bet types. Higher multiplier = more points if you win.</div>
+     <div style={{fontSize:14,color:"rgba(255,255,255,0.45)",lineHeight:1.6}}>Pick as many as you want, any bet type. Higher multiplier = more points if you win.</div>
    </div>
    <div style={{flex:1,display:"flex",flexDirection:"column",gap:8,marginBottom:24}}>
      {[
@@ -4928,18 +4928,19 @@ export default function App() {
        <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="#30D158" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
      </div>
      <div style={{fontSize:28,fontWeight:800,color:"#fff",letterSpacing:-.5,marginBottom:12,lineHeight:1.15}}>Compete with your crew</div>
-     <div style={{fontSize:14,color:"rgba(255,255,255,0.45)",lineHeight:1.7,marginBottom:28}}>Create a private league or join a public one. Weekly matchups, standings, and a championship at the end.</div>
+     <div style={{fontSize:14,color:"rgba(255,255,255,0.45)",lineHeight:1.7,marginBottom:28}}>Spin up a private league, join a public one, or run it solo. Standings every week — and a title on the line at the end.</div>
      <div style={{width:"100%",background:"#111",border:"0.5px solid #1E1E1E",borderRadius:12,padding:"14px 16px",textAlign:"left"}}>
-       <div style={{fontSize:9,fontWeight:700,color:"rgba(255,255,255,0.3)",textTransform:"uppercase",letterSpacing:.5,marginBottom:12}}>League formats</div>
+       <div style={{fontSize:9,fontWeight:700,color:"rgba(255,255,255,0.3)",textTransform:"uppercase",letterSpacing:.5,marginBottom:12}}>Ways to play</div>
        <div style={{display:"flex",flexDirection:"column",gap:10}}>
          {[
-           {icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>, label:"Head-to-head + playoffs"},
-           {icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>, label:"Total points all season"},
-           {icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>, label:"Single elimination bracket"},
+           {icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>, label:"Head-to-head", desc:"Weekly matchups + a seeded playoff bracket"},
+           {icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>, label:"Total points", desc:"Cumulative all season — no matchups"},
+           {icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>, label:"Tournament bracket", desc:"Single elimination — win or go home"},
+           {icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>, label:"Solo", desc:"Just you vs. the line — no crew needed"},
          ].map((f,i)=>(
            <div key={i} style={{display:"flex",alignItems:"center",gap:10}}>
              <div style={{width:28,height:28,borderRadius:8,background:"rgba(10,132,255,0.1)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{f.icon}</div>
-             <div style={{fontSize:13,color:"rgba(255,255,255,0.7)",fontWeight:600}}>{f.label}</div>
+             <div style={{minWidth:0}}><div style={{fontSize:13,color:"#fff",fontWeight:700}}>{f.label}</div><div style={{fontSize:11,color:"rgba(255,255,255,0.4)",fontWeight:500,marginTop:1}}>{f.desc}</div></div>
            </div>
          ))}
        </div>
@@ -4958,11 +4959,12 @@ export default function App() {
        <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="#FF9F0A" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
      </div>
      <div style={{fontSize:28,fontWeight:800,color:"#fff",letterSpacing:-.5,marginBottom:12}}>Ready to lock in?</div>
-     <div style={{fontSize:14,color:"rgba(255,255,255,0.45)",lineHeight:1.7,maxWidth:300}}>Create a league with friends, join a public one, or go solo and track your own picks first.</div>
+     <div style={{fontSize:14,color:"rgba(255,255,255,0.45)",lineHeight:1.7,maxWidth:300}}>Create a league with friends, join one by invite code or from public leagues, or go solo and track your own picks first.</div>
    </div>
    <div style={{width:"100%",display:"flex",flexDirection:"column",gap:10}}>
      <button onClick={()=>{dismissOnboard();setScreen("leagues");setShowNewLeague(true);setNewLeagueCreated(null);setNewLeagueSport(null);setNewLeagueName("");setNewLeagueSize(8);setNewLeagueStep(0);}} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:14,padding:"15px",fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Create a League</button>
      <button onClick={()=>{dismissOnboard();setShowBrowse(true);fetchPublicLeagues();}} style={{width:"100%",background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:14,padding:"15px",fontSize:15,fontWeight:700,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Browse Public Leagues</button>
+     <button onClick={()=>{ const c=(window.prompt("Enter invite code")||"").trim(); if(c){ dismissOnboard(); handleJoinCode(c); } }} style={{width:"100%",background:"rgba(255,255,255,0.06)",border:"0.5px solid rgba(255,255,255,0.12)",borderRadius:14,padding:"15px",fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Join with a code</button>
      <button onClick={()=>{dismissOnboard();setHomeMode("solo");setSoloModeWithRef(true);try{fetchSoloWeeks();}catch(e){}setScreen("home");}} style={{width:"100%",background:"none",border:"none",padding:"12px",fontSize:14,fontWeight:600,color:"rgba(255,255,255,0.35)",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Go Solo for now</button>
    </div>
  </div>
