@@ -11044,35 +11044,101 @@ export default function App() {
  ); })}
  </div>
  );
- return (
- <div>
- {/* Tale of the Tape hero */}
- <div style={{position:"relative",padding:"2px 16px 18px",overflow:"hidden"}}>
- <div style={{position:"absolute",inset:0,background:"linear-gradient(105deg,"+tint(AC,0.30)+" 0%,transparent 40%,transparent 60%,"+tint(HC,0.30)+" 100%)"}}/>
- <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,transparent 35%,#1C1C1E 100%)"}}/>
- <div style={{position:"relative",display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8}}>
- <div style={{flex:1,textAlign:"center"}}>
- <div style={{width:64,height:64,borderRadius:18,margin:"0 auto 10px",background:awayColor,border:"1px solid rgba(255,255,255,0.14)",boxShadow:"0 8px 20px -6px rgba(0,0,0,0.55)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:21,color:"#fff",letterSpacing:0.5}}>{awayAbbr}</div>
- <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:23,letterSpacing:0.3,lineHeight:0.95,color:"#fff",textTransform:"uppercase"}}>{awayNick}</div>
- {(awayRec||awaySt) && <div style={{fontSize:11,fontWeight:700,color:IOS.label2,marginTop:3}}>{[awayRec,awaySt].filter(Boolean).join(" · ")}</div>}
- </div>
- <div style={{textAlign:"center",paddingTop:20}}>
- <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:IOS.label3}}>{tg.isLive?"":"AT"}</div>
- {tg.isLive && <div style={{fontSize:11,fontWeight:800,color:IOS.green}}>● LIVE</div>}
- </div>
- <div style={{flex:1,textAlign:"center"}}>
- <div style={{width:64,height:64,borderRadius:18,margin:"0 auto 10px",background:homeColor,border:"1px solid rgba(255,255,255,0.14)",boxShadow:"0 8px 20px -6px rgba(0,0,0,0.55)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:21,color:"#fff",letterSpacing:0.5}}>{homeAbbr}</div>
- <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:23,letterSpacing:0.3,lineHeight:0.95,color:"#fff",textTransform:"uppercase"}}>{homeNick}</div>
- {(homeRec||homeSt) && <div style={{fontSize:11,fontWeight:700,color:IOS.label2,marginTop:3}}>{[homeRec,homeSt].filter(Boolean).join(" · ")}</div>}
- </div>
- </div>
- {(gameTime||venue||tv) && <div style={{position:"relative",textAlign:"center",marginTop:15,fontSize:12.5,fontWeight:700,color:"#fff"}}>{[gameTime,venue,tv].filter(Boolean).join("  ·  ")}</div>}
- {wx && (wx.temp!=null||wx.summary) && <div style={{position:"relative",textAlign:"center",marginTop:5,fontSize:11.5,fontWeight:600,color:IOS.label2,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={IOS.label2} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>{[wx.temp!=null?(wx.temp+"°F"):"",wx.summary].filter(Boolean).join(" · ")}</div>}
- </div>
+    // -- redesigned game-detail vars --
+   const _dTeams=det.teams||[];
+   const teamA=_dTeams.find(t=>String(t.abbrev||"").toUpperCase()===String(awayAbbr).toUpperCase())||_dTeams[0]||{};
+   const teamH=_dTeams.find(t=>String(t.abbrev||"").toUpperCase()===String(homeAbbr).toUpperCase())||_dTeams[1]||{};
+   const _initials=(n)=>{ const ps=String(n||"").trim().split(/\s+/); if(!ps[0])return "?"; return ((ps[0][0]||"")+(ps.length>1?(ps[ps.length-1][0]||""):"")).toUpperCase(); };
+   const _parsePit=(pp)=>{ if(!pp)return null; let wl="",era=""; const rec=String(pp.record||"").replace(/[()]/g,"").trim(); if(rec){ const pr=rec.split(","); wl=(pr[0]||"").trim(); era=(pr[1]||"").trim(); } return {name:pp.name||"",pos:pp.pos||"SP",photo:pp.photo||"",wl:wl,era:era}; };
+   const mA=_parsePit((eg&&eg.awayProbable)||null), mH=_parsePit((eg&&eg.homeProbable)||null);
+   const hasMound=!!(mA||mH);
+   const _ssA=(teamA.seasonStats&&teamA.seasonStats.length?teamA.seasonStats:ss0)||[];
+   const _ssH=(teamH.seasonStats&&teamH.seasonStats.length?teamH.seasonStats:ss1)||[];
+   const _num=(v)=>{ const n=parseFloat(String(v==null?"":v).replace(/[^0-9.\-]/g,"")); return isNaN(n)?null:n; };
+   const _diff=(ss)=>{ const sc=_num(ss[0]&&ss[0].value), al=_num(ss[1]&&ss[1].value); return (sc!=null&&al!=null)?(sc-al):null; };
+   const _fmtD=(d)=> d==null?"\u2014":((d>=0?"+":"")+d.toFixed(1));
+   const _win=(ss)=> (ss[2]&&ss[2].value)||"\u2014";
+   const _diffLabel=((activeLeague&&activeLeague.sport)==="mlb")?"Run Diff":"Pt Diff";
+   const tiles=[{l:_diffLabel,a:_fmtD(_diff(_ssA)),h:_fmtD(_diff(_ssH))},{l:"Last 10",a:teamA.last10||"\u2014",h:teamH.last10||"\u2014"},{l:"Win %",a:_win(_ssA),h:_win(_ssH)},{l:"Streak",a:teamA.streak||((mu&&mu.away&&mu.away.streak)||"\u2014"),h:teamH.streak||((mu&&mu.home&&mu.home.streak)||"\u2014")}];
+   const hasTiles=_dTeams.length>0;
+   const _catLabel=(c)=>({avg:"AVG",homeRuns:"HR",RBIs:"RBI",rbi:"RBI",era:"ERA",strikeouts:"K",wins:"W",points:"PPG",rebounds:"REB",assists:"AST",passingYards:"PASS",rushingYards:"RUSH",receivingYards:"REC",passingTouchdowns:"PASS TD"}[c]||String(c||"").toUpperCase());
+   const _leadFor=(abbr)=>{ const seen={}; const out=[]; (leaders||[]).forEach(cat=>{ if(cat.category==="MLBRating")return; (cat.leaders||[]).forEach(l=>{ if(l.name&&String(l.team||"").toUpperCase()===String(abbr).toUpperCase()&&!seen[l.name]){ seen[l.name]=1; out.push({cat:cat.category,name:l.name,stat:l.stat,photo:l.photo}); } }); }); return out.slice(0,2); };
+   const leadA=_leadFor(awayAbbr), leadH=_leadFor(homeAbbr);
+   const hasLeaders=(leadA.length>0||leadH.length>0);
+   const hasWP=(probAway!=null&&probHome!=null);
+   const _card={background:"linear-gradient(165deg,#212126,#161619)",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:16,overflow:"hidden"};
+   const _nick={fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:25,lineHeight:0.92,textTransform:"uppercase",letterSpacing:0.3,color:"#fff"};
+   const Sec=({t})=>(<div style={{display:"flex",alignItems:"center",gap:11,margin:"22px 4px 11px"}}><span style={{fontSize:10.5,fontWeight:800,letterSpacing:"0.16em",textTransform:"uppercase",color:IOS.label3}}>{t}</span><span style={{flex:1,height:1,background:"rgba(255,255,255,0.07)"}}/></div>);
+   const Crest=({logo,color,abbr})=>(<div style={{width:72,height:72,borderRadius:"50%",margin:"0 auto 11px",position:"relative",display:"flex",alignItems:"center",justifyContent:"center",background:color||"#101014",boxShadow:"0 10px 26px -8px rgba(0,0,0,0.7)"}}><div style={{position:"absolute",inset:0,borderRadius:"50%",border:"2px solid rgba(255,255,255,0.18)",zIndex:3}}/><span style={{position:"absolute",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:23,color:"#fff",letterSpacing:0.5,textShadow:"0 2px 4px rgba(0,0,0,0.4)",zIndex:1}}>{abbr}</span>{logo?<img src={logo} alt="" style={{width:54,height:54,objectFit:"contain",position:"relative",zIndex:2,filter:"drop-shadow(0 3px 6px rgba(0,0,0,0.5))"}} onError={(e)=>{e.currentTarget.style.display="none";}}/>:null}</div>);
+   const PitCol=({m,color,abbr})=>(<div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",textAlign:"center",gap:3}}><div style={{width:58,height:58,borderRadius:"50%",overflow:"hidden",position:"relative",display:"flex",alignItems:"center",justifyContent:"center",background:color,marginBottom:5,boxShadow:"0 6px 16px -6px rgba(0,0,0,0.6)",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:18,color:"#fff"}}><div style={{position:"absolute",inset:0,borderRadius:"50%",border:"2px solid rgba(255,255,255,0.18)",zIndex:3}}/><span style={{zIndex:1}}>{_initials(m?m.name:"")}</span>{m&&m.photo?<img src={m.photo} alt="" style={{width:"100%",height:"100%",objectFit:"cover",position:"relative",zIndex:2}} onError={(e)=>{e.currentTarget.style.display="none";}}/>:null}</div><div style={{fontSize:14,fontWeight:800,color:"#fff"}}>{m?m.name:"TBD"}</div><div style={{fontSize:9,fontWeight:800,letterSpacing:"0.07em",textTransform:"uppercase",color:IOS.label3}}>{((m&&m.pos)||"SP")+" \u00b7 "+abbr}</div>{m&&(m.wl||m.era)?<div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:700,color:IOS.label2,marginTop:3}}>{[m.wl,(m.era?(m.era+" ERA"):"")].filter(Boolean).join(" \u00b7 ")}</div>:null}</div>);
 
- <div style={{padding:"0 16px"}}>
- {/* Plok read + matchup data (auto-loaded once per game for Pro, cached) */}
- {(read && (read.loading || (read.data && read.data.summary))) ? (
+   return (
+   <div>
+   {/* Hero */}
+   <div style={{position:"relative",padding:"6px 18px 20px",overflow:"hidden"}}>
+   <div style={{position:"absolute",inset:0,background:"radial-gradient(120% 80% at 8% 0%,"+tint(awayColor,0.32)+" 0%,transparent 46%),radial-gradient(120% 80% at 92% 0%,"+tint(homeColor,0.32)+" 0%,transparent 46%),linear-gradient(180deg,transparent 40%,#1C1C1E 100%)"}}/>
+   <div style={{position:"relative",display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:6,paddingTop:6}}>
+   <div style={{flex:1,textAlign:"center"}}>
+   <Crest logo={awayLogo} color={awayColor} abbr={awayAbbr}/>
+   <div style={_nick}>{awayNick}</div>
+   {awayRec?<div style={{fontSize:11,fontWeight:700,color:IOS.label2,marginTop:4}}>{awayRec}</div>:null}
+   {awaySt?<div style={{fontSize:10,fontWeight:700,color:IOS.label3,marginTop:2}}>{awaySt}</div>:null}
+   </div>
+   <div style={{paddingTop:22,textAlign:"center"}}>
+   <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:14,color:IOS.label3,letterSpacing:1}}>{tg.isLive?"":"AT"}</div>
+   {tg.isLive?<div style={{fontSize:11,fontWeight:800,color:IOS.green}}>\u25cf LIVE</div>:null}
+   </div>
+   <div style={{flex:1,textAlign:"center"}}>
+   <Crest logo={homeLogo} color={homeColor} abbr={homeAbbr}/>
+   <div style={_nick}>{homeNick}</div>
+   {homeRec?<div style={{fontSize:11,fontWeight:700,color:IOS.label2,marginTop:4}}>{homeRec}</div>:null}
+   {homeSt?<div style={{fontSize:10,fontWeight:700,color:IOS.label3,marginTop:2}}>{homeSt}</div>:null}
+   </div>
+   </div>
+   {(gameTime||venue||tv)?<div style={{position:"relative",textAlign:"center",marginTop:14,fontSize:12.5,fontWeight:700,color:"#fff"}}>{[gameTime,venue,tv].filter(Boolean).join("  \u00b7  ")}</div>:null}
+   {wx&&(wx.temp!=null||wx.summary)?<div style={{position:"relative",textAlign:"center",marginTop:4,fontSize:11.5,fontWeight:600,color:IOS.label2,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={IOS.label2} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>{[wx.temp!=null?(wx.temp+"\u00b0F"):"",wx.summary].filter(Boolean).join(" \u00b7 ")}</div>:null}
+   {hasWP?(
+   <div style={{position:"relative",marginTop:18}}>
+   <div style={{position:"absolute",left:0,right:0,top:0,textAlign:"center",fontSize:8.5,fontWeight:800,letterSpacing:"0.16em",color:IOS.label3,textTransform:"uppercase"}}>Win probability</div>
+   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:7}}>
+   <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:22,lineHeight:0.9,color:awayColor}}>{probAway}%</span>
+   <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:22,lineHeight:0.9,color:homeColor}}>{probHome}%</span>
+   </div>
+   <div style={{height:9,borderRadius:5,overflow:"hidden",display:"flex",background:"rgba(255,255,255,0.06)",boxShadow:"inset 0 1px 2px rgba(0,0,0,0.4)"}}>
+   <span style={{height:"100%",width:probAway+"%",background:awayColor,borderRadius:"5px 0 0 5px"}}/>
+   <span style={{height:"100%",width:probHome+"%",background:homeColor,borderRadius:"0 5px 5px 0",marginLeft:"auto"}}/>
+   </div>
+   </div>
+   ):null}
+   </div>
+
+   <div style={{padding:"0 16px 4px"}}>
+   {hasMound?(<>
+   <Sec t="On the Mound"/>
+   <div style={{background:_card.background,border:_card.border,borderRadius:16,overflow:"hidden",display:"flex",alignItems:"stretch",padding:"14px 10px"}}>
+   <PitCol m={mA} color={awayColor} abbr={awayAbbr}/>
+   <div style={{alignSelf:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:13,color:IOS.label3,letterSpacing:1,padding:"0 4px"}}>VS</div>
+   <PitCol m={mH} color={homeColor} abbr={homeAbbr}/>
+   </div>
+   </>):null}
+
+   {hasTiles?(
+   <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7,marginTop:hasMound?14:8}}>
+   {tiles.map((t,ti)=>(
+   <div key={ti} style={{background:"linear-gradient(160deg,#202026,#161619)",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:14,padding:"9px 6px 10px",textAlign:"center"}}>
+   <div style={{fontSize:8,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:IOS.label3}}>{t.l}</div>
+   <div style={{display:"flex",justifyContent:"center",gap:6,marginTop:6}}>
+   <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:awayColor}}>{t.a}</span>
+   <span style={{color:IOS.label3,fontWeight:700,fontSize:13,alignSelf:"center"}}>/</span>
+   <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:homeColor}}>{t.h}</span>
+   </div>
+   </div>
+   ))}
+   </div>
+   ):null}
+
+   <div style={{marginTop:16}}/>
+   {(read && (read.loading || (read.data && read.data.summary))) ? (
  <div onClick={()=>{ if(read.loading) return; setGameSheet(null); askFindBet({sport:(activeLeague&&activeLeague.sport)||"nfl", game:away+" @ "+home}); }} style={{background:"linear-gradient(135deg,rgba(10,132,255,0.16),rgba(94,92,230,0.08))",border:"0.5px solid rgba(10,132,255,0.34)",borderRadius:16,padding:"13px 15px",marginBottom:2,cursor:"pointer"}}>
  <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:read.loading?6:8}}>
  <div style={{width:28,height:28,borderRadius:9,background:"rgba(10,132,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="16" height="16" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg></div>
@@ -11090,99 +11156,112 @@ export default function App() {
  </div>
  )}
 
- {tapeRows.length>0 && (<>
- <div style={{display:"flex",alignItems:"center",gap:12,margin:"22px 4px 12px"}}><span style={{fontSize:11,fontWeight:800,letterSpacing:1.8,textTransform:"uppercase",color:IOS.label3}}>The Tape</span><div style={{flex:1,height:1,background:"rgba(255,255,255,0.09)"}}/></div>
- <div style={{background:"#2C2C2E",border:"0.5px solid rgba(255,255,255,0.06)",borderRadius:16,padding:"4px 14px"}}>
- {tapeRows.map((row,i)=>{ const v0=(row.a==null||row.a==="")?"—":String(row.a), v1=(row.h==null||row.h==="")?"—":String(row.h); const n0=parseFloat(v0), n1=parseFloat(v1); const showBar=row.bar && !isNaN(n0) && !isNaN(n1); const a=isNaN(n0)?0:n0, b=isNaN(n1)?0:n1; const sum=(a+b)||1; const w0=Math.max(4,Math.round(a/sum*100)), w1=Math.max(4,Math.round(b/sum*100)); return (
- <div key={i} style={{padding:"11px 0",borderBottom:i<tapeRows.length-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
- <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:showBar?7:0}}>
- <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:AC,minWidth:52,textAlign:"left"}}>{v0}</span>
- <span style={{fontSize:9.5,fontWeight:800,letterSpacing:1,textTransform:"uppercase",color:IOS.label3,textAlign:"center",flex:1,padding:"0 8px"}}>{row.k}</span>
- <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:HC,minWidth:52,textAlign:"right"}}>{v1}</span>
- </div>
- {showBar && <div style={{display:"flex",height:7,borderRadius:4,overflow:"hidden",background:"rgba(255,255,255,0.05)",gap:2}}>
- <div style={{width:w0+"%",background:AC,borderRadius:"4px 0 0 4px"}}/>
- <div style={{width:w1+"%",background:HC,borderRadius:"0 4px 4px 0",marginLeft:"auto"}}/>
- </div>}
- </div>
- ); })}
- </div>
- </>)}
+   {tapeRows.filter(r=>r.k!=="Streak").length>0?(<>
+   <Sec t="The Tape"/>
+   <div style={_card}>
+   {tapeRows.filter(r=>r.k!=="Streak").map((row,i,arr)=>{ const v0=(row.a==null||row.a==="")?"\u2014":String(row.a), v1=(row.h==null||row.h==="")?"\u2014":String(row.h); const n0=parseFloat(v0), n1=parseFloat(v1); const showBar=row.bar&&!isNaN(n0)&&!isNaN(n1); const lower=/allow/i.test(row.k); let aWin=false,hWin=false,wa=50,wh=50; if(showBar){ const sm=(Math.abs(n0)+Math.abs(n1))||1; wa=Math.max(8,Math.round(Math.abs(n0)/sm*100)); wh=Math.max(8,100-wa); aWin=lower?n0<n1:n0>n1; hWin=lower?n1<n0:n1>n0; } return (
+   <div key={i} style={{padding:"11px 14px",borderBottom:i<arr.length-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
+   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:showBar?8:0}}>
+   <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:16,minWidth:54,textAlign:"left",color:awayColor,display:"flex",alignItems:"center",gap:5}}>{aWin?<span style={{width:5,height:5,borderRadius:"50%",background:awayColor,boxShadow:"0 0 8px "+awayColor}}/>:null}{v0}</span>
+   <span style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.09em",textTransform:"uppercase",color:IOS.label3,textAlign:"center",flex:1}}>{row.k}</span>
+   <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:16,minWidth:54,textAlign:"right",color:homeColor,display:"flex",alignItems:"center",justifyContent:"flex-end",gap:5}}>{v1}{hWin?<span style={{width:5,height:5,borderRadius:"50%",background:homeColor,boxShadow:"0 0 8px "+homeColor}}/>:null}</span>
+   </div>
+   {showBar?<div style={{display:"flex",alignItems:"center",gap:3,height:7}}>
+   <div style={{height:"100%",width:wa+"%",borderRadius:"4px 0 0 4px",background:awayColor,opacity:aWin?1:0.4,marginLeft:"auto"}}/>
+   <div style={{width:1,height:11,background:"rgba(255,255,255,0.22)",flex:"none"}}/>
+   <div style={{height:"100%",width:wh+"%",borderRadius:"0 4px 4px 0",background:homeColor,opacity:hWin?1:0.4}}/>
+   </div>:null}
+   </div>
+   ); })}
+   </div>
+   </>):null}
 
- {/* Form · Last 5 */}
- {(form0.length>0||form1.length>0) && (<>
- <div style={{fontSize:10.5,fontWeight:800,letterSpacing:1.8,textTransform:"uppercase",color:IOS.label3,margin:"20px 4px 10px"}}>Form · Last 5</div>
- <div style={{background:"#2C2C2E",border:"0.5px solid rgba(255,255,255,0.06)",borderRadius:16,padding:"8px 14px"}}>
- {[{abbr:awayAbbr,color:awayColor,f:form0},{abbr:homeAbbr,color:homeColor,f:form1}].map((t,ti)=>(
- <div key={ti} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderTop:ti>0?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
- <div style={{width:38,fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:14,fontWeight:800,color:t.color,flexShrink:0}}>{t.abbr}</div>
- <div style={{display:"flex",gap:5,flex:1,flexWrap:"wrap"}}>
- {t.f.length===0 ? <span style={{fontSize:11,color:IOS.label3}}>No recent games</span> : t.f.map((g,gi)=>{ const r=String(g.r||"").toUpperCase(); const win=r==="W"; const loss=r==="L"; return (
- <div key={gi} title={g.opp?(((g.home?"vs ":"@ ")+g.opp)+(g.score?(" "+g.score):"")):""} style={{width:22,height:22,borderRadius:7,background:win?"rgba(48,209,88,0.16)":loss?"rgba(255,69,58,0.16)":"rgba(255,255,255,0.08)",color:win?IOS.green:loss?IOS.red:IOS.label3,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800}}>{r||"·"}</div>
- ); })}
- </div>
- </div>
- ))}
- </div>
- </>)}
+   {hasLeaders?(<>
+   <Sec t="Leaders"/>
+   <div style={{background:_card.background,border:_card.border,borderRadius:16,overflow:"hidden",display:"flex"}}>
+   {[{abbr:awayAbbr,color:awayColor,list:leadA},{abbr:homeAbbr,color:homeColor,list:leadH}].map((col,ci)=>(
+   <div key={ci} style={{flex:1,padding:"12px 13px",borderLeft:ci>0?"0.5px solid rgba(255,255,255,0.06)":"none"}}>
+   <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:9,color:col.color}}>{col.abbr}</div>
+   {col.list.length===0?<div style={{fontSize:11,color:IOS.label3}}>\u2014</div>:col.list.map((pl,pi)=>(
+   <div key={pi} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"6px 0",borderTop:pi>0?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
+   <div style={{minWidth:0}}><div style={{fontSize:12.5,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{pl.name}</div><div style={{fontSize:9.5,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:"0.04em"}}>{_catLabel(pl.cat)}</div></div>
+   <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:"#fff",flexShrink:0}}>{pl.stat}</div>
+   </div>
+   ))}
+   </div>
+   ))}
+   </div>
+   </>):null}
 
- {/* Head to Head */}
- {(h2h.length>0||h2hSummary) && (<>
- <div style={{fontSize:10.5,fontWeight:800,letterSpacing:1.8,textTransform:"uppercase",color:IOS.label3,margin:"20px 4px 10px"}}>Head to Head</div>
- <div style={{background:"#2C2C2E",border:"0.5px solid rgba(255,255,255,0.06)",borderRadius:16,padding:"4px 14px"}}>
- {h2hSummary && <div style={{fontSize:11.5,color:IOS.label2,fontWeight:700,padding:"9px 0 7px",textAlign:"center"}}>{h2hSummary}</div>}
- {h2h.slice(0,4).map((m,mi)=>{ const as=parseFloat(m.as), hs=parseFloat(m.hs); const aWon=!isNaN(as)&&!isNaN(hs)&&as>hs; const hWon=!isNaN(as)&&!isNaN(hs)&&hs>as; return (
- <div key={mi} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 0",borderTop:(mi>0||h2hSummary)?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
- <div style={{fontSize:11,color:IOS.label3,width:54,flexShrink:0}}>{m.date||""}</div>
- <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:8,fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:14,fontWeight:700}}>
- <span style={{color:aWon?"#fff":IOS.label3,fontWeight:aWon?800:700}}>{m.a||awayAbbr} {!isNaN(as)?as:""}</span>
- <span style={{color:IOS.label3,fontSize:10}}>—</span>
- <span style={{color:hWon?"#fff":IOS.label3,fontWeight:hWon?800:700}}>{!isNaN(hs)?hs:""} {m.h||homeAbbr}</span>
- </div>
- </div>
- ); })}
- </div>
- </>)}
+   {(form0.length>0||form1.length>0)?(<>
+   <Sec t="Form \u00b7 Last 5"/>
+   <div style={_card}>
+   {[{abbr:awayAbbr,color:awayColor,f:form0},{abbr:homeAbbr,color:homeColor,f:form1}].map((t,ti)=>(
+   <div key={ti} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px",borderTop:ti>0?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
+   <div style={{width:40,fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:14,fontWeight:900,color:t.color,flexShrink:0}}>{t.abbr}</div>
+   <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+   {t.f.length===0?<span style={{fontSize:11,color:IOS.label3}}>No recent games</span>:t.f.map((g,gi)=>{ const rr=String(g.r||"").toUpperCase(); const win=rr==="W",loss=rr==="L"; return <div key={gi} style={{width:24,height:24,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,background:win?"rgba(48,209,88,0.16)":loss?"rgba(255,69,58,0.16)":"rgba(255,255,255,0.08)",color:win?IOS.green:loss?IOS.red:IOS.label3}}>{rr||"\u00b7"}</div>; })}
+   </div>
+   </div>
+   ))}
+   </div>
+   </>):null}
 
- {((odds.ml&&odds.ml.length>0)||(odds.spread&&odds.spread.length>0)||(odds.ou&&odds.ou.length>0)) && (<>
- <div style={{fontSize:10.5,fontWeight:800,letterSpacing:1.8,textTransform:"uppercase",color:IOS.label3,margin:"20px 4px 10px"}}>DraftKings Odds</div>
- <div style={{background:"#2C2C2E",border:"0.5px solid rgba(255,255,255,0.06)",borderRadius:16,overflow:"hidden",display:"flex"}}>
- {[{label:"Moneyline",items:(odds.ml||[]).slice(0,2)},{label:"Spread",items:(odds.spread||[]).slice(0,2)},{label:"Total",items:(odds.ou||[]).slice(0,2)}].map((col,ci)=>(
- <div key={ci} style={{flex:1,borderRight:ci<2?"0.5px solid rgba(255,255,255,0.06)":"none"}}>
- <div style={{fontSize:9.5,fontWeight:800,color:IOS.label3,textAlign:"center",padding:"9px 4px 5px",letterSpacing:0.5,textTransform:"uppercase"}}>{col.label}</div>
- {col.items.map((it,ii)=>(
- <div key={ii} style={{textAlign:"center",padding:"3px 4px 9px"}}>
- <div style={{fontSize:10.5,color:IOS.label2,marginBottom:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",padding:"0 4px"}}>{it.pick}</div>
- <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:14,color:(it.odds||"").startsWith("+")?IOS.green:IOS.blue}}>{it.odds}</div>
- </div>
- ))}
- </div>
- ))}
- </div>
- </>)}
+   {(h2h.length>0||h2hSummary)?(<>
+   <Sec t="Head to Head"/>
+   <div style={_card}>
+   {h2hSummary?<div style={{textAlign:"center",fontSize:11.5,fontWeight:700,color:IOS.label2,padding:"10px 0 8px",borderBottom:(h2h.length>0)?"0.5px solid rgba(255,255,255,0.05)":"none"}}>{h2hSummary}</div>:null}
+   {h2h.slice(0,4).map((m,mi)=>{ const as=parseFloat(m.as), hs=parseFloat(m.hs); const aWon=!isNaN(as)&&!isNaN(hs)&&as>hs; const hWon=!isNaN(as)&&!isNaN(hs)&&hs>as; return (
+   <div key={mi} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 14px",borderTop:(mi>0||h2hSummary)?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
+   <div style={{fontSize:11,color:IOS.label3,width:52}}>{m.date||""}</div>
+   <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:8,fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:14,fontWeight:700}}>
+   <span style={{color:aWon?"#fff":IOS.label3,fontWeight:aWon?900:700}}>{(m.a||awayAbbr)+" "+(!isNaN(as)?as:"")}</span>
+   <span style={{color:IOS.label3,fontSize:10}}>\u2014</span>
+   <span style={{color:hWon?"#fff":IOS.label3,fontWeight:hWon?900:700}}>{(!isNaN(hs)?hs:"")+" "+(m.h||homeAbbr)}</span>
+   </div>
+   </div>
+   ); })}
+   </div>
+   </>):null}
 
+   {((odds.ml&&odds.ml.length>0)||(odds.spread&&odds.spread.length>0)||(odds.ou&&odds.ou.length>0))?(<>
+   <Sec t="DraftKings Odds"/>
+   <div style={{background:_card.background,border:_card.border,borderRadius:16,overflow:"hidden",display:"flex"}}>
+   {[{label:"Moneyline",items:(odds.ml||[]).slice(0,2)},{label:"Spread",items:(odds.spread||[]).slice(0,2)},{label:"Total",items:(odds.ou||[]).slice(0,2)}].map((col,ci)=>(
+   <div key={ci} style={{flex:1,padding:"9px 4px 11px",borderLeft:ci>0?"0.5px solid rgba(255,255,255,0.06)":"none"}}>
+   <div style={{fontSize:9,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:IOS.label3,textAlign:"center",marginBottom:7}}>{col.label}</div>
+   {col.items.map((it,ii)=>(
+   <div key={ii} style={{textAlign:"center",padding:"4px 2px"}}>
+   <div style={{fontSize:10,color:IOS.label2,marginBottom:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{it.pick}</div>
+   <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:String(it.odds||"").startsWith("+")?IOS.green:IOS.blue}}>{it.odds}</div>
+   </div>
+   ))}
+   </div>
+   ))}
+   </div>
+   </>):null}
 
- {injuries.length>0 && (<>
- <div style={{fontSize:10.5,fontWeight:800,letterSpacing:1.8,textTransform:"uppercase",color:IOS.label3,margin:"20px 4px 10px"}}>Injury Report</div>
- <div style={{background:"#2C2C2E",border:"0.5px solid rgba(255,255,255,0.06)",borderRadius:16,padding:"12px 8px",display:"flex",gap:4,marginBottom:8}}>
- <InjCol list={injAway} color={awayColor} abbr={awayAbbr}/>
- <div style={{width:"0.5px",background:"rgba(255,255,255,0.08)",alignSelf:"stretch"}}/>
- <InjCol list={injHome} color={homeColor} abbr={homeAbbr}/>
- </div>
- </>)}
+   {injuries.length>0?(<>
+   <Sec t="Injury Report"/>
+   <div style={{background:_card.background,border:_card.border,borderRadius:16,overflow:"hidden",display:"flex",padding:"12px 6px",marginBottom:8}}>
+   <InjCol list={injAway} color={awayColor} abbr={awayAbbr}/>
+   <div style={{width:"0.5px",background:"rgba(255,255,255,0.08)",alignSelf:"stretch"}}/>
+   <InjCol list={injHome} color={homeColor} abbr={homeAbbr}/>
+   </div>
+   </>):null}
 
- {gameLoading && <div style={{textAlign:"center",padding:"24px",color:IOS.label3,fontSize:13}}>Loading stats…</div>}
- {!gameLoading && !det.teams && !eg && <div style={{textAlign:"center",padding:"16px 8px 8px",color:IOS.label3,fontSize:13,lineHeight:1.6}}>Detailed stats not available yet — check back closer to game time.</div>}
- </div>
+   {gameLoading?<div style={{textAlign:"center",padding:"24px",color:IOS.label3,fontSize:13}}>Loading stats\u2026</div>:null}
+   {(!gameLoading&&!det.teams&&!eg)?<div style={{textAlign:"center",padding:"16px 8px 8px",color:IOS.label3,fontSize:13,lineHeight:1.6}}>Detailed stats not available yet \u2014 check back closer to game time.</div>:null}
+   </div>
 
- {/* Footer CTA */}
- <div style={{padding:"16px 16px calc(20px + env(safe-area-inset-bottom))"}}>
- <div onClick={()=>{ setGameSheet(null); setScreen("picks"); }} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"linear-gradient(135deg,"+IOS.blue+",#5e5ce6)",borderRadius:14,padding:14,fontWeight:800,fontSize:15,color:"#fff",cursor:"pointer",boxShadow:"0 10px 26px -8px rgba(10,132,255,0.6)"}}>
- <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg> Add a pick from this game
- </div>
- </div>
- </div>
- );
+   {/* Footer CTA */}
+   <div style={{padding:"16px 16px calc(20px + env(safe-area-inset-bottom))"}}>
+   <div onClick={()=>{ setGameSheet(null); setScreen("picks"); }} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"linear-gradient(135deg,"+IOS.blue+",#5e5ce6)",borderRadius:14,padding:14,fontWeight:800,fontSize:15,color:"#fff",cursor:"pointer",boxShadow:"0 10px 26px -8px rgba(10,132,255,0.6)"}}>
+   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg> Add a pick from this game
+   </div>
+   </div>
+   </div>
+   );
  })()}
  </div>
  </div>

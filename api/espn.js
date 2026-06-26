@@ -54,13 +54,15 @@ async function fetchTeamMeta(sp, league, teamId) {
   } catch { return empty; }
 }
 
-// Last-5 form for a team (most recent first). lastFiveGames isn't in the game
-// summary, so we read the team's schedule and take its most recent completed games.
+// Last-5 form, last-10 record, and current streak for a team (most recent first).
+// lastFiveGames isn't in the game summary, so we read the team's schedule and take
+// its most recent completed games.
 async function fetchTeamForm(sp, league, teamId) {
+  const empty = { form: [], last10: "", streak: "" };
   try {
     const url = `https://site.api.espn.com/apis/site/v2/sports/${sp}/${league}/teams/${teamId}/schedule`;
     const r = await fetch(url);
-    if (!r.ok) return [];
+    if (!r.ok) return empty;
     const data = await r.json();
     const events = data.events || [];
     const completed = events.filter(e => {
@@ -68,25 +70,40 @@ async function fetchTeamForm(sp, league, teamId) {
       return comp?.status?.type?.completed === true;
     });
     completed.sort((a, b) => new Date(b.date) - new Date(a.date)); // most recent first
-    return completed.slice(0, 5).map(e => {
+    const results = completed.map(e => {
       const comp = e.competitions[0];
       const cs = comp.competitors || [];
       const me = cs.find(c => String(c.team?.id) === String(teamId));
       const opp = cs.find(c => c !== me);
       const myScore = scoreVal(me?.score);
       const oppScore = scoreVal(opp?.score);
-      let r = "";
-      if (me?.winner === true) r = "W";
-      else if (me?.winner === false) r = "L";
-      else if (myScore != null && oppScore != null) r = myScore > oppScore ? "W" : (myScore < oppScore ? "L" : "T");
+      let res = "";
+      if (me?.winner === true) res = "W";
+      else if (me?.winner === false) res = "L";
+      else if (myScore != null && oppScore != null) res = myScore > oppScore ? "W" : (myScore < oppScore ? "L" : "T");
       return {
-        r,
+        r: res,
         opp: opp?.team?.abbreviation || "",
         home: me?.homeAway === "home",
         score: (myScore != null && oppScore != null) ? `${myScore}-${oppScore}` : "",
       };
     }).filter(g => g.r);
-  } catch { return []; }
+    const form = results.slice(0, 5);
+    const l10 = results.slice(0, 10);
+    const w = l10.filter(g => g.r === "W").length;
+    const l = l10.filter(g => g.r === "L").length;
+    const last10 = l10.length ? `${w}-${l}` : "";
+    let streak = "";
+    if (results.length) {
+      const top = results[0].r;
+      if (top === "W" || top === "L") {
+        let n = 0;
+        for (const g of results) { if (g.r === top) n++; else break; }
+        streak = top + n;
+      }
+    }
+    return { form, last10, streak };
+  } catch { return empty; }
 }
 
 export default async function handler(req, res) {
@@ -124,7 +141,7 @@ export default async function handler(req, res) {
       // Align meta + form to boxscore teams by team id (ESPN's competitor order
       // can differ from the boxscore team order, which otherwise swaps the data).
       const metaById = {}, formById = {};
-      teamIds.forEach((id, i) => { metaById[id] = metaPairs[i] || {}; formById[id] = formPairs[i] || []; });
+      teamIds.forEach((id, i) => { metaById[id] = metaPairs[i] || {}; formById[id] = formPairs[i] || { form: [], last10: "", streak: "" }; });
       const meta0 = metaPairs[0] || {}, meta1 = metaPairs[1] || {};
       const [form0, form1] = formPairs;
 
@@ -141,7 +158,9 @@ export default async function handler(req, res) {
         seasonStats: (metaById[t.team?.id] || (ti === 0 ? meta0 : meta1)).seasonStats || [],
         standing:    (metaById[t.team?.id] || (ti === 0 ? meta0 : meta1)).standing || "",
         record:      (metaById[t.team?.id] || (ti === 0 ? meta0 : meta1)).record || "",
-        form:        formById[t.team?.id] || (ti === 0 ? form0 : form1) || [],
+        form:        (formById[t.team?.id] || (ti === 0 ? form0 : form1) || {}).form || [],
+        last10:      (formById[t.team?.id] || (ti === 0 ? form0 : form1) || {}).last10 || "",
+        streak:      (formById[t.team?.id] || (ti === 0 ? form0 : form1) || {}).streak || "",
       }));
 
       // Head-to-head — current-season series (seasonseries is already in the summary).
@@ -229,6 +248,18 @@ export default async function handler(req, res) {
     if (!r.ok) return res.status(502).json({ error: "ESPN scoreboard fetch failed" });
     const data = await r.json();
 
+    const probOf = (c) => {
+      const p = c?.probables?.[0];
+      const a = p && p.athlete;
+      if (!a) return null;
+      const hs = a.headshot;
+      return {
+        name: a.displayName || a.shortName || "",
+        record: p.record || "",
+        pos: (typeof a.position === "string" ? a.position : (a.position && a.position.abbreviation)) || "",
+        photo: (typeof hs === "string" ? hs : (hs && hs.href)) || "",
+      };
+    };
     const games = (data.events || []).map(e => {
       const comp = e.competitions?.[0];
       const away = comp?.competitors?.find(c => c.homeAway === "away");
@@ -248,6 +279,8 @@ export default async function handler(req, res) {
         homeLogo:   home?.team?.logo,
         homeRecord: home?.records?.[0]?.summary || "",
         homeScore:  home?.score,
+        awayProbable: probOf(away),
+        homeProbable: probOf(home),
       };
     });
 
