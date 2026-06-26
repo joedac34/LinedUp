@@ -5620,25 +5620,68 @@ export default function App() {
    const gap=(leader&&me)?parseFloat(((leader.points||0)-(me.points||0)).toFixed(1)):0;
    const lpts=leader?(leader.points||0):0;
    const fillPct=isLeader?100:(lpts>0?Math.max(8,Math.min(98,((me?.points||0)/lpts)*100)):8);
+   const _cfg=parseSlotConfig(activeLeague&&activeLeague.slot_config);
+   const slotCount=_cfg?_cfg.length:5;
+   const openSlots=Math.max(0,slotCount-total);
+   const _now=Date.now();
+   const _BUF={mlb:185,nba:140,nfl:190,nhl:150};
+   const _bufMs=(_BUF[activeLeague&&activeLeague.sport]||180)*60000;
+   const _ends=myPicks.filter(p=>p.result==="pending"&&p.game_date).map(p=>new Date(p.game_date).getTime()+_bufMs).filter(t=>!isNaN(t));
+   const settleMs=_ends.length?Math.max.apply(null,_ends):null;
+   const _ups=(tickerGames||[]).filter(g=>g.sport===(activeLeague&&activeLeague.sport)).map(g=>new Date(g.time).getTime()).filter(t=>t>_now).sort((a,b)=>a-b);
+   const nextLockMs=_ups.length?_ups[0]:null;
+   const fmtCd=(ms)=>{const dd=Math.max(0,ms-_now);const hh=Math.floor(dd/3600000);const mm=Math.floor((dd%3600000)/60000);return hh>0?(hh+"h "+mm+"m"):(mm+"m");};
+   const fmtClk=(ms)=>new Date(ms).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
+   const COL={win:"#30D158",loss:"#FF453A",pend:"#FF9F0A",idle:"rgba(255,255,255,0.16)"};
+   const _legLamps=myPicks.map(p=>p.result==="W"?COL.win:(p.result==="L"?COL.loss:COL.pend)).concat(Array(Math.max(0,openSlots)).fill(COL.idle)).slice(0,10);
+   const _stripDot=liveCount>0?"#64D2FF":(hit>0?"#30D158":"#FF453A");
+   const _stripText=liveCount>0?(liveCount+" of "+slotCount+" legs live"+(settleMs?(" \u00b7 settles ~"+fmtClk(settleMs)):"")+" \u00b7 "+weekPts+" this week"):(hit+" of "+total+" hit \u00b7 "+weekPts+" pts this week");
+   const _buildLabel="Build Week "+(activeLeague.current_week||activeLeague.week||1)+" slip";
+   const _addLabel=openSlots===1?"Add a pick":("Add "+openSlots+" picks");
+   const _openLabel=openSlots+" slot"+(openSlots>1?"s":"")+" open";
+   const _lab={fontSize:9.5,letterSpacing:"0.12em",color:"rgba(255,255,255,0.3)",fontWeight:700,textTransform:"uppercase"};
+   const _val={fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:700,fontSize:25,lineHeight:1,marginTop:7};
+   const _cta={marginLeft:"auto",display:"inline-flex",alignItems:"center",gap:7,background:"#0A84FF",color:"#fff",fontWeight:700,fontSize:14,padding:"10px 15px",borderRadius:10,border:"none",cursor:"pointer"};
    return (
-   <>
-   <div className="wr-hero">
-     <div className="wr-aurora"/>
-     <div className="wr-hlabel">Your points · Week {activeLeague.current_week||activeLeague.week||1}</div>
-     <div className="wr-hbig"><div className="wr-pts">{total>0?<Ticker value={weekPts} decimals={1} prefix="+"/>:"+0"}</div><div className="wr-u">{total>0?`pts · ${hit} of ${total} hit`:"no picks yet"}</div></div>
-     <div className="wr-chips">
-       {liveCount>0 && <div className="wr-chip"><span className="wr-dot"/>{liveCount} live</div>}
-       {st&&st.count>=1 && <div className="wr-chip">{st.type==="W"&&st.count>=2?`W${st.count} streak`:`${st.type}${st.count}`}</div>}
-       <div className="wr-chip">{rec} · {seasonPts>=0?`+${seasonPts}`:seasonPts}</div>
-       {myRank>0 && <div className="wr-chip">#{myRank} overall</div>}
+   <div style={{position:"relative",border:"1px solid rgba(255,255,255,0.14)",borderRadius:18,overflow:"hidden",background:"radial-gradient(120% 140% at 0% 0%, rgba(10,132,255,0.10), transparent 55%), #0B0B10",boxShadow:"inset 0 1px 0 rgba(255,255,255,0.06), 0 14px 40px rgba(0,0,0,0.4)",margin:"0 0 10px"}}>
+   <div style={{position:"absolute",left:0,top:0,right:0,bottom:0,backgroundImage:"repeating-linear-gradient(0deg,rgba(255,255,255,0.025) 0px,rgba(255,255,255,0.025) 1px,transparent 1px,transparent 4px)",pointerEvents:"none",opacity:0.5}}/>
+   <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",position:"relative"}}>
+     <div style={{padding:"13px 12px 12px"}}>
+       <div style={_lab}>Seed</div>
+       <div style={_val}>{myRank>0?("#"+myRank):"\u2014"}<span style={{fontSize:13,color:"rgba(255,255,255,0.3)",fontWeight:700}}> /{sorted.length}</span></div>
+     </div>
+     <div style={{padding:"13px 12px 12px",borderLeft:"1px solid rgba(255,255,255,0.08)"}}>
+       <div style={_lab}>Record</div>
+       <div style={{..._val,color:rec==="0-0"?"rgba(255,255,255,0.3)":"#fff"}}>{rec}</div>
+     </div>
+     <div style={{padding:"13px 12px 12px",borderLeft:"1px solid rgba(255,255,255,0.08)"}}>
+       <div style={_lab}>Net pts</div>
+       <div style={{..._val,color:seasonPts>0?"#64D2FF":"rgba(255,255,255,0.3)"}}>{seasonPts>0?Number(seasonPts).toFixed(1):"\u2014"}</div>
+     </div>
+     <div style={{padding:"13px 12px 12px",borderLeft:"1px solid rgba(255,255,255,0.08)"}}>
+       <div style={_lab}>Slip</div>
+       {total>0?(<div style={{display:"flex",gap:5,marginTop:10,flexWrap:"wrap"}}>{_legLamps.map((c,i)=>(<span key={i} style={{width:7,height:7,borderRadius:"50%",background:c,boxShadow:c===COL.idle?"none":"0 0 8px "+c}}/>))}</div>):(<div style={{..._val,fontSize:18,marginTop:9,color:"rgba(255,255,255,0.3)"}}>0/{slotCount}</div>)}
      </div>
    </div>
-   {sorted.length>1 && !isLeader && <div className="wr-rival">
-     <div className="wr-rt"><span>{isLeader?"You lead the league":<>Chasing <span style={{color:"#fff"}}>{(leader.isYou||leader.name==="You")?"the leader":leader.name}</span></>}</span><span style={{color:IOS.blue}}>{myRank>0?`#${myRank}`:""}</span></div>
-     <div className="wr-track"><div className="wr-fill" style={{width:fillPct+"%"}}/></div>
-     <div className="wr-gap">{isLeader?"Top of the standings — keep it locked.":`${gap} pts back of ${(leader.isYou||leader.name==="You")?"1st":leader.name}.`}</div>
-   </div>}
-   </>
+   {total===0?(
+     <div style={{display:"flex",alignItems:"center",gap:10,borderTop:"1px solid rgba(255,255,255,0.08)",padding:"11px 12px",background:"rgba(255,255,255,0.015)"}}>
+       {nextLockMs&&(<span style={{display:"inline-flex",alignItems:"center",gap:7,border:"1px solid rgba(255,159,10,0.4)",color:"#FF9F0A",borderRadius:9,padding:"8px 11px",fontSize:12.5,fontWeight:600}}>{"Locks in "}<span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",color:"#FF9F0A"}}>{fmtCd(nextLockMs)}</span></span>)}
+       <button onClick={()=>setScreen("picks")} style={_cta}>{_buildLabel}</button>
+     </div>
+   ):(
+     <div style={{borderTop:"1px solid rgba(255,255,255,0.08)",background:"rgba(255,255,255,0.015)"}}>
+       <div style={{display:"flex",alignItems:"center",gap:9,padding:"11px 12px",fontSize:12.5,color:"rgba(255,255,255,0.6)",fontWeight:600}}>
+         <span style={{width:7,height:7,borderRadius:"50%",flexShrink:0,background:_stripDot,boxShadow:"0 0 8px "+_stripDot}}/>{_stripText}
+       </div>
+       {(openSlots>0&&nextLockMs)&&(
+         <div style={{display:"flex",alignItems:"center",gap:10,padding:"0 12px 12px"}}>
+           <span style={{fontSize:12,color:"rgba(255,255,255,0.3)",fontWeight:600}}>{_openLabel}</span>
+           <button onClick={()=>setScreen("picks")} style={{..._cta,fontSize:13.5,padding:"10px 14px"}}>{_addLabel}</button>
+         </div>
+       )}
+     </div>
+   )}
+   </div>
    );
  })()}
  </div>
