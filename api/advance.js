@@ -15,10 +15,15 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: "unauthorized" });
   }
 
-  const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
+  // NOTE: these names must match what grade.js / closing.js use (VITE_SUPABASE_URL,
+  // SUPABASE_SERVICE_KEY). The old names (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY)
+  // were never set in Vercel, which is why this route was 500-ing every run.
+  const SB_URL = process.env.VITE_SUPABASE_URL;
+  const SB_KEY = process.env.SUPABASE_SERVICE_KEY;
+  if (!SB_URL || !SB_KEY) {
+    return res.status(500).json({ error: "supabase env not set (VITE_SUPABASE_URL / SUPABASE_SERVICE_KEY)" });
+  }
+  const supabase = createClient(SB_URL, SB_KEY);
 
   try {
     const { data: leagues, error } = await supabase
@@ -34,19 +39,22 @@ export default async function handler(req, res) {
       if (isNaN(start)) continue;
 
       const seasonWeeks = Number(lg.season_weeks || 18);
-      const derived = Math.min(
-        seasonWeeks,
+      // target can reach seasonWeeks+1 so the loop below finalizes the FINAL week too,
+      // but current_week itself is clamped to seasonWeeks.
+      const target = Math.min(
+        seasonWeeks + 1,
         Math.floor((Date.now() - start - GRACE_MS) / WEEK_MS) + 1
       );
       const cw = lg.current_week || 1;
-      if (derived <= cw) continue; // current week isn't over yet
+      if (target <= cw) continue; // current week isn't over yet
 
-      // Finalize every week that has closed since we last advanced.
-      for (let wk = cw; wk < derived; wk++) {
+      // Finalize every week that has closed since we last advanced (incl. the last week).
+      for (let wk = cw; wk < target; wk++) {
         await finalizeWeek(supabase, lg.id, wk);
       }
-      await supabase.from("leagues").update({ current_week: derived }).eq("id", lg.id);
-      advanced.push({ league: lg.id, from: cw, to: derived });
+      const newWeek = Math.min(seasonWeeks, target);
+      await supabase.from("leagues").update({ current_week: newWeek }).eq("id", lg.id);
+      advanced.push({ league: lg.id, from: cw, to: newWeek });
     }
 
     return res.status(200).json({ ok: true, advanced });
@@ -79,6 +87,9 @@ async function finalizeWeek(supabase, leagueId, week) {
     .is("winner_id", null);
 
   for (const m of matchups || []) {
+    // Skip bye/placeholder rows (a real matchup needs two players).
+    if (!m.user1_id || !m.user2_id) continue;
+
     const p1 = totals[m.user1_id] || 0;
     const p2 = totals[m.user2_id] || 0;
     const winner = p1 >= p2 ? m.user1_id : m.user2_id;
