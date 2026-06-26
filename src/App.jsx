@@ -5637,7 +5637,7 @@ export default function App() {
    const _legLamps=myPicks.map(p=>p.result==="W"?COL.win:(p.result==="L"?COL.loss:COL.pend)).concat(Array(Math.max(0,openSlots)).fill(COL.idle)).slice(0,10);
    const _stripDot=liveCount>0?"#64D2FF":(hit>0?"#30D158":"#FF453A");
    const _stripText=liveCount>0?(liveCount+" of "+slotCount+" legs live"+(settleMs?(" \u00b7 settles ~"+fmtClk(settleMs)):"")+" \u00b7 "+weekPts+" this week"):(hit+" of "+total+" hit \u00b7 "+weekPts+" pts this week");
-   const _buildLabel="Build Week "+(activeLeague.current_week||activeLeague.week||1)+" slip";
+   const _buildLabel=isSoloMode?"Build this week's slip":("Build Week "+(activeLeague.current_week||activeLeague.week||1)+" slip");
    const _addLabel=openSlots===1?"Add a pick":("Add "+openSlots+" picks");
    const _openLabel=openSlots+" slot"+(openSlots>1?"s":"")+" open";
    const _lab={fontSize:9.5,letterSpacing:"0.12em",color:"rgba(255,255,255,0.3)",fontWeight:700,textTransform:"uppercase"};
@@ -9873,7 +9873,7 @@ export default function App() {
  <div className="body">
  <div style={{padding:"0 20px 12px"}}>
  <div className="nav-title-large">{activeLeague.name||"My League"}</div>
- <div className="nav-subtitle">{SPORTS[activeLeague.sport]?.label||sport.label} · {leagueMembers.length||"?"} members · Week {activeLeague.current_week||activeLeague.week||1}</div>
+ <div className="nav-subtitle">{(SPORTS[activeLeague.sport]?.label||sport.label)+" · "+(isSoloMode?("Solo · "+soloWeekRange(soloWeekNum())):((leagueMembers.length||"?")+" members · Week "+(activeLeague.current_week||activeLeague.week||1)))}</div>
  </div>
 
  {/* Season Complete banner */}
