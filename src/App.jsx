@@ -1550,7 +1550,6 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
 
   return (
     <div style={{padding:"0 16px 40px"}}>
-      {onOpenLeaderboard && <div onClick={onOpenLeaderboard} style={{display:"flex",alignItems:"center",gap:12,background:"linear-gradient(135deg,rgba(10,132,255,0.12),rgba(94,92,230,0.05))",border:"0.5px solid rgba(10,132,255,0.28)",borderRadius:15,padding:"12px 14px",marginBottom:12,cursor:"pointer"}}><div style={{width:36,height:36,borderRadius:11,background:"rgba(10,132,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M8 21V10M16 21V3M4 21v-6"/></svg></div><div style={{flex:1,minWidth:0}}><div style={{fontSize:9.5,fontWeight:800,letterSpacing:0.5,textTransform:"uppercase",color:"rgba(255,255,255,0.4)"}}>Global rank</div><div style={{fontSize:15,fontWeight:800,color:"#fff",marginTop:1}}>{globalRank?("#"+globalRank.rank+" · top "+Math.max(1,Math.round(globalRank.rank/globalRank.total*100))+"%"):"See where you rank"}</div></div><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg></div>}
       {!heroCollapsed ? (
       <div style={{position:"relative",borderRadius:22,padding:"20px 18px 18px",overflow:"hidden",marginBottom:12,background:"radial-gradient(130% 120% at 8% -10%, rgba(10,132,255,0.4), rgba(94,92,230,0.16) 42%, rgba(12,12,16,0) 72%),linear-gradient(160deg,#10204a 0%,#0a0a12 78%)",border:"1px solid rgba(10,132,255,0.32)",boxShadow:"0 22px 60px -26px rgba(10,132,255,0.7)"}}>
         <div style={{position:"absolute",top:-50,right:-40,width:200,height:200,borderRadius:"50%",background:IOS.indigo,filter:"blur(70px)",opacity:0.34}}/>
@@ -6229,7 +6228,30 @@ export default function App() {
  const _ts = activeLeague.target_size||activeLeague.max_members||8;
  const leagueNotStarted = !isSoloMode && leagueMembers.length>0 && leagueMembers.length < _ts;
  const _need = Math.max(0, _ts - leagueMembers.length);
- if(leagueNotStarted){
+ const noRealLeague = !isSoloMode && (!activeLeague || !activeLeague.id || (realLeagues||[]).length===0);
+   if(noRealLeague){
+     return (
+       <div className="body" style={{padding:"16px 16px 90px"}}>
+         <div style={{background:"linear-gradient(160deg,#16181d,#0c0d10)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:16,padding:"24px 18px",textAlign:"center"}}>
+           <div style={{width:46,height:46,borderRadius:13,background:"rgba(10,132,255,0.14)",border:"0.5px solid rgba(10,132,255,0.3)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px"}}>
+             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+           </div>
+           <div style={{fontSize:17,fontWeight:800,color:"#fff"}}>Make picks with a league</div>
+           <div style={{fontSize:13,color:IOS.label3,marginTop:6,lineHeight:1.45}}>Create or join a league to put your slip up against friends — weekly matchups, playoffs, bragging rights.</div>
+           <button onClick={()=>{ try{setNewLeagueStep&&setNewLeagueStep(0);}catch(e){} setShowNewLeague&&setShowNewLeague(true); }} style={{marginTop:16,width:"100%",background:"linear-gradient(135deg,"+IOS.blue+","+IOS.indigo+")",color:"#fff",border:"none",borderRadius:11,padding:"13px",fontSize:14.5,fontWeight:800,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Create a league</button>
+           <div style={{display:"flex",gap:8,marginTop:9}}>
+             <button onClick={()=>{ try{fetchPublicLeagues&&fetchPublicLeagues();}catch(e){} setShowBrowse&&setShowBrowse(true); }} style={{flex:1,background:"rgba(255,255,255,0.06)",border:"0.5px solid rgba(255,255,255,0.12)",color:"#fff",borderRadius:11,padding:"12px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Browse public</button>
+             <button onClick={()=>{ const c=(window.prompt("Enter invite code")||"").trim(); if(c) handleJoinCode(c); }} style={{flex:1,background:"rgba(255,255,255,0.06)",border:"0.5px solid rgba(255,255,255,0.12)",color:"#fff",borderRadius:11,padding:"12px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Join with code</button>
+           </div>
+         </div>
+         <div style={{display:"flex",alignItems:"center",gap:10,margin:"16px 4px"}}>
+           <div style={{flex:1,height:"0.5px",background:"rgba(255,255,255,0.1)"}}/><div style={{fontSize:11,color:IOS.label3,fontWeight:700}}>or</div><div style={{flex:1,height:"0.5px",background:"rgba(255,255,255,0.1)"}}/>
+         </div>
+         <button onClick={()=>{ setHomeMode("solo"); setSoloModeWithRef(true); try{fetchSoloWeeks();}catch(e){} setScreen("picks"); }} style={{width:"100%",background:"rgba(191,90,242,0.12)",border:"0.5px solid "+(IOS.purple||"#BF5AF2")+"66",color:(IOS.purple||"#BF5AF2"),borderRadius:11,padding:"13px",fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Track your own picks in Solo →</button>
+       </div>
+     );
+   }
+   if(leagueNotStarted){
    return (
      <div className="body" style={{padding:"16px 16px 90px"}}>
        <div style={{background:"linear-gradient(160deg,#16181d,#0c0d10)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:16,padding:"22px 18px",textAlign:"center"}}>
@@ -12205,7 +12227,7 @@ export default function App() {
  profile:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
  };
  return (
- <div key={t.id} className={"tab-item "+(isOn?"on":"")} onClick={()=>{ if(t.id==="picks" && realLeagues.length===0 && !isSoloMode){ setHomeMode("solo"); setSoloModeWithRef(true); try{fetchSoloWeeks();}catch(e){} } setScreen(t.id); }}>
+ <div key={t.id} className={"tab-item "+(isOn?"on":"")} onClick={()=>{ setScreen(t.id); }}>
  <div className="tab-icon" style={{display:"flex",alignItems:"center",justifyContent:"center"}}>{svgs[t.icon]}</div>
  <div className="tab-label" style={isOn?{color:IOS.blue}:{}}>{t.label}</div>
  </div>
