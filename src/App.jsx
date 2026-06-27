@@ -1470,7 +1470,7 @@ const soloWeekRange = (n) => {
     : M[s.getUTCMonth()]+" "+s.getUTCDate()+" – "+M[e.getUTCMonth()]+" "+e.getUTCDate();
 };
 
-function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeague, setNewLeagueStep, setShowBrowse, fetchPublicLeagues, setIsSoloMode, setActiveLeagueId, getOrCreateSoloLeague, soloSavedPicks, setSoloSavedPicks, soloFlexPicks, setSoloFlexPicks, soloSport, setSoloSport, setShowSoloSportPicker, soloSubmitted, setSoloSubmitted, username, soloTopPct, onDeleteSlate, onJoinCode, setShowPaywall, tickerGames=[], espnGames=[]}) {
+function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeague, setNewLeagueStep, setShowBrowse, fetchPublicLeagues, setIsSoloMode, setActiveLeagueId, getOrCreateSoloLeague, soloSavedPicks, setSoloSavedPicks, soloFlexPicks, setSoloFlexPicks, soloSport, setSoloSport, setShowSoloSportPicker, soloSubmitted, setSoloSubmitted, username, soloTopPct, onDeleteSlate, onJoinCode, setShowPaywall, tickerGames=[], espnGames=[], globalRank=null, onOpenLeaderboard}) {
   const [shareToast,setShareToast]=useState("");
   const [openSlate,setOpenSlate]=useState(null);
   const [joinCode,setJoinCode]=useState("");
@@ -1550,6 +1550,7 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
 
   return (
     <div style={{padding:"0 16px 40px"}}>
+      {onOpenLeaderboard && <div onClick={onOpenLeaderboard} style={{display:"flex",alignItems:"center",gap:12,background:"linear-gradient(135deg,rgba(10,132,255,0.12),rgba(94,92,230,0.05))",border:"0.5px solid rgba(10,132,255,0.28)",borderRadius:15,padding:"12px 14px",marginBottom:12,cursor:"pointer"}}><div style={{width:36,height:36,borderRadius:11,background:"rgba(10,132,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M8 21V10M16 21V3M4 21v-6"/></svg></div><div style={{flex:1,minWidth:0}}><div style={{fontSize:9.5,fontWeight:800,letterSpacing:0.5,textTransform:"uppercase",color:"rgba(255,255,255,0.4)"}}>Global rank</div><div style={{fontSize:15,fontWeight:800,color:"#fff",marginTop:1}}>{globalRank?("#"+globalRank.rank+" · top "+Math.max(1,Math.round(globalRank.rank/globalRank.total*100))+"%"):"See where you rank"}</div></div><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg></div>}
       {!heroCollapsed ? (
       <div style={{position:"relative",borderRadius:22,padding:"20px 18px 18px",overflow:"hidden",marginBottom:12,background:"radial-gradient(130% 120% at 8% -10%, rgba(10,132,255,0.4), rgba(94,92,230,0.16) 42%, rgba(12,12,16,0) 72%),linear-gradient(160deg,#10204a 0%,#0a0a12 78%)",border:"1px solid rgba(10,132,255,0.32)",boxShadow:"0 22px 60px -26px rgba(10,132,255,0.7)"}}>
         <div style={{position:"absolute",top:-50,right:-40,width:200,height:200,borderRadius:"50%",background:IOS.indigo,filter:"blur(70px)",opacity:0.34}}/>
@@ -1859,6 +1860,10 @@ export default function App() {
  const [liveSchedule, setLiveSchedule] = useState([]);
  const [realStandings, setRealStandings] = useState([]);
  const [allMyStats, setAllMyStats] = useState(null);
+ const [lbCache, setLbCache] = useState({});
+ const [lbTf, setLbTf] = useState("all");
+ const [lbTab, setLbTab] = useState("points");
+ const [lbLoading, setLbLoading] = useState(false);
  const [leagueTrophies, setLeagueTrophies] = useState([]);
  // solo weeks must be declared before activeLeague since activeLeague uses soloWeeks.length
  const [soloWeeks, setSoloWeeks] = useState([]);
@@ -3643,6 +3648,13 @@ export default function App() {
    (async()=>{ try{ const {data}=await supabase.from("users").select("id,is_pro").eq("referred_by",code); if(cancelled) return; const rows=data||[]; setRefStats({signups:rows.length, paying:rows.filter(r=>r.is_pro===true).length}); }catch(e){} })();
    return ()=>{cancelled=true;};
  }, [userProfile&&userProfile.referral_code]);
+ const fetchLeaderboard = async (tf) => {
+   if(lbCache[tf]) return lbCache[tf];
+   setLbLoading(true);
+   try{ const {data,error}=await supabase.rpc("global_leaderboard",{tf}); if(!error){ const rows=data||[]; setLbCache(prev=>({...prev,[tf]:rows})); setLbLoading(false); return rows; } }catch(e){}
+   setLbLoading(false); return [];
+ };
+ useEffect(()=>{ if(user) fetchLeaderboard("all"); }, [user]);
  const fetchUserProfile = async (uid) => {
  const {data} = await supabase.from("users").select("id,username,email,is_pro,push_enabled,notif_results,notif_grades,notif_reminder,notif_league,notif_plok,referral_code,referred_by").eq("id",uid).maybeSingle();
  if(data) {
@@ -5500,7 +5512,13 @@ export default function App() {
  {screen==="home"&&(
  <>
  <div className="body">
- {tickerGames.length > 0 && (() => {
+ {(()=>{ const rows=lbCache["all"]; let rk=null,total=0; if(rows&&rows.length){ const sx=[...rows].sort((a,b)=>(Number(b.points)||0)-(Number(a.points)||0)); total=sx.length; const i=sx.findIndex(r=>String(r.user_id)===String(user?.id)); if(i>=0) rk=i+1; } const pct=(rk&&total)?Math.max(1,Math.round(rk/total*100)):null; return (
+           <div onClick={()=>{ fetchLeaderboard("all"); setScreen("leaderboard"); }} style={{display:"flex",alignItems:"center",gap:12,background:"linear-gradient(135deg,rgba(10,132,255,0.12),rgba(94,92,230,0.05))",border:"0.5px solid rgba(10,132,255,0.28)",borderRadius:15,padding:"12px 14px",marginBottom:12,cursor:"pointer"}}>
+             <div style={{width:36,height:36,borderRadius:11,background:"rgba(10,132,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M8 21V10M16 21V3M4 21v-6"/></svg></div>
+             <div style={{flex:1,minWidth:0}}><div style={{fontSize:9.5,fontWeight:800,letterSpacing:0.5,textTransform:"uppercase",color:"rgba(255,255,255,0.4)"}}>Global rank</div><div style={{fontSize:15,fontWeight:800,color:"#fff",marginTop:1}}>{rk?("#"+rk+(pct?(" · top "+pct+"%"):"")):"See where you rank"}</div></div>
+             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+           </div>); })()}
+           {tickerGames.length > 0 && (() => {
  const now = new Date();
  // Only highlight games from LOCKED slip (weekPicks from DB)
  const myLockedPickNames = (weekPicks||[])
@@ -5719,7 +5737,7 @@ export default function App() {
  </div>
 
  {/* ══ SOLO MODE HOME SCREEN ══ */}
- {homeMode==="solo" && <SoloHome soloWeeks={soloWeeks} soloLoading={soloLoading} isPro={isPro} IOS={IOS} setScreen={setScreen} setShowNewLeague={setShowNewLeague} setNewLeagueStep={setNewLeagueStep} setShowBrowse={setShowBrowse} fetchPublicLeagues={fetchPublicLeagues} setIsSoloMode={setIsSoloMode} setActiveLeagueId={setActiveLeagueId} getOrCreateSoloLeague={getOrCreateSoloLeague} soloSavedPicks={soloSavedPicks} setSoloSavedPicks={setSoloSavedPicks} soloFlexPicks={soloFlexPicks} setSoloFlexPicks={setSoloFlexPicks} soloSport={soloSport} setSoloSport={setSoloSportPersist} setShowSoloSportPicker={setShowSoloSportPicker} soloSubmitted={soloSubmitted} setSoloSubmitted={setSoloSubmitted} username={userProfile?.username||""} soloTopPct={soloTopPct} onDeleteSlate={deleteSoloSlate} onJoinCode={handleJoinCode} setShowPaywall={setShowPaywall} tickerGames={tickerGames} espnGames={espnGames}/>}
+ {homeMode==="solo" && <SoloHome soloWeeks={soloWeeks} soloLoading={soloLoading} isPro={isPro} IOS={IOS} setScreen={setScreen} setShowNewLeague={setShowNewLeague} setNewLeagueStep={setNewLeagueStep} setShowBrowse={setShowBrowse} fetchPublicLeagues={fetchPublicLeagues} setIsSoloMode={setIsSoloMode} setActiveLeagueId={setActiveLeagueId} getOrCreateSoloLeague={getOrCreateSoloLeague} soloSavedPicks={soloSavedPicks} setSoloSavedPicks={setSoloSavedPicks} soloFlexPicks={soloFlexPicks} setSoloFlexPicks={setSoloFlexPicks} soloSport={soloSport} setSoloSport={setSoloSportPersist} setShowSoloSportPicker={setShowSoloSportPicker} soloSubmitted={soloSubmitted} setSoloSubmitted={setSoloSubmitted} username={userProfile?.username||""} soloTopPct={soloTopPct} onDeleteSlate={deleteSoloSlate} onJoinCode={handleJoinCode} setShowPaywall={setShowPaywall} tickerGames={tickerGames} espnGames={espnGames} globalRank={(()=>{ const rows=lbCache["all"]; if(!rows||!rows.length) return null; const sx=[...rows].sort((a,b)=>(Number(b.points)||0)-(Number(a.points)||0)); const i=sx.findIndex(r=>String(r.user_id)===String(user?.id)); return i>=0?{rank:i+1,total:sx.length}:null; })()} onOpenLeaderboard={()=>{ fetchLeaderboard("all"); setScreen("leaderboard"); }}/>}
 
  {/* ══ LEAGUES MODE ══ */}
  <div style={{display:homeMode==="leagues"?"block":"none"}}>
@@ -7419,6 +7437,66 @@ export default function App() {
  }
 
  {/* ══ GRID BET BROWSER ══ */}
+{screen==="leaderboard"&&(()=>{
+   const THRESH={all:25,month:12,week:5};
+   const TFLABEL={all:"all-time",month:"this month",week:"this week"};
+   const rows=lbCache[lbTf]||[];
+   const mv=(r)=> lbTab==="points"?(Number(r.points)||0) : lbTab==="hit"?(r.picks?r.wins/r.picks:0) : (Number(r.longshot_pts)||0);
+   let list=rows.slice();
+   if(lbTab==="hit") list=list.filter(r=>r.picks>=THRESH[lbTf]);
+   list.sort((a,b)=>mv(b)-mv(a));
+   const top=list.slice(0,100);
+   const myIdx=list.findIndex(r=>String(r.user_id)===String(user?.id));
+   const me=myIdx>=0?list[myIdx]:null;
+   const myRow=rows.find(r=>String(r.user_id)===String(user?.id));
+   const ini=(n)=>String(n||"?").slice(0,2).toUpperCase();
+   const PAL=[IOS.blue,IOS.green,IOS.orange,IOS.purple,"#64D2FF","#FF375F"];
+   const valFor=(r)=> lbTab==="points"?(Number(r.points).toLocaleString()) : lbTab==="hit"?((r.picks?Math.round(r.wins/r.picks*100):0)+"%") : Number(r.longshot_pts).toLocaleString();
+   const medalC=(rk)=> rk===1?"#FFD60A":rk===2?"#AEB6C2":rk===3?"#E8995A":null;
+   return (
+   <div className="body">
+     <div style={{display:"flex",alignItems:"center",gap:12,padding:"6px 2px 14px"}}>
+       <div onClick={()=>setScreen("home")} style={{cursor:"pointer",width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:10,background:"rgba(255,255,255,0.06)"}}>
+         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+       </div>
+       <div><div style={{fontSize:24,fontWeight:800,letterSpacing:-0.5}}>Leaderboard</div><div style={{fontSize:12,color:IOS.label3,fontWeight:600}}>{(lbTab==="hit"?"Qualified players":"Top players")+" · "+rows.length+" ranked"}</div></div>
+     </div>
+     <div style={{display:"flex",gap:3,background:"#161619",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:11,padding:4,marginBottom:11}}>
+       {[["points","Points"],["hit","Hit Rate"],["ls","Longshots"]].map(([k,lab])=>(
+         <div key={k} onClick={()=>setLbTab(k)} style={{flex:1,textAlign:"center",padding:"9px 4px",borderRadius:8,fontSize:12.5,fontWeight:800,cursor:"pointer",background:lbTab===k?IOS.blue:"transparent",color:lbTab===k?"#fff":"rgba(255,255,255,0.38)"}}>{lab}</div>
+       ))}
+     </div>
+     <div style={{display:"flex",gap:7,marginBottom:12}}>
+       {[["all","All-time"],["month","Month"],["week","Week"]].map(([k,lab])=>(
+         <div key={k} onClick={()=>{ setLbTf(k); fetchLeaderboard(k); }} style={{fontSize:11.5,fontWeight:700,padding:"6px 13px",borderRadius:8,cursor:"pointer",background:lbTf===k?"rgba(10,132,255,0.16)":"#1a1a1f",border:"1px solid "+(lbTf===k?"rgba(10,132,255,0.4)":"rgba(255,255,255,0.07)"),color:lbTf===k?IOS.blue:"rgba(255,255,255,0.55)"}}>{lab}</div>
+       ))}
+     </div>
+     <div style={{marginBottom:14,background:"linear-gradient(135deg,rgba(10,132,255,0.16),#161619)",border:"0.5px solid rgba(10,132,255,0.4)",borderRadius:14,padding:"11px 13px",display:"flex",alignItems:"center",gap:11}}>
+       <div style={{width:30,textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:16,color:IOS.blue}}>{me?("#"+(myIdx+1)):"—"}</div>
+       <div style={{width:38,height:38,borderRadius:"50%",background:"linear-gradient(135deg,#0A84FF,#5e5ce6)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:14,color:"#fff"}}>{ini(userProfile?.username||"You")}</div>
+       <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:800}}>You</div>
+         <div style={{fontSize:10.5,color:(lbTab==="hit"&&!me)?IOS.orange:IOS.label3,fontWeight:600,marginTop:1}}>{(lbTab==="hit"&&!me)?((myRow?myRow.picks:0)+" / "+THRESH[lbTf]+" picks to qualify"):(me?(me.wins+"-"+me.losses+" · "+me.picks+" picks"):"No graded picks yet")}</div>
+       </div>
+       <div style={{textAlign:"right",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:19}}>{me?valFor(me):"—"}</div>
+     </div>
+     {lbTab==="hit" && <div style={{display:"flex",alignItems:"center",gap:8,background:"rgba(255,159,10,0.09)",border:"0.5px solid rgba(255,159,10,0.22)",borderRadius:11,padding:"9px 13px",marginBottom:12,fontSize:11.5,color:IOS.label2,fontWeight:600}}>Hit Rate ranks anyone with {THRESH[lbTf]}+ graded picks {TFLABEL[lbTf]}.</div>}
+     {(lbLoading && top.length===0) ? <div style={{textAlign:"center",padding:30,color:IOS.label3,fontSize:13}}>Loading…</div> :
+      top.length===0 ? <div style={{textAlign:"center",padding:30,color:IOS.label3,fontSize:13,lineHeight:1.6}}>No ranked players yet — graded picks show up here.</div> :
+      top.map((r,i)=>{ const rk=i+1; const mc=medalC(rk); const isMe=String(r.user_id)===String(user?.id); const c=PAL[i%PAL.length];
+        return (
+        <div key={r.user_id} style={{display:"flex",alignItems:"center",gap:11,padding:"9px 11px",borderRadius:13,marginBottom:6,background:isMe?"linear-gradient(135deg,rgba(10,132,255,0.13),#161619)":"linear-gradient(165deg,#1a1a1f,#141417)",border:"1px solid "+(isMe?"rgba(10,132,255,0.4)":"rgba(255,255,255,0.07)")}}>
+          {mc ? <div style={{width:26,height:26,borderRadius:"50%",background:mc,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:14,color:"#000",flexShrink:0}}>{rk}</div>
+              : <div style={{width:26,textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:16,color:IOS.label3,flexShrink:0}}>{rk}</div>}
+          <div style={{width:38,height:38,borderRadius:"50%",background:"linear-gradient(135deg,"+c+","+c+"99)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:14,color:"#fff",border:"1px solid rgba(255,255,255,0.12)",flexShrink:0}}>{ini(r.username)}</div>
+          <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{(r.username||"Player")+(isMe?" (you)":"")}</div><div style={{fontSize:10.5,color:IOS.label3,fontWeight:600,marginTop:1}}>{r.wins+"-"+r.losses+" · "+r.picks+" picks"}</div></div>
+          <div style={{textAlign:"right",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:19,color:rk===1?"#FFD60A":"#fff",flexShrink:0}}>{valFor(r)}</div>
+        </div>
+        );
+      })}
+     <div style={{height:20}}/>
+   </div>
+   );
+   })()}
  {screen==="browser"&&(()=>{
  const activePicks = isSoloMode ? soloFlexPicks : flexPicks;
  const setActivePicks = isSoloMode ? setSoloFlexPicks : setFlexPicks;
@@ -11812,6 +11890,14 @@ export default function App() {
  )}
 
  {/* ══ SOLO STATS ══ */}
+ {screen==="solostats"&&(()=>{ const rows=lbCache["all"]; let rk=null,total=0; if(rows&&rows.length){ const sx=[...rows].sort((a,b)=>(Number(b.points)||0)-(Number(a.points)||0)); total=sx.length; const i=sx.findIndex(r=>String(r.user_id)===String(user?.id)); if(i>=0) rk=i+1; } return (
+   <div style={{padding:"8px 16px 0"}}>
+     <div onClick={()=>{ fetchLeaderboard("all"); setScreen("leaderboard"); }} style={{display:"flex",alignItems:"center",gap:12,background:"linear-gradient(135deg,rgba(10,132,255,0.12),rgba(94,92,230,0.05))",border:"0.5px solid rgba(10,132,255,0.28)",borderRadius:15,padding:"12px 14px",cursor:"pointer"}}>
+       <div style={{width:36,height:36,borderRadius:11,background:"rgba(10,132,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M8 21V10M16 21V3M4 21v-6"/></svg></div>
+       <div style={{flex:1,minWidth:0}}><div style={{fontSize:9.5,fontWeight:800,letterSpacing:0.5,textTransform:"uppercase",color:"rgba(255,255,255,0.4)"}}>Global leaderboard</div><div style={{fontSize:15,fontWeight:800,color:"#fff",marginTop:1}}>{rk?("You\u2019re #"+rk+" of "+total):"See where you rank"}</div></div>
+       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+     </div>
+   </div>); })()}
  {(screen==="solostats"||screen==="analytics")&&(()=>{
  const s = allMyStats||{};
  const CC={blue:"#0A84FF",green:"#30D158",red:"#FF453A",orange:"#FF9F0A",yellow:"#FFD60A",pink:"#FF375F",purple:"#BF5AF2",teal:"#64D2FF",indigo:"#5E5CE6",l3:"rgba(255,255,255,0.34)",l2:"rgba(255,255,255,0.55)"};
