@@ -3655,7 +3655,7 @@ export default function App() {
  };
  useEffect(()=>{ if(user) fetchLeaderboard("all"); }, [user]);
  const fetchUserProfile = async (uid) => {
- const {data} = await supabase.from("users").select("id,username,email,is_pro,push_enabled,notif_results,notif_grades,notif_reminder,notif_league,notif_plok,referral_code,referred_by").eq("id",uid).maybeSingle();
+ const {data} = await supabase.from("users").select("id,username,email,is_pro,push_enabled,notif_results,notif_grades,notif_reminder,notif_league,notif_plok,referral_code,referred_by,is_founder,founder_number").eq("id",uid).maybeSingle();
  if(data) {
  setUserProfile(data);
  // DB is source of truth for pro status
@@ -7496,7 +7496,7 @@ export default function App() {
      <div style={{marginBottom:14,background:"linear-gradient(135deg,rgba(10,132,255,0.16),#161619)",border:"0.5px solid rgba(10,132,255,0.4)",borderRadius:14,padding:"11px 13px",display:"flex",alignItems:"center",gap:11}}>
        <div style={{width:30,textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:16,color:IOS.blue}}>{me?("#"+(myIdx+1)):"—"}</div>
        <div style={{width:38,height:38,borderRadius:"50%",background:"linear-gradient(135deg,#0A84FF,#5e5ce6)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:14,color:"#fff"}}>{ini(userProfile?.username||"You")}</div>
-       <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:800}}>You</div>
+       <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:800,display:"flex",alignItems:"center",gap:5}}>You{userProfile?.is_founder && <svg width="11" height="11" viewBox="0 0 24 24" fill="#FFD60A" stroke="none" style={{flexShrink:0}}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>}</div>
          <div style={{fontSize:10.5,color:(lbTab==="hit"&&!me)?IOS.orange:IOS.label3,fontWeight:600,marginTop:1}}>{(lbTab==="hit"&&!me)?((myRow?myRow.picks:0)+" / "+THRESH[lbTf]+" picks to qualify"):(me?(me.wins+"-"+me.losses+" · "+me.picks+" picks"):"No graded picks yet")}</div>
        </div>
        <div style={{textAlign:"right",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:19}}>{me?valFor(me):"—"}</div>
@@ -7510,7 +7510,7 @@ export default function App() {
           {mc ? <div style={{width:26,height:26,borderRadius:"50%",background:mc,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:14,color:"#000",flexShrink:0}}>{rk}</div>
               : <div style={{width:26,textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:16,color:IOS.label3,flexShrink:0}}>{rk}</div>}
           <div style={{width:38,height:38,borderRadius:"50%",background:"linear-gradient(135deg,"+c+","+c+"99)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:14,color:"#fff",border:"1px solid rgba(255,255,255,0.12)",flexShrink:0}}>{ini(r.username)}</div>
-          <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{(r.username||"Player")+(isMe?" (you)":"")}</div><div style={{fontSize:10.5,color:IOS.label3,fontWeight:600,marginTop:1}}>{r.wins+"-"+r.losses+" · "+r.picks+" picks"}</div></div>
+          <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",display:"flex",alignItems:"center",gap:5}}><span style={{overflow:"hidden",textOverflow:"ellipsis"}}>{(r.username||"Player")+(isMe?" (you)":"")}</span>{r.is_founder && <svg width="11" height="11" viewBox="0 0 24 24" fill="#FFD60A" stroke="none" style={{flexShrink:0}}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>}</div><div style={{fontSize:10.5,color:IOS.label3,fontWeight:600,marginTop:1}}>{r.wins+"-"+r.losses+" · "+r.picks+" picks"}</div></div>
           <div style={{textAlign:"right",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:19,color:rk===1?"#FFD60A":"#fff",flexShrink:0}}>{valFor(r)}</div>
         </div>
         );
@@ -10896,6 +10896,7 @@ export default function App() {
  return (
  <div style={{padding:"8px 0 4px"}}>
  <PlayerCard data={cardData} IOS={IOS}/>
+          {userProfile?.is_founder && <div style={{display:"flex",justifyContent:"center",marginTop:12}}><div style={{display:"inline-flex",alignItems:"center",gap:7,background:"linear-gradient(135deg,rgba(255,214,10,0.16),rgba(255,159,10,0.07))",border:"0.5px solid rgba(255,214,10,0.4)",borderRadius:999,padding:"6px 14px"}}><svg width="13" height="13" viewBox="0 0 24 24" fill="#FFD60A" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg><span style={{fontSize:11.5,fontWeight:800,letterSpacing:0.5,color:"#FFD60A",textTransform:"uppercase"}}>Founding Member{userProfile?.founder_number?(" · #"+userProfile.founder_number):""}</span></div></div>}
  <div style={{textAlign:"center",marginTop:12}}>
  <span onClick={()=>{setUsernameInput(userProfile?.username||"");setEditingUsername(true);}} style={{fontSize:12.5,fontWeight:700,color:IOS.blue,cursor:"pointer"}}>{userProfile?.username?"Edit name":"Set username"}</span>
  <span style={{fontSize:12.5,color:IOS.label3,marginLeft:12}}>{realLeagues.length} league{realLeagues.length!==1?"s":""}</span>
