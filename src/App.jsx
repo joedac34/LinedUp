@@ -4252,7 +4252,7 @@ export default function App() {
  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
  ::-webkit-scrollbar{display:none;}
 
- html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;position:fixed;width:100%;top:0;left:0;} #root{height:100%;overflow:hidden;} .phone{width:100%;max-width:480px;margin:0 auto;height:100%;max-height:100%;background:#000;position:relative;overflow:hidden;display:flex;flex-direction:column;font-family:'Barlow',system-ui,-apple-system,sans-serif;color:#fff;-webkit-font-smoothing:antialiased;padding-top:env(safe-area-inset-top,0px);box-sizing:border-box;}
+ html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;position:fixed;width:100%;top:0;left:0;background:#000;} #root{height:100%;overflow:hidden;background:#000;} .phone{width:100%;max-width:480px;margin:0 auto;height:100%;max-height:100%;background:#000;position:relative;overflow:hidden;display:flex;flex-direction:column;font-family:'Barlow',system-ui,-apple-system,sans-serif;color:#fff;-webkit-font-smoothing:antialiased;padding-top:env(safe-area-inset-top,0px);box-sizing:border-box;}
 
  /* iOS Status Bar */
 
@@ -7260,15 +7260,12 @@ export default function App() {
  const atCap = soloFreePicks.length>=CAP;
  return (
  <div className="body" style={{padding:"0 16px 40px"}}>
-   <div style={{padding:"18px 0 12px",display:"flex",alignItems:"flex-start",justifyContent:"space-between"}}>
+   <div style={{padding:"18px 0 12px",textAlign:"center"}}>
      <div>
        <div style={{fontSize:23,fontWeight:800,color:"#fff",letterSpacing:-0.5}}>{locked?"This Week":"Build This Week"}</div>
        <div style={{fontSize:12.5,color:IOS.label3,marginTop:2}}>{locked?"Locked — pending results":"Pick as many as you want. Each scores on its own odds."}</div>
+       <div style={{fontSize:12,fontWeight:800,color:IOS.blue,marginTop:6,textTransform:"uppercase",letterSpacing:0.5}}>{soloWeekRange(soloWeekNum())}</div>
        {!locked && <div onClick={()=>setShowSoloSportPicker(true)} style={{display:"inline-flex",alignItems:"center",gap:6,marginTop:10,background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:9,padding:"5px 10px",cursor:"pointer"}}><span style={{width:7,height:7,borderRadius:2,background:(SPORTS[soloSport]&&SPORTS[soloSport].color)||IOS.blue}}/><span style={{fontSize:12,fontWeight:800,color:"#fff"}}>{(SPORTS[soloSport]&&SPORTS[soloSport].label)||String(soloSport).toUpperCase()}</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={IOS.label3} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>}
-     </div>
-     <div style={{textAlign:"right",flexShrink:0,marginLeft:12}}>
-       <div style={{fontSize:9.5,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5}}>Week</div>
-       <div style={{fontSize:13,fontWeight:800,color:IOS.blue,lineHeight:1.2,marginTop:2}}>{soloWeekRange(soloWeekNum())}</div>
      </div>
    </div>
 
@@ -11297,6 +11294,7 @@ export default function App() {
    const _fmtD=(d)=> d==null?"\u2014":((d>=0?"+":"")+d.toFixed(1));
    const _win=(ss)=> (ss[2]&&ss[2].value)||"\u2014";
    const _diffLabel=((activeLeague&&activeLeague.sport)==="mlb")?"Run Diff":"Pt Diff";
+   const _brite=(hex)=>{ try{ let h=String(hex||"").replace("#",""); if(h.length===3) h=h.split("").map(c=>c+c).join(""); const r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16); const lum=(0.299*r+0.587*g+0.114*b)/255; if(lum>=0.55) return hex; const f=0.5; return "rgb("+Math.round(r+(255-r)*f)+","+Math.round(g+(255-g)*f)+","+Math.round(b+(255-b)*f)+")"; }catch(e){ return hex||"#fff"; } };
    const tiles=[{l:_diffLabel,a:_fmtD(_diff(_ssA)),h:_fmtD(_diff(_ssH))},{l:"Last 10",a:teamA.last10||"\u2014",h:teamH.last10||"\u2014"},{l:"Win %",a:_win(_ssA),h:_win(_ssH)},{l:"Streak",a:teamA.streak||((mu&&mu.away&&mu.away.streak)||"\u2014"),h:teamH.streak||((mu&&mu.home&&mu.home.streak)||"\u2014")}];
    const hasTiles=_dTeams.length>0;
    const _catLabel=(c)=>({avg:"AVG",homeRuns:"HR",RBIs:"RBI",rbi:"RBI",era:"ERA",strikeouts:"K",wins:"W",points:"PPG",rebounds:"REB",assists:"AST",passingYards:"PASS",rushingYards:"RUSH",receivingYards:"REC",passingTouchdowns:"PASS TD"}[c]||String(c||"").toUpperCase());
@@ -11307,8 +11305,8 @@ export default function App() {
    const _card={background:"linear-gradient(165deg,#212126,#161619)",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:16,overflow:"hidden"};
    const _nick={fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:25,lineHeight:0.92,textTransform:"uppercase",letterSpacing:0.3,color:"#fff"};
    const Sec=({t})=>(<div style={{display:"flex",alignItems:"center",gap:11,margin:"22px 4px 11px"}}><span style={{fontSize:10.5,fontWeight:800,letterSpacing:"0.16em",textTransform:"uppercase",color:IOS.label3}}>{t}</span><span style={{flex:1,height:1,background:"rgba(255,255,255,0.07)"}}/></div>);
-   const Crest=({logo,color,abbr})=>(<div style={{width:72,height:72,borderRadius:"50%",margin:"0 auto 11px",position:"relative",display:"flex",alignItems:"center",justifyContent:"center",background:color||"#101014",boxShadow:"0 10px 26px -8px rgba(0,0,0,0.7)"}}><div style={{position:"absolute",inset:0,borderRadius:"50%",border:"2px solid rgba(255,255,255,0.18)",zIndex:3}}/><span style={{position:"absolute",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:23,color:"#fff",letterSpacing:0.5,textShadow:"0 2px 4px rgba(0,0,0,0.4)",zIndex:1}}>{abbr}</span>{logo?<img src={logo} alt="" style={{width:54,height:54,objectFit:"contain",position:"relative",zIndex:2,filter:"drop-shadow(0 3px 6px rgba(0,0,0,0.5))"}} onError={(e)=>{e.currentTarget.style.display="none";}}/>:null}</div>);
-   const PitCol=({m,color,abbr})=>(<div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",textAlign:"center",gap:3}}><div style={{width:58,height:58,borderRadius:"50%",overflow:"hidden",position:"relative",display:"flex",alignItems:"center",justifyContent:"center",background:color,marginBottom:5,boxShadow:"0 6px 16px -6px rgba(0,0,0,0.6)",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:18,color:"#fff"}}><div style={{position:"absolute",inset:0,borderRadius:"50%",border:"2px solid rgba(255,255,255,0.18)",zIndex:3}}/><span style={{zIndex:1}}>{_initials(m?m.name:"")}</span>{m&&m.photo?<img src={m.photo} alt="" style={{width:"100%",height:"100%",objectFit:"cover",position:"relative",zIndex:2}} onError={(e)=>{e.currentTarget.style.display="none";}}/>:null}</div><div style={{fontSize:14,fontWeight:800,color:"#fff"}}>{m?m.name:"TBD"}</div><div style={{fontSize:9,fontWeight:800,letterSpacing:"0.07em",textTransform:"uppercase",color:IOS.label3}}>{((m&&m.pos)||"SP")+" \u00b7 "+abbr}</div>{m&&(m.wl||m.era)?<div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:700,color:IOS.label2,marginTop:3}}>{[m.wl,(m.era?(m.era+" ERA"):"")].filter(Boolean).join(" \u00b7 ")}</div>:null}</div>);
+   const Crest=({logo,color,abbr})=>(<div style={{width:72,height:72,borderRadius:"50%",margin:"0 auto 11px",position:"relative",display:"flex",alignItems:"center",justifyContent:"center",background:color||"#101014",boxShadow:"0 10px 26px -8px rgba(0,0,0,0.7)"}}><div style={{position:"absolute",inset:0,borderRadius:"50%",border:"2px solid rgba(255,255,255,0.18)",zIndex:3}}/>{!logo&&<span style={{position:"absolute",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:23,color:"#fff",letterSpacing:0.5,textShadow:"0 2px 4px rgba(0,0,0,0.4)",zIndex:1}}>{abbr}</span>}{logo?<img src={logo} alt="" style={{width:54,height:54,objectFit:"contain",position:"relative",zIndex:2,filter:"drop-shadow(0 3px 6px rgba(0,0,0,0.5))"}} onError={(e)=>{e.currentTarget.style.display="none";}}/>:null}</div>);
+   const PitCol=({m,color,abbr})=>(<div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",textAlign:"center",gap:3}}><div style={{width:58,height:58,borderRadius:"50%",overflow:"hidden",position:"relative",display:"flex",alignItems:"center",justifyContent:"center",background:color,marginBottom:5,boxShadow:"0 6px 16px -6px rgba(0,0,0,0.6)",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:18,color:"#fff"}}><div style={{position:"absolute",inset:0,borderRadius:"50%",border:"2px solid rgba(255,255,255,0.18)",zIndex:3}}/>{!(m&&m.photo)&&<span style={{zIndex:1}}>{_initials(m?m.name:"")}</span>}{m&&m.photo?<img src={m.photo} alt="" style={{width:"100%",height:"100%",objectFit:"cover",position:"relative",zIndex:2}} onError={(e)=>{e.currentTarget.style.display="none";}}/>:null}</div><div style={{fontSize:14,fontWeight:800,color:"#fff"}}>{m?m.name:"TBD"}</div><div style={{fontSize:9,fontWeight:800,letterSpacing:"0.07em",textTransform:"uppercase",color:IOS.label3}}>{((m&&m.pos)||"SP")+" \u00b7 "+abbr}</div>{m&&(m.wl||m.era)?<div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:700,color:IOS.label2,marginTop:3}}>{[m.wl,(m.era?(m.era+" ERA"):"")].filter(Boolean).join(" \u00b7 ")}</div>:null}</div>);
 
    return (
    <div>
@@ -11339,8 +11337,8 @@ export default function App() {
    <div style={{position:"relative",marginTop:18}}>
    <div style={{position:"absolute",left:0,right:0,top:0,textAlign:"center",fontSize:8.5,fontWeight:800,letterSpacing:"0.16em",color:IOS.label3,textTransform:"uppercase"}}>Win probability</div>
    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:7}}>
-   <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:22,lineHeight:0.9,color:awayColor}}>{probAway}%</span>
-   <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:22,lineHeight:0.9,color:homeColor}}>{probHome}%</span>
+   <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:22,lineHeight:0.9,color:_brite(awayColor)}}>{probAway}%</span>
+   <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:22,lineHeight:0.9,color:_brite(homeColor)}}>{probHome}%</span>
    </div>
    <div style={{height:9,borderRadius:5,overflow:"hidden",display:"flex",background:"rgba(255,255,255,0.06)",boxShadow:"inset 0 1px 2px rgba(0,0,0,0.4)"}}>
    <span style={{height:"100%",width:probAway+"%",background:awayColor,borderRadius:"5px 0 0 5px"}}/>
