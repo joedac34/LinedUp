@@ -1898,6 +1898,7 @@ export default function App() {
  const [gameLoading, setGameLoading] = useState(false);
  const [gameRead, setGameRead] = useState({});
  const [oddsLoading, setOddsLoading] = useState(false);
+ const [soloGamesAll, setSoloGamesAll] = useState(false);
  const [oddsError, setOddsError] = useState(false);
  // oddsLastFetched persisted in localStorage so cache survives page refreshes
 
@@ -5737,6 +5738,66 @@ export default function App() {
 
  {/* ══ SOLO MODE HOME SCREEN ══ */}
  {homeMode==="solo" && <SoloHome soloWeeks={soloWeeks} soloLoading={soloLoading} isPro={isPro} IOS={IOS} setScreen={setScreen} setShowNewLeague={setShowNewLeague} setNewLeagueStep={setNewLeagueStep} setShowBrowse={setShowBrowse} fetchPublicLeagues={fetchPublicLeagues} setIsSoloMode={setIsSoloMode} setActiveLeagueId={setActiveLeagueId} getOrCreateSoloLeague={getOrCreateSoloLeague} soloSavedPicks={soloSavedPicks} setSoloSavedPicks={setSoloSavedPicks} soloFlexPicks={soloFlexPicks} setSoloFlexPicks={setSoloFlexPicks} soloSport={soloSport} setSoloSport={setSoloSportPersist} setShowSoloSportPicker={setShowSoloSportPicker} soloSubmitted={soloSubmitted} setSoloSubmitted={setSoloSubmitted} username={userProfile?.username||""} soloTopPct={soloTopPct} onDeleteSlate={deleteSoloSlate} onJoinCode={handleJoinCode} setShowPaywall={setShowPaywall} tickerGames={tickerGames} espnGames={espnGames} globalRank={(()=>{ const rows=lbCache["all"]; if(!rows||!rows.length) return null; const sx=[...rows].sort((a,b)=>(Number(b.points)||0)-(Number(a.points)||0)); const i=sx.findIndex(r=>String(r.user_id)===String(user?.id)); return i>=0?{rank:i+1,total:sx.length}:null; })()} onOpenLeaderboard={()=>{ fetchLeaderboard("all"); setScreen("leaderboard"); }}/>}
+       {homeMode==="solo" && screen==="home" && (()=>{
+         const SP=["mlb","nfl","nba"];
+         const games=tickerGames||[];
+         const shown=soloGamesAll?games:games.slice(0,4);
+         const so=liveOdds[soloSport];
+         return (
+         <div style={{padding:"4px 16px 8px"}}>
+           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",margin:"4px 0 11px"}}>
+             <div style={{fontSize:11,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:IOS.label3}}>Games on the board</div>
+             {games.length>4 && <div onClick={()=>setSoloGamesAll(v=>!v)} style={{fontSize:12,fontWeight:800,color:IOS.blue,cursor:"pointer"}}>{soloGamesAll?"Show less":("See all "+games.length+" \u203a")}</div>}
+           </div>
+           <div style={{display:"flex",gap:7,overflowX:"auto",marginBottom:12,paddingBottom:2}}>
+             {SP.map(k=>{ const sp=SPORTS[k]||{}; const on=soloSport===k; return (
+               <div key={k} onClick={()=>{ if(soloSport!==k){ setSoloSportPersist(k); setSoloGamesAll(false); } }} style={{flexShrink:0,display:"flex",alignItems:"center",gap:6,background:on?"rgba(10,132,255,0.14)":IOS.bg2,border:"1px solid "+(on?"rgba(10,132,255,0.4)":"rgba(255,255,255,0.07)"),borderRadius:999,padding:"7px 13px",cursor:"pointer"}}>
+                 <span style={{width:7,height:7,borderRadius:2,background:sp.color||IOS.blue}}/>
+                 <span style={{fontSize:12.5,fontWeight:800,color:on?IOS.blue:IOS.label2}}>{sp.label||String(k).toUpperCase()}</span>
+               </div>); })}
+           </div>
+           {(oddsLoading && games.length===0) ? <div style={{textAlign:"center",padding:"28px",color:IOS.label3,fontSize:13}}>Loading games…</div> :
+            games.length===0 ? <div style={{textAlign:"center",padding:"28px 16px",color:IOS.label3,fontSize:13,lineHeight:1.6}}>No {(SPORTS[soloSport]&&SPORTS[soloSport].label)||""} games on the board right now.</div> :
+            shown.map((g,gi)=>{
+              const away=g.away.split(" ").pop(); const home=g.home.split(" ").pop();
+              const espn=espnGames.find(e=>e.awayTeam?.toLowerCase().includes(away.toLowerCase())||e.homeTeam?.toLowerCase().includes(home.toLowerCase()));
+              const t=new Date(g.time); const now=new Date();
+              const isLive=now>=t&&now<new Date(t.getTime()+4*60*60*1000);
+              const gameTime=t.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
+              const mlOdds=(so?.ml||[]).filter(o=>o.game?.includes(away)||o.game?.includes(home));
+              const spreadOdds=(so?.spread||[]).filter(o=>o.game?.includes(away)||o.game?.includes(home));
+              const ouOdds=(so?.ou||[]).filter(o=>o.game?.includes(away)||o.game?.includes(home));
+              return (
+              <div key={gi} onClick={async()=>{ const gameOdds={ml:mlOdds,spread:spreadOdds,ou:ouOdds}; setGameSheet({tickerGame:{...g,away,home,isLive,timeStr:gameTime},espnGame:espn,detail:null,odds:gameOdds}); setGameTeamTab("matchup"); if(espn?.id){ setGameLoading(true); try{ const r=await fetch(`/api/espn?sport=${SPORT_KEYS[soloSport]}&gameId=${espn.id}`); if(r.ok){const d=await r.json();setGameSheet(prev=>({...prev,detail:d}));} }catch(e){} finally{setGameLoading(false);} } }} style={{margin:"0 0 10px",background:IOS.bg2,borderRadius:14,overflow:"hidden",cursor:"pointer",border:"1px solid rgba(255,255,255,0.06)"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 14px",borderBottom:`0.5px solid ${IOS.sep}`}}>
+                  <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,color:isLive?IOS.green:IOS.label3,textTransform:"uppercase"}}>{isLive?"\u25cf LIVE":gameTime}</div>
+                  <div style={{fontSize:9,fontWeight:800,letterSpacing:0.5,color:IOS.label3,textTransform:"uppercase"}}>{(SPORTS[soloSport]&&SPORTS[soloSport].label)||""}</div>
+                </div>
+                <div style={{padding:"10px 14px"}}>
+                  {[{name:g.away,logo:espn?.awayLogo,record:espn?.awayRecord},{name:g.home,logo:espn?.homeLogo,record:espn?.homeRecord}].map((team,ti)=>(
+                    <div key={ti} style={{display:"flex",alignItems:"center",gap:10,marginBottom:ti===0?8:0}}>
+                      {team.logo?<img src={team.logo} style={{width:28,height:28,objectFit:"contain",flexShrink:0}} onError={e=>e.target.style.display="none"}/>:<div style={{width:28,height:28,borderRadius:"50%",background:"rgba(255,255,255,0.1)",flexShrink:0}}/>}
+                      <div style={{flex:1}}><div style={{fontSize:14,fontWeight:700,color:"#fff"}}>{team.name}</div>{team.record&&<div style={{fontSize:11,color:IOS.label3}}>{team.record}</div>}</div>
+                    </div>
+                  ))}
+                </div>
+                {mlOdds.length>0 && (
+                  <div style={{display:"flex",borderTop:`0.5px solid ${IOS.sep}`}}>
+                    {[{label:"ML",items:mlOdds.slice(0,2)},{label:"Spread",items:spreadOdds.slice(0,2)},{label:"O/U",items:ouOdds.slice(0,2)}].map((col,ci)=>(
+                      <div key={ci} style={{flex:1,padding:"8px 6px",borderRight:ci<2?`0.5px solid ${IOS.sep}`:"none",textAlign:"center"}}>
+                        <div style={{fontSize:9,color:IOS.label3,fontWeight:600,letterSpacing:0.5,marginBottom:4}}>{col.label}</div>
+                        {col.items.map((o,oi)=>(<div key={oi} style={{fontSize:11,fontWeight:700,color:o.odds?.startsWith("+")?IOS.green:IOS.blue,lineHeight:1.4}}>{o.pick?.split(" ").slice(-1)[0]} {o.odds}</div>))}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              );
+            })}
+         </div>
+         );
+       })()}
+
 
  {/* ══ LEAGUES MODE ══ */}
  <div style={{display:homeMode==="leagues"?"block":"none"}}>
