@@ -3323,8 +3323,10 @@ export default function App() {
    const {data:currentMembers}=await supabase.from("league_members").select("user_id").eq("league_id",league.id);
    const targetSize = league.target_size||league.max_members||8;
    if(currentMembers && currentMembers.length >= targetSize){alert("This league is already full ("+targetSize+"/"+targetSize+").");return;}
+   const {data:_mine}=await supabase.from("league_members").select("user_id").eq("league_id",league.id).eq("user_id",user.id).maybeSingle();
+   if(_mine){ setHomeMode("leagues"); setSoloModeWithRef(false); setActiveLeagueId(league.id); await fetchLeagues(user.id); alert("You're already in "+league.name+" — opening it now."); return; }
    const {error:joinError}=await supabase.from("league_members").insert({league_id:league.id,user_id:user.id,is_commissioner:false});
-   if(joinError){alert("Could not join — you may already be a member.");return;}
+   if(joinError){alert("Couldn't join "+league.name+": "+(joinError.message||joinError.code||"unknown error"));return;}
    const {data:allMembers}=await supabase.from("league_members").select("user_id").eq("league_id",league.id);
    if(allMembers && allMembers.length === targetSize){
      const memberIds=allMembers.map(m=>m.user_id);
@@ -3379,8 +3381,10 @@ export default function App() {
      fetchPublicLeagues();
      return;
    }
+   const {data:_mine} = await supabase.from("league_members").select("user_id").eq("league_id",league.id).eq("user_id",user.id).maybeSingle();
+   if(_mine){ setHomeMode("leagues"); setSoloModeWithRef(false); setActiveLeagueId(league.id); await fetchLeagues(user.id); setShowBrowse(false); alert("You're already in "+league.name+" — opening it now."); setJoiningLeagueId(null); return; }
    const {error:joinError} = await supabase.from("league_members").insert({league_id:league.id,user_id:user.id,is_commissioner:false});
-   if(joinError) { alert("Error joining. You may already be a member."); setJoiningLeagueId(null); return; }
+   if(joinError) { alert("Couldn't join: "+(joinError.message||joinError.code||"unknown error")); setJoiningLeagueId(null); return; }
    const {data:allMembers} = await supabase.from("league_members").select("user_id").eq("league_id",league.id);
    if(allMembers && allMembers.length === targetSize) {
      const memberIds = allMembers.map(m=>m.user_id);
@@ -3699,7 +3703,18 @@ export default function App() {
  if(ageSeconds > 30) setShowUsernamePrompt(true);
  }
  } else {
- // No user record yet — they just signed up, skip prompt
+ // No public.users row yet (common with email confirmation on: the signup-time insert
+ // ran before the user was authenticated). Create it now that we're logged in.
+ try {
+ const {data:_au}=await supabase.auth.getUser();
+ const _meta=(_au&&_au.user&&_au.user.user_metadata)||{};
+ const _myRef=Math.random().toString(36).substring(2,8).toUpperCase();
+ const _row={ id:uid, email:(_au&&_au.user&&_au.user.email)||null, referral_code:_myRef };
+ if(_meta.username) _row.username=_meta.username;
+ if(_meta.referred_by) _row.referred_by=_meta.referred_by;
+ const {data:_created}=await supabase.from("users").upsert(_row,{onConflict:"id"}).select("id,username,email,is_pro,push_enabled,notif_results,notif_grades,notif_reminder,notif_league,notif_plok,referral_code,referred_by,is_founder,founder_number").maybeSingle();
+ if(_created){ setUserProfile(_created); setIsPro(_created.is_pro===true); if(!_created.username){ setShowUsernamePrompt(true); } }
+ } catch(e) {}
  }
  };
 
@@ -5092,7 +5107,8 @@ export default function App() {
  <input id="auth-password" className="auth-input" type="password" placeholder="Password" style={{marginBottom:11}}/>
  {authScreen==="signup"&&<input id="auth-username" className="auth-input" type="text" placeholder="Username (e.g. sharpshooter99)" style={{marginBottom:7}}/>}
  {authScreen==="signup"&&<div style={{fontSize:11,color:"rgba(255,255,255,0.32)",marginBottom:7,paddingLeft:4}}>This is how you'll appear to other players</div>}
- {authScreen==="signup"&&<input id="auth-referral" className="auth-input" type="text" placeholder="Referral code (optional)" defaultValue={(new URLSearchParams(window.location.search).get("ref")||"").toUpperCase()} style={{marginBottom:15}}/>}
+ {authScreen==="signup"&&<input id="auth-referral" className="auth-input" type="text" placeholder="Friend's referral code (optional)" defaultValue={(new URLSearchParams(window.location.search).get("ref")||"").toUpperCase()} style={{marginBottom:6}}/>}
+ {authScreen==="signup"&&<div style={{fontSize:11,color:"rgba(255,255,255,0.34)",margin:"0 2px 14px",lineHeight:1.4}}>Have a league code? Leave this blank — you’ll join your league after signing in, from Leagues → Join.</div>}
  {authScreen==="login"&&<div style={{height:16}}/>}
  <button className="auth-cta" onClick={async()=>{
  const email=document.getElementById("auth-email").value.trim();
@@ -5107,13 +5123,15 @@ export default function App() {
  if(!/^[a-zA-Z0-9_]+$/.test(username)){ alert("Username can only contain letters, numbers, and underscores."); return; }
  const {data:existing}=await supabase.from("users").select("id").eq("username",username).maybeSingle();
  if(existing){ alert("That username is taken. Try another."); return; }
- const {data,error}=await supabase.auth.signUp({email,password});
+ const refCode=((document.getElementById("auth-referral")?.value||"").trim().toUpperCase())||null;
+ const {data,error}=await supabase.auth.signUp({email,password,options:{data:{username, referred_by:refCode}}});
  if(error){ alert(error.message); return; }
  const uid = data?.user?.id;
- if(uid){
- const refCode=((document.getElementById("auth-referral")?.value||"").trim().toUpperCase())||null; const myRef=Math.random().toString(36).substring(2,8).toUpperCase();
+ if(uid && data?.session){
+ const myRef=Math.random().toString(36).substring(2,8).toUpperCase();
  await supabase.from("users").upsert({id:uid, email, username, referral_code:myRef, referred_by:refCode}, {onConflict:"id"});
  }
+ if(uid && !data?.session){ alert("Account created! Check your email to confirm your address, then sign in."); setAuthScreen("login"); return; }
  setTutorialStep(0);
  }}}>{authScreen==="login"?"Sign In":"Create Account"}</button>
  <div onClick={()=>setAuthScreen(authScreen==="login"?"signup":"login")} style={{textAlign:"center",fontSize:13,color:"rgba(255,255,255,0.4)",cursor:"pointer",marginTop:16}}>{authScreen==="login"?"No account? Sign up":"Already have an account? Sign in"}</div>
