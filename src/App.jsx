@@ -1876,6 +1876,11 @@ export default function App() {
  const setSoloSportPersist = (sp) => { setSoloSport(sp); try{localStorage.setItem("picklock_solo_sport",sp);}catch(e){} };
  const [showSoloSportPicker, setShowSoloSportPicker] = useState(false); // sport selector before building
  const activeLeague = isSoloMode ? {id:soloLeagueId||"solo",name:"Solo Mode",sport:soloSport,current_week:soloWeekNum(),season_weeks:99,max_members:1,target_size:1,isCommissioner:false} : ([...realLeagues].find(l=>l.id===activeLeagueId) || realLeagues[0] || {id:"",name:"",sport:"nfl",current_week:1,season_weeks:18,max_members:8,target_size:8,isCommissioner:false});
+ const _lgTarget=(activeLeague&&(activeLeague.target_size||activeLeague.max_members))||8;
+ const leagueNotStarted = !isSoloMode && !!(activeLeague&&activeLeague.id) && !activeLeague.season_start;
+ const leagueFull = !isSoloMode && (Number((activeLeague&&activeLeague.memberCount)||0) >= _lgTarget);
+ const leagueAwaitingStart = leagueNotStarted && leagueFull;
+ const notStartedBody = (<div className="body" style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center",padding:"70px 30px",gap:11}}><div style={{width:56,height:56,borderRadius:"50%",background:"rgba(255,159,10,0.12)",display:"flex",alignItems:"center",justifyContent:"center"}}><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke={IOS.orange} strokeWidth="2.2"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg></div><div style={{fontSize:18,fontWeight:800,color:"#fff"}}>Season hasn’t started</div><div style={{fontSize:13.5,color:IOS.label2,lineHeight:1.5,maxWidth:250}}>{(activeLeague&&activeLeague.isCommissioner)?"Open Week 1 from the Home tab when you\u2019re ready.":"Picks open once the commissioner starts the season."}</div></div>);
  const sport = SPORTS[activeLeague?.sport] || SPORTS["nfl"];
  const SLOTS = sport.slots;
 
@@ -2922,6 +2927,7 @@ export default function App() {
  const [newLeagueStep, setNewLeagueStep] = useState(0); // 0=type, 1=details
  const [newLeaguePrivacy, setNewLeaguePrivacy] = useState('private');
  const [newLeaguePlayoffs, setNewLeaguePlayoffs] = useState(true);
+ const [newLeagueStartMode, setNewLeagueStartMode] = useState('auto');
  const [newLeaguePlayoffSize, setNewLeaguePlayoffSize] = useState(4);
  const SLOT_TYPES=[
   {id:"ml",l:"Moneyline",scope:"Game line",color:"#0A84FF"},
@@ -2991,7 +2997,7 @@ export default function App() {
    name, sport:sportsArr[0], sports:sportsArr, commissioner_id:user.id, invite_code:inviteCode,
    max_members:newLeagueSize, target_size:newLeagueSize, pick_deadline:"Sun 1PM ET",
    season_weeks:seasonWeeks, current_week:1, privacy:newLeaguePrivacy||"private",
-   scoring_type:"multiplier_odds", league_type:newLeagueType||"h2h",
+   scoring_type:"multiplier_odds", start_mode:newLeagueStartMode||"auto", league_type:newLeagueType||"h2h",
    playoffs_enabled:(newLeagueType==='bracket')?false:!!newLeaguePlayoffs, playoff_size:(newLeagueType==='bracket'||!newLeaguePlayoffs)?0:Math.min(newLeaguePlayoffSize,([2,4,6,8].filter(v=>v<=newLeagueSize).pop()||2)),
  }).select().single();
  if(error){alert(`leagues error: ${error.message} | code: ${error.code} | details: ${error.details}`);setCreatingLeague(false);return;}
@@ -3139,7 +3145,7 @@ export default function App() {
 
  await supabase.from("matchups").insert(matchupsToInsert);
     // Stamp the league start the first time a schedule is built — drives the 7-day week math.
-    await supabase.from("leagues").update({ season_start: new Date().toISOString(), current_week: 1 }).eq("id", leagueId).is("season_start", null);
+    await supabase.from("leagues").update({ season_start: new Date().toISOString(), current_week: 1 }).eq("id", leagueId).is("season_start", null).or("start_mode.is.null,start_mode.neq.manual");
  };
 
  const getOrCreateSoloLeague = async () => {
@@ -3300,7 +3306,7 @@ export default function App() {
      const memberIds=allMembers.map(m=>m.user_id);
      if((league.league_type||"h2h")==="bracket") await generateBracket(league.id, memberIds);
      else if((league.league_type||"h2h")==="h2h") await generateSchedule(league.id, memberIds, regularSeasonWeeksFor(league, memberIds.length));
-     else if(league.league_type==="points") await supabase.from("leagues").update({ season_start: new Date().toISOString(), current_week: 1 }).eq("id", league.id).is("season_start", null);
+     else if(league.league_type==="points") await supabase.from("leagues").update({ season_start: new Date().toISOString(), current_week: 1 }).eq("id", league.id).is("season_start", null).or("start_mode.is.null,start_mode.neq.manual");
      alert("Joined "+league.name+"! League is full"+((league.league_type||'h2h')==='points'?" — standings are live!":(league.league_type||'h2h')==='bracket'?" — bracket generated!":" — schedule generated."));
    } else {
      alert("Joined "+league.name+"! "+(targetSize-allMembers.length)+" more needed.");
@@ -3356,7 +3362,7 @@ export default function App() {
      const memberIds = allMembers.map(m=>m.user_id);
      if((league.league_type||"h2h")==="bracket") await generateBracket(league.id, memberIds);
      else if((league.league_type||"h2h")==="h2h") await generateSchedule(league.id, memberIds, regularSeasonWeeksFor(league, memberIds.length));
-     else if(league.league_type==="points") await supabase.from("leagues").update({ season_start: new Date().toISOString(), current_week: 1 }).eq("id", league.id).is("season_start", null);
+     else if(league.league_type==="points") await supabase.from("leagues").update({ season_start: new Date().toISOString(), current_week: 1 }).eq("id", league.id).is("season_start", null).or("start_mode.is.null,start_mode.neq.manual");
    }
    await fetchLeagues(user.id);
    setShowBrowse(false);
@@ -3394,7 +3400,7 @@ export default function App() {
  }
  await supabase.from("matchups").insert(matchupsToInsert);
     // Stamp the league start the first time a schedule is built — drives the 7-day week math.
-    await supabase.from("leagues").update({ season_start: new Date().toISOString(), current_week: 1 }).eq("id", leagueId).is("season_start", null);
+    await supabase.from("leagues").update({ season_start: new Date().toISOString(), current_week: 1 }).eq("id", leagueId).is("season_start", null).or("start_mode.is.null,start_mode.neq.manual");
  };
 
  // Seed a single-elim playoff from final standings order (1 vs N, 2 vs N-1 ...).
@@ -5813,7 +5819,34 @@ export default function App() {
  </div>
 
 
- {homeTab==='home' && tickerGames.length>0 && (()=>{
+ {homeTab==='home' && !isSoloMode && leagueAwaitingStart && (activeLeague.isCommissioner ? (
+   <div style={{margin:"6px 16px 16px",background:"linear-gradient(160deg,#0c1f38,#0b0d12)",border:"0.5px solid rgba(10,132,255,0.25)",borderRadius:18,padding:"18px",textAlign:"center"}}>
+     <div style={{display:"inline-flex",alignItems:"center",gap:5,background:"rgba(48,209,88,0.14)",border:"0.5px solid rgba(48,209,88,0.3)",borderRadius:999,padding:"4px 11px",fontSize:11,fontWeight:800,color:IOS.green}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>Roster full · {(activeLeague.memberCount||0)}/{_lgTarget}</div>
+     <div style={{fontSize:20,fontWeight:900,color:"#fff",marginTop:11,letterSpacing:-0.3}}>Roster’s full</div>
+     <div style={{fontSize:13,color:IOS.label2,lineHeight:1.5,marginTop:7}}>You chose manual start, so the season hasn’t begun. Start it whenever everyone’s signed and the slate looks right.</div>
+     <button onClick={async()=>{ if(!window.confirm("Start the season now? Week 1 opens, the roster locks, and this week\u2019s games become everyone\u2019s first slate. This can\u2019t be undone.")) return; await supabase.from("leagues").update({season_start:new Date().toISOString(),current_week:1}).eq("id",activeLeague.id).is("season_start",null); await fetchLeagues(user.id); }} style={{width:"100%",marginTop:16,background:IOS.blue,border:"none",color:"#fff",borderRadius:13,padding:"15px",fontSize:16,fontWeight:800,fontFamily:"Barlow,sans-serif",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><svg width="16" height="16" viewBox="0 0 24 24" fill="#fff" stroke="none"><polygon points="6 4 20 12 6 20 6 4"/></svg>Start League</button>
+     <div style={{marginTop:14,textAlign:"left"}}>
+       {["Week 1 opens and picks go live for everyone","This week\u2019s games become your Week 1 slate","The roster locks \u2014 no new joins after start"].map((t,i)=>(
+         <div key={i} style={{display:"flex",gap:9,alignItems:"flex-start",padding:"7px 0",borderTop:i>0?"0.5px solid rgba(255,255,255,0.07)":"none"}}>
+           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.4" style={{flexShrink:0,marginTop:1}}><polyline points="20 6 9 17 4 12"/></svg>
+           <span style={{fontSize:12.5,color:IOS.label2,lineHeight:1.4}}>{t}</span>
+         </div>
+       ))}
+     </div>
+   </div>
+   ) : (
+   <div style={{margin:"6px 16px 16px",background:"#141417",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:18,padding:"24px 18px",textAlign:"center"}}>
+     <div style={{width:58,height:58,borderRadius:"50%",background:"rgba(255,159,10,0.12)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px"}}><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={IOS.orange} strokeWidth="2.2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+     <div style={{fontSize:20,fontWeight:900,color:"#fff",letterSpacing:-0.3}}>You’re in. League’s full.</div>
+     <div style={{fontSize:13.5,color:IOS.label2,lineHeight:1.5,marginTop:8}}>Waiting for the commissioner to start the season. You’ll get a heads-up the moment Week 1 opens.</div>
+     <div style={{display:"flex",gap:9,alignItems:"flex-start",background:"#1c1c1e",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:13,padding:"13px",marginTop:18,textAlign:"left"}}>
+       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64D2FF" strokeWidth="2" style={{flexShrink:0,marginTop:1}}><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg>
+       <span style={{fontSize:12.5,color:IOS.label3,lineHeight:1.45}}>Picks stay locked until the season starts — so your first slate matches whatever week the league goes live.</span>
+     </div>
+   </div>
+   ))}
+
+       {homeTab==='home' && !leagueAwaitingStart && tickerGames.length>0 && (()=>{
  const now=new Date();
  const myList=(weekPicks||[]).filter(p=>p.user_id===user?.id);
  const myPickNames=myList.map(p=>(p.pick_name||"").toLowerCase());
@@ -5867,7 +5900,7 @@ export default function App() {
  })()}
 
  {/* Matchup — compact card — only show if there's a real opponent */}
- {homeTab==='home' && (()=>{
+ {homeTab==='home' && !leagueAwaitingStart && (()=>{
  const myPicks = weekPicks.filter(p=>p.user_id===user?.id);
  const currentWeekNum = activeLeague.current_week||activeLeague.week||1;
  const currentOpp = liveSchedule.find(w=>w.week===currentWeekNum)?.opp;
@@ -6001,7 +6034,7 @@ export default function App() {
  );
  })()}
 
- {homeTab==='home' && (()=>{
+ {homeTab==='home' && !leagueAwaitingStart && (()=>{
  const _hasFilled=(arr)=>(arr||[]).some(s=>s.mult&&(s.isParlay?(s.parlayLegs||[]).length>0:!!s.bet));
  const slipSlots = _hasFilled(flexPicks) ? flexPicks : ((savedPicks&&savedPicks.flexPicks&&_hasFilled(savedPicks.flexPicks)) ? savedPicks.flexPicks : null);
  const catColors={ml:IOS.blue,prop:IOS.yellow,ou:IOS.orange,spread:IOS.green,longshot:IOS.pink};
@@ -6264,7 +6297,7 @@ export default function App() {
  )}
 
  {/* ══ PICKS ══ */}
- {screen==="picks"&&!isSoloMode&&(()=>{
+ {screen==="picks"&&!isSoloMode&&(()=>{ if(leagueNotStarted){ return notStartedBody; }
  // Use separate state for solo mode vs league mode
  const activePicks = isSoloMode ? soloFlexPicks : flexPicks;
  const setActivePicks = isSoloMode ? setSoloFlexPicks : setFlexPicks;
@@ -7577,7 +7610,7 @@ export default function App() {
    </div>
    );
    })()}
- {screen==="browser"&&(()=>{
+ {screen==="browser"&&(()=>{ if(leagueNotStarted){ return notStartedBody; }
  const activePicks = isSoloMode ? soloFlexPicks : flexPicks;
  const setActivePicks = isSoloMode ? setSoloFlexPicks : setFlexPicks;
 
@@ -8770,7 +8803,7 @@ export default function App() {
  {showNewLeague && (
  <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.7)",zIndex:50,display:"flex",flexDirection:"column",justifyContent:"flex-end",backdropFilter:"blur(8px)"}}
  onClick={()=>{if(!newLeagueCreated){setShowNewLeague(false);setNewLeagueSport(null);setNewLeagueSports([]);setNewLeagueName("");setNewLeagueSize(8);setNewLeagueType(null);setNewLeagueStep(0);setNewLeagueWeeks(18);
- setNewLeagueSlots(DEFAULT_SLOTS); setSlotSheetIdx(null);setNewLeaguePrivacy('private');setNewLeaguePlayoffs(true);setNewLeaguePlayoffSize(4);}}}>
+ setNewLeagueSlots(DEFAULT_SLOTS); setSlotSheetIdx(null);setNewLeaguePrivacy('private');setNewLeaguePlayoffs(true);setNewLeaguePlayoffSize(4);setNewLeagueStartMode('auto');}}}>
  <div style={{background:IOS.bg2,borderRadius:"20px 20px 0 0",padding:"0 0 40px",maxHeight:"90vh",overflowY:"auto",WebkitOverflowScrolling:"touch",overscrollBehavior:"contain"}} onClick={e=>e.stopPropagation()}>
  <div style={{position:"sticky",top:0,zIndex:5,background:IOS.bg2,paddingTop:1}}><div style={{width:36,height:5,borderRadius:3,background:"rgba(255,255,255,0.2)",margin:"10px auto 8px"}}/></div>
 
@@ -9122,6 +9155,16 @@ export default function App() {
      );
    })()}
 
+   {/* Start mode */}
+   <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"rgba(255,255,255,0.6)",marginBottom:8}}>When does it start?</div>
+   <div style={{display:"flex",gap:6,marginBottom:16}}>
+   {[{id:"auto",l:"Auto-start",d:"Goes live when it fills"},{id:"manual",l:"Manual",d:"You start it when ready"}].map(v=>{ const on=(newLeagueStartMode||"auto")===v.id; return (
+     <div key={v.id} onClick={()=>setNewLeagueStartMode(v.id)} style={{flex:1,borderRadius:8,padding:"11px 10px",border:"0.5px solid "+(on?"rgba(10,132,255,0.4)":"#222"),background:on?"rgba(10,132,255,0.08)":"transparent",cursor:"pointer"}}>
+       <div style={{fontSize:12,fontWeight:700,color:on?IOS.blue:"rgba(255,255,255,0.6)"}}>{v.l}</div>
+       <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginTop:3}}>{v.d}</div>
+     </div>
+   );})}
+   </div>
    {/* Visibility */}
    <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"rgba(255,255,255,0.6)",marginBottom:8}}>Visibility</div>
    <div style={{display:"flex",gap:6,marginBottom:16}}>
