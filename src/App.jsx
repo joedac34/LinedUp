@@ -7342,7 +7342,7 @@ export default function App() {
      <div style={{display:"flex",flexDirection:"column",gap:9,marginBottom:12}}>
        {lp.map((b,i)=>{
          const col=b.categoryColor||IOS.blue;
-         const isLk=!!(b.gameTime && now>=new Date(b.gameTime).getTime());
+         const _gtv=b.gameTime?new Date(b.gameTime).getTime():0; const isLk=(!b.gameTime||isNaN(_gtv))?true:(now>=_gtv);
          const ro=isLk||!b.slot;
          const pp=(b.mult||1)*ptsFor(b.impliedOdds);
          return (
@@ -11355,7 +11355,7 @@ export default function App() {
    const _fmtD=(d)=> d==null?"\u2014":((d>=0?"+":"")+d.toFixed(1));
    const _win=(ss)=> (ss[2]&&ss[2].value)||"\u2014";
    const _diffLabel=((activeLeague&&activeLeague.sport)==="mlb")?"Run Diff":"Pt Diff";
-   const _brite=(hex)=>{ try{ let h=String(hex||"").replace("#",""); if(h.length===3) h=h.split("").map(c=>c+c).join(""); const r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16); const lum=(0.299*r+0.587*g+0.114*b)/255; if(lum>=0.55) return hex; const f=0.5; return "rgb("+Math.round(r+(255-r)*f)+","+Math.round(g+(255-g)*f)+","+Math.round(b+(255-b)*f)+")"; }catch(e){ return hex||"#fff"; } };
+   const _brite=(hex)=>{ try{ let h=String(hex||"").replace("#",""); if(h.length===3) h=h.split("").map(c=>c+c).join(""); const r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16); const lum=(0.299*r+0.587*g+0.114*b)/255; if(lum>=0.62) return hex; const f=lum<0.32?0.64:0.46; return "rgb("+Math.round(r+(255-r)*f)+","+Math.round(g+(255-g)*f)+","+Math.round(b+(255-b)*f)+")"; }catch(e){ return hex||"#fff"; } };
    const tiles=[{l:_diffLabel,a:_fmtD(_diff(_ssA)),h:_fmtD(_diff(_ssH))},{l:"Last 10",a:teamA.last10||"\u2014",h:teamH.last10||"\u2014"},{l:"Win %",a:_win(_ssA),h:_win(_ssH)},{l:"Streak",a:teamA.streak||((mu&&mu.away&&mu.away.streak)||"\u2014"),h:teamH.streak||((mu&&mu.home&&mu.home.streak)||"\u2014")}];
    const hasTiles=_dTeams.length>0;
    const _catLabel=(c)=>({avg:"AVG",homeRuns:"HR",RBIs:"RBI",rbi:"RBI",era:"ERA",strikeouts:"K",wins:"W",points:"PPG",rebounds:"REB",assists:"AST",passingYards:"PASS",rushingYards:"RUSH",receivingYards:"REC",passingTouchdowns:"PASS TD"}[c]||String(c||"").toUpperCase());
@@ -11383,7 +11383,7 @@ export default function App() {
    </div>
    <div style={{paddingTop:22,textAlign:"center"}}>
    <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:14,color:IOS.label3,letterSpacing:1}}>{tg.isLive?"":"AT"}</div>
-   {tg.isLive?<div style={{fontSize:11,fontWeight:800,color:IOS.green}}>\u25cf LIVE</div>:null}
+   {tg.isLive?<div style={{fontSize:11,fontWeight:800,color:IOS.green}}>● LIVE</div>:null}
    </div>
    <div style={{flex:1,textAlign:"center"}}>
    <Crest logo={homeLogo} color={homeColor} abbr={homeAbbr}/>
@@ -11425,9 +11425,9 @@ export default function App() {
    <div key={ti} style={{background:"linear-gradient(160deg,#202026,#161619)",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:14,padding:"9px 6px 10px",textAlign:"center"}}>
    <div style={{fontSize:8,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:IOS.label3}}>{t.l}</div>
    <div style={{display:"flex",justifyContent:"center",gap:6,marginTop:6}}>
-   <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:awayColor}}>{t.a}</span>
+   <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:_brite(awayColor)}}>{t.a}</span>
    <span style={{color:IOS.label3,fontWeight:700,fontSize:13,alignSelf:"center"}}>/</span>
-   <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:homeColor}}>{t.h}</span>
+   <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:_brite(homeColor)}}>{t.h}</span>
    </div>
    </div>
    ))}
@@ -11459,9 +11459,9 @@ export default function App() {
    {tapeRows.filter(r=>r.k!=="Streak").map((row,i,arr)=>{ const v0=(row.a==null||row.a==="")?"\u2014":String(row.a), v1=(row.h==null||row.h==="")?"\u2014":String(row.h); const n0=parseFloat(v0), n1=parseFloat(v1); const showBar=row.bar&&!isNaN(n0)&&!isNaN(n1); const lower=/allow/i.test(row.k); let aWin=false,hWin=false,wa=50,wh=50; if(showBar){ const sm=(Math.abs(n0)+Math.abs(n1))||1; wa=Math.max(8,Math.round(Math.abs(n0)/sm*100)); wh=Math.max(8,100-wa); aWin=lower?n0<n1:n0>n1; hWin=lower?n1<n0:n1>n0; } return (
    <div key={i} style={{padding:"11px 14px",borderBottom:i<arr.length-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:showBar?8:0}}>
-   <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:16,minWidth:54,textAlign:"left",color:awayColor,display:"flex",alignItems:"center",gap:5}}>{aWin?<span style={{width:5,height:5,borderRadius:"50%",background:awayColor,boxShadow:"0 0 8px "+awayColor}}/>:null}{v0}</span>
+   <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:16,minWidth:54,textAlign:"left",color:_brite(awayColor),display:"flex",alignItems:"center",gap:5}}>{aWin?<span style={{width:5,height:5,borderRadius:"50%",background:awayColor,boxShadow:"0 0 8px "+awayColor}}/>:null}{v0}</span>
    <span style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.09em",textTransform:"uppercase",color:IOS.label3,textAlign:"center",flex:1}}>{row.k}</span>
-   <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:16,minWidth:54,textAlign:"right",color:homeColor,display:"flex",alignItems:"center",justifyContent:"flex-end",gap:5}}>{v1}{hWin?<span style={{width:5,height:5,borderRadius:"50%",background:homeColor,boxShadow:"0 0 8px "+homeColor}}/>:null}</span>
+   <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:16,minWidth:54,textAlign:"right",color:_brite(homeColor),display:"flex",alignItems:"center",justifyContent:"flex-end",gap:5}}>{v1}{hWin?<span style={{width:5,height:5,borderRadius:"50%",background:homeColor,boxShadow:"0 0 8px "+homeColor}}/>:null}</span>
    </div>
    {showBar?<div style={{display:"flex",alignItems:"center",gap:3,height:7}}>
    <div style={{height:"100%",width:wa+"%",borderRadius:"4px 0 0 4px",background:awayColor,opacity:aWin?1:0.4,marginLeft:"auto"}}/>
@@ -11478,8 +11478,8 @@ export default function App() {
    <div style={{background:_card.background,border:_card.border,borderRadius:16,overflow:"hidden",display:"flex"}}>
    {[{abbr:awayAbbr,color:awayColor,list:leadA},{abbr:homeAbbr,color:homeColor,list:leadH}].map((col,ci)=>(
    <div key={ci} style={{flex:1,padding:"12px 13px",borderLeft:ci>0?"0.5px solid rgba(255,255,255,0.06)":"none"}}>
-   <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:9,color:col.color}}>{col.abbr}</div>
-   {col.list.length===0?<div style={{fontSize:11,color:IOS.label3}}>\u2014</div>:col.list.map((pl,pi)=>(
+   <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:9,color:_brite(col.color)}}>{col.abbr}</div>
+   {col.list.length===0?<div style={{fontSize:11,color:IOS.label3}}>—</div>:col.list.map((pl,pi)=>(
    <div key={pi} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"6px 0",borderTop:pi>0?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
    <div style={{minWidth:0}}><div style={{fontSize:12.5,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{pl.name}</div><div style={{fontSize:9.5,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:"0.04em"}}>{_catLabel(pl.cat)}</div></div>
    <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:"#fff",flexShrink:0}}>{pl.stat}</div>
@@ -11491,11 +11491,11 @@ export default function App() {
    </>):null}
 
    {(form0.length>0||form1.length>0)?(<>
-   <Sec t="Form \u00b7 Last 5"/>
+   <Sec t="Form · Last 5"/>
    <div style={_card}>
    {[{abbr:awayAbbr,color:awayColor,f:form0},{abbr:homeAbbr,color:homeColor,f:form1}].map((t,ti)=>(
    <div key={ti} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px",borderTop:ti>0?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
-   <div style={{width:40,fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:14,fontWeight:900,color:t.color,flexShrink:0}}>{t.abbr}</div>
+   <div style={{width:40,fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:14,fontWeight:900,color:_brite(t.color),flexShrink:0}}>{t.abbr}</div>
    <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
    {t.f.length===0?<span style={{fontSize:11,color:IOS.label3}}>No recent games</span>:t.f.map((g,gi)=>{ const rr=String(g.r||"").toUpperCase(); const win=rr==="W",loss=rr==="L"; return <div key={gi} style={{width:24,height:24,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,background:win?"rgba(48,209,88,0.16)":loss?"rgba(255,69,58,0.16)":"rgba(255,255,255,0.08)",color:win?IOS.green:loss?IOS.red:IOS.label3}}>{rr||"\u00b7"}</div>; })}
    </div>
@@ -11513,7 +11513,7 @@ export default function App() {
    <div style={{fontSize:11,color:IOS.label3,width:52}}>{m.date||""}</div>
    <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:8,fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:14,fontWeight:700}}>
    <span style={{color:aWon?"#fff":IOS.label3,fontWeight:aWon?900:700}}>{(m.a||awayAbbr)+" "+(!isNaN(as)?as:"")}</span>
-   <span style={{color:IOS.label3,fontSize:10}}>\u2014</span>
+   <span style={{color:IOS.label3,fontSize:10}}>—</span>
    <span style={{color:hWon?"#fff":IOS.label3,fontWeight:hWon?900:700}}>{(!isNaN(hs)?hs:"")+" "+(m.h||homeAbbr)}</span>
    </div>
    </div>
@@ -11547,7 +11547,7 @@ export default function App() {
    </div>
    </>):null}
 
-   {gameLoading?<div style={{textAlign:"center",padding:"24px",color:IOS.label3,fontSize:13}}>Loading stats\u2026</div>:null}
+   {gameLoading?<div style={{textAlign:"center",padding:"24px",color:IOS.label3,fontSize:13}}>Loading stats…</div>:null}
    {(!gameLoading&&!det.teams&&!eg)?<div style={{textAlign:"center",padding:"16px 8px 8px",color:IOS.label3,fontSize:13,lineHeight:1.6}}>Detailed stats not available yet \u2014 check back closer to game time.</div>:null}
    </div>
 
