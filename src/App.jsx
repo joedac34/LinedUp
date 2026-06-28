@@ -1877,9 +1877,9 @@ export default function App() {
  const [showSoloSportPicker, setShowSoloSportPicker] = useState(false); // sport selector before building
  const activeLeague = isSoloMode ? {id:soloLeagueId||"solo",name:"Solo Mode",sport:soloSport,current_week:soloWeekNum(),season_weeks:99,max_members:1,target_size:1,isCommissioner:false} : ([...realLeagues].find(l=>l.id===activeLeagueId) || realLeagues[0] || {id:"",name:"",sport:"nfl",current_week:1,season_weeks:18,max_members:8,target_size:8,isCommissioner:false});
  const _lgTarget=(activeLeague&&(activeLeague.target_size||activeLeague.max_members))||8;
- const leagueNotStarted = !isSoloMode && !!(activeLeague&&activeLeague.id) && !activeLeague.season_start;
+ const seasonNotStarted = !isSoloMode && !!(activeLeague&&activeLeague.id) && !activeLeague.season_start;
  const leagueFull = !isSoloMode && (Number((activeLeague&&activeLeague.memberCount)||0) >= _lgTarget);
- const leagueAwaitingStart = leagueNotStarted && leagueFull;
+ const leagueAwaitingStart = seasonNotStarted && leagueFull;
  const notStartedBody = (<div className="body" style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center",padding:"70px 30px",gap:11}}><div style={{width:56,height:56,borderRadius:"50%",background:"rgba(255,159,10,0.12)",display:"flex",alignItems:"center",justifyContent:"center"}}><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke={IOS.orange} strokeWidth="2.2"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg></div><div style={{fontSize:18,fontWeight:800,color:"#fff"}}>Season hasn’t started</div><div style={{fontSize:13.5,color:IOS.label2,lineHeight:1.5,maxWidth:250}}>{(activeLeague&&activeLeague.isCommissioner)?"Open Week 1 from the Home tab when you\u2019re ready.":"Picks open once the commissioner starts the season."}</div></div>);
  const sport = SPORTS[activeLeague?.sport] || SPORTS["nfl"];
  const SLOTS = sport.slots;
@@ -2987,7 +2987,7 @@ export default function App() {
  };
 
 // ── WEB PUSH ──  Paste your VAPID *public* key here (web-push generate-vapid-keys)
- const PUSH_VAPID_PUBLIC = "BOjqgMq7CrOaWaK8uIITHtxLnUkdh_L3dk2vOe_5YAcEb6geMKNw9ehy55lMWBbZaxjaNBg8Zsjb4D3l2fZVUEY";
+ const PUSH_VAPID_PUBLIC = "REPLACE_WITH_YOUR_VAPID_PUBLIC_KEY";
  const _urlB64ToUint8 = (base64) => { const pad="=".repeat((4-base64.length%4)%4); const b=(base64+pad).replace(/-/g,"+").replace(/_/g,"/"); const raw=atob(b); const out=new Uint8Array(raw.length); for(let i=0;i<raw.length;i++) out[i]=raw.charCodeAt(i); return out; };
  const subscribeToPush = async () => {
    try {
@@ -6321,7 +6321,7 @@ export default function App() {
  )}
 
  {/* ══ PICKS ══ */}
- {screen==="picks"&&!isSoloMode&&(()=>{ if(leagueNotStarted){ return notStartedBody; }
+ {screen==="picks"&&!isSoloMode&&(()=>{ if(seasonNotStarted){ return notStartedBody; }
  // Use separate state for solo mode vs league mode
  const activePicks = isSoloMode ? soloFlexPicks : flexPicks;
  const setActivePicks = isSoloMode ? setSoloFlexPicks : setFlexPicks;
@@ -7634,7 +7634,7 @@ export default function App() {
    </div>
    );
    })()}
- {screen==="browser"&&(()=>{ if(leagueNotStarted){ return notStartedBody; }
+ {screen==="browser"&&(()=>{ if(seasonNotStarted){ return notStartedBody; }
  const activePicks = isSoloMode ? soloFlexPicks : flexPicks;
  const setActivePicks = isSoloMode ? setSoloFlexPicks : setFlexPicks;
 
