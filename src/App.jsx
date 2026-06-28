@@ -2987,7 +2987,7 @@ export default function App() {
  };
 
 // ── WEB PUSH ──  Paste your VAPID *public* key here (web-push generate-vapid-keys)
- const PUSH_VAPID_PUBLIC = "REPLACE_WITH_YOUR_VAPID_PUBLIC_KEY";
+ const PUSH_VAPID_PUBLIC = "BOjqgMq7CrOaWaK8uIITHtxLnUkdh_L3dk2vOe_5YAcEb6geMKNw9ehy55lMWBbZaxjaNBg8Zsjb4D3l2fZVUEY";
  const _urlB64ToUint8 = (base64) => { const pad="=".repeat((4-base64.length%4)%4); const b=(base64+pad).replace(/-/g,"+").replace(/_/g,"/"); const raw=atob(b); const out=new Uint8Array(raw.length); for(let i=0;i<raw.length;i++) out[i]=raw.charCodeAt(i); return out; };
  const subscribeToPush = async () => {
    try {
