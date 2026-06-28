@@ -2986,6 +2986,30 @@ export default function App() {
  }
  };
 
+// ── WEB PUSH ──  Paste your VAPID *public* key here (web-push generate-vapid-keys)
+ const PUSH_VAPID_PUBLIC = "BOjqgMq7CrOaWaK8uIITHtxLnUkdh_L3dk2vOe_5YAcEb6geMKNw9ehy55lMWBbZaxjaNBg8Zsjb4D3l2fZVUEY";
+ const _urlB64ToUint8 = (base64) => { const pad="=".repeat((4-base64.length%4)%4); const b=(base64+pad).replace(/-/g,"+").replace(/_/g,"/"); const raw=atob(b); const out=new Uint8Array(raw.length); for(let i=0;i<raw.length;i++) out[i]=raw.charCodeAt(i); return out; };
+ const subscribeToPush = async () => {
+   try {
+     if(!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)){ alert("Push isn't supported here. On iPhone, add PickLock to your Home Screen and open it from the icon, then try again."); return false; }
+     const perm = await Notification.requestPermission();
+     if(perm!=="granted"){ alert("Notifications are blocked. Turn them on for PickLock in your browser or phone settings."); return false; }
+     const reg = await navigator.serviceWorker.ready;
+     let sub = await reg.pushManager.getSubscription();
+     if(!sub){ sub = await reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey:_urlB64ToUint8(PUSH_VAPID_PUBLIC) }); }
+     const r = await fetch("/api/push-subscribe",{ method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ userId:user.id, subscription:sub.toJSON?sub.toJSON():sub }) });
+     if(!r.ok){ return false; }
+     setUserProfile(prev=>({...(prev||{}), push_enabled:true }));
+     return true;
+   } catch(e) { console.error("push subscribe failed", e); alert("Couldn't enable push: "+((e&&e.message)||e)); return false; }
+ };
+ const disablePush = async () => {
+   try { const reg = await navigator.serviceWorker.ready; const sub = await reg.pushManager.getSubscription(); if(sub){ try{ await fetch("/api/push-subscribe",{ method:"DELETE", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ endpoint:sub.endpoint }) }); }catch(e){} try{ await sub.unsubscribe(); }catch(e){} } } catch(e) {}
+   try { if(user&&user.id) await supabase.from("users").update({ push_enabled:false }).eq("id", user.id); } catch(e) {}
+   setUserProfile(prev=>({...(prev||{}), push_enabled:false }));
+ };
+ useEffect(()=>{ try{ if(typeof navigator!=="undefined" && "serviceWorker" in navigator){ navigator.serviceWorker.register("/sw.js").catch(()=>{}); } }catch(e){} }, []);
+
  const createLeague = async (name, sportId) => {
  if(!user||!name||!sportId) return;
  setCreatingLeague(true);
@@ -5824,7 +5848,7 @@ export default function App() {
      <div style={{display:"inline-flex",alignItems:"center",gap:5,background:"rgba(48,209,88,0.14)",border:"0.5px solid rgba(48,209,88,0.3)",borderRadius:999,padding:"4px 11px",fontSize:11,fontWeight:800,color:IOS.green}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>Roster full · {(activeLeague.memberCount||0)}/{_lgTarget}</div>
      <div style={{fontSize:20,fontWeight:900,color:"#fff",marginTop:11,letterSpacing:-0.3}}>Roster’s full</div>
      <div style={{fontSize:13,color:IOS.label2,lineHeight:1.5,marginTop:7}}>You chose manual start, so the season hasn’t begun. Start it whenever everyone’s signed and the slate looks right.</div>
-     <button onClick={async()=>{ if(!window.confirm("Start the season now? Week 1 opens, the roster locks, and this week\u2019s games become everyone\u2019s first slate. This can\u2019t be undone.")) return; await supabase.from("leagues").update({season_start:new Date().toISOString(),current_week:1}).eq("id",activeLeague.id).is("season_start",null); await fetchLeagues(user.id); }} style={{width:"100%",marginTop:16,background:IOS.blue,border:"none",color:"#fff",borderRadius:13,padding:"15px",fontSize:16,fontWeight:800,fontFamily:"Barlow,sans-serif",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><svg width="16" height="16" viewBox="0 0 24 24" fill="#fff" stroke="none"><polygon points="6 4 20 12 6 20 6 4"/></svg>Start League</button>
+     <button onClick={async()=>{ if(!window.confirm("Start the season now? Week 1 opens, the roster locks, and this week\u2019s games become everyone\u2019s first slate. This can\u2019t be undone.")) return; await supabase.from("leagues").update({season_start:new Date().toISOString(),current_week:1}).eq("id",activeLeague.id).is("season_start",null); try{ const {data:_mem}=await supabase.from("league_members").select("user_id").eq("league_id",activeLeague.id); const _ids=(_mem||[]).map(m=>m.user_id); fetch("/api/notify",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({userIds:_ids,title:(activeLeague.name||"Your league")+" is live!",body:"Week 1 is open — make your picks before they lock.",url:"/",category:"notif_league"})}); }catch(e){} await fetchLeagues(user.id); }} style={{width:"100%",marginTop:16,background:IOS.blue,border:"none",color:"#fff",borderRadius:13,padding:"15px",fontSize:16,fontWeight:800,fontFamily:"Barlow,sans-serif",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><svg width="16" height="16" viewBox="0 0 24 24" fill="#fff" stroke="none"><polygon points="6 4 20 12 6 20 6 4"/></svg>Start League</button>
      <div style={{marginTop:14,textAlign:"left"}}>
        {["Week 1 opens and picks go live for everyone","This week\u2019s games become your Week 1 slate","The roster locks \u2014 no new joins after start"].map((t,i)=>(
          <div key={i} style={{display:"flex",gap:9,alignItems:"flex-start",padding:"7px 0",borderTop:i>0?"0.5px solid rgba(255,255,255,0.07)":"none"}}>
@@ -11256,9 +11280,9 @@ export default function App() {
  </div>
  <div style={{flex:1}}>
  <div style={{fontSize:14.5,fontWeight:800,color:"#fff"}}>Push Notifications</div>
- <div style={{fontSize:11.5,color:IOS.orange,marginTop:1}}>Coming soon — iOS App Store</div>
+ <div style={{fontSize:11.5,color:IOS.label3,marginTop:1}}>{(userProfile&&userProfile.push_enabled)?"On — alerts even when the app is closed":"Off — tap to turn on alerts"}</div>
  </div>
- <div className="nt-tg" style={{opacity:0.4,pointerEvents:"none"}}>
+ <div className={"nt-tg"+((userProfile&&userProfile.push_enabled)?" on":"")} onClick={async()=>{ const _on=!!(userProfile&&userProfile.push_enabled); try{ if(navigator.vibrate) navigator.vibrate(_on?8:12); }catch(e){} if(_on){ await disablePush(); } else { await subscribeToPush(); } }}>
  <div className="nt-fill"/>
  <div className="nt-knob">
  <svg className="lk-off" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8a8a90" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7-1.5"/></svg>

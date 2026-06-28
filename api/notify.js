@@ -1,87 +1,45 @@
-/**
- * /api/notify.js
- * Push notification sender — stub ready for OneSignal or APNs.
- * Currently logs only. When ready to activate:
- *   1. Sign up at onesignal.com, create an iOS app
- *   2. Add ONESIGNAL_APP_ID and ONESIGNAL_API_KEY to Vercel env vars
- *   3. Uncomment the OneSignal block below
- */
+/* Send a Web Push to one or more users.  Place at: api/notify.js
+   Body (both shapes accepted): { userIds:[...] | userId, title, body, url?, data?, category? }
+   - Back-compatible with the old stub's { userId, title, body, data } callers.
+   - category (e.g. "notif_league") is checked against the user's pref + push_enabled.
+   Env: VITE_SUPABASE_URL, SUPABASE_SERVICE_KEY, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT */
+import { createClient } from '@supabase/supabase-js';
+import webpush from 'web-push';
+
+const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+webpush.setVapidDetails(
+  'mailto:' + (process.env.VAPID_SUBJECT || 'admin@picklockapp.com'),
+  process.env.VAPID_PUBLIC_KEY,
+  process.env.VAPID_PRIVATE_KEY
+);
 
 export default async function handler(req, res) {
-  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
-
-  const { userId, title, body, data } = req.body;
-
-  if (!userId || !title || !body) {
-    return res.status(400).json({ error: "Missing userId, title, or body" });
-  }
-
-  // ── Fetch user's push token from Supabase ──
-  const supabaseUrl = process.env.VITE_SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_SERVICE_KEY; // service role key (not anon)
-
-  let pushToken = null;
-  let pushEnabled = true;
-
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
   try {
-    const r = await fetch(`${supabaseUrl}/rest/v1/users?id=eq.${userId}&select=push_token,push_enabled`, {
-      headers: {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
-      },
-    });
-    const users = await r.json();
-    pushToken   = users?.[0]?.push_token;
-    pushEnabled = users?.[0]?.push_enabled !== false;
+    const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+    const { userIds, userId, title, body: text, url, data, category } = body;
+    const ids = (userIds && userIds.length ? userIds : (userId ? [userId] : [])).filter(Boolean);
+    if (!ids.length || !title) return res.status(400).json({ error: 'missing userIds/title' });
+
+    const cols = 'id,push_enabled' + (category ? (',' + category) : '');
+    const { data: users } = await supabase.from('users').select(cols).in('id', ids);
+    const allowed = (users || [])
+      .filter(u => u.push_enabled !== false && (!category || u[category] !== false))
+      .map(u => u.id);
+    if (!allowed.length) return res.status(200).json({ ok: true, sent: 0, skipped: ids.length });
+
+    const { data: subs } = await supabase.from('push_subscriptions').select('*').in('user_id', allowed);
+    const payload = JSON.stringify({ title, body: text || '', url: url || (data && data.url) || '/', tag: category || undefined });
+
+    let sent = 0; const dead = [];
+    await Promise.all((subs || []).map(async row => {
+      try { await webpush.sendNotification(row.subscription, payload); sent++; }
+      catch (err) { if (err.statusCode === 404 || err.statusCode === 410) dead.push(row.endpoint); }
+    }));
+    if (dead.length) await supabase.from('push_subscriptions').delete().in('endpoint', dead);
+
+    return res.status(200).json({ ok: true, sent, pruned: dead.length });
   } catch (e) {
-    console.error("Failed to fetch push token:", e);
-    return res.status(500).json({ error: "Failed to fetch user" });
+    return res.status(500).json({ error: e.message });
   }
-
-  if (!pushEnabled) {
-    return res.status(200).json({ skipped: true, reason: "User has push disabled" });
-  }
-
-  if (!pushToken) {
-    // Token not registered yet — log and succeed silently
-    console.log(`[notify] No push token for user ${userId} — skipping`);
-    return res.status(200).json({ skipped: true, reason: "No push token" });
-  }
-
-  // ── OneSignal (uncomment when ready) ──
-  /*
-  const ONESIGNAL_APP_ID  = process.env.ONESIGNAL_APP_ID;
-  const ONESIGNAL_API_KEY = process.env.ONESIGNAL_API_KEY;
-
-  const payload = {
-    app_id: ONESIGNAL_APP_ID,
-    include_external_user_ids: [userId],
-    headings:  { en: title },
-    contents:  { en: body },
-    data:      data || {},
-    ios_badgeType: "Increase",
-    ios_badgeCount: 1,
-  };
-
-  const notifRes = await fetch("https://onesignal.com/api/v1/notifications", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Basic ${ONESIGNAL_API_KEY}`,
-    },
-    body: JSON.stringify(payload),
-  });
-
-  const notifData = await notifRes.json();
-  if (notifData.errors) {
-    console.error("[notify] OneSignal error:", notifData.errors);
-    return res.status(500).json({ error: "OneSignal error", details: notifData.errors });
-  }
-
-  return res.status(200).json({ sent: true, id: notifData.id });
-  */
-
-  // ── Stub: just log for now ──
-  console.log(`[notify] STUB — would send to ${userId}: "${title}" / "${body}"`);
-  return res.status(200).json({ sent: false, stub: true, userId, title, body });
 }
