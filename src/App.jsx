@@ -1470,6 +1470,20 @@ const soloWeekRange = (n) => {
     : M[s.getUTCMonth()]+" "+s.getUTCDate()+" – "+M[e.getUTCMonth()]+" "+e.getUTCDate();
 };
 
+const matchEspnGame = (list, awayName, homeName) => {
+  if(!awayName || !homeName) return undefined;
+  const a=String(awayName).toLowerCase(), h=String(homeName).toLowerCase();
+  const hit=(f,v)=> !!f && !!v && String(f).toLowerCase().includes(v);
+  const eq=(f,v)=> !!f && !!v && String(f).toLowerCase()===v;
+  return (list||[]).find(e=>{
+    const aw = hit(e.awayTeam,a) || eq(e.awayAbbr,a);
+    const hm = hit(e.homeTeam,h) || eq(e.homeAbbr,h);
+    const awF = hit(e.awayTeam,h) || eq(e.awayAbbr,h);
+    const hmF = hit(e.homeTeam,a) || eq(e.homeAbbr,a);
+    return (aw && hm) || (awF && hmF);
+  });
+};
+
 function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeague, setNewLeagueStep, setShowBrowse, fetchPublicLeagues, setIsSoloMode, setActiveLeagueId, getOrCreateSoloLeague, soloSavedPicks, setSoloSavedPicks, soloFlexPicks, setSoloFlexPicks, soloSport, setSoloSport, setShowSoloSportPicker, soloSubmitted, setSoloSubmitted, username, soloTopPct, onDeleteSlate, onJoinCode, setShowPaywall, tickerGames=[], espnGames=[], globalRank=null, onOpenLeaderboard}) {
   const [shareToast,setShareToast]=useState("");
   const [openSlate,setOpenSlate]=useState(null);
@@ -5592,12 +5606,7 @@ export default function App() {
  const doubled = [...items, ...items];
  const openGame = async (g) => {
  // Match ticker game to ESPN game by team name
- const espn = espnGames.find(e =>
- e.awayTeam?.toLowerCase().includes(g.away.toLowerCase()) ||
- e.homeTeam?.toLowerCase().includes(g.home.toLowerCase()) ||
- e.awayAbbr?.toLowerCase() === g.away.toLowerCase() ||
- e.homeAbbr?.toLowerCase() === g.home.toLowerCase()
- );
+ const espn = matchEspnGame(espnGames, g.away, g.home);
  // Find odds for this game from liveOdds
  const sport = SPORT_KEYS[activeLeague?.sport];
  const gameOdds = {
@@ -5808,7 +5817,7 @@ export default function App() {
             games.length===0 ? <div style={{textAlign:"center",padding:"28px 16px",color:IOS.label3,fontSize:13,lineHeight:1.6}}>No {(SPORTS[soloSport]&&SPORTS[soloSport].label)||""} games on the board right now.</div> :
             shown.map((g,gi)=>{
               const away=g.away.split(" ").pop(); const home=g.home.split(" ").pop();
-              const espn=espnGames.find(e=>e.awayTeam?.toLowerCase().includes(away.toLowerCase())||e.homeTeam?.toLowerCase().includes(home.toLowerCase()));
+              const espn=matchEspnGame(espnGames, away, home);
               const t=new Date(g.time); const now=new Date();
               const isLive=now>=t&&now<new Date(t.getTime()+4*60*60*1000);
               const gameTime=t.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
@@ -5910,7 +5919,7 @@ export default function App() {
  <div className="wr-carousel">
  {tickerGames.slice(0,10).map((g,gi)=>{
  const away=g.away.split(" ").pop(), home=g.home.split(" ").pop();
- const espn=espnGames.find(e=>e.awayTeam?.toLowerCase().includes(away.toLowerCase())||e.homeTeam?.toLowerCase().includes(home.toLowerCase()));
+ const espn=matchEspnGame(espnGames, away, home);
  const t=new Date(g.time);
  const isLive=now>=t&&now<new Date(t.getTime()+4*60*60*1000);
  const isDone=espn?.awayScore!=null&&espn?.homeScore!=null&&!isLive&&!!t&&now>=t;
@@ -6251,10 +6260,7 @@ export default function App() {
  ) : tickerGames.map((g, gi) => {
  const away = g.away.split(" ").pop();
  const home = g.home.split(" ").pop();
- const espn = espnGames.find(e =>
- e.awayTeam?.toLowerCase().includes(away.toLowerCase()) ||
- e.homeTeam?.toLowerCase().includes(home.toLowerCase())
- );
+ const espn = matchEspnGame(espnGames, away, home);
  const t = new Date(g.time);
  const now = new Date();
  const isLive = now >= t && now < new Date(t.getTime() + 4*60*60*1000);
@@ -7717,7 +7723,7 @@ export default function App() {
  // ─── RECENT FORM (placeholder until ESPN game logs are wired) ───
  // Deterministic from a seed so it's stable per team/bet (not random flicker).
  // Replace `formFor` with real last-3 results from your ESPN feed when ready.
- const recordFor = (teamName, g) => { const pg=parseGame(g); const aw=(pg.away||"").toLowerCase(), hm=(pg.home||"").toLowerCase(); const e=(espnGames||[]).find(x=> (x.awayTeam&&aw&&x.awayTeam.toLowerCase().includes(aw)) || (x.homeTeam&&hm&&x.homeTeam.toLowerCase().includes(hm)) ); if(!e) return null; const side=sideOf(teamName,g); return side==="HOME"?(e.homeRecord||null):side==="AWAY"?(e.awayRecord||null):null; };
+ const recordFor = (teamName, g) => { const pg=parseGame(g); const aw=(pg.away||"").toLowerCase(), hm=(pg.home||"").toLowerCase(); const e=matchEspnGame(espnGames, pg.away, pg.home); if(!e) return null; const side=sideOf(teamName,g); return side==="HOME"?(e.homeRecord||null):side==="AWAY"?(e.awayRecord||null):null; };
  const GRID_SHOW_FORM = true;
  const formFor = (seed="") => {
  let h=0; for(let i=0;i<seed.length;i++){ h=(h*31 + seed.charCodeAt(i))>>>0; }
