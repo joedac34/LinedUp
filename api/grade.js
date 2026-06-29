@@ -363,8 +363,19 @@ async function espnRecentEventIds(sp, lg) {
       const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/${sp}/${lg}/scoreboard?dates=${day}`);
       if (!r.ok) continue;
       const data = await r.json();
-      // Keep each completed game's start time so a prop can be graded off ITS game, not the player's latest.
-      (data.events || []).forEach(e => { if (e.status?.type?.completed) out.push({ id: e.id, date: e.date || null }); });
+      // Keep each completed game's start time AND teams, so a prop can be graded
+      // off ITS OWN game (matched by matchup), not the player's most recent game.
+      (data.events || []).forEach(e => {
+        if (!e.status?.type?.completed) return;
+        const comp = e.competitions && e.competitions[0];
+        const cs = (comp && comp.competitors) || [];
+        const hm = cs.find(c => c.homeAway === "home"), aw = cs.find(c => c.homeAway === "away");
+        out.push({
+          id: e.id, date: e.date || null,
+          home: (hm && hm.team && (hm.team.displayName || hm.team.name)) || "",
+          away: (aw && aw.team && (aw.team.displayName || aw.team.name)) || "",
+        });
+      });
     } catch {}
   }
   const seen = new Set(), uniq = [];
@@ -383,7 +394,7 @@ async function buildPlayerStatIndex(sp, lg) {
       try {
         const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/${sp}/${lg}/summary?event=${ev.id}`);
         if (!r.ok) return null;
-        return { date: ev.date, players: (await r.json()).boxscore?.players || null };
+        return { date: ev.date, home: ev.home, away: ev.away, players: (await r.json()).boxscore?.players || null };
       } catch { return null; }
     }));
     for (const rr of results) {
@@ -406,9 +417,10 @@ async function buildPlayerStatIndex(sp, lg) {
           }
         }
       }
-      // One entry PER GAME (with its date) so we can grade the prop's OWN game.
+      // One entry PER GAME, tagged with that game's teams + date, so a prop can be
+      // matched to its OWN game (by matchup) rather than the player's latest box score.
       for (const nm in perGame) {
-        (index[nm] || (index[nm] = [])).push({ date: evDate, stats: perGame[nm] });
+        (index[nm] || (index[nm] = [])).push({ date: evDate, home: rr.home, away: rr.away, stats: perGame[nm] });
       }
     }
   }
@@ -416,10 +428,28 @@ async function buildPlayerStatIndex(sp, lg) {
 }
 
 // Grade a single player prop against the box-score index.
+// "Pittsburgh Pirates @ Philadelphia Phillies" -> ["Pittsburgh Pirates","Philadelphia Phillies"]
+function parseMatchupTeams(g) {
+  const s = (g || "").trim();
+  if (!s.includes("@")) return null;
+  const parts = s.split("@").map(x => x.trim()).filter(Boolean);
+  return parts.length === 2 ? parts : null;
+}
+// Is `teamName` one of the two teams in a box-score entry? (full name OR nickname)
+function teamInGame(teamName, entry) {
+  const t = normName(teamName); if (!t) return false;
+  const last = t.split(" ").pop();
+  const hit = (x) => { x = normName(x || ""); return !!x && (x.includes(t) || t.includes(x) || x.split(" ").pop() === last); };
+  return hit(entry.home) || hit(entry.away);
+}
+
 function gradeProp(pickName, gameField, index, info = {}, gameDate = null) {
   const parsed = parseProp(pickName);
   if (!parsed) { info.reason = "prop_unparsed"; return null; }
-  const playerName = parsed.player || gameField;   // player is in the pick_name, else in pick.game
+  // Standard props: player is in the pick_name and gameField is the matchup.
+  // Longshot legs: no player in the name and gameField IS the player.
+  const teams = parseMatchupTeams(gameField);
+  const playerName = parsed.player || (teams ? null : gameField);
   const pl = normName(playerName);
   if (!pl || !index) { info.reason = "prop_no_player_name"; return null; }
 
@@ -436,25 +466,29 @@ function gradeProp(pickName, gameField, index, info = {}, gameDate = null) {
   }
   if (!entries || !entries.length) { info.reason = "prop_player_not_in_boxscores"; return null; }
 
-  // Bind to the SPECIFIC game this prop was placed on, by start time. Without this,
-  // a player who also played yesterday gets graded off yesterday's box score.
-  const want = gameDate ? Date.parse(gameDate) : NaN;
   let stats = null;
-  if (!isNaN(want)) {
-    let best = null;
-    for (const e of entries) {
-      if (isNaN(e.date)) continue;
-      const diff = Math.abs(e.date - want);
-      if (best === null || diff < best.diff) best = { e, diff };
-    }
-    // The intended game isn't final yet (only OTHER nights are indexed) -> wait, don't grade a sibling.
-    if (!best || best.diff > 14 * 3600 * 1000) { info.reason = "prop_game_not_final"; return null; }
-    stats = best.e.stats;
+  if (teams && teams.length === 2) {
+    // Preferred: grade ONLY the box score for THIS prop's matchup. If that game
+    // isn't a completed box score yet, wait — never grade off a different night.
+    const cands = entries.filter(e => teamInGame(teams[0], e) && teamInGame(teams[1], e));
+    if (!cands.length) { info.reason = "prop_game_not_final"; return null; }
+    const want = gameDate ? Date.parse(gameDate) : NaN;          // doubleheader tiebreak
+    cands.sort((a, b) => (!isNaN(want) ? Math.abs(a.date - want) - Math.abs(b.date - want) : b.date - a.date));
+    stats = cands[0].stats;
   } else {
-    // Legacy prop with no game_date: fall back to the most recent completed game.
-    let latest = null;
-    for (const e of entries) { if (isNaN(e.date)) continue; if (latest === null || e.date > latest.date) latest = e; }
-    stats = (latest || entries[entries.length - 1]).stats;
+    // No matchup teams available (e.g. longshot leg). Bind by game_date if present,
+    // else fall back to the player's most recent completed game.
+    const want = gameDate ? Date.parse(gameDate) : NaN;
+    if (!isNaN(want)) {
+      let best = null;
+      for (const e of entries) { if (isNaN(e.date)) continue; const diff = Math.abs(e.date - want); if (best === null || diff < best.diff) best = { e, diff }; }
+      if (!best || best.diff > 14 * 3600 * 1000) { info.reason = "prop_game_not_final"; return null; }
+      stats = best.e.stats;
+    } else {
+      let latest = null;
+      for (const e of entries) { if (isNaN(e.date)) continue; if (latest === null || e.date > latest.date) latest = e; }
+      stats = (latest || entries[entries.length - 1]).stats;
+    }
   }
   if (!stats) { info.reason = "prop_player_not_in_boxscores"; return null; }
 

@@ -80,6 +80,8 @@ export default async function handler(req, res) {
               props.push({
                 id: `prop_${event.id}_${market.key}_${props.length}`,
                 game: gameLabel,
+                gameTime: event.commence_time,   // saved as pick.game_date -> grading binds to THIS game
+                eventId: event.id,
                 pick: label,
                 market: market.key,
                 odds: outcome.price >= 0 ? `+${outcome.price}` : `${outcome.price}`,
