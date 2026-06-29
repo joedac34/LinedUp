@@ -3981,6 +3981,7 @@ export default function App() {
  // Convert DB picks back into flexPicks format for the locked view
  const groups = {}; const order = [];
  data.forEach(p=>{ const sl=p.slot||""; const key = sl.startsWith("longshot") ? ("longshot_"+p.multiplier) : ("m"+p.multiplier); if(!groups[key]){ groups[key]=[]; order.push(key); } groups[key].push(p); });
+ const _isCustom = data.some(pp=>{const s=pp.slot||""; return !s.startsWith("longshot") && /_\d+$/.test(s);});
  const flexPicks = order.map((key,gi)=>{
  const picks = groups[key];
  const isParlay = key.startsWith("longshot");
@@ -3994,11 +3995,13 @@ export default function App() {
  power_up_id: picks[0].power_up_id||null,
  pu_tier: picks[0].pu_tier!=null?picks[0].pu_tier:null,
  category: cat,
+ locked: _isCustom,
+ slotType: cat,
+ market: (picks[0].market_key||null),
  committed: true,
  commitIds: picks.map(pp=>pp.id),
  };
  });
- const _isCustom = data.some(pp=>{const s=pp.slot||""; return !s.startsWith("longshot") && /_\d+$/.test(s);});
  if(!_isCustom){ while(flexPicks.length < 5) flexPicks.push({id:flexPicks.length, bet:null, mult:null, isParlay:false, parlayLegs:[]}); }
  setSavedPicks({fromDB: true, flexPicks, dbPicks: data});
  } else {
@@ -7005,6 +7008,7 @@ export default function App() {
  </div>
  </div>
 
+ {slots.some(s=>!slotStarted(s)) && <button className="ios-btn" style={{background:IOS.blue,color:"#fff",marginTop:8}} onClick={()=>{ const sp=activeSavedPicks?.flexPicks; if(sp) setActivePicks(sp); setActiveSavedPicks(null); setActiveSubmitted(false); }}>Edit picks</button>}
  <button className="ios-btn" style={{background:"rgba(255,255,255,0.07)",color:IOS.blue,marginTop:8}} onClick={()=>{setScreen("home");}}>Back to Home</button>
  </div>
  );
