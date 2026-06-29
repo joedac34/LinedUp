@@ -1213,7 +1213,7 @@ function BracketMatchSheet({ d, IOS, onClose }){
   return (
     <div className="bmd-bg" onClick={(e)=>{ if(e.currentTarget===e.target) onClose(); }}>
       <div className="bmd">
-        <div className="bmd-grip"/>
+        <div className="bmd-top"><div className="bmd-grip"/><div className="bmd-close" onClick={onClose} role="button" aria-label="Close"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></div></div>
         <div className="bmd-rd">{d.round}</div>
         <div className="bmd-score">
           <div className={"bmd-side"+(aWin?" win":(d.winnerId?" lose":""))}><div className="n">{d.a.name}</div><div className="pp">{Number(d.a.total).toFixed(1)}</div></div>
@@ -4071,7 +4071,7 @@ export default function App() {
  };
 
  const fetchAllMatchups = async (leagueId) => { try{ const { data } = await supabase.from("matchups").select("*").eq("league_id", leagueId); setAllMatchups(data||[]); }catch(e){} };
- useEffect(()=>{ if(screen==="matchup" && activeLeague && (activeLeague.league_type||"h2h")==="h2h" && activeLeague.id){ fetchAllMatchups(activeLeague.id); setMWeek(activeLeague.current_week||activeLeague.week||1); } }, [screen, activeLeagueId]);
+ useEffect(()=>{ if(screen==="matchup" && activeLeague && (activeLeague.league_type||"h2h")==="h2h" && activeLeague.id){ fetchAllMatchups(activeLeague.id); setMWeek(activeLeague.current_week||activeLeague.week||1); setBracketDetail(null); setMatchupView("mine"); } }, [screen, activeLeagueId]);
 
  useEffect(()=>{
  if(activeLeague && ((screen==="league" && ((activeLeague.league_type==="bracket" && (leagueTab==="bracket"||leagueTab==="schedule")) || leagueTab==="playoff")) || (screen==="leagues" && leagueSubTab==="playoff"))){
@@ -4657,9 +4657,11 @@ export default function App() {
  .brk-cup .cn{font-size:16px;font-weight:900;margin-top:5px;}
  .brk-cup .cn.tbd{color:rgba(255,255,255,.4);font-style:italic;}
  .bmd-bg{position:fixed;inset:0;z-index:9600;background:rgba(2,3,8,.72);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);display:flex;align-items:flex-end;justify-content:center;}
- .bmd{width:390px;max-width:100vw;max-height:88vh;overflow-y:auto;background:#111;border-radius:22px 22px 0 0;border:1px solid rgba(255,255,255,.1);animation:bmdUp .26s cubic-bezier(.2,.8,.2,1);padding-bottom:30px;}
+ .bmd{width:390px;max-width:100vw;max-height:calc(100vh - 132px);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;background:#111;border-radius:22px 22px 0 0;border:1px solid rgba(255,255,255,.1);animation:bmdUp .26s cubic-bezier(.2,.8,.2,1);padding-bottom:calc(env(safe-area-inset-bottom, 0px) + 92px);}
  @keyframes bmdUp{from{transform:translateY(40px);}to{transform:translateY(0);}}
  .bmd-grip{width:38px;height:4px;border-radius:3px;background:rgba(255,255,255,.2);margin:10px auto 8px;}
+ .bmd-top{position:sticky;top:0;z-index:12;background:#111;min-height:38px;}
+ .bmd-close{position:absolute;top:6px;right:12px;width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;color:#fff;cursor:pointer;}
  .bmd-rd{text-align:center;font-size:10px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:12px;}
  .bmd-score{display:flex;align-items:center;justify-content:center;gap:10px;padding:0 18px 16px;border-bottom:1px solid rgba(255,255,255,.08);}
  .bmd-side{flex:1;text-align:center;min-width:0;}
