@@ -1189,13 +1189,22 @@ function BracketMatchSheet({ d, IOS, onClose }){
         <span className="tot">{Number(p.total).toFixed(1)} pts</span>
       </div>
       {p.picks.length===0 ? <div style={{fontSize:12,color:"rgba(255,255,255,.35)",padding:"6px 0 12px"}}>No slip submitted</div> :
-        p.picks.map((pk,i)=>(
+        p.picks.map((pk,i)=>{
+          const reveal = p.you || pk.locked;
+          return (
           <div key={i} className="bmd-row">
-            <span className="bmd-chip">{BMD_CHIP[pk.slot]||(pk.slot||"").toUpperCase().slice(0,4)}</span>
-            <div className="bmd-pk"><div className="pn">{pk.name}</div><div className="ps">{pk.sub}</div></div>
+            {reveal
+              ? <span className="bmd-chip">{BMD_CHIP[pk.slot]||(pk.slot||"").toUpperCase().slice(0,4)}</span>
+              : <span className="bmd-chip" style={{opacity:.55,display:"inline-flex",alignItems:"center",justifyContent:"center"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>}
+            <div className="bmd-pk">
+              {reveal
+                ? <><div className="pn">{pk.name}</div><div className="ps">{pk.sub}</div></>
+                : <><div className="pn" style={{color:"rgba(255,255,255,.5)"}}>Hidden until lock</div><div className="ps">Reveals when the game starts</div></>}
+            </div>
             {resCell(pk.res, pk.pts)}
           </div>
-        ))
+          );
+        })
       }
     </div>
   );
@@ -4048,10 +4057,10 @@ export default function App() {
  const openBracketMatch = async (mu, labelOverride) => {
  try {
  const u1=mu.user1_id, u2=mu.user2_id; if(!u1||!u2) return;
- const { data } = await supabase.from("picks").select("user_id,slot,pick_name,odds,multiplier,result,points_earned").eq("league_id",activeLeague.id).eq("week",mu.week).in("user_id",[u1,u2]);
+ const { data } = await supabase.from("picks").select("user_id,slot,pick_name,odds,multiplier,result,points_earned,game_date").eq("league_id",activeLeague.id).eq("week",mu.week).in("user_id",[u1,u2]);
  const rows = data||[];
  const build = (id, storedPts) => {
- const ps = rows.filter(r=>r.user_id===id).map(r=>({ slot:(r.slot||"").split("_")[0], name:r.pick_name||"Pick", sub:(r.multiplier?r.multiplier+"x":"")+(r.odds!=null&&r.odds!==""?" · "+r.odds:""), res:r.result==="W"?"W":(r.result==="L"?"L":"pend"), pts:parseFloat(r.points_earned||0) }));
+ const ps = rows.filter(r=>r.user_id===id).map(r=>({ slot:(r.slot||"").split("_")[0], name:r.pick_name||"Pick", sub:(r.multiplier?r.multiplier+"x":"")+(r.odds!=null&&r.odds!==""?" · "+r.odds:""), res:r.result==="W"?"W":(r.result==="L"?"L":"pend"), pts:parseFloat(r.points_earned||0), locked:!!(r.result==="W"||r.result==="L"||(r.game_date&&new Date(r.game_date).getTime()<=Date.now())) }));
  const computed = ps.reduce((a,pk)=>a+(pk.res==="W"?pk.pts:0),0);
  const mem = leagueMembers.find(x=>x.userId===id);
  return { name: mem?mem.name:"Player", you:id===(user&&user.id), total:(mu.winner_id!=null && storedPts!=null)?Number(storedPts):computed, picks:ps };
