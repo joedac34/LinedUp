@@ -8635,7 +8635,7 @@ export default function App() {
      </div>
      {matchupView==="league" && (
        <div style={{position:"fixed",left:0,right:0,top:0,bottom:0,background:"#000",zIndex:160,display:"flex",flexDirection:"column"}}>
-         <div style={{padding:"max(env(safe-area-inset-top),14px) 16px 10px",display:"flex",alignItems:"center",borderBottom:`0.5px solid ${IOS.sep}`}}>
+         <div style={{padding:"calc(env(safe-area-inset-top, 44px) + 56px) 16px 10px",display:"flex",alignItems:"center",borderBottom:`0.5px solid ${IOS.sep}`}}>
            <div onClick={()=>setMatchupView("mine")} style={{cursor:"pointer",display:"flex",alignItems:"center",gap:4,color:IOS.blue,fontSize:15,fontWeight:700,width:120}}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.4"><path d="M15 18l-6-6 6-6"/></svg>My Matchup</div>
            <div style={{flex:1,textAlign:"center",fontSize:16,fontWeight:800}}>League Matchups</div>
            <div style={{width:120}}/>
