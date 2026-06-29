@@ -354,7 +354,7 @@ function statNumber(raw) {
 }
 
 async function espnRecentEventIds(sp, lg) {
-  const ids = [];
+  const out = [];
   const now = new Date();
   for (let i = 0; i < 4; i++) {                              // today + last 3 days (UTC)
     const d = new Date(now); d.setUTCDate(d.getUTCDate() - i);
@@ -363,29 +363,34 @@ async function espnRecentEventIds(sp, lg) {
       const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/${sp}/${lg}/scoreboard?dates=${day}`);
       if (!r.ok) continue;
       const data = await r.json();
-      (data.events || []).forEach(e => { if (e.status?.type?.completed) ids.push(e.id); });
+      // Keep each completed game's start time so a prop can be graded off ITS game, not the player's latest.
+      (data.events || []).forEach(e => { if (e.status?.type?.completed) out.push({ id: e.id, date: e.date || null }); });
     } catch {}
   }
-  return [...new Set(ids)];
+  const seen = new Set(), uniq = [];
+  for (const e of out) { if (!seen.has(e.id)) { seen.add(e.id); uniq.push(e); } }
+  return uniq;
 }
 
 // Build { normalizedPlayerName: { "AST": "3", "assists": "3", ... } } from completed box scores.
 async function buildPlayerStatIndex(sp, lg) {
-  const ids = (await espnRecentEventIds(sp, lg)).slice(0, 30); // cap for runtime
+  const evs = (await espnRecentEventIds(sp, lg)).slice(0, 30); // cap for runtime
   const index = {};
   // Fetch summaries in small parallel batches to stay under the function timeout.
-  for (let i = 0; i < ids.length; i += 6) {
-    const batch = ids.slice(i, i + 6);
-    const results = await Promise.all(batch.map(async id => {
+  for (let i = 0; i < evs.length; i += 6) {
+    const batch = evs.slice(i, i + 6);
+    const results = await Promise.all(batch.map(async ev => {
       try {
-        const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/${sp}/${lg}/summary?event=${id}`);
+        const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/${sp}/${lg}/summary?event=${ev.id}`);
         if (!r.ok) return null;
-        return (await r.json()).boxscore?.players || null;
+        return { date: ev.date, players: (await r.json()).boxscore?.players || null };
       } catch { return null; }
     }));
-    for (const players of results) {
-      if (!players) continue;
-      for (const teamBlock of players) {
+    for (const rr of results) {
+      if (!rr || !rr.players) continue;
+      const evDate = rr.date ? Date.parse(rr.date) : NaN;
+      const perGame = {}; // player -> merged stats for THIS game only
+      for (const teamBlock of rr.players) {
         for (const grp of (teamBlock.statistics || [])) {
           const names = (grp.names || grp.labels || []);
           const keys = (grp.keys || []);
@@ -393,13 +398,17 @@ async function buildPlayerStatIndex(sp, lg) {
             if (a.didNotPlay) continue;
             const nm = normName(a.athlete?.displayName);
             if (!nm) continue;
-            const entry = index[nm] || (index[nm] = {});
+            const st = perGame[nm] || (perGame[nm] = {});
             (a.stats || []).forEach((val, idx) => {
-              if (names[idx] != null && entry[names[idx]] == null) entry[names[idx]] = val;
-              if (keys[idx] != null && entry[keys[idx]] == null) entry[keys[idx]] = val;
+              if (names[idx] != null && st[names[idx]] == null) st[names[idx]] = val;
+              if (keys[idx] != null && st[keys[idx]] == null) st[keys[idx]] = val;
             });
           }
         }
+      }
+      // One entry PER GAME (with its date) so we can grade the prop's OWN game.
+      for (const nm in perGame) {
+        (index[nm] || (index[nm] = [])).push({ date: evDate, stats: perGame[nm] });
       }
     }
   }
@@ -407,15 +416,15 @@ async function buildPlayerStatIndex(sp, lg) {
 }
 
 // Grade a single player prop against the box-score index.
-function gradeProp(pickName, gameField, index, info = {}) {
+function gradeProp(pickName, gameField, index, info = {}, gameDate = null) {
   const parsed = parseProp(pickName);
   if (!parsed) { info.reason = "prop_unparsed"; return null; }
   const playerName = parsed.player || gameField;   // player is in the pick_name, else in pick.game
   const pl = normName(playerName);
   if (!pl || !index) { info.reason = "prop_no_player_name"; return null; }
 
-  let stats = index[pl];
-  if (!stats) {                                             // fallback: last name + first initial
+  let entries = index[pl];
+  if (!entries) {                                          // fallback: last name + first initial
     const parts = pl.split(" ");
     const last = parts[parts.length - 1];
     const fi = parts[0]?.[0];
@@ -423,7 +432,29 @@ function gradeProp(pickName, gameField, index, info = {}) {
       const kp = k.split(" ");
       return kp[kp.length - 1] === last && (!fi || kp[0]?.[0] === fi);
     });
-    if (hitKey) stats = index[hitKey];
+    if (hitKey) entries = index[hitKey];
+  }
+  if (!entries || !entries.length) { info.reason = "prop_player_not_in_boxscores"; return null; }
+
+  // Bind to the SPECIFIC game this prop was placed on, by start time. Without this,
+  // a player who also played yesterday gets graded off yesterday's box score.
+  const want = gameDate ? Date.parse(gameDate) : NaN;
+  let stats = null;
+  if (!isNaN(want)) {
+    let best = null;
+    for (const e of entries) {
+      if (isNaN(e.date)) continue;
+      const diff = Math.abs(e.date - want);
+      if (best === null || diff < best.diff) best = { e, diff };
+    }
+    // The intended game isn't final yet (only OTHER nights are indexed) -> wait, don't grade a sibling.
+    if (!best || best.diff > 14 * 3600 * 1000) { info.reason = "prop_game_not_final"; return null; }
+    stats = best.e.stats;
+  } else {
+    // Legacy prop with no game_date: fall back to the most recent completed game.
+    let latest = null;
+    for (const e of entries) { if (isNaN(e.date)) continue; if (latest === null || e.date > latest.date) latest = e; }
+    stats = (latest || entries[entries.length - 1]).stats;
   }
   if (!stats) { info.reason = "prop_player_not_in_boxscores"; return null; }
 
@@ -529,7 +560,7 @@ function gradePick(pick, games, playerIndex, info = {}) {
   // ── Prop (player stat): graded from the ESPN box-score index, not team scores.
   //    pick.game holds the player name for props (e.g. "Mikal Bridges").
   if (baseType === "prop" || (slot?.startsWith("longshot_") && parseProp(name))) {
-    return gradeProp(name, pick.game, playerIndex || {}, info);
+    return gradeProp(name, pick.game, playerIndex || {}, info, pick.game_date);
   }
 
   // A team is "referenced" if its full name OR its nickname (last word) appears.
