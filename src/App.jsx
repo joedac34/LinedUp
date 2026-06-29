@@ -4427,7 +4427,7 @@ export default function App() {
  .nav-subtitle{font-size:13px;color:${IOS.label3};margin-top:2px;}
 
  /* Scrollable body */
- .body{flex:1;min-height:0;overflow-y:auto;position:relative;z-index:1;padding-top:0;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}
+ .body{flex:1;min-height:0;overflow-y:auto;position:relative;z-index:1;padding-top:0;overscroll-behavior:contain;}
  .body-pad{padding-bottom:calc(100px + env(safe-area-inset-bottom,0px));}
  .app-header{flex-shrink:0;z-index:25;position:relative;display:flex;align-items:center;gap:8px;height:52px;padding:0 14px;background:linear-gradient(180deg,#10101a 0%,#0b0b0e 100%);border-bottom:0.5px solid rgba(255,255,255,0.08);box-shadow:0 6px 18px rgba(0,0,0,0.45);}
  .gh-left{display:flex;align-items:center;min-width:0;flex-shrink:0;}
@@ -4814,7 +4814,7 @@ export default function App() {
  .lh-name{font-size:30px;font-weight:700;letter-spacing:-0.5px;margin-bottom:12px;}
  @keyframes ticker-scroll{0%{transform:translateX(0%)}100%{transform:translateX(-50%)}}
  .ticker-wrap{overflow:hidden;background:#0a0a0a;border-top:0.5px solid rgba(255,255,255,0.06);border-bottom:0.5px solid rgba(255,255,255,0.06);height:42px;display:flex;align-items:center;margin:0 0 10px;}
- .ticker-track{display:flex;align-items:center;white-space:nowrap;animation:ticker-scroll 40s linear infinite;will-change:transform;}
+ .ticker-track{display:flex;align-items:center;white-space:nowrap;animation:ticker-scroll 40s linear infinite;}
  .ticker-track:hover,.ticker-track:active{animation-play-state:paused;}
  .ticker-item{display:inline-flex;align-items:center;gap:7px;padding:0 22px;font-size:13px;font-weight:600;color:rgba(255,255,255,0.5);letter-spacing:0.02em;font-family:'Barlow',sans-serif;}
  .ticker-item .ti-teams{color:rgba(255,255,255,0.85);font-weight:700;}
