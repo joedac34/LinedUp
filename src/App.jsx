@@ -9618,7 +9618,22 @@ export default function App() {
    {liveSchedule.length===0 ? (
      <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"20px",textAlign:"center"}}>
        <div style={{fontSize:13,color:"#fff",fontWeight:700,marginBottom:4}}>No schedule yet</div>
-       <div style={{fontSize:11,color:IOS.label3}}>Fill up the league to generate the schedule</div>
+       {(()=>{ const _cm=!!(activeLeague&&activeLeague.isCommissioner)&&((activeLeague&&activeLeague.league_type)||"h2h")==="h2h"&&leagueMembers.length>=2; return (
+       <>
+       <div style={{fontSize:11,color:IOS.label3,marginBottom:_cm?12:0}}>{_cm?"Generate the regular-season matchups now \u2014 playoff weeks are reserved automatically.":"Fill up the league to generate the schedule"}</div>
+       {_cm && (
+       <button onClick={async()=>{
+         const memberIds=leagueMembers.map(m=>m.userId).filter(Boolean);
+         if(memberIds.length<2){ alert("Need at least 2 members to generate a schedule."); return; }
+         if(!window.confirm("Generate the schedule now for "+memberIds.length+" players? This pairs everyone into weekly matchups.")) return;
+         await generateSchedule(activeLeague.id, memberIds, regularSeasonWeeksFor(activeLeague, memberIds.length));
+         await fetchSchedule(activeLeague.id, user.id);
+         await fetchStandings(activeLeague.id);
+         alert("Schedule generated!");
+       }} style={{width:"100%",background:IOS.green,border:"none",borderRadius:10,padding:"12px",fontFamily:"Barlow,sans-serif",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer"}}>Generate schedule now</button>
+       )}
+       </>
+       ); })()}
      </div>
    ) : (
    <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:12,overflow:"hidden"}}>
