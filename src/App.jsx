@@ -1470,6 +1470,21 @@ const soloWeekRange = (n) => {
     : M[s.getUTCMonth()]+" "+s.getUTCDate()+" – "+M[e.getUTCMonth()]+" "+e.getUTCDate();
 };
 
+const TEAM_ABBR = {
+  mlb:{ "diamondbacks":"ari","braves":"atl","orioles":"bal","red sox":"bos","cubs":"chc","white sox":"chw","reds":"cin","guardians":"cle","rockies":"col","tigers":"det","astros":"hou","royals":"kc","angels":"laa","dodgers":"lad","marlins":"mia","brewers":"mil","twins":"min","mets":"nym","yankees":"nyy","athletics":"oak","phillies":"phi","pirates":"pit","padres":"sd","giants":"sf","mariners":"sea","cardinals":"stl","rays":"tb","rangers":"tex","blue jays":"tor","nationals":"wsh" },
+  nfl:{ "cardinals":"ari","falcons":"atl","ravens":"bal","bills":"buf","panthers":"car","bears":"chi","bengals":"cin","browns":"cle","cowboys":"dal","broncos":"den","lions":"det","packers":"gb","texans":"hou","colts":"ind","jaguars":"jax","chiefs":"kc","raiders":"lv","chargers":"lac","rams":"lar","dolphins":"mia","vikings":"min","patriots":"ne","saints":"no","giants":"nyg","jets":"nyj","eagles":"phi","steelers":"pit","49ers":"sf","seahawks":"sea","buccaneers":"tb","titans":"ten","commanders":"wsh" },
+  nba:{ "hawks":"atl","celtics":"bos","nets":"bkn","hornets":"cha","bulls":"chi","cavaliers":"cle","mavericks":"dal","nuggets":"den","pistons":"det","warriors":"gs","rockets":"hou","pacers":"ind","clippers":"lac","lakers":"lal","grizzlies":"mem","heat":"mia","bucks":"mil","timberwolves":"min","pelicans":"no","knicks":"ny","thunder":"okc","magic":"orl","76ers":"phi","suns":"phx","trail blazers":"por","kings":"sac","spurs":"sa","raptors":"tor","jazz":"utah","wizards":"wsh" }
+};
+const teamLogo = (sport, name) => {
+  if(!name) return null;
+  const lg=String(sport||"").toLowerCase(); const m=TEAM_ABBR[lg]; if(!m) return null;
+  const n=String(name).toLowerCase().trim();
+  let abbr=m[n];
+  if(!abbr){ for(const k in m){ if(n.indexOf(k)>=0){ abbr=m[k]; break; } } }
+  if(!abbr) return null;
+  return "https://a.espncdn.com/i/teamlogos/"+lg+"/500/"+abbr+".png";
+};
+
 const matchEspnGame = (list, awayName, homeName) => {
   if(!awayName || !homeName) return undefined;
   const a=String(awayName).toLowerCase(), h=String(homeName).toLowerCase();
@@ -1866,6 +1881,9 @@ export default function App() {
  const [leagueMembers, setLeagueMembers] = useState([]);
  const [bracketMatchups, setBracketMatchups] = useState([]);
  const [bracketDetail, setBracketDetail] = useState(null);
+ const [matchupView, setMatchupView] = useState("mine");
+ const [mWeek, setMWeek] = useState(0);
+ const [allMatchups, setAllMatchups] = useState([]);
  const [bracketLive, setBracketLive] = useState({week:0,totals:{}});
  const [champCelebrate, setChampCelebrate] = useState(null);
  const champSeenRef = useRef("");
@@ -4005,7 +4023,7 @@ export default function App() {
  } catch(e) { setBracketMatchups([]); }
  };
 
- const openBracketMatch = async (mu) => {
+ const openBracketMatch = async (mu, labelOverride) => {
  try {
  const u1=mu.user1_id, u2=mu.user2_id; if(!u1||!u2) return;
  const { data } = await supabase.from("picks").select("user_id,slot,pick_name,odds,multiplier,result,points_earned").eq("league_id",activeLeague.id).eq("week",mu.week).in("user_id",[u1,u2]);
@@ -4017,9 +4035,12 @@ export default function App() {
  return { name: mem?mem.name:"Player", you:id===(user&&user.id), total:(mu.winner_id!=null && storedPts!=null)?Number(storedPts):computed, picks:ps };
  };
  const rn = brkRoundName(((bracketMatchups||[]).filter(x=>x.week===mu.week)).length||1);
- setBracketDetail({ round: rn+" · Week "+mu.week, week:mu.week, winnerId:mu.winner_id, u1, u2, a:build(u1, mu.user1_points), b:build(u2, mu.user2_points) });
+ setBracketDetail({ round: (labelOverride||(rn+" · Week "+mu.week)), week:mu.week, winnerId:mu.winner_id, u1, u2, a:build(u1, mu.user1_points), b:build(u2, mu.user2_points) });
  } catch(e) {}
  };
+
+ const fetchAllMatchups = async (leagueId) => { try{ const { data } = await supabase.from("matchups").select("*").eq("league_id", leagueId); setAllMatchups(data||[]); }catch(e){} };
+ useEffect(()=>{ if(screen==="matchup" && activeLeague && (activeLeague.league_type||"h2h")==="h2h" && activeLeague.id){ fetchAllMatchups(activeLeague.id); setMWeek(activeLeague.current_week||activeLeague.week||1); } }, [screen, activeLeagueId]);
 
  useEffect(()=>{
  if(screen==="league" && activeLeague && ((activeLeague.league_type==="bracket" && (leagueTab==="bracket"||leagueTab==="schedule")) || leagueTab==="playoff")){
@@ -5831,7 +5852,7 @@ export default function App() {
                   <div style={{fontSize:9,fontWeight:800,letterSpacing:0.5,color:IOS.label3,textTransform:"uppercase"}}>{(SPORTS[soloSport]&&SPORTS[soloSport].label)||""}</div>
                 </div>
                 <div style={{padding:"10px 14px"}}>
-                  {[{name:g.away,logo:espn?.awayLogo,record:espn?.awayRecord},{name:g.home,logo:espn?.homeLogo,record:espn?.homeRecord}].map((team,ti)=>(
+                  {[{name:g.away,logo:(teamLogo(soloSport,g.away)||espn?.awayLogo),record:espn?.awayRecord},{name:g.home,logo:(teamLogo(soloSport,g.home)||espn?.homeLogo),record:espn?.homeRecord}].map((team,ti)=>(
                     <div key={ti} style={{display:"flex",alignItems:"center",gap:10,marginBottom:ti===0?8:0}}>
                       {team.logo?<img src={team.logo} style={{width:28,height:28,objectFit:"contain",flexShrink:0}} onError={e=>e.target.style.display="none"}/>:<div style={{width:28,height:28,borderRadius:"50%",background:"rgba(255,255,255,0.1)",flexShrink:0}}/>}
                       <div style={{flex:1}}><div style={{fontSize:14,fontWeight:700,color:"#fff"}}>{team.name}</div>{team.record&&<div style={{fontSize:11,color:IOS.label3}}>{team.record}</div>}</div>
@@ -5932,7 +5953,7 @@ export default function App() {
  return (
  <div key={gi} className={"wr-gc"+(hasPick?" picked":"")} onClick={()=>openG(g,away,home,espn,gameTime,isLive)}>
  <div className="wr-gctop">{isLive?<span className="wr-glive"><span className="wr-dot"/>LIVE</span>:isDone?<span className="wr-gtime">Final</span>:<span className="wr-gtime">{gameTime}</span>}<span className="wr-gsport">{SPORTS[activeLeague?.sport]?.label||""}</span></div>
- {[{ab:away,logo:espn?.awayLogo,sc:espn?.awayScore,rec:espn?.awayRecord},{ab:home,logo:espn?.homeLogo,sc:espn?.homeScore,rec:espn?.homeRecord}].map((tm,ti)=>(
+ {[{ab:away,logo:(teamLogo(activeLeague?.sport,g.away)||espn?.awayLogo),sc:espn?.awayScore,rec:espn?.awayRecord},{ab:home,logo:(teamLogo(activeLeague?.sport,g.home)||espn?.homeLogo),sc:espn?.homeScore,rec:espn?.homeRecord}].map((tm,ti)=>(
  <div key={ti} className="wr-grow">
  <div className="wr-gl"><div className="wr-glogo">{tm.logo?<img src={tm.logo} style={{width:22,height:22,objectFit:"contain"}} onError={e=>{e.target.style.display="none";}}/>:tm.ab}</div><div style={{minWidth:0}}><div className="wr-gn">{tm.ab}</div>{tm.rec&&<div style={{fontSize:9.5,color:"rgba(255,255,255,0.4)"}}>{tm.rec}</div>}</div></div>
  {(isLive||isDone)&&tm.sc!=null&&<div className="wr-gsc">{tm.sc}</div>}
@@ -6298,8 +6319,8 @@ export default function App() {
  </div>
  {/* Teams */}
  <div style={{padding:"10px 14px"}}>
- {[{name:g.away,abbr:away,logo:espn?.awayLogo,score:espn?.awayScore,record:espn?.awayRecord},
- {name:g.home,abbr:home,logo:espn?.homeLogo,score:espn?.homeScore,record:espn?.homeRecord}
+ {[{name:g.away,abbr:away,logo:(teamLogo(activeLeague?.sport,g.away)||espn?.awayLogo),score:espn?.awayScore,record:espn?.awayRecord},
+ {name:g.home,abbr:home,logo:(teamLogo(activeLeague?.sport,g.home)||espn?.homeLogo),score:espn?.homeScore,record:espn?.homeRecord}
  ].map((team,ti)=>(
  <div key={ti} style={{display:"flex",alignItems:"center",gap:10,marginBottom:ti===0?8:0}}>
  {team.logo
@@ -8578,6 +8599,66 @@ export default function App() {
  <div style={{fontSize:11,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(255,255,255,0.42)"}}>Week {activeLeague.current_week||activeLeague.week||1} · {activeLeague.name} · Live</div>
  <div style={{fontSize:30,fontWeight:800,letterSpacing:"-0.7px",color:"#fff",lineHeight:1.05,marginTop:2}}>Matchup</div>
  </div>
+ {(activeLeague.league_type||"h2h")==="h2h" && (()=>{
+   const wkSel = mWeek || (activeLeague.current_week||1);
+   const wks = [...new Set((allMatchups||[]).map(m=>m.week))].sort((x,y)=>x-y);
+   const maxWk = wks.length?wks[wks.length-1]:(activeLeague.season_weeks||1);
+   const minWk = wks.length?wks[0]:1;
+   const weekMs = (allMatchups||[]).filter(m=>m.week===wkSel);
+   const nameOf = (id)=>{ const m=leagueMembers.find(x=>x.userId===id); return id===(user&&user.id)?"You":(m?m.name:"Player"); };
+   return (<>
+     <div style={{display:"flex",background:IOS.bg2,borderRadius:12,padding:3,margin:"0 16px 8px"}}>
+       <div onClick={()=>setMatchupView("mine")} style={{flex:1,textAlign:"center",padding:"9px 0",borderRadius:9,fontSize:14,fontWeight:800,cursor:"pointer",background:matchupView==="mine"?"#2d2d31":"transparent",color:matchupView==="mine"?"#fff":IOS.label2}}>My Matchup</div>
+       <div onClick={()=>{ setMatchupView("league"); setMWeek(mWeek||(activeLeague.current_week||1)); }} style={{flex:1,textAlign:"center",padding:"9px 0",borderRadius:9,fontSize:14,fontWeight:800,cursor:"pointer",background:matchupView==="league"?"#2d2d31":"transparent",color:matchupView==="league"?"#fff":IOS.label2}}>League</div>
+     </div>
+     {matchupView==="league" && (
+       <div style={{position:"fixed",left:0,right:0,top:0,bottom:0,background:"#000",zIndex:160,display:"flex",flexDirection:"column"}}>
+         <div style={{padding:"max(env(safe-area-inset-top),14px) 16px 10px",display:"flex",alignItems:"center",borderBottom:`0.5px solid ${IOS.sep}`}}>
+           <div onClick={()=>setMatchupView("mine")} style={{cursor:"pointer",display:"flex",alignItems:"center",gap:4,color:IOS.blue,fontSize:15,fontWeight:700,width:120}}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.4"><path d="M15 18l-6-6 6-6"/></svg>My Matchup</div>
+           <div style={{flex:1,textAlign:"center",fontSize:16,fontWeight:800}}>League Matchups</div>
+           <div style={{width:120}}/>
+         </div>
+         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 18px 8px"}}>
+           <div onClick={()=>setMWeek(Math.max(minWk, wkSel-1))} style={{width:34,height:34,borderRadius:10,background:IOS.bg2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",opacity:wkSel<=minWk?0.3:1}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4"><path d="M15 18l-6-6 6-6"/></svg></div>
+           <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:800}}>Week {wkSel}</div><div style={{fontSize:11,color:IOS.label3,fontWeight:600,marginTop:1}}>{weekMs.length} matchup{weekMs.length===1?"":"s"}</div></div>
+           <div onClick={()=>setMWeek(Math.min(maxWk, wkSel+1))} style={{width:34,height:34,borderRadius:10,background:IOS.bg2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",opacity:wkSel>=maxWk?0.3:1}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4"><path d="M9 18l6-6-6-6"/></svg></div>
+         </div>
+         <div style={{flex:1,overflow:"auto",padding:"4px 16px 100px"}}>
+           {weekMs.length===0 ? (<div style={{textAlign:"center",color:IOS.label3,fontSize:14,padding:"40px 0"}}>No matchups scheduled for Week {wkSel}.</div>) : weekMs.map((mu,mi)=>{
+             const u1=mu.user1_id,u2=mu.user2_id;
+             const mine=u1===(user&&user.id)||u2===(user&&user.id);
+             const p1=Number(mu.user1_points||0), p2=Number(mu.user2_points||0);
+             const done=mu.winner_id!=null;
+             const lead1=done?mu.winner_id===u1:(p1>p2);
+             const lead2=done?mu.winner_id===u2:(p2>p1);
+             const anyLead=lead1||lead2;
+             const row=(id,pts,lead)=>(
+               <div style={{display:"flex",alignItems:"center",gap:11,padding:"9px 13px",opacity:lead?1:(anyLead?0.6:1)}}>
+                 <div style={{width:32,height:32,borderRadius:9,background:(id===(user&&user.id)?IOS.blue:IOS.indigo)+"33",color:id===(user&&user.id)?IOS.blue:IOS.indigo,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:13,flexShrink:0}}>{nameOf(id).slice(0,2).toUpperCase()}</div>
+                 <div style={{flex:1,fontSize:15,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{nameOf(id)}</div>
+                 <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:21,color:lead?IOS.green:"#fff"}}>{pts.toFixed(1)}</div>
+               </div>
+             );
+             return (
+               <div key={mi} onClick={()=>openBracketMatch(mu,"Week "+wkSel)} style={{background:IOS.bg2,border:mine?("1px solid "+IOS.blue+"88"):`1px solid ${IOS.sep}`,borderRadius:14,marginBottom:11,overflow:"hidden",cursor:"pointer"}}>
+                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 13px 2px"}}>
+                   <div style={{fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",color:mine?IOS.blue:IOS.label3}}>{mine?"Your matchup":"Matchup"}</div>
+                   <div style={{fontSize:10,fontWeight:800,padding:"3px 8px",borderRadius:6,background:done?"rgba(255,255,255,0.08)":"rgba(48,209,88,0.14)",color:done?IOS.label2:IOS.green}}>{done?"FINAL":"LIVE"}</div>
+                 </div>
+                 {row(u1,p1,lead1)}
+                 <div style={{height:0.5,background:IOS.sep,margin:"0 13px"}}/>
+                 {row(u2,p2,lead2)}
+                 <div style={{fontSize:9.5,color:IOS.label3,fontWeight:600,padding:"6px 13px 9px",display:"flex",alignItems:"center",justifyContent:"space-between"}}><span>Tap to see both slips</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={IOS.label3} strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg></div>
+               </div>
+             );
+           })}
+         </div>
+         {bracketDetail && <BracketMatchSheet d={bracketDetail} IOS={IOS} onClose={()=>setBracketDetail(null)}/>}
+       </div>
+     )}
+   </>);
+ })()}
+
 
  {(()=>{
  const targetSize = activeLeague.target_size||activeLeague.max_members||8;
