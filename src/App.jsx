@@ -4065,12 +4065,12 @@ export default function App() {
  useEffect(()=>{ if(screen==="matchup" && activeLeague && (activeLeague.league_type||"h2h")==="h2h" && activeLeague.id){ fetchAllMatchups(activeLeague.id); setMWeek(activeLeague.current_week||activeLeague.week||1); } }, [screen, activeLeagueId]);
 
  useEffect(()=>{
- if(screen==="league" && activeLeague && ((activeLeague.league_type==="bracket" && (leagueTab==="bracket"||leagueTab==="schedule")) || leagueTab==="playoff")){
+ if(activeLeague && ((screen==="league" && ((activeLeague.league_type==="bracket" && (leagueTab==="bracket"||leagueTab==="schedule")) || leagueTab==="playoff")) || (screen==="leagues" && leagueSubTab==="playoff"))){
  fetchBracket(activeLeague.id);
  const _iv=setInterval(()=>fetchBracket(activeLeague.id), 45000);
  return ()=>clearInterval(_iv);
  }
- }, [screen, leagueTab, activeLeagueId]);
+ }, [screen, leagueTab, leagueSubTab, activeLeagueId]);
 
  const fetchLeagues = async (uid) => {
  setLeaguesLoading(true);
@@ -9494,7 +9494,7 @@ export default function App() {
  {/* Sub-tabs - hide when dropdown is open */}
  {lg && leagueSubTab!=="dropdown" && (
  <div style={{display:"flex",borderBottom:`0.5px solid ${IOS.sep}`,margin:"10px 0 0"}}>
-   {["overview","standings",(lg.league_type||"h2h")==="bracket"?"bracket":"schedule"].map(t=>(
+   {["overview","standings",(lg.league_type||"h2h")==="bracket"?"bracket":"schedule", ...(((lg.league_type||"h2h")!=="bracket" && (Number(lg.playoff_size)||0)>=2)?["playoff"]:[])].map(t=>(
      <div key={t} onClick={()=>setLeagueSubTab(t)} style={{flex:1,textAlign:"center",padding:"9px 4px",fontSize:11,fontWeight:700,textTransform:"capitalize",cursor:"pointer",
        color:leagueSubTab===t?IOS.blue:"rgba(255,255,255,0.4)",
        borderBottom:leagueSubTab===t?`2px solid ${IOS.blue}`:"2px solid transparent",transition:"all .15s"}}>
@@ -9658,32 +9658,73 @@ export default function App() {
        ); })()}
      </div>
    ) : (
-   <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:12,overflow:"hidden"}}>
-     {liveSchedule.map((m,i)=>{
-       const isCurrentWk = m.week===(lg.current_week||1);
-       const won=m.result==="W", lost=m.result==="L", live=m.result==="live";
+   <div style={{background:IOS.bg2,borderRadius:12,overflow:"hidden"}}>
+     {(()=>{ const _sw=Number(lg.season_weeks)||18; const _N=playoffFieldFor(lg, leagueMembers.length||0); const _start=_N>=2?Math.max(1,_sw-playoffWeeksFor(_N)+1):(_sw+1); return Array.from({length:_sw},(_,_i)=>_i+1).map(_wknum=>{ const wk=liveSchedule.find(w=>w.week===_wknum); const _isPO=_wknum>=_start; if(!wk){ return (<div key={"ph"+_wknum} className="sch-item" style={{opacity:0.7}}><div className="sch-wk">W{_wknum}</div><div className="sch-opp up" style={_isPO?{color:(IOS.purple||"#BF5AF2"),fontWeight:700}:{}}>{_isPO?"Playoffs":"Bye week"}</div><div className="sch-score" style={{width:70,fontSize:12}}>—</div><div style={{display:"flex",alignItems:"center",gap:6}}><div className="sch-badge up">{_isPO?"TBD":"BYE"}</div></div></div>); }
+       const live=wk.result==="live"; const done=wk.result==="W"||wk.result==="L";
+       const myPts=wk.myPts>0?wk.myPts:null; const oppPts=wk.oppPts>0?wk.oppPts:null;
+       const isCurrentWeek=wk.week===(lg.current_week||lg.week||1);
+       const showLive=live||(isCurrentWeek&&!done);
+       const myLivePts=showLive?parseFloat(weekPicks.filter(p=>p.user_id===user?.id&&p.result==="W").reduce((su,p)=>su+parseFloat(p.points_earned||0),0).toFixed(1)):null;
+       const oppLivePts=showLive?parseFloat(weekPicks.filter(p=>p.user_id===wk.oppId&&p.result==="W").reduce((su,p)=>su+parseFloat(p.points_earned||0),0).toFixed(1)):null;
        return (
-       <div key={i} onClick={()=>{ if(won||lost){ setActiveLeagueId(lg.id); setSelectedMatchup(m.week); fetchPastMatchupPicks(m.week, user.id, m.oppId); } }} style={{display:"flex",alignItems:"center",padding:"10px 14px",borderBottom:i<liveSchedule.length-1?`0.5px solid ${IOS.sep}`:"none",background:isCurrentWk?"rgba(10,132,255,0.05)":"transparent",cursor:(won||lost)?"pointer":"default"}}>
-         <div style={{width:32,fontSize:11,fontWeight:700,color:isCurrentWk?IOS.blue:IOS.label3,flexShrink:0}}>Wk {m.week}</div>
-         <div style={{flex:1,fontSize:12,color:"#ccc"}}>vs {m.opp}</div>
+       <div key={wk.week} className="sch-item" style={{...(live?{background:"rgba(10,132,255,0.06)"}:{}),...(done?{cursor:"pointer"}:{})}} onClick={()=>{ if(done){ setActiveLeagueId(lg.id); setSelectedMatchup(wk.week); fetchPastMatchupPicks(wk.week, user.id, wk.oppId); } }}>
+         <div className={`sch-wk ${live?"live":""}`}>W{wk.week}</div>
+         <div className={`sch-opp ${live?"live":done?"done":"up"}`}>{live&&<span style={{color:IOS.blue,marginRight:6}}>●</span>}vs {wk.opp}</div>
+         <div className="sch-score" style={{width:70,fontSize:12}}>{done&&myPts!==null?<span style={{color:wk.result==="W"?IOS.green:IOS.red,fontWeight:700}}>{myPts}–{oppPts}</span>:showLive&&myLivePts!==null?<span style={{color:IOS.blue,fontWeight:700}}>{myLivePts}–{oppLivePts}</span>:"—"}</div>
          <div style={{display:"flex",alignItems:"center",gap:6}}>
-           {(m.myPts>0||m.oppPts>0)&&<div style={{fontSize:11,color:IOS.label3}}>{m.myPts.toFixed(1)} - {m.oppPts.toFixed(1)}</div>}
-           <div style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:5,
-             background:won?"rgba(48,209,88,0.1)":lost?"rgba(255,59,48,0.08)":live?"rgba(255,159,10,0.1)":"rgba(255,255,255,0.06)",
-             color:won?IOS.green:lost?IOS.red:live?IOS.orange:IOS.label3}}>
-             {won?"W":lost?"L":live?"Live":isCurrentWk?"Now":"—"}
-           </div>
-           {(won||lost)&&<div style={{fontSize:14,color:IOS.label3,marginLeft:2}}>›</div>}
+           <div className={`sch-badge ${showLive&&!done?"live":wk.result==="upcoming"?"up":wk.result}`}>{showLive&&!done?"LIVE":wk.result==="upcoming"?"—":wk.result}</div>
+           {done&&<div style={{fontSize:16,color:IOS.label3}}>›</div>}
          </div>
        </div>
        );
-     })}
-   </div>
-   )}
+     }); })()}
+   </div>   )}
  </div>
  )}
 
 
+
+ {/* ── PLAYOFF TAB ── */}
+ {lg && leagueSubTab==="playoff" && (()=>{
+   const ms = realStandings||[];
+   const total = ms.length || (lg.target_size||lg.max_members||0);
+   const N = playoffFieldFor(lg, total);
+   const pWeeks = playoffWeeksFor(N);
+   const sw = Number(lg.season_weeks)||18;
+   const startWeek = Math.max(1, sw - pWeeks + 1);
+   const playoffMs = (bracketMatchups||[]).filter(m=>String(m.bracket_match_id||"").startsWith("P"));
+   const seeded = ms.slice(0,N);
+   if(N<2) return (<div style={{padding:"12px 16px 20px"}}><div style={{background:IOS.bg2,borderRadius:12,padding:"28px 20px",textAlign:"center"}}><div style={{fontSize:15,fontWeight:700,color:"#fff",marginBottom:6}}>No playoff in this league</div><div style={{fontSize:13,color:IOS.label3,lineHeight:1.6}}>Playoffs need at least 4 players. The top of the standings takes the title.</div></div></div>);
+   if(playoffMs.length) return (
+     <div style={{padding:"12px 16px 20px"}}>
+       <div style={{margin:"0 0 12px",fontSize:11,fontWeight:800,letterSpacing:".5px",textTransform:"uppercase",color:IOS.yellow}}>Top {N} seeds · single-elim · Wk {startWeek}–{sw}</div>
+       <BracketView matchups={playoffMs} members={leagueMembers} uid={user&&user.id} IOS={IOS} onOpenMatch={openBracketMatch} live={bracketLive} onChampion={(id,nm)=>setChampCelebrate(champPayload(id,nm))}/>
+       {bracketDetail && <BracketMatchSheet d={bracketDetail} IOS={IOS} onClose={()=>setBracketDetail(null)}/>}
+       {champCelebrate && <ChampCelebrate name={champCelebrate.name} leagueName={champCelebrate.leagueName} isYou={champCelebrate.isYou} members={champCelebrate.members} record={champCelebrate.record} points={champCelebrate.points} runnerUp={champCelebrate.runnerUp} IOS={IOS} onClose={()=>setChampCelebrate(null)} onShare={()=>champShare(champCelebrate.name, champCelebrate.leagueName)}/>}
+     </div>
+   );
+   return (
+     <div style={{padding:"12px 16px 20px"}}>
+       <div style={{borderRadius:14,padding:"16px",background:"linear-gradient(160deg,#19191e,#141417)",border:`0.5px solid ${IOS.sep}`,marginBottom:12}}>
+         <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:6}}>Playoff bracket</div>
+         <div style={{fontSize:13,color:IOS.label2,lineHeight:1.55}}>Top {N} seeds make a {pWeeks}-week single-elimination playoff (Wk {startWeek}–{sw}). The bracket appears here once the regular season ends.</div>
+       </div>
+       <div style={{fontSize:11,fontWeight:800,letterSpacing:".5px",textTransform:"uppercase",color:IOS.label3,margin:"0 4px 8px"}}>Projected seeds</div>
+       <div style={{background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:14,overflow:"hidden"}}>
+         {seeded.length===0 ? (<div style={{padding:"22px 16px",textAlign:"center",color:IOS.label3,fontSize:14}}>No graded picks yet</div>) : seeded.map((r,i)=>(
+           <div key={r.userId||i} style={{display:"flex",alignItems:"center",gap:11,padding:"12px 14px",background:r.isYou?"rgba(10,132,255,0.10)":"transparent",borderBottom:i<seeded.length-1?`0.5px solid ${IOS.sep}`:"none"}}>
+             <div style={{width:24,height:24,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:12,background:IOS.blue+"22",color:IOS.blue,flexShrink:0}}>{i+1}</div>
+             <div style={{flex:1,minWidth:0}}>
+               <div style={{fontSize:14,fontWeight:800,color:r.isYou?IOS.blue:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.isYou?"You":r.name}</div>
+               <div style={{fontSize:10.5,color:IOS.label3,fontWeight:600,marginTop:1}}>{r.record||"0-0"} · {r.points!=null?r.points:0} pts</div>
+             </div>
+             <div style={{fontSize:10,fontWeight:800,letterSpacing:".4px",textTransform:"uppercase",color:IOS.label3,flexShrink:0}}>vs #{N-i}</div>
+           </div>
+         ))}
+       </div>
+     </div>
+   );
+ })()}
 
  {/* Action buttons */}
  <div style={{padding:"2px 16px 12px",display:"flex",alignItems:"center",justifyContent:"center",gap:16}}>
