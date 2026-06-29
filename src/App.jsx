@@ -2165,7 +2165,7 @@ export default function App() {
  const [soloFreePicks, setSoloFreePicks] = useState([]); // freeform solo slate (variable count)
  const [freeCat, setFreeCat] = useState("all");
  const parseSlotConfig=(raw)=>{ try{ const a=typeof raw==="string"?JSON.parse(raw):raw; return (Array.isArray(a)&&a.length)?a:null; }catch(e){ return null; } };
- const freshSlots=()=>{ const cfg = !isSoloMode ? parseSlotConfig(activeLeague&&activeLeague.slot_config) : null; return cfg ? cfg.map((c,i)=>({id:i,bet:null,mult:c.mult,category:c.type,slotType:c.type,market:c.market||null,isParlay:false,parlayLegs:[],locked:true})) : EMPTY_FLEX.map(s=>({...s})); };
+ const freshSlots=()=>{ const cfg = !isSoloMode ? parseSlotConfig(activeLeague&&activeLeague.slot_config) : null; return cfg ? cfg.map((c,i)=>({id:i,bet:null,mult:null,category:c.type,slotType:c.type,market:c.market||null,isParlay:false,parlayLegs:[],locked:true})) : EMPTY_FLEX.map(s=>({...s})); };
  useEffect(()=>{ if(isSoloMode) return; setFlexPicks(freshSlots()); }, [activeLeagueId, isSoloMode, activeLeague&&activeLeague.slot_config]);
  const [soloSavedPicks, setSoloSavedPicks] = useState(null);
  const [soloSubmitted, setSoloSubmitted] = useState(false);
@@ -6409,6 +6409,13 @@ export default function App() {
  // ── Derived from activePicks (correct for both solo & league) ──
  const usedMults = activePicks.filter(p=>p.mult!==null).map(p=>p.mult);
  const availableMults = [1,2,3,4,5].filter(m=>!usedMults.includes(m));
+ // ── Multiplier pool (draft model): commish-defined multiset from slot_config; players assign each once ──
+ const _multPoolCfg = !isSoloMode ? parseSlotConfig(activeLeague&&activeLeague.slot_config) : null;
+ const multPool = _multPoolCfg ? _multPoolCfg.map(c=>c.mult) : [1,2,3,4,5];
+ const poolCounts = multPool.reduce((a,v)=>{a[v]=(a[v]||0)+1;return a;},{});
+ const poolUsedCounts = usedMults.reduce((a,v)=>{a[v]=(a[v]||0)+1;return a;},{});
+ const poolDistinct = [...new Set(multPool)].sort((a,b)=>a-b);
+ const multRemaining = (v, ownMult)=> (poolCounts[v]||0) - ((poolUsedCounts[v]||0) - (ownMult===v?1:0));
  const hasLongshot = activePicks.some(p=> {
  if(p.category==="longshot" && p.bet && p.bet.impliedOdds >= 400) return true;
  if(p.isParlay && p.parlayLegs.length>=2) {
@@ -7140,6 +7147,20 @@ export default function App() {
  {!hasParlay&&!isCustomSlip&&<div style={{fontSize:10.5,color:IOS.orange,marginTop:8,lineHeight:1.4}}>One pick must be a Longshot (+400 or better)</div>}
  </div>
 
+ {/* Multiplier pool — draft model */}
+ {isCustomSlip && multPool.length>0 && !activeSubmitted && (
+ <div style={{margin:"0 16px 12px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:14,padding:"11px 14px"}}>
+ <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",marginBottom:9}}>
+ <div style={{fontSize:12,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"rgba(255,255,255,0.4)"}}>Your multipliers</div>
+ <div style={{fontSize:11,fontWeight:700,color:IOS.label3}}><span style={{color:usedMults.length===multPool.length?IOS.green:"#64D2FF"}}>{usedMults.length}</span> / {multPool.length} assigned</div>
+ </div>
+ <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+ {(()=>{ const order=[...multPool].map((v,i)=>({v,i})).sort((a,b)=>a.v-b.v||a.i-b.i); const usedLeft={...poolUsedCounts}; return order.map((c,ci)=>{ let used=false; if((usedLeft[c.v]||0)>0){ used=true; usedLeft[c.v]--; } return (<div key={ci} style={{minWidth:40,height:34,borderRadius:9,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,background:used?"#2a2a2c":"#64D2FF",color:used?"#5a5a5e":"#06304a",opacity:used?0.5:1,transition:"all .15s"}}>{c.v}×</div>); }); })()}
+ </div>
+ <div style={{fontSize:10.5,color:IOS.label3,marginTop:8,lineHeight:1.4}}>Assign one to each pick below — each multiplier is used once. Tap a multiplier on a pick to set it.</div>
+ </div>
+ )}
+
  {/* Grid Bet Browser entry */}
  {!activeSubmitted && (()=>{
    const firstEmpty = activePicks.findIndex(p=>!p.isParlay && p.bet===null);
@@ -7327,8 +7348,8 @@ export default function App() {
  {/* Bottom bar: multipliers + pts if win */}
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(0,0,0,0.25)",borderTop:"0.5px solid rgba(255,255,255,0.06)",padding:"6px 13px",gap:8}}>
  <div style={{display:"flex",gap:5}}>
- {(slot.locked||slot.committed) ? [(<div key="lk" style={{width:34,height:26,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",background:(multColors[slot.mult]||"#2a2a2a"),color:"#fff",fontSize:11,fontWeight:700}}>{slot.mult}×</div>)] : [1,2,3,4,5].map(m=>{
- const taken = usedMults.includes(m) && slot.mult!==m;
+ {slot.committed ? [(<div key="lk" style={{width:34,height:26,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",background:(multColors[slot.mult]||"#2a2a2a"),color:"#fff",fontSize:11,fontWeight:700}}>{slot.mult}×</div>)] : poolDistinct.map(m=>{
+ const taken = multRemaining(m, slot.mult)<=0 && slot.mult!==m;
  const active = slot.mult===m;
  return (
  <div key={m} onClick={()=>{if(taken)return;setActivePicks(prev=>prev.map((p,i)=>i===idx?{...p,mult:active?null:m}:p));}}
