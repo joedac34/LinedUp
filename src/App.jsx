@@ -1910,8 +1910,30 @@ export default function App() {
  const activeLeague = isSoloMode ? {id:soloLeagueId||"solo",name:"Solo Mode",sport:soloSport,current_week:soloWeekNum(),season_weeks:99,max_members:1,target_size:1,isCommissioner:false} : ([...realLeagues].find(l=>l.id===activeLeagueId) || realLeagues[0] || {id:"",name:"",sport:"nfl",current_week:1,season_weeks:18,max_members:8,target_size:8,isCommissioner:false});
  const _lgTarget=(activeLeague&&(activeLeague.target_size||activeLeague.max_members))||8;
  const seasonNotStarted = !isSoloMode && !!(activeLeague&&activeLeague.id) && !activeLeague.season_start;
- const leagueFull = !isSoloMode && (Number((activeLeague&&activeLeague.memberCount)||0) >= _lgTarget);
+ const _lgMembers = Math.max(Number((activeLeague&&activeLeague.memberCount)||0), (!isSoloMode && activeLeague && activeLeague.id && Array.isArray(leagueMembers)) ? leagueMembers.length : 0);
+ const leagueFull = !isSoloMode && (_lgMembers >= _lgTarget);
  const leagueAwaitingStart = seasonNotStarted && leagueFull;
+ const _autoStartRef = useRef({});
+ useEffect(()=>{
+   if(isSoloMode || !activeLeague || !activeLeague.id) return;
+   if(!activeLeague.isCommissioner) return;
+   if(((activeLeague.start_mode)||"auto")==="manual") return;
+   if(activeLeague.season_start) return;
+   const _isH2H=((activeLeague.league_type)||"h2h")==="h2h";
+   const _ready=_isH2H ? (liveSchedule.length>0) : leagueFull;
+   if(!_ready) return;
+   if(_autoStartRef.current[activeLeague.id]) return;
+   _autoStartRef.current[activeLeague.id]=true;
+   (async()=>{
+     try{
+       const { data:_upd } = await supabase.from("leagues").update({ season_start:new Date().toISOString(), current_week:1 }).eq("id",activeLeague.id).is("season_start",null).select("id");
+       if(_upd && _upd.length){
+         try{ const {data:_mem}=await supabase.from("league_members").select("user_id").eq("league_id",activeLeague.id); const _ids=(_mem||[]).map(m=>m.user_id); fetch("/api/notify",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ userIds:_ids, title:(activeLeague.name||"Your league")+" is live!", body:"Week 1 is open \u2014 make your picks before they lock.", url:"/", category:"notif_league" })}); }catch(e){}
+       }
+       if(user&&user.id) await fetchLeagues(user.id);
+     }catch(e){}
+   })();
+ }, [isSoloMode, activeLeague&&activeLeague.id, activeLeague&&activeLeague.season_start, activeLeague&&activeLeague.start_mode, activeLeague&&activeLeague.isCommissioner, leagueFull, liveSchedule.length]);
  const notStartedBody = (<div className="body" style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center",padding:"70px 30px",gap:11}}><div style={{width:56,height:56,borderRadius:"50%",background:"rgba(255,159,10,0.12)",display:"flex",alignItems:"center",justifyContent:"center"}}><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke={IOS.orange} strokeWidth="2.2"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg></div><div style={{fontSize:18,fontWeight:800,color:"#fff"}}>Season hasn’t started</div><div style={{fontSize:13.5,color:IOS.label2,lineHeight:1.5,maxWidth:250}}>{(activeLeague&&activeLeague.isCommissioner)?"Open Week 1 from the Home tab when you\u2019re ready.":"Picks open once the commissioner starts the season."}</div><button onClick={async()=>{ setHomeMode("solo"); setSoloModeWithRef(true); try{ const lid=await getOrCreateSoloLeague(); setActiveLeagueId(lid||"solo"); }catch(e){} try{fetchSoloWeeks();}catch(e){} setScreen("picks"); }} style={{marginTop:8,background:"rgba(191,90,242,0.12)",border:"0.5px solid "+(IOS.purple||"#BF5AF2")+"66",color:(IOS.purple||"#BF5AF2"),borderRadius:11,padding:"11px 22px",fontSize:13.5,fontWeight:800,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Make picks in Solo instead →</button></div>);
  const sport = SPORTS[activeLeague?.sport] || SPORTS["nfl"];
  const SLOTS = sport.slots;
