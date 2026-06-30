@@ -3979,36 +3979,46 @@ export default function App() {
  .eq("user_id", uid)
  .eq("week", week);
  if(data && data.length > 0) {
- // Convert DB picks back into flexPicks format for the locked view
- const groups = {}; const order = [];
- data.forEach(p=>{ const sl=p.slot||""; const key = sl.startsWith("longshot") ? ("longshot_"+p.multiplier) : ("m"+p.multiplier); if(!groups[key]){ groups[key]=[]; order.push(key); } groups[key].push(p); });
- const _isCustom = data.some(pp=>{const s=pp.slot||""; return !s.startsWith("longshot") && /_\d+$/.test(s);});
- const flexPicks = order.map((key,gi)=>{
- const picks = groups[key];
- const isParlay = key.startsWith("longshot");
- const cat = (picks[0].slot||"").split("_")[0];
- return {
- id: gi,
- mult: picks[0].multiplier,
- isParlay,
- parlayLegs: isParlay ? picks.map(pp=>({id:pp.id, pick:pp.pick_name, game:pp.game||"", odds:pp.odds, impliedOdds:pp.implied_odds, gameTime:pp.game_date||null})) : [],
- bet: isParlay ? null : {pick:picks[0].pick_name, game:picks[0].game||"", odds:picks[0].odds, impliedOdds:picks[0].implied_odds, gameTime:picks[0].game_date||null, eventId:picks[0].event_id||null, marketKey:picks[0].market_key||null, outcome:picks[0].outcome||null, point:(picks[0].outcome_point!=null?picks[0].outcome_point:null), selKey:picks[0].sel_key||null},
- power_up_id: picks[0].power_up_id||null,
- pu_tier: picks[0].pu_tier!=null?picks[0].pu_tier:null,
- category: cat,
- locked: _isCustom,
- slotType: cat,
- market: (picks[0].market_key||null),
- committed: true,
- commitIds: picks.map(pp=>pp.id),
- };
- });
- if(!_isCustom){ while(flexPicks.length < 5) flexPicks.push({id:flexPicks.length, bet:null, mult:null, isParlay:false, parlayLegs:[]}); }
- setSavedPicks({fromDB: true, flexPicks, dbPicks: data});
+  // Convert DB picks back into flexPicks format for the locked/edit view
+  const _isCustom = data.some(pp=>{const s=pp.slot||""; return !s.startsWith("longshot") && /_\d+$/.test(s);});
+  const buildSlot = (picks, slotId)=>{
+    const isParlay = (picks[0].slot||"").startsWith("longshot");
+    const cat = (picks[0].slot||"").split("_")[0];
+    return {
+      id: slotId,
+      mult: picks[0].multiplier,
+      isParlay,
+      parlayLegs: isParlay ? picks.map(pp=>({id:pp.id, pick:pp.pick_name, game:pp.game||"", odds:pp.odds, impliedOdds:pp.implied_odds, gameTime:pp.game_date||null})) : [],
+      bet: isParlay ? null : {pick:picks[0].pick_name, game:picks[0].game||"", odds:picks[0].odds, impliedOdds:picks[0].implied_odds, gameTime:picks[0].game_date||null, eventId:picks[0].event_id||null, marketKey:picks[0].market_key||null, outcome:picks[0].outcome||null, point:(picks[0].outcome_point!=null?picks[0].outcome_point:null), selKey:picks[0].sel_key||null},
+      power_up_id: picks[0].power_up_id||null,
+      pu_tier: picks[0].pu_tier!=null?picks[0].pu_tier:null,
+      category: cat, locked: true, slotType: cat, market: (picks[0].market_key||null),
+      committed: true, commitIds: picks.map(pp=>pp.id),
+    };
+  };
+  let flexPicks;
+  if(_isCustom){
+   // Rebuild the FULL slot config so empty slots stay addable after a partial submit.
+   // Each DB slot name encodes its config index (type_idx) — place committed picks there.
+   const base = freshSlots().map(sl=>({...sl, committed:false, commitIds:[]}));
+   const bySlot = {}; data.forEach(p=>{ const s=p.slot||""; (bySlot[s]=bySlot[s]||[]).push(p); });
+   Object.keys(bySlot).forEach(slotName=>{
+     const idx = parseInt(String(slotName).split("_").pop(), 10);
+     if(isNaN(idx) || idx<0 || idx>=base.length) return;
+     const built = buildSlot(bySlot[slotName], idx);
+     base[idx] = {...base[idx], ...built, id: idx, category: base[idx].category||built.category, slotType: base[idx].slotType||built.slotType, market: base[idx].market||built.market};
+   });
+   flexPicks = base;
+  } else {
+   const groups = {}; const order = [];
+   data.forEach(p=>{ const sl=p.slot||""; const key = sl.startsWith("longshot") ? ("longshot_"+p.multiplier) : ("m"+p.multiplier); if(!groups[key]){ groups[key]=[]; order.push(key); } groups[key].push(p); });
+   flexPicks = order.map((key,gi)=> buildSlot(groups[key], gi));
+   while(flexPicks.length < 5) flexPicks.push({id:flexPicks.length, bet:null, mult:null, isParlay:false, parlayLegs:[]});
+  }
+  setSavedPicks({fromDB: true, flexPicks, dbPicks: data});
  } else {
- setSavedPicks(null);
- }
- };
+  setSavedPicks(null);
+ } };
  const fetchWeekPicks = async (leagueId, week) => {
  const {data:picks} = await supabase
  .from("picks")
@@ -6888,7 +6898,10 @@ export default function App() {
 
  {/* Submitted */}
  {(activeSubmitted || activeSavedPicks?.flexPicks)&&(()=>{
- const slots=[...(activeSavedPicks?.flexPicks||activePicks)].filter(x=>x.mult).sort((a,b)=>a.mult-b.mult);
+ const allSlots=[...(activeSavedPicks?.flexPicks||activePicks)];
+ const slots=[...allSlots].filter(x=>x.mult).sort((a,b)=>a.mult-b.mult);
+ const emptyLeft=allSlots.filter(x=>!x.committed && !x.mult && !x.bet && !(x.isParlay&&x.parlayLegs&&x.parlayLegs.length)).length;
+ const canEdit=slots.some(x=>!slotStarted(x)) || emptyLeft>0;
  const wk=activeLeague.current_week||activeLeague.week||1;
  const catColors={ml:IOS.blue,prop:IOS.yellow,ou:IOS.orange,spread:IOS.green,longshot:IOS.pink};
  const catLabels={ml:"Moneyline",prop:"Prop",ou:"Over/Under",spread:"Spread",longshot:"Longshot"};
@@ -6928,15 +6941,15 @@ export default function App() {
  <div style={{fontSize:10.5,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(255,255,255,0.38)"}}>{activeLeague.name} · Week {wk}</div>
  <div style={{fontSize:27,fontWeight:800,letterSpacing:"-0.7px",color:"#fff",marginTop:3,lineHeight:1}}>Your Slip</div>
  </div>
- <div style={{display:"flex",alignItems:"center",gap:6,background:"rgba(48,209,88,0.12)",border:"0.5px solid rgba(48,209,88,0.35)",borderRadius:20,padding:"6px 11px",flexShrink:0}}>
- <span style={{width:6,height:6,borderRadius:"50%",background:IOS.green,display:"inline-block",boxShadow:`0 0 7px ${IOS.green}`,animation:"lsxPulse 2s ease-in-out infinite"}}/>
- <span style={{fontSize:10,fontWeight:800,letterSpacing:"0.06em",color:IOS.green}}>LOCKED</span>
+ <div style={{display:"flex",alignItems:"center",gap:6,background:emptyLeft>0?"rgba(255,159,10,0.12)":"rgba(48,209,88,0.12)",border:"0.5px solid "+(emptyLeft>0?"rgba(255,159,10,0.35)":"rgba(48,209,88,0.35)"),borderRadius:20,padding:"6px 11px",flexShrink:0}}>
+ <span style={{width:6,height:6,borderRadius:"50%",background:emptyLeft>0?IOS.orange:IOS.green,display:"inline-block",boxShadow:`0 0 7px ${emptyLeft>0?IOS.orange:IOS.green}`,animation:"lsxPulse 2s ease-in-out infinite"}}/>
+ <span style={{fontSize:10,fontWeight:800,letterSpacing:"0.06em",color:emptyLeft>0?IOS.orange:IOS.green}}>{emptyLeft>0?"IN PROGRESS":"LOCKED"}</span>
  </div>
  </div>
  <div style={{display:"flex",gap:8,padding:"0 16px 16px",position:"relative"}}>
  {graded
  ? <><Tile val={`${wins}-${losses}`} lbl="Record" color={IOS.blue}/><Tile val={`+${wonTotal.toFixed(1)}`} lbl="Pts Won" color={IOS.green}/><Tile val={lsOdds||"—"} lbl="Longshot" color={IOS.pink}/></>
- : <><Tile val={`${slots.length}/5`} lbl="Picks" color={IOS.blue}/><Tile val={`+${projTotal.toFixed(1)}`} lbl="Proj. Pts" color={IOS.green}/><Tile val={lsOdds||"—"} lbl="Longshot" color={IOS.pink}/></>
+ : <><Tile val={`${slots.length}/${allSlots.length||5}`} lbl="Picks" color={IOS.blue}/><Tile val={`+${projTotal.toFixed(1)}`} lbl="Proj. Pts" color={IOS.green}/><Tile val={lsOdds||"—"} lbl="Longshot" color={IOS.pink}/></>
  }
  </div>
  </div>
@@ -7011,7 +7024,7 @@ export default function App() {
  </div>
  </div>
 
- {slots.some(s=>!slotStarted(s)) && <button className="ios-btn" style={{background:IOS.blue,color:"#fff",marginTop:8}} onClick={()=>{ const sp=activeSavedPicks?.flexPicks; if(sp) setActivePicks(sp); setActiveSavedPicks(null); setActiveSubmitted(false); }}>Edit picks</button>}
+ {canEdit && <button className="ios-btn" style={{background:IOS.blue,color:"#fff",marginTop:8}} onClick={()=>{ const sp=activeSavedPicks?.flexPicks; if(sp) setActivePicks(sp); setActiveSavedPicks(null); setActiveSubmitted(false); }}>{emptyLeft>0?("Add picks · "+emptyLeft+" left"):"Edit picks"}</button>}
  <button className="ios-btn" style={{background:"rgba(255,255,255,0.07)",color:IOS.blue,marginTop:8}} onClick={()=>{setScreen("home");}}>Back to Home</button>
  </div>
  );
