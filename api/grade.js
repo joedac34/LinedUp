@@ -801,6 +801,30 @@ async function gradePlokCalls() {
   } catch (e) { /* never let PLOK grading break the run */ }
 }
 
+// Keep each non-solo matchup's stored points in sync with graded picks DURING a live week,
+// so standings, the matchup list, My Matchup, and the schedule (which all read the stored
+// user1_points/user2_points columns) match the live detail view. Does NOT decide winners —
+// week finalization (advance.js for h2h, settleBracketRound for brackets) owns winner_id, and
+// finalized matchups (winner_id set) are never overwritten.
+async function updateMatchupPoints(league, week) {
+  try {
+    if (!league || !league.id || !week) return;
+    if ((league.league_type || "h2h") === "solo") return;
+    const ms = await sbGet(`matchups?league_id=eq.${league.id}&week=eq.${week}&winner_id=is.null&select=id,user1_id,user2_id,user1_points,user2_points`);
+    if (!Array.isArray(ms) || ms.length === 0) return; // nothing live to sync
+    const won = await sbGet(`picks?league_id=eq.${league.id}&week=eq.${week}&result=eq.W&select=user_id,points_earned`);
+    const totals = {};
+    for (const pk of (Array.isArray(won) ? won : [])) { if (pk.user_id) totals[pk.user_id] = (totals[pk.user_id] || 0) + (parseFloat(pk.points_earned) || 0); }
+    for (const m of ms) {
+      const p1 = parseFloat((totals[m.user1_id] || 0).toFixed(1));
+      const p2 = parseFloat((totals[m.user2_id] || 0).toFixed(1));
+      if (p1 !== Number(m.user1_points || 0) || p2 !== Number(m.user2_points || 0)) {
+        await sbPatch(`matchups?id=eq.${m.id}`, { user1_points: p1, user2_points: p2 });
+      }
+    }
+  } catch (e) { /* best-effort */ }
+}
+
 export default async function handler(req, res) {
   // Auth check — allow GET from Vercel cron (Authorization header) or POST with secret
   const cronSecret = process.env.CRON_SECRET;
@@ -843,7 +867,7 @@ export default async function handler(req, res) {
           ? `picks?league_id=eq.${league.id}&result=eq.pending&select=*`
           : `picks?league_id=eq.${league.id}&week=eq.${league.current_week}&result=eq.pending&select=*`
       );
-      if (!Array.isArray(picks) || picks.length === 0) continue;
+      if (!Array.isArray(picks) || picks.length === 0) { if (!_isSolo) await updateMatchupPoints(league, league.current_week); continue; }
 
       // Fetch LIVE + recent scores from ESPN (free — does NOT touch the Odds API).
       // Cached per sport within this run so leagues sharing a sport don't refetch.
@@ -970,6 +994,7 @@ export default async function handler(req, res) {
           if (pend.size === 0) await maybeNotifyCommishShare(league, wk);
         } catch (e) { /* best-effort */ }
       }
+      await updateMatchupPoints(league, league.current_week);
       await settleBracketRound(league, league.current_week);
     }
 
