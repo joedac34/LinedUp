@@ -492,10 +492,30 @@ function gradeProp(pickName, gameField, index, info = {}, gameDate = null) {
   }
   if (!stats) { info.reason = "prop_player_not_in_boxscores"; return null; }
 
-  const labels = resolveStatLabels(parsed.stat);
-  let raw = null;
-  for (const l of labels) { if (stats[l] != null) { raw = stats[l]; break; } }
-  const val = statNumber(raw);
+  const sget = (keys) => { for (const k of keys) { if (stats[k] != null) { const n = statNumber(stats[k]); if (n != null) return n; } } return null; };
+  const shas = (keys) => keys.some(k => stats[k] != null);
+  let val;
+  if (/total\s*bases?\b/.test(parsed.stat) || /^tb$/.test(parsed.stat.trim())) {
+    // Total bases = 1B + 2B*2 + 3B*3 + HR*4 = H + 2B + 2*3B + 3*HR. ESPN's batting line
+    // doesn't always carry doubles/triples; only grade when the components are actually
+    // present (direct stat, OR both 2B and 3B keys so a missing value means zero).
+    // Otherwise leave PENDING — never grade total bases off an incomplete box score.
+    const direct = sget(["totalBases", "TB", "total bases", "total_bases"]);
+    if (direct != null) { val = direct; }
+    else {
+      const H = sget(["H", "hits"]);
+      if (H == null || !shas(["2B", "doubles", "2b"]) || !shas(["3B", "triples", "3b"])) { info.reason = "prop_total_bases_data_unavailable"; return null; }
+      const D = sget(["2B", "doubles", "2b"]) || 0;
+      const Tr = sget(["3B", "triples", "3b"]) || 0;
+      const HR = sget(["HR", "homeRuns", "hr"]) || 0;
+      val = H + D + 2 * Tr + 3 * HR;
+    }
+  } else {
+    const labels = resolveStatLabels(parsed.stat);
+    let raw = null;
+    for (const l of labels) { if (stats[l] != null) { raw = stats[l]; break; } }
+    val = statNumber(raw);
+  }
   if (val == null) { info.reason = "prop_stat_not_found"; return null; }
 
   if (parsed.dir === "over")    return val > parsed.line ? "W" : val < parsed.line ? "L" : "P";
