@@ -531,13 +531,26 @@ function gradeProp(pickName, gameField, index, info = {}, gameDate = null) {
 
   let stats = null;
   if (teams && teams.length === 2) {
-    // Preferred: grade ONLY the box score for THIS prop's matchup. If that game
-    // isn't a completed box score yet, wait — never grade off a different night.
+    // Grade ONLY the box score for THIS prop's OWN game. A pick can only be made before
+    // its game starts, so the matching completed box score must be that same game — never
+    // a past meeting of the same teams. The box score's date must line up with the pick's
+    // stored game_date (within 11h: covers doubleheaders + minor source time skew; a
+    // same-matchup game on an adjacent day is 15h+ away and is correctly excluded).
     const cands = entries.filter(e => teamInGame(teams[0], e) && teamInGame(teams[1], e));
     if (!cands.length) { info.reason = "prop_game_not_final"; return null; }
-    const want = gameDate ? Date.parse(gameDate) : NaN;          // doubleheader tiebreak
-    cands.sort((a, b) => (!isNaN(want) ? Math.abs(a.date - want) - Math.abs(b.date - want) : b.date - a.date));
-    stats = cands[0].stats;
+    const want = gameDate ? Date.parse(gameDate) : NaN;
+    if (!isNaN(want)) {
+      const sameGame = cands.filter(e => !isNaN(e.date) && Math.abs(e.date - want) <= 11 * 3600 * 1000);
+      if (!sameGame.length) { info.reason = "prop_game_not_final"; return null; }   // its game isn't final yet
+      sameGame.sort((a, b) => Math.abs(a.date - want) - Math.abs(b.date - want));
+      stats = sameGame[0].stats;
+    } else {
+      // Legacy pick with no stored game_date: only safe when there's a single completed
+      // meeting of these teams (no multi-day series to confuse it); otherwise wait.
+      const dated = cands.filter(e => !isNaN(e.date));
+      if (dated.length !== 1) { info.reason = "prop_game_ambiguous_no_date"; return null; }
+      stats = dated[0].stats;
+    }
   } else {
     // No matchup teams available (e.g. longshot leg). Bind by game_date if present,
     // else fall back to the player's most recent completed game.
@@ -545,7 +558,7 @@ function gradeProp(pickName, gameField, index, info = {}, gameDate = null) {
     if (!isNaN(want)) {
       let best = null;
       for (const e of entries) { if (isNaN(e.date)) continue; const diff = Math.abs(e.date - want); if (best === null || diff < best.diff) best = { e, diff }; }
-      if (!best || best.diff > 14 * 3600 * 1000) { info.reason = "prop_game_not_final"; return null; }
+      if (!best || best.diff > 11 * 3600 * 1000) { info.reason = "prop_game_not_final"; return null; }
       stats = best.e.stats;
     } else {
       let latest = null;
