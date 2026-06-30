@@ -304,10 +304,12 @@ const STAT_ALIASES = {
   // MLB (verified against a real box score). Batting & pitching share labels
   // (H, R, HR, BB, K); with the universal DH each player is in only one group,
   // so a player's own stat resolves correctly (exception: two-way players).
-  "strikeouts": ["K", "strikeouts"], "hits allowed": ["H", "hits"], "hits": ["H", "hits"],
+  "strikeouts": ["K", "strikeouts", "strikeOuts"], "hits allowed": ["H", "hits"], "hits": ["H", "hits"],
   "earned runs": ["ER", "earnedRuns"], "runs allowed": ["R", "runs"], "runs": ["R", "runs"],
-  "walks": ["BB", "walks"], "home runs": ["HR", "homeRuns"], "homers": ["HR", "homeRuns"],
-  "rbis": ["RBI", "RBIs"], "rbi": ["RBI", "RBIs"],
+  "walks": ["BB", "walks", "baseOnBalls"], "home runs": ["HR", "homeRuns"], "homers": ["HR", "homeRuns"],
+  "rbis": ["RBI", "RBIs", "rbi"], "rbi": ["RBI", "RBIs", "rbi"],
+  "doubles": ["2B", "doubles"], "triples": ["3B", "triples"],
+  "stolen bases": ["SB", "stolenBases"], "stolen base": ["SB", "stolenBases"],
 };
 
 function normName(s) {
@@ -381,6 +383,67 @@ async function espnRecentEventIds(sp, lg) {
   const seen = new Set(), uniq = [];
   for (const e of out) { if (!seen.has(e.id)) { seen.add(e.id); uniq.push(e); } }
   return uniq;
+}
+
+// MLB StatsAPI (statsapi.mlb.com) — free, no key. Unlike ESPN's free box score it carries
+// doubles, triples, totalBases and stolenBases, so derived props (e.g. total bases) grade
+// automatically. Same index shape as buildPlayerStatIndex: name -> [{date,home,away,stats}].
+async function buildMlbStatsApiIndex() {
+  const index = {};
+  const now = new Date();
+  const games = [];
+  const seenPk = new Set();
+  for (let i = 0; i < 4; i++) {                               // today + last 3 days (UTC)
+    const d = new Date(now); d.setUTCDate(d.getUTCDate() - i);
+    const day = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+    try {
+      const r = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${day}`);
+      if (!r.ok) continue;
+      const data = await r.json();
+      for (const dt of (data.dates || [])) {
+        for (const g of (dt.games || [])) {
+          const st = g.status?.abstractGameState || g.status?.detailedState || "";
+          if (!/final|completed|game over/i.test(st)) continue;  // only completed games
+          if (seenPk.has(g.gamePk)) continue;
+          seenPk.add(g.gamePk);
+          games.push({ pk: g.gamePk, date: g.gameDate || null, home: g.teams?.home?.team?.name || "", away: g.teams?.away?.team?.name || "" });
+        }
+      }
+    } catch {}
+  }
+  const capped = games.slice(0, 48);                          // cap for runtime
+  for (let i = 0; i < capped.length; i += 6) {
+    const batch = capped.slice(i, i + 6);
+    const results = await Promise.all(batch.map(async gm => {
+      try {
+        const r = await fetch(`https://statsapi.mlb.com/api/v1/game/${gm.pk}/boxscore`);
+        if (!r.ok) return null;
+        return { gm, box: await r.json() };
+      } catch { return null; }
+    }));
+    for (const rr of results) {
+      if (!rr || !rr.box) continue;
+      const evDate = rr.gm.date ? Date.parse(rr.gm.date) : NaN;
+      for (const side of ["home", "away"]) {
+        const players = rr.box.teams?.[side]?.players || {};
+        for (const key in players) {
+          const pl = players[key];
+          const nm = normName(pl.person?.fullName);
+          if (!nm) continue;
+          const bat = pl.stats?.batting || {};
+          const pit = pl.stats?.pitching || {};
+          // Merge batting then pitching (universal DH: a player is in one group, so shared
+          // keys like strikeOuts resolve to that player's own stat).
+          const stats = {};
+          for (const k in bat) if (bat[k] != null) stats[k] = bat[k];
+          for (const k in pit) if (pit[k] != null && stats[k] == null) stats[k] = pit[k];
+          if (Object.keys(stats).length === 0) continue;       // didn't appear
+          (index[nm] || (index[nm] = [])).push({ date: evDate, home: rr.gm.home, away: rr.gm.away, stats });
+        }
+      }
+    }
+  }
+  return index;
 }
 
 // Build { normalizedPlayerName: { "AST": "3", "assists": "3", ... } } from completed box scores.
@@ -912,7 +975,14 @@ export default async function handler(req, res) {
       if (needProps) {
         const em = ESPN_MAP[league.sport];
         if (playerIndexCache[league.sport] === undefined) {
-          playerIndexCache[league.sport] = em ? await buildPlayerStatIndex(em.sp, em.lg) : {};
+          let idx;
+          if (league.sport === "mlb") {
+            try { idx = await buildMlbStatsApiIndex(); } catch (e) { idx = {}; }
+            if (!idx || Object.keys(idx).length === 0) { idx = em ? await buildPlayerStatIndex(em.sp, em.lg) : {}; }  // StatsAPI down -> ESPN fallback
+          } else {
+            idx = em ? await buildPlayerStatIndex(em.sp, em.lg) : {};
+          }
+          playerIndexCache[league.sport] = idx;
         }
         playerIndex = playerIndexCache[league.sport];
       }
