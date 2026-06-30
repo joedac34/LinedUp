@@ -4135,6 +4135,7 @@ export default function App() {
  });
  };
  const [savedPicks, setSavedPicks] = useState(null);
+ const [buildingSlip, setBuildingSlip] = useState(false); // user is actively editing/adding to their slip
  const [selectedMatchup, setSelectedMatchup] = useState(null);
  const [pastMatchupPicks, setPastMatchupPicks] = useState({my:[], opp:[]});
  const [pastMatchupLoading, setPastMatchupLoading] = useState(false);
@@ -4219,16 +4220,18 @@ export default function App() {
  leagueSportsToFetch.forEach(sp => fetchLiveOdds(sp));
  if(lg2) {
  const week = lg2.current_week||lg2.week||1;
- fetchMyPicks(activeLeagueId, week, user.id);
+ if(!buildingSlip) fetchMyPicks(activeLeagueId, week, user.id);
  fetchSchedule(activeLeagueId, user.id);
  fetchLeaguePowerUps(activeLeagueId, user.id);
  // Restore saved picks from localStorage for this specific league+week
  try {
  const stored = localStorage.getItem(`linedup_picks_${activeLeagueId}_wk${week}`);
- if(stored) setSavedPicks(JSON.parse(stored));
+ if(stored && !buildingSlip) setSavedPicks(JSON.parse(stored));
  } catch(e) {}
  }
  },[activeLeagueId, user, screen]);
+
+ useEffect(()=>{ setBuildingSlip(false); }, [activeLeagueId, isSoloMode]);
 
  // Rehydrate the solo home's locked-slip card after a reload (in-memory state is lost otherwise).
  // Guarded by week so a slip from a prior, already-graded week never shows as current.
@@ -6897,7 +6900,7 @@ export default function App() {
  )}
 
  {/* Submitted */}
- {(activeSubmitted || activeSavedPicks?.flexPicks)&&(()=>{
+ {(activeSubmitted || activeSavedPicks?.flexPicks)&&!buildingSlip&&(()=>{
  const allSlots=[...(activeSavedPicks?.flexPicks||activePicks)];
  const slots=[...allSlots].filter(x=>x.mult).sort((a,b)=>a.mult-b.mult);
  const emptyLeft=allSlots.filter(x=>!x.committed && !x.mult && !x.bet && !(x.isParlay&&x.parlayLegs&&x.parlayLegs.length)).length;
@@ -7024,7 +7027,7 @@ export default function App() {
  </div>
  </div>
 
- {canEdit && <button className="ios-btn" style={{background:IOS.blue,color:"#fff",marginTop:8}} onClick={()=>{ const sp=activeSavedPicks?.flexPicks; if(sp) setActivePicks(sp); setActiveSavedPicks(null); setActiveSubmitted(false); }}>{emptyLeft>0?("Add picks · "+emptyLeft+" left"):"Edit picks"}</button>}
+ {canEdit && <button className="ios-btn" style={{background:IOS.blue,color:"#fff",marginTop:8}} onClick={()=>{ const sp=activeSavedPicks?.flexPicks; if(sp) setActivePicks(sp); setActiveSavedPicks(null); setActiveSubmitted(false); setBuildingSlip(true); }}>{emptyLeft>0?("Add picks · "+emptyLeft+" left"):"Edit picks"}</button>}
  <button className="ios-btn" style={{background:"rgba(255,255,255,0.07)",color:IOS.blue,marginTop:8}} onClick={()=>{setScreen("home");}}>Back to Home</button>
  </div>
  );
@@ -7040,6 +7043,7 @@ export default function App() {
  if(stored) setSavedPicks(JSON.parse(stored));
  } catch(e) {}
  }
+ setBuildingSlip(false);
  setScreen("home");
  }} style={{background:IOS.fill2,border:"none",borderRadius:10,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:17,flexShrink:0}}>‹</button>
  <div style={{fontSize:17,fontWeight:600,letterSpacing:-0.3}}>{savedPicks?"My Slip":"Build Your Slip"}</div>
@@ -7056,6 +7060,7 @@ export default function App() {
  <div onClick={()=>{
  if(activeSavedPicks?.flexPicks) setActivePicks(activeSavedPicks.flexPicks);
  setActiveSavedPicks(null);
+ setBuildingSlip(true);
  }} style={{fontSize:13,fontWeight:600,color:IOS.blue,cursor:"pointer"}}>Edit</div>
  <div onClick={async()=>{
  if(window.confirm("Clear your unlocked picks? Picks from games that have already started are kept.")){
@@ -7469,7 +7474,7 @@ export default function App() {
  const storageKey = `linedup_picks_${activeLeague.id}_wk${weekNum}`;
  try { localStorage.setItem(storageKey, JSON.stringify(locked)); } catch(e) {}
  if(isSoloMode) { setSoloSavedPicks(locked); setSoloSubmitted(true); try{ localStorage.setItem("picklock_solo_locked", JSON.stringify({flexPicks:activePicks, lockedAt:locked.lockedAt, week:weekNum})); }catch(e){} }
- else { setActiveSavedPicks(locked); setActiveSubmitted(true); }
+ else { setActiveSavedPicks(locked); setActiveSubmitted(true); setBuildingSlip(false); }
  try{ if(navigator.vibrate) navigator.vibrate([0,30,40,30,60]); }catch(e){}
  setLockRitual(true);
  }}> Lock Your Slip </button>
