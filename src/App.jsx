@@ -2626,13 +2626,13 @@ export default function App() {
       ? baseSlots.map((sl,i)=>({idx:i, category:sl.category, mult: sl.mult||null}))
       : [{idx:0,category:"ml",mult:null},{idx:1,category:"spread",mult:null},{idx:2,category:"ou",mult:null},{idx:3,category:"prop",mult:null},{idx:4,category:"longshot",mult:null}];
     const neededCats = [...new Set(slotSpec.map(z=>z.category))];
-    const candidates = {}; let missing = false;
+    const candidates = {}; let haveAny = false;
     neededCats.forEach(cat=>{
       const list = (ALL_BETS||[]).filter(b=>b.category===cat).slice(0,6).map(b=>({id:b.id, pick:b.pick, odds:b.odds, game:b.game}));
-      if(!list.length) missing = true;
+      if(list.length) haveAny = true;
       candidates[cat] = list;
     });
-    if(missing){ setPlokBuild({error:"Odds are still loading for this slate — try again in a moment."}); return; }
+    if(!haveAny){ setPlokBuild({error:"Odds are still loading for this slate — try again in a moment."}); return; }
     const L = plokLeagueCtx();
     let strategy = "balanced";
     if(L){ if((L.matchupGap!=null&&L.matchupGap<0)||(L.finalWeek&&L.leaderGap!=null&&L.leaderGap>0)) strategy="ceiling"; else if((L.matchupGap!=null&&L.matchupGap>0)||L.leading) strategy="protect"; }
@@ -4074,7 +4074,7 @@ export default function App() {
  };
 
  const fetchAllMatchups = async (leagueId) => { try{ const { data } = await supabase.from("matchups").select("*").eq("league_id", leagueId); setAllMatchups(data||[]); }catch(e){} };
- useEffect(()=>{ if(screen==="matchup" && activeLeague && (activeLeague.league_type||"h2h")==="h2h" && activeLeague.id){ fetchAllMatchups(activeLeague.id); setMWeek(activeLeague.current_week||activeLeague.week||1); setBracketDetail(null); setMatchupView("mine"); } }, [screen, activeLeagueId]);
+ useEffect(()=>{ if(screen==="matchup" && activeLeague && (activeLeague.league_type||"h2h")==="h2h" && activeLeague.id){ fetchAllMatchups(activeLeague.id); fetchWeekPicks(activeLeague.id, activeLeague.current_week||activeLeague.week||1); setMWeek(activeLeague.current_week||activeLeague.week||1); setBracketDetail(null); setMatchupView("mine"); } }, [screen, activeLeagueId]);
 
  useEffect(()=>{
  if(activeLeague && ((screen==="league" && ((activeLeague.league_type==="bracket" && (leagueTab==="bracket"||leagueTab==="schedule")) || leagueTab==="playoff")) || (screen==="leagues" && leagueSubTab==="playoff"))){
@@ -8685,8 +8685,11 @@ export default function App() {
            {weekMs.length===0 ? (<div style={{textAlign:"center",color:IOS.label3,fontSize:14,padding:"40px 0"}}>No matchups scheduled for Week {wkSel}.</div>) : weekMs.map((mu,mi)=>{
              const u1=mu.user1_id,u2=mu.user2_id;
              const mine=u1===(user&&user.id)||u2===(user&&user.id);
-             const p1=Number(mu.user1_points||0), p2=Number(mu.user2_points||0);
              const done=mu.winner_id!=null;
+             const _curWk=activeLeague.current_week||activeLeague.week||1;
+             const _useLive=!done && mu.week===_curWk;
+             const _liveSum=(uid)=>(weekPicks||[]).filter(pp=>pp.user_id===uid && pp.result==="W").reduce((sm,pp)=>sm+parseFloat(pp.points_earned||0),0);
+             const p1=_useLive?_liveSum(u1):Number(mu.user1_points||0), p2=_useLive?_liveSum(u2):Number(mu.user2_points||0);
              const lead1=done?mu.winner_id===u1:(p1>p2);
              const lead2=done?mu.winner_id===u2:(p2>p1);
              const anyLead=lead1||lead2;
