@@ -1198,7 +1198,7 @@ function BracketMatchSheet({ d, IOS, onClose }){
               : <span className="bmd-chip" style={{opacity:.55,display:"inline-flex",alignItems:"center",justifyContent:"center"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>}
             <div className="bmd-pk">
               {reveal
-                ? <><div className="pn">{pk.name}</div><div className="ps">{pk.sub}</div></>
+                ? <><div className="pn">{pk.name}</div>{pk.game?<div className="ps" style={{opacity:.6}}>{pk.game}</div>:null}<div className="ps">{pk.sub}</div></>
                 : <><div className="pn" style={{color:"rgba(255,255,255,.5)"}}>Hidden until lock</div><div className="ps">Reveals when the game starts</div></>}
             </div>
             {resCell(pk.res, pk.pts)}
@@ -1892,6 +1892,7 @@ export default function App() {
  const [bracketDetail, setBracketDetail] = useState(null);
  const [matchupView, setMatchupView] = useState("mine");
  const [mWeek, setMWeek] = useState(0);
+ const [lmWeek, setLmWeek] = useState(null);
  const [allMatchups, setAllMatchups] = useState([]);
  const [bracketLive, setBracketLive] = useState({week:0,totals:{}});
  const [champCelebrate, setChampCelebrate] = useState(null);
@@ -4060,10 +4061,10 @@ export default function App() {
  const openBracketMatch = async (mu, labelOverride) => {
  try {
  const u1=mu.user1_id, u2=mu.user2_id; if(!u1||!u2) return;
- const { data } = await supabase.from("picks").select("user_id,slot,pick_name,odds,multiplier,result,points_earned,game_date").eq("league_id",activeLeague.id).eq("week",mu.week).in("user_id",[u1,u2]);
+ const { data } = await supabase.from("picks").select("user_id,slot,pick_name,odds,multiplier,result,points_earned,game_date,game").eq("league_id",activeLeague.id).eq("week",mu.week).in("user_id",[u1,u2]);
  const rows = data||[];
  const build = (id, storedPts) => {
- const ps = rows.filter(r=>r.user_id===id).map(r=>({ slot:(r.slot||"").split("_")[0], name:r.pick_name||"Pick", sub:(r.multiplier?r.multiplier+"x":"")+(r.odds!=null&&r.odds!==""?" · "+r.odds:""), res:r.result==="W"?"W":(r.result==="L"?"L":"pend"), pts:parseFloat(r.points_earned||0), locked:!!(r.result==="W"||r.result==="L"||(r.game_date&&new Date(r.game_date).getTime()<=Date.now())) }));
+ const ps = rows.filter(r=>r.user_id===id).map(r=>({ slot:(r.slot||"").split("_")[0], name:r.pick_name||"Pick", game:r.game||"", sub:(r.multiplier?r.multiplier+"x":"")+(r.odds!=null&&r.odds!==""?" · "+r.odds:""), res:r.result==="W"?"W":(r.result==="L"?"L":"pend"), pts:parseFloat(r.points_earned||0), locked:!!(r.result==="W"||r.result==="L"||(r.game_date&&new Date(r.game_date).getTime()<=Date.now())) }));
  const computed = ps.reduce((a,pk)=>a+(pk.res==="W"?pk.pts:0),0);
  const mem = leagueMembers.find(x=>x.userId===id);
  return { name: mem?mem.name:"Player", you:id===(user&&user.id), total:(mu.winner_id!=null && storedPts!=null)?Number(storedPts):computed, picks:ps };
@@ -4075,6 +4076,8 @@ export default function App() {
 
  const fetchAllMatchups = async (leagueId) => { try{ const { data } = await supabase.from("matchups").select("*").eq("league_id", leagueId); setAllMatchups(data||[]); }catch(e){} };
  useEffect(()=>{ if(screen==="matchup" && activeLeague && (activeLeague.league_type||"h2h")==="h2h" && activeLeague.id){ fetchAllMatchups(activeLeague.id); fetchWeekPicks(activeLeague.id, activeLeague.current_week||activeLeague.week||1); setMWeek(activeLeague.current_week||activeLeague.week||1); setBracketDetail(null); setMatchupView("mine"); } }, [screen, activeLeagueId]);
+
+ useEffect(()=>{ if(screen==="leagues" && leagueSubTab==="matchups" && activeLeague && activeLeague.id){ fetchAllMatchups(activeLeague.id); fetchWeekPicks(activeLeague.id, activeLeague.current_week||activeLeague.week||1); setBracketDetail(null); } }, [screen, leagueSubTab, activeLeagueId]);
 
  useEffect(()=>{
  if(activeLeague && ((screen==="league" && ((activeLeague.league_type==="bracket" && (leagueTab==="bracket"||leagueTab==="schedule")) || leagueTab==="playoff")) || (screen==="leagues" && leagueSubTab==="playoff"))){
@@ -9509,7 +9512,7 @@ export default function App() {
        const lsp=SPORTS[l.sport];
        const isSelected=l.id===activeLeagueId;
        return (
-       <div key={l.id} onClick={()=>{setActiveLeagueId(l.id);setLeagueSubTab("overview");}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 14px",borderBottom:i<realLeagues.length-1?`0.5px solid ${IOS.sep}`:"none",background:isSelected?"rgba(10,132,255,0.08)":"transparent",cursor:"pointer"}}>
+       <div key={l.id} onClick={()=>{setActiveLeagueId(l.id);setLeagueSubTab("overview");setLmWeek(null);}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 14px",borderBottom:i<realLeagues.length-1?`0.5px solid ${IOS.sep}`:"none",background:isSelected?"rgba(10,132,255,0.08)":"transparent",cursor:"pointer"}}>
          <div>
            <div style={{display:"flex",alignItems:"center",gap:6}}>
              <div style={{fontSize:13,fontWeight:700,color:isSelected?IOS.blue:"#fff"}}>{l.name}</div>{unreadByLeague[l.id]>0&&<span style={{minWidth:16,height:16,borderRadius:8,background:IOS.pink,color:"#fff",fontSize:10,fontWeight:800,display:"inline-flex",alignItems:"center",justifyContent:"center",padding:"0 4px"}}>{unreadByLeague[l.id]>9?"9+":unreadByLeague[l.id]}</span>}
@@ -9533,7 +9536,7 @@ export default function App() {
  {/* Sub-tabs - hide when dropdown is open */}
  {lg && leagueSubTab!=="dropdown" && (
  <div style={{display:"flex",borderBottom:`0.5px solid ${IOS.sep}`,margin:"10px 0 0"}}>
-   {["overview","standings",(lg.league_type||"h2h")==="bracket"?"bracket":"schedule", ...(((lg.league_type||"h2h")!=="bracket" && (Number(lg.playoff_size)||0)>=2)?["playoff"]:[])].map(t=>(
+   {["overview","standings",...(((lg.league_type||"h2h")==="h2h")?["matchups"]:[]),(lg.league_type||"h2h")==="bracket"?"bracket":"schedule", ...(((lg.league_type||"h2h")!=="bracket" && (Number(lg.playoff_size)||0)>=2)?["playoff"]:[])].map(t=>(
      <div key={t} onClick={()=>setLeagueSubTab(t)} style={{flex:1,textAlign:"center",padding:"9px 4px",fontSize:11,fontWeight:700,textTransform:"capitalize",cursor:"pointer",
        color:leagueSubTab===t?IOS.blue:"rgba(255,255,255,0.4)",
        borderBottom:leagueSubTab===t?`2px solid ${IOS.blue}`:"2px solid transparent",transition:"all .15s"}}>
@@ -9671,6 +9674,62 @@ export default function App() {
    </div>
  </div>
  )}
+
+
+ {/* ── MATCHUPS TAB ── */}
+ {lg && leagueSubTab==="matchups" && (()=>{
+   const curWk = lg.current_week||lg.week||1;
+   const totalWk = Number(lg.season_weeks)||curWk;
+   const wk = lmWeek!=null ? lmWeek : curWk;
+   const minWk=1, maxWk=Math.max(totalWk, curWk);
+   const weekMs = (allMatchups||[]).filter(m=>m.week===wk);
+   const nm=(id)=>{ if(!id) return "Player"; if(id===(user&&user.id)) return "You"; const m=(leagueMembers||[]).find(x=>x.userId===id); return m?m.name:"Player"; };
+   const liveSum=(uid)=>(weekPicks||[]).filter(pp=>pp.user_id===uid && pp.result==="W").reduce((sm,pp)=>sm+parseFloat(pp.points_earned||0),0);
+   return (
+   <div style={{padding:"12px 16px 24px"}}>
+     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+       <div onClick={()=>setLmWeek(Math.max(minWk, wk-1))} style={{width:34,height:34,borderRadius:10,background:IOS.bg2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",opacity:wk<=minWk?0.3:1}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4"><path d="M15 18l-6-6 6-6"/></svg></div>
+       <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:800}}>Week {wk}</div><div style={{fontSize:11,color:IOS.label3,fontWeight:600,marginTop:1}}>{weekMs.length} matchup{weekMs.length===1?"":"s"}</div></div>
+       <div onClick={()=>setLmWeek(Math.min(maxWk, wk+1))} style={{width:34,height:34,borderRadius:10,background:IOS.bg2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",opacity:wk>=maxWk?0.3:1}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4"><path d="M9 18l6-6-6-6"/></svg></div>
+     </div>
+     {weekMs.length===0 ? (
+       <div style={{textAlign:"center",color:IOS.label3,fontSize:14,padding:"40px 0"}}>No matchups scheduled for Week {wk}.</div>
+     ) : weekMs.map((mu,mi)=>{
+       const u1=mu.user1_id,u2=mu.user2_id;
+       const mine=u1===(user&&user.id)||u2===(user&&user.id);
+       const done=mu.winner_id!=null;
+       const useLive=!done && wk===curWk;
+       const p1=useLive?liveSum(u1):Number(mu.user1_points||0), p2=useLive?liveSum(u2):Number(mu.user2_points||0);
+       const lead1=done?mu.winner_id===u1:(p1>p2);
+       const lead2=done?mu.winner_id===u2:(p2>p1);
+       const anyLead=lead1||lead2;
+       const badge=done?"FINAL":(wk>curWk?"UPCOMING":"LIVE");
+       const badgeBg=done?"rgba(255,255,255,0.08)":(wk>curWk?"rgba(255,255,255,0.06)":"rgba(48,209,88,0.14)");
+       const badgeCol=done?IOS.label2:(wk>curWk?IOS.label3:IOS.green);
+       const row=(id,pts,lead)=>(
+         <div style={{display:"flex",alignItems:"center",gap:11,padding:"9px 13px",opacity:lead?1:(anyLead?0.6:1)}}>
+           <div style={{width:32,height:32,borderRadius:9,background:(id===(user&&user.id)?IOS.blue:IOS.indigo)+"33",color:id===(user&&user.id)?IOS.blue:IOS.indigo,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:13,flexShrink:0}}>{nm(id).slice(0,2).toUpperCase()}</div>
+           <div style={{flex:1,fontSize:15,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{nm(id)}</div>
+           <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:21,color:lead?IOS.green:"#fff"}}>{Number(pts).toFixed(1)}</div>
+         </div>
+       );
+       return (
+         <div key={mi} onClick={()=>openBracketMatch(mu,"Week "+wk)} style={{background:IOS.bg2,border:mine?("1px solid "+IOS.blue+"88"):("1px solid "+IOS.sep),borderRadius:14,marginBottom:11,overflow:"hidden",cursor:"pointer"}}>
+           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 13px 2px"}}>
+             <div style={{fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",color:mine?IOS.blue:IOS.label3}}>{mine?"Your matchup":"Matchup"}</div>
+             {badge && <div style={{fontSize:10,fontWeight:800,padding:"3px 8px",borderRadius:6,background:badgeBg,color:badgeCol}}>{badge}</div>}
+           </div>
+           {row(u1,p1,lead1)}
+           <div style={{height:0.5,background:IOS.sep,margin:"0 13px"}}/>
+           {row(u2,p2,lead2)}
+           <div style={{fontSize:9.5,color:IOS.label3,fontWeight:600,padding:"6px 13px 9px",display:"flex",alignItems:"center",justifyContent:"space-between"}}><span>Tap to see both slips</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={IOS.label3} strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg></div>
+         </div>
+       );
+     })}
+     {bracketDetail && <BracketMatchSheet d={bracketDetail} IOS={IOS} onClose={()=>setBracketDetail(null)}/>}
+   </div>
+   );
+ })()}
 
  {/* ── SCHEDULE TAB ── */}
  {lg && (leagueSubTab==="schedule"||leagueSubTab==="bracket") && (
