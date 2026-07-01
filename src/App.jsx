@@ -1855,6 +1855,105 @@ const PERIOD_SUBS_BY_SPORT = {
  nfl:[{id:"ml_h1",l:"1H ML"},{id:"spread_h1",l:"1H Spread"},{id:"ou_h1",l:"1H O/U"}],
  nba:[{id:"ml_h1",l:"1H ML"},{id:"spread_h1",l:"1H Spread"},{id:"ou_h1",l:"1H O/U"}],
 };
+// ── MLB starting lineup (StatsAPI) — shown on game detail, under the mound ──
+function LineupSection({ away, home, date, firstPitchLabel, IOS }) {
+  const BLUE=(IOS&&IOS.blue)||"#0A84FF", GREEN=(IOS&&IOS.green)||"#30D158", L3=(IOS&&IOS.label3)||"rgba(255,255,255,0.3)";
+  const [data,setData]=useState(null);
+  const [loading,setLoading]=useState(true);
+  const [side,setSide]=useState("away");
+  useEffect(()=>{
+    let alive=true; setLoading(true);
+    const qs=new URLSearchParams({away:away||"",home:home||"",date:date||""});
+    fetch("/api/lineup?"+qs.toString()).then(r=>r.json()).then(j=>{ if(alive){ setData(j); setLoading(false); } }).catch(()=>{ if(alive){ setData(null); setLoading(false); } });
+    return ()=>{ alive=false; };
+  },[away,home,date]);
+  const cur=data?(side==="away"?data.away:data.home):null;
+  const oppHand=data?(side==="away"?(data.home&&data.home.pitcherHand):(data.away&&data.away.pitcherHand)):"";
+  const fav=(bat)=> bat==="S"||(!!oppHand&&!!bat&&bat!==oppHand);
+  const nick=(t,fb)=>{ const st=String((t&&t.team)||fb||""); const p=st.trim().split(/\s+/); return p[p.length-1]||"Team"; };
+  const card={background:"linear-gradient(165deg,#212126,#161619)",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:16,overflow:"hidden"};
+  const colH={display:"grid",gridTemplateColumns:"22px 1fr 42px 34px 34px 44px",gap:6};
+  const Tab=(id,label,sub)=>(<div key={id} onClick={()=>setSide(id)} style={{flex:1,padding:10,textAlign:"center",cursor:"pointer",fontSize:14,fontWeight:800,color:side===id?"#fff":"rgba(255,255,255,0.45)",borderBottom:"2px solid "+(side===id?BLUE:"transparent")}}>{label}<span style={{display:"block",fontSize:9,fontWeight:700,letterSpacing:"0.05em",color:L3,marginTop:2}}>{sub}</span></div>);
+  return (
+    <div>
+    <div style={{display:"flex",alignItems:"center",gap:11,margin:"22px 4px 11px"}}><span style={{fontSize:10.5,fontWeight:800,letterSpacing:"0.16em",textTransform:"uppercase",color:L3}}>Starting Lineup</span><span style={{flex:1,height:1,background:"rgba(255,255,255,0.07)"}}/></div>
+    <div style={card}>
+    <div style={{display:"flex",padding:"12px 12px 0",gap:8}}>
+    {Tab("away",nick(data&&data.away,away),"AWAY")}
+    {Tab("home",nick(data&&data.home,home),"HOME")}
+    </div>
+    {loading?(<div style={{padding:32,textAlign:"center",color:"rgba(255,255,255,0.4)",fontSize:13}}>Loading lineup...</div>):null}
+    {(!loading&&(!cur||!cur.posted))?(
+    <div style={{padding:"40px 24px",textAlign:"center"}}>
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.6" style={{opacity:0.3,marginBottom:12}}><path d="M4 20l4-9 3 3 4-8 5 14"/><circle cx="8" cy="6" r="2"/></svg>
+    <div style={{fontSize:15,fontWeight:800,marginBottom:6}}>Lineup not posted yet</div>
+    <div style={{fontSize:12.5,color:"rgba(255,255,255,0.45)",lineHeight:1.5}}>Starting lineups usually drop 1–2 hours before first pitch. Check back closer to {firstPitchLabel||"first pitch"}.</div>
+    </div>
+    ):null}
+    {(!loading&&cur&&cur.posted)?(
+    <div>
+    <div style={{padding:"9px 14px",fontSize:10.5,fontWeight:700,letterSpacing:"0.04em",color:GREEN,background:"rgba(48,209,88,0.06)"}}>● CONFIRMED LINEUP{oppHand?("  ·  platoon edge vs "+oppHand+"HP highlighted"):""}</div>
+    <div style={{display:"grid",gridTemplateColumns:"22px 1fr 42px 34px 34px 44px",gap:6,padding:"10px 14px 6px",fontSize:9.5,fontWeight:800,letterSpacing:"0.06em",color:"rgba(255,255,255,0.3)"}}>
+    <div>#</div><div>BATTER</div><div style={{textAlign:"center"}}>AVG</div><div style={{textAlign:"center"}}>HR</div><div style={{textAlign:"center"}}>RBI</div><div style={{textAlign:"center"}}>OPS</div>
+    </div>
+    {cur.lineup.map((p,i)=>{
+      const f=fav(p.bat);
+      return (
+      <div key={i} style={{display:"grid",gridTemplateColumns:"22px 1fr 42px 34px 34px 44px",gap:6,padding:"9px 14px",alignItems:"center",borderTop:"1px solid rgba(255,255,255,0.05)",background:f?"rgba(10,132,255,0.06)":"transparent"}}>
+      <div style={{fontSize:14,fontWeight:900,color:"rgba(255,255,255,0.35)",textAlign:"center"}}>{p.order}</div>
+      <div><div style={{fontSize:14.5,fontWeight:700,lineHeight:1.1}}>{p.name}</div><div style={{fontSize:10,fontWeight:700,color:"rgba(255,255,255,0.4)",marginTop:1}}>{p.pos} · <span style={{color:f?BLUE:"rgba(255,255,255,0.55)",fontWeight:800}}>{p.bat||"?"}</span></div></div>
+      <div style={{fontSize:13.5,fontWeight:700,textAlign:"center",fontVariantNumeric:"tabular-nums"}}>{p.avg}</div>
+      <div style={{fontSize:13.5,fontWeight:700,textAlign:"center",fontVariantNumeric:"tabular-nums"}}>{p.hr}</div>
+      <div style={{fontSize:13.5,fontWeight:700,textAlign:"center",fontVariantNumeric:"tabular-nums"}}>{p.rbi}</div>
+      <div style={{fontSize:13.5,fontWeight:800,textAlign:"center",fontVariantNumeric:"tabular-nums"}}>{p.ops}</div>
+      </div>
+      );
+    })}
+    </div>
+    ):null}
+    </div>
+    </div>
+  );
+}
+
+// ── Team-stat tiles: team-specific; enriches MLB Run Diff/Last10/Win%/Streak from StatsAPI ──
+function StatTiles({ tiles, sport, away, home, date, aColor, hColor, IOS, mt }) {
+  const [ts,setTs]=useState(null);
+  useEffect(()=>{
+    if(sport!=="mlb") return;
+    let alive=true;
+    const qs=new URLSearchParams({away:away||"",home:home||"",date:date||""});
+    fetch("/api/lineup?"+qs.toString()).then(r=>r.json()).then(j=>{ if(alive) setTs(j); }).catch(()=>{});
+    return ()=>{ alive=false; };
+  },[sport,away,home,date]);
+  const fmtD=(d)=> (d==null?null:((d>=0?"+":"")+d));
+  const a=ts&&ts.away&&ts.away.teamStats, h=ts&&ts.home&&ts.home.teamStats;
+  const rows=tiles.map((t)=>{
+    let av=t.a, hv=t.h;
+    if(a||h){
+      if(t.l==="Run Diff"||t.l==="Pt Diff"){ const x=fmtD(a&&a.runDiff), y=fmtD(h&&h.runDiff); if(x!=null)av=x; if(y!=null)hv=y; }
+      else if(t.l==="Last 10"){ if(a&&a.lastTen)av=a.lastTen; if(h&&h.lastTen)hv=h.lastTen; }
+      else if(t.l==="Win %"){ if(a&&a.pct)av=a.pct; if(h&&h.pct)hv=h.pct; }
+      else if(t.l==="Streak"){ if(a&&a.streak)av=a.streak; if(h&&h.streak)hv=h.streak; }
+    }
+    return {l:t.l,a:av,h:hv};
+  });
+  return (
+  <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7,marginTop:mt}}>
+  {rows.map((t,ti)=>(
+  <div key={ti} style={{background:"linear-gradient(160deg,#202026,#161619)",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:14,padding:"9px 6px 10px",textAlign:"center"}}>
+  <div style={{fontSize:8,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:IOS.label3}}>{t.l}</div>
+  <div style={{display:"flex",justifyContent:"center",gap:6,marginTop:6}}>
+  <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:aColor}}>{t.a}</span>
+  <span style={{color:IOS.label3,fontWeight:700,fontSize:13,alignSelf:"center"}}>/</span>
+  <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:hColor}}>{t.h}</span>
+  </div>
+  </div>
+  ))}
+  </div>
+  );
+}
+
 export default function App() {
  const [screen, setScreen] = useState("home");
  const [tutorialStep, setTutorialStep] = useState(-1); // -1 = hidden; only shown on fresh signup
@@ -11806,19 +11905,10 @@ export default function App() {
    </div>
    </>):null}
 
+   {((activeLeague&&activeLeague.sport)==="mlb")?(<LineupSection away={away} home={home} date={tg.time} firstPitchLabel={gameTime||"first pitch"} IOS={IOS}/>):null}
+
    {hasTiles?(
-   <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7,marginTop:hasMound?14:8}}>
-   {tiles.map((t,ti)=>(
-   <div key={ti} style={{background:"linear-gradient(160deg,#202026,#161619)",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:14,padding:"9px 6px 10px",textAlign:"center"}}>
-   <div style={{fontSize:8,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:IOS.label3}}>{t.l}</div>
-   <div style={{display:"flex",justifyContent:"center",gap:6,marginTop:6}}>
-   <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:_brite(awayColor)}}>{t.a}</span>
-   <span style={{color:IOS.label3,fontWeight:700,fontSize:13,alignSelf:"center"}}>/</span>
-   <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:_brite(homeColor)}}>{t.h}</span>
-   </div>
-   </div>
-   ))}
-   </div>
+   <StatTiles tiles={tiles} sport={(activeLeague&&activeLeague.sport)} away={away} home={home} date={tg.time} aColor={_brite(awayColor)} hColor={_brite(homeColor)} IOS={IOS} mt={hasMound?14:8}/>
    ):null}
 
    <div style={{marginTop:16}}/>
