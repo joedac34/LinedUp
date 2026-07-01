@@ -130,7 +130,51 @@ export default async function handler(req, res) {
       return true;
     });
 
-    res.setHeader("Cache-Control", "no-store");
+    // --- MLB: hydrate probable starting pitchers from the free MLB StatsAPI ---
+    // Keyless, best-effort: any failure just leaves pitchers null (frontend shows TBD).
+    if (sport === "baseball_mlb" && games.length) {
+      try {
+        const day = now.split("T")[0];
+        const sched = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${day}&hydrate=probablePitcher`)
+          .then(r => (r.ok ? r.json() : null)).catch(() => null);
+        const rows = sched && sched.dates ? sched.dates.flatMap(d => d.games || []) : [];
+        const ids = new Set();
+        rows.forEach(gm => {
+          const hp = gm.teams && gm.teams.home && gm.teams.home.probablePitcher;
+          const ap = gm.teams && gm.teams.away && gm.teams.away.probablePitcher;
+          if (hp && hp.id) ids.add(hp.id);
+          if (ap && ap.id) ids.add(ap.id);
+        });
+        const handById = {};
+        if (ids.size) {
+          const ppl = await fetch(`https://statsapi.mlb.com/api/v1/people?personIds=${[...ids].join(",")}`)
+            .then(r => (r.ok ? r.json() : null)).catch(() => null);
+          ((ppl && ppl.people) || []).forEach(p => { if (p && p.id && p.pitchHand && p.pitchHand.code) handById[p.id] = p.pitchHand.code; });
+        }
+        const fmt = (pp) => {
+          if (!pp || !pp.fullName) return null;
+          const parts = String(pp.fullName).trim().split(/\s+/);
+          const nm = parts.length > 1 ? `${parts[0][0]}. ${parts.slice(1).join(" ")}` : pp.fullName;
+          const hand = handById[pp.id];
+          return hand ? `${nm} (${hand})` : nm;
+        };
+        const norm = (x) => String(x || "").toLowerCase().replace(/[^a-z]/g, "");
+        const byHome = {};
+        rows.forEach(gm => {
+          const h = gm.teams && gm.teams.home && gm.teams.home.team && gm.teams.home.team.name;
+          if (h) byHome[norm(h)] = { home: fmt(gm.teams.home.probablePitcher), away: fmt(gm.teams.away && gm.teams.away.probablePitcher) };
+        });
+        games.forEach(g => {
+          const rec = byHome[norm(g.home_team)];
+          if (rec) { g.home_pitcher = rec.home || null; g.away_pitcher = rec.away || null; }
+        });
+      } catch (e) { /* pitchers are best-effort; never block odds */ }
+    }
+
+    // Shared edge cache: the odds payload is identical for every user, so let Vercel's CDN
+    // serve one upstream pull to all users per window instead of hitting the Odds API per client.
+    // ~3 min fresh + 5 min stale-while-revalidate keeps lines current while decoupling cost from user count.
+    res.setHeader("Cache-Control", "public, s-maxage=180, stale-while-revalidate=300");
     return res.status(200).json({ games, remaining, used });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch odds" });

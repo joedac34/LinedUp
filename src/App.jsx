@@ -2014,7 +2014,7 @@ export default function App() {
  odds: american,
  impliedOdds: o.price,
  edge: (o.edge!=null?o.edge:null),
- gameTime: game.commence_time,
+ gameTime: game.commence_time, awayPitcher: game.away_pitcher||null, homePitcher: game.home_pitcher||null,
  eventId: game.id, marketKey: "h2h", outcome: o.name, point: null,
  selKey: `${game.id}|h2h|${o.name}|`,
  });
@@ -2026,7 +2026,7 @@ export default function App() {
  pick: `${o.name} ML`,
  odds: american,
  impliedOdds: o.price,
- gameTime: game.commence_time,
+ gameTime: game.commence_time, awayPitcher: game.away_pitcher||null, homePitcher: game.home_pitcher||null,
  eventId: game.id, marketKey: "h2h", outcome: o.name, point: null,
  selKey: `${game.id}|h2h|${o.name}|`,
  });
@@ -2044,7 +2044,7 @@ export default function App() {
  odds: american,
  impliedOdds: o.price,
  edge: (o.edge!=null?o.edge:null),
- gameTime: game.commence_time,
+ gameTime: game.commence_time, awayPitcher: game.away_pitcher||null, homePitcher: game.home_pitcher||null,
  eventId: game.id, marketKey: "spreads", outcome: o.name, point: o.point,
  selKey: `${game.id}|spreads|${o.name}|${o.point}`,
  });
@@ -2060,7 +2060,7 @@ export default function App() {
  odds: american,
  impliedOdds: o.price,
  edge: (o.edge!=null?o.edge:null),
- gameTime: game.commence_time,
+ gameTime: game.commence_time, awayPitcher: game.away_pitcher||null, homePitcher: game.home_pitcher||null,
  eventId: game.id, marketKey: "totals", outcome: o.name, point: o.point,
  selKey: `${game.id}|totals|${o.name}|${o.point}`,
  });
@@ -8220,9 +8220,9 @@ export default function App() {
  const nick = (nm="")=>{ const w=String(nm).trim().split(/\s+/); return w.length>1 ? w[w.length-1] : nm; };
  const _bg = {};
  const _ens = (g,t)=>{ if(!_bg[g]){ const pg=parseGame(g); _bg[g]={ game:g, away:pg.away, home:pg.home, time:t||"", ml:{}, spread:{}, ou:{} }; } if(t&&!_bg[g].time)_bg[g].time=t; return _bg[g]; };
- (BETS.ml||[]).filter(b=>b._sport===gSport).forEach(b=>{ const e=_ens(b.game,b.gameTime); const sd=sideOf(b.outcome||b.pick,b.game); if(sd==="AWAY")e.ml.away=b; else if(sd==="HOME")e.ml.home=b; });
- (BETS.spread||[]).filter(b=>b._sport===gSport).forEach(b=>{ const e=_ens(b.game,b.gameTime); const sd=sideOf(b.outcome||teamFromSpread(b.pick),b.game); if(sd==="AWAY")e.spread.away=b; else if(sd==="HOME")e.spread.home=b; });
- (BETS.ou||[]).filter(b=>b._sport===gSport).forEach(b=>{ const e=_ens(b.game,b.gameTime); const o=String(b.outcome||b.pick||"").toLowerCase(); if(o.indexOf("over")===0)e.ou.over=b; else if(o.indexOf("under")===0)e.ou.under=b; });
+ (BETS.ml||[]).filter(b=>b._sport===gSport).forEach(b=>{ const e=_ens(b.game,b.gameTime); if(b.awayPitcher&&!e.awayPitcher)e.awayPitcher=b.awayPitcher; if(b.homePitcher&&!e.homePitcher)e.homePitcher=b.homePitcher; const sd=sideOf(b.outcome||b.pick,b.game); if(sd==="AWAY")e.ml.away=b; else if(sd==="HOME")e.ml.home=b; });
+ (BETS.spread||[]).filter(b=>b._sport===gSport).forEach(b=>{ const e=_ens(b.game,b.gameTime); if(b.awayPitcher&&!e.awayPitcher)e.awayPitcher=b.awayPitcher; if(b.homePitcher&&!e.homePitcher)e.homePitcher=b.homePitcher; const sd=sideOf(b.outcome||teamFromSpread(b.pick),b.game); if(sd==="AWAY")e.spread.away=b; else if(sd==="HOME")e.spread.home=b; });
+ (BETS.ou||[]).filter(b=>b._sport===gSport).forEach(b=>{ const e=_ens(b.game,b.gameTime); if(b.awayPitcher&&!e.awayPitcher)e.awayPitcher=b.awayPitcher; if(b.homePitcher&&!e.homePitcher)e.homePitcher=b.homePitcher; const o=String(b.outcome||b.pick||"").toLowerCase(); if(o.indexOf("over")===0)e.ou.over=b; else if(o.indexOf("under")===0)e.ou.under=b; });
  let sheetGames = Object.values(_bg);
  if(gridSearch.trim()){ const q=gridSearch.toLowerCase().trim(); sheetGames=sheetGames.filter(g=>String(g.game).toLowerCase().includes(q)); }
  sheetGames.sort((a,b)=> (new Date(a.time||0)) - (new Date(b.time||0)) );
@@ -8305,12 +8305,13 @@ export default function App() {
  </div>
  <div style={{display:"grid",gridTemplateColumns:"1.45fr 1fr 1fr 1fr",alignItems:"stretch"}}>
  <div style={{padding:"8px 13px",display:"flex",flexDirection:"column",justifyContent:"center",gap:9}}>
- {[{nm:g.away,badge:"away",rec:awayRec},{nm:g.home,badge:"home",rec:homeRec}].map((tm,ti)=>(
+ {[{nm:g.away,badge:"away",rec:awayRec,pit:g.awayPitcher},{nm:g.home,badge:"home",rec:homeRec,pit:g.homePitcher}].map((tm,ti)=>(
  <div key={ti} style={{display:"flex",alignItems:"center",gap:8}}>
  <div style={{width:28,height:28,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,background:tm.badge==="home"?"rgba(10,132,255,0.16)":"rgba(255,255,255,0.08)",color:tm.badge==="home"?IOS.teal:"rgba(255,255,255,0.6)"}}>{getAcronym(tm.nm,false)}</div>
  <div style={{minWidth:0}}>
  <div style={{fontSize:13.5,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{nick(tm.nm)} <span style={{fontSize:8,fontWeight:800,letterSpacing:"0.05em",padding:"1px 5px",borderRadius:4,background:tm.badge==="home"?"rgba(10,132,255,0.18)":"rgba(255,255,255,0.08)",color:tm.badge==="home"?IOS.teal:"rgba(255,255,255,0.5)"}}>{tm.badge==="home"?"HOME":"AWAY"}</span></div>
  {tm.rec ? <div style={{fontSize:9.5,color:"rgba(255,255,255,0.34)",fontWeight:600,marginTop:1}}>{tm.rec}</div> : null}
+                     {gSport==="mlb" ? (<div style={{display:"flex",alignItems:"center",gap:3,marginTop:2,fontSize:9.5,fontWeight:600,color:"rgba(255,255,255,0.42)"}}><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><circle cx="12" cy="12" r="9"/><path d="M5 6c3 3 3 9 0 12M19 6c-3 3-3 9 0 12"/></svg>{tm.pit||"TBD"}</div>) : null}
  </div>
  </div>
  ))}
@@ -8492,15 +8493,17 @@ export default function App() {
 
  {/* Bet type switcher */}
  <div className="gbx-scroll" style={{display:"flex",gap:7,padding:`${sportsList.length>1?0:6}px 16px 9px`,overflowX:"auto"}}>
- {allowedTypes.map(t=>{
- const on = t===gridType; const tc = ACC[t];
- return (
- <div key={t} onClick={()=>{ setGridType(t); setGridPropSub("all"); if(t==="period"){ const _ps=PERIOD_SUBS_BY_SPORT[gSport]; setGridPeriodSub(_ps&&_ps.length?_ps[0].id:""); } if(gridCfg){ let _i=activePicks.findIndex(p=>!p.isParlay && p.category===t && p.bet===null); if(_i===-1) _i=activePicks.findIndex(p=>!p.isParlay && p.category===t); if(_i!==-1) setGridTargetSlot(_i); } }} style={{...pillBase,
- background:on?`${tc}26`:"rgba(255,255,255,0.05)", borderColor:on?`${tc}80`:"rgba(255,255,255,0.1)", color:on?tc:"rgba(255,255,255,0.45)"}}>
- {TYPE_LABELS[t]}
+ {(()=>{
+ const _gl = allowedTypes.filter(t=>t==="ml"||t==="spread"||t==="ou");
+ const _rest = allowedTypes.filter(t=>t!=="ml"&&t!=="spread"&&t!=="ou");
+ const _pills = [...(_gl.length?[{key:"__gl__",label:"Game Lines",target:_gl[0],on:isGameLine,col:IOS.blue}]:[]), ..._rest.map(t=>({key:t,label:TYPE_LABELS[t],target:t,on:t===gridType,col:ACC[t]}))];
+ return _pills.map(p=>(
+ <div key={p.key} onClick={()=>{ setGridType(p.target); setGridPropSub("all"); if(p.target==="period"){ const _ps=PERIOD_SUBS_BY_SPORT[gSport]; setGridPeriodSub(_ps&&_ps.length?_ps[0].id:""); } if(gridCfg){ let _i=activePicks.findIndex(x=>!x.isParlay && x.category===p.target && x.bet===null); if(_i===-1) _i=activePicks.findIndex(x=>!x.isParlay && x.category===p.target); if(_i!==-1) setGridTargetSlot(_i); } }} style={{...pillBase,
+ background:p.on?`${p.col}26`:"rgba(255,255,255,0.05)", borderColor:p.on?`${p.col}80`:"rgba(255,255,255,0.1)", color:p.on?p.col:"rgba(255,255,255,0.45)"}}>
+ {p.label}
  </div>
- );
- })}
+ ));
+ })()}
  </div>
 
  <div style={{padding:"0 16px 9px"}}>
