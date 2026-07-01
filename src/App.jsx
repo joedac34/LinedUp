@@ -3806,6 +3806,16 @@ export default function App() {
  } catch(e){ setCheckoutLoading(null); console.warn("checkout failed:", e); }
  };
 
+ useEffect(()=>{
+   if(!user || !user.id) return;
+   let sp; try { sp = new URLSearchParams(window.location.search); } catch(e){ return; }
+   if(sp.get("checkout")==="success"){
+     const _r = ()=>{ try{ fetchUserProfile(user.id); }catch(e){} };
+     _r(); setTimeout(_r, 2500); setTimeout(_r, 6000);
+     try{ window.history.replaceState({}, "", window.location.pathname); }catch(e){}
+   }
+ }, [user]);
+
  const fetchAllMyStats = async (uid) => {
  const {data:picks} = await supabase.from("picks").select("*").eq("user_id", uid).neq("result", "pending");
  if(!picks||!picks.length){setAllMyStats({wins:0,losses:0,points:0,total:0,winRate:"0%",bestBet:null,worstBet:null,byType:{},bySport:{},byWeek:[],avgOdds:0,currentStreak:{count:0,type:"W"},maxStreak:0,bestWeek:null,personality:"The Rookie",personalityDesc:"Keep picking and your style will emerge.",longshotStats:[],byMult:[],oddsBands:[],clv:null});return;}
@@ -12217,6 +12227,7 @@ export default function App() {
      powerups:{icon:"bolt",title:"Power-ups are a Pro feature",sub:"Double Down, Spread Enhancer, Insurance and more are unlocked with Commish Pro.",features:["All current and future power-ups","Unlimited picks and custom settings","Multi-sport league support"]},
    };
    const cfg = configs[showPaywall]||configs.picks;
+   const _isDev = (user && user.id === "769f7ebe-90c2-45f5-99f4-b98b54622f52") || (()=>{ try { return localStorage.getItem("picklock_dev")==="1"; } catch(e){ return false; } })();
    return (
      <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:9999,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>setShowPaywall(null)}>
        <div style={{background:"#111",borderRadius:"20px 20px 0 0",padding:"0 0 40px",border:"0.5px solid #1E1E1E"}} onClick={e=>e.stopPropagation()}>
@@ -12236,9 +12247,17 @@ export default function App() {
                <div style={{fontSize:13,color:"#ccc"}}>{f}</div>
              </div>
            ))}
-          <button onClick={()=>{setProStatus(true);setShowPaywall(null);}} style={{display:"block",width:"100%",background:IOS.blue,color:"#fff",border:"none",borderRadius:8,padding:13,fontSize:14,fontWeight:700,textAlign:"center",marginTop:16,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
-             Unlock Pro
+          <button disabled={checkoutLoading!==null} onClick={()=>startCheckout("annual")} style={{display:"block",width:"100%",background:IOS.blue,color:"#fff",border:"none",borderRadius:10,padding:14,fontSize:14,fontWeight:800,textAlign:"center",marginTop:16,cursor:checkoutLoading?"default":"pointer",fontFamily:"Barlow,sans-serif",opacity:checkoutLoading?0.6:1}}>
+             {checkoutLoading==="annual" ? "Redirecting..." : "Go Pro — $60/yr (save 50%)"}
            </button>
+          <button disabled={checkoutLoading!==null} onClick={()=>startCheckout("monthly")} style={{display:"block",width:"100%",background:"rgba(255,255,255,0.06)",color:"#fff",border:"0.5px solid rgba(255,255,255,0.14)",borderRadius:10,padding:13,fontSize:13.5,fontWeight:700,textAlign:"center",marginTop:8,cursor:checkoutLoading?"default":"pointer",fontFamily:"Barlow,sans-serif",opacity:checkoutLoading?0.6:1}}>
+             {checkoutLoading==="monthly" ? "Redirecting..." : "Or $10/mo"}
+           </button>
+          {_isDev && (
+             <button onClick={()=>{setProStatus(true);setShowPaywall(null);}} style={{display:"block",width:"100%",background:"none",border:"0.5px dashed rgba(48,209,88,0.4)",color:"#30D158",borderRadius:8,padding:9,fontSize:11,fontWeight:700,textAlign:"center",marginTop:10,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
+               Dev: instant unlock
+             </button>
+           )}
            <button onClick={()=>setShowPaywall(null)} style={{display:"block",width:"100%",background:"none",border:"none",color:"#555",fontSize:12,textAlign:"center",marginTop:10,cursor:"pointer",fontFamily:"Barlow,sans-serif",padding:4}}>
              Not now
            </button>
@@ -12268,8 +12287,8 @@ export default function App() {
              </div>
            ))}
          </div>
-         <button onClick={()=>{setProStatus(true);setShowPostLeagueUpsell(false);}} style={{display:"block",width:"100%",background:IOS.blue,color:"#fff",border:"none",borderRadius:8,padding:13,fontSize:14,fontWeight:700,textAlign:"center",marginBottom:10,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
-           Upgrade to Commish Pro — $5/mo
+         <button onClick={()=>{setShowPostLeagueUpsell(false);setShowPaywall("ai");}} style={{display:"block",width:"100%",background:IOS.blue,color:"#fff",border:"none",borderRadius:8,padding:13,fontSize:14,fontWeight:700,textAlign:"center",marginBottom:10,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
+           Upgrade to Commish Pro
          </button>
          <button onClick={()=>setShowPostLeagueUpsell(false)} style={{display:"block",width:"100%",background:"none",border:"none",color:"#555",fontSize:12,textAlign:"center",cursor:"pointer",fontFamily:"Barlow,sans-serif",padding:4}}>
            I'm good with free for now
