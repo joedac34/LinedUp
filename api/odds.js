@@ -174,7 +174,13 @@ export default async function handler(req, res) {
     // Shared edge cache: the odds payload is identical for every user, so let Vercel's CDN
     // serve one upstream pull to all users per window instead of hitting the Odds API per client.
     // ~3 min fresh + 5 min stale-while-revalidate keeps lines current while decoupling cost from user count.
-    res.setHeader("Cache-Control", "public, s-maxage=180, stale-while-revalidate=300");
+    // NEVER pin an empty slate: if an upstream blip returns 200-with-no-games, a short TTL lets
+    // real odds reappear within seconds instead of being cached as "no odds" for minutes.
+    if (games.length > 0) {
+      res.setHeader("Cache-Control", "public, s-maxage=180, stale-while-revalidate=300");
+    } else {
+      res.setHeader("Cache-Control", "public, s-maxage=15");
+    }
     return res.status(200).json({ games, remaining, used });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch odds" });
