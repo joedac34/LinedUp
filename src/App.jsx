@@ -6422,7 +6422,7 @@ export default function App() {
  // Use separate state for solo mode vs league mode
  const activePicks = isSoloMode ? soloFlexPicks : flexPicks;
  const setActivePicks = isSoloMode ? setSoloFlexPicks : setFlexPicks;
- const openSlot=(i)=>{ const s=activePicks[i]; setActiveFlexSlot(i); if(s&&s.locked&&s.category) setFlexCategory(s.category); };
+ const openSlot=(i)=>{ const s=activePicks[i]; setBuildingSlip(true); setGridTargetSlot(i); setGridType((s&&s.category)?s.category:"ml"); setGridPropSub("all"); setScreen("browser"); };
  const activeSubmitted = isSoloMode ? soloSubmitted : submitted;
  const activeSavedPicks = isSoloMode ? soloSavedPicks : savedPicks;
  const setActiveSavedPicks = isSoloMode ? setSoloSavedPicks : setSavedPicks;
@@ -7193,7 +7193,7 @@ export default function App() {
    const firstEmpty = activePicks.findIndex(p=>!p.isParlay && p.bet===null);
    const target = firstEmpty===-1 ? 0 : firstEmpty;
    return (
-   <div onClick={()=>{ setGridTargetSlot(target); setGridType("ml"); setGridPropSub("all"); setScreen("browser"); }}
+   <div onClick={()=>{ setBuildingSlip(true); setGridTargetSlot(target); setGridType("ml"); setGridPropSub("all"); setScreen("browser"); }}
      style={{margin:"0 16px 12px",borderRadius:14,padding:"13px 16px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",
        background:"linear-gradient(135deg,rgba(10,132,255,0.16),rgba(94,92,230,0.10))",border:"0.5px solid rgba(10,132,255,0.35)"}}>
      <div style={{display:"flex",alignItems:"center",gap:11}}>
@@ -7589,7 +7589,7 @@ export default function App() {
        </div>
      )}
 
-     <div onClick={()=>{ setGridTargetSlot(null); setGridType("ml"); setGridPropSub("all"); setScreen("browser"); }} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,border:"1.5px dashed rgba(255,255,255,0.16)",background:"rgba(255,255,255,0.02)",borderRadius:13,padding:"14px",fontSize:14,fontWeight:800,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif",marginBottom:14}}>
+     <div onClick={()=>{ setBuildingSlip(true); setGridTargetSlot(null); setGridType("ml"); setGridPropSub("all"); setScreen("browser"); }} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,border:"1.5px dashed rgba(255,255,255,0.16)",background:"rgba(255,255,255,0.02)",borderRadius:13,padding:"14px",fontSize:14,fontWeight:800,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif",marginBottom:14}}>
        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
        Add another pick
      </div>
@@ -7683,7 +7683,7 @@ export default function App() {
          )}
        </div>
 
-       <div onClick={()=>{ setGridTargetSlot(null); setGridType("ml"); setGridPropSub("all"); setScreen("browser"); }} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"rgba(10,132,255,0.1)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:12,padding:"13px",fontSize:14,fontWeight:800,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif",marginBottom:12}}>
+       <div onClick={()=>{ setBuildingSlip(true); setGridTargetSlot(null); setGridType("ml"); setGridPropSub("all"); setScreen("browser"); }} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"rgba(10,132,255,0.1)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:12,padding:"13px",fontSize:14,fontWeight:800,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif",marginBottom:12}}>
          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
          Browse all games
        </div>
