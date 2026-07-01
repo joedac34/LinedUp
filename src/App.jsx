@@ -6539,6 +6539,7 @@ export default function App() {
  const rows = buildSlotRows(slot, idx);
  const { data, error } = await supabase.from("picks").insert(rows).select("id");
  if(error){ alert("Couldn’t lock that pick: "+error.message); return; }
+ try{ posthog.capture('pick_locked', { league_id: activeLeague.id, category: slot.category||null, multiplier: slot.mult||null }); }catch(e){}
  const ids = (data||[]).map(r=>r.id);
  setActivePicks(prev=>prev.map((p,i)=> i===idx ? {...p, committed:true, commitIds:ids} : p));
  try{ fetchWeekPicks(activeLeague.id, _weekNum); }catch(e){}
@@ -6867,7 +6868,6 @@ export default function App() {
  }:p));
  } else {
  setActivePicks(prev=>prev.map((p,i)=>i===activeFlexSlot?{...p,bet,category:flexCategory}:p));
- try{ posthog.capture('pick_added', { category: flexCategory, market_key: (bet&&bet.marketKey)||null }); }catch(e){}
  setActiveFlexSlot(null);
  setFlexCategory(null);
  }
@@ -7481,7 +7481,7 @@ export default function App() {
  try { localStorage.setItem(storageKey, JSON.stringify(locked)); } catch(e) {}
  if(isSoloMode) { setSoloSavedPicks(locked); setSoloSubmitted(true); try{ localStorage.setItem("picklock_solo_locked", JSON.stringify({flexPicks:activePicks, lockedAt:locked.lockedAt, week:weekNum})); }catch(e){} }
  else { setActiveSavedPicks(locked); setActiveSubmitted(true); setBuildingSlip(false); }
- try{ posthog.capture('slip_submitted', { league_id: activeLeague.id, week: weekNum, num_picks: activePicks.filter(p=>p.mult!=null&&(p.isParlay?(p.parlayLegs||[]).length>0:!!p.bet)).length, solo: isSoloMode }); }catch(e){}
+ try{ posthog.capture('slip_locked', { league_id: activeLeague.id, week: weekNum, num_picks: activePicks.filter(p=>p.mult!=null&&(p.isParlay?(p.parlayLegs||[]).length>0:!!p.bet)).length, solo: isSoloMode }); }catch(e){}
  try{ if(navigator.vibrate) navigator.vibrate([0,30,40,30,60]); }catch(e){}
  setLockRitual(true);
  }}> Lock Your Slip </button>
@@ -7975,6 +7975,7 @@ export default function App() {
  if(existingIdx!==-1) dest = existingIdx;
  }
  setActivePicks(prev=>prev.map((p,i)=> i===dest ? {...p, bet, category:cat, isParlay:false, parlayLegs:[], mult:((!gridCfg && !isSoloMode && gridFlexMult!=null && cat!=="longshot") ? gridFlexMult : p.mult)} : p));
+ try{ posthog.capture('pick_added', { league_id: activeLeague.id, category: cat, market_key: (bet&&bet.marketKey)||null }); }catch(e){}
  setGridJustAdded(bet.id);
  // Advance to next empty slot, or bounce back to the slip if full
  const nextEmpty = activePicks.findIndex((p,i)=> i!==dest && !p.isParlay && p.bet===null);
