@@ -118,6 +118,18 @@ export default async function handler(req, res) {
 
     games.sort((a, b) => new Date(a.commence_time) - new Date(b.commence_time));
 
+    // A team can appear twice inside the 36h window (it plays tonight AND tomorrow),
+    // producing two entries for the same matchup. A pick can then bind to the wrong
+    // night. Keep only the NEAREST upcoming game per matchup (already sorted ascending),
+    // so ml/spread/ou picks always attach to the soonest game and grade on the right night.
+    const _seenMatchup = new Set();
+    games = games.filter(g => {
+      const k = (g.away_team || "") + "@" + (g.home_team || "");
+      if (_seenMatchup.has(k)) return false;
+      _seenMatchup.add(k);
+      return true;
+    });
+
     res.setHeader("Cache-Control", "no-store");
     return res.status(200).json({ games, remaining, used });
   } catch (err) {
