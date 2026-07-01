@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, Component } from "react";
 import { supabase } from './supabase';
+import posthog from 'posthog-js';
 
 // iOS System Colors
 const IOS = {
@@ -3391,6 +3392,7 @@ export default function App() {
    if(_mine){ setHomeMode("leagues"); setSoloModeWithRef(false); setActiveLeagueId(league.id); await fetchLeagues(user.id); alert("You're already in "+league.name+" — opening it now."); return; }
    const {error:joinError}=await supabase.from("league_members").insert({league_id:league.id,user_id:user.id,is_commissioner:false});
    if(joinError){alert("Couldn't join "+league.name+": "+(joinError.message||joinError.code||"unknown error"));return;}
+   try{ posthog.capture('league_joined', { league_id: league.id, league_type: league.league_type||'h2h', via: 'code' }); }catch(e){}
    const {data:allMembers}=await supabase.from("league_members").select("user_id").eq("league_id",league.id);
    if(allMembers && allMembers.length === targetSize){
      const memberIds=allMembers.map(m=>m.user_id);
@@ -3449,6 +3451,7 @@ export default function App() {
    if(_mine){ setHomeMode("leagues"); setSoloModeWithRef(false); setActiveLeagueId(league.id); await fetchLeagues(user.id); setShowBrowse(false); alert("You're already in "+league.name+" — opening it now."); setJoiningLeagueId(null); return; }
    const {error:joinError} = await supabase.from("league_members").insert({league_id:league.id,user_id:user.id,is_commissioner:false});
    if(joinError) { alert("Couldn't join: "+(joinError.message||joinError.code||"unknown error")); setJoiningLeagueId(null); return; }
+   try{ posthog.capture('league_joined', { league_id: league.id, league_type: league.league_type||'h2h', via: 'browse' }); }catch(e){}
    const {data:allMembers} = await supabase.from("league_members").select("user_id").eq("league_id",league.id);
    if(allMembers && allMembers.length === targetSize) {
      const memberIds = allMembers.map(m=>m.user_id);
@@ -3760,6 +3763,7 @@ export default function App() {
  // DB is source of truth for pro status
  const proVal = data.is_pro === true;
  setIsPro(proVal);
+ try{ posthog.identify(data.id, { username: data.username||null, is_pro: data.is_pro===true }); }catch(e){}
  try { localStorage.setItem("picklock_is_pro", proVal ? "true" : "false"); } catch(e) {}
  if(!data.username) {
  const createdAt = data.created_at ? new Date(data.created_at).getTime() : 0;
@@ -4136,6 +4140,7 @@ export default function App() {
  };
  const [savedPicks, setSavedPicks] = useState(null);
  const [buildingSlip, setBuildingSlip] = useState(false); // user is actively editing/adding to their slip
+ useEffect(()=>{ if(buildingSlip){ try{ posthog.capture('builder_opened', { league_id: activeLeagueId }); }catch(e){} } }, [buildingSlip]);
  const [selectedMatchup, setSelectedMatchup] = useState(null);
  const [pastMatchupPicks, setPastMatchupPicks] = useState({my:[], opp:[]});
  const [pastMatchupLoading, setPastMatchupLoading] = useState(false);
@@ -4189,7 +4194,7 @@ export default function App() {
  supabase.auth.onAuthStateChange((_e,session)=>{
  const u = session?.user??null;
  setUser(u);
- if(u) { fetchLeagues(u.id); fetchAllMyStats(u.id); fetchUserProfile(u.id); }
+ if(u) { fetchLeagues(u.id); fetchAllMyStats(u.id); fetchUserProfile(u.id); } else { try{ posthog.reset(); }catch(e){} }
  });
  setTimeout(()=>setAnim(true),80);
  const t=setInterval(()=>setTimeLeft(p=>{let{h,m,s}=p;s--;if(s<0){s=59;m--;}if(m<0){m=59;h--;}if(h<0){h=0;m=0;s=0;}return{h,m,s};}),1000);
@@ -6862,6 +6867,7 @@ export default function App() {
  }:p));
  } else {
  setActivePicks(prev=>prev.map((p,i)=>i===activeFlexSlot?{...p,bet,category:flexCategory}:p));
+ try{ posthog.capture('pick_added', { category: flexCategory, market_key: (bet&&bet.marketKey)||null }); }catch(e){}
  setActiveFlexSlot(null);
  setFlexCategory(null);
  }
@@ -7475,6 +7481,7 @@ export default function App() {
  try { localStorage.setItem(storageKey, JSON.stringify(locked)); } catch(e) {}
  if(isSoloMode) { setSoloSavedPicks(locked); setSoloSubmitted(true); try{ localStorage.setItem("picklock_solo_locked", JSON.stringify({flexPicks:activePicks, lockedAt:locked.lockedAt, week:weekNum})); }catch(e){} }
  else { setActiveSavedPicks(locked); setActiveSubmitted(true); setBuildingSlip(false); }
+ try{ posthog.capture('slip_submitted', { league_id: activeLeague.id, week: weekNum, num_picks: activePicks.filter(p=>p.mult!=null&&(p.isParlay?(p.parlayLegs||[]).length>0:!!p.bet)).length, solo: isSoloMode }); }catch(e){}
  try{ if(navigator.vibrate) navigator.vibrate([0,30,40,30,60]); }catch(e){}
  setLockRitual(true);
  }}> Lock Your Slip </button>
