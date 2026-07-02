@@ -9148,7 +9148,7 @@ export default function App() {
  <div style={{padding:"0 10px 8px"}}>
  {matchRows.map(row=>{ const _t=row.type; const _c=_t?(catColors[_t]||IOS.blue):IOS.blue; const _sh=_t?(SLOT_SHORT[_t]||_t.toUpperCase()):null; return (
  <div key={row.key} style={{display:"grid",gridTemplateColumns:"1fr 34px 1fr",gap:4,marginBottom:5,alignItems:"start"}}>
- {renderCard(row.mine, true, "mexp-my-"+row.key, _t, row.mode==="slot", row.mode==="slot"?(()=>{ setBuildingSlip(true); setGridTargetSlot(row.idx); setGridType(_t||"ml"); setGridPropSub("all"); setScreen("browser"); }):(()=>{ setBuildingSlip(true); setScreen("picks"); }))}
+ {renderCard(row.mine, true, "mexp-my-"+row.key, _t, row.mode==="slot", (()=>{ const sp=savedPicks?.flexPicks; if(sp) setFlexPicks(sp); setSavedPicks(null); setSubmitted(false); setBuildingSlip(true); if(row.mode==="slot"){ setGridTargetSlot(row.idx); setGridType(_t||"ml"); setGridPropSub("all"); setScreen("browser"); } else { setScreen("picks"); } }))}
  <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",paddingTop:20,gap:3}}>
  {row.mode==="slot"
  ? <div style={{width:26,height:26,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:900,background:_c+"22",color:_c}}>{_sh||"?"}</div>
