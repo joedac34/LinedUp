@@ -3432,7 +3432,7 @@ export default function App() {
  const _slotBase = (_existWk && _existWk.length) || 0; // append to this week — do not wipe earlier locks
  const rows = soloFreePicks.map((b,i)=>({
  league_id: lgId, user_id: user.id, week,
- slot: `free_${_slotBase+i}`, multiplier: b.mult||1,
+ slot: `${b.category||"ml"}_${_slotBase+i}`, multiplier: b.mult||1,
  pick_name: b.pick, game: b.game||"", odds: b.odds, implied_odds: b.impliedOdds,
  game_date: b.gameTime||null,
  event_id: b.eventId||null, market_key: b.marketKey||null, outcome: b.outcome||null, outcome_point: (b.point!=null?b.point:null), sel_key: b.selKey||null,
@@ -3441,7 +3441,7 @@ export default function App() {
  const { error } = await supabase.from("picks").insert(rows);
  if(error){ alert("Error saving picks: " + error.message); return; }
  try{ await supabase.from("leagues").update({sport: soloSport}).eq("id", lgId); }catch(e){}
- const freeSnap = soloFreePicks.map((b,i)=>({pick:b.pick, game:b.game||"", odds:b.odds, impliedOdds:b.impliedOdds, category:b.category, categoryLabel:b.categoryLabel, categoryColor:b.categoryColor, slot:`free_${_slotBase+i}`, gameTime:b.gameTime||null, mult:b.mult||1, eventId:b.eventId||null, marketKey:b.marketKey||null, outcome:b.outcome||null, point:(b.point!=null?b.point:null), selKey:b.selKey||null, id:b.id||null}));
+ const freeSnap = soloFreePicks.map((b,i)=>({pick:b.pick, game:b.game||"", odds:b.odds, impliedOdds:b.impliedOdds, category:b.category, categoryLabel:b.categoryLabel, categoryColor:b.categoryColor, slot:`${b.category||"ml"}_${_slotBase+i}`, gameTime:b.gameTime||null, mult:b.mult||1, eventId:b.eventId||null, marketKey:b.marketKey||null, outcome:b.outcome||null, point:(b.point!=null?b.point:null), selKey:b.selKey||null, id:b.id||null}));
  const _prevSnap = (soloSavedPicks && soloSavedPicks.week===week && Array.isArray(soloSavedPicks.freePicks)) ? soloSavedPicks.freePicks : [];
  const mergedSnap = [..._prevSnap, ...freeSnap];
  const lockedAt = new Date().toISOString();
@@ -9778,7 +9778,7 @@ export default function App() {
        const won=p.result==="W", lost=p.result==="L";
        return (
        <div key={p.id||i} style={{display:"flex",alignItems:"center",padding:"7px 12px",borderBottom:i<Math.min(myPicksThisWeek.length,5)-1?`0.5px solid ${IOS.sep}`:"none",background:won?"rgba(48,209,88,0.04)":lost?"rgba(255,59,48,0.04)":"transparent"}}>
-         {(()=>{const cc={ml:IOS.blue,prop:IOS.yellow,ou:IOS.orange,spread:IOS.green,longshot:IOS.pink};const k=(p.slot||"ml").split("_")[0];return <div style={{fontSize:8,fontWeight:800,color:cc[k]||IOS.blue,textTransform:"uppercase",width:30,flexShrink:0}}>{p.slot?.replace("_0","")?.replace("longshot","LS")||"ML"}</div>;})()}
+         {(()=>{const cc={ml:IOS.blue,prop:IOS.yellow,ou:IOS.orange,spread:IOS.green,longshot:IOS.pink};const k=(p.slot||"ml").split("_")[0];return <div style={{fontSize:8,fontWeight:800,color:cc[k]||IOS.blue,textTransform:"uppercase",width:30,flexShrink:0}}>{k==="longshot"?"LS":(k||"ml").toUpperCase()}</div>;})()}
          <div style={{flex:1,fontSize:11,color:"#ccc",padding:"0 8px"}}>{p.pick_name}</div>
          <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0,whiteSpace:"nowrap",fontSize:10,fontWeight:700,color:won?IOS.green:lost?IOS.red:"#555"}}>{won?(<><span>+{parseFloat(p.points_earned||0).toFixed(1)} pts</span><span style={{fontSize:8,fontWeight:800,color:IOS.green,background:"rgba(48,209,88,0.16)",borderRadius:4,padding:"1px 4px",letterSpacing:"0.03em"}}>W</span></>):lost?(<span>0 pts</span>):(<span>pending</span>)}</div>
        </div>
