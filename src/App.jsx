@@ -4137,7 +4137,7 @@ export default function App() {
 
  setRealStandings(standings);
  };
- const fetchMyPicks = async (leagueId, week, uid) => {
+ const fetchMyPicks = async (leagueId, week, uid) => { setPicksLoading(true);
  const {data} = await supabase
  .from("picks")
  .select("*")
@@ -4185,7 +4185,9 @@ export default function App() {
   setSavedPicks({fromDB: true, flexPicks, dbPicks: data});
  } else {
   setSavedPicks(null);
- } };
+ }
+ setPicksLoading(false);
+ };
  const fetchWeekPicks = async (leagueId, week) => {
  const {data:picks} = await supabase
  .from("picks")
@@ -4306,6 +4308,7 @@ export default function App() {
  });
  };
  const [savedPicks, setSavedPicks] = useState(null);
+ const [picksLoading, setPicksLoading] = useState(false);
  const [buildingSlip, setBuildingSlip] = useState(false); // user is actively editing/adding to their slip
  useEffect(()=>{ if(buildingSlip){ try{ posthog.capture('builder_opened', { league_id: activeLeagueId }); }catch(e){} } }, [buildingSlip]);
  const [selectedMatchup, setSelectedMatchup] = useState(null);
@@ -6616,6 +6619,7 @@ export default function App() {
 
  {/* ══ PICKS ══ */}
  {screen==="picks"&&!isSoloMode&&(()=>{ if(seasonNotStarted){ return notStartedBody; }
+ if(!buildingSlip && picksLoading && !(savedPicks&&savedPicks.flexPicks)) return (<div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:"120px 0"}}><div style={{width:28,height:28,borderRadius:"50%",border:"2.5px solid rgba(255,255,255,0.12)",borderTopColor:IOS.blue,animation:"spin 0.7s linear infinite"}}/></div>);
  // Use separate state for solo mode vs league mode
  const activePicks = isSoloMode ? soloFlexPicks : flexPicks;
  const setActivePicks = isSoloMode ? setSoloFlexPicks : setFlexPicks;
