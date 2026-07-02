@@ -9030,27 +9030,32 @@ export default function App() {
 {/* ── SIDE-BY-SIDE PICKS ── */}
  {(()=>{
  const oppPicksByMult = {};
- oppUserPicks.forEach(p=>{
- if(!oppPicksByMult[p.multiplier]) oppPicksByMult[p.multiplier]=[];
- oppPicksByMult[p.multiplier].push(p);
- });
- const allMults = [...new Set([
- ...Object.keys(myPicksByMult),
- ...Object.keys(oppPicksByMult),
- ])].map(Number).sort((a,b)=>a-b);
+ oppUserPicks.forEach(p=>{ if(!oppPicksByMult[p.multiplier]) oppPicksByMult[p.multiplier]=[]; oppPicksByMult[p.multiplier].push(p); });
+ const SLOT_SHORT={ml:"ML",prop:"PROP",ou:"O/U",spread:"SPR",longshot:"LS"};
+ const _slotIdx=(p)=>{ const a=String(p.slot||"").split("_"); if(a[0]==="longshot") return a.length>=3?(parseInt(a[1],10)||0):0; const n=parseInt(a[a.length-1],10); return isNaN(n)?0:n; };
+ const _cfg = parseSlotConfig(activeLeague && activeLeague.slot_config);
+ let matchRows=[];
+ if(_cfg){
+ const myBySlot={}, oppBySlot={};
+ myPicks.forEach(p=>{ const i=_slotIdx(p); (myBySlot[i]=myBySlot[i]||[]).push(p); });
+ oppUserPicks.forEach(p=>{ const i=_slotIdx(p); (oppBySlot[i]=oppBySlot[i]||[]).push(p); });
+ matchRows = _cfg.map((c,i)=>({ key:"s"+i, mode:"slot", type:(c.type==="wildcard"?null:c.type), mine:myBySlot[i]||null, theirs:oppBySlot[i]||null }));
+ } else {
+ const used=[...new Set([...Object.keys(myPicksByMult),...Object.keys(oppPicksByMult)].map(Number))];
+ const maxM=used.length?Math.max(5,...used):5;
+ matchRows = Array.from({length:maxM},(_,k)=>k+1).map(m=>({ key:"m"+m, mode:"mult", mult:m, mine:myPicksByMult[m]||null, theirs:oppPicksByMult[m]||null }));
+ }
 
- if(allMults.length===0) return (
- <div style={{margin:"0 16px 16px",background:IOS.bg2,borderRadius:14,padding:"20px 16px",textAlign:"center",color:IOS.label3,fontSize:14}}>
- No picks submitted yet this week
+ const renderCard = (picks, isMe, expandId, slotType, showMult) => {
+ if(!picks || picks.length===0){
+ const _lab = slotType ? (slotLabels[slotType]||slotType) : "";
+ return (
+ <div style={{flex:1,borderRadius:12,minHeight:68,background:"#09090B",border:"1px dashed #24242C",display:"flex",flexDirection:"column",alignItems:isMe?"flex-start":"flex-end",justifyContent:"center",gap:4,padding:"0 12px"}}>
+ {_lab&&<span style={{fontSize:8,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:"#4a4a52"}}>{_lab}</span>}
+ <span style={{fontSize:isMe?11:10,fontWeight:isMe?800:700,color:isMe?IOS.blue:"#3a3a40"}}>{isMe?(slotType?"+ Add "+_lab:"+ Add pick"):"Not locked yet"}</span>
  </div>
  );
-
- const renderCard = (picks, isMe, expandId) => {
- if(!picks || picks.length===0) return (
- <div style={{flex:1,borderRadius:12,minHeight:68,background:"#0A0A0A",border:"0.5px dashed #1E1E1E",display:"flex",alignItems:"center",justifyContent:"center"}}>
- <span style={{fontSize:9,color:"#333"}}>No pick</span>
- </div>
- );
+ }
  // Opponent picks stay hidden ("Locked") until their game starts — revealed at kickoff (or once graded).
  if(!isMe){
  const _now=Date.now();
@@ -9104,7 +9109,7 @@ export default function App() {
  <div style={{position:"absolute",top:-20,right:-20,width:60,height:60,borderRadius:"50%",background:`radial-gradient(circle,${strip}1f,transparent 70%)`,pointerEvents:"none"}}/>
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
  <div style={{display:"flex",alignItems:"center",gap:4,minWidth:0}}><span style={{fontSize:8,fontWeight:800,color:c,letterSpacing:.4,textTransform:"uppercase",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{typeLabel}</span>{picks[0]?.power_up_id&&<PUBadge puId={picks[0].power_up_id} size={13} />}</div>
- <span style={{fontSize:8,fontWeight:800,padding:"2px 5px",borderRadius:4,background:badgeBg,color:badgeColor,flexShrink:0,marginLeft:4}}>{won?"W":lost?"L":"–"}</span>
+ <div style={{display:"flex",alignItems:"center",gap:4,flexShrink:0,marginLeft:4}}>{showMult&&<span style={{fontSize:8.5,fontWeight:900,padding:"2px 5px",borderRadius:5,background:"rgba(255,255,255,0.08)",color:"#fff"}}>{picks[0]?.multiplier}×</span>}<span style={{fontSize:8,fontWeight:800,padding:"2px 5px",borderRadius:4,background:badgeBg,color:badgeColor}}>{won?"W":lost?"L":"–"}</span></div>
  </div>
  <div style={{fontSize:11,fontWeight:700,color:"#fff",lineHeight:1.25,marginTop:3,textAlign:"left",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{pickName}</div>
  {gameCtx&&<div style={{fontSize:9,color:"#666",marginTop:1,textAlign:"left",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{gameCtx}</div>}
@@ -9134,21 +9139,23 @@ export default function App() {
 
  return (
  <>
- <div style={{display:"grid",gridTemplateColumns:"1fr 28px 1fr",gap:4,padding:"4px 16px 4px"}}>
+ <div style={{display:"grid",gridTemplateColumns:"1fr 34px 1fr",gap:4,padding:"4px 16px 4px"}}>
  <div style={{fontSize:9,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",color:IOS.blue}}>Your Picks</div>
  <div/>
  <div style={{fontSize:9,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",color:"#555",textAlign:"right"}}>Their Picks</div>
  </div>
  <div style={{padding:"0 10px 8px"}}>
- {allMults.map(mult=>(
- <div key={mult} style={{display:"grid",gridTemplateColumns:"1fr 28px 1fr",gap:4,marginBottom:5,alignItems:"start"}}>
- {renderCard(myPicksByMult[mult]||null, true, `mexp-my-${mult}`)}
- <div style={{display:"flex",alignItems:"center",justifyContent:"center",paddingTop:22}}>
- <span style={{fontSize:9,fontWeight:800,color:"#333"}}>{mult}×</span>
+ {matchRows.map(row=>{ const _t=row.type; const _c=_t?(catColors[_t]||IOS.blue):IOS.blue; const _sh=_t?(SLOT_SHORT[_t]||_t.toUpperCase()):null; return (
+ <div key={row.key} style={{display:"grid",gridTemplateColumns:"1fr 34px 1fr",gap:4,marginBottom:5,alignItems:"start"}}>
+ {renderCard(row.mine, true, "mexp-my-"+row.key, _t, row.mode==="slot")}
+ <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",paddingTop:20,gap:3}}>
+ {row.mode==="slot"
+ ? <div style={{width:26,height:26,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:900,background:_c+"22",color:_c}}>{_sh||"?"}</div>
+ : <span style={{fontSize:11,fontWeight:900,color:"#333"}}>{row.mult}×</span>}
  </div>
- {renderCard(oppPicksByMult[mult]||null, false, `mexp-opp-${mult}`)}
+ {renderCard(row.theirs, false, "mexp-opp-"+row.key, _t, row.mode==="slot")}
  </div>
- ))}
+ ); })}
  </div>
   </>
  );
