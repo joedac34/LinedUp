@@ -5172,13 +5172,13 @@ export default function App() {
  <div style={{flex:1,display:"flex",flexDirection:"column",padding:"0 24px 48px"}}>
    <div style={{textAlign:"center",marginBottom:24}}>
      <div style={{fontSize:26,fontWeight:800,color:"#fff",letterSpacing:-.5,marginBottom:8}}>Build your slip every week</div>
-     <div style={{fontSize:14,color:"rgba(255,255,255,0.45)",lineHeight:1.6}}>Pick as many as you want, any bet type. Higher multiplier = more points if you win.</div>
+     <div style={{fontSize:14,color:"rgba(255,255,255,0.45)",lineHeight:1.6}}>Every pick gets a multiplier. A bigger multiplier and longer odds mean more points — but only if the pick hits.</div>
    </div>
-   <div style={{flex:1,display:"flex",flexDirection:"column",gap:8,marginBottom:24}}>
+   <div style={{flex:1,display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
      {[
-       {mult:"1×",cat:"Moneyline",pick:"Seattle Seahawks",odds:"-205",game:"NE @ SEA",pts:"+4.9 pts if win",catColor:"#0A84FF",highlight:false},
-       {mult:"3×",cat:"Over/Under",pick:"Over 44.5",odds:"-110",game:"BUF @ MIA",pts:"+27.3 pts if win",catColor:"#FF9F0A",highlight:false},
-       {mult:"5×",cat:"Longshot",pick:"3-leg parlay",odds:"+583",game:"Go big or go home",pts:"+291.5 pts if win",catColor:"#FF375F",highlight:true},
+       {mult:"1×",cat:"Moneyline",pick:"Seattle Seahawks",odds:"-205",game:"NE @ SEA",pts:"+4.9 pts if it hits",catColor:"#0A84FF",highlight:false},
+       {mult:"3×",cat:"Over/Under",pick:"Over 44.5",odds:"-110",game:"BUF @ MIA",pts:"+27.3 pts if it hits",catColor:"#FF9F0A",highlight:false},
+       {mult:"5×",cat:"Longshot",pick:"3-leg parlay",odds:"+583",game:"Go big or go home",pts:"+291.5 pts if it hits",catColor:"#FF375F",highlight:true},
      ].map((s,i)=>(
        <div key={i} style={{background:s.highlight?"rgba(10,132,255,0.06)":"#0D1A2A",border:`0.5px solid ${s.highlight?"rgba(10,132,255,0.3)":"#1A3A5A"}`,borderRadius:12,padding:"12px 14px"}}>
          <div style={{fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",color:s.catColor,marginBottom:4}}>{s.mult} · {s.cat}</div>
@@ -5192,6 +5192,13 @@ export default function App() {
          </div>
        </div>
      ))}
+   </div>
+   <div style={{background:"rgba(10,132,255,0.06)",border:"0.5px solid rgba(10,132,255,0.22)",borderRadius:12,padding:"12px 14px",marginBottom:16}}>
+     <div style={{fontSize:9,fontWeight:800,letterSpacing:0.5,textTransform:"uppercase",color:"#0A84FF",marginBottom:6}}>The math</div>
+     <div style={{fontSize:13.5,fontWeight:700,color:"#fff"}}>points = multiplier × (decimal odds - 1) × 10</div>
+     <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",marginTop:5,lineHeight:1.5}}>5× at +583 (6.83) -&gt; 5 × 5.83 × 10 = 291.5 · only winning picks score; a loss or push is 0.</div>
+     <div style={{height:1,background:"rgba(255,255,255,0.08)",margin:"10px 0"}} />
+     <div style={{fontSize:11.5,color:"rgba(255,255,255,0.55)",lineHeight:1.5}}>Standard leagues give one each of 1× through 5×. Pro leagues let the creator set the multiplier pool and which bet types each slot allows.</div>
    </div>
    <button onClick={()=>setTutorialStep(2)} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:14,padding:"16px",fontSize:16,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Next</button>
  </div>
