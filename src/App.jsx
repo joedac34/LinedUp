@@ -8400,6 +8400,47 @@ export default function App() {
    </div>
    );
    };
+   const parseProp = (b) => {
+   const pk = String(b.pick||""); const low = pk.toLowerCase();
+   const io = low.indexOf(" over "); const iu = low.indexOf(" under ");
+   let dir=null, di=-1;
+   if(io>-1 && (iu<0 || io<iu)){ dir="over"; di=io; } else if(iu>-1){ dir="under"; di=iu; }
+   if(dir){ const player = pk.slice(0,di).trim(); const rest = pk.slice(di + (dir==="over"?6:7)).trim(); return {dir, player, rest, baseKey:(b.market||"")+"|"+player+"|"+rest}; }
+   const parts = pk.split(" - "); return {dir:null, player:parts[0].trim(), rest:(parts[1]||"").trim(), baseKey:(b.market||"")+"|"+pk};
+   };
+   const renderPlayerRow = (pr, isFirst) => {
+   const {player, rest, over, under, single} = pr;
+   if(!over && !under && single) return renderRow(single, 0, isFirst);
+   const oPct = over ? impliedPct(over.impliedOdds) : null;
+   const uPct = under ? impliedPct(under.impliedOdds) : null;
+   const favOver = (oPct!=null && uPct!=null) ? oPct>=uPct : (oPct!=null);
+   const leanPct = Math.max(oPct||0, uPct||0); const leanRead = readFor(leanPct);
+   const sel = (b)=> b && (isSoloMode ? soloFreePicks.some(p=>String(p.id)===String(b.id)) : (activePicks.some(p=>p.bet&&p.bet.id===b.id)||isLeg(b)));
+   const sideBtn = (b, label, fav) => {
+   if(!b) return (<div style={{width:66,borderRadius:10,border:"1px solid rgba(255,255,255,0.06)",background:"rgba(255,255,255,0.02)",textAlign:"center",padding:"6px 3px 5px",opacity:0.45}}><div style={{fontSize:8,fontWeight:800,letterSpacing:"0.06em",color:"rgba(255,255,255,0.3)"}}>{label}</div><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:16,color:"rgba(255,255,255,0.3)",lineHeight:1.1,marginTop:1}}>—</div><div style={{fontSize:9,fontWeight:700,color:"rgba(255,255,255,0.25)",marginTop:1}}>n/a</div></div>);
+   const on=sel(b); const pos=String(b.odds||"").charAt(0)==="+"; const pts=calcPickPoints(targetMult||1,b.impliedOdds,"W");
+   return (<div onClick={(e)=>{e.stopPropagation(); addCard(b);}} style={{width:66,borderRadius:10,cursor:"pointer",border:"1px solid "+(on?acc:fav?acc:"rgba(255,255,255,0.12)"),background:on?(acc+"2e"):fav?(acc+"14"):"rgba(255,255,255,0.04)",textAlign:"center",padding:"6px 3px 5px"}}><div style={{fontSize:8,fontWeight:800,letterSpacing:"0.06em",color:(fav||on)?acc:"rgba(255,255,255,0.4)"}}>{fav?"▲ ":""}{label}</div><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:16,color:pos?IOS.green:"#fff",lineHeight:1.1,marginTop:1}}>{b.odds}</div><div style={{fontSize:9,fontWeight:800,color:IOS.green,marginTop:1}}>+{pts} pts</div></div>);
+   };
+   return (
+   <div key={pr.baseKey} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 13px",borderTop:isFirst?"none":"1px solid rgba(255,255,255,0.07)"}}>
+   <button onClick={(e)=>{e.stopPropagation(); askFromBet(over||under,"prop");}} aria-label="Ask AI" style={{flexShrink:0,width:27,height:27,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",background:acc+"1a",border:"1px solid "+acc+"33",color:acc,cursor:"pointer"}}><svg width="12" height="12" viewBox="0 0 24 24" fill={acc}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg></button>
+   <div style={{flex:1,minWidth:0}}>
+   <div style={{fontSize:14,fontWeight:800,letterSpacing:"-0.2px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{player}</div>
+   <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.42)",marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{rest}</div>
+   <div style={{display:"flex",alignItems:"center",gap:6,marginTop:6}}>
+   <span style={{width:44,height:4,borderRadius:2,background:"rgba(255,255,255,0.1)",overflow:"hidden",flexShrink:0}}><span style={{display:"block",height:"100%",width:Math.max(0,Math.min(100,leanPct))+"%",background:acc}}/></span>
+   <span style={{fontSize:10.5,fontWeight:700,color:leanRead.c,whiteSpace:"nowrap"}}>{leanPct}% {leanRead.t}</span>
+   </div>
+   </div>
+   <div style={{display:"flex",gap:6,flexShrink:0}}>{sideBtn(over,"OVER",favOver)}{sideBtn(under,"UNDER",!favOver)}</div>
+   </div>
+   );
+   };
+   const renderPropPairs = (bets) => {
+   const pairs=[]; const idx={};
+   bets.forEach(b=>{ const pp=parseProp(b); let g=idx[pp.baseKey]; if(g==null){ g=pairs.length; idx[pp.baseKey]=g; pairs.push({baseKey:pp.baseKey, player:pp.player, rest:pp.rest, over:null, under:null, single:null}); } if(pp.dir==="over") pairs[g].over=b; else if(pp.dir==="under") pairs[g].under=b; else pairs[g].single=b; });
+   return pairs.map((pr,i)=>renderPlayerRow(pr,i===0));
+   };
    const renderGroupedRows = () => {
    const groups={};
    list.forEach(b=>{ const g=b.game||"Other"; if(!groups[g]) groups[g]=[]; groups[g].push(b); });
@@ -8424,7 +8465,7 @@ export default function App() {
    </div>
    </div>
    </div>
-   {gridOpenGames[gk] && <div style={{borderTop:"1px solid rgba(255,255,255,0.07)"}}>{bets.map((bet,idx)=>renderRow(bet,idx,idx===0))}</div>}
+   {gridOpenGames[gk] && <div style={{borderTop:"1px solid rgba(255,255,255,0.07)"}}>{gridType==="prop" ? renderPropPairs(bets) : bets.map((bet,idx)=>renderRow(bet,idx,idx===0))}</div>}
    </div>
    );
    })}
