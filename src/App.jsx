@@ -6568,7 +6568,7 @@ export default function App() {
  // Use separate state for solo mode vs league mode
  const activePicks = isSoloMode ? soloFlexPicks : flexPicks;
  const setActivePicks = isSoloMode ? setSoloFlexPicks : setFlexPicks;
- const openSlot=(i)=>{ const s=activePicks[i]; setBuildingSlip(true); setGridTargetSlot(i); setGridType((s&&s.category)?s.category:"ml"); setGridPropSub("all"); setScreen("browser"); };
+ const openSlot=(i)=>{ const s=activePicks[i]; if(s&&s.committed){ alert(slotGraded(s)?"This pick has already been graded — it can’t be changed.":slotStarted(s)?"That game has started — this pick is locked in.":"This pick is locked in. Tap Unlock first to change it."); return; } setBuildingSlip(true); setGridTargetSlot(i); setGridType((s&&s.category)?s.category:"ml"); setGridPropSub("all"); setScreen("browser"); };
  const activeSubmitted = isSoloMode ? soloSubmitted : submitted;
  const activeSavedPicks = isSoloMode ? soloSavedPicks : savedPicks;
  const setActiveSavedPicks = isSoloMode ? setSoloSavedPicks : setSavedPicks;
@@ -7491,9 +7491,9 @@ export default function App() {
  {slot.isParlay&&parlayOdds?parlayOdds.american:slot.bet?.odds||""}
  </div>
  <div style={{display:"flex",gap:5}}>
- <div onClick={()=>openSlot(idx)} style={{background:"#2a2a2a",borderRadius:7,color:"#bbb",fontSize:11,fontWeight:600,padding:"4px 10px",cursor:"pointer"}}>
+ {!slot.committed && <div onClick={()=>openSlot(idx)} style={{background:"#2a2a2a",borderRadius:7,color:"#bbb",fontSize:11,fontWeight:600,padding:"4px 10px",cursor:"pointer"}}>
  {filled?"Edit":"+ Pick"}
- </div>
+ </div>}
  {filled&&!slot.committed&&<button onClick={e=>{e.stopPropagation();setActivePicks(prev=>prev.map((p,i)=>i===idx?(p.locked?{id:i,bet:null,mult:p.mult,category:p.category,isParlay:false,parlayLegs:[],locked:true}:{...EMPTY_FLEX[0],id:i}):p));}} style={{background:"#2a2a2a",border:"none",borderRadius:7,color:"#555",fontSize:14,width:26,height:26,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>}
  </div>
  </div>
