@@ -2391,8 +2391,8 @@ export default function App() {
      setLeagueRecapLoading(true);
      const { data:members } = await supabase.from("league_members").select("user_id").eq("league_id", lg.id);
      const ids = (members||[]).map(m=>m.user_id);
-     const { data:us } = await supabase.from("users").select("id,username,email").in("id", ids.length?ids:["00000000-0000-0000-0000-000000000000"]);
-     const nameOf = (id)=>{ const u=(us||[]).find(z=>z.id===id); return (u&&u.username) || ((u&&u.email)||"").split("@")[0] || "Player"; };
+     const { data:us } = await supabase.from("public_profiles").select("id,username").in("id", ids.length?ids:["00000000-0000-0000-0000-000000000000"]);
+     const nameOf = (id)=>{ const u=(us||[]).find(z=>z.id===id); return (u&&u.username) || "Player"; };
      const { data:picks } = await supabase.from("picks").select("user_id,week,result,points_earned").eq("league_id", lg.id).neq("result","pending");
      if(!picks||!picks.length){ setLeagueRecapLoading(false); return; }
      const { data:mus } = await supabase.from("matchups").select("user1_id,user2_id,winner_id,week").eq("league_id", lg.id);
@@ -2461,7 +2461,7 @@ export default function App() {
              oppPts = (op||[]).reduce((a,pp)=>a+(parseFloat(pp.points_earned)||0),0);
              const mem = leagueMembers.find(x=>x.userId===oppId);
              if(mem){ oppName = mem.name; }
-             else { const { data:u } = await supabase.from("users").select("username,email").eq("id",oppId).maybeSingle(); oppName = (u&&(u.username||(u.email||"").split("@")[0]))||"Opponent"; }
+             else { const { data:u } = await supabase.from("public_profiles").select("username").eq("id",oppId).maybeSingle(); oppName = (u&&u.username)||"Opponent"; }
              won = pts > oppPts;
            }
          }
@@ -3210,10 +3210,10 @@ export default function App() {
  .order("week", {ascending: true});
  if(!data || !data.length) { setLiveSchedule([]); return; }
  const userIds = [...new Set([...data.map(m=>m.user1_id), ...data.map(m=>m.user2_id)])];
- const {data:users} = await supabase.from("users").select("id,username,email").in("id",userIds);
+ const {data:users} = await supabase.from("public_profiles").select("id,username").in("id",userIds);
  const getName = uid => {
  const u = users?.find(x=>x.id===uid);
- return u?.username || u?.email?.split("@")[0] || "Unknown";
+ return u?.username || "Unknown";
  };
  const schedule = data.map(m => {
  const isUser1 = m.user1_id === userId;
@@ -3795,11 +3795,11 @@ export default function App() {
  const {data:members} = await supabase.from("league_members").select("user_id").eq("league_id", leagueId);
  if(!members||!members.length) { setLeagueTrophies([]); return; }
  const userIds = members.map(m=>m.user_id);
- const {data:users} = await supabase.from("users").select("id,username,email").in("id",userIds);
+ const {data:users} = await supabase.from("public_profiles").select("id,username").in("id",userIds);
 
  const getName = (uid) => {
  const u = users?.find(x=>x.id===uid);
- return u?.username || u?.email?.split("@")[0] || "Unknown";
+ return u?.username || "Unknown";
  };
  const isMe = (uid) => uid === user?.id;
 
@@ -3845,7 +3845,7 @@ export default function App() {
  useEffect(()=>{
    const code=userProfile&&userProfile.referral_code; if(!code){ setRefStats({signups:0,paying:0}); return; }
    let cancelled=false;
-   (async()=>{ try{ const {data}=await supabase.from("users").select("id,is_pro").eq("referred_by",code); if(cancelled) return; const rows=data||[]; setRefStats({signups:rows.length, paying:rows.filter(r=>r.is_pro===true).length}); }catch(e){} })();
+   (async()=>{ try{ const {data}=await supabase.from("public_profiles").select("id,is_pro").eq("referred_by",code); if(cancelled) return; const rows=data||[]; setRefStats({signups:rows.length, paying:rows.filter(r=>r.is_pro===true).length}); }catch(e){} })();
    return ()=>{cancelled=true;};
  }, [userProfile&&userProfile.referral_code]);
  const fetchLeaderboard = async (tf) => {
@@ -3993,8 +3993,8 @@ export default function App() {
 
  const userIds = members.map(m=>m.user_id);
  const {data:users} = await supabase
- .from("users")
- .select("id, username, email")
+ .from("public_profiles")
+ .select("id, username")
  .in("id", userIds);
 
  // Get all graded picks for this league (may be empty for new leagues)
@@ -4141,8 +4141,8 @@ export default function App() {
  if(!picks||!picks.length) return;
  const userIds = [...new Set(picks.map(p=>p.user_id))];
  const {data:users} = await supabase
- .from("users")
- .select("id, username, email")
+ .from("public_profiles")
+ .select("id, username")
  .in("id", userIds);
  setWeekPicks(picks.map(p=>({
  ...p,
@@ -4153,15 +4153,19 @@ export default function App() {
  const fetchLeagueMembers = async (leagueId, uid) => {
  const {data} = await supabase
  .from("league_members")
- .select("user_id, is_commissioner, users(id, email, username)")
+ .select("user_id, is_commissioner")
  .eq("league_id", leagueId);
- if(data) setLeagueMembers(data.map(m=>({
+ if(data){
+ const _ids=data.map(m=>m.user_id);
+ const {data:_profs}=await supabase.from("public_profiles").select("id,username").in("id", _ids.length?_ids:["00000000-0000-0000-0000-000000000000"]);
+ const _pm={}; (_profs||[]).forEach(p=>{ _pm[p.id]=p; });
+ setLeagueMembers(data.map(m=>({
  userId: m.user_id,
  isCommissioner: m.is_commissioner,
- name: m.users?.username || m.users?.email?.split("@")[0] || "Unknown",
- email: m.users?.email,
+ name: (_pm[m.user_id]&&_pm[m.user_id].username) || "Unknown",
  isYou: m.user_id === uid,
  })));
+ }
  };
 
  const fetchBracket = async (lid) => {
@@ -5322,7 +5326,7 @@ export default function App() {
  if(!username){ alert("Please enter a username."); return; }
  if(username.length<3){ alert("Username must be at least 3 characters."); return; }
  if(!/^[a-zA-Z0-9_]+$/.test(username)){ alert("Username can only contain letters, numbers, and underscores."); return; }
- const {data:existing}=await supabase.from("users").select("id").eq("username",username).maybeSingle();
+ const {data:existing}=await supabase.from("public_profiles").select("id").eq("username",username).maybeSingle();
  if(existing){ alert("That username is taken. Try another."); return; }
  const refCode=((document.getElementById("auth-referral")?.value||"").trim().toUpperCase())||null;
  const {data,error}=await supabase.auth.signUp({email,password,options:{data:{username, referred_by:refCode}}});
@@ -5621,7 +5625,7 @@ export default function App() {
  if(val.length<3){setUsernamePromptError("Min 3 characters");return;}
  if(!/^[a-zA-Z0-9_]+$/.test(val)){setUsernamePromptError("Letters, numbers, and _ only");return;}
  setUsernamePromptSaving(true);
- const {data:existing} = await supabase.from("users").select("id").eq("username",val).maybeSingle();
+ const {data:existing} = await supabase.from("public_profiles").select("id").eq("username",val).maybeSingle();
  if(existing && existing.id!==user.id){setUsernamePromptError("That username is taken");setUsernamePromptSaving(false);return;}
  await supabase.from("users").upsert({id:user.id,email:user.email,username:val},{onConflict:"id"});
  setUserProfile(prev=>({...prev,username:val}));
@@ -11423,7 +11427,7 @@ export default function App() {
  if(val.length<3){ setUsernameError("Min 3 characters"); return; }
  if(!/^[a-zA-Z0-9_]+$/.test(val)){ setUsernameError("Letters, numbers, _ only"); return; }
  setUsernameSaving(true);
- const {data:existing}=await supabase.from("users").select("id").eq("username",val).maybeSingle();
+ const {data:existing}=await supabase.from("public_profiles").select("id").eq("username",val).maybeSingle();
  if(existing && existing.id!==user.id){ setUsernameError("Already taken"); setUsernameSaving(false); return; }
  await supabase.from("users").upsert({id:user.id, email:user.email, username:val},{onConflict:"id"});
  setUserProfile(prev=>({...prev, username:val}));
