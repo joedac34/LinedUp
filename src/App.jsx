@@ -1980,6 +1980,7 @@ export default function App() {
  const [usernameSaving, setUsernameSaving] = useState(false);
  const [usernameError, setUsernameError] = useState("");
  const [authScreen, setAuthScreen] = useState("login");
+ const [recoveryMode, setRecoveryMode] = useState(false);
  const [anim, setAnim] = useState(false);
  const [timeLeft, setTimeLeft] = useState({h:0,m:0,s:0});
  const [submitted, setSubmitted] = useState(false);
@@ -4313,6 +4314,7 @@ export default function App() {
  if(u) { fetchLeagues(u.id); fetchAllMyStats(u.id); fetchUserProfile(u.id); }
  });
  supabase.auth.onAuthStateChange((_e,session)=>{
+ if(_e==="PASSWORD_RECOVERY"){ setRecoveryMode(true); }
  const u = session?.user??null;
  setUser(u);
  if(u) { fetchLeagues(u.id); fetchAllMyStats(u.id); fetchUserProfile(u.id); } else { try{ posthog.reset(); }catch(e){} }
@@ -5148,6 +5150,17 @@ export default function App() {
  <style>{css}</style>
 
  {/* ══ TUTORIAL OVERLAY ══ */}
+{recoveryMode && (
+<div style={{position:"fixed",inset:0,zIndex:10000,background:"#000",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"0 26px",fontFamily:"Barlow,sans-serif"}}>
+  <div style={{width:"100%",maxWidth:380}}>
+    <div style={{fontSize:26,fontWeight:800,color:"#fff",letterSpacing:-0.5,marginBottom:8,textAlign:"center"}}>Set a new password</div>
+    <div style={{fontSize:14,color:"rgba(255,255,255,0.5)",lineHeight:1.6,marginBottom:22,textAlign:"center"}}>Choose a new password for your account, then you are all set.</div>
+    <input id="recovery-pw" className="auth-input" type="password" placeholder="New password" style={{marginBottom:11}}/>
+    <input id="recovery-pw2" className="auth-input" type="password" placeholder="Confirm new password" style={{marginBottom:14}}/>
+    <button className="auth-cta" onClick={async()=>{ const p1=(document.getElementById("recovery-pw")?.value||""); const p2=(document.getElementById("recovery-pw2")?.value||""); if(p1.length<6){ alert("Password must be at least 6 characters."); return; } if(p1!==p2){ alert("Those passwords do not match."); return; } const {error}=await supabase.auth.updateUser({password:p1}); if(error){ alert(error.message); return; } setRecoveryMode(false); alert("Password updated - you are all set."); }}>Update password</button>
+  </div>
+</div>
+)}
  {user && tutorialStep >= 0 && (()=>{
  const isLast = tutorialStep === 3;
  const dismissOnboard = () => { setTutorialStep(-1); try{localStorage.setItem("picklock_onboarded","true");}catch(e){} };
@@ -5329,7 +5342,7 @@ export default function App() {
  {authScreen==="signup"&&<div style={{fontSize:11,color:"rgba(255,255,255,0.32)",marginBottom:7,paddingLeft:4}}>This is how you'll appear to other players</div>}
  {authScreen==="signup"&&<input id="auth-referral" className="auth-input" type="text" placeholder="Friend's referral code (optional)" defaultValue={(new URLSearchParams(window.location.search).get("ref")||"").toUpperCase()} style={{marginBottom:6}}/>}
  {authScreen==="signup"&&<div style={{fontSize:11,color:"rgba(255,255,255,0.34)",margin:"0 2px 14px",lineHeight:1.4}}>Have a league code? Leave this blank — you’ll join your league after signing in, from Leagues → Join.</div>}
- {authScreen==="login"&&<div style={{height:16}}/>}
+ {authScreen==="login"&&<div onClick={async()=>{ const email=(document.getElementById("auth-email")?.value||"").trim(); if(!email){ alert("Enter your email above first, then tap Forgot password."); return; } const {error}=await supabase.auth.resetPasswordForEmail(email,{redirectTo:window.location.origin}); if(error){ alert(error.message); } else { alert("If an account exists for that email, a reset link is on its way - check your inbox and spam."); } }} style={{textAlign:"center",fontSize:13,fontWeight:600,color:IOS.blue,cursor:"pointer",margin:"2px 0 14px"}}>Forgot password?</div>}
  <button className="auth-cta" onClick={async()=>{
  const email=document.getElementById("auth-email").value.trim();
  const password=document.getElementById("auth-password").value;
