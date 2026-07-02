@@ -2340,6 +2340,7 @@ export default function App() {
  const [gridPeriodSub, setGridPeriodSub] = useState(""); // period sub-type (solo browser)
  const [gridTargetSlot, setGridTargetSlot] = useState(null); // which flex slot a tapped card fills
  const [gridSearch, setGridSearch] = useState("");
+ const [gridOpenGames, setGridOpenGames] = useState({}); // bet-browser game accordion: {gameName:true}
  const [sheetExpanded, setSheetExpanded] = useState(null); // line-sheet expanded game key
  const [lineMoves, setLineMoves] = useState({}); // opening line per sel_key (from /api/linemoves)
  const lineMovesRef = useRef("");
@@ -8410,12 +8411,20 @@ export default function App() {
    const bets=groups[gk]; const t=bets[0].gameTime;
    return (
    <div key={gk} style={{border:"1px solid rgba(255,255,255,0.09)",borderRadius:16,background:"linear-gradient(165deg,#15151A,#0B0B0E 80%)",overflow:"hidden",margin:"10px 0",boxShadow:"0 6px 18px rgba(0,0,0,0.35)"}}>
+   <div onClick={()=>setGridOpenGames(o=>({...o,[gk]:!o[gk]}))} style={{cursor:"pointer"}}>
    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 13px 5px"}}>
    <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.07em",textTransform:"uppercase",color:acc}}>{tag}</div>
    {t && <div style={{fontSize:10,fontWeight:700,color:IOS.orange}}>{countdown(t)}</div>}
    </div>
-   <div style={{fontSize:13,fontWeight:800,padding:"0 13px 7px",letterSpacing:"-0.2px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{gk}</div>
-   <div>{bets.map((bet,idx)=>renderRow(bet,idx,idx===0))}</div>
+   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"0 13px 9px"}}>
+   <div style={{fontSize:13,fontWeight:800,letterSpacing:"-0.2px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{gk}</div>
+   <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+   {!gridOpenGames[gk] && <span style={{fontSize:10,fontWeight:700,color:"rgba(255,255,255,0.4)"}}>{bets.length} bet{bets.length!==1?"s":""}</span>}
+   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2.5" style={{transform:gridOpenGames[gk]?"rotate(180deg)":"none",transition:"transform .18s",flexShrink:0}}><polyline points="6 9 12 15 18 9"/></svg>
+   </div>
+   </div>
+   </div>
+   {gridOpenGames[gk] && <div style={{borderTop:"1px solid rgba(255,255,255,0.07)"}}>{bets.map((bet,idx)=>renderRow(bet,idx,idx===0))}</div>}
    </div>
    );
    })}
