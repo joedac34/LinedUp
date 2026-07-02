@@ -82,7 +82,7 @@ async function notifyPick(pick, league, result, pts, legs) {
       const BASE = process.env.PUBLIC_BASE_URL || "https://lined-up-murex.vercel.app";
       await fetch(`${BASE}/api/notify`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + (process.env.CRON_SECRET || "") },
         body: JSON.stringify({
           userId: pick.user_id,
           title: won ? "Pick won" : "Pick lost",

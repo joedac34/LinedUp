@@ -1,8 +1,9 @@
 /* Send a Web Push to one or more users.  Place at: api/notify.js
-   Body (both shapes accepted): { userIds:[...] | userId, title, body, url?, data?, category? }
-   - Back-compatible with the old stub's { userId, title, body, data } callers.
-   - category (e.g. "notif_league") is checked against the user's pref + push_enabled.
-   Env: VITE_SUPABASE_URL, SUPABASE_SERVICE_KEY, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT */
+   Auth: either the internal server secret (Authorization: Bearer <CRON_SECRET>, used by grade.js)
+         OR a valid Supabase user access token (used by the client "league is live" call).
+         Anonymous callers are rejected — this closes the open push-spam/phishing vector.
+   Body: { userIds:[...] | userId, title, body, url?, data?, category? }
+   Env: VITE_SUPABASE_URL, SUPABASE_SERVICE_KEY, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT, CRON_SECRET */
 import { createClient } from '@supabase/supabase-js';
 import webpush from 'web-push';
 
@@ -13,9 +14,24 @@ webpush.setVapidDetails(
   process.env.VAPID_PRIVATE_KEY
 );
 
+async function authedUser(req) {
+  const h = req.headers.authorization || '';
+  const token = h.startsWith('Bearer ') ? h.slice(7) : null;
+  if (!token) return null;
+  try { const { data, error } = await supabase.auth.getUser(token); if (error || !data || !data.user) return null; return data.user; }
+  catch (e) { return null; }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
   try {
+    const authHeader = req.headers.authorization || '';
+    const isInternal = !!process.env.CRON_SECRET && authHeader === `Bearer ${process.env.CRON_SECRET}`;
+    if (!isInternal) {
+      const caller = await authedUser(req);
+      if (!caller) return res.status(401).json({ error: 'unauthorized' });
+    }
+
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
     const { userIds, userId, title, body: text, url, data, category } = body;
     const ids = (userIds && userIds.length ? userIds : (userId ? [userId] : [])).filter(Boolean);

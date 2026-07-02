@@ -1,5 +1,12 @@
 import { useState, useEffect, useRef, Component } from "react";
 import { supabase } from './supabase';
+// Attach the current user's Supabase access token so API routes verify the caller
+// server-side (endpoints derive the user from this token, not the request body).
+async function authHeaders() {
+  const h = { "Content-Type": "application/json" };
+  try { const { data } = await supabase.auth.getSession(); const t = data && data.session && data.session.access_token; if (t) h["Authorization"] = "Bearer " + t; } catch (e) {}
+  return h;
+}
 import posthog from 'posthog-js';
 
 // iOS System Colors
@@ -2038,7 +2045,7 @@ export default function App() {
      try{
        const { data:_upd } = await supabase.from("leagues").update({ season_start:new Date().toISOString(), current_week:1 }).eq("id",activeLeague.id).is("season_start",null).select("id");
        if(_upd && _upd.length){
-         try{ const {data:_mem}=await supabase.from("league_members").select("user_id").eq("league_id",activeLeague.id); const _ids=(_mem||[]).map(m=>m.user_id); fetch("/api/notify",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ userIds:_ids, title:(activeLeague.name||"Your league")+" is live!", body:"Week 1 is open \u2014 make your picks before they lock.", url:"/", category:"notif_league" })}); }catch(e){}
+         try{ const {data:_mem}=await supabase.from("league_members").select("user_id").eq("league_id",activeLeague.id); const _ids=(_mem||[]).map(m=>m.user_id); fetch("/api/notify",{method:"POST",headers:await authHeaders(),body:JSON.stringify({ userIds:_ids, title:(activeLeague.name||"Your league")+" is live!", body:"Week 1 is open \u2014 make your picks before they lock.", url:"/", category:"notif_league" })}); }catch(e){}
        }
        if(user&&user.id) await fetchLeagues(user.id);
      }catch(e){}
@@ -3161,14 +3168,14 @@ export default function App() {
      const reg = await navigator.serviceWorker.ready;
      let sub = await reg.pushManager.getSubscription();
      if(!sub){ sub = await reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey:_urlB64ToUint8(PUSH_VAPID_PUBLIC) }); }
-     const r = await fetch("/api/push-subscribe",{ method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ userId:user.id, subscription:sub.toJSON?sub.toJSON():sub }) });
+     const r = await fetch("/api/push-subscribe",{ method:"POST", headers:await authHeaders(), body:JSON.stringify({ userId:user.id, subscription:sub.toJSON?sub.toJSON():sub }) });
      if(!r.ok){ return false; }
      setUserProfile(prev=>({...(prev||{}), push_enabled:true }));
      return true;
    } catch(e) { console.error("push subscribe failed", e); alert("Couldn't enable push: "+((e&&e.message)||e)); return false; }
  };
  const disablePush = async () => {
-   try { const reg = await navigator.serviceWorker.ready; const sub = await reg.pushManager.getSubscription(); if(sub){ try{ await fetch("/api/push-subscribe",{ method:"DELETE", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ endpoint:sub.endpoint }) }); }catch(e){} try{ await sub.unsubscribe(); }catch(e){} } } catch(e) {}
+   try { const reg = await navigator.serviceWorker.ready; const sub = await reg.pushManager.getSubscription(); if(sub){ try{ await fetch("/api/push-subscribe",{ method:"DELETE", headers:await authHeaders(), body:JSON.stringify({ endpoint:sub.endpoint }) }); }catch(e){} try{ await sub.unsubscribe(); }catch(e){} } } catch(e) {}
    try { if(user&&user.id) await supabase.from("users").update({ push_enabled:false }).eq("id", user.id); } catch(e) {}
    setUserProfile(prev=>({...(prev||{}), push_enabled:false }));
  };
@@ -3897,7 +3904,7 @@ export default function App() {
  if(!user || !user.id){ setShowPaywall(null); setScreen("auth"); return; }
  try {
  setCheckoutLoading(plan);
- const r = await fetch("/api/checkout", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ plan, userId:user.id, email:(userProfile&&userProfile.email)||user.email||null }) });
+ const r = await fetch("/api/checkout", { method:"POST", headers:await authHeaders(), body: JSON.stringify({ plan, userId:user.id, email:(userProfile&&userProfile.email)||user.email||null }) });
  const d = await r.json();
  if(r.ok && d.url){ window.location.href = d.url; return; }
  setCheckoutLoading(null);
@@ -6066,7 +6073,7 @@ export default function App() {
      <div style={{display:"inline-flex",alignItems:"center",gap:5,background:"rgba(48,209,88,0.14)",border:"0.5px solid rgba(48,209,88,0.3)",borderRadius:999,padding:"4px 11px",fontSize:11,fontWeight:800,color:IOS.green}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>Roster full · {(activeLeague.memberCount||0)}/{_lgTarget}</div>
      <div style={{fontSize:20,fontWeight:900,color:"#fff",marginTop:11,letterSpacing:-0.3}}>Roster’s full</div>
      <div style={{fontSize:13,color:IOS.label2,lineHeight:1.5,marginTop:7}}>You chose manual start, so the season hasn’t begun. Start it whenever everyone’s signed and the slate looks right.</div>
-     <button onClick={async()=>{ if(!window.confirm("Start the season now? Week 1 opens, the roster locks, and this week\u2019s games become everyone\u2019s first slate. This can\u2019t be undone.")) return; await supabase.from("leagues").update({season_start:new Date().toISOString(),current_week:1}).eq("id",activeLeague.id).is("season_start",null); try{ const {data:_mem}=await supabase.from("league_members").select("user_id").eq("league_id",activeLeague.id); const _ids=(_mem||[]).map(m=>m.user_id); fetch("/api/notify",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({userIds:_ids,title:(activeLeague.name||"Your league")+" is live!",body:"Week 1 is open — make your picks before they lock.",url:"/",category:"notif_league"})}); }catch(e){} await fetchLeagues(user.id); }} style={{width:"100%",marginTop:16,background:IOS.blue,border:"none",color:"#fff",borderRadius:13,padding:"15px",fontSize:16,fontWeight:800,fontFamily:"Barlow,sans-serif",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><svg width="16" height="16" viewBox="0 0 24 24" fill="#fff" stroke="none"><polygon points="6 4 20 12 6 20 6 4"/></svg>Start League</button>
+     <button onClick={async()=>{ if(!window.confirm("Start the season now? Week 1 opens, the roster locks, and this week\u2019s games become everyone\u2019s first slate. This can\u2019t be undone.")) return; await supabase.from("leagues").update({season_start:new Date().toISOString(),current_week:1}).eq("id",activeLeague.id).is("season_start",null); try{ const {data:_mem}=await supabase.from("league_members").select("user_id").eq("league_id",activeLeague.id); const _ids=(_mem||[]).map(m=>m.user_id); fetch("/api/notify",{method:"POST",headers:await authHeaders(),body:JSON.stringify({userIds:_ids,title:(activeLeague.name||"Your league")+" is live!",body:"Week 1 is open — make your picks before they lock.",url:"/",category:"notif_league"})}); }catch(e){} await fetchLeagues(user.id); }} style={{width:"100%",marginTop:16,background:IOS.blue,border:"none",color:"#fff",borderRadius:13,padding:"15px",fontSize:16,fontWeight:800,fontFamily:"Barlow,sans-serif",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><svg width="16" height="16" viewBox="0 0 24 24" fill="#fff" stroke="none"><polygon points="6 4 20 12 6 20 6 4"/></svg>Start League</button>
      <div style={{marginTop:14,textAlign:"left"}}>
        {["Week 1 opens and picks go live for everyone","This week\u2019s games become your Week 1 slate","The roster locks \u2014 no new joins after start"].map((t,i)=>(
          <div key={i} style={{display:"flex",gap:9,alignItems:"flex-start",padding:"7px 0",borderTop:i>0?"0.5px solid rgba(255,255,255,0.07)":"none"}}>
@@ -11725,7 +11732,7 @@ export default function App() {
  {/* Sign Out + Delete Account */}
  <div style={{padding:"8px 16px 32px",display:"flex",flexDirection:"column",gap:10}}>
  <button onClick={async()=>{ if(userProfile&&userProfile.push_enabled){ await disablePush(); } else { await subscribeToPush(); } }} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.14)",borderRadius:12,padding:"14px",fontSize:15,fontWeight:600,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}><span>Push notifications</span><span style={{fontSize:13,fontWeight:700,color:(userProfile&&userProfile.push_enabled)?IOS.green:IOS.label3}}>{(userProfile&&userProfile.push_enabled)?"On":"Off"}</span></button>
- {isPro?(<button onClick={async()=>{ try{ const r=await fetch("/api/portal",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({userId:user&&user.id})}); const d=await r.json().catch(()=>null); if(r.ok&&d&&d.url){ window.location.href=d.url; } else { alert("Couldn't open the subscription portal - try again in a moment."); } }catch(e){ alert("Couldn't open the subscription portal - try again in a moment."); } }} style={{width:"100%",background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.14)",borderRadius:12,padding:"14px",fontSize:15,fontWeight:600,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Manage subscription</button>):null}
+ {isPro?(<button onClick={async()=>{ try{ const r=await fetch("/api/portal",{method:"POST",headers:await authHeaders(),body:JSON.stringify({userId:user&&user.id})}); const d=await r.json().catch(()=>null); if(r.ok&&d&&d.url){ window.location.href=d.url; } else { alert("Couldn't open the subscription portal - try again in a moment."); } }catch(e){ alert("Couldn't open the subscription portal - try again in a moment."); } }} style={{width:"100%",background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.14)",borderRadius:12,padding:"14px",fontSize:15,fontWeight:600,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Manage subscription</button>):null}
  <button onClick={async()=>{
  await supabase.auth.signOut();
  setUser(null);
