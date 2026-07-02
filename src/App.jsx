@@ -2193,17 +2193,12 @@ export default function App() {
  const espnRes = await fetch(`/api/espn?sport=${sportKey}`);
  if(espnRes.ok) {
  const espnPayload = await espnRes.json();
- if(espnPayload.games) setEspnGames(espnPayload.games);
+ if(espnPayload.games) setEspnGames(prev => [...(prev||[]).filter(x => x._sport !== sportId), ...espnPayload.games.map(x => ({...x, _sport: sportId}))]);
  }
  } catch(e) { console.warn("ESPN scoreboard fetch failed:", e); }
 
- // Store raw games for the ticker
- setTickerGames(games.map(g => ({
- away: g.away_team,
- home: g.home_team,
- time: g.commence_time,
- sport: sportId,
- })));
+ // Store raw games for the ticker — merge by sport so one sport's fetch doesn't wipe another's
+ setTickerGames(prev => { const _fresh = games.map(g => ({ away: g.away_team, home: g.home_team, time: g.commence_time, sport: sportId })); return [...(prev||[]).filter(x => x.sport !== sportId), ..._fresh]; });
 
  setLiveOdds(prev => ({
  ...prev,
@@ -5799,8 +5794,11 @@ export default function App() {
              <div style={{flex:1,minWidth:0}}><div style={{fontSize:9.5,fontWeight:800,letterSpacing:0.5,textTransform:"uppercase",color:"rgba(255,255,255,0.4)"}}>Global rank</div><div style={{fontSize:15,fontWeight:800,color:"#fff",marginTop:1}}>{rk?("#"+rk+(pct?(" · top "+pct+"%"):"")):"See where you rank"}</div></div>
              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
            </div>); })()}
-           {tickerGames.length > 0 && (() => {
+           {(() => {
  const now = new Date();
+ const _ls = activeLeague?.sports||(activeLeague?.sport?[activeLeague.sport]:[]);
+ const _sg = (tickerGames||[]).filter(g=>!_ls.length||_ls.includes(g.sport));
+ if(!_sg.length) return null;
  // Only highlight games from LOCKED slip (weekPicks from DB)
  const myLockedPickNames = (weekPicks||[])
  .filter(p=>p.user_id===user?.id)
@@ -5811,7 +5809,7 @@ export default function App() {
  return myLockedPickNames.some(n => n.includes(a) || n.includes(h));
  };
 
- const items = tickerGames.map(g => {
+ const items = _sg.map(g => {
  const t = new Date(g.time);
  const isLive = now >= t && now < new Date(t.getTime() + 4*60*60*1000);
  const isToday = t.toDateString() === now.toDateString();
@@ -6474,12 +6472,12 @@ export default function App() {
  </div>
  </div>
 
- {tickerGames.length === 0 ? (
+ {(tickerGames||[]).filter(g=>{const _ls=activeLeague?.sports||(activeLeague?.sport?[activeLeague.sport]:[]);return !_ls.length||_ls.includes(g.sport);}).length === 0 ? (
  <div style={{textAlign:"center",padding:"40px 24px",color:IOS.label3,fontSize:14}}>
  <div style={{fontSize:32,marginBottom:8}}></div>
  No games found. Check back closer to game day.
  </div>
- ) : tickerGames.map((g, gi) => {
+ ) : (tickerGames||[]).filter(g=>{const _ls=activeLeague?.sports||(activeLeague?.sport?[activeLeague.sport]:[]);return !_ls.length||_ls.includes(g.sport);}).map((g, gi) => {
  const away = g.away.split(" ").pop();
  const home = g.home.split(" ").pop();
  const espn = matchEspnGame(espnGames, away, home);
