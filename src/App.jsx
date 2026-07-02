@@ -4114,6 +4114,7 @@ export default function App() {
       pu_tier: picks[0].pu_tier!=null?picks[0].pu_tier:null,
       category: cat, locked: true, slotType: cat, market: (picks[0].market_key||null),
       committed: true, commitIds: picks.map(pp=>pp.id),
+      result: (picks[0].result==="W"||picks[0].result==="L"||picks[0].result==="P") ? picks[0].result : null, points_earned: parseFloat(picks[0].points_earned||0),
     };
   };
   let flexPicks;
@@ -6649,6 +6650,8 @@ export default function App() {
  return slot.bet&&slot.bet.gameTime?new Date(slot.bet.gameTime).getTime():0;
  };
  const slotStarted = (slot)=>{ const gt=slotGameTime(slot); return !!gt && gt<=Date.now(); };
+ const slotGraded = (slot)=>{ const r=slot&&(slot.result||(slot.bet&&slot.bet.result)); return r==="W"||r==="L"||r==="P"; };
+ const slotLocked = (slot)=> slotStarted(slot) || slotGraded(slot);
  const buildSlotRows = (slot, slotIdx)=>{
  const _pu = activatedPUs[slotIdx] || null; const _puId=_pu?_pu.id:null; const _puTier=(_pu&&_pu.tier!=null)?_pu.tier:null;
  if(slot.isParlay){
@@ -6675,9 +6678,13 @@ export default function App() {
  const unlockSlot = async (idx)=>{
  const slot = activePicks[idx];
  if(!slot||!slot.committed) return;
- if(slotStarted(slot)){ alert("That game has started — this pick is locked in."); return; }
+ if(slotLocked(slot)){ alert(slotGraded(slot)?"This pick has already been graded — it can’t be changed.":"That game has started — this pick is locked in."); return; }
  const ids = slot.commitIds||[];
- if(ids.length){ const { error } = await supabase.from("picks").delete().in("id", ids); if(error){ alert("Couldn’t unlock: "+error.message); return; } }
+ if(ids.length){
+   const { data:_chk } = await supabase.from("picks").select("result").in("id", ids);
+   if((_chk||[]).some(r=>r.result==="W"||r.result==="L"||r.result==="P")){ alert("This pick has already been graded — it can’t be changed."); return; }
+   const { error } = await supabase.from("picks").delete().in("id", ids); if(error){ alert("Couldn’t unlock: "+error.message); return; }
+ }
  setActivePicks(prev=>prev.map((p,i)=> i===idx ? {...p, committed:false, commitIds:[]} : p));
  try{ fetchWeekPicks(activeLeague.id, _weekNum); }catch(e){}
  };
@@ -7037,7 +7044,7 @@ export default function App() {
  const allSlots=[...(activeSavedPicks?.flexPicks||activePicks)];
  const slots=[...allSlots].filter(x=>x.mult).sort((a,b)=>a.mult-b.mult);
  const emptyLeft=allSlots.filter(x=>!x.committed && !x.mult && !x.bet && !(x.isParlay&&x.parlayLegs&&x.parlayLegs.length)).length;
- const canEdit=slots.some(x=>!slotStarted(x)) || emptyLeft>0;
+ const canEdit=slots.some(x=>!slotLocked(x)) || emptyLeft>0;
  const wk=activeLeague.current_week||activeLeague.week||1;
  const catColors={ml:IOS.blue,prop:IOS.yellow,ou:IOS.orange,spread:IOS.green,longshot:IOS.pink};
  const catLabels={ml:"Moneyline",prop:"Prop",ou:"Over/Under",spread:"Spread",longshot:"Longshot"};
@@ -7529,7 +7536,7 @@ export default function App() {
  const started=slotStarted(slot);
  if(slot.committed) return (<div style={{display:"flex",alignItems:"center",gap:7}}>
  <span style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:10,fontWeight:800,color:IOS.green,background:"rgba(48,209,88,0.12)",border:"1px solid rgba(48,209,88,0.3)",borderRadius:7,padding:"4px 8px"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>LOCKED</span>
- {!started && <span onClick={(e)=>{e.stopPropagation();unlockSlot(idx);}} style={{fontSize:10.5,fontWeight:700,color:IOS.blue,cursor:"pointer"}}>Unlock</span>}
+ {!slotLocked(slot) && <span onClick={(e)=>{e.stopPropagation();unlockSlot(idx);}} style={{fontSize:10.5,fontWeight:700,color:IOS.blue,cursor:"pointer"}}>Unlock</span>}
  </div>);
  if(started) return (<span style={{fontSize:10,fontWeight:700,color:IOS.label3}}>Game started</span>);
  return (<button onClick={(e)=>{e.stopPropagation();lockSlot(idx);}} style={{fontFamily:"Barlow",display:"inline-flex",alignItems:"center",gap:5,fontSize:11,fontWeight:800,color:"#08080B",background:IOS.green,border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#08080B" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Lock</button>);
