@@ -9039,19 +9039,20 @@ export default function App() {
  const myBySlot={}, oppBySlot={};
  myPicks.forEach(p=>{ const i=_slotIdx(p); (myBySlot[i]=myBySlot[i]||[]).push(p); });
  oppUserPicks.forEach(p=>{ const i=_slotIdx(p); (oppBySlot[i]=oppBySlot[i]||[]).push(p); });
- matchRows = _cfg.map((c,i)=>({ key:"s"+i, mode:"slot", type:(c.type==="wildcard"?null:c.type), mine:myBySlot[i]||null, theirs:oppBySlot[i]||null }));
+ matchRows = _cfg.map((c,i)=>({ key:"s"+i, idx:i, mode:"slot", type:(c.type==="wildcard"?null:c.type), mine:myBySlot[i]||null, theirs:oppBySlot[i]||null }));
  } else {
  const used=[...new Set([...Object.keys(myPicksByMult),...Object.keys(oppPicksByMult)].map(Number))];
  const maxM=used.length?Math.max(5,...used):5;
  matchRows = Array.from({length:maxM},(_,k)=>k+1).map(m=>({ key:"m"+m, mode:"mult", mult:m, mine:myPicksByMult[m]||null, theirs:oppPicksByMult[m]||null }));
  }
 
- const renderCard = (picks, isMe, expandId, slotType, showMult) => {
+ const renderCard = (picks, isMe, expandId, slotType, showMult, onAdd) => {
  if(!picks || picks.length===0){
  const _lab = slotType ? (slotLabels[slotType]||slotType) : "";
+ const _tap = !!(isMe && onAdd);
  return (
- <div style={{flex:1,borderRadius:12,minHeight:68,background:"#09090B",border:"1px dashed #24242C",display:"flex",flexDirection:"column",alignItems:isMe?"flex-start":"flex-end",justifyContent:"center",gap:4,padding:"0 12px"}}>
- {_lab&&<span style={{fontSize:8,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:"#4a4a52"}}>{_lab}</span>}
+ <div onClick={_tap?onAdd:undefined} style={{flex:1,borderRadius:12,minHeight:68,background:_tap?"#0B111C":"#09090B",border:_tap?("1px dashed "+IOS.blue+"55"):"1px dashed #24242C",display:"flex",flexDirection:"column",alignItems:isMe?"flex-start":"flex-end",justifyContent:"center",gap:4,padding:"0 12px",cursor:_tap?"pointer":"default"}}>
+ {_lab&&<span style={{fontSize:8,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:_tap?IOS.blue:"#4a4a52"}}>{_lab}</span>}
  <span style={{fontSize:isMe?11:10,fontWeight:isMe?800:700,color:isMe?IOS.blue:"#3a3a40"}}>{isMe?(slotType?"+ Add "+_lab:"+ Add pick"):"Not locked yet"}</span>
  </div>
  );
@@ -9147,7 +9148,7 @@ export default function App() {
  <div style={{padding:"0 10px 8px"}}>
  {matchRows.map(row=>{ const _t=row.type; const _c=_t?(catColors[_t]||IOS.blue):IOS.blue; const _sh=_t?(SLOT_SHORT[_t]||_t.toUpperCase()):null; return (
  <div key={row.key} style={{display:"grid",gridTemplateColumns:"1fr 34px 1fr",gap:4,marginBottom:5,alignItems:"start"}}>
- {renderCard(row.mine, true, "mexp-my-"+row.key, _t, row.mode==="slot")}
+ {renderCard(row.mine, true, "mexp-my-"+row.key, _t, row.mode==="slot", row.mode==="slot"?(()=>{ setBuildingSlip(true); setGridTargetSlot(row.idx); setGridType(_t||"ml"); setGridPropSub("all"); setScreen("browser"); }):(()=>{ setBuildingSlip(true); setScreen("picks"); }))}
  <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",paddingTop:20,gap:3}}>
  {row.mode==="slot"
  ? <div style={{width:26,height:26,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:900,background:_c+"22",color:_c}}>{_sh||"?"}</div>
