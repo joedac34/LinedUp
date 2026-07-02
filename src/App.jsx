@@ -6116,8 +6116,11 @@ export default function App() {
    </div>
    ))}
 
-       {homeTab==='home' && !leagueAwaitingStart && tickerGames.length>0 && (()=>{
+       {homeTab==='home' && !leagueAwaitingStart && (()=>{
  const now=new Date();
+ const _ls=activeLeague?.sports||(activeLeague?.sport?[activeLeague.sport]:[]);
+ const _games=(tickerGames||[]).filter(g=>_ls.length===0||_ls.includes(g.sport));
+ if(!_games.length) return null;
  const myList=(weekPicks||[]).filter(p=>p.user_id===user?.id);
  const myPickNames=myList.map(p=>(p.pick_name||"").toLowerCase());
  const openG=async(g,away,home,espn,gameTime,isLive)=>{
@@ -6136,7 +6139,7 @@ export default function App() {
  </div>
  </div>
  <div className="wr-carousel">
- {tickerGames.slice(0,10).map((g,gi)=>{
+ {_games.slice(0,10).map((g,gi)=>{
  const away=g.away.split(" ").pop(), home=g.home.split(" ").pop();
  const espn=matchEspnGame(espnGames, away, home);
  const t=new Date(g.time);
@@ -8902,8 +8905,17 @@ export default function App() {
 
  {(()=>{
  const targetSize = activeLeague.target_size||activeLeague.max_members||8;
- const leagueIsFull = activeLeagueId==="solo" || leagueMembers.length >= targetSize;
+ const _mc = Math.max(leagueMembers.length, Number(activeLeague.memberCount||0));
+ const _membersKnown = activeLeagueId==="solo" || _mc>0;
+ const leagueIsFull = activeLeagueId==="solo" || _mc >= targetSize;
  const hasOpponent = leagueMembers.filter(m=>!m.isYou).length > 0;
+
+ // Membership not loaded yet — show a spinner rather than flashing the "locked" state
+ if(!_membersKnown) return (
+ <div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:"80px 0"}}>
+ <div style={{width:26,height:26,borderRadius:"50%",border:"2.5px solid rgba(255,255,255,0.12)",borderTopColor:IOS.blue,animation:"spin 0.7s linear infinite"}}/>
+ </div>
+ );
 
  // League not full yet — no schedule, no matchup
  if(!leagueIsFull) return (
@@ -8917,12 +8929,12 @@ export default function App() {
  <div style={{width:"100%",maxWidth:280,marginTop:12}}>
  <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
  <div style={{fontSize:13,fontWeight:600,color:IOS.label3}}>Members joined</div>
- <div style={{fontSize:13,fontWeight:700,color:IOS.blue}}>{leagueMembers.length} / {targetSize}</div>
+ <div style={{fontSize:13,fontWeight:700,color:IOS.blue}}>{_mc} / {targetSize}</div>
  </div>
  <div style={{background:"rgba(255,255,255,0.08)",borderRadius:8,height:8,overflow:"hidden"}}>
- <div style={{height:"100%",borderRadius:8,background:`linear-gradient(90deg,${IOS.blue},${IOS.teal})`,width:`${(leagueMembers.length/targetSize)*100}%`,transition:"width .4s"}}/>
+ <div style={{height:"100%",borderRadius:8,background:`linear-gradient(90deg,${IOS.blue},${IOS.teal})`,width:`${(_mc/targetSize)*100}%`,transition:"width .4s"}}/>
  </div>
- <div style={{fontSize:12,color:IOS.label3,marginTop:8,textAlign:"center"}}>{targetSize-leagueMembers.length} more player{targetSize-leagueMembers.length!==1?"s":""} needed</div>
+ <div style={{fontSize:12,color:IOS.label3,marginTop:8,textAlign:"center"}}>{targetSize-_mc} more player{targetSize-_mc!==1?"s":""} needed</div>
  </div>
  {activeLeague.isCommissioner && (
  <div style={{marginTop:8,background:"rgba(10,132,255,0.1)",borderRadius:14,padding:"14px 20px",border:`1px solid ${IOS.blue}30`,width:"100%",maxWidth:280}}>
