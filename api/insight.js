@@ -506,9 +506,36 @@ async function generate(ctx, stats) {
       "You also have the user's own PickLock history in PROFILE and their standing/matchup in LEAGUE (when present) — you MAY reference their archetype, hot/cold streak, strong/weak bet types, or where they sit in the league to make the chat personal, specific, and strategic.";
     user = `USER MESSAGE\n${ctx.question || ctx.selection}` + profileBlock + leagueBlock;
   } else {
+    // Bet-type-aware model projection, derived ONLY from matchup scoring already in DATA.
+    if (stats.matchup && stats.matchup.away && stats.matchup.home && ctx.betType !== "prop" && ctx.betType !== "chat") {
+      const _mA=stats.matchup.away, _mH=stats.matchup.home;
+      const _aS=num(_mA.scored), _aA=num(_mA.allowed), _hS=num(_mH.scored), _hA=num(_mH.allowed);
+      if (_aS!=null && _aA!=null && _hS!=null && _hA!=null) {
+        const _awayExp=(_aS+_hA)/2, _homeExp=(_hS+_aA)/2;
+        const _projTotal=_awayExp+_homeExp, _projMargin=_homeExp-_awayExp;
+        const _unit = ctx.sport === "mlb" ? "runs" : "pts";
+        const _proj=[];
+        if (ctx.betType === "ou") {
+          _proj.push({label:"Model projected total", value:`${_projTotal.toFixed(1)} ${_unit}`});
+          if (ctx.line!=null && Number.isFinite(num(ctx.line))) { const _d=_projTotal-num(ctx.line); _proj.push({label:"Projection vs the O/U line", value:`model ${_projTotal.toFixed(1)} vs line ${ctx.line} — leans ${_d>=0?"OVER":"UNDER"} by ${Math.abs(_d).toFixed(1)}`}); }
+        } else {
+          const _fav=_projMargin>=0?_mH.name:_mA.name;
+          _proj.push({label:"Model projected score", value:`${_mA.abbr} ${_awayExp.toFixed(1)} - ${_homeExp.toFixed(1)} ${_mH.abbr}`});
+          _proj.push({label:"Model projected margin", value:`${_fav} by ${Math.abs(_projMargin).toFixed(1)} ${_unit}`});
+        }
+        stats.lines = _proj.concat(stats.lines||[]);
+      }
+    }
     const dataBlock = (stats.lines && stats.lines.length)
       ? stats.lines.map(l => `- ${l.label}: ${l.value}`).join("\n")
       : "(no live stats were available for this selection)";
+    const frame = ctx.betType === "ou"
+      ? "This is a TOTAL (over/under): the question is whether the teams' COMBINED score clears the line. Lead with the model projected total vs the line, then pace and each side's scoring/allowed. "
+      : ctx.betType === "spread"
+      ? "This is a SPREAD: the question is whether the selected side COVERS the number, not just wins. Lead with the model projected margin/score vs the line — does the favorite win by more than the number, or the underdog stay within it. "
+      : ctx.betType === "ml"
+      ? "This is a MONEYLINE: the question is who wins outright. Lead with records, form, H2H and the model projected margin as a win-probability lean, and weigh the odds for value. "
+      : "";
     system = personaLine +
       "You are Plok, a sharp, concise sports-betting analyst. " +
       "Use ONLY the figures in the DATA block — never invent, estimate, or recall numbers from memory. If a relevant stat is missing, speak qualitatively without stating a number. " +
@@ -516,7 +543,7 @@ async function generate(ctx, stats) {
       "For MLB game bets, DATA may also include each side's league RANKS, the probable starting pitchers' lines, key hitters, injuries, and weather — name the probable starters and weave the most decisive of these into the read. " +
       "Lead the summary with the single most decisive figure for THIS bet, name the team(s) or player, and INTERPRET — do not just list. " +
       "If DATA has no game-log numbers for this player/stat, say plainly that recent game logs for this stat were not available, keep the read brief and qualitative, and do NOT invent or describe metrics (no 'speed', 'matchup dynamics', 'base-running ability' as if measured). " +
-      "Do NOT mention against-the-spread (ATS) or cover rates — they are not in DATA. " +
+      "Do not claim real against-the-spread (ATS) or cover-rate HISTORY (it is not in DATA); you MAY reason from the MODEL PROJECTED margin/total provided in DATA. " + frame +
       "BULL and BEAR cases must be SPECIFIC: each cites at least one concrete number from DATA (a record, a per-game figure, the line, or the odds) and ties it to why this side wins or loses. Forbidden filler: 'if they play well', 'momentum', 'anything can happen', 'capable'. Two to three sentences each, no platitudes. If there are genuinely no numbers, keep both cases short and honest rather than padded. " +
       "trends: up to 3 short notes, each anchored to a specific number, or empty if none. " +
       "ALWAYS return keyStats as an EMPTY array — the app renders factual stats separately. Never imply a metric that is not an explicit number in DATA. " +
