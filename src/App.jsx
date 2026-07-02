@@ -687,6 +687,56 @@ function pcDrawCard(data){
   x.textAlign="right"; x.fillText("PICKLOCK · 2026 S1",W-48,H-54);
   return c;
 }
+function drawSlipCard(data){
+  const W=600,H=900,c=document.createElement("canvas");c.width=W;c.height=H;
+  const x=c.getContext("2d"); const P=44;
+  const BLUE="#0A84FF",GREEN="#30D158",RED="#FF453A";
+  const TCOL={ml:"#0A84FF",prop:"#FFD60A",ou:"#FF9F0A",spread:"#30D158",longshot:"#FF375F"};
+  const rr=(a,b,w,h,r)=>{ if(x.roundRect){x.beginPath();x.roundRect(a,b,w,h,r);} else {x.beginPath();x.moveTo(a+r,b);x.arcTo(a+w,b,a+w,b+h,r);x.arcTo(a+w,b+h,a,b+h,r);x.arcTo(a,b+h,a,b,r);x.arcTo(a,b,a+w,b,r);x.closePath();} };
+  const hex=(h,a)=>{ const n=parseInt(h.slice(1),16); return "rgba("+((n>>16)&255)+","+((n>>8)&255)+","+(n&255)+","+a+")"; };
+  const ell=(t,max)=>{ t=String(t||""); if(x.measureText(t).width<=max) return t; while(t.length>1 && x.measureText(t+"…").width>max) t=t.slice(0,-1); return t+"…"; };
+  const g=x.createLinearGradient(0,0,W,H); g.addColorStop(0,"#12141b"); g.addColorStop(.62,"#0a0a0d"); g.addColorStop(1,"#0b0d12");
+  rr(0,0,W,H,44); x.fillStyle=g; x.fill();
+  x.lineWidth=2; x.strokeStyle="rgba(255,255,255,.09)"; rr(6,6,W-12,H-12,40); x.stroke();
+  const rad=x.createRadialGradient(W-120,80,10,W-120,80,250); rad.addColorStop(0,hex(BLUE,.26)); rad.addColorStop(1,"rgba(0,0,0,0)"); x.fillStyle=rad; x.fillRect(0,0,W,340);
+  const tl=x.createLinearGradient(P,0,W-P,0); tl.addColorStop(0,"rgba(10,132,255,0)"); tl.addColorStop(.5,BLUE); tl.addColorStop(1,"rgba(10,132,255,0)"); x.fillStyle=tl; x.fillRect(P,0,W-2*P,4);
+  x.textBaseline="alphabetic";
+  rr(P,44,30,30,9); const lg=x.createLinearGradient(P,44,P+30,74); lg.addColorStop(0,BLUE); lg.addColorStop(1,"#0060d0"); x.fillStyle=lg; x.fill();
+  x.strokeStyle="#fff"; x.lineWidth=2.4; x.lineCap="round"; rr(P+8,60,14,10,2.5); x.stroke(); x.beginPath(); x.arc(P+15,60,4.4,Math.PI,0); x.stroke();
+  x.fillStyle="#fff"; x.textAlign="left"; x.font="900 24px Barlow, system-ui, sans-serif"; x.fillText("PICKLOCK",P+40,67);
+  x.font="800 15px Barlow, system-ui, sans-serif"; const wkT=("WEEK "+data.week).toUpperCase(); const wkW=x.measureText(wkT).width;
+  rr(W-P-wkW-24,46,wkW+24,28,14); x.strokeStyle="rgba(255,255,255,.18)"; x.lineWidth=1.5; x.stroke(); x.fillStyle="rgba(255,255,255,.6)"; x.textAlign="center"; x.fillText(wkT,W-P-(wkW+24)/2,65);
+  x.textAlign="left"; x.fillStyle="#fff"; x.font="800 40px 'Barlow Semi Condensed', Barlow, sans-serif"; x.fillText(ell(String(data.league||"").toUpperCase(),W-2*P),P,150);
+  x.font="700 20px Barlow, system-ui, sans-serif"; x.fillStyle=BLUE; const handle="@"+String(data.handle||"you"); x.fillText(handle,P,188); const hW=x.measureText(handle).width;
+  x.font="800 13px Barlow, system-ui, sans-serif"; const chT="LOCKED IN"; const chW=x.measureText(chT).width; const chX=P+hW+16;
+  rr(chX,170,chW+40,24,12); x.fillStyle=hex(GREEN,.14); x.fill(); x.strokeStyle=hex(GREEN,.4); x.lineWidth=1; x.stroke();
+  x.strokeStyle=GREEN; x.lineWidth=2; rr(chX+12,180,9,7,2); x.stroke(); x.beginPath(); x.arc(chX+16.5,180,3,Math.PI,0); x.stroke();
+  x.fillStyle=GREEN; x.textAlign="left"; x.fillText(chT,chX+28,188);
+  const dv=x.createLinearGradient(P,0,W-P,0); dv.addColorStop(0,"rgba(255,255,255,0)"); dv.addColorStop(.5,"rgba(255,255,255,.14)"); dv.addColorStop(1,"rgba(255,255,255,0)"); x.fillStyle=dv; x.fillRect(P,214,W-2*P,1.5);
+  const picks=data.picks||[]; const n=Math.max(1,picks.length); const hasCombo=!!data.comboOdds;
+  const areaTop=238, areaBot=hasCombo?770:840, gap=12;
+  const rowH=Math.max(60,Math.min(150,(areaBot-areaTop-gap*(n-1))/n));
+  picks.forEach((p,i)=>{
+    const y=areaTop+i*(rowH+gap); const col=TCOL[p.type]||BLUE;
+    const won=p.result==="W",lost=p.result==="L"; const strip=won?GREEN:lost?RED:col;
+    rr(P,y,W-2*P,rowH,16); x.fillStyle="rgba(255,255,255,.045)"; x.fill();
+    x.strokeStyle=won?hex(GREEN,.5):lost?hex(RED,.5):"rgba(255,255,255,.08)"; x.lineWidth=1; x.stroke();
+    rr(P,y,5,rowH,3); x.fillStyle=strip; x.fill();
+    const padL=P+22,padR=W-P-20; const chipS=Math.min(40,rowH*0.44);
+    rr(padL,y+16,chipS,chipS,11); x.fillStyle=hex(col,.15); x.fill();
+    x.fillStyle=col; x.textAlign="center"; x.font="900 "+Math.round(chipS*0.42)+"px Barlow, system-ui, sans-serif"; x.fillText((p.mult||1)+"×",padL+chipS/2,y+16+chipS*0.66);
+    x.textAlign="left"; x.fillStyle=col; x.font="800 13px Barlow, system-ui, sans-serif"; x.fillText(String(p.typeLabel||"").toUpperCase(),padL+chipS+14,y+32);
+    const oc=String(p.odds||"").trim().charAt(0)==="+"?GREEN:BLUE; x.textAlign="right"; x.fillStyle=won?GREEN:lost?RED:oc; x.font="800 22px 'Barlow Semi Condensed',Barlow,sans-serif"; x.fillText(won?"WON":lost?"LOST":String(p.odds||""),padR,y+36);
+    x.textAlign="left"; x.fillStyle="#fff"; x.font="800 19px Barlow, system-ui, sans-serif"; x.fillText(ell(p.name,padR-(padL+chipS+14)),padL+chipS+14,y+56);
+    if(rowH>=76){ x.fillStyle="rgba(255,255,255,.4)"; x.font="500 13px Barlow, system-ui, sans-serif"; x.fillText(ell(p.game,padR-(padL+chipS+14)),padL+chipS+14,y+76); }
+  });
+  if(hasCombo){ const cy=786; rr(P,cy,W-2*P,54,14); x.fillStyle="rgba(10,132,255,.1)"; x.fill(); x.strokeStyle=hex(BLUE,.3); x.lineWidth=1; x.stroke();
+    x.textAlign="left"; x.fillStyle="rgba(255,255,255,.55)"; x.font="800 14px Barlow, system-ui, sans-serif"; x.fillText("IF IT ALL HITS",P+20,cy+33);
+    x.textAlign="right"; x.fillStyle=BLUE; x.font="900 30px 'Barlow Semi Condensed',Barlow,sans-serif"; x.fillText(String(data.comboOdds),W-P-20,cy+37); }
+  x.textAlign="left"; x.fillStyle="rgba(255,255,255,.5)"; x.font="700 16px Barlow, system-ui, sans-serif"; x.fillText("Think you can beat it?",P,874);
+  x.textAlign="right"; x.fillStyle=BLUE; x.font="800 16px Barlow, system-ui, sans-serif"; x.fillText("picklockapp.com",W-P,874);
+  return c;
+}
 function PlayerCard({ data, IOS }){
   const cardRef=useRef(null), stageRef=useRef(null);
   const [flipped,setFlipped]=useState(false);
@@ -7072,7 +7122,25 @@ export default function App() {
  const losses=slots.filter(x=>resultFor(x)==="L").length;
  const lsSlot=slots.find(x=>x.category==="longshot"||(x.isParlay&&x.parlayLegs.length>=2));
  const lsOdds=lsSlot?(lsSlot.isParlay?calcLS(lsSlot.parlayLegs)?.american:lsSlot.bet?.odds):null;
- const onShare=()=>{try{const txt=`My ${activeLeague.name} Week ${wk} slip is locked — ${slots.length} picks, projected +${projTotal.toFixed(1)} pts.`;if(navigator.share){navigator.share({title:"PickLock slip",text:txt});}else if(navigator.clipboard){navigator.clipboard.writeText(txt);}}catch(e){}};
+ const onShare=async()=>{try{
+   if(document.fonts&&document.fonts.ready){ try{ await document.fonts.ready; }catch(e){} }
+   const cp=slots.filter(z=>z.bet||z.isParlay);
+   const cardPicks=cp.map(z=>{ const isP=z.isParlay; const cat=isP?"longshot":z.category;
+     const nm=isP?(((z.parlayLegs||[]).length)+"-Leg Parlay"):(z.bet?.pick||"");
+     const gm=isP?((z.parlayLegs||[]).map(l=>l.pick).join(" + ")):(z.bet?.game||"");
+     const od=isP?(calcLS(z.parlayLegs)?.american||""):(z.bet?.odds||"");
+     return {mult:z.mult||1, type:cat, typeLabel:catLabels[cat]||cat, name:nm, game:gm, odds:od, result:resultFor(z)}; });
+   const comboDec=cp.length>=2 ? cp.reduce((acc,z)=>{ if(z.isParlay){const ls=calcLS(z.parlayLegs);return acc*(ls?ls.decimal:1);} const io=Number(z.bet?.impliedOdds); return acc*(io?toDecimal(io):1); },1) : 0;
+   const comboOdds=comboDec>1?toAmerican(comboDec):null;
+   const data={ league:activeLeague.name, week:wk, handle:(userProfile?.username||"you"), picks:cardPicks, comboOdds };
+   const canvas=drawSlipCard(data);
+   const text="My "+activeLeague.name+" Week "+wk+" slip is locked in. Think you can beat it? picklockapp.com";
+   const blob=await new Promise(r=>canvas.toBlob(r,"image/png"));
+   const file=blob?new File([blob],"picklock-slip.png",{type:"image/png"}):null;
+   if(file && navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({files:[file],text,title:"My PickLock slip"}); }
+   else if(navigator.share){ await navigator.share({text,title:"My PickLock slip"}); }
+   else { const a=document.createElement("a"); a.href=canvas.toDataURL("image/png"); a.download="picklock-slip.png"; a.click(); try{ await navigator.clipboard.writeText(text); }catch(e){} }
+ }catch(e){}};
  const Tile=({val,lbl,color})=>(
  <div style={{flex:1,background:"rgba(255,255,255,0.03)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"11px 8px",textAlign:"center"}}>
  <div style={{fontSize:19,fontWeight:800,letterSpacing:"-0.5px",color}}>{val}</div>
@@ -8321,7 +8389,7 @@ export default function App() {
    </div>
    <div style={{flexShrink:0,width:74,borderRadius:10,border:"1px solid "+(selected?acc:"rgba(255,255,255,0.12)"),background:selected?(acc+"1f"):"rgba(255,255,255,0.04)",textAlign:"center",padding:"7px 3px"}}>
    <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:17,color:pos?IOS.green:"#fff",lineHeight:1.05}}>{bet.odds}</div>
-   <div style={{fontSize:10,fontWeight:800,color:IOS.green,lineHeight:1.1,marginTop:1}}>{gridType==="longshot"?(ret.toFixed(1)+"\u00d7"):("+"+pts+" pts")}</div>
+   <div style={{fontSize:10,fontWeight:800,color:IOS.green,lineHeight:1.1,marginTop:1}}>{gridType==="longshot"?(ret.toFixed(1)+"×"):("+"+pts+" pts")}</div>
    </div>
    {added && <div style={{position:"absolute",top:0,right:0,bottom:0,left:0,background:acc+"1a",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{display:"flex",alignItems:"center",gap:5,background:acc,color:"#fff",borderRadius:20,padding:"5px 12px",fontSize:11,fontWeight:800}}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Added</div></div>}
    </div>
@@ -10497,7 +10565,7 @@ export default function App() {
      </div>
      {_sc&&(
      <div style={{display:"flex",flexWrap:"wrap",gap:6,padding:"0 14px 14px"}}>
-       {_sc.map((c,i)=>(<span key={i} style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.6)",background:"rgba(255,255,255,0.05)",border:_hair,borderRadius:7,padding:"5px 9px"}}><span style={{color:"#fff",fontWeight:700}}>{c.mult}{"\u00d7"}</span> {_tLabel(c.type)}</span>))}
+       {_sc.map((c,i)=>(<span key={i} style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.6)",background:"rgba(255,255,255,0.05)",border:_hair,borderRadius:7,padding:"5px 9px"}}><span style={{color:"#fff",fontWeight:700}}>{c.mult}{"×"}</span> {_tLabel(c.type)}</span>))}
      </div>
      )}
    </div>
