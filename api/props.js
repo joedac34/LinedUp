@@ -14,6 +14,8 @@ const PROP_MARKETS = {
     "batter_doubles","batter_triples","pitcher_walks",
     // batch 3: H+R+RBI (grade.js derives H+R+RBI)
     "batter_hits_runs_rbis","batter_singles",
+    // HR is usually a "to hit a HR" (1+) milestone -> alternate key
+    "batter_home_runs_alternate",
   ],
 };
 
@@ -29,7 +31,7 @@ const MARKET_LABELS = {
   batter_runs_scored:"Runs", batter_walks:"Walks", batter_stolen_bases:"Stolen Bases",
   pitcher_earned_runs:"Earned Runs", pitcher_hits_allowed:"Hits Allowed",
   batter_doubles:"Doubles", batter_triples:"Triples", pitcher_walks:"Walks Allowed",
-  batter_hits_runs_rbis:"Hits+Runs+RBIs", batter_singles:"Singles",
+  batter_hits_runs_rbis:"Hits+Runs+RBIs", batter_singles:"Singles", batter_home_runs_alternate:"Home Runs",
 };
 
 export default async function handler(req, res) {
@@ -64,7 +66,7 @@ export default async function handler(req, res) {
         if (!r.ok) continue;
         const data = await r.json();
         if (!data.bookmakers || !data.bookmakers.length) { if (debugRows) debugRows.push({ game: gameLabel, time: event.commence_time, note: "no bookmakers returned", markets: [] }); continue; }
-        if (debugRows) { const _ks = new Set(); data.bookmakers.forEach(bk => bk.markets?.forEach(m => _ks.add(m.key))); debugRows.push({ game: gameLabel, time: event.commence_time, hasHR: _ks.has("batter_home_runs"), markets: [..._ks] }); }
+        if (debugRows) { const _ks = new Set(); data.bookmakers.forEach(bk => bk.markets?.forEach(m => _ks.add(m.key))); debugRows.push({ game: gameLabel, time: event.commence_time, hasHR: _ks.has("batter_home_runs") || _ks.has("batter_home_runs_alternate"), markets: [..._ks] }); }
 
         // Merge markets across ALL books (each book carries a different subset),
         // de-duping the same player+market+line+side so we don't triple-list it.
