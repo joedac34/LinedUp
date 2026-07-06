@@ -593,6 +593,11 @@ function gradeProp(pickName, gameField, index, info = {}, gameDate = null) {
     const H = sget(["H", "hits"]), R = sget(["R", "runs"]), RBI = sget(["RBI", "RBIs", "rbi"]);
     if (H == null || R == null || RBI == null) { info.reason = "prop_hrr_data_unavailable"; return null; }
     val = H + R + RBI;
+  } else if (/\bsingles?\b/i.test(parsed.stat)) {
+    // Singles = H - 2B - 3B - HR. Grade only with a complete batting line, else PENDING.
+    const H = sget(["H", "hits"]), D = sget(["2B", "doubles", "2b"]), Tr = sget(["3B", "triples", "3b"]), HR = sget(["HR", "homeRuns", "hr"]);
+    if (H == null || D == null || Tr == null || HR == null) { info.reason = "prop_singles_data_unavailable"; return null; }
+    val = H - D - Tr - HR;
   } else {
     const labels = resolveStatLabels(parsed.stat);
     let raw = null;
