@@ -4171,8 +4171,9 @@ export default function App() {
    const base = freshSlots().map(sl=>({...sl, committed:false, commitIds:[]}));
    const bySlot = {}; data.forEach(p=>{ const s=p.slot||""; (bySlot[s]=bySlot[s]||[]).push(p); });
    Object.keys(bySlot).forEach(slotName=>{
-     const idx = parseInt(String(slotName).split("_").pop(), 10);
-     if(isNaN(idx) || idx<0 || idx>=base.length) return;
+     let idx = parseInt(String(slotName).split("_").pop(), 10);
+     if(isNaN(idx) || idx<0) idx = base.length; // unknown slot index -> append so the pick is never dropped
+     while(idx >= base.length) base.push({id:base.length, bet:null, mult:null, isParlay:false, parlayLegs:[], category:null, slotType:null, market:null, committed:false, commitIds:[]});
      const built = buildSlot(bySlot[slotName], idx);
      base[idx] = {...base[idx], ...built, id: idx, category: base[idx].category||built.category, slotType: base[idx].slotType||built.slotType, market: base[idx].market||built.market};
    });
@@ -7111,7 +7112,7 @@ export default function App() {
  {/* Submitted */}
  {(activeSubmitted || activeSavedPicks?.flexPicks)&&!buildingSlip&&(()=>{
  const allSlots=[...(activeSavedPicks?.flexPicks||activePicks)];
- const slots=[...allSlots].filter(x=>x.mult).sort((a,b)=>a.mult-b.mult);
+ const slots=[...allSlots].filter(x=>x.mult||x.committed||x.bet||(x.isParlay&&x.parlayLegs&&x.parlayLegs.length)).sort((a,b)=>(a.mult||0)-(b.mult||0));
  const emptyLeft=allSlots.filter(x=>!x.committed && !x.mult && !x.bet && !(x.isParlay&&x.parlayLegs&&x.parlayLegs.length)).length;
  const canEdit=slots.some(x=>!slotLocked(x)) || emptyLeft>0;
  const wk=activeLeague.current_week||activeLeague.week||1;
