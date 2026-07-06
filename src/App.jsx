@@ -3318,7 +3318,7 @@ export default function App() {
  const seasonWeeks = Number(league.season_weeks||18);
  const derived = Math.min(seasonWeeks+1, Math.floor((Date.now()-start-GRACE_MS)/WEEK_MS)+1); // +1 lets the final week finalize
  const cw = league.current_week || 1;
- if(derived <= cw) return; // current week isn't over yet
+ if(derived <= cw) return false; // current week isn't over yet
  for(let wk=cw; wk<derived; wk++){
  await maybeSeedPlayoff(leagueId, league, wk);
  await finalizeWeekMatchups(leagueId, wk);
@@ -3327,6 +3327,7 @@ export default function App() {
  }
  await maybeSeedPlayoff(leagueId, league, Math.min(seasonWeeks, derived));
  await maybeCrownChampion(leagueId, league);
+ return true;
  };
 
  // Decide W/L for a closed week from graded picks. Idempotent: only touches unfinalized matchups.
@@ -3345,6 +3346,13 @@ export default function App() {
  };
 
   // ─── SCHEDULE GENERATION ────────────────────────────────────────
+ useEffect(()=>{
+ if(isSoloMode || !user || !activeLeague || !activeLeague.id || !activeLeague.season_start) return;
+ let cancelled=false;
+ (async()=>{ const adv=await checkAutoAdvanceWeek(activeLeague.id, activeLeague); if(adv && !cancelled){ await fetchLeagues(user.id); await fetchStandings(activeLeague.id); } })();
+ return ()=>{ cancelled=true; };
+ }, [activeLeagueId, activeLeague&&activeLeague.season_start, activeLeague&&activeLeague.current_week, isSoloMode, user]);
+
  const generateSchedule = async (leagueId, memberIds, seasonWeeks) => {
  // Round-robin algorithm: generates matchups so everyone plays everyone else
  // before repeating. For N players, each round has N/2 matchups.
@@ -7996,7 +8004,7 @@ export default function App() {
 
  // Per-bet-type accent — the screen's accent shifts with the selected type
  const ACC = { ml:IOS.blue, spread:IOS.green, ou:IOS.orange, prop:IOS.yellow, longshot:IOS.pink, ml_h1:"#64D2FF", spread_h1:"#64D2FF", ou_h1:"#64D2FF", ml_f5:"#5E5CE6", spread_f5:"#5E5CE6", ou_f5:"#5E5CE6", yrfi:"#FF9F0A", nrfi:"#30D158", period:"#5E5CE6" };
- const TYPE_LABELS = { ml:"Moneyline", spread:"Spread", ou:"Over/Under", prop:"Prop", longshot:"Longshot", ml_h1:"1H Moneyline", spread_h1:"1H Spread", ou_h1:"1H Over/Under", ml_f5:"F5 Moneyline", spread_f5:"F5 Spread", ou_f5:"F5 Over/Under", yrfi:"YRFI", nrfi:"NRFI", period:"Periods" };
+ const TYPE_LABELS = { ml:"Moneyline", spread:"Spread", ou:"Over/Under", prop:"Prop", longshot:"Longshot", ml_h1:"1H Moneyline", spread_h1:"1H Spread", ou_h1:"1H Over/Under", ml_f5:"F5 Moneyline", spread_f5:"F5 Spread", ou_f5:"F5 Over/Under", yrfi:"YRFI", nrfi:"NRFI", period:"Innings" };
  const acc = ACC[gridType] || IOS.blue;
  const gridCfg = !isSoloMode ? parseSlotConfig(activeLeague&&activeLeague.slot_config) : null;
  const allowedTypes = gridCfg ? [...new Set(gridCfg.flatMap(s=>s.type==="wildcard"?WILDCARD_TYPES:[s.type]))] : (isSoloMode ? ["ml","spread","ou","prop","period","longshot"] : ["ml","spread","ou","prop","longshot"]);
@@ -8971,6 +8979,7 @@ export default function App() {
  {/* Header */}
  <div style={{padding:"10px 20px 14px",background:"radial-gradient(120% 90% at 90% -10%, rgba(10,132,255,0.18), transparent 55%), linear-gradient(180deg,#0B1A2E 0%,#000 80%)"}}>
  <div style={{fontSize:11,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(255,255,255,0.42)"}}>Week {activeLeague.current_week||activeLeague.week||1} · {activeLeague.name} · Live</div>
+ {activeLeague.season_start && (()=>{ const _wm=7*24*60*60*1000; const _end=new Date(new Date(activeLeague.season_start).getTime()+(activeLeague.current_week||activeLeague.week||1)*_wm); const _ms=_end.getTime()-Date.now(); const _d=Math.floor(_ms/86400000); const _h=Math.floor((_ms%86400000)/3600000); return <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.4)",marginTop:3}}>Week ends {_end.toLocaleDateString(undefined,{month:"short",day:"numeric"})}{_ms>0?" · "+(_d>0?_d+"d ":"")+_h+"h left":" · closing…"}</div>; })()}
  <div style={{fontSize:30,fontWeight:800,letterSpacing:"-0.7px",color:"#fff",lineHeight:1.05,marginTop:2}}>Matchup</div>
  </div>
  {(activeLeague.league_type||"h2h")==="h2h" && (()=>{

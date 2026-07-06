@@ -52,6 +52,7 @@ export default async function handler(req, res) {
     const upcomingEvents = events.filter(e => new Date(e.commence_time) <= cutoff);
 
     const props = [];
+    const debugRows = req.query.debug ? [] : null; // ?debug=1 -> report which markets the API actually returns per game
     const marketsParam = markets.join(",");
     const bookmakers = "draftkings,fanduel,betmgm";
 
@@ -62,7 +63,8 @@ export default async function handler(req, res) {
         const r = await fetch(url);
         if (!r.ok) continue;
         const data = await r.json();
-        if (!data.bookmakers || !data.bookmakers.length) continue;
+        if (!data.bookmakers || !data.bookmakers.length) { if (debugRows) debugRows.push({ game: gameLabel, time: event.commence_time, note: "no bookmakers returned", markets: [] }); continue; }
+        if (debugRows) { const _ks = new Set(); data.bookmakers.forEach(bk => bk.markets?.forEach(m => _ks.add(m.key))); debugRows.push({ game: gameLabel, time: event.commence_time, hasHR: _ks.has("batter_home_runs"), markets: [..._ks] }); }
 
         // Merge markets across ALL books (each book carries a different subset),
         // de-duping the same player+market+line+side so we don't triple-list it.
@@ -102,6 +104,8 @@ export default async function handler(req, res) {
         });
       } catch (e) { continue; }
     }
+
+    if (debugRows) return res.status(200).json({ requested: markets, events: debugRows });
 
     // Props are identical for every user and all pre-game, so let Vercel's CDN serve one
     // upstream pull to all users per window instead of hitting the Odds API per client.
