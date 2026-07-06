@@ -62,6 +62,39 @@ async function storeCache(key, payload) {
   } catch { /* table may not exist yet — fine */ }
 }
 
+// ── per-identity rate limit on the EXPENSIVE (uncached) path ──────────────────
+// Caps real OpenAI calls per identity per hour so nobody can run up the bill.
+// The cap is far above any real user's usage, and this ALWAYS fails open: any
+// error (missing table, network) returns true so a real user is never blocked.
+// Optional table (run once in Supabase; until it exists this is a silent no-op):
+//   create table if not exists insight_rate (
+//     identity text primary key, window_start timestamptz, count int
+//   );
+const RL_LIMIT     = 100;            // uncached OpenAI calls / identity / hour
+const RL_WINDOW_MS = 3600 * 1000;
+async function underRateLimit(identity) {
+  if (!identity || !SB_URL) return true;            // can't identify -> don't block
+  try {
+    const nowMs = Date.now();
+    const r = await fetch(`${SB_URL}/rest/v1/insight_rate?identity=eq.${encodeURIComponent(identity)}&select=window_start,count`, { headers: sbHeaders });
+    const rows = await r.json();
+    const row = Array.isArray(rows) && rows[0] ? rows[0] : null;
+    let count = 0;
+    let windowStart = new Date(nowMs).toISOString();
+    if (row && row.window_start && (nowMs - new Date(row.window_start).getTime()) < RL_WINDOW_MS) {
+      count = row.count || 0;
+      windowStart = row.window_start;
+      if (count >= RL_LIMIT) return false;           // over the cap -> block
+    }
+    await fetch(`${SB_URL}/rest/v1/insight_rate`, {
+      method: "POST",
+      headers: { ...sbHeaders, Prefer: "resolution=merge-duplicates" },
+      body: JSON.stringify({ identity, window_start: windowStart, count: count + 1 }),
+    });
+    return true;
+  } catch { return true; }                           // fail OPEN — never block a real user
+}
+
 // ── SportsDataIO stat layer ───────────────────────────────────────────────────
 // NOTE: endpoint paths + season strings vary by subscription. Everything below is
 // best-effort and wrapped — a wrong path just yields fewer stats, never a crash.
@@ -596,6 +629,12 @@ export default async function handler(req, res) {
 
     const cached = await getCached(key);
     if (cached) return res.status(200).json({ ...cached, cached: true });
+
+    // Only the uncached path costs an OpenAI call — rate-limit that, not cache hits.
+    const identity = ctx.userId || String(req.headers["x-forwarded-for"] || req.headers["x-real-ip"] || "").split(",")[0].trim() || "anon";
+    if (!(await underRateLimit(identity))) {
+      return res.status(429).json({ error: "You're generating insights very fast — give it a minute and try again." });
+    }
 
     const stats = await fetchSportsData(ctx);
     const out = await generate(ctx, stats);
