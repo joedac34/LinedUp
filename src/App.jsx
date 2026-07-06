@@ -3957,9 +3957,7 @@ export default function App() {
  const setProStatus = async (val) => {
  setIsPro(val);
  try { localStorage.setItem("picklock_is_pro", val ? "true" : "false"); } catch(e) {}
- if(user) {
- await supabase.from("users").update({is_pro: val}).eq("id", user.id);
- }
+ // is_pro is written ONLY by the Stripe webhook (server-side). Never from the client.
  };
  const startCheckout = async (plan) => {
  if(!user || !user.id){ setShowPaywall(null); setScreen("auth"); return; }
@@ -10914,7 +10912,7 @@ export default function App() {
  );
  })()}
 
- {((user&&user.id==="769f7ebe-90c2-45f5-99f4-b98b54622f52")||(typeof localStorage!=="undefined"&&localStorage.getItem("picklock_dev")==="1")) && activeLeague.isCommissioner && activeLeague.league_type!=="bracket" && (()=>{
+ {(user&&user.id==="769f7ebe-90c2-45f5-99f4-b98b54622f52") && activeLeague.isCommissioner && activeLeague.league_type!=="bracket" && (()=>{
    const sw=Number(activeLeague.season_weeks)||18;
    const N=playoffFieldFor(activeLeague, leagueMembers.length||0);
    const pw=playoffWeeksFor(N);
@@ -12569,7 +12567,7 @@ export default function App() {
      powerups:{icon:"bolt",title:"Power-ups are a Pro feature",sub:"Double Down, Spread Enhancer, Insurance and more are unlocked with Commish Pro.",features:["All current and future power-ups","Unlimited picks and custom settings","Multi-sport league support"]},
    };
    const cfg = configs[showPaywall]||configs.picks;
-   const _isDev = (user && user.id === "769f7ebe-90c2-45f5-99f4-b98b54622f52") || (()=>{ try { return localStorage.getItem("picklock_dev")==="1"; } catch(e){ return false; } })();
+   const _isDev = (user && user.id === "769f7ebe-90c2-45f5-99f4-b98b54622f52");
    return (
      <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:9999,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>setShowPaywall(null)}>
        <div style={{background:"#111",borderRadius:"20px 20px 0 0",padding:"0 0 40px",border:"0.5px solid #1E1E1E"}} onClick={e=>e.stopPropagation()}>
