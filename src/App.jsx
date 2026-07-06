@@ -3188,9 +3188,11 @@ export default function App() {
   {id:"goingyard", name:"Going Yard", desc:"Home runs, hits, total bases and strikeouts — swing big.", sports:["mlb"], slots:[{type:"prop",mult:1,market:"hr"},{type:"prop",mult:2,market:"hr"},{type:"prop",mult:3,market:"hits"},{type:"prop",mult:4,market:"bases"},{type:"prop",mult:5,market:"k"}]},
  ];
  const [newLeagueSlots,setNewLeagueSlots]=useState([{type:"ml",mult:1},{type:"prop",mult:2},{type:"ou",mult:3},{type:"spread",mult:4},{type:"longshot",mult:5}]);
+ const [newLeaguePool,setNewLeaguePool]=useState([1,2,3,4,5]);
  const [presetSheet,setPresetSheet]=useState(false);
  const [marketSheet,setMarketSheet]=useState(null);
  const [slotSheetIdx,setSlotSheetIdx]=useState(null);
+ const [slotSearch,setSlotSearch]=useState("");
  const [advancingWeek, setAdvancingWeek] = useState(false);
  const [creatingLeague, setCreatingLeague] = useState(false);
 
@@ -3247,7 +3249,8 @@ export default function App() {
  if(memberError){alert(`league_members error: ${memberError.message} | code: ${memberError.code}`);setCreatingLeague(false);return;}
  // Best-effort: store custom per-slot config (Pro). Safe no-op until the column exists.
  if(isPro && Array.isArray(newLeagueSlots) && newLeagueSlots.length && newLeagueSlots.every(s=>s.type)){
- await supabase.from("leagues").update({slot_config: JSON.stringify(newLeagueSlots)}).eq("id", data.id);
+ const _cfg = newLeagueSlots.map((s,i)=>({ type:s.type, mult:(newLeaguePool[i]||1), ...(s.market?{market:s.market}:{}) }));
+ await supabase.from("leagues").update({slot_config: JSON.stringify(_cfg)}).eq("id", data.id);
  }
  await fetchLeagues(user.id);
  setNewLeagueCreated(data);
@@ -9434,9 +9437,9 @@ export default function App() {
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"linear-gradient(160deg,#15151A,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.09)",borderRadius:14,padding:"13px 15px",marginBottom:14}}>
  <div style={{fontSize:13,fontWeight:700,color:"#fff"}}>Picks per week<div style={{fontSize:11,color:"#555",fontWeight:600,marginTop:2}}>How many slots in the slip</div></div>
  <div style={{display:"flex",alignItems:"center",gap:12}}>
- <div onClick={()=>setNewLeagueSlots(s=>s.length>1?s.slice(0,-1):s)} style={{width:32,height:32,borderRadius:9,background:newLeagueSlots.length>1?"rgba(255,255,255,0.08)":"rgba(255,255,255,0.03)",display:"flex",alignItems:"center",justifyContent:"center",cursor:newLeagueSlots.length>1?"pointer":"default",fontSize:19,fontWeight:700,color:newLeagueSlots.length>1?"#fff":"#444"}}>−</div>
+ <div onClick={()=>{setNewLeagueSlots(s=>s.length>1?s.slice(0,-1):s);setNewLeaguePool(p=>p.length>1?p.slice(0,-1):p);}} style={{width:32,height:32,borderRadius:9,background:newLeagueSlots.length>1?"rgba(255,255,255,0.08)":"rgba(255,255,255,0.03)",display:"flex",alignItems:"center",justifyContent:"center",cursor:newLeagueSlots.length>1?"pointer":"default",fontSize:19,fontWeight:700,color:newLeagueSlots.length>1?"#fff":"#444"}}>−</div>
  <div style={{fontSize:20,fontWeight:800,color:"#fff",minWidth:20,textAlign:"center"}}>{newLeagueSlots.length}</div>
- <div onClick={()=>setNewLeagueSlots(s=>s.length<10?[...s,{type:null,mult:1}]:s)} style={{width:32,height:32,borderRadius:9,background:newLeagueSlots.length<10?"rgba(255,255,255,0.08)":"rgba(255,255,255,0.03)",display:"flex",alignItems:"center",justifyContent:"center",cursor:newLeagueSlots.length<10?"pointer":"default",fontSize:19,fontWeight:700,color:newLeagueSlots.length<10?"#fff":"#444"}}>+</div>
+ <div onClick={()=>{setNewLeagueSlots(s=>s.length<10?[...s,{type:null,mult:1}]:s);setNewLeaguePool(p=>p.length<10?[...p,p.length+1]:p);}} style={{width:32,height:32,borderRadius:9,background:newLeagueSlots.length<10?"rgba(255,255,255,0.08)":"rgba(255,255,255,0.03)",display:"flex",alignItems:"center",justifyContent:"center",cursor:newLeagueSlots.length<10?"pointer":"default",fontSize:19,fontWeight:700,color:newLeagueSlots.length<10?"#fff":"#444"}}>+</div>
  </div>
  </div>
 
@@ -9454,16 +9457,34 @@ export default function App() {
  <div style={{fontSize:11,color:"#555",fontWeight:600,marginTop:2}}>{tt?tt.scope:"any bet type"}</div>
  {s.type==="prop" && (()=>{ let _lbl="Any prop"; if(s.market){ for(const sp of newLeagueSports){ const f=(PROP_SUBS_BY_SPORT[sp]||[]).find(x=>x.id===s.market); if(f){ _lbl=f.l; break; } } } return (<div onClick={(e)=>{e.stopPropagation(); setMarketSheet(i);}} style={{display:"inline-flex",alignItems:"center",gap:4,marginTop:6,background:"rgba(255,214,10,0.12)",border:"0.5px solid rgba(255,214,10,0.3)",borderRadius:7,padding:"3px 8px",cursor:"pointer"}}><span style={{fontSize:10.5,fontWeight:700,color:"#FFD60A"}}>{_lbl}</span><span style={{fontSize:9,color:"#FFD60A"}}>▾</span></div>); })()}
  </div>
- <div onClick={e=>e.stopPropagation()} style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
- <div onClick={()=>setNewLeagueSlots(arr=>arr.map((p,j)=>j===i?{...p,mult:Math.max(1,p.mult-1)}:p))} style={{width:24,height:24,borderRadius:7,background:"rgba(255,255,255,0.08)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer"}}>−</div>
- <div style={{fontSize:14,fontWeight:800,color:"#FFD60A",minWidth:24,textAlign:"center"}}>{s.mult}×</div>
- <div onClick={()=>setNewLeagueSlots(arr=>arr.map((p,j)=>j===i?{...p,mult:Math.min(5,p.mult+1)}:p))} style={{width:24,height:24,borderRadius:7,background:"rgba(255,255,255,0.08)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer"}}>+</div>
- </div>
  <div style={{color:"#555",fontSize:18,flexShrink:0}}>›</div>
  </div>
  );})}
 
- {(()=>{const ready=newLeagueSlots.every(s=>s.type)&&!creatingLeague;const tot=newLeagueSlots.reduce((a,b)=>a+b.mult,0);const uniq=new Set(newLeagueSlots.map(s=>s.type)).size;return (<>
+ <div style={{background:"#111114",border:"0.5px solid rgba(255,255,255,0.12)",borderRadius:14,padding:"13px 14px",marginBottom:12}}>
+ <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:11}}>
+ <div style={{fontSize:11,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:"rgba(255,255,255,0.5)"}}>Multiplier pool</div>
+ <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.35)"}}>one used per pick</div>
+ </div>
+ <div style={{display:"flex",flexWrap:"wrap",gap:9}}>
+ {newLeaguePool.map((v,i)=>(
+ <div key={i} style={{width:58,borderRadius:12,border:"0.5px solid rgba(255,255,255,0.12)",background:"#17171b",textAlign:"center",padding:"7px 0 5px"}}>
+ <div style={{fontSize:21,fontWeight:900,color:"#64D2FF",letterSpacing:"-0.5px"}}>{v}<span style={{fontSize:11,opacity:0.7}}>×</span></div>
+ <div style={{display:"flex",borderTop:"0.5px solid rgba(255,255,255,0.1)",marginTop:5}}>
+ <div onClick={()=>setNewLeaguePool(p=>p.map((x,j)=>j===i?Math.max(1,x-1):x))} style={{flex:1,borderRight:"0.5px solid rgba(255,255,255,0.1)",color:"rgba(255,255,255,0.5)",fontSize:14,fontWeight:800,padding:"3px 0",cursor:"pointer"}}>−</div>
+ <div onClick={()=>setNewLeaguePool(p=>p.map((x,j)=>j===i?Math.min(9,x+1):x))} style={{flex:1,color:"rgba(255,255,255,0.5)",fontSize:14,fontWeight:800,padding:"3px 0",cursor:"pointer"}}>+</div>
+ </div>
+ </div>
+ ))}
+ </div>
+ <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:11}}>
+ <div onClick={()=>setNewLeaguePool(newLeagueSlots.map((_,i)=>i+1))} style={{fontSize:12,fontWeight:800,color:IOS.blue,cursor:"pointer"}}>Reset to 1–{newLeagueSlots.length}×</div>
+ {(()=>{ const seen={},d=[]; newLeaguePool.forEach(v=>{seen[v]=(seen[v]||0)+1;}); Object.keys(seen).forEach(k=>{if(seen[k]>1)d.push(k+"×");}); return d.length?<div style={{fontSize:11,fontWeight:700,color:IOS.orange}}>Repeats: {d.join(", ")}</div>:null; })()}
+ </div>
+ <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",lineHeight:1.4,marginTop:10}}>Players assign these across their picks — one per pick.</div>
+</div>
+
+ {(()=>{const ready=newLeagueSlots.every(s=>s.type)&&!creatingLeague;const tot=newLeaguePool.reduce((a,b)=>a+b,0);const uniq=new Set(newLeagueSlots.map(s=>s.type)).size;return (<>
  <div style={{textAlign:"center",fontSize:11,color:"#555",fontWeight:600,margin:"6px 0 9px"}}>{newLeagueSlots.length} picks · {tot} max multiplier{uniq===1&&newLeagueSlots.length>1?" · single-type league":""}</div>
  <button disabled={!ready} onClick={()=>{if(ready)createLeague(newLeagueName.trim(), newLeagueSports[0]);}} style={{width:"100%",background:ready?IOS.blue:"rgba(255,255,255,0.08)",border:"none",borderRadius:12,padding:"15px",fontFamily:"Barlow,sans-serif",fontSize:16,fontWeight:800,color:ready?"#fff":"rgba(255,255,255,0.25)",cursor:ready?"pointer":"default",marginBottom:4}}>{creatingLeague?"Creating...":"Create League"}</button>
  </>);})()}
@@ -9534,13 +9555,34 @@ export default function App() {
  </div>
  <div style={{overflowY:"auto",padding:"0 16px 26px"}}>
  {slotSheetIdx===-1&&<div style={{fontSize:12,color:"rgba(255,255,255,0.5)",marginBottom:12,lineHeight:1.4}}>Pick one type and every slot becomes that type.</div>}
- {SLOT_TYPES.filter(tp=>!tp.sports||tp.sports.some(sp=>newLeagueSports.includes(sp))).map(tp=>{const sel=slotSheetIdx>=0&&newLeagueSlots[slotSheetIdx]&&newLeagueSlots[slotSheetIdx].type===tp.id;return (
- <div key={tp.id} onClick={()=>{ if(slotSheetIdx===-1){setNewLeagueSlots(arr=>arr.map(p=>({...p,type:tp.id,market:tp.id==="prop"?p.market:null})));} else {setNewLeagueSlots(arr=>arr.map((p,j)=>j===slotSheetIdx?{...p,type:tp.id,market:tp.id==="prop"?p.market:null}:p));} setSlotSheetIdx(null); }} style={{display:"flex",alignItems:"center",gap:11,background:sel?"rgba(10,132,255,0.1)":"linear-gradient(160deg,#15151A,#0B0B0E 80%)",border:"0.5px solid "+(sel?"rgba(10,132,255,0.6)":"rgba(255,255,255,0.09)"),borderRadius:12,padding:"13px 14px",marginBottom:8,cursor:"pointer"}}>
- <span style={{width:10,height:10,borderRadius:3,background:tp.color,flexShrink:0}}/>
- <div style={{flex:1}}><div style={{fontSize:14,fontWeight:700,color:"#fff"}}>{tp.l}</div><div style={{fontSize:11,color:"#555",marginTop:1}}>{tp.scope}</div></div>
- {sel&&<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+ <div style={{display:"flex",alignItems:"center",gap:8,background:"#16161a",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:11,padding:"9px 12px",marginBottom:10}}>
+ <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+ <input value={slotSearch} onChange={e=>setSlotSearch(e.target.value)} placeholder="Search bet types" style={{flex:1,background:"transparent",border:0,outline:0,color:"#fff",fontFamily:"Barlow,sans-serif",fontSize:14}}/>
+ </div>
+ {(()=>{
+ const cats=[{cat:"Game lines",ids:["ml","spread","ou"]},{cat:"Player props",ids:["prop"]},{cat:"Innings / periods",ids:["ml_f5","spread_f5","ou_f5","ml_h1","spread_h1","ou_h1","yrfi","nrfi"]},{cat:"Exotic",ids:["longshot","wildcard"]}];
+ const q=(slotSearch||"").toLowerCase();
+ const avail=(tp)=>!tp.sports||tp.sports.some(sp=>newLeagueSports.includes(sp));
+ const match=(tp)=>!q||tp.l.toLowerCase().includes(q)||(tp.scope||"").toLowerCase().includes(q);
+ const pickType=(id)=>{ if(slotSheetIdx===-1){setNewLeagueSlots(arr=>arr.map(p=>({...p,type:id,market:id==="prop"?p.market:null})));} else {setNewLeagueSlots(arr=>arr.map((p,j)=>j===slotSheetIdx?{...p,type:id,market:id==="prop"?p.market:null}:p));} setSlotSearch(""); setSlotSheetIdx(null); };
+ let any=false;
+ const out=cats.map(g=>{
+ const items=g.ids.map(id=>SLOT_TYPES.find(t=>t.id===id)).filter(Boolean).filter(tp=>avail(tp)&&match(tp));
+ if(!items.length) return null; any=true;
+ return (<div key={g.cat}>
+ <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(255,255,255,0.32)",margin:"12px 2px 6px"}}>{g.cat}</div>
+ {items.map(tp=>{ const sel=slotSheetIdx>=0&&newLeagueSlots[slotSheetIdx]&&newLeagueSlots[slotSheetIdx].type===tp.id; return (
+ <div key={tp.id} onClick={()=>pickType(tp.id)} style={{display:"flex",alignItems:"center",gap:11,background:sel?"rgba(10,132,255,0.1)":"transparent",border:"0.5px solid "+(sel?"rgba(10,132,255,0.4)":"transparent"),borderRadius:11,padding:"10px 11px",cursor:"pointer"}}>
+ <span style={{width:9,height:9,borderRadius:"50%",background:tp.color,flexShrink:0}}/>
+ <div style={{flex:1,fontSize:14.5,fontWeight:700,color:"#fff"}}>{tp.l}</div>
+ <div style={{fontSize:11,color:"rgba(255,255,255,0.35)"}}>{tp.scope}</div>
+ {sel&&<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
  </div>
  );})}
+ </div>);
+ });
+ return any?out:<div style={{textAlign:"center",color:"rgba(255,255,255,0.3)",fontSize:13,padding:"24px 0"}}>No bet types match your search</div>;
+ })()}
  </div>
  </div>
  </div>
