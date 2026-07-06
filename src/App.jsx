@@ -7048,7 +7048,7 @@ export default function App() {
      </div>
      <div style={{fontSize:12,color:"rgba(255,255,255,0.15)",lineHeight:1.5}}>
        {flexCategory==="prop"
-         ? "Player props usually go live 2-3 days before game time. Check back closer to kickoff."
+         ? "Player props usually go live 2-3 days before game time. Check back closer to game time."
          : "Check back when games are scheduled."}
      </div>
    </div>
@@ -8859,7 +8859,7 @@ export default function App() {
  {gridType==="prop"?"No props live yet":`No ${TYPE_LABELS[gridType]} bets right now`}
  </div>
  <div style={{fontSize:12,color:"rgba(255,255,255,0.25)",lineHeight:1.5}}>
- {gridType==="prop"?"Player props usually post 2–3 days before kickoff. Check back closer to game time."
+ {gridType==="prop"?"Player props usually post 2–3 days out. Check back closer to game time."
  :gridType==="longshot"?"No +400-or-better singles on the board right now. Build a parlay from your slip instead."
  :"Check back when games are scheduled for this sport."}
  </div>
@@ -9189,19 +9189,19 @@ export default function App() {
  </div>
  );
  }
- // Opponent picks stay hidden ("Locked") until their game starts — revealed at kickoff (or once graded).
+ // Opponent picks stay hidden ("Locked") until their game starts — revealed at game time (or once graded).
  if(!isMe){
  const _now=Date.now();
  const _gd=picks.map(p=>p.game_date?new Date(p.game_date).getTime():0).filter(t=>t>0);
  const _earliest=_gd.length?Math.min(..._gd):0;
  const _graded=picks.some(p=>p.result&&p.result!=="pending");
- const _started=_graded || _earliest===0 || _earliest<=_now; // unknown kickoff -> reveal (never hide forever)
+ const _started=_graded || _earliest===0 || _earliest<=_now; // unknown start time -> reveal (never hide forever)
  if(!_started) return (
  <div style={{flex:1,position:"relative",overflow:"hidden",borderRadius:12,minHeight:68,background:"linear-gradient(155deg,#16121A,#0B0B0E 75%)",border:`1px solid ${IOS.pink}40`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4}}>
  <div style={{position:"absolute",top:0,left:0,bottom:0,width:3,background:IOS.pink}}/>
  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={IOS.pink} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
  <span style={{fontSize:9.5,fontWeight:800,color:IOS.pink,letterSpacing:0.4}}>LOCKED</span>
- <span style={{fontSize:8,fontWeight:600,color:"#666"}}>Reveals at kickoff</span>
+ <span style={{fontSize:8,fontWeight:600,color:"#666"}}>Reveals at game time</span>
  </div>
  );
  }

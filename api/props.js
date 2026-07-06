@@ -8,6 +8,8 @@ const PROP_MARKETS = {
   ],
   baseball_mlb: [
     "batter_home_runs","batter_hits","batter_total_bases","batter_rbis","pitcher_strikeouts",
+    // batch 1 (all gradeable by grade.js STAT_ALIASES):
+    "batter_runs_scored","batter_walks","batter_stolen_bases","pitcher_earned_runs","pitcher_hits_allowed",
   ],
 };
 
@@ -20,6 +22,8 @@ const MARKET_LABELS = {
   player_threes:"3-Pointers", player_points_rebounds_assists:"Pts+Reb+Ast",
   batter_home_runs:"Home Runs", batter_hits:"Hits", batter_total_bases:"Total Bases",
   batter_rbis:"RBIs", pitcher_strikeouts:"Strikeouts",
+  batter_runs_scored:"Runs", batter_walks:"Walks", batter_stolen_bases:"Stolen Bases",
+  pitcher_earned_runs:"Earned Runs", pitcher_hits_allowed:"Hits Allowed",
 };
 
 export default async function handler(req, res) {
@@ -93,7 +97,14 @@ export default async function handler(req, res) {
       } catch (e) { continue; }
     }
 
-    res.setHeader("Cache-Control", "no-store");
+    // Props are identical for every user and all pre-game, so let Vercel's CDN serve one
+    // upstream pull to all users per window instead of hitting the Odds API per client.
+    // Never pin an empty slate: a short TTL lets real props reappear fast after a blip.
+    if (props.length > 0) {
+      res.setHeader("Cache-Control", "public, s-maxage=120, stale-while-revalidate=300");
+    } else {
+      res.setHeader("Cache-Control", "public, s-maxage=20");
+    }
     return res.status(200).json({ props });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch props" });
