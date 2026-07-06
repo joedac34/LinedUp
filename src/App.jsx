@@ -3173,7 +3173,7 @@ export default function App() {
  const PROP_SUBS_BY_SPORT = {
   nfl:[{id:"all",l:"All"},{id:"pass",l:"Pass"},{id:"rush",l:"Rush"},{id:"rec",l:"Receiving"},{id:"td",l:"TDs"}],
   nba:[{id:"all",l:"All"},{id:"pts",l:"Points"},{id:"reb",l:"Rebounds"},{id:"ast",l:"Assists"},{id:"3pt",l:"Threes"}],
-  mlb:[{id:"all",l:"All"},{id:"hr",l:"HR"},{id:"hits",l:"Hits"},{id:"bases",l:"Total Bases"},{id:"rbi",l:"RBIs"},{id:"k",l:"K"}],
+  mlb:[{id:"all",l:"All"},{id:"hr",l:"HR"},{id:"hits",l:"Hits"},{id:"bases",l:"Total Bases"},{id:"rbi",l:"RBIs"},{id:"runs",l:"Runs"},{id:"walks",l:"Walks"},{id:"sb",l:"SB"},{id:"doubles",l:"2B"},{id:"triples",l:"3B"},{id:"hrr",l:"H+R+RBI"},{id:"k",l:"K"},{id:"er",l:"ER"},{id:"hitsallowed",l:"Hits Alwd"},{id:"walksallowed",l:"BB Alwd"}],
  };
  const DEFAULT_SLOTS=[{type:"ml",mult:1},{type:"prop",mult:2},{type:"ou",mult:3},{type:"spread",mult:4},{type:"longshot",mult:5}];
  const LAYOUT_PRESETS=[
@@ -8080,6 +8080,7 @@ export default function App() {
  td:["player_anytime_td","player_first_td","player_rush_tds","player_reception_tds","player_pass_tds"],
  pts:["player_points","player_points_rebounds_assists"], reb:["player_rebounds"], ast:["player_assists"], "3pt":["player_threes"],
  hr:["batter_home_runs"], hits:["batter_hits"], bases:["batter_total_bases"], rbi:["batter_rbis"], k:["pitcher_strikeouts"],
+ runs:["batter_runs_scored"], walks:["batter_walks"], sb:["batter_stolen_bases"], doubles:["batter_doubles"], triples:["batter_triples"], hrr:["batter_hits_runs_rbis"], er:["pitcher_earned_runs"], hitsallowed:["pitcher_hits_allowed"], walksallowed:["pitcher_walks"],
  };
  const mk = SUB_MK[gridPropSub];
  list = list.filter(b=>{
@@ -8099,6 +8100,15 @@ export default function App() {
  case "hr": return s.includes("home run")||s.includes("homer");
  case "bases": return s.includes("base");
  case "rbi": return s.includes("rbi");
+ case "runs": return s.includes("run")&&!s.includes("home run")&&!s.includes("earned")&&!s.includes("rbi");
+ case "walks": return s.includes("walk")&&!s.includes("allowed");
+ case "sb": return s.includes("stolen");
+ case "doubles": return s.includes("double");
+ case "triples": return s.includes("triple");
+ case "hrr": return s.includes("hits+runs")||s.includes("h+r+rbi");
+ case "er": return s.includes("earned");
+ case "hitsallowed": return s.includes("hits allowed")||s.includes("hits alwd");
+ case "walksallowed": return s.includes("walks allowed")||s.includes("walks alwd");
  default: return true;
  }
  });
