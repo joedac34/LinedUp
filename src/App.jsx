@@ -8979,7 +8979,7 @@ export default function App() {
  {/* Header */}
  <div style={{padding:"10px 20px 14px",background:"radial-gradient(120% 90% at 90% -10%, rgba(10,132,255,0.18), transparent 55%), linear-gradient(180deg,#0B1A2E 0%,#000 80%)"}}>
  <div style={{fontSize:11,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(255,255,255,0.42)"}}>Week {activeLeague.current_week||activeLeague.week||1} · {activeLeague.name} · Live</div>
- {activeLeague.season_start && (()=>{ const _wm=7*24*60*60*1000; const _end=new Date(new Date(activeLeague.season_start).getTime()+(activeLeague.current_week||activeLeague.week||1)*_wm); const _ms=_end.getTime()-Date.now(); const _d=Math.floor(_ms/86400000); const _h=Math.floor((_ms%86400000)/3600000); return <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.4)",marginTop:3}}>Week ends {_end.toLocaleDateString(undefined,{month:"short",day:"numeric"})}{_ms>0?" · "+(_d>0?_d+"d ":"")+_h+"h left":" · closing…"}</div>; })()}
+ {activeLeague.season_start && (()=>{ const _wm=7*24*60*60*1000; const _end=new Date(new Date(activeLeague.season_start).getTime()+(activeLeague.current_week||activeLeague.week||1)*_wm+10800000); const _ms=_end.getTime()-Date.now(); const _d=Math.floor(_ms/86400000); const _h=Math.floor((_ms%86400000)/3600000); return <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.4)",marginTop:3}}>Week ends {_end.toLocaleDateString(undefined,{month:"short",day:"numeric"})}{_ms>0?" · "+(_d>0?_d+"d ":"")+_h+"h left":" · closing…"}</div>; })()}
  <div style={{fontSize:30,fontWeight:800,letterSpacing:"-0.7px",color:"#fff",lineHeight:1.05,marginTop:2}}>Matchup</div>
  </div>
  {(activeLeague.league_type||"h2h")==="h2h" && (()=>{
