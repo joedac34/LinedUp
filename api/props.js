@@ -76,6 +76,8 @@ export default async function handler(req, res) {
             const marketLabel = MARKET_LABELS[market.key] || market.key;
             const isTD = market.key === "player_anytime_td" || market.key === "player_first_td";
             market.outcomes?.forEach(outcome => {
+              // HR alternate returns 1+/2+/3+ milestone lines; keep only the classic "to hit a HR" (1+) line
+              if (market.key === "batter_home_runs_alternate" && outcome.point !== 0.5) return;
               let label, dedupKey;
               if (isTD) {
                 const player = outcome.name;

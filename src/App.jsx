@@ -8091,7 +8091,7 @@ export default function App() {
  rec:["player_receptions","player_reception_yds","player_reception_tds"],
  td:["player_anytime_td","player_first_td","player_rush_tds","player_reception_tds","player_pass_tds"],
  pts:["player_points","player_points_rebounds_assists"], reb:["player_rebounds"], ast:["player_assists"], "3pt":["player_threes"],
- hr:["batter_home_runs"], hits:["batter_hits"], bases:["batter_total_bases"], rbi:["batter_rbis"], k:["pitcher_strikeouts"],
+ hr:["batter_home_runs","batter_home_runs_alternate"], hits:["batter_hits"], bases:["batter_total_bases"], rbi:["batter_rbis"], k:["pitcher_strikeouts"],
  runs:["batter_runs_scored"], walks:["batter_walks"], sb:["batter_stolen_bases"], doubles:["batter_doubles"], triples:["batter_triples"], hrr:["batter_hits_runs_rbis"], er:["pitcher_earned_runs"], hitsallowed:["pitcher_hits_allowed"], walksallowed:["pitcher_walks"],
  };
  const mk = SUB_MK[gridPropSub];
