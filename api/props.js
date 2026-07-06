@@ -13,7 +13,7 @@ const PROP_MARKETS = {
     // batch 2 (gradeable now; walks-allowed resolves via "walks" -> pitcher BB):
     "batter_doubles","batter_triples","pitcher_walks",
     // batch 3: H+R+RBI (grade.js derives H+R+RBI)
-    "batter_hits_runs_rbis",
+    "batter_hits_runs_rbis","batter_singles",
   ],
 };
 
@@ -29,7 +29,7 @@ const MARKET_LABELS = {
   batter_runs_scored:"Runs", batter_walks:"Walks", batter_stolen_bases:"Stolen Bases",
   pitcher_earned_runs:"Earned Runs", pitcher_hits_allowed:"Hits Allowed",
   batter_doubles:"Doubles", batter_triples:"Triples", pitcher_walks:"Walks Allowed",
-  batter_hits_runs_rbis:"Hits+Runs+RBIs",
+  batter_hits_runs_rbis:"Hits+Runs+RBIs", batter_singles:"Singles",
 };
 
 export default async function handler(req, res) {
