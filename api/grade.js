@@ -77,21 +77,6 @@ async function notifyPick(pick, league, result, pts, legs) {
       data: { league_id: pick.league_id, week: pick.week, result, points: pts, league_name: (league && league.name) || "" },
       created_at: new Date().toISOString(),
     });
-    // Also fire a real web push (respects the user's "Picks Graded" pref inside /api/notify).
-    try {
-      const BASE = process.env.PUBLIC_BASE_URL || "https://lined-up-murex.vercel.app";
-      await fetch(`${BASE}/api/notify`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: "Bearer " + (process.env.CRON_SECRET || "") },
-        body: JSON.stringify({
-          userId: pick.user_id,
-          title: won ? "Pick won" : "Pick lost",
-          body: `${what}${won ? ` won — +${pts} pts` : " lost"}`,
-          url: "/",
-          category: "notif_grades",
-        }),
-      });
-    } catch (e) { /* push is best-effort */ }
   } catch (e) { /* swallow */ }
 }
 // Snapshot each member's cumulative league rank for the current week, so the
@@ -601,6 +586,13 @@ function gradeProp(pickName, gameField, index, info = {}, gameDate = null) {
       const HR = sget(["HR", "homeRuns", "hr"]) || 0;
       val = H + D + 2 * Tr + 3 * HR;
     }
+  } else if (/hits?\s*\+\s*runs?\s*\+\s*rbi/i.test(parsed.stat) || /\bhrr\b/i.test(parsed.stat)) {
+    // Hits + Runs + RBIs: no single box-score field; sum the three components.
+    // Must be caught before the generic path (else "hits" substring-matches and it
+    // grades as hits only). Grade only with a complete batting line, else PENDING.
+    const H = sget(["H", "hits"]), R = sget(["R", "runs"]), RBI = sget(["RBI", "RBIs", "rbi"]);
+    if (H == null || R == null || RBI == null) { info.reason = "prop_hrr_data_unavailable"; return null; }
+    val = H + R + RBI;
   } else {
     const labels = resolveStatLabels(parsed.stat);
     let raw = null;

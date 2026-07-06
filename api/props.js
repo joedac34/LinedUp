@@ -10,6 +10,10 @@ const PROP_MARKETS = {
     "batter_home_runs","batter_hits","batter_total_bases","batter_rbis","pitcher_strikeouts",
     // batch 1 (all gradeable by grade.js STAT_ALIASES):
     "batter_runs_scored","batter_walks","batter_stolen_bases","pitcher_earned_runs","pitcher_hits_allowed",
+    // batch 2 (gradeable now; walks-allowed resolves via "walks" -> pitcher BB):
+    "batter_doubles","batter_triples","pitcher_walks",
+    // batch 3: H+R+RBI (grade.js derives H+R+RBI)
+    "batter_hits_runs_rbis",
   ],
 };
 
@@ -24,6 +28,8 @@ const MARKET_LABELS = {
   batter_rbis:"RBIs", pitcher_strikeouts:"Strikeouts",
   batter_runs_scored:"Runs", batter_walks:"Walks", batter_stolen_bases:"Stolen Bases",
   pitcher_earned_runs:"Earned Runs", pitcher_hits_allowed:"Hits Allowed",
+  batter_doubles:"Doubles", batter_triples:"Triples", pitcher_walks:"Walks Allowed",
+  batter_hits_runs_rbis:"Hits+Runs+RBIs",
 };
 
 export default async function handler(req, res) {
