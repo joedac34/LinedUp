@@ -2066,6 +2066,7 @@ export default function App() {
  const [leagueTrophies, setLeagueTrophies] = useState([]);
  // solo weeks must be declared before activeLeague since activeLeague uses soloWeeks.length
  const [soloWeeks, setSoloWeeks] = useState([]);
+ const lastAuthUidRef = useRef(null);
  const [soloTopPct, setSoloTopPct] = useState(null);
  const [soloLoading, setSoloLoading] = useState(false);
  const [isSoloMode, setIsSoloMode] = useState(false);
@@ -4378,6 +4379,13 @@ export default function App() {
  supabase.auth.onAuthStateChange((_e,session)=>{
  if(_e==="PASSWORD_RECOVERY"){ setRecoveryMode(true); }
  const u = session?.user??null;
+ if((u?.id ?? null) !== lastAuthUidRef.current){
+   // account actually changed (switch or sign-out) — wipe the previous account's
+   // in-memory data so it can't flash on the next account.
+   setSoloWeeks([]); setSavedPicks(null); setSoloSavedPicks(null); setSoloFreePicks([]);
+   setRealLeagues([]); setWeekPicks([]); setLeagueMembers([]); setAllMyStats(null); setUserProfile(null);
+   lastAuthUidRef.current = u?.id ?? null;
+ }
  setUser(u);
  if(u) { fetchLeagues(u.id); fetchAllMyStats(u.id); fetchUserProfile(u.id); } else { try{ posthog.reset(); }catch(e){} }
  });
