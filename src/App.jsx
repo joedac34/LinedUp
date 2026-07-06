@@ -2077,7 +2077,7 @@ export default function App() {
  const [showSoloSportPicker, setShowSoloSportPicker] = useState(false); // sport selector before building
  const activeLeague = isSoloMode ? {id:soloLeagueId||"solo",name:"Solo Mode",sport:soloSport,current_week:soloWeekNum(),season_weeks:99,max_members:1,target_size:1,isCommissioner:false} : ([...realLeagues].find(l=>l.id===activeLeagueId) || realLeagues[0] || {id:"",name:"",sport:"nfl",current_week:1,season_weeks:18,max_members:8,target_size:8,isCommissioner:false});
  const _lgTarget=(activeLeague&&(activeLeague.target_size||activeLeague.max_members))||8;
- const seasonNotStarted = !isSoloMode && !!(activeLeague&&activeLeague.id) && !activeLeague.season_start;
+ const seasonNotStarted = !isSoloMode && !!(activeLeague&&activeLeague.id) && (!activeLeague.season_start || new Date(activeLeague.season_start).getTime() > Date.now());
  const _lgMembers = Math.max(Number((activeLeague&&activeLeague.memberCount)||0), (!isSoloMode && activeLeague && activeLeague.id && Array.isArray(leagueMembers)) ? leagueMembers.length : 0);
  const leagueFull = !isSoloMode && (_lgMembers >= _lgTarget);
  const leagueAwaitingStart = seasonNotStarted && leagueFull;
@@ -2085,7 +2085,7 @@ export default function App() {
  useEffect(()=>{
    if(isSoloMode || !activeLeague || !activeLeague.id) return;
    if(!activeLeague.isCommissioner) return;
-   if(((activeLeague.start_mode)||"auto")==="manual") return;
+   if(((activeLeague.start_mode)||"auto")==="manual" || ((activeLeague.start_mode)||"auto")==="scheduled") return;
    if(activeLeague.season_start) return;
    const _isH2H=((activeLeague.league_type)||"h2h")==="h2h";
    const _ready=_isH2H ? (liveSchedule.length>0) : leagueFull;
@@ -2102,7 +2102,7 @@ export default function App() {
      }catch(e){}
    })();
  }, [isSoloMode, activeLeague&&activeLeague.id, activeLeague&&activeLeague.season_start, activeLeague&&activeLeague.start_mode, activeLeague&&activeLeague.isCommissioner, leagueFull, liveSchedule.length]);
- const notStartedBody = (<div className="body" style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center",padding:"70px 30px",gap:11}}><div style={{width:56,height:56,borderRadius:"50%",background:"rgba(255,159,10,0.12)",display:"flex",alignItems:"center",justifyContent:"center"}}><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke={IOS.orange} strokeWidth="2.2"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg></div><div style={{fontSize:18,fontWeight:800,color:"#fff"}}>Season hasn’t started</div><div style={{fontSize:13.5,color:IOS.label2,lineHeight:1.5,maxWidth:250}}>{(activeLeague&&activeLeague.isCommissioner)?"Open Week 1 from the Home tab when you\u2019re ready.":"Picks open once the commissioner starts the season."}</div><button onClick={async()=>{ setHomeMode("solo"); setSoloModeWithRef(true); try{ const lid=await getOrCreateSoloLeague(); setActiveLeagueId(lid||"solo"); }catch(e){} try{fetchSoloWeeks();}catch(e){} setScreen("picks"); }} style={{marginTop:8,background:"rgba(191,90,242,0.12)",border:"0.5px solid "+(IOS.purple||"#BF5AF2")+"66",color:(IOS.purple||"#BF5AF2"),borderRadius:11,padding:"11px 22px",fontSize:13.5,fontWeight:800,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Make picks in Solo instead →</button></div>);
+ const notStartedBody = (<div className="body" style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center",padding:"70px 30px",gap:11}}><div style={{width:56,height:56,borderRadius:"50%",background:"rgba(255,159,10,0.12)",display:"flex",alignItems:"center",justifyContent:"center"}}><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke={IOS.orange} strokeWidth="2.2"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg></div><div style={{fontSize:18,fontWeight:800,color:"#fff"}}>{(activeLeague&&activeLeague.season_start&&new Date(activeLeague.season_start).getTime()>Date.now())?("Starts "+new Date(activeLeague.season_start).toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"})):"Season hasn’t started"}</div><div style={{fontSize:13.5,color:IOS.label2,lineHeight:1.5,maxWidth:250}}>{(activeLeague&&activeLeague.season_start&&new Date(activeLeague.season_start).getTime()>Date.now())?("Week 1 opens "+new Date(activeLeague.season_start).toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"})+" — everyone’s picks stay locked until then."):((activeLeague&&activeLeague.isCommissioner)?"Open Week 1 from the Home tab when you’re ready.":"Picks open once the commissioner starts the season.")}</div><button onClick={async()=>{ setHomeMode("solo"); setSoloModeWithRef(true); try{ const lid=await getOrCreateSoloLeague(); setActiveLeagueId(lid||"solo"); }catch(e){} try{fetchSoloWeeks();}catch(e){} setScreen("picks"); }} style={{marginTop:8,background:"rgba(191,90,242,0.12)",border:"0.5px solid "+(IOS.purple||"#BF5AF2")+"66",color:(IOS.purple||"#BF5AF2"),borderRadius:11,padding:"11px 22px",fontSize:13.5,fontWeight:800,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Make picks in Solo instead →</button></div>);
  const sport = SPORTS[activeLeague?.sport] || SPORTS["nfl"];
  const SLOTS = sport.slots;
 
@@ -3146,6 +3146,7 @@ export default function App() {
  const [newLeaguePrivacy, setNewLeaguePrivacy] = useState('private');
  const [newLeaguePlayoffs, setNewLeaguePlayoffs] = useState(true);
  const [newLeagueStartMode, setNewLeagueStartMode] = useState('auto');
+ const [newLeagueStartAt, setNewLeagueStartAt] = useState('');
  const [newLeaguePlayoffSize, setNewLeaguePlayoffSize] = useState(4);
  const SLOT_TYPES=[
   {id:"ml",l:"Moneyline",scope:"Game line",color:"#0A84FF"},
@@ -3232,6 +3233,7 @@ export default function App() {
 
  const createLeague = async (name, sportId) => {
  if(!user||!name||!sportId) return;
+ if(newLeagueStartMode==="scheduled" && !newLeagueStartAt){ alert("Choose a start date & time for a scheduled league."); return; }
  setCreatingLeague(true);
  const inviteCode = Math.random().toString(36).substring(2,8).toUpperCase();
  const bracketWeeks = {4:2,8:3,16:4,32:5};
@@ -3242,6 +3244,7 @@ export default function App() {
    max_members:newLeagueSize, target_size:newLeagueSize, pick_deadline:"Sun 1PM ET",
    season_weeks:seasonWeeks, current_week:1, privacy:newLeaguePrivacy||"private",
    scoring_type:"multiplier_odds", start_mode:newLeagueStartMode||"auto", league_type:newLeagueType||"h2h",
+   ...(newLeagueStartMode==="scheduled" && newLeagueStartAt ? {season_start:new Date(newLeagueStartAt).toISOString()} : {}),
    playoffs_enabled:(newLeagueType==='bracket')?false:!!newLeaguePlayoffs, playoff_size:(newLeagueType==='bracket'||!newLeaguePlayoffs)?0:Math.min(newLeaguePlayoffSize,([2,4,6,8].filter(v=>v<=newLeagueSize).pop()||2)),
  }).select().single();
  if(error){alert(`leagues error: ${error.message} | code: ${error.code} | details: ${error.details}`);setCreatingLeague(false);return;}
@@ -6055,8 +6058,7 @@ export default function App() {
    </div>
    {total===0?(
      <div style={{display:"flex",alignItems:"center",gap:10,borderTop:"1px solid rgba(255,255,255,0.08)",padding:"11px 12px",background:"rgba(255,255,255,0.015)"}}>
-       {nextLockMs&&(<span style={{display:"inline-flex",alignItems:"center",gap:7,border:"1px solid rgba(255,159,10,0.4)",color:"#FF9F0A",borderRadius:9,padding:"8px 11px",fontSize:12.5,fontWeight:600}}>{"Locks in "}<span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",color:"#FF9F0A"}}>{fmtCd(nextLockMs)}</span></span>)}
-       <button onClick={()=>setScreen("picks")} style={_cta}>{_buildLabel}</button>
+       <button onClick={()=>setScreen("picks")} style={{..._cta,flex:1}}>{_buildLabel}</button>
      </div>
    ):(
      <div style={{borderTop:"1px solid rgba(255,255,255,0.08)",background:"rgba(255,255,255,0.015)"}}>
@@ -9729,13 +9731,18 @@ export default function App() {
    {/* Start mode */}
    <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"rgba(255,255,255,0.6)",marginBottom:8}}>When does it start?</div>
    <div style={{display:"flex",gap:6,marginBottom:16}}>
-   {[{id:"auto",l:"Auto-start",d:"Goes live when it fills"},{id:"manual",l:"Manual",d:"You start it when ready"}].map(v=>{ const on=(newLeagueStartMode||"auto")===v.id; return (
+   {[{id:"auto",l:"Auto-start",d:"Goes live when it fills"},{id:"manual",l:"Manual",d:"You start it when ready"},{id:"scheduled",l:"Scheduled",d:"Set an exact time"}].map(v=>{ const on=(newLeagueStartMode||"auto")===v.id; return (
      <div key={v.id} onClick={()=>setNewLeagueStartMode(v.id)} style={{flex:1,borderRadius:8,padding:"11px 10px",border:"0.5px solid "+(on?"rgba(10,132,255,0.4)":"#222"),background:on?"rgba(10,132,255,0.08)":"transparent",cursor:"pointer"}}>
        <div style={{fontSize:12,fontWeight:700,color:on?IOS.blue:"rgba(255,255,255,0.6)"}}>{v.l}</div>
        <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginTop:3}}>{v.d}</div>
      </div>
    );})}
    </div>
+   {(newLeagueStartMode==="scheduled")&&<div style={{marginBottom:16,background:"#111114",border:"0.5px solid rgba(191,90,242,0.3)",borderRadius:10,padding:"12px 13px"}}>
+   <div style={{fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",color:"rgba(255,255,255,0.45)",marginBottom:8}}>Week 1 opens</div>
+   <input type="datetime-local" value={newLeagueStartAt} onChange={e=>setNewLeagueStartAt(e.target.value)} style={{width:"100%",background:"#17171b",border:"0.5px solid #2c2c30",borderRadius:9,padding:"11px 12px",color:"#fff",fontFamily:"Barlow,sans-serif",fontSize:14,colorScheme:"dark"}}/>
+   {newLeagueStartAt&&<div style={{fontSize:11.5,color:IOS.green,marginTop:9,fontWeight:600}}>Everyone’s picks stay locked until then.</div>}
+   </div>}
    {/* Visibility */}
    <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"rgba(255,255,255,0.6)",marginBottom:8}}>Visibility</div>
    <div style={{display:"flex",gap:6,marginBottom:16}}>
