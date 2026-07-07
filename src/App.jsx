@@ -8407,13 +8407,12 @@ export default function App() {
    const side0 = isSpread ? (bet.outcome||"") : ((meta&&meta.side) || (String(bet.pick||"").toLowerCase().indexOf("under")>-1?"Under":"Over"));
    setAltSheet({ bet, player, label, isProp, isSpread, sides:[], side:side0, sel:null, loading:true });
    try {
-   const q = new URLSearchParams({ sport: bet._sport||bet.sport||"baseball_mlb", event: bet.eventId||"", market: mk });
+   const _spk = {mlb:"baseball_mlb",nfl:"americanfootball_nfl",nba:"basketball_nba",nhl:"icehockey_nhl"}; const _rawSp = bet._sport||bet.sport||"mlb"; const q = new URLSearchParams({ sport: (_spk[_rawSp]||_rawSp||"baseball_mlb"), event: bet.eventId||"", market: mk });
    if(isProp && player) q.set("player", player);
    if(isSpread && bet.outcome) q.set("name", bet.outcome);
-   const _url = "/api/altlines?"+q.toString();
-   const r = await fetch(_url, { cache: "no-store" });
-   const d = await r.json().catch(()=>({sides:[],_parsefail:true}));
-   setAltSheet(a=> a ? {...a, loading:false, sides:(d.sides||[]), _dbg:{st:r.status, keys:Object.keys(d||{}).join(","), note:(d&&d.note)||"", url:_url} } : a);
+   const r = await fetch("/api/altlines?"+q.toString(), { cache: "no-store" });
+   const d = await r.json().catch(()=>({sides:[]}));
+   setAltSheet(a=> a ? {...a, loading:false, sides:(d.sides||[])} : a);
    } catch(e){ setAltSheet(a=> a ? {...a, loading:false, sides:[]} : a); }
    };
    const addAltPick = () => {
@@ -8965,7 +8964,6 @@ export default function App() {
  <div style={{padding:"6px 16px 4px"}}>
  <div style={{fontSize:16,fontWeight:800}}>{altSheet.isProp?(altSheet.player+" \u00b7 "+altSheet.label):(altSheet.isSpread?((altSheet.bet.outcome||"")+" \u00b7 Run Line"):"Game Total")}</div>
  <div style={{fontSize:11.5,color:"rgba(255,255,255,0.45)",marginTop:1}}>Pick a line — lower pays less, longer pays more</div>
- <div style={{fontSize:9.5,color:"#FF9F0A",marginTop:2,wordBreak:"break-all"}}>dbg: {altSheet.loading?"loading":((altSheet.sides?altSheet.sides.length:0)+" sides")} | st:{altSheet._dbg?altSheet._dbg.st:"-"} | keys:{altSheet._dbg?altSheet._dbg.keys:"-"} | note:{altSheet._dbg?altSheet._dbg.note:"-"}<br/>{altSheet._dbg?altSheet._dbg.url:""}</div>
  </div>
  {altSheet.loading ? (
  <div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:"50px 0"}}><div style={{width:26,height:26,borderRadius:"50%",border:"2.5px solid rgba(255,255,255,0.12)",borderTopColor:IOS.blue,animation:"spin 0.7s linear infinite"}}/></div>
