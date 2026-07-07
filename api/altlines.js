@@ -28,7 +28,10 @@ export default async function handler(req, res) {
   if (!sport || !event || !market) return res.status(400).json({ error: "missing sport/event/market" });
   if (!apiKey) return res.status(500).json({ error: "API key not configured" });
 
-  const altMarket = market.endsWith("_alternate") ? market : `${market}_alternate`;
+  // Game lines use the PREFIX form (alternate_spreads/alternate_totals); props use
+  // the SUFFIX form ({market}_alternate). Map accordingly.
+  const GAME_ALT = { spreads: "alternate_spreads", totals: "alternate_totals", h2h: "alternate_h2h" };
+  const altMarket = GAME_ALT[market] || (market.endsWith("_alternate") ? market : `${market}_alternate`);
 
   try {
     const url = `https://api.the-odds-api.com/v4/sports/${sport}/events/${event}/odds`
