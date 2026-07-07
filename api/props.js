@@ -115,7 +115,7 @@ export default async function handler(req, res) {
     // upstream pull to all users per window instead of hitting the Odds API per client.
     // Never pin an empty slate: a short TTL lets real props reappear fast after a blip.
     if (props.length > 0) {
-      res.setHeader("Cache-Control", "public, s-maxage=120, stale-while-revalidate=300");
+      res.setHeader("Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
     } else {
       res.setHeader("Cache-Control", "public, s-maxage=20");
     }

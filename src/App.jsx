@@ -4164,7 +4164,8 @@ export default function App() {
  };
  }).sort((a,b)=>{
  if(isCume){ if(b.points!==a.points) return b.points-a.points; return b.wins-a.wins; }
- if(b.wins !== a.wins) return b.wins - a.wins;
+ const _aw=parseInt((a.record||"0-0").split("-")[0])||0, _bw=parseInt((b.record||"0-0").split("-")[0])||0;
+ if(_bw !== _aw) return _bw - _aw;
  return b.points - a.points;
  })
  .map((s,i)=>({...s, rank:i+1}));
@@ -8962,7 +8963,7 @@ export default function App() {
  <div style={{width:36,height:4,borderRadius:2,background:"#33333a",margin:"9px auto 4px"}}/>
  <div style={{padding:"6px 16px 4px"}}>
  <div style={{fontSize:16,fontWeight:800}}>{altSheet.isProp?(altSheet.player+" \u00b7 "+altSheet.label):(altSheet.isSpread?((altSheet.bet.outcome||"")+" \u00b7 Run Line"):"Game Total")}</div>
- <div style={{fontSize:11.5,color:"rgba(255,255,255,0.45)",marginTop:1}}>Pick a line \u2014 lower pays less, longer pays more</div>
+ <div style={{fontSize:11.5,color:"rgba(255,255,255,0.45)",marginTop:1}}>Pick a line — lower pays less, longer pays more</div>
  </div>
  {altSheet.loading ? (
  <div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:"50px 0"}}><div style={{width:26,height:26,borderRadius:"50%",border:"2.5px solid rgba(255,255,255,0.12)",borderTopColor:IOS.blue,animation:"spin 0.7s linear infinite"}}/></div>
@@ -8978,7 +8979,7 @@ export default function App() {
  </div>
  )}
  <div style={{display:"flex",justifyContent:"space-between",padding:"8px 18px 2px",fontSize:10,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"rgba(255,255,255,0.32)"}}><span>Line</span><span>Odds</span><span>If it hits</span></div>
- <div style={{padding:"2px 14px 8px",overflowY:"auto"}}>
+ <div style={{padding:"2px 14px 8px",overflowY:"auto",flex:1,minHeight:0,WebkitOverflowScrolling:"touch"}}>
  {lines.map((l,i)=>{ const pos=String(l.odds).charAt(0)==="+"; const on=(altSheet.sel===i)||(altSheet.sel==null && i===Math.floor(lines.length/2)); const _pts=calcPickPoints(1,l.impliedOdds,"W"); const ptStr=(l.point>=0?("+"+l.point):(""+l.point));
  return (<div key={i} onClick={()=>setAltSheet(x=>({...x,sel:i}))} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 13px",borderRadius:12,border:"1px solid "+(on?IOS.blue:"transparent"),background:on?"rgba(10,132,255,0.1)":"#131317",cursor:"pointer",marginBottom:6}}>
  <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:19,width:74}}>{altSheet.isSpread?ptStr:l.point}</div>
@@ -8987,7 +8988,7 @@ export default function App() {
  </div>);
  })}
  </div>
- <div onClick={addAltPick} style={{margin:"6px 16px 18px",padding:15,borderRadius:13,background:IOS.blue,color:"#fff",fontSize:15.5,fontWeight:800,textAlign:"center",cursor:"pointer"}}>Add to slip</div>
+ <div onClick={addAltPick} style={{margin:"6px 16px 18px",padding:15,borderRadius:13,background:IOS.blue,color:"#fff",fontSize:15.5,fontWeight:800,textAlign:"center",cursor:"pointer",flexShrink:0}}>Add to slip</div>
  </>);
  })() : (
  <div style={{textAlign:"center",color:"rgba(255,255,255,0.4)",fontSize:13,padding:"40px 20px 46px"}}>No alternate lines available for this bet right now.</div>
