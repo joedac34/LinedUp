@@ -4437,7 +4437,7 @@ export default function App() {
  if(isSoloMode && !soloSavedPicks){
  try{
  const _s = localStorage.getItem("picklock_solo_locked");
- if(_s){ const _p = JSON.parse(_s); if(_p && _p.week===soloWeekNum()){ if(_p.freePicks){ setSoloSavedPicks({freePicks:_p.freePicks, lockedAt:_p.lockedAt}); } else if(_p.flexPicks){ setSoloSavedPicks({flexPicks:_p.flexPicks, lockedAt:_p.lockedAt}); } } }
+ if(_s){ const _p = JSON.parse(_s); if(_p && _p.week===soloWeekNum()){ if(_p.freePicks){ setSoloSavedPicks({freePicks:_p.freePicks, lockedAt:_p.lockedAt, week:_p.week}); } else if(_p.flexPicks){ setSoloSavedPicks({flexPicks:_p.flexPicks, lockedAt:_p.lockedAt, week:_p.week}); } } }
  }catch(e){}
  }
  },[isSoloMode, soloWeeks, soloSavedPicks]);

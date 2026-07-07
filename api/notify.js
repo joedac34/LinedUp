@@ -27,15 +27,36 @@ export default async function handler(req, res) {
   try {
     const authHeader = req.headers.authorization || '';
     const isInternal = !!process.env.CRON_SECRET && authHeader === `Bearer ${process.env.CRON_SECRET}`;
+    let caller = null;
     if (!isInternal) {
-      const caller = await authedUser(req);
+      caller = await authedUser(req);
       if (!caller) return res.status(401).json({ error: 'unauthorized' });
     }
 
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
     const { userIds, userId, title, body: text, url, data, category } = body;
-    const ids = (userIds && userIds.length ? userIds : (userId ? [userId] : [])).filter(Boolean);
+    let ids = (userIds && userIds.length ? userIds : (userId ? [userId] : [])).filter(Boolean);
     if (!ids.length || !title) return res.status(400).json({ error: 'missing userIds/title' });
+
+    // Internal (cron) callers are trusted. A regular logged-in caller may ONLY push
+    // to people who share a league with them, and the click-through is forced
+    // internal — this closes the arbitrary-recipient push spam / phishing vector.
+    let clickUrl = url || (data && data.url) || '/';
+    let safeTitle = title, safeText = text;
+    if (!isInternal) {
+      const { data: myL } = await supabase.from('league_members').select('league_id').eq('user_id', caller.id);
+      const lids = (myL || []).map(r => r.league_id);
+      const co = new Set([caller.id]);
+      if (lids.length) {
+        const { data: peers } = await supabase.from('league_members').select('user_id').in('league_id', lids);
+        (peers || []).forEach(p => co.add(p.user_id));
+      }
+      ids = ids.filter(id => co.has(id));
+      clickUrl = '/';
+      safeTitle = String(title || '').slice(0, 120);
+      safeText = String(text || '').slice(0, 240);
+      if (!ids.length) return res.status(200).json({ ok: true, sent: 0, skipped: 'no shared-league recipients' });
+    }
 
     const cols = 'id,push_enabled' + (category ? (',' + category) : '');
     const { data: users } = await supabase.from('users').select(cols).in('id', ids);
@@ -45,7 +66,7 @@ export default async function handler(req, res) {
     if (!allowed.length) return res.status(200).json({ ok: true, sent: 0, skipped: ids.length });
 
     const { data: subs } = await supabase.from('push_subscriptions').select('*').in('user_id', allowed);
-    const payload = JSON.stringify({ title, body: text || '', url: url || (data && data.url) || '/', tag: category || undefined });
+    const payload = JSON.stringify({ title: safeTitle, body: safeText || '', url: clickUrl, tag: category || undefined });
 
     let sent = 0; const dead = [];
     await Promise.all((subs || []).map(async row => {
