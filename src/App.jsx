@@ -8964,7 +8964,7 @@ export default function App() {
  <div style={{padding:"6px 16px 4px"}}>
  <div style={{fontSize:16,fontWeight:800}}>{altSheet.isProp?(altSheet.player+" \u00b7 "+altSheet.label):(altSheet.isSpread?((altSheet.bet.outcome||"")+" \u00b7 Run Line"):"Game Total")}</div>
  <div style={{fontSize:11.5,color:"rgba(255,255,255,0.45)",marginTop:1}}>Pick a line — lower pays less, longer pays more</div>
- <div style={{fontSize:10,color:"#FF9F0A",marginTop:2}}>dbg: {altSheet.loading?"loading":((altSheet.sides?altSheet.sides.length:0)+" sides")} | mk:{altSheet.bet&&(altSheet.bet.marketKey||altSheet.bet.market)} | sp:{altSheet.isSpread?"Y":"N"}</div>
+ <div style={{fontSize:10,color:"#FF9F0A",marginTop:2}}>dbg: {altSheet.loading?"loading":((altSheet.sides?altSheet.sides.length:0)+" sides")} | mk:{altSheet.bet&&(altSheet.bet.marketKey||altSheet.bet.market)} | ev:{(altSheet.bet&&altSheet.bet.eventId)?String(altSheet.bet.eventId).slice(0,8):"EMPTY"} | out:{(altSheet.bet&&altSheet.bet.outcome)||"?"}</div>
  </div>
  {altSheet.loading ? (
  <div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:"50px 0"}}><div style={{width:26,height:26,borderRadius:"50%",border:"2.5px solid rgba(255,255,255,0.12)",borderTopColor:IOS.blue,animation:"spin 0.7s linear infinite"}}/></div>
