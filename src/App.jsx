@@ -8410,7 +8410,7 @@ export default function App() {
    const q = new URLSearchParams({ sport: bet._sport||bet.sport||"baseball_mlb", event: bet.eventId||"", market: mk });
    if(isProp && player) q.set("player", player);
    if(isSpread && bet.outcome) q.set("name", bet.outcome);
-   const r = await fetch("/api/altlines?"+q.toString());
+   const r = await fetch("/api/altlines?"+q.toString(), { cache: "no-store" });
    const d = await r.json().catch(()=>({sides:[]}));
    setAltSheet(a=> a ? {...a, loading:false, sides:(d.sides||[])} : a);
    } catch(e){ setAltSheet(a=> a ? {...a, loading:false, sides:[]} : a); }
