@@ -3475,6 +3475,25 @@ export default function App() {
        return {week:parseInt(w), picks, wins, losses, pts:parseFloat(pts.toFixed(1))};
      }).sort((a,b)=>b.week-a.week);
      setSoloWeeks(weeks);
+     // Rebuild THIS week's saved slip straight from the DB (source of truth) so the
+     // Picks screen always shows every locked pick — no dependence on the local snapshot.
+     try {
+       const _curW = soloWeekNum();
+       const _cur = weeks.find(w => w.week === _curW);
+       if (_cur && _cur.picks && _cur.picks.length) {
+         const _catOf = (slot) => { const parts = String(slot||"ml").split("_"); return parts.length>1 ? parts.slice(0,-1).join("_") : (parts[0]||"ml"); };
+         const _free = _cur.picks.map(p => ({
+           pick: p.pick_name, game: p.game||"", odds: p.odds, impliedOdds: p.implied_odds,
+           category: _catOf(p.slot), slot: p.slot, gameTime: p.game_date||null, mult: p.multiplier||1,
+           eventId: p.event_id||null, marketKey: p.market_key||null, outcome: p.outcome||null,
+           point: (p.outcome_point!=null?p.outcome_point:null), selKey: p.sel_key||null, id: p.id||null, result: p.result,
+         }));
+         _free.sort((a,b)=>{ const ai=parseInt(String(a.slot).split("_").pop())||0, bi=parseInt(String(b.slot).split("_").pop())||0; return ai-bi; });
+         const _obj = { freePicks: _free, week: _curW, lockedAt: new Date().toISOString() };
+         setSoloSavedPicks(_obj); setSoloSubmitted(true);
+         try { localStorage.setItem("picklock_solo_locked", JSON.stringify(_obj)); } catch(e2) {}
+       }
+     } catch(e3) {}
    }
  } catch(e) { console.error(e); }
  setSoloLoading(false);
