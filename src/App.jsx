@@ -8398,7 +8398,7 @@ export default function App() {
    const canAlt = (mk) => ALT_MARKETS.has(mk||"");
    const openAltLines = async (bet, meta) => {
    if(!isPro){ if(setShowPaywall) setShowPaywall("alt"); return; }
-   const mk = bet.marketKey||""; if(!canAlt(mk)) return;
+   const mk = bet.marketKey||bet.market||""; if(!canAlt(mk)) return;
    const isProp = mk.indexOf("batter_")===0 || mk.indexOf("pitcher_")===0;
    const isSpread = mk==="spreads";
    const player = (meta&&meta.player)||"";
@@ -8427,7 +8427,7 @@ export default function App() {
    if(a.isProp){ pick = (a.player+" "+activeSide+" "+pt+" "+a.label).replace(/\s+/g," ").trim(); }
    else if(a.isSpread){ pick = a.bet.outcome+" "+ptStr; }
    else { pick = activeSide+" "+pt; }
-   const altBet = { ...a.bet, id:(a.bet.eventId+"|"+a.bet.marketKey+"|"+activeSide+"|"+pt+"|alt"), point:pt, odds:line.odds, impliedOdds:line.impliedOdds, outcome:activeSide, pick:pick, selKey:(a.bet.eventId+"|"+a.bet.marketKey+"|"+activeSide+"|"+pt), isAlt:true };
+   const _amk = a.bet.marketKey||a.bet.market||""; const altBet = { ...a.bet, id:(a.bet.eventId+"|"+_amk+"|"+activeSide+"|"+pt+"|alt"), point:pt, odds:line.odds, impliedOdds:line.impliedOdds, outcome:activeSide, pick:pick, selKey:(a.bet.eventId+"|"+_amk+"|"+activeSide+"|"+pt), isAlt:true };
    addCard(altBet, a.bet.category);
    setAltSheet(null);
    };
@@ -8597,9 +8597,10 @@ export default function App() {
  const sel = isSoloMode ? soloFreePicks.some(p=>String(p.id)===String(b.id)) : ((activePicks.some(p=>p.bet&&p.bet.id===b.id)) || isLeg(b));
  const pts = ptsOf(b);
  return (
- <div onClick={()=>{ if(enabled) addCard(b,cat); }} style={{position:"relative",borderRadius:10,cursor:enabled?"pointer":"default",textAlign:"center",padding:"8px 3px",opacity:enabled?1:0.4,
+ <div onClick={()=>{ if(!enabled) return; if(sel){ if(isSoloMode){ setSoloFreePicks(prev=>prev.filter(p=>String(p.id)!==String(b.id))); } else { setActivePicks(prev=>prev.map(pp=> (pp.bet&&String(pp.bet.id)===String(b.id)) ? {...pp, bet:null} : pp)); } } else { addCard(b,cat); } }} style={{position:"relative",borderRadius:10,cursor:enabled?"pointer":"default",textAlign:"center",padding:"8px 3px",opacity:enabled?1:0.4,
  border:"1px solid "+(sel?IOS.blue+"a6":value?"rgba(48,209,88,0.55)":"rgba(255,255,255,0.1)"),
  background:sel?"linear-gradient(160deg,rgba(10,132,255,0.24),rgba(10,132,255,0.05))":value?"linear-gradient(160deg,rgba(48,209,88,0.2),rgba(48,209,88,0.04))":"rgba(255,255,255,0.04)",transition:"all .13s"}}>
+ {(cat==="spread"||cat==="ou") && canAlt(b.marketKey) && <div onClick={(e)=>{e.stopPropagation(); openAltLines(b);}} style={{position:"absolute",top:2,right:2,fontSize:7.5,fontWeight:900,color:"#64D2FF",background:"rgba(100,210,255,0.14)",border:"1px solid rgba(100,210,255,0.45)",borderRadius:4,padding:"1px 4px",cursor:"pointer",zIndex:3,lineHeight:1.25}}>ALT</div>}
  {value && <div style={{position:"absolute",top:-6,left:"50%",transform:"translateX(-50%)"}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="3" strokeLinecap="round"><polyline points="6 14 12 8 18 14"/></svg></div>}
  {line ? <div style={{fontSize:12,fontWeight:700,color:"rgba(255,255,255,0.55)"}}>{line}</div> : null}
  <div style={{fontSize:18,fontWeight:900,color:sel?IOS.blue:"#fff",fontVariantNumeric:"tabular-nums",lineHeight:1.1}}>{b.odds}</div>
