@@ -2326,6 +2326,7 @@ export default function App() {
  const [soloSubmitted, setSoloSubmitted] = useState(false);
  const [isPro, setIsPro] = useState(()=>{ try { return localStorage.getItem("picklock_is_pro")==="true"; } catch(e){ return false; } });
  const [showPaywall, setShowPaywall] = useState(null);
+ const [altSheet, setAltSheet] = useState(null);
  const [checkoutLoading, setCheckoutLoading] = useState(null);
  const [showPostLeagueUpsell, setShowPostLeagueUpsell] = useState(false);
  const [activeFlexSlot, setActiveFlexSlot] = useState(null); // index of slot being edited
@@ -8393,6 +8394,43 @@ export default function App() {
 
 
    // --- OPTION A: prop/period/longshot as grouped-by-game rows (same pill language as game lines) ---
+   const ALT_MARKETS = new Set(["spreads","totals","batter_total_bases","batter_hits","batter_rbis","batter_runs_scored","batter_walks","batter_strikeouts","batter_doubles","batter_singles","batter_hits_runs_rbis","pitcher_strikeouts","pitcher_earned_runs","pitcher_hits_allowed","pitcher_walks"]);
+   const canAlt = (mk) => ALT_MARKETS.has(mk||"");
+   const openAltLines = async (bet, meta) => {
+   if(!isPro){ if(setShowPaywall) setShowPaywall("alt"); return; }
+   const mk = bet.marketKey||""; if(!canAlt(mk)) return;
+   const isProp = mk.indexOf("batter_")===0 || mk.indexOf("pitcher_")===0;
+   const isSpread = mk==="spreads";
+   const player = (meta&&meta.player)||"";
+   const label = (meta&&meta.label)||"";
+   const side0 = isSpread ? (bet.outcome||"") : ((meta&&meta.side) || (String(bet.pick||"").toLowerCase().indexOf("under")>-1?"Under":"Over"));
+   setAltSheet({ bet, player, label, isProp, isSpread, sides:[], side:side0, sel:null, loading:true });
+   try {
+   const q = new URLSearchParams({ sport: bet._sport||bet.sport||"baseball_mlb", event: bet.eventId||"", market: mk });
+   if(isProp && player) q.set("player", player);
+   if(isSpread && bet.outcome) q.set("name", bet.outcome);
+   const r = await fetch("/api/altlines?"+q.toString());
+   const d = await r.json().catch(()=>({sides:[]}));
+   setAltSheet(a=> a ? {...a, loading:false, sides:(d.sides||[])} : a);
+   } catch(e){ setAltSheet(a=> a ? {...a, loading:false, sides:[]} : a); }
+   };
+   const addAltPick = () => {
+   const a = altSheet; if(!a) return;
+   const sideNames = (a.sides||[]).map(x=>x.name);
+   const activeSide = sideNames.indexOf(a.side)>-1 ? a.side : sideNames[0];
+   const sideObj = (a.sides||[]).find(x=>x.name===activeSide) || (a.sides||[])[0];
+   if(!sideObj) return;
+   const line = (a.sel!=null ? sideObj.lines[a.sel] : sideObj.lines[Math.floor(sideObj.lines.length/2)]) || sideObj.lines[0];
+   if(!line) return;
+   const pt = line.point; const ptStr = (pt>=0?("+"+pt):(""+pt));
+   let pick;
+   if(a.isProp){ pick = (a.player+" "+activeSide+" "+pt+" "+a.label).replace(/\s+/g," ").trim(); }
+   else if(a.isSpread){ pick = a.bet.outcome+" "+ptStr; }
+   else { pick = activeSide+" "+pt; }
+   const altBet = { ...a.bet, id:(a.bet.eventId+"|"+a.bet.marketKey+"|"+activeSide+"|"+pt+"|alt"), point:pt, odds:line.odds, impliedOdds:line.impliedOdds, outcome:activeSide, pick:pick, selKey:(a.bet.eventId+"|"+a.bet.marketKey+"|"+activeSide+"|"+pt), isAlt:true };
+   addCard(altBet, a.bet.category);
+   setAltSheet(null);
+   };
    const renderRow = (bet, idx, isFirst) => {
    const selected = isSoloMode ? soloFreePicks.some(p=>String(p.id)===String(bet.id)) : (activePicks.some(p=>p.bet&&p.bet.id===bet.id) || isLeg(bet));
    const added = gridJustAdded===bet.id;
@@ -8445,6 +8483,7 @@ export default function App() {
    <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:17,color:pos?IOS.green:"#fff",lineHeight:1.05}}>{bet.odds}</div>
    <div style={{fontSize:10,fontWeight:800,color:IOS.green,lineHeight:1.1,marginTop:1}}>{gridType==="longshot"?(ret.toFixed(1)+"×"):("+"+pts+" pts")}</div>
    </div>
+   {canAlt(bet.marketKey) && <div onClick={(e)=>{e.stopPropagation(); openAltLines(bet);}} style={{flexShrink:0,marginLeft:6,display:"flex",alignItems:"center",justifyContent:"center",border:"1px solid #64D2FF",color:"#64D2FF",background:"rgba(100,210,255,0.1)",borderRadius:9,padding:"9px 10px",fontSize:10.5,fontWeight:800,cursor:"pointer"}}>Alt</div>}
    {added && <div style={{position:"absolute",top:0,right:0,bottom:0,left:0,background:acc+"1a",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{display:"flex",alignItems:"center",gap:5,background:acc,color:"#fff",borderRadius:20,padding:"5px 12px",fontSize:11,fontWeight:800}}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Added</div></div>}
    </div>
    );
@@ -8481,7 +8520,7 @@ export default function App() {
    <span style={{fontSize:10.5,fontWeight:700,color:leanRead.c,whiteSpace:"nowrap"}}>{leanPct}% {leanRead.t}</span>
    </div>
    </div>
-   <div style={{display:"flex",gap:6,flexShrink:0}}>{sideBtn(over,"OVER",favOver)}{sideBtn(under,"UNDER",!favOver)}</div>
+   <div style={{display:"flex",alignItems:"stretch",gap:6,flexShrink:0}}>{sideBtn(over,"OVER",favOver)}{sideBtn(under,"UNDER",!favOver)}{canAlt((over||under||{}).market) && <div onClick={(e)=>{e.stopPropagation(); const _b=over||under; openAltLines(_b,{player:player, label:String(rest||"").replace(/^[0-9.]+\s*/,""), side:(over?"Over":"Under")}); }} style={{display:"flex",alignItems:"center",justifyContent:"center",border:"1px solid #64D2FF",color:"#64D2FF",background:"rgba(100,210,255,0.1)",borderRadius:10,padding:"0 8px",fontSize:10,fontWeight:800,cursor:"pointer"}}>Alt</div>}</div>
    </div>
    );
    };
@@ -8915,6 +8954,45 @@ export default function App() {
  </div>
  ) : (
  renderGroupedRows()
+ )}
+ {altSheet && (
+ <div onClick={()=>setAltSheet(null)} style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"flex-end",zIndex:9000}}>
+ <div onClick={(e)=>e.stopPropagation()} style={{width:"100%",maxHeight:"90%",background:"#0d0d10",borderTopLeftRadius:20,borderTopRightRadius:20,borderTop:"1px solid #26262a",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+ <div style={{width:36,height:4,borderRadius:2,background:"#33333a",margin:"9px auto 4px"}}/>
+ <div style={{padding:"6px 16px 4px"}}>
+ <div style={{fontSize:16,fontWeight:800}}>{altSheet.isProp?(altSheet.player+" \u00b7 "+altSheet.label):(altSheet.isSpread?((altSheet.bet.outcome||"")+" \u00b7 Run Line"):"Game Total")}</div>
+ <div style={{fontSize:11.5,color:"rgba(255,255,255,0.45)",marginTop:1}}>Pick a line \u2014 lower pays less, longer pays more</div>
+ </div>
+ {altSheet.loading ? (
+ <div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:"50px 0"}}><div style={{width:26,height:26,borderRadius:"50%",border:"2.5px solid rgba(255,255,255,0.12)",borderTopColor:IOS.blue,animation:"spin 0.7s linear infinite"}}/></div>
+ ) : (altSheet.sides && altSheet.sides.length) ? (()=>{
+ const sideNames = altSheet.sides.map(x=>x.name);
+ const activeSide = sideNames.indexOf(altSheet.side)>-1 ? altSheet.side : sideNames[0];
+ const sideObj = altSheet.sides.find(x=>x.name===activeSide) || altSheet.sides[0];
+ const lines = sideObj.lines;
+ return (<>
+ {!altSheet.isSpread && sideNames.length>1 && (
+ <div style={{display:"flex",gap:7,padding:"12px 16px 6px"}}>
+ {sideNames.map(sn=>{ const on=sn===activeSide; return (<div key={sn} onClick={()=>setAltSheet(x=>({...x,side:sn,sel:null}))} style={{flex:1,textAlign:"center",border:"1px solid "+(on?IOS.yellow:"#2c2c30"),background:on?"rgba(255,214,10,0.12)":"#17171b",color:on?IOS.yellow:"rgba(255,255,255,0.55)",fontWeight:800,fontSize:13,padding:9,borderRadius:10,cursor:"pointer"}}>{sn}</div>);})}
+ </div>
+ )}
+ <div style={{display:"flex",justifyContent:"space-between",padding:"8px 18px 2px",fontSize:10,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"rgba(255,255,255,0.32)"}}><span>Line</span><span>Odds</span><span>If it hits</span></div>
+ <div style={{padding:"2px 14px 8px",overflowY:"auto"}}>
+ {lines.map((l,i)=>{ const pos=String(l.odds).charAt(0)==="+"; const on=(altSheet.sel===i)||(altSheet.sel==null && i===Math.floor(lines.length/2)); const _pts=calcPickPoints(1,l.impliedOdds,"W"); const ptStr=(l.point>=0?("+"+l.point):(""+l.point));
+ return (<div key={i} onClick={()=>setAltSheet(x=>({...x,sel:i}))} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 13px",borderRadius:12,border:"1px solid "+(on?IOS.blue:"transparent"),background:on?"rgba(10,132,255,0.1)":"#131317",cursor:"pointer",marginBottom:6}}>
+ <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:19,width:74}}>{altSheet.isSpread?ptStr:l.point}</div>
+ <div style={{flex:1}}><span style={{fontWeight:800,fontSize:15,color:pos?IOS.green:"#fff"}}>{l.odds}</span><div style={{fontSize:9.5,fontWeight:800,color:"rgba(255,255,255,0.35)",marginTop:1}}>{altSheet.isSpread?((altSheet.bet.outcome||"")+" "+ptStr):(activeSide+" "+l.point)}</div></div>
+ <div style={{textAlign:"right"}}><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:20,color:IOS.green}}>+{_pts}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.4)",fontWeight:700}}>pts</div></div>
+ </div>);
+ })}
+ </div>
+ <div onClick={addAltPick} style={{margin:"6px 16px 18px",padding:15,borderRadius:13,background:IOS.blue,color:"#fff",fontSize:15.5,fontWeight:800,textAlign:"center",cursor:"pointer"}}>Add to slip</div>
+ </>);
+ })() : (
+ <div style={{textAlign:"center",color:"rgba(255,255,255,0.4)",fontSize:13,padding:"40px 20px 46px"}}>No alternate lines available for this bet right now.</div>
+ )}
+ </div>
+ </div>
  )}
  </div>
  );
