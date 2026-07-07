@@ -8957,45 +8957,6 @@ export default function App() {
  ) : (
  renderGroupedRows()
  )}
- {altSheet && (
- <div onClick={()=>setAltSheet(null)} style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"flex-end",zIndex:9000}}>
- <div onClick={(e)=>e.stopPropagation()} style={{width:"100%",maxHeight:"90%",background:"#0d0d10",borderTopLeftRadius:20,borderTopRightRadius:20,borderTop:"1px solid #26262a",display:"flex",flexDirection:"column",overflow:"hidden"}}>
- <div style={{width:36,height:4,borderRadius:2,background:"#33333a",margin:"9px auto 4px"}}/>
- <div style={{padding:"6px 16px 4px"}}>
- <div style={{fontSize:16,fontWeight:800}}>{altSheet.isProp?(altSheet.player+" \u00b7 "+altSheet.label):(altSheet.isSpread?((altSheet.bet.outcome||"")+" \u00b7 Run Line"):"Game Total")}</div>
- <div style={{fontSize:11.5,color:"rgba(255,255,255,0.45)",marginTop:1}}>Pick a line — lower pays less, longer pays more</div>
- </div>
- {altSheet.loading ? (
- <div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:"50px 0"}}><div style={{width:26,height:26,borderRadius:"50%",border:"2.5px solid rgba(255,255,255,0.12)",borderTopColor:IOS.blue,animation:"spin 0.7s linear infinite"}}/></div>
- ) : (altSheet.sides && altSheet.sides.length) ? (()=>{
- const sideNames = altSheet.sides.map(x=>x.name);
- const activeSide = sideNames.indexOf(altSheet.side)>-1 ? altSheet.side : sideNames[0];
- const sideObj = altSheet.sides.find(x=>x.name===activeSide) || altSheet.sides[0];
- const lines = sideObj.lines;
- return (<>
- {!altSheet.isSpread && sideNames.length>1 && (
- <div style={{display:"flex",gap:7,padding:"12px 16px 6px"}}>
- {sideNames.map(sn=>{ const on=sn===activeSide; return (<div key={sn} onClick={()=>setAltSheet(x=>({...x,side:sn,sel:null}))} style={{flex:1,textAlign:"center",border:"1px solid "+(on?IOS.yellow:"#2c2c30"),background:on?"rgba(255,214,10,0.12)":"#17171b",color:on?IOS.yellow:"rgba(255,255,255,0.55)",fontWeight:800,fontSize:13,padding:9,borderRadius:10,cursor:"pointer"}}>{sn}</div>);})}
- </div>
- )}
- <div style={{display:"flex",justifyContent:"space-between",padding:"8px 18px 2px",fontSize:10,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"rgba(255,255,255,0.32)"}}><span>Line</span><span>Odds</span><span>If it hits</span></div>
- <div style={{padding:"2px 14px 8px",overflowY:"auto",flex:1,minHeight:0,WebkitOverflowScrolling:"touch"}}>
- {lines.map((l,i)=>{ const pos=String(l.odds).charAt(0)==="+"; const on=(altSheet.sel===i)||(altSheet.sel==null && i===Math.floor(lines.length/2)); const _pts=calcPickPoints(1,l.impliedOdds,"W"); const ptStr=(l.point>=0?("+"+l.point):(""+l.point));
- return (<div key={i} onClick={()=>setAltSheet(x=>({...x,sel:i}))} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 13px",borderRadius:12,border:"1px solid "+(on?IOS.blue:"transparent"),background:on?"rgba(10,132,255,0.1)":"#131317",cursor:"pointer",marginBottom:6}}>
- <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:19,width:74}}>{altSheet.isSpread?ptStr:l.point}</div>
- <div style={{flex:1}}><span style={{fontWeight:800,fontSize:15,color:pos?IOS.green:"#fff"}}>{l.odds}</span><div style={{fontSize:9.5,fontWeight:800,color:"rgba(255,255,255,0.35)",marginTop:1}}>{altSheet.isSpread?((altSheet.bet.outcome||"")+" "+ptStr):(activeSide+" "+l.point)}</div></div>
- <div style={{textAlign:"right"}}><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:20,color:IOS.green}}>+{_pts}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.4)",fontWeight:700}}>pts</div></div>
- </div>);
- })}
- </div>
- <div onClick={addAltPick} style={{margin:"6px 16px 18px",padding:15,borderRadius:13,background:IOS.blue,color:"#fff",fontSize:15.5,fontWeight:800,textAlign:"center",cursor:"pointer",flexShrink:0}}>Add to slip</div>
- </>);
- })() : (
- <div style={{textAlign:"center",color:"rgba(255,255,255,0.4)",fontSize:13,padding:"40px 20px 46px"}}>No alternate lines available for this bet right now.</div>
- )}
- </div>
- </div>
- )}
  </div>
  );
  })()
@@ -13098,6 +13059,45 @@ export default function App() {
  );})()}
 
 
+ {altSheet && (
+ <div onClick={()=>setAltSheet(null)} style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"flex-end",zIndex:9000}}>
+ <div onClick={(e)=>e.stopPropagation()} style={{width:"100%",maxHeight:"90%",background:"#0d0d10",borderTopLeftRadius:20,borderTopRightRadius:20,borderTop:"1px solid #26262a",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+ <div style={{width:36,height:4,borderRadius:2,background:"#33333a",margin:"9px auto 4px"}}/>
+ <div style={{padding:"6px 16px 4px"}}>
+ <div style={{fontSize:16,fontWeight:800}}>{altSheet.isProp?(altSheet.player+" \u00b7 "+altSheet.label):(altSheet.isSpread?((altSheet.bet.outcome||"")+" \u00b7 Run Line"):"Game Total")}</div>
+ <div style={{fontSize:11.5,color:"rgba(255,255,255,0.45)",marginTop:1}}>Pick a line — lower pays less, longer pays more</div>
+ </div>
+ {altSheet.loading ? (
+ <div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:"50px 0"}}><div style={{width:26,height:26,borderRadius:"50%",border:"2.5px solid rgba(255,255,255,0.12)",borderTopColor:IOS.blue,animation:"spin 0.7s linear infinite"}}/></div>
+ ) : (altSheet.sides && altSheet.sides.length) ? (()=>{
+ const sideNames = altSheet.sides.map(x=>x.name);
+ const activeSide = sideNames.indexOf(altSheet.side)>-1 ? altSheet.side : sideNames[0];
+ const sideObj = altSheet.sides.find(x=>x.name===activeSide) || altSheet.sides[0];
+ const lines = sideObj.lines;
+ return (<>
+ {!altSheet.isSpread && sideNames.length>1 && (
+ <div style={{display:"flex",gap:7,padding:"12px 16px 6px"}}>
+ {sideNames.map(sn=>{ const on=sn===activeSide; return (<div key={sn} onClick={()=>setAltSheet(x=>({...x,side:sn,sel:null}))} style={{flex:1,textAlign:"center",border:"1px solid "+(on?IOS.yellow:"#2c2c30"),background:on?"rgba(255,214,10,0.12)":"#17171b",color:on?IOS.yellow:"rgba(255,255,255,0.55)",fontWeight:800,fontSize:13,padding:9,borderRadius:10,cursor:"pointer"}}>{sn}</div>);})}
+ </div>
+ )}
+ <div style={{display:"flex",justifyContent:"space-between",padding:"8px 18px 2px",fontSize:10,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"rgba(255,255,255,0.32)"}}><span>Line</span><span>Odds</span><span>If it hits</span></div>
+ <div style={{padding:"2px 14px 8px",overflowY:"auto",flex:1,minHeight:0,WebkitOverflowScrolling:"touch"}}>
+ {lines.map((l,i)=>{ const pos=String(l.odds).charAt(0)==="+"; const on=(altSheet.sel===i)||(altSheet.sel==null && i===Math.floor(lines.length/2)); const _pts=calcPickPoints(1,l.impliedOdds,"W"); const ptStr=(l.point>=0?("+"+l.point):(""+l.point));
+ return (<div key={i} onClick={()=>setAltSheet(x=>({...x,sel:i}))} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 13px",borderRadius:12,border:"1px solid "+(on?IOS.blue:"transparent"),background:on?"rgba(10,132,255,0.1)":"#131317",cursor:"pointer",marginBottom:6}}>
+ <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:19,width:74}}>{altSheet.isSpread?ptStr:l.point}</div>
+ <div style={{flex:1}}><span style={{fontWeight:800,fontSize:15,color:pos?IOS.green:"#fff"}}>{l.odds}</span><div style={{fontSize:9.5,fontWeight:800,color:"rgba(255,255,255,0.35)",marginTop:1}}>{altSheet.isSpread?((altSheet.bet.outcome||"")+" "+ptStr):(activeSide+" "+l.point)}</div></div>
+ <div style={{textAlign:"right"}}><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:20,color:IOS.green}}>+{_pts}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.4)",fontWeight:700}}>pts</div></div>
+ </div>);
+ })}
+ </div>
+ <div onClick={addAltPick} style={{margin:"6px 16px 0",marginBottom:"calc(18px + env(safe-area-inset-bottom,0px))",padding:15,borderRadius:13,background:IOS.blue,color:"#fff",fontSize:15.5,fontWeight:800,textAlign:"center",cursor:"pointer",flexShrink:0}}>Add to slip</div>
+ </>);
+ })() : (
+ <div style={{textAlign:"center",color:"rgba(255,255,255,0.4)",fontSize:13,padding:"40px 20px 46px"}}>No alternate lines available for this bet right now.</div>
+ )}
+ </div>
+ </div>
+ )}
  {pickConflict && <div style={{position:"fixed",left:"50%",bottom:96,transform:"translateX(-50%)",maxWidth:"86%",background:"rgba(28,16,16,0.97)",border:"0.5px solid rgba(255,69,58,0.45)",borderRadius:11,padding:"11px 16px",fontSize:12.5,fontWeight:700,color:"#fff",zIndex:99999,boxShadow:"0 8px 30px rgba(0,0,0,0.5)",textAlign:"center",lineHeight:1.4}}>{pickConflict}</div>}
  <div className="tab-bar">
  {(homeMode==="solo" ? [
