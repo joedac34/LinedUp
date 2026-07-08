@@ -672,6 +672,33 @@ function gradePeriod(pick, game, info) {
   return null;
 }
 
+// Final (or in-progress) team score for a pick's own game, matched out of the ESPN
+// scoreboard the same way gradePick does (both teams referenced, closest to game_date).
+// Returns null for longshot legs (pick.game is a player name) or when scores aren't in
+// the feed. Informational only: grading stays authoritative above.
+function gameScoreFor(pick, games) {
+  if (!Array.isArray(games) || !games.length) return null;
+  const teams = parseMatchupTeams(pick.game || "");
+  if (!teams || teams.length !== 2) return null;
+  const lastWord = (x) => { const n = normName(x || ""); const parts = n.split(" "); return parts[parts.length - 1]; };
+  const same = (a, b) => { const na = normName(a || ""), nb = normName(b || ""); if (!na || !nb) return false; return na.includes(nb) || nb.includes(na) || lastWord(a) === lastWord(b); };
+  const both = (g) => (same(teams[0], g.home_team) || same(teams[0], g.away_team)) && (same(teams[1], g.home_team) || same(teams[1], g.away_team));
+  const want = pick.game_date ? Date.parse(pick.game_date) : NaN;
+  let game = null;
+  if (!isNaN(want)) {
+    let best = null;
+    for (const g of games) { if (!both(g) || !g.date) continue; const diff = Math.abs(Date.parse(g.date) - want); if (best === null || diff < best.diff) best = { g, diff }; }
+    if (best && best.diff <= 24 * 3600 * 1000) game = best.g;
+  } else {
+    game = games.find(g => both(g)) || null;
+  }
+  if (!game || !game.scores) return null;
+  const hs = parseFloat(game.scores.find(s => s.name === game.home_team)?.score ?? -1);
+  const as = parseFloat(game.scores.find(s => s.name === game.away_team)?.score ?? -1);
+  if (!(hs >= 0) || !(as >= 0)) return null;
+  return { home_score: hs, away_score: as, final_status: game.completed ? "final" : (game.inProgress ? "in_progress" : null) };
+}
+
 function gradePick(pick, games, playerIndex, info = {}) {
   const slot = pick.slot;
   let baseType = (slot||"").split("_")[0];
@@ -1054,10 +1081,7 @@ export default async function handler(req, res) {
             if (group[0].power_up_id === "double") totalPts *= 2;
             // First leg gets the points, rest get 0
             for (let i = 0; i < group.length; i++) {
-              await sbPatch(`picks?id=eq.${group[i].id}`, {
-                result: "W",
-                points_earned: i === 0 ? totalPts : 0,
-              });
+              await sbPatch(`picks?id=eq.${group[i].id}`, { result: "W", points_earned: i === 0 ? totalPts : 0, ...(gameScoreFor(group[i], games) || {}) });
             }
             await notifyPick(group[0], league, "W", totalPts, group.length);
             results.graded += group.length;
@@ -1068,13 +1092,13 @@ export default async function handler(req, res) {
             let placed = false;
             for (let i = 0; i < group.length; i++) {
               const give = legResults[i] === "W" && !placed; if (give) placed = true;
-              await sbPatch(`picks?id=eq.${group[i].id}`, { result: legResults[i], points_earned: give ? insuredPts : 0 });
+              await sbPatch(`picks?id=eq.${group[i].id}`, { result: legResults[i], points_earned: give ? insuredPts : 0, ...(gameScoreFor(group[i], games) || {}) });
             }
             await notifyPick(group[0], league, "W", insuredPts, group.length);
             results.graded += group.length;
           } else if (anyLost) {
             for (const p of group) {
-              await sbPatch(`picks?id=eq.${p.id}`, { result: "L", points_earned: 0 });
+              await sbPatch(`picks?id=eq.${p.id}`, { result: "L", points_earned: 0, ...(gameScoreFor(p, games) || {}) });
             }
             await notifyPick(group[0], league, "L", 0, group.length);
             results.graded += group.length;
@@ -1092,7 +1116,7 @@ export default async function handler(req, res) {
             let pts = result === "W" ? calcPoints(pick.multiplier, pick.implied_odds) : 0;
             if (result === "W" && pick.power_up_id === "double") pts *= 2;
             if (result === "W" && pick.power_up_id === "second") pts = parseFloat((pts * 0.5).toFixed(1));
-            await sbPatch(`picks?id=eq.${pick.id}`, { result, points_earned: pts });
+            await sbPatch(`picks?id=eq.${pick.id}`, { result, points_earned: pts, ...(gameScoreFor(pick, games) || {}) });
             await notifyPick(pick, league, result, pts, 1);
             results.graded++;
           }
