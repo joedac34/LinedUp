@@ -8848,7 +8848,7 @@ export default function App() {
  const _rest = allowedTypes.filter(t=>t!=="ml"&&t!=="spread"&&t!=="ou");
  const _pills = [...(_gl.length?[{key:"__gl__",label:"Game Lines",target:_gl[0],on:isGameLine,col:IOS.blue}]:[]), ..._rest.map(t=>({key:t,label:TYPE_LABELS[t],target:t,on:t===gridType,col:ACC[t]}))];
  return _pills.map(p=>(
- <div key={p.key} onClick={()=>{ setGridType(p.target); setGridPropSub("all"); if(p.target==="period"){ const _ps=PERIOD_SUBS_BY_SPORT[gSport]; setGridPeriodSub(_ps&&_ps.length?_ps[0].id:""); } if(gridCfg){ let _i=activePicks.findIndex(x=>!x.isParlay && x.category===p.target && x.bet===null); if(_i===-1) _i=activePicks.findIndex(x=>!x.isParlay && x.category===p.target); if(_i!==-1) setGridTargetSlot(_i); } }} style={{...pillBase,
+ <div key={p.key} onClick={()=>{ setGridType(p.target); setGridPropSub("all"); if(p.target==="period"){ const _ps=PERIOD_SUBS_BY_SPORT[gSport]; setGridPeriodSub(_ps&&_ps.length?_ps[0].id:""); } if(gridCfg){ const _st=(s)=>s?(s.slotType||s.category):null; const _cur=activePicks[gridTargetSlot]; const _onWild=_cur&&!_cur.isParlay&&_st(_cur)==="wildcard"&&_cur.bet===null; if(!_onWild){ let _i=activePicks.findIndex(x=>!x.isParlay && _st(x)===p.target && x.bet===null); if(_i===-1) _i=activePicks.findIndex(x=>!x.isParlay && _st(x)==="wildcard" && x.bet===null); if(_i===-1) _i=activePicks.findIndex(x=>!x.isParlay && _st(x)===p.target); if(_i!==-1) setGridTargetSlot(_i); } } }} style={{...pillBase,
  background:p.on?`${p.col}26`:"rgba(255,255,255,0.05)", borderColor:p.on?`${p.col}80`:"rgba(255,255,255,0.1)", color:p.on?p.col:"rgba(255,255,255,0.45)"}}>
  {p.label}
  </div>
