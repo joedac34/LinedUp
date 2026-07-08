@@ -1312,7 +1312,7 @@ function BracketView({ matchups, members, uid, IOS, onOpenMatch, live, onChampio
   );
 }
 const BMD_CHIP = { ml:"ML", spread:"SPR", ou:"O/U", prop:"PROP", longshot:"LONG" };
-function BracketMatchSheet({ d, IOS, onClose }){
+function BracketMatchSheet({ d, IOS, onClose, liveGames=[], onOpenGamecast }){
   if(!d) return null;
   const resCell = (res, pts)=>{
     if(res==="W") return <div className="bmd-res"><div className="rp" style={{color:IOS.green}}>+{Number(pts).toFixed(1)}</div><div className="rl" style={{color:IOS.green}}>Win</div></div>;
@@ -1338,7 +1338,7 @@ function BracketMatchSheet({ d, IOS, onClose }){
               : <span className="bmd-chip" style={{opacity:.55,display:"inline-flex",alignItems:"center",justifyContent:"center"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>}
             <div className="bmd-pk">
               {reveal
-                ? <><div className="pn">{pk.name}</div>{pk.game?<div className="ps" style={{opacity:.6}}>{pk.game}</div>:null}<div className="ps">{pk.sub}</div></>
+                ? <><div className="pn">{pk.name}</div>{pk.game?<div className="ps" style={{opacity:.6}}>{pk.game}</div>:null}<div className="ps">{pk.sub}</div>{(pk.locked||pk.res==="W"||pk.res==="L")?<ScoreChip pick={pk} live={liveMatch(pk, liveGames)} onOpen={()=>{ if(onOpenGamecast) onOpenGamecast(pk); }}/>:null}</>
                 : <><div className="pn" style={{color:"rgba(255,255,255,.5)"}}>Hidden until lock</div><div className="ps">Reveals when the game starts</div></>}
             </div>
             {resCell(pk.res, pk.pts)}
@@ -4503,10 +4503,10 @@ export default function App() {
  const openBracketMatch = async (mu, labelOverride) => {
  try {
  const u1=mu.user1_id, u2=mu.user2_id; if(!u1||!u2) return;
- const { data } = await supabase.from("picks").select("user_id,slot,pick_name,odds,multiplier,result,points_earned,game_date,game").eq("league_id",activeLeague.id).eq("week",mu.week).in("user_id",[u1,u2]);
+ const { data } = await supabase.from("picks").select("user_id,slot,pick_name,odds,multiplier,result,points_earned,game_date,game,home_score,away_score").eq("league_id",activeLeague.id).eq("week",mu.week).in("user_id",[u1,u2]);
  const rows = data||[];
  const build = (id, storedPts) => {
- const ps = rows.filter(r=>r.user_id===id).map(r=>({ slot:(r.slot||"").split("_")[0], name:r.pick_name||"Pick", game:r.game||"", sub:(r.multiplier?r.multiplier+"x":"")+(r.odds!=null&&r.odds!==""?" · "+r.odds:""), res:r.result==="W"?"W":(r.result==="L"?"L":"pend"), pts:parseFloat(r.points_earned||0), locked:!!(r.result==="W"||r.result==="L"||(r.game_date&&new Date(r.game_date).getTime()<=Date.now())) }));
+ const ps = rows.filter(r=>r.user_id===id).map(r=>({ slot:(r.slot||"").split("_")[0], name:r.pick_name||"Pick", game:r.game||"", sub:(r.multiplier?r.multiplier+"x":"")+(r.odds!=null&&r.odds!==""?" · "+r.odds:""), res:r.result==="W"?"W":(r.result==="L"?"L":"pend"), pts:parseFloat(r.points_earned||0), locked:!!(r.result==="W"||r.result==="L"||(r.game_date&&new Date(r.game_date).getTime()<=Date.now())), result:r.result||null, game_date:r.game_date||null, home_score:(r.home_score!=null?r.home_score:null), away_score:(r.away_score!=null?r.away_score:null), pick_name:r.pick_name||"", odds:r.odds }));
  const computed = ps.reduce((a,pk)=>a+(pk.res==="W"?pk.pts:0),0);
  const mem = leagueMembers.find(x=>x.userId===id);
  return { name: mem?mem.name:"Player", you:id===(user&&user.id), total:(mu.winner_id!=null && storedPts!=null)?Number(storedPts):computed, picks:ps };
@@ -6332,7 +6332,7 @@ export default function App() {
  {homeMode==="solo" && <SoloHome soloWeeks={soloWeeks} soloLoading={soloLoading} isPro={isPro} IOS={IOS} setScreen={setScreen} setShowNewLeague={setShowNewLeague} setNewLeagueStep={setNewLeagueStep} setShowBrowse={setShowBrowse} fetchPublicLeagues={fetchPublicLeagues} setIsSoloMode={setIsSoloMode} setActiveLeagueId={setActiveLeagueId} getOrCreateSoloLeague={getOrCreateSoloLeague} soloSavedPicks={soloSavedPicks} setSoloSavedPicks={setSoloSavedPicks} soloFlexPicks={soloFlexPicks} setSoloFlexPicks={setSoloFlexPicks} soloSport={soloSport} setSoloSport={setSoloSportPersist} setShowSoloSportPicker={setShowSoloSportPicker} soloSubmitted={soloSubmitted} setSoloSubmitted={setSoloSubmitted} username={userProfile?.username||""} soloTopPct={soloTopPct} onDeleteSlate={deleteSoloSlate} onJoinCode={handleJoinCode} setShowPaywall={setShowPaywall} tickerGames={tickerGames} espnGames={espnGames} globalRank={(()=>{ const rows=lbCache["all"]; if(!rows||!rows.length) return null; const sx=[...rows].sort((a,b)=>(Number(b.points)||0)-(Number(a.points)||0)); const i=sx.findIndex(r=>String(r.user_id)===String(user?.id)); return i>=0?{rank:i+1,total:sx.length}:null; })()} onOpenLeaderboard={()=>{ fetchLeaderboard("all"); setScreen("leaderboard"); }} liveGames={liveGames} onOpenGamecast={openGamecast}/>}
        {homeMode==="solo" && screen==="home" && (()=>{
          const SP=["mlb","nfl","nba"];
-         const games=tickerGames||[];
+         const games=(tickerGames||[]).filter(g=>g&&g.sport===soloSport);
          const shown=soloGamesAll?games:games.slice(0,4);
          const so=liveOdds[soloSport];
          return (
@@ -7485,7 +7485,7 @@ export default function App() {
  </div>
  ) : (<>
  <div style={{fontSize:13.5,fontWeight:700,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{name}</div>
- {game&&<div style={{fontSize:10,color:"rgba(255,255,255,0.36)",marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{game}</div>}
+ {game&&<div style={{fontSize:10,color:"rgba(255,255,255,0.36)",marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{game}</div>}{slot.bet&&<ScoreChip pick={{game:game,game_date:slot.bet.gameTime||null,result:res,pick_name:name,odds:odds}} live={liveMatch({game:game,game_date:slot.bet.gameTime||null}, liveGames)} onOpen={()=>openGamecast({game:game,game_date:slot.bet.gameTime||null,pick_name:name,odds:odds,result:res})}/>}
  </>)}
  </div>
  <div style={{textAlign:"right",flexShrink:0}}>
@@ -9369,7 +9369,7 @@ export default function App() {
              );
            })}
          </div>
-         {bracketDetail && <BracketMatchSheet d={bracketDetail} IOS={IOS} onClose={()=>setBracketDetail(null)}/>}
+         {bracketDetail && <BracketMatchSheet d={bracketDetail} IOS={IOS} onClose={()=>setBracketDetail(null)} liveGames={liveGames} onOpenGamecast={openGamecast}/>}
        </div>
      )}
    </>);
@@ -10316,8 +10316,8 @@ export default function App() {
        return (
        <div key={p.id||i} style={{display:"flex",alignItems:"center",padding:"7px 12px",borderBottom:i<Math.min(myPicksThisWeek.length,5)-1?`0.5px solid ${IOS.sep}`:"none",background:won?"rgba(48,209,88,0.04)":lost?"rgba(255,59,48,0.04)":"transparent"}}>
          {(()=>{const cc={ml:IOS.blue,prop:IOS.yellow,ou:IOS.orange,spread:IOS.green,longshot:IOS.pink};const k=(p.slot||"ml").split("_")[0];return <div style={{fontSize:8,fontWeight:800,color:cc[k]||IOS.blue,textTransform:"uppercase",width:30,flexShrink:0}}>{k==="longshot"?"LS":(k||"ml").toUpperCase()}</div>;})()}
-         <div style={{flex:1,fontSize:11,color:"#ccc",padding:"0 8px"}}>{p.pick_name}</div>
-         <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0,whiteSpace:"nowrap",fontSize:10,fontWeight:700,color:won?IOS.green:lost?IOS.red:"#555"}}>{won?(<><span>+{parseFloat(p.points_earned||0).toFixed(1)} pts</span><span style={{fontSize:8,fontWeight:800,color:IOS.green,background:"rgba(48,209,88,0.16)",borderRadius:4,padding:"1px 4px",letterSpacing:"0.03em"}}>W</span></>):lost?(<span>0 pts</span>):(<span>pending</span>)}</div>
+         <div style={{flex:1,minWidth:0,padding:"0 8px"}}><div style={{fontSize:11,color:"#ccc",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.pick_name}</div>{p.game?<div style={{fontSize:9,color:IOS.label3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.game}</div>:null}</div>
+         <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:2,flexShrink:0}}><div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0,whiteSpace:"nowrap",fontSize:10,fontWeight:700,color:won?IOS.green:lost?IOS.red:"#555"}}>{won?(<><span>+{parseFloat(p.points_earned||0).toFixed(1)} pts</span><span style={{fontSize:8,fontWeight:800,color:IOS.green,background:"rgba(48,209,88,0.16)",borderRadius:4,padding:"1px 4px",letterSpacing:"0.03em"}}>W</span></>):lost?(<span>0 pts</span>):(<span>pending</span>)}</div><ScoreChip pick={p} live={liveMatch(p, liveGames)} onOpen={()=>openGamecast(p)}/></div>
        </div>
        );
      })}
@@ -10439,7 +10439,7 @@ export default function App() {
          </div>
        );
      })}
-     {bracketDetail && <BracketMatchSheet d={bracketDetail} IOS={IOS} onClose={()=>setBracketDetail(null)}/>}
+     {bracketDetail && <BracketMatchSheet d={bracketDetail} IOS={IOS} onClose={()=>setBracketDetail(null)} liveGames={liveGames} onOpenGamecast={openGamecast}/>}
    </div>
    );
  })()}
@@ -10510,7 +10510,7 @@ export default function App() {
      <div style={{padding:"12px 16px 20px"}}>
        <div style={{margin:"0 0 12px",fontSize:11,fontWeight:800,letterSpacing:".5px",textTransform:"uppercase",color:IOS.yellow}}>Top {N} seeds · single-elim · Wk {startWeek}–{sw}</div>
        <BracketView matchups={playoffMs} members={leagueMembers} uid={user&&user.id} IOS={IOS} onOpenMatch={openBracketMatch} live={bracketLive} onChampion={(id,nm)=>setChampCelebrate(champPayload(id,nm))}/>
-       {bracketDetail && <BracketMatchSheet d={bracketDetail} IOS={IOS} onClose={()=>setBracketDetail(null)}/>}
+       {bracketDetail && <BracketMatchSheet d={bracketDetail} IOS={IOS} onClose={()=>setBracketDetail(null)} liveGames={liveGames} onOpenGamecast={openGamecast}/>}
        {champCelebrate && <ChampCelebrate name={champCelebrate.name} leagueName={champCelebrate.leagueName} isYou={champCelebrate.isYou} members={champCelebrate.members} record={champCelebrate.record} points={champCelebrate.points} runnerUp={champCelebrate.runnerUp} IOS={IOS} onClose={()=>setChampCelebrate(null)} onShare={()=>champShare(champCelebrate.name, champCelebrate.leagueName)}/>}
      </div>
    );
@@ -11291,7 +11291,7 @@ export default function App() {
  <BracketView matchups={bracketMatchups} members={leagueMembers} uid={user&&user.id} IOS={IOS} onOpenMatch={openBracketMatch} live={bracketLive} onChampion={(id,nm)=>setChampCelebrate(champPayload(id,nm))}/>
  </>);
  })()}
- {bracketDetail && <BracketMatchSheet d={bracketDetail} IOS={IOS} onClose={()=>setBracketDetail(null)}/>}
+ {bracketDetail && <BracketMatchSheet d={bracketDetail} IOS={IOS} onClose={()=>setBracketDetail(null)} liveGames={liveGames} onOpenGamecast={openGamecast}/>}
  {champCelebrate && <ChampCelebrate name={champCelebrate.name} leagueName={champCelebrate.leagueName} isYou={champCelebrate.isYou} members={champCelebrate.members} record={champCelebrate.record} points={champCelebrate.points} runnerUp={champCelebrate.runnerUp} IOS={IOS} onClose={()=>setChampCelebrate(null)} onShare={()=>champShare(champCelebrate.name, champCelebrate.leagueName)}/>}
  </>
  )}
@@ -11320,7 +11320,7 @@ export default function App() {
        {playoffMs.some(mm=>mm.week===bracketLive.week && !mm.winner_id) && <div style={{margin:"0 16px 10px",display:"flex",alignItems:"center",justifyContent:"center",gap:7,background:"rgba(48,209,88,.1)",border:"1px solid rgba(48,209,88,.3)",borderRadius:12,padding:"9px 14px"}}><span className="brk-livedot"/><span style={{fontSize:11,fontWeight:900,letterSpacing:".12em",color:IOS.green}}>PLAYOFFS · LIVE ROUND</span></div>}
        <div style={{margin:"0 16px 12px",fontSize:11,fontWeight:800,letterSpacing:".5px",textTransform:"uppercase",color:IOS.yellow}}>Top {N} seeds · single-elim · Wk {startWeek}–{sw}</div>
        <BracketView matchups={playoffMs} members={leagueMembers} uid={user&&user.id} IOS={IOS} onOpenMatch={openBracketMatch} live={bracketLive} onChampion={(id,nm)=>setChampCelebrate(champPayload(id,nm))}/>
-       {bracketDetail && <BracketMatchSheet d={bracketDetail} IOS={IOS} onClose={()=>setBracketDetail(null)}/>}
+       {bracketDetail && <BracketMatchSheet d={bracketDetail} IOS={IOS} onClose={()=>setBracketDetail(null)} liveGames={liveGames} onOpenGamecast={openGamecast}/>}
        {champCelebrate && <ChampCelebrate name={champCelebrate.name} leagueName={champCelebrate.leagueName} isYou={champCelebrate.isYou} members={champCelebrate.members} record={champCelebrate.record} points={champCelebrate.points} runnerUp={champCelebrate.runnerUp} IOS={IOS} onClose={()=>setChampCelebrate(null)} onShare={()=>champShare(champCelebrate.name, champCelebrate.leagueName)}/>}
      </>
    );
