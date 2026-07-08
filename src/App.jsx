@@ -9,6 +9,88 @@ async function authHeaders() {
 }
 import posthog from 'posthog-js';
 
+// ─── TEAM ACRONYM HELPER (module scope: shared across components) ───
+ const getAcronym = (name, isProp=false) => {
+ if(!name) return "?";
+
+ // For props — show first name only (e.g. "LeBron James" → "LEBRON", "Patrick Mahomes" → "PAT")
+ if(isProp) {
+ const first = name.split(" ")[0];
+ return first.substring(0,5).toUpperCase();
+ }
+
+ // Full name map
+ const known = {
+ // NFL
+ "Kansas City Chiefs":"KC","Philadelphia Eagles":"PHI","San Francisco 49ers":"SF",
+ "Dallas Cowboys":"DAL","Buffalo Bills":"BUF","Miami Dolphins":"MIA",
+ "New England Patriots":"NE","New York Jets":"NYJ","New York Giants":"NYG",
+ "Los Angeles Rams":"LAR","Los Angeles Chargers":"LAC","Las Vegas Raiders":"LV",
+ "Seattle Seahawks":"SEA","Arizona Cardinals":"ARI","Green Bay Packers":"GB",
+ "Chicago Bears":"CHI","Minnesota Vikings":"MIN","Detroit Lions":"DET",
+ "Atlanta Falcons":"ATL","New Orleans Saints":"NO","Carolina Panthers":"CAR",
+ "Tampa Bay Buccaneers":"TB","Pittsburgh Steelers":"PIT","Baltimore Ravens":"BAL",
+ "Cleveland Browns":"CLE","Cincinnati Bengals":"CIN","Tennessee Titans":"TEN",
+ "Indianapolis Colts":"IND","Houston Texans":"HOU","Jacksonville Jaguars":"JAX",
+ "Denver Broncos":"DEN","Washington Commanders":"WAS","New York Giants":"NYG",
+ // MLB
+ "Los Angeles Dodgers":"LAD","New York Yankees":"NYY","Boston Red Sox":"BOS",
+ "Chicago Cubs":"CHC","St. Louis Cardinals":"STL","Atlanta Braves":"ATL",
+ "Houston Astros":"HOU","Toronto Blue Jays":"TOR","San Francisco Giants":"SFG",
+ "New York Mets":"NYM","Philadelphia Phillies":"PHI","San Diego Padres":"SD",
+ "Milwaukee Brewers":"MIL","Cincinnati Reds":"CIN","Chicago White Sox":"CWS",
+ "Cleveland Guardians":"CLE","Detroit Tigers":"DET","Minnesota Twins":"MIN",
+ "Seattle Mariners":"SEA","Oakland Athletics":"OAK","Texas Rangers":"TEX",
+ "Baltimore Orioles":"BAL","Tampa Bay Rays":"TB","Miami Marlins":"MIA",
+ "Washington Nationals":"WSH","Pittsburgh Pirates":"PIT","Colorado Rockies":"COL",
+ "Arizona Diamondbacks":"ARI","Los Angeles Angels":"LAA","Kansas City Royals":"KC",
+ // NBA
+ "Los Angeles Lakers":"LAL","Golden State Warriors":"GS","Boston Celtics":"BOS",
+ "Milwaukee Bucks":"MIL","Phoenix Suns":"PHX","Miami Heat":"MIA",
+ "Brooklyn Nets":"BKN","Chicago Bulls":"CHI","Denver Nuggets":"DEN",
+ "Memphis Grizzlies":"MEM","Dallas Mavericks":"DAL","Los Angeles Clippers":"LAC",
+ "Atlanta Hawks":"ATL","Cleveland Cavaliers":"CLE","Philadelphia 76ers":"PHI",
+ "Toronto Raptors":"TOR","New York Knicks":"NYK","Indiana Pacers":"IND",
+ "Minnesota Timberwolves":"MIN","Oklahoma City Thunder":"OKC","Sacramento Kings":"SAC",
+ "Portland Trail Blazers":"POR","Utah Jazz":"UTA","New Orleans Pelicans":"NO",
+ "San Antonio Spurs":"SA","Charlotte Hornets":"CHA","Washington Wizards":"WAS",
+ "Orlando Magic":"ORL","Detroit Pistons":"DET",
+ };
+ if(known[name]) return known[name];
+
+ // Partial name match — check if name contains a known nickname
+ const partialMap = {
+ "Chiefs":"KC","Eagles":"PHI","49ers":"SF","Cowboys":"DAL","Bills":"BUF",
+ "Dolphins":"MIA","Patriots":"NE","Jets":"NYJ","Giants":"NYG","Rams":"LAR",
+ "Chargers":"LAC","Raiders":"LV","Seahawks":"SEA","Cardinals":"ARI",
+ "Packers":"GB","Bears":"CHI","Vikings":"MIN","Lions":"DET","Falcons":"ATL",
+ "Saints":"NO","Panthers":"CAR","Buccaneers":"TB","Steelers":"PIT",
+ "Ravens":"BAL","Browns":"CLE","Bengals":"CIN","Titans":"TEN","Colts":"IND",
+ "Texans":"HOU","Jaguars":"JAX","Broncos":"DEN","Commanders":"WAS",
+ "Dodgers":"LAD","Yankees":"NYY","Red Sox":"BOS","Cubs":"CHC",
+ "Braves":"ATL","Astros":"HOU","Blue Jays":"TOR","Mets":"NYM",
+ "Phillies":"PHI","Padres":"SD","Brewers":"MIL","Reds":"CIN",
+ "Mariners":"SEA","Athletics":"OAK","Rangers":"TEX","Orioles":"BAL",
+ "Rays":"TB","Marlins":"MIA","Nationals":"WSH","Pirates":"PIT",
+ "Rockies":"COL","Diamondbacks":"ARI","Angels":"LAA","Royals":"KC",
+ "Lakers":"LAL","Warriors":"GS","Celtics":"BOS","Bucks":"MIL",
+ "Suns":"PHX","Heat":"MIA","Nets":"BKN","Bulls":"CHI","Nuggets":"DEN",
+ "Grizzlies":"MEM","Mavericks":"DAL","Clippers":"LAC","Hawks":"ATL",
+ "Cavaliers":"CLE","76ers":"PHI","Raptors":"TOR","Knicks":"NYK",
+ "Pacers":"IND","Timberwolves":"MIN","Thunder":"OKC","Kings":"SAC",
+ "Trail Blazers":"POR","Jazz":"UTA","Pelicans":"NO","Spurs":"SA",
+ "Hornets":"CHA","Wizards":"WAS","Magic":"ORL","Pistons":"DET",
+ };
+ for(const [nickname, abbr] of Object.entries(partialMap)) {
+ if(name.includes(nickname)) return abbr;
+ }
+
+ // Fallback: first letters of words
+ const words = name.split(" ").filter(w=>w.length>2);
+ if(words.length===1) return name.substring(0,3).toUpperCase();
+ return words.map(w=>w[0]).join("").substring(0,3).toUpperCase();
+ };
+
 // iOS System Colors
 const IOS = {
  blue: "#0A84FF",
@@ -1762,7 +1844,7 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
                     {p.game && <div style={{fontSize:10,color:IOS.label3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.game}</div>}
                   </div>
                   <div style={{fontSize:11,fontWeight:800,color:String(p.odds||"").startsWith("+")?IOS.green:IOS.blue,flexShrink:0}}>{p.odds}</div>
-                  <div style={{minWidth:52,flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1}}><div style={{fontSize:8.5,fontWeight:800,letterSpacing:.3,color:rc}}>{rl}{res==="W"&&p.points_earned?` +${parseFloat(p.points_earned).toFixed(1)}`:""}</div>{(res==="W"||res==="L")&&p.away_score!=null&&p.home_score!=null&&<div style={{fontSize:9,fontWeight:700,color:IOS.label3,fontFamily:"'Barlow Semi Condensed',sans-serif",marginTop:1}}>{p.away_score}–{p.home_score}</div>}</div>
+                  <div style={{minWidth:52,flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1}}><div style={{fontSize:8.5,fontWeight:800,letterSpacing:.3,color:rc}}>{rl}{res==="W"&&p.points_earned?` +${parseFloat(p.points_earned).toFixed(1)}`:""}</div>{(res==="W"||res==="L")&&p.away_score!=null&&p.home_score!=null&&(()=>{const _pp=(p.game||"").split("@");const _aw=getAcronym((_pp[0]||"").trim());const _hm=getAcronym((_pp[1]||"").trim());const _awWon=Number(p.away_score)>Number(p.home_score);return <div style={{fontSize:9,fontWeight:700,fontFamily:"'Barlow Semi Condensed',sans-serif",marginTop:1,whiteSpace:"nowrap"}}><span style={{color:_awWon?"#fff":IOS.label3,fontWeight:_awWon?800:700}}>{_aw} {p.away_score}</span><span style={{color:IOS.label3}}>{" – "}</span><span style={{color:!_awWon?"#fff":IOS.label3,fontWeight:!_awWon?800:700}}>{_hm} {p.home_score}</span></div>;})()}</div>
                 </div>
               );
             })}
@@ -1816,7 +1898,7 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
                           {p.game && <div style={{fontSize:10,color:IOS.label3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.game}</div>}
                         </div>
                         <div style={{fontSize:11,fontWeight:800,color:String(p.odds||"").startsWith("+")?IOS.green:IOS.blue,flexShrink:0}}>{p.odds}</div>
-                        <div style={{minWidth:52,flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1}}><div style={{fontSize:8.5,fontWeight:800,letterSpacing:.3,color:rc}}>{rl}{res==="W"&&p.points_earned?` +${parseFloat(p.points_earned).toFixed(1)}`:""}</div>{(res==="W"||res==="L")&&p.away_score!=null&&p.home_score!=null&&<div style={{fontSize:9,fontWeight:700,color:IOS.label3,fontFamily:"'Barlow Semi Condensed',sans-serif",marginTop:1}}>{p.away_score}–{p.home_score}</div>}</div>
+                        <div style={{minWidth:52,flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1}}><div style={{fontSize:8.5,fontWeight:800,letterSpacing:.3,color:rc}}>{rl}{res==="W"&&p.points_earned?` +${parseFloat(p.points_earned).toFixed(1)}`:""}</div>{(res==="W"||res==="L")&&p.away_score!=null&&p.home_score!=null&&(()=>{const _pp=(p.game||"").split("@");const _aw=getAcronym((_pp[0]||"").trim());const _hm=getAcronym((_pp[1]||"").trim());const _awWon=Number(p.away_score)>Number(p.home_score);return <div style={{fontSize:9,fontWeight:700,fontFamily:"'Barlow Semi Condensed',sans-serif",marginTop:1,whiteSpace:"nowrap"}}><span style={{color:_awWon?"#fff":IOS.label3,fontWeight:_awWon?800:700}}>{_aw} {p.away_score}</span><span style={{color:IOS.label3}}>{" – "}</span><span style={{color:!_awWon?"#fff":IOS.label3,fontWeight:!_awWon?800:700}}>{_hm} {p.home_score}</span></div>;})()}</div>
                       </div>
                     );
                   })}
@@ -2586,87 +2668,6 @@ export default function App() {
  const [pickConflict, setPickConflict] = useState(""); // contradictory-pick notice
  // usedMults / availableMults / hasLongshot / allFlexFilled are derived inside the picks IIFE
  // so they always read from the correct activePicks (solo vs league). Do NOT compute them here.
- // ─── TEAM ACRONYM HELPER ─────────────────────────────────────────
- const getAcronym = (name, isProp=false) => {
- if(!name) return "?";
-
- // For props — show first name only (e.g. "LeBron James" → "LEBRON", "Patrick Mahomes" → "PAT")
- if(isProp) {
- const first = name.split(" ")[0];
- return first.substring(0,5).toUpperCase();
- }
-
- // Full name map
- const known = {
- // NFL
- "Kansas City Chiefs":"KC","Philadelphia Eagles":"PHI","San Francisco 49ers":"SF",
- "Dallas Cowboys":"DAL","Buffalo Bills":"BUF","Miami Dolphins":"MIA",
- "New England Patriots":"NE","New York Jets":"NYJ","New York Giants":"NYG",
- "Los Angeles Rams":"LAR","Los Angeles Chargers":"LAC","Las Vegas Raiders":"LV",
- "Seattle Seahawks":"SEA","Arizona Cardinals":"ARI","Green Bay Packers":"GB",
- "Chicago Bears":"CHI","Minnesota Vikings":"MIN","Detroit Lions":"DET",
- "Atlanta Falcons":"ATL","New Orleans Saints":"NO","Carolina Panthers":"CAR",
- "Tampa Bay Buccaneers":"TB","Pittsburgh Steelers":"PIT","Baltimore Ravens":"BAL",
- "Cleveland Browns":"CLE","Cincinnati Bengals":"CIN","Tennessee Titans":"TEN",
- "Indianapolis Colts":"IND","Houston Texans":"HOU","Jacksonville Jaguars":"JAX",
- "Denver Broncos":"DEN","Washington Commanders":"WAS","New York Giants":"NYG",
- // MLB
- "Los Angeles Dodgers":"LAD","New York Yankees":"NYY","Boston Red Sox":"BOS",
- "Chicago Cubs":"CHC","St. Louis Cardinals":"STL","Atlanta Braves":"ATL",
- "Houston Astros":"HOU","Toronto Blue Jays":"TOR","San Francisco Giants":"SFG",
- "New York Mets":"NYM","Philadelphia Phillies":"PHI","San Diego Padres":"SD",
- "Milwaukee Brewers":"MIL","Cincinnati Reds":"CIN","Chicago White Sox":"CWS",
- "Cleveland Guardians":"CLE","Detroit Tigers":"DET","Minnesota Twins":"MIN",
- "Seattle Mariners":"SEA","Oakland Athletics":"OAK","Texas Rangers":"TEX",
- "Baltimore Orioles":"BAL","Tampa Bay Rays":"TB","Miami Marlins":"MIA",
- "Washington Nationals":"WSH","Pittsburgh Pirates":"PIT","Colorado Rockies":"COL",
- "Arizona Diamondbacks":"ARI","Los Angeles Angels":"LAA","Kansas City Royals":"KC",
- // NBA
- "Los Angeles Lakers":"LAL","Golden State Warriors":"GS","Boston Celtics":"BOS",
- "Milwaukee Bucks":"MIL","Phoenix Suns":"PHX","Miami Heat":"MIA",
- "Brooklyn Nets":"BKN","Chicago Bulls":"CHI","Denver Nuggets":"DEN",
- "Memphis Grizzlies":"MEM","Dallas Mavericks":"DAL","Los Angeles Clippers":"LAC",
- "Atlanta Hawks":"ATL","Cleveland Cavaliers":"CLE","Philadelphia 76ers":"PHI",
- "Toronto Raptors":"TOR","New York Knicks":"NYK","Indiana Pacers":"IND",
- "Minnesota Timberwolves":"MIN","Oklahoma City Thunder":"OKC","Sacramento Kings":"SAC",
- "Portland Trail Blazers":"POR","Utah Jazz":"UTA","New Orleans Pelicans":"NO",
- "San Antonio Spurs":"SA","Charlotte Hornets":"CHA","Washington Wizards":"WAS",
- "Orlando Magic":"ORL","Detroit Pistons":"DET",
- };
- if(known[name]) return known[name];
-
- // Partial name match — check if name contains a known nickname
- const partialMap = {
- "Chiefs":"KC","Eagles":"PHI","49ers":"SF","Cowboys":"DAL","Bills":"BUF",
- "Dolphins":"MIA","Patriots":"NE","Jets":"NYJ","Giants":"NYG","Rams":"LAR",
- "Chargers":"LAC","Raiders":"LV","Seahawks":"SEA","Cardinals":"ARI",
- "Packers":"GB","Bears":"CHI","Vikings":"MIN","Lions":"DET","Falcons":"ATL",
- "Saints":"NO","Panthers":"CAR","Buccaneers":"TB","Steelers":"PIT",
- "Ravens":"BAL","Browns":"CLE","Bengals":"CIN","Titans":"TEN","Colts":"IND",
- "Texans":"HOU","Jaguars":"JAX","Broncos":"DEN","Commanders":"WAS",
- "Dodgers":"LAD","Yankees":"NYY","Red Sox":"BOS","Cubs":"CHC",
- "Braves":"ATL","Astros":"HOU","Blue Jays":"TOR","Mets":"NYM",
- "Phillies":"PHI","Padres":"SD","Brewers":"MIL","Reds":"CIN",
- "Mariners":"SEA","Athletics":"OAK","Rangers":"TEX","Orioles":"BAL",
- "Rays":"TB","Marlins":"MIA","Nationals":"WSH","Pirates":"PIT",
- "Rockies":"COL","Diamondbacks":"ARI","Angels":"LAA","Royals":"KC",
- "Lakers":"LAL","Warriors":"GS","Celtics":"BOS","Bucks":"MIL",
- "Suns":"PHX","Heat":"MIA","Nets":"BKN","Bulls":"CHI","Nuggets":"DEN",
- "Grizzlies":"MEM","Mavericks":"DAL","Clippers":"LAC","Hawks":"ATL",
- "Cavaliers":"CLE","76ers":"PHI","Raptors":"TOR","Knicks":"NYK",
- "Pacers":"IND","Timberwolves":"MIN","Thunder":"OKC","Kings":"SAC",
- "Trail Blazers":"POR","Jazz":"UTA","Pelicans":"NO","Spurs":"SA",
- "Hornets":"CHA","Wizards":"WAS","Magic":"ORL","Pistons":"DET",
- };
- for(const [nickname, abbr] of Object.entries(partialMap)) {
- if(name.includes(nickname)) return abbr;
- }
-
- // Fallback: first letters of words
- const words = name.split(" ").filter(w=>w.length>2);
- if(words.length===1) return name.substring(0,3).toUpperCase();
- return words.map(w=>w[0]).join("").substring(0,3).toUpperCase();
- };
 
  const calcParlayOddsDecimal = (legs) => legs.reduce((acc,b)=>{
  const dec = b.impliedOdds > 0 ? (b.impliedOdds/100)+1 : (100/Math.abs(b.impliedOdds))+1;
