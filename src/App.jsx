@@ -1648,7 +1648,7 @@ const matchEspnGame = (list, awayName, homeName) => {
   });
 };
 
-function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeague, setNewLeagueStep, setShowBrowse, fetchPublicLeagues, setIsSoloMode, setActiveLeagueId, getOrCreateSoloLeague, soloSavedPicks, setSoloSavedPicks, soloFlexPicks, setSoloFlexPicks, soloSport, setSoloSport, setShowSoloSportPicker, soloSubmitted, setSoloSubmitted, username, soloTopPct, onDeleteSlate, onJoinCode, setShowPaywall, tickerGames=[], espnGames=[], globalRank=null, onOpenLeaderboard}) {
+function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeague, setNewLeagueStep, setShowBrowse, fetchPublicLeagues, setIsSoloMode, setActiveLeagueId, getOrCreateSoloLeague, soloSavedPicks, setSoloSavedPicks, soloFlexPicks, setSoloFlexPicks, soloSport, setSoloSport, setShowSoloSportPicker, soloSubmitted, setSoloSubmitted, username, soloTopPct, onDeleteSlate, onJoinCode, setShowPaywall, tickerGames=[], espnGames=[], globalRank=null, onOpenLeaderboard, liveGames=[], onOpenGamecast}) {
   const [shareToast,setShareToast]=useState("");
   const [openSlate,setOpenSlate]=useState(null);
   const [joinCode,setJoinCode]=useState("");
@@ -1844,7 +1844,7 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
                     {p.game && <div style={{fontSize:10,color:IOS.label3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.game}</div>}
                   </div>
                   <div style={{fontSize:11,fontWeight:800,color:String(p.odds||"").startsWith("+")?IOS.green:IOS.blue,flexShrink:0}}>{p.odds}</div>
-                  <div style={{minWidth:52,flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1}}><div style={{fontSize:8.5,fontWeight:800,letterSpacing:.3,color:rc}}>{rl}{res==="W"&&p.points_earned?` +${parseFloat(p.points_earned).toFixed(1)}`:""}</div>{(res==="W"||res==="L")&&p.away_score!=null&&p.home_score!=null&&(()=>{const _pp=(p.game||"").split("@");const _aw=getAcronym((_pp[0]||"").trim());const _hm=getAcronym((_pp[1]||"").trim());const _awWon=Number(p.away_score)>Number(p.home_score);return <div style={{fontSize:9,fontWeight:700,fontFamily:"'Barlow Semi Condensed',sans-serif",marginTop:1,whiteSpace:"nowrap"}}><span style={{color:_awWon?"#fff":IOS.label3,fontWeight:_awWon?800:700}}>{_aw} {p.away_score}</span><span style={{color:IOS.label3}}>{" – "}</span><span style={{color:!_awWon?"#fff":IOS.label3,fontWeight:!_awWon?800:700}}>{_hm} {p.home_score}</span></div>;})()}</div>
+                  <div style={{minWidth:52,flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1}}><div style={{fontSize:8.5,fontWeight:800,letterSpacing:.3,color:rc}}>{rl}{res==="W"&&p.points_earned?` +${parseFloat(p.points_earned).toFixed(1)}`:""}</div><ScoreChip pick={p} live={liveMatch(p, liveGames)} onOpen={()=>{ if(onOpenGamecast) onOpenGamecast(p); }}/></div>
                 </div>
               );
             })}
@@ -1898,7 +1898,7 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
                           {p.game && <div style={{fontSize:10,color:IOS.label3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.game}</div>}
                         </div>
                         <div style={{fontSize:11,fontWeight:800,color:String(p.odds||"").startsWith("+")?IOS.green:IOS.blue,flexShrink:0}}>{p.odds}</div>
-                        <div style={{minWidth:52,flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1}}><div style={{fontSize:8.5,fontWeight:800,letterSpacing:.3,color:rc}}>{rl}{res==="W"&&p.points_earned?` +${parseFloat(p.points_earned).toFixed(1)}`:""}</div>{(res==="W"||res==="L")&&p.away_score!=null&&p.home_score!=null&&(()=>{const _pp=(p.game||"").split("@");const _aw=getAcronym((_pp[0]||"").trim());const _hm=getAcronym((_pp[1]||"").trim());const _awWon=Number(p.away_score)>Number(p.home_score);return <div style={{fontSize:9,fontWeight:700,fontFamily:"'Barlow Semi Condensed',sans-serif",marginTop:1,whiteSpace:"nowrap"}}><span style={{color:_awWon?"#fff":IOS.label3,fontWeight:_awWon?800:700}}>{_aw} {p.away_score}</span><span style={{color:IOS.label3}}>{" – "}</span><span style={{color:!_awWon?"#fff":IOS.label3,fontWeight:!_awWon?800:700}}>{_hm} {p.home_score}</span></div>;})()}</div>
+                        <div style={{minWidth:52,flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1}}><div style={{fontSize:8.5,fontWeight:800,letterSpacing:.3,color:rc}}>{rl}{res==="W"&&p.points_earned?` +${parseFloat(p.points_earned).toFixed(1)}`:""}</div><ScoreChip pick={p} live={liveMatch(p, liveGames)} onOpen={()=>{ if(onOpenGamecast) onOpenGamecast(p); }}/></div>
                       </div>
                     );
                   })}
@@ -2093,6 +2093,196 @@ function StatTiles({ tiles, sport, away, home, date, aColor, hColor, IOS, mt }) 
   );
 }
 
+
+// ─── LIVE SCORES (Phase 2/3): match picks to the /api/livescores feed + render ───
+// Matching is by full team NAME (stable across sources); getAcronym is display-only,
+// because MLB StatsAPI abbreviations (AZ, SF) differ from the app's (ARI, SFG).
+function _lsNorm(s){return (s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9 ]/g,"").replace(/\s+/g," ").trim();}
+function _lsLast(x){const n=_lsNorm(x);const p=n.split(" ");return p[p.length-1];}
+function _lsTeamEq(a,b){const na=_lsNorm(a),nb=_lsNorm(b);if(!na||!nb)return false;return na.includes(nb)||nb.includes(na)||_lsLast(a)===_lsLast(b);}
+function _lsPickTeams(pick){const g=(pick&&pick.game)||"";if(!g.includes("@"))return null;const p=g.split("@").map(x=>x.trim()).filter(Boolean);return p.length===2?p:null;}
+function liveMatch(pick, games){
+  if(!Array.isArray(games)||!games.length) return null;
+  const teams=_lsPickTeams(pick); if(!teams) return null; // longshot leg (player name) / unparseable
+  const both=(g)=> g && g.away && g.home &&
+    (_lsTeamEq(teams[0],g.away.name)||_lsTeamEq(teams[0],g.home.name)) &&
+    (_lsTeamEq(teams[1],g.away.name)||_lsTeamEq(teams[1],g.home.name));
+  const want=(pick&&pick.game_date)?Date.parse(pick.game_date):NaN;
+  let best=null;
+  for(const g of games){
+    if(!both(g)) continue;
+    if(!isNaN(want)&&g.gameDate){ const diff=Math.abs(Date.parse(g.gameDate)-want); if(best===null||diff<best.diff) best={g,diff}; }
+    else if(best===null){ best={g,diff:Infinity}; }
+  }
+  if(!best) return null;
+  if(!isNaN(want)&&best.diff>26*3600*1000) return null; // wrong game in a series
+  return best.g;
+}
+function _lsOrdinal(n){ n=Number(n)||0; const s=["th","st","nd","rd"], v=n%100; return n+(s[(v-20)%10]||s[v]||s[0]); }
+// Verdict badge for the gamecast. Graded result wins; else a live lead read for team
+// bets (pick_name names a team). Props/totals just show Live/Final (Phase 4 adds stat progress).
+function pickBadge(pick, game){
+  if(pick && pick.result==="W") return {txt:"Won",col:"#30D158",bg:"rgba(48,209,88,0.18)"};
+  if(pick && pick.result==="L") return {txt:"Lost",col:"#FF453A",bg:"rgba(255,69,58,0.16)"};
+  if(!game) return {txt:"Pending",col:"rgba(255,255,255,0.5)",bg:"rgba(255,255,255,0.08)"};
+  if(game.state==="pre") return {txt:"Not started",col:"rgba(255,255,255,0.5)",bg:"rgba(255,255,255,0.08)"};
+  const nm=(pick&&pick.pick_name)||"";
+  const isTotalOrProp=/\b(over|under)\b/i.test(nm);
+  const onAway=_lsTeamEq(nm, game.away.name), onHome=_lsTeamEq(nm, game.home.name);
+  if((onAway||onHome) && !isTotalOrProp){
+    const my=Number(onHome?game.home.score:game.away.score)||0;
+    const opp=Number(onHome?game.away.score:game.home.score)||0;
+    const live=game.state==="live";
+    if(my>opp) return {txt:live?"Winning":"Team won",col:"#30D158",bg:"rgba(48,209,88,0.18)"};
+    if(my<opp) return {txt:live?"Trailing":"Team lost",col:"#FF9F0A",bg:"rgba(255,159,10,0.16)"};
+    return {txt:"Tied",col:"rgba(255,255,255,0.7)",bg:"rgba(255,255,255,0.08)"};
+  }
+  return {txt:game.state==="live"?"Live":"Final",col:"rgba(255,255,255,0.6)",bg:"rgba(255,255,255,0.08)"};
+}
+
+// Compact tappable chip shown on each bet row: pre = time, live = score+inning, final = labeled score.
+function ScoreChip({ pick, live, onOpen }){
+  const L3="rgba(255,255,255,0.3)";
+  const g=live;
+  if(g && g.state==="live"){
+    const up=(g.half==="Top"||g.half==="Middle");
+    const inn=g.inning!=null?((up?"\u25B2":"\u25BC")+g.inning):"";
+    return (
+      <div onClick={onOpen} style={{marginTop:2,display:"inline-flex",alignItems:"center",gap:5,padding:"3px 7px",borderRadius:7,background:"rgba(48,209,88,0.13)",border:"0.5px solid rgba(48,209,88,0.35)",cursor:"pointer",whiteSpace:"nowrap"}}>
+        <span style={{width:5,height:5,borderRadius:"50%",background:"#FF453A",flexShrink:0}}/>
+        <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:11,fontWeight:800,color:"#fff"}}>{g.away.score}{"\u2013"}{g.home.score}</span>
+        <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:10,fontWeight:700,color:L3}}>{inn}</span>
+      </div>
+    );
+  }
+  const graded=pick && (pick.result==="W"||pick.result==="L");
+  const aFin=(g&&g.state==="final")?g.away.score:(pick?pick.away_score:null);
+  const hFin=(g&&g.state==="final")?g.home.score:(pick?pick.home_score:null);
+  if((graded||(g&&g.state==="final")) && aFin!=null && hFin!=null){
+    const parts=((pick&&pick.game)||"").split("@");
+    const aw=getAcronym((parts[0]||"").trim()), hm=getAcronym((parts[1]||"").trim());
+    const awWon=Number(aFin)>Number(hFin);
+    return (
+      <div onClick={onOpen} style={{marginTop:1,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"'Barlow Semi Condensed',sans-serif"}}>
+        <span style={{fontSize:9,fontWeight:awWon?800:700,color:awWon?"#fff":L3}}>{aw} {aFin}</span>
+        <span style={{fontSize:9,color:L3}}>{" \u2013 "}</span>
+        <span style={{fontSize:9,fontWeight:!awWon?800:700,color:!awWon?"#fff":L3}}>{hm} {hFin}</span>
+      </div>
+    );
+  }
+  if(g && g.state==="pre"){
+    let t=""; try{ t=new Date(g.gameDate).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}); }catch(e){}
+    return <div onClick={onOpen} style={{marginTop:2,fontSize:10,fontWeight:700,color:L3,cursor:"pointer",whiteSpace:"nowrap"}}>{t||"Scheduled"}</div>;
+  }
+  return null;
+}
+
+// Full gamecast bottom sheet. Rendered at .phone top level so it clears the tab bar.
+function GamecastSheet({ game, pick, onClose }){
+  if(!game) return null;
+  const CY="#64D2FF", YEL="#FFD60A", RED="#FF453A", L2="rgba(255,255,255,0.5)", L3="rgba(255,255,255,0.3)";
+  const live=game.state==="live", fin=game.state==="final", pre=game.state==="pre";
+  const aAb=getAcronym(game.away.name), hAb=getAcronym(game.home.name);
+  const aSc=game.away.score, hSc=game.home.score;
+  const leadA=Number(aSc)>Number(hSc), leadH=Number(hSc)>Number(aSc);
+  const up=(game.half==="Top"||game.half==="Middle");
+  const statusTxt= fin?"Final" : live?((game.half||"")+" "+_lsOrdinal(game.inning)+(game.outs!=null?(" \u00b7 "+game.outs+" out"):"")) : "Scheduled";
+  const badge=pickBadge(pick, game);
+  const inns=(game.linescore&&game.linescore.innings)||[];
+  const n=Math.max(9, inns.length);
+  const cur=live?game.inning:-1;
+  const cell=(v,isCur)=>(<td style={{textAlign:"center",padding:"6px 0",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:700,color:isCur?CY:"#fff",background:isCur?"rgba(10,132,255,0.16)":"transparent",borderRadius:isCur?6:0}}>{v==null?"\u00b7":v}</td>);
+  const ls=game.linescore||{};
+  let startT=""; try{ startT=new Date(game.gameDate).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}); }catch(e){}
+
+  return (
+    <div onClick={onClose} style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.62)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:9200}}>
+      <div onClick={(e)=>e.stopPropagation()} style={{width:"100%",maxWidth:480,background:"#131315",borderRadius:"22px 22px 0 0",maxHeight:"90%",overflowY:"auto",WebkitOverflowScrolling:"touch",paddingBottom:"calc(20px + env(safe-area-inset-bottom,0px))"}}>
+        <div style={{width:38,height:4,borderRadius:2,background:"rgba(255,255,255,0.22)",margin:"10px auto 4px"}}/>
+        <div style={{padding:"8px 20px 14px",borderBottom:"0.5px solid rgba(255,255,255,0.1)"}}>
+          <div style={{display:"inline-flex",alignItems:"center",gap:7,fontSize:12,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:fin?L2:(live?"#30D158":L2)}}>
+            {live && <span style={{width:6,height:6,borderRadius:"50%",background:RED,flexShrink:0}}/>}
+            {statusTxt}
+          </div>
+          <div style={{fontSize:13,color:L3,marginTop:6}}>{game.away.name} @ {game.home.name}</div>
+        </div>
+
+        {/* scoreboard */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"18px 22px 14px"}}>
+          <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6,width:92}}>
+            <div style={{fontSize:12,fontWeight:800,color:L2}}>{aAb}</div>
+            <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:40,fontWeight:800,lineHeight:1,color:pre?L3:(leadA?"#fff":L3)}}>{pre?"\u2013":aSc}</div>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:9}}>
+            {pre ? (
+              <div style={{fontSize:12,fontWeight:800,color:L2,fontFamily:"'Barlow Semi Condensed',sans-serif"}}>{startT||"TBD"}</div>
+            ) : live ? (<>
+              <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:800,color:CY}}>{(up?"\u25B2":"\u25BC")} {_lsOrdinal(game.inning)}</div>
+              <div style={{position:"relative",width:46,height:46}}>
+                <div style={{position:"absolute",width:13,height:13,transform:"rotate(45deg)",top:0,left:16.5,background:game.bases&&game.bases.second?YEL:"rgba(255,255,255,0.14)",border:"1px solid "+(game.bases&&game.bases.second?YEL:"rgba(255,255,255,0.2)")}}/>
+                <div style={{position:"absolute",width:13,height:13,transform:"rotate(45deg)",top:16.5,left:0,background:game.bases&&game.bases.third?YEL:"rgba(255,255,255,0.14)",border:"1px solid "+(game.bases&&game.bases.third?YEL:"rgba(255,255,255,0.2)")}}/>
+                <div style={{position:"absolute",width:13,height:13,transform:"rotate(45deg)",top:16.5,left:33,background:game.bases&&game.bases.first?YEL:"rgba(255,255,255,0.14)",border:"1px solid "+(game.bases&&game.bases.first?YEL:"rgba(255,255,255,0.2)")}}/>
+              </div>
+              <div style={{display:"flex",gap:5}}>
+                {[0,1,2].map(i=>(<span key={i} style={{width:8,height:8,borderRadius:"50%",background:(game.outs||0)>i?RED:"rgba(255,255,255,0.14)"}}/>))}
+              </div>
+            </>) : (
+              <div style={{fontSize:12,fontWeight:800,color:L2,textTransform:"uppercase",letterSpacing:"0.04em"}}>Final</div>
+            )}
+          </div>
+          <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6,width:92}}>
+            <div style={{fontSize:12,fontWeight:800,color:L2}}>{hAb}</div>
+            <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:40,fontWeight:800,lineHeight:1,color:pre?L3:(leadH?"#fff":L3)}}>{pre?"\u2013":hSc}</div>
+          </div>
+        </div>
+
+        {/* linescore */}
+        {!pre && (
+          <div style={{padding:"4px 14px 12px",overflowX:"auto"}}>
+            <table style={{borderCollapse:"collapse",width:"100%",minWidth:340}}>
+              <tbody>
+                <tr>
+                  <td style={{width:56}}/>
+                  {Array.from({length:n}).map((_,i)=>(<td key={i} style={{textAlign:"center",fontSize:10.5,fontWeight:800,color:L3,padding:"4px 0",borderBottom:"0.5px solid rgba(255,255,255,0.08)"}}>{i+1}</td>))}
+                  <td style={{textAlign:"center",fontSize:10.5,fontWeight:800,color:L3,paddingLeft:10,borderBottom:"0.5px solid rgba(255,255,255,0.08)"}}>R</td>
+                  <td style={{textAlign:"center",fontSize:10.5,fontWeight:800,color:L3,borderBottom:"0.5px solid rgba(255,255,255,0.08)"}}>H</td>
+                  <td style={{textAlign:"center",fontSize:10.5,fontWeight:800,color:L3,borderBottom:"0.5px solid rgba(255,255,255,0.08)"}}>E</td>
+                </tr>
+                <tr>
+                  <td style={{fontSize:13,fontWeight:700,color:L2,paddingLeft:6}}>{aAb}</td>
+                  {Array.from({length:n}).map((_,i)=>cell(inns[i]?inns[i].a:null, (i+1)===cur))}
+                  <td style={{textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:800,color:"#fff",paddingLeft:10}}>{ls.awayR!=null?ls.awayR:aSc}</td>
+                  <td style={{textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:700,color:L2}}>{ls.awayH!=null?ls.awayH:"\u00b7"}</td>
+                  <td style={{textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:700,color:L2}}>{ls.awayE!=null?ls.awayE:"\u00b7"}</td>
+                </tr>
+                <tr>
+                  <td style={{fontSize:13,fontWeight:700,color:L2,paddingLeft:6}}>{hAb}</td>
+                  {Array.from({length:n}).map((_,i)=>cell(inns[i]?inns[i].h:null, (i+1)===cur))}
+                  <td style={{textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:800,color:"#fff",paddingLeft:10}}>{ls.homeR!=null?ls.homeR:hSc}</td>
+                  <td style={{textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:700,color:L2}}>{ls.homeH!=null?ls.homeH:"\u00b7"}</td>
+                  <td style={{textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:700,color:L2}}>{ls.homeE!=null?ls.homeE:"\u00b7"}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* your pick */}
+        {pick && (
+          <div style={{margin:"8px 16px 4px",background:"#1C1C1E",borderRadius:14,padding:"14px 16px"}}>
+            <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.1em",color:L3,textTransform:"uppercase"}}>Your pick{pick.odds?(" \u00b7 "+pick.odds):""}</div>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginTop:5}}>
+              <span style={{fontSize:16,fontWeight:700}}>{pick.pick_name}</span>
+              <span style={{fontSize:11,fontWeight:800,padding:"4px 10px",borderRadius:8,whiteSpace:"nowrap",color:badge.col,background:badge.bg}}>{badge.txt}</span>
+            </div>
+          </div>
+        )}
+        <div style={{margin:"12px 20px 0",fontSize:11,color:L3,lineHeight:1.5,textAlign:"center"}}>Live data from MLB StatsAPI. Final W/L is set by grade.js.</div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
  const [screen, setScreen] = useState("home");
  const [tutorialStep, setTutorialStep] = useState(-1); // -1 = hidden; only shown on fresh signup
@@ -2192,6 +2382,38 @@ export default function App() {
  // ─── LIVE ODDS STATE ─────────────────────────────────────────────
  const [liveOdds, setLiveOdds] = useState({});
  const [homeTab, setHomeTab] = useState('home');
+  // Live scores (Phase 2/3): poll the normalized feed for today+yesterday; matches picks by team name.
+  const [liveGames, setLiveGames] = useState([]);
+  const [gamecastSel, setGamecastSel] = useState(null);
+  const _liveTimer = useRef(null);
+  const _etDate = (d) => { try { const pp = new Intl.DateTimeFormat("en-CA",{timeZone:"America/New_York",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(d); const gg=(t)=>pp.find(x=>x.type===t).value; return gg("year")+"-"+gg("month")+"-"+gg("day"); } catch(e){ return new Date(d).toISOString().slice(0,10); } };
+  useEffect(() => {
+    let alive = true;
+    const pull = async () => {
+      try {
+        const today=_etDate(new Date()), yest=_etDate(new Date(Date.now()-86400000));
+        const r = await fetch(`/api/livescores?dates=${today},${yest}`);
+        const j = await r.json();
+        if (alive && j && Array.isArray(j.games)) setLiveGames(j.games);
+      } catch(e){}
+    };
+    pull();
+    _liveTimer.current = setInterval(pull, 30000);
+    return () => { alive=false; if(_liveTimer.current) clearInterval(_liveTimer.current); };
+  }, []);
+  const openGamecast = async (pick) => {
+    let g = liveMatch(pick, liveGames);
+    if (!g && pick && pick.game_date) {
+      try {
+        const d = new Date(pick.game_date);
+        const ds=_etDate(d), dp=_etDate(new Date(d.getTime()-86400000)), dn=_etDate(new Date(d.getTime()+86400000));
+        const r = await fetch(`/api/livescores?dates=${ds},${dp},${dn}`);
+        const j = await r.json();
+        if (j && Array.isArray(j.games)) g = liveMatch(pick, j.games);
+      } catch(e){}
+    }
+    if (g) setGamecastSel({ game:g, pick });
+  };
  const [homeMode, setHomeMode] = useState('leagues');
  // No leagues yet -> route into the Solo lobby (never the phantom NFL league).
  useEffect(()=>{ if(!leaguesLoading && realLeagues.length===0 && !isSoloModeRef.current){ setHomeMode('solo'); setSoloModeWithRef(true); } }, [leaguesLoading, realLeagues.length]);
@@ -6107,7 +6329,7 @@ export default function App() {
  </div>
 
  {/* ══ SOLO MODE HOME SCREEN ══ */}
- {homeMode==="solo" && <SoloHome soloWeeks={soloWeeks} soloLoading={soloLoading} isPro={isPro} IOS={IOS} setScreen={setScreen} setShowNewLeague={setShowNewLeague} setNewLeagueStep={setNewLeagueStep} setShowBrowse={setShowBrowse} fetchPublicLeagues={fetchPublicLeagues} setIsSoloMode={setIsSoloMode} setActiveLeagueId={setActiveLeagueId} getOrCreateSoloLeague={getOrCreateSoloLeague} soloSavedPicks={soloSavedPicks} setSoloSavedPicks={setSoloSavedPicks} soloFlexPicks={soloFlexPicks} setSoloFlexPicks={setSoloFlexPicks} soloSport={soloSport} setSoloSport={setSoloSportPersist} setShowSoloSportPicker={setShowSoloSportPicker} soloSubmitted={soloSubmitted} setSoloSubmitted={setSoloSubmitted} username={userProfile?.username||""} soloTopPct={soloTopPct} onDeleteSlate={deleteSoloSlate} onJoinCode={handleJoinCode} setShowPaywall={setShowPaywall} tickerGames={tickerGames} espnGames={espnGames} globalRank={(()=>{ const rows=lbCache["all"]; if(!rows||!rows.length) return null; const sx=[...rows].sort((a,b)=>(Number(b.points)||0)-(Number(a.points)||0)); const i=sx.findIndex(r=>String(r.user_id)===String(user?.id)); return i>=0?{rank:i+1,total:sx.length}:null; })()} onOpenLeaderboard={()=>{ fetchLeaderboard("all"); setScreen("leaderboard"); }}/>}
+ {homeMode==="solo" && <SoloHome soloWeeks={soloWeeks} soloLoading={soloLoading} isPro={isPro} IOS={IOS} setScreen={setScreen} setShowNewLeague={setShowNewLeague} setNewLeagueStep={setNewLeagueStep} setShowBrowse={setShowBrowse} fetchPublicLeagues={fetchPublicLeagues} setIsSoloMode={setIsSoloMode} setActiveLeagueId={setActiveLeagueId} getOrCreateSoloLeague={getOrCreateSoloLeague} soloSavedPicks={soloSavedPicks} setSoloSavedPicks={setSoloSavedPicks} soloFlexPicks={soloFlexPicks} setSoloFlexPicks={setSoloFlexPicks} soloSport={soloSport} setSoloSport={setSoloSportPersist} setShowSoloSportPicker={setShowSoloSportPicker} soloSubmitted={soloSubmitted} setSoloSubmitted={setSoloSubmitted} username={userProfile?.username||""} soloTopPct={soloTopPct} onDeleteSlate={deleteSoloSlate} onJoinCode={handleJoinCode} setShowPaywall={setShowPaywall} tickerGames={tickerGames} espnGames={espnGames} globalRank={(()=>{ const rows=lbCache["all"]; if(!rows||!rows.length) return null; const sx=[...rows].sort((a,b)=>(Number(b.points)||0)-(Number(a.points)||0)); const i=sx.findIndex(r=>String(r.user_id)===String(user?.id)); return i>=0?{rank:i+1,total:sx.length}:null; })()} onOpenLeaderboard={()=>{ fetchLeaderboard("all"); setScreen("leaderboard"); }} liveGames={liveGames} onOpenGamecast={openGamecast}/>}
        {homeMode==="solo" && screen==="home" && (()=>{
          const SP=["mlb","nfl","nba"];
          const games=tickerGames||[];
@@ -13099,7 +13321,8 @@ export default function App() {
  );})()}
 
 
- {pickConflict && <div style={{position:"fixed",left:"50%",bottom:96,transform:"translateX(-50%)",maxWidth:"86%",background:"rgba(28,16,16,0.97)",border:"0.5px solid rgba(255,69,58,0.45)",borderRadius:11,padding:"11px 16px",fontSize:12.5,fontWeight:700,color:"#fff",zIndex:99999,boxShadow:"0 8px 30px rgba(0,0,0,0.5)",textAlign:"center",lineHeight:1.4}}>{pickConflict}</div>}
+ {gamecastSel && <GamecastSheet game={gamecastSel.game} pick={gamecastSel.pick} onClose={()=>setGamecastSel(null)}/>}
+      {pickConflict && <div style={{position:"fixed",left:"50%",bottom:96,transform:"translateX(-50%)",maxWidth:"86%",background:"rgba(28,16,16,0.97)",border:"0.5px solid rgba(255,69,58,0.45)",borderRadius:11,padding:"11px 16px",fontSize:12.5,fontWeight:700,color:"#fff",zIndex:99999,boxShadow:"0 8px 30px rgba(0,0,0,0.5)",textAlign:"center",lineHeight:1.4}}>{pickConflict}</div>}
  <div className="tab-bar">
  {(homeMode==="solo" ? [
  {icon:"home",label:"Home",id:"home"},
