@@ -1762,7 +1762,7 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
                     {p.game && <div style={{fontSize:10,color:IOS.label3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.game}</div>}
                   </div>
                   <div style={{fontSize:11,fontWeight:800,color:String(p.odds||"").startsWith("+")?IOS.green:IOS.blue,flexShrink:0}}>{p.odds}</div>
-                  <div style={{fontSize:8.5,fontWeight:800,letterSpacing:.3,color:rc,minWidth:52,textAlign:"right",flexShrink:0}}>{rl}{res==="W"&&p.points_earned?` +${parseFloat(p.points_earned).toFixed(1)}`:""}</div>
+                  <div style={{minWidth:52,flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1}}><div style={{fontSize:8.5,fontWeight:800,letterSpacing:.3,color:rc}}>{rl}{res==="W"&&p.points_earned?` +${parseFloat(p.points_earned).toFixed(1)}`:""}</div>{(res==="W"||res==="L")&&p.away_score!=null&&p.home_score!=null&&<div style={{fontSize:9,fontWeight:700,color:IOS.label3,fontFamily:"'Barlow Semi Condensed',sans-serif",marginTop:1}}>{p.away_score}–{p.home_score}</div>}</div>
                 </div>
               );
             })}
@@ -1816,7 +1816,7 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
                           {p.game && <div style={{fontSize:10,color:IOS.label3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.game}</div>}
                         </div>
                         <div style={{fontSize:11,fontWeight:800,color:String(p.odds||"").startsWith("+")?IOS.green:IOS.blue,flexShrink:0}}>{p.odds}</div>
-                        <div style={{fontSize:8.5,fontWeight:800,letterSpacing:.3,color:rc,minWidth:52,textAlign:"right",flexShrink:0}}>{rl}{res==="W"&&p.points_earned?` +${parseFloat(p.points_earned).toFixed(1)}`:""}</div>
+                        <div style={{minWidth:52,flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1}}><div style={{fontSize:8.5,fontWeight:800,letterSpacing:.3,color:rc}}>{rl}{res==="W"&&p.points_earned?` +${parseFloat(p.points_earned).toFixed(1)}`:""}</div>{(res==="W"||res==="L")&&p.away_score!=null&&p.home_score!=null&&<div style={{fontSize:9,fontWeight:700,color:IOS.label3,fontFamily:"'Barlow Semi Condensed',sans-serif",marginTop:1}}>{p.away_score}–{p.home_score}</div>}</div>
                       </div>
                     );
                   })}
@@ -7342,7 +7342,7 @@ export default function App() {
  fetchWeekPicks(activeLeague.id, week);
  }
  // keep only started+committed slots locally; reset the rest
- setActivePicks(prev=>prev.map(p=> (p.committed && slotStarted(p)) ? p : (p.locked?{id:p.id,bet:null,mult:p.mult,category:p.category,isParlay:false,parlayLegs:[],locked:true}:{...EMPTY_FLEX[0],id:p.id})));
+ setActivePicks(prev=>prev.map(p=> (p.committed && slotStarted(p)) ? p : (p.locked?{id:p.id,bet:null,mult:p.mult,category:(p.slotType||p.category),slotType:(p.slotType||p.category),market:p.market,isParlay:false,parlayLegs:[],locked:true}:{...EMPTY_FLEX[0],id:p.id})));
  setActiveSavedPicks(null);
  try { localStorage.removeItem(`linedup_picks_${activeLeague.id}_wk${activeLeague.current_week||activeLeague.week||1}`); } catch(e) {}
  }
@@ -7609,7 +7609,7 @@ export default function App() {
  {!slot.committed && <div onClick={()=>openSlot(idx)} style={{background:"#2a2a2a",borderRadius:7,color:"#bbb",fontSize:11,fontWeight:600,padding:"4px 10px",cursor:"pointer"}}>
  {filled?"Edit":"+ Pick"}
  </div>}
- {filled&&!slot.committed&&<button onClick={e=>{e.stopPropagation();setActivePicks(prev=>prev.map((p,i)=>i===idx?(p.locked?{id:i,bet:null,mult:p.mult,category:p.category,isParlay:false,parlayLegs:[],locked:true}:{...EMPTY_FLEX[0],id:i}):p));}} style={{background:"#2a2a2a",border:"none",borderRadius:7,color:"#555",fontSize:14,width:26,height:26,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>}
+ {filled&&!slot.committed&&<button onClick={e=>{e.stopPropagation();setActivePicks(prev=>prev.map((p,i)=>i===idx?(p.locked?{id:i,bet:null,mult:p.mult,category:(p.slotType||p.category),slotType:(p.slotType||p.category),market:p.market,isParlay:false,parlayLegs:[],locked:true}:{...EMPTY_FLEX[0],id:i}):p));}} style={{background:"#2a2a2a",border:"none",borderRadius:7,color:"#555",fontSize:14,width:26,height:26,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>}
  </div>
  </div>
  </div>
@@ -8224,18 +8224,18 @@ export default function App() {
  // slip, replace that slot instead of stacking a second bet of the same type.
  let dest = target;
  if(gridCfg){
- // Custom league: each slot has a fixed category. Route the tapped bet to a
- // slot that accepts THIS market (prefer the active target, else first empty).
- const tgt = activePicks[target];
- const _acc=(p)=>p&&!p.isParlay&&(((p.slotType||p.category)===cat)||((p.slotType||p.category)==="wildcard"));
- if(!_acc(tgt)){
- let idx = activePicks.findIndex(p=>!p.isParlay && (p.slotType||p.category)===cat && p.bet===null);
- if(idx===-1) idx = activePicks.findIndex(p=>!p.isParlay && (p.slotType||p.category)==="wildcard" && p.bet===null);
- if(idx===-1) idx = activePicks.findIndex(p=>!p.isParlay && (p.slotType||p.category)===cat);
- if(idx===-1) idx = activePicks.findIndex(p=>!p.isParlay && (p.slotType||p.category)==="wildcard");
- if(idx===-1) return;
+ // Custom league: each slot has a fixed type; a "wildcard" slot accepts any type.
+ // Only ever fill an EMPTY slot that accepts this bet. Order: the slot you're actively
+ // on (if empty + accepts) -> an empty native-type slot -> an empty wildcard slot.
+ // If none is open, block instead of clobbering an existing pick of the same type.
+ const _st=(s)=>s?(s.slotType||s.category):null;
+ const _cur=(gridTargetSlot!=null)?activePicks[gridTargetSlot]:null;
+ let idx=-1;
+ if(_cur && !_cur.isParlay && _cur.bet===null && (_st(_cur)===cat || _st(_cur)==="wildcard")) idx=gridTargetSlot;
+ if(idx===-1) idx = activePicks.findIndex(p=>!p.isParlay && _st(p)===cat && p.bet===null);
+ if(idx===-1) idx = activePicks.findIndex(p=>!p.isParlay && _st(p)==="wildcard" && p.bet===null);
+ if(idx===-1){ const _lbl=TYPE_LABELS[cat]||cat; setPickConflict("No open slot for another "+_lbl+" — your "+_lbl+" and wildcard slots are full. Remove one to swap."); setTimeout(()=>setPickConflict(""),3000); setGridJustAdded(null); return; }
  dest = idx;
- }
  } else if(!isSoloMode && gridFlexMult!=null && cat!=="longshot"){
  // Flex league, multiplier-first: fill the chosen mult slot (replace if taken),
  // else the first empty slot. Lets you stack two of a type at different mults.
@@ -8848,7 +8848,7 @@ export default function App() {
  const _rest = allowedTypes.filter(t=>t!=="ml"&&t!=="spread"&&t!=="ou");
  const _pills = [...(_gl.length?[{key:"__gl__",label:"Game Lines",target:_gl[0],on:isGameLine,col:IOS.blue}]:[]), ..._rest.map(t=>({key:t,label:TYPE_LABELS[t],target:t,on:t===gridType,col:ACC[t]}))];
  return _pills.map(p=>(
- <div key={p.key} onClick={()=>{ setGridType(p.target); setGridPropSub("all"); if(p.target==="period"){ const _ps=PERIOD_SUBS_BY_SPORT[gSport]; setGridPeriodSub(_ps&&_ps.length?_ps[0].id:""); } if(gridCfg){ const _st=(s)=>s?(s.slotType||s.category):null; const _cur=activePicks[gridTargetSlot]; const _onWild=_cur&&!_cur.isParlay&&_st(_cur)==="wildcard"&&_cur.bet===null; if(!_onWild){ let _i=activePicks.findIndex(x=>!x.isParlay && _st(x)===p.target && x.bet===null); if(_i===-1) _i=activePicks.findIndex(x=>!x.isParlay && _st(x)==="wildcard" && x.bet===null); if(_i===-1) _i=activePicks.findIndex(x=>!x.isParlay && _st(x)===p.target); if(_i!==-1) setGridTargetSlot(_i); } } }} style={{...pillBase,
+ <div key={p.key} onClick={()=>{ setGridType(p.target); setGridPropSub("all"); if(p.target==="period"){ const _ps=PERIOD_SUBS_BY_SPORT[gSport]; setGridPeriodSub(_ps&&_ps.length?_ps[0].id:""); } if(gridCfg){ const _st=(s)=>s?(s.slotType||s.category):null; const _cur=activePicks[gridTargetSlot]; const _onWild=_cur&&!_cur.isParlay&&_st(_cur)==="wildcard"&&_cur.bet===null; if(!_onWild){ let _i=activePicks.findIndex(x=>!x.isParlay && _st(x)===p.target && x.bet===null); if(_i===-1) _i=activePicks.findIndex(x=>!x.isParlay && _st(x)==="wildcard" && x.bet===null); setGridTargetSlot(_i!==-1?_i:null); } } }} style={{...pillBase,
  background:p.on?`${p.col}26`:"rgba(255,255,255,0.05)", borderColor:p.on?`${p.col}80`:"rgba(255,255,255,0.1)", color:p.on?p.col:"rgba(255,255,255,0.45)"}}>
  {p.label}
  </div>
