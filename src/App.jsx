@@ -1648,9 +1648,20 @@ const matchEspnGame = (list, awayName, homeName) => {
   });
 };
 
+// ─── SOLO: group a week's picks into day buckets (chronological; undated last) ───
+function _dayKey(p){ const d=p&&(p.game_date||p.created_at); if(!d) return "nodate"; const dt=new Date(d); if(isNaN(dt)) return "nodate"; const y=dt.getFullYear(),m=String(dt.getMonth()+1).padStart(2,"0"),da=String(dt.getDate()).padStart(2,"0"); return y+"-"+m+"-"+da; }
+function _dayLabel(key){ if(key==="nodate") return "No date"; const parts=key.split("-").map(Number); const dt=new Date(parts[0],parts[1]-1,parts[2]); const wd=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][dt.getDay()]; const mo=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][parts[1]-1]; return wd+" \u00b7 "+mo+" "+parts[2]; }
+function groupPicksByDay(picks){
+  const map={};
+  (picks||[]).forEach(p=>{ const k=_dayKey(p); (map[k]=map[k]||[]).push(p); });
+  const keys=Object.keys(map).sort((a,b)=>{ if(a==="nodate") return 1; if(b==="nodate") return -1; return a<b?-1:a>b?1:0; });
+  return keys.map(k=>{ const ps=map[k]; let w=0,l=0,pts=0,live=false; ps.forEach(p=>{ if(p.result==="W"){w++; pts+=parseFloat(p.points_earned||0);} else if(p.result==="L"){l++;} else if(p.result!=="P"){ live=true; } }); return {key:k,label:_dayLabel(k),picks:ps,w:w,l:l,pts:pts,live:live}; });
+}
+
 function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeague, setNewLeagueStep, setShowBrowse, fetchPublicLeagues, setIsSoloMode, setActiveLeagueId, getOrCreateSoloLeague, soloSavedPicks, setSoloSavedPicks, soloFlexPicks, setSoloFlexPicks, soloSport, setSoloSport, setShowSoloSportPicker, soloSubmitted, setSoloSubmitted, username, soloTopPct, onDeleteSlate, onJoinCode, setShowPaywall, tickerGames=[], espnGames=[], globalRank=null, onOpenLeaderboard, liveGames=[], onOpenGamecast}) {
   const [shareToast,setShareToast]=useState("");
   const [openSlate,setOpenSlate]=useState(null);
+  const [openDays,setOpenDays]=useState({});
   const [joinCode,setJoinCode]=useState("");
   const [dayPlay,setDayPlay]=useState(null); // Plok Play of the Day: {loading|data|error}
   const [heroCollapsed, setHeroCollapsed] = useState(()=>{ try{return localStorage.getItem("picklock_lobby_collapsed")==="1";}catch(e){return false;} });
@@ -1832,22 +1843,39 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
         )}
         {weekHasPicks && (
           <div style={{marginBottom:12}}>
-            {_cur.map((p,pi)=>{
-              const res=(p.result||"pending");
-              const rc=res==="W"?IOS.green:res==="L"?IOS.red:res==="P"?IOS.label3:"rgba(255,255,255,0.3)";
-              const rl=res==="W"?"WON":res==="L"?"LOST":res==="P"?"PUSH":"PENDING";
-              return (
-                <div key={pi} style={{display:"flex",alignItems:"center",gap:9,padding:"8px 0",borderBottom:pi<_cur.length-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
-                  <div style={{width:7,height:7,borderRadius:"50%",background:rc,flexShrink:0}}/>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:12,fontWeight:600,color:"rgba(255,255,255,0.85)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.pick_name}</div>
-                    {p.game && <div style={{fontSize:10,color:IOS.label3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.game}</div>}
-                  </div>
-                  <div style={{fontSize:11,fontWeight:800,color:String(p.odds||"").startsWith("+")?IOS.green:IOS.blue,flexShrink:0}}>{p.odds}</div>
-                  <div style={{minWidth:52,flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1}}><div style={{fontSize:8.5,fontWeight:800,letterSpacing:.3,color:rc}}>{rl}{res==="W"&&p.points_earned?` +${parseFloat(p.points_earned).toFixed(1)}`:""}</div><ScoreChip pick={p} live={liveMatch(p, liveGames)} onOpen={()=>{ if(onOpenGamecast) onOpenGamecast(p); }}/></div>
-                </div>
-              );
-            })}
+{groupPicksByDay(_cur).map((grp,gi,arr)=>{
+                    const dk="cur"+":"+grp.key; const dOpen=(dk in openDays)?openDays[dk]:(gi===arr.length-1);
+                    return (
+                    <div key={grp.key}>
+                      <div onClick={()=>setOpenDays(o=>({...o,[dk]:!((dk in o)?o[dk]:(gi===arr.length-1))}))} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"9px 0 6px",borderTop:gi>0?"0.5px solid rgba(255,255,255,0.06)":"none",cursor:"pointer"}}>
+                        <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0}}>
+                          <span style={{fontSize:10.5,fontWeight:800,letterSpacing:0.6,textTransform:"uppercase",color:IOS.label2}}>{grp.label}</span>
+                          {grp.live&&<span style={{fontSize:8,fontWeight:800,letterSpacing:0.4,color:IOS.green,background:"rgba(48,209,88,0.14)",border:"0.5px solid rgba(48,209,88,0.3)",borderRadius:5,padding:"2px 6px"}}>LIVE</span>}
+                        </div>
+                        <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                          <span style={{fontSize:10,fontWeight:700,color:IOS.label3}}>{(grp.w+grp.l>0)?(<><span style={{color:IOS.green}}>{grp.w}W</span>-<span style={{color:IOS.red}}>{grp.l}L</span>{grp.pts>0?(" \u00b7 +"+(Math.round(grp.pts*10)/10)):""}</>):(grp.picks.length+" pick"+(grp.picks.length>1?"s":""))}</span>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2.4" strokeLinecap="round" style={{transform:dOpen?"rotate(180deg)":"none",transition:"transform .2s"}}><polyline points="6 9 12 15 18 9"/></svg>
+                        </div>
+                      </div>
+                      {dOpen && grp.picks.map((p,pi)=>{
+                        const res=(p.result||"pending");
+                        const rc=res==="W"?IOS.green:res==="L"?IOS.red:res==="P"?IOS.label3:"rgba(255,255,255,0.3)";
+                        const rl=res==="W"?"WON":res==="L"?"LOST":res==="P"?"PUSH":"PENDING";
+                        return (
+                          <div key={pi} style={{display:"flex",alignItems:"center",gap:9,padding:"8px 0",borderBottom:pi<grp.picks.length-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
+                            <div style={{width:7,height:7,borderRadius:"50%",background:rc,flexShrink:0}}/>
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{fontSize:12,fontWeight:600,color:"rgba(255,255,255,0.85)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.pick_name}</div>
+                              {p.game && <div style={{fontSize:10,color:IOS.label3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.game}</div>}
+                            </div>
+                            <div style={{fontSize:11,fontWeight:800,color:String(p.odds||"").startsWith("+")?IOS.green:IOS.blue,flexShrink:0}}>{p.odds}</div>
+                            <div style={{minWidth:52,flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1}}><div style={{fontSize:8.5,fontWeight:800,letterSpacing:0.3,color:rc}}>{rl}{res==="W"&&p.points_earned?` +${parseFloat(p.points_earned).toFixed(1)}`:""}</div><ScoreChip pick={p} live={liveMatch(p, liveGames)} onOpen={()=>{ if(onOpenGamecast) onOpenGamecast(p); }}/></div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    );
+                  })}
           </div>
         )}
         <button onClick={async()=>{
@@ -1886,20 +1914,37 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
               </div>
               {isOpen && (
                 <div style={{padding:"0 14px 12px",borderTop:"0.5px dashed rgba(255,255,255,0.08)"}}>
-                  {(w.picks||[]).map((p,pi)=>{
-                    const res=(p.result||"pending");
-                    const rc=res==="W"?IOS.green:res==="L"?IOS.red:res==="P"?IOS.label3:"rgba(255,255,255,0.3)";
-                    const rl=res==="W"?"WON":res==="L"?"LOST":res==="P"?"PUSH":"PENDING";
+{groupPicksByDay(w.picks).map((grp,gi,arr)=>{
+                    const dk=("w"+w.week)+":"+grp.key; const dOpen=(dk in openDays)?openDays[dk]:(gi===arr.length-1);
                     return (
-                      <div key={pi} style={{display:"flex",alignItems:"center",gap:9,padding:"8px 0",borderBottom:pi<w.picks.length-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
-                        <div style={{width:7,height:7,borderRadius:"50%",background:rc,flexShrink:0}}/>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontSize:12,fontWeight:600,color:"rgba(255,255,255,0.85)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.pick_name}</div>
-                          {p.game && <div style={{fontSize:10,color:IOS.label3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.game}</div>}
+                    <div key={grp.key}>
+                      <div onClick={()=>setOpenDays(o=>({...o,[dk]:!((dk in o)?o[dk]:(gi===arr.length-1))}))} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"9px 0 6px",borderTop:gi>0?"0.5px solid rgba(255,255,255,0.06)":"none",cursor:"pointer"}}>
+                        <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0}}>
+                          <span style={{fontSize:10.5,fontWeight:800,letterSpacing:0.6,textTransform:"uppercase",color:IOS.label2}}>{grp.label}</span>
+                          {grp.live&&<span style={{fontSize:8,fontWeight:800,letterSpacing:0.4,color:IOS.green,background:"rgba(48,209,88,0.14)",border:"0.5px solid rgba(48,209,88,0.3)",borderRadius:5,padding:"2px 6px"}}>LIVE</span>}
                         </div>
-                        <div style={{fontSize:11,fontWeight:800,color:String(p.odds||"").startsWith("+")?IOS.green:IOS.blue,flexShrink:0}}>{p.odds}</div>
-                        <div style={{minWidth:52,flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1}}><div style={{fontSize:8.5,fontWeight:800,letterSpacing:.3,color:rc}}>{rl}{res==="W"&&p.points_earned?` +${parseFloat(p.points_earned).toFixed(1)}`:""}</div><ScoreChip pick={p} live={liveMatch(p, liveGames)} onOpen={()=>{ if(onOpenGamecast) onOpenGamecast(p); }}/></div>
+                        <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                          <span style={{fontSize:10,fontWeight:700,color:IOS.label3}}>{(grp.w+grp.l>0)?(<><span style={{color:IOS.green}}>{grp.w}W</span>-<span style={{color:IOS.red}}>{grp.l}L</span>{grp.pts>0?(" \u00b7 +"+(Math.round(grp.pts*10)/10)):""}</>):(grp.picks.length+" pick"+(grp.picks.length>1?"s":""))}</span>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2.4" strokeLinecap="round" style={{transform:dOpen?"rotate(180deg)":"none",transition:"transform .2s"}}><polyline points="6 9 12 15 18 9"/></svg>
+                        </div>
                       </div>
+                      {dOpen && grp.picks.map((p,pi)=>{
+                        const res=(p.result||"pending");
+                        const rc=res==="W"?IOS.green:res==="L"?IOS.red:res==="P"?IOS.label3:"rgba(255,255,255,0.3)";
+                        const rl=res==="W"?"WON":res==="L"?"LOST":res==="P"?"PUSH":"PENDING";
+                        return (
+                          <div key={pi} style={{display:"flex",alignItems:"center",gap:9,padding:"8px 0",borderBottom:pi<grp.picks.length-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
+                            <div style={{width:7,height:7,borderRadius:"50%",background:rc,flexShrink:0}}/>
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{fontSize:12,fontWeight:600,color:"rgba(255,255,255,0.85)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.pick_name}</div>
+                              {p.game && <div style={{fontSize:10,color:IOS.label3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.game}</div>}
+                            </div>
+                            <div style={{fontSize:11,fontWeight:800,color:String(p.odds||"").startsWith("+")?IOS.green:IOS.blue,flexShrink:0}}>{p.odds}</div>
+                            <div style={{minWidth:52,flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1}}><div style={{fontSize:8.5,fontWeight:800,letterSpacing:0.3,color:rc}}>{rl}{res==="W"&&p.points_earned?` +${parseFloat(p.points_earned).toFixed(1)}`:""}</div><ScoreChip pick={p} live={liveMatch(p, liveGames)} onOpen={()=>{ if(onOpenGamecast) onOpenGamecast(p); }}/></div>
+                          </div>
+                        );
+                      })}
+                    </div>
                     );
                   })}
                   <div style={{display:"flex",gap:8,marginTop:11}}>
@@ -7871,12 +7916,14 @@ export default function App() {
  const active = slot.mult===m;
  return (
  <div key={m} onClick={()=>{if(taken)return;setActivePicks(prev=>prev.map((p,i)=>i===idx?{...p,mult:active?null:m}:p));}}
- style={{width:34,height:26,borderRadius:7,border:"none",display:"flex",alignItems:"center",justifyContent:"center",
- background:active?multColors[m]:"#2a2a2a",
- color:active?"#fff":taken?"rgba(255,255,255,0.1)":"#555",
+ style={{position:"relative",width:34,height:26,borderRadius:7,border:"none",display:"flex",alignItems:"center",justifyContent:"center",
+ background:active?multColors[m]:taken?"#1a1a1c":"#2a2a2a",
+ color:active?"#fff":taken?"rgba(255,255,255,0.28)":"#8a8a8e",
+ textDecoration:taken?"line-through":"none",textDecorationThickness:"1.5px",
  fontSize:11,fontWeight:700,cursor:taken?"not-allowed":"pointer",transition:"background 0.15s,color 0.15s",
  }}>
  {m}×
+ {taken && <span style={{position:"absolute",top:-4,right:-4,width:12,height:12,borderRadius:"50%",background:"#3a3a3d",display:"flex",alignItems:"center",justifyContent:"center"}}><svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="3"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>}
  </div>
  );
  })}
@@ -8857,7 +8904,7 @@ export default function App() {
  return (
  <div key={g.game}>
  {showHead && (
- <div style={{position:"sticky",top:0,zIndex:4,display:"flex",alignItems:"center",gap:8,padding:"8px 2px 7px",background:"linear-gradient(180deg,#08080A,rgba(8,8,10,0.7))",backdropFilter:"blur(6px)"}}>
+ <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 2px 7px",background:"#08080A"}}>
  <span style={{width:6,height:6,borderRadius:"50%",background:headFirst?IOS.orange:"rgba(255,255,255,0.3)",boxShadow:headFirst?"0 0 7px "+IOS.orange:"none"}}/>
  <span style={{fontSize:12,fontWeight:800}}>{blk} block</span>
  <span style={{fontSize:10,color:"rgba(255,255,255,0.32)",fontWeight:700,marginLeft:"auto"}}>{blockCount} game{blockCount>1?"s":""}</span>
@@ -8935,7 +8982,7 @@ export default function App() {
  `}</style>
 
  {/* Header */}
- <div style={{position:"sticky",top:0,zIndex:10,background:"linear-gradient(180deg,#08080A 70%,rgba(8,8,10,0))",paddingBottom:6}}>
+ <div style={{position:"sticky",top:0,zIndex:10,background:"#08080A",paddingBottom:6,boxShadow:"0 8px 16px -8px rgba(0,0,0,0.7)"}}>
  <div style={{display:"flex",alignItems:"center",gap:11,padding:"10px 16px 8px"}}>
  <div onClick={()=>setScreen("picks")} style={{width:34,height:34,borderRadius:10,background:"rgba(255,255,255,0.06)",border:"0.5px solid rgba(255,255,255,0.1)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:acc,fontSize:18,flexShrink:0}}>‹</div>
  <div style={{flex:1,minWidth:0}}>
