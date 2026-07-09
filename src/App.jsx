@@ -2430,6 +2430,8 @@ export default function App() {
   // Live scores (Phase 2/3): poll the normalized feed for today+yesterday; matches picks by team name.
   const [liveGames, setLiveGames] = useState([]);
   const [gamecastSel, setGamecastSel] = useState(null);
+  const [histOpenWeeks,setHistOpenWeeks]=useState({});
+  const [histOpenDays,setHistOpenDays]=useState({});
   const _liveTimer = useRef(null);
   const _etDate = (d) => { try { const pp = new Intl.DateTimeFormat("en-CA",{timeZone:"America/New_York",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(d); const gg=(t)=>pp.find(x=>x.type===t).value; return gg("year")+"-"+gg("month")+"-"+gg("day"); } catch(e){ return new Date(d).toISOString().slice(0,10); } };
   useEffect(() => {
@@ -7530,7 +7532,7 @@ export default function App() {
  </div>
  ) : (<>
  <div style={{fontSize:13.5,fontWeight:700,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{name}</div>
- {game&&<div style={{fontSize:10,color:"rgba(255,255,255,0.36)",marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{game}</div>}{slot.bet&&<ScoreChip pick={{game:game,game_date:slot.bet.gameTime||null,result:res,pick_name:name,odds:odds}} live={liveMatch({game:game,game_date:slot.bet.gameTime||null}, liveGames)} onOpen={()=>openGamecast({game:game,game_date:slot.bet.gameTime||null,pick_name:name,odds:odds,result:res})}/>}
+ {game&&<div style={{fontSize:10,color:"rgba(255,255,255,0.36)",marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{game}</div>}{slot.bet&&(()=>{ const _db=(weekPicks||[]).find(x=>x.user_id===user?.id&&x.game===game&&x.pick_name===name); const _scp=_db?{game:_db.game,game_date:_db.game_date||slot.bet.gameTime||null,result:_db.result,home_score:_db.home_score,away_score:_db.away_score,pick_name:name,odds:odds}:{game:game,game_date:slot.bet.gameTime||null,result:res,pick_name:name,odds:odds}; return <ScoreChip pick={_scp} live={liveMatch(_scp, liveGames)} onOpen={()=>openGamecast(_scp)}/>; })()}
  </>)}
  </div>
  <div style={{textAlign:"right",flexShrink:0}}>
@@ -9650,6 +9652,7 @@ export default function App() {
  <span style={{fontSize:11,fontWeight:800,color:oddsColor}}>{oddsVal}</span>
  <span style={{fontSize:8.5,fontWeight:700,padding:"2px 5px",borderRadius:5,whiteSpace:"nowrap",background:ptsBg,color:ptsColor}}>{ptsLabel}</span>
  </div>
+ {!isParlay && picks[0] && (liveMatch(picks[0], liveGames) || (picks[0].away_score!=null && picks[0].home_score!=null)) && <div style={{marginTop:4}} onClick={(e)=>e.stopPropagation()}><ScoreChip pick={picks[0]} live={liveMatch(picks[0], liveGames)} onOpen={()=>openGamecast(picks[0])}/></div>}
  {isMe && !isParlay && result==="pending" && myPUs.some(p=>p.id==="second") && (
  <button onClick={(e)=>{e.stopPropagation(); setSecondSwap({pick:picks[0], category:(picks[0].slot||"ml").split("_")[0]});}} style={{marginTop:5,width:"100%",padding:"4px",borderRadius:6,border:`1px solid ${IOS.orange}55`,background:`${IOS.orange}1a`,color:IOS.orange,fontSize:8.5,fontWeight:800,letterSpacing:0.3,cursor:"pointer"}}>SECOND CHANCE</button>
  )}
@@ -13048,31 +13051,53 @@ export default function App() {
  <div style={{fontSize:11,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>All Slates</div>
  {soloWeeks.map((w,i)=>{
    const isBest = soloWeeks.length>1 && w.pts===Math.max(...soloWeeks.map(x=>x.pts));
+   const wOpen = (w.week in histOpenWeeks) ? histOpenWeeks[w.week] : (i===0);
    return (
    <div key={w.week} style={{background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"12px 14px",marginBottom:8}}>
-     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-       <div>
+     <div onClick={()=>setHistOpenWeeks(o=>({...o,[w.week]:!((w.week in o)?o[w.week]:(i===0))}))} style={{display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}}>
+       <div style={{minWidth:0}}>
          <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>{soloWeekRange(w.week)}</div>
          <div style={{fontSize:11,color:IOS.label3,marginTop:2}}>{w.wins}W · {w.losses}L · {w.picks.length} picks</div>
        </div>
-       <div style={{textAlign:"right"}}>
-         <div style={{fontSize:18,fontWeight:800,color:w.pts>0?IOS.green:"#555"}}>{w.pts>0?"+"+w.pts:"0"} pts</div>
-         {isBest&&<div style={{fontSize:8,fontWeight:700,color:IOS.green,background:"rgba(48,209,88,0.1)",border:"0.5px solid rgba(48,209,88,0.2)",borderRadius:4,padding:"1px 5px",marginTop:2}}>BEST SLATE</div>}
+       <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+         <div style={{textAlign:"right"}}>
+           <div style={{fontSize:18,fontWeight:800,color:w.pts>0?IOS.green:"#555"}}>{w.pts>0?"+"+w.pts:"0"} pts</div>
+           {isBest&&<div style={{fontSize:8,fontWeight:700,color:IOS.green,background:"rgba(48,209,88,0.1)",border:"0.5px solid rgba(48,209,88,0.2)",borderRadius:4,padding:"1px 5px",marginTop:2}}>BEST SLATE</div>}
+         </div>
+         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2.4" strokeLinecap="round" style={{transform:wOpen?"rotate(180deg)":"none",transition:"transform .2s"}}><polyline points="6 9 12 15 18 9"/></svg>
        </div>
      </div>
-     {/* Pick breakdown */}
-     <div style={{borderTop:"0.5px solid rgba(255,255,255,0.06)",paddingTop:8}}>
-       {w.picks.map((p,j)=>{
-         const won=p.result==="W",lost=p.result==="L";
+     {wOpen && (
+     <div style={{borderTop:"0.5px solid rgba(255,255,255,0.06)",paddingTop:4,marginTop:8}}>
+       {groupPicksByDay(w.picks).map((grp,gi,arr)=>{
+         const dk=w.week+":"+grp.key; const dOpen=(dk in histOpenDays)?histOpenDays[dk]:(gi===arr.length-1);
          return (
-         <div key={j} style={{display:"flex",alignItems:"center",padding:"3px 0"}}>
-           <div style={{width:8,height:8,borderRadius:"50%",background:won?IOS.green:lost?IOS.red:"#444",flexShrink:0,marginRight:8}}/>
-           <div style={{flex:1,fontSize:11,color:"#ccc"}}>{p.pick_name}</div>
-           <div style={{fontSize:11,fontWeight:700,color:won?IOS.green:lost?IOS.red:"#555"}}>{won?"+"+parseFloat(p.points_earned||0).toFixed(1)+"pts":lost?"L":"—"}</div>
+         <div key={grp.key}>
+           <div onClick={()=>setHistOpenDays(o=>({...o,[dk]:!((dk in o)?o[dk]:(gi===arr.length-1))}))} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"8px 0 5px",borderTop:gi>0?"0.5px solid rgba(255,255,255,0.05)":"none",cursor:"pointer"}}>
+             <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0}}>
+               <span style={{fontSize:10,fontWeight:800,letterSpacing:0.6,textTransform:"uppercase",color:IOS.label2}}>{grp.label}</span>
+               {grp.live&&<span style={{fontSize:8,fontWeight:800,letterSpacing:0.4,color:IOS.green,background:"rgba(48,209,88,0.14)",border:"0.5px solid rgba(48,209,88,0.3)",borderRadius:5,padding:"2px 6px"}}>LIVE</span>}
+             </div>
+             <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+               <span style={{fontSize:10,fontWeight:700,color:IOS.label3}}>{(grp.w+grp.l>0)?(<><span style={{color:IOS.green}}>{grp.w}W</span>-<span style={{color:IOS.red}}>{grp.l}L</span>{grp.pts>0?(" · +"+(Math.round(grp.pts*10)/10)):""}</>):(grp.picks.length+" pick"+(grp.picks.length>1?"s":""))}</span>
+               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2.4" strokeLinecap="round" style={{transform:dOpen?"rotate(180deg)":"none",transition:"transform .2s"}}><polyline points="6 9 12 15 18 9"/></svg>
+             </div>
+           </div>
+           {dOpen && grp.picks.map((p,j)=>{
+             const won=p.result==="W",lost=p.result==="L";
+             return (
+             <div key={j} style={{display:"flex",alignItems:"center",padding:"3px 0"}}>
+               <div style={{width:8,height:8,borderRadius:"50%",background:won?IOS.green:lost?IOS.red:"#444",flexShrink:0,marginRight:8}}/>
+               <div style={{flex:1,fontSize:11,color:"#ccc"}}>{p.pick_name}</div>
+               <div style={{fontSize:11,fontWeight:700,color:won?IOS.green:lost?IOS.red:"#555"}}>{won?"+"+parseFloat(p.points_earned||0).toFixed(1)+"pts":lost?"L":"—"}</div>
+             </div>
+             );
+           })}
          </div>
          );
        })}
      </div>
+     )}
    </div>
    );
  })}
