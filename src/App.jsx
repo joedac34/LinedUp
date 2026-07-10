@@ -2328,6 +2328,32 @@ function GamecastSheet({ game, pick, onClose }){
   );
 }
 
+// ─── LONGSHOT: market label for filter chips + odds sort ───
+const _LS_MK = {
+  h2h:{key:"ml",label:"Moneyline"}, spreads:{key:"spread",label:"Spread"}, totals:{key:"ou",label:"Total"},
+  batter_home_runs:{key:"hr",label:"Home Runs"}, batter_home_runs_alternate:{key:"hr",label:"Home Runs"},
+  batter_hits:{key:"hits",label:"Hits"}, batter_total_bases:{key:"bases",label:"Total Bases"},
+  batter_rbis:{key:"rbi",label:"RBIs"}, pitcher_strikeouts:{key:"k",label:"Strikeouts"},
+  batter_runs_scored:{key:"runs",label:"Runs"}, batter_walks:{key:"walks",label:"Walks"},
+  batter_stolen_bases:{key:"sb",label:"Stolen Bases"}, batter_doubles:{key:"doubles",label:"Doubles"},
+  batter_triples:{key:"triples",label:"Triples"}, batter_hits_runs_rbis:{key:"hrr",label:"H+R+RBI"},
+  pitcher_earned_runs:{key:"er",label:"Earned Runs"}, pitcher_hits_allowed:{key:"hitsallowed",label:"Hits Allowed"},
+  pitcher_walks:{key:"walksallowed",label:"Walks Allowed"},
+  player_pass_yds:{key:"passyd",label:"Pass Yards"}, player_rush_yds:{key:"rushyd",label:"Rush Yards"},
+  player_reception_yds:{key:"recyd",label:"Rec Yards"}, player_anytime_td:{key:"td",label:"Anytime TD"},
+  player_points:{key:"pts",label:"Points"}, player_rebounds:{key:"reb",label:"Rebounds"},
+  player_assists:{key:"ast",label:"Assists"}, player_threes:{key:"3pt",label:"3-Pointers"},
+};
+function lsMarket(b){
+  if(!b) return {key:"other",label:"Other"};
+  const m = (b.marketKey && _LS_MK[b.marketKey]) || (b.market && _LS_MK[b.market]);
+  if(m) return m;
+  if(b.category==="ml") return {key:"ml",label:"Moneyline"};
+  if(b.category==="spread") return {key:"spread",label:"Spread"};
+  if(b.category==="ou") return {key:"ou",label:"Total"};
+  return {key:(b.category||"other"),label:(b.categoryLabel||"Other")};
+}
+
 export default function App() {
  const [screen, setScreen] = useState("home");
  const [tutorialStep, setTutorialStep] = useState(-1); // -1 = hidden; only shown on fresh signup
@@ -2711,6 +2737,8 @@ export default function App() {
  const [gridFlexMult, setGridFlexMult] = useState(null); // flex leagues: multiplier-first picking
  const [gridParlayMult, setGridParlayMult] = useState(5); // flex: which multiplier is the parlay
  const [gridBuildMode, setGridBuildMode] = useState(false); // flex: building parlay legs in the browser
+ const [gridSort, setGridSort] = useState("long");
+ const [gridLsMarket, setGridLsMarket] = useState("all");
  useEffect(()=>{
  if(screen!=="browser"||isSoloMode){ if(gridBuildMode) setGridBuildMode(false); return; }
  const _cfg = parseSlotConfig(activeLeague&&activeLeague.slot_config);
@@ -8375,6 +8403,14 @@ export default function App() {
  let list = [];
  if(gridType==="longshot") {
  list = gridBuildMode ? (ALL_BETS||[]).filter(b=> b._sport===gSport) : (ALL_BETS||[]).filter(b=> b._sport===gSport && b.impliedOdds>=400);
+ let lsChips=[];
+ if(gridType==="longshot"){
+ const _seen=new Set();
+ list.forEach(b=>{ const m=lsMarket(b); if(!_seen.has(m.key)){ _seen.add(m.key); lsChips.push(m); } });
+ const _ord=k=>(({ml:0,spread:1,ou:2})[k]!=null?({ml:0,spread:1,ou:2})[k]:9);
+ lsChips.sort((a,b)=>_ord(a.key)-_ord(b.key));
+ if(gridLsMarket!=="all" && _seen.has(gridLsMarket)) list = list.filter(b=>lsMarket(b).key===gridLsMarket);
+ }
  } else if(gridType==="period") {
  const _psub = gridPeriodSub || ((PERIOD_SUBS_BY_SPORT[gSport]||[])[0]||{}).id;
  list = (BETS[_psub]||[]).filter(b=> b._sport===gSport);
@@ -8450,7 +8486,16 @@ export default function App() {
  if((gridFlexMult||1)===M){ const nm=[1,2,3,4,5].find(m=>m!==M); if(nm) setGridFlexMult(nm); }
  };
  const toggleLeg = (bet)=>{
- const leg = {id:bet.id, pick:bet.pick, game:bet.game||"", odds:bet.odds, impliedOdds:bet.impliedOdds};
+ const _par = activePicks.find(p=>p.isParlay);
+ const _curLegs = _par ? (_par.parlayLegs||[]) : [];
+ const _already = _curLegs.some(l=>String(l.id)===String(bet.id)||l.pick===bet.pick);
+ const _isGL = (mk)=> mk==="h2h"||mk==="spreads"||mk==="totals";
+ const _plyr = (pk)=>((pk||"").split(/\s+(?:Over|Under)\s+/i)[0]||"").trim().toLowerCase();
+ if(!_already && bet.eventId && _curLegs.some(l=> String(l.id)!==String(bet.id) && (l.eventId||null)===(bet.eventId||null) && (l.marketKey||null)===(bet.marketKey||null) && (_isGL(bet.marketKey) || _plyr(l.pick)===_plyr(bet.pick)) )){
+ setPickConflict("Those two directly conflict \u2014 you can't parlay both sides of the same market.");
+ setTimeout(()=>setPickConflict(""),2800); setGridJustAdded(null); return;
+ }
+ const leg = {id:bet.id, pick:bet.pick, game:bet.game||"", eventId:bet.eventId||null, marketKey:bet.marketKey||null, odds:bet.odds, impliedOdds:bet.impliedOdds};
  setActivePicks(prev=>{
  let found=false;
  let next = prev.map(p=>{
@@ -8807,6 +8852,8 @@ export default function App() {
    list.forEach(b=>{ const g=b.game||"Other"; if(!groups[g]) groups[g]=[]; groups[g].push(b); });
    const keys=Object.keys(groups).sort((a,b)=> (new Date(groups[a][0].gameTime||0)) - (new Date(groups[b][0].gameTime||0)) );
    const tag=(gSport?String(gSport).toUpperCase():"")+" \u00b7 "+String(TYPE_LABELS[gridType]||"").toUpperCase();
+   const _dec=(o)=>{ const n=Number(o); if(!n) return 1; return n>0?(1+n/100):(1+100/Math.abs(n)); };
+   const _sortBets=(arr)=>{ const k=b=>(b.impliedOdds!=null?b.impliedOdds:Number(String(b.odds).replace("+",""))); if(gridSort==="long") return [...arr].sort((a,b)=>_dec(k(b))-_dec(k(a))); if(gridSort==="short") return [...arr].sort((a,b)=>_dec(k(a))-_dec(k(b))); return arr; };
    return (
    <div style={{padding:"6px 14px 28px"}}>
    {keys.map((gk)=>{
@@ -8826,7 +8873,7 @@ export default function App() {
    </div>
    </div>
    </div>
-   {gridOpenGames[gk] && <div style={{borderTop:"1px solid rgba(255,255,255,0.07)"}}>{gridType==="prop" ? renderPropPairs(bets) : bets.map((bet,idx)=>renderRow(bet,idx,idx===0))}</div>}
+   {gridOpenGames[gk] && <div style={{borderTop:"1px solid rgba(255,255,255,0.07)"}}>{gridType==="prop" ? renderPropPairs(bets) : (gridType==="longshot"?_sortBets(bets):bets).map((bet,idx)=>renderRow(bet,idx,idx===0))}</div>}
    </div>
    );
    })}
@@ -9177,7 +9224,7 @@ export default function App() {
  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={IOS.pink} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 0 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
  </div>
  <div style={{flex:1,minWidth:0}}>
- <div style={{fontSize:8.5,fontWeight:900,letterSpacing:"0.08em",color:IOS.pink}}>{((activePicks.find(p=>p.isParlay)||{}).mult)||gridParlayMult}× PARLAY · {parlayLegs.length} {parlayLegs.length===1?"LEG":"LEGS"}{ready?(" · "+am):""}</div>
+ <div style={{fontSize:8.5,fontWeight:900,letterSpacing:"0.08em",color:IOS.pink}}>PARLAY · {parlayLegs.length} {parlayLegs.length===1?"LEG":"LEGS"}{ready?(" · "+am):""}</div>
  <div style={{fontSize:10.5,fontWeight:600,color:"rgba(255,255,255,0.5)",marginTop:1}}>{ready?"Tap more to add, or a leg below to remove":"Tap bets below to add legs — need 2+"}</div>
  </div>
  <div onClick={()=>setGridBuildMode(false)} style={{fontFamily:"Barlow",fontSize:12,fontWeight:800,color:ready?"#08080B":"rgba(255,255,255,0.4)",background:ready?IOS.pink:"rgba(255,255,255,0.08)",borderRadius:9,padding:"8px 14px",cursor:"pointer",flexShrink:0}}>Done</div>
@@ -9206,6 +9253,27 @@ export default function App() {
  const on=(o.m==="parlay")===gridBuildMode;
  return (<div key={o.m} onClick={()=>{ if(o.m==="parlay") enterBuild(); else { setGridBuildMode(false); if(gridCfg) setActivePicks(prev=>prev.map(p=> (p.category==="longshot"&&p.isParlay) ? {...p, isParlay:false, parlayLegs:[]} : p)); } }} style={{flex:1,textAlign:"center",padding:"8px 4px",borderRadius:8,fontSize:12.5,fontWeight:800,cursor:"pointer",transition:"all .15s",background:on?(o.m==="parlay"?IOS.pink:IOS.green):"transparent",color:on?"#fff":"rgba(255,255,255,0.45)"}}>{o.l}</div>);
  })}
+ </div>
+ )}
+
+ {gridType==="longshot" && !isSoloMode && (
+ <div style={{margin:"10px 16px 0"}}>
+ <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+ <div style={{display:"inline-flex",alignItems:"center",gap:6,background:"#1c1c1e",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:9,padding:"7px 10px"}}>
+ <span style={{fontSize:10,color:IOS.label3,fontWeight:700}}>Sort</span>
+ <select value={gridSort} onChange={e=>setGridSort(e.target.value)} style={{background:"transparent",border:"none",color:"#fff",fontFamily:"Barlow,sans-serif",fontSize:12,fontWeight:700,outline:"none"}}>
+ <option value="long" style={{color:"#000"}}>Longest odds</option>
+ <option value="short" style={{color:"#000"}}>Shortest odds</option>
+ <option value="time" style={{color:"#000"}}>Start time</option>
+ </select>
+ </div>
+ <span style={{fontSize:10.5,color:IOS.label3,fontWeight:700}}>{list.length} bet{list.length!==1?"s":""}</span>
+ </div>
+ <div style={{display:"flex",gap:6,overflowX:"auto",scrollbarWidth:"none",paddingBottom:2}}>
+ {[{key:"all",label:"All"},...lsChips].map(c=>(
+ <div key={c.key} onClick={()=>setGridLsMarket(c.key)} style={{flexShrink:0,fontSize:11.5,fontWeight:700,padding:"6px 11px",borderRadius:20,cursor:"pointer",whiteSpace:"nowrap",border:"0.5px solid "+(gridLsMarket===c.key?"#fff":"rgba(255,255,255,0.12)"),background:gridLsMarket===c.key?"#fff":"rgba(255,255,255,0.04)",color:gridLsMarket===c.key?"#0b0b0e":IOS.label2}}>{c.label}</div>
+ ))}
+ </div>
  </div>
  )}
 
