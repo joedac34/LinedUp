@@ -12,6 +12,7 @@ const SPORT_KEYS = {
   nfl: "americanfootball_nfl",
   nba: "basketball_nba",
   mlb: "baseball_mlb",
+  ncaaf: "americanfootball_ncaaf",
 };
 
 // ── Supabase REST helpers ─────────────────────────────────────────────────────
@@ -282,6 +283,7 @@ const ESPN_MAP = {
   nfl: { sp: "football",   lg: "nfl" },
   nba: { sp: "basketball", lg: "nba" },
   mlb: { sp: "baseball",   lg: "mlb" },
+  ncaaf: { sp: "football", lg: "college-football" },
 };
 
 // Map the stat words in a prop pick_name to ESPN's stat labels/keys.
