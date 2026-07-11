@@ -298,11 +298,16 @@ const STAT_ALIASES = {
   "blocks": ["BLK", "blocks"], "blk": ["BLK", "blocks"],
   "turnovers": ["TO", "turnovers"],
   "3-pointers": ["3PT"], "three pointers": ["3PT"], "threes": ["3PT"], "3pt": ["3PT"], "3 pointers": ["3PT"],
-  // NFL (best-effort)
-  "passing yards": ["YDS", "passingYards"], "pass yds": ["YDS", "passingYards"], "pass yards": ["YDS", "passingYards"],
-  "rushing yards": ["YDS", "rushingYards"], "rush yds": ["YDS", "rushingYards"], "rush yards": ["YDS", "rushingYards"],
-  "receiving yards": ["YDS", "receivingYards"], "rec yds": ["YDS", "receivingYards"], "rec yards": ["YDS", "receivingYards"],
-  "receptions": ["REC", "receptions"], "touchdowns": ["TD"], "tds": ["TD"],
+  // Football (NFL + NCAAF). ESPN nests passing/rushing/receiving as separate
+  // categories that SHARE labels (YDS/TD), so key off the category-specific ESPN
+  // keys (passingYards, rushingYards, ...) and never the ambiguous shared labels.
+  "passing yards": ["passingYards"], "pass yds": ["passingYards"], "pass yards": ["passingYards"],
+  "rushing yards": ["rushingYards"], "rush yds": ["rushingYards"], "rush yards": ["rushingYards"],
+  "receiving yards": ["receivingYards"], "rec yds": ["receivingYards"], "rec yards": ["receivingYards"],
+  "receptions": ["receptions", "REC"], "catches": ["receptions", "REC"],
+  "passing touchdowns": ["passingTouchdowns"], "passing tds": ["passingTouchdowns"], "pass tds": ["passingTouchdowns"],
+  "rushing touchdowns": ["rushingTouchdowns"], "rushing tds": ["rushingTouchdowns"], "rush tds": ["rushingTouchdowns"],
+  "receiving touchdowns": ["receivingTouchdowns"], "receiving tds": ["receivingTouchdowns"], "rec tds": ["receivingTouchdowns"],
   // MLB (verified against a real box score). Batting & pitching share labels
   // (H, R, HR, BB, K); with the universal DH each player is in only one group,
   // so a player's own stat resolves correctly (exception: two-way players).
