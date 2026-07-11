@@ -2197,6 +2197,7 @@ function ScoreChip({ pick, live, onOpen }){
         <span style={{width:5,height:5,borderRadius:"50%",background:"#FF453A",flexShrink:0}}/>
         <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:11,fontWeight:800,color:"#fff"}}>{g.away.score}{"\u2013"}{g.home.score}</span>
         <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:10,fontWeight:700,color:L3}}>{inn}</span>
+        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{marginLeft:1,flexShrink:0}}><polyline points="9 18 15 12 9 6"/></svg>
       </div>
     );
   }
@@ -2208,10 +2209,11 @@ function ScoreChip({ pick, live, onOpen }){
     const aw=getAcronym((parts[0]||"").trim()), hm=getAcronym((parts[1]||"").trim());
     const awWon=Number(aFin)>Number(hFin);
     return (
-      <div onClick={onOpen} style={{marginTop:1,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"'Barlow Semi Condensed',sans-serif"}}>
-        <span style={{fontSize:9,fontWeight:awWon?800:700,color:awWon?"#fff":L3}}>{aw} {aFin}</span>
-        <span style={{fontSize:9,color:L3}}>{" \u2013 "}</span>
-        <span style={{fontSize:9,fontWeight:!awWon?800:700,color:!awWon?"#fff":L3}}>{hm} {hFin}</span>
+      <div onClick={onOpen} style={{marginTop:2,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5,padding:"3px 7px",borderRadius:7,background:"rgba(10,132,255,0.1)",border:"0.5px solid rgba(10,132,255,0.32)",whiteSpace:"nowrap",fontFamily:"'Barlow Semi Condensed',sans-serif"}}>
+        <span style={{fontSize:9.5,fontWeight:awWon?800:700,color:awWon?"#fff":L3}}>{aw} {aFin}</span>
+        <span style={{fontSize:9.5,color:L3}}>{" \u2013 "}</span>
+        <span style={{fontSize:9.5,fontWeight:!awWon?800:700,color:!awWon?"#fff":L3}}>{hm} {hFin}</span>
+        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{marginLeft:1,flexShrink:0}}><polyline points="9 18 15 12 9 6"/></svg>
       </div>
     );
   }
@@ -6513,7 +6515,7 @@ export default function App() {
  const _games=(tickerGames||[]).filter(g=>_ls.length===0||_ls.includes(g.sport));
  if(!_games.length) return null;
  const myList=(weekPicks||[]).filter(p=>p.user_id===user?.id);
- const myPickNames=myList.map(p=>(p.pick_name||"").toLowerCase());
+ const myPickNames=myList.map(p=>(p.pick_name||"").toLowerCase()); const myPickGames=myList.map(p=>(p.game||"").toLowerCase());
  const openG=async(g,away,home,espn,gameTime,isLive)=>{
  const so=liveOdds[activeLeague?.sport];
  const gameOdds={ml:(so?.ml||[]).filter(o=>o.game?.includes(away)||o.game?.includes(home)),spread:(so?.spread||[]).filter(o=>o.game?.includes(away)||o.game?.includes(home)),ou:(so?.ou||[]).filter(o=>o.game?.includes(away)||o.game?.includes(home))};
@@ -6541,7 +6543,7 @@ export default function App() {
  const ml=(so?.ml||[]).filter(o=>o.game?.includes(away)||o.game?.includes(home));
  const sp2=(so?.spread||[]).filter(o=>o.game?.includes(away)||o.game?.includes(home));
  const ou=(so?.ou||[]).filter(o=>o.game?.includes(away)||o.game?.includes(home));
- const hasPick=myPickNames.some(n=>n.includes(away.toLowerCase())||n.includes(home.toLowerCase()));
+ const hasPick=myPickGames.some(gm=>gm.includes(away.toLowerCase())&&gm.includes(home.toLowerCase()));
  return (
  <div key={gi} className={"wr-gc"+(hasPick?" picked":"")} onClick={()=>openG(g,away,home,espn,gameTime,isLive)}>
  <div className="wr-gctop">{isLive?<span className="wr-glive"><span className="wr-dot"/>LIVE</span>:isDone?<span className="wr-gtime">Final</span>:<span className="wr-gtime">{gameTime}</span>}<span className="wr-gsport">{SPORTS[activeLeague?.sport]?.label||""}</span></div>
@@ -6885,8 +6887,8 @@ export default function App() {
  const spreadOdds = (sportOdds?.spread||[]).filter(o=>o.game?.includes(away)||o.game?.includes(home));
  const ouOdds = (sportOdds?.ou||[]).filter(o=>o.game?.includes(away)||o.game?.includes(home));
  // Check if user has a pick on this game
- const myPickNames = (weekPicks||[]).filter(p=>p.user_id===user?.id).map(p=>(p.pick_name||"").toLowerCase());
- const hasPick = myPickNames.some(n=>n.includes(away.toLowerCase())||n.includes(home.toLowerCase()));
+ const myPickNames = (weekPicks||[]).filter(p=>p.user_id===user?.id).map(p=>(p.pick_name||"").toLowerCase()); const myPickGames = (weekPicks||[]).filter(p=>p.user_id===user?.id).map(p=>(p.game||"").toLowerCase());
+ const hasPick = myPickGames.some(gm=>gm.includes(away.toLowerCase())&&gm.includes(home.toLowerCase()));
 
  return (
  <div key={gi} onClick={async()=>{
@@ -13157,7 +13159,7 @@ export default function App() {
              <div key={j} style={{display:"flex",alignItems:"center",padding:"3px 0"}}>
                <div style={{width:8,height:8,borderRadius:"50%",background:won?IOS.green:lost?IOS.red:"#444",flexShrink:0,marginRight:8}}/>
                <div style={{flex:1,fontSize:11,color:"#ccc"}}>{p.pick_name}</div>
-               <div style={{fontSize:11,fontWeight:700,color:won?IOS.green:lost?IOS.red:"#555"}}>{won?"+"+parseFloat(p.points_earned||0).toFixed(1)+"pts":lost?"L":"—"}</div>
+               <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:2,flexShrink:0}}><div style={{fontSize:11,fontWeight:700,color:won?IOS.green:lost?IOS.red:"#555"}}>{won?"+"+parseFloat(p.points_earned||0).toFixed(1)+"pts":lost?"L":"—"}</div><ScoreChip pick={p} live={liveMatch(p, liveGames)} onOpen={()=>{ if(openGamecast) openGamecast(p); }}/></div>
              </div>
              );
            })}
