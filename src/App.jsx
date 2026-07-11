@@ -2710,7 +2710,7 @@ function ScoreChip({ pick, live, onOpen }){
   const g=live;
   if(g && g.state==="live"){
     const up=(g.half==="Top"||g.half==="Middle");
-    const inn=g.inning!=null?((up?"\u25B2":"\u25BC")+g.inning):"";
+    const inn=g.inning!=null?((up?"\u25B2":"\u25BC")+g.inning):(g.period!=null?((g.clock&&g.clock!=="0:00"?(g.clock+" "):"")+"Q"+g.period):(g.detail||""));
     return (
       <div onClick={onOpen} style={{marginTop:2,display:"inline-flex",alignItems:"center",gap:5,padding:"3px 7px",borderRadius:7,background:"rgba(48,209,88,0.13)",border:"0.5px solid rgba(48,209,88,0.35)",cursor:"pointer",whiteSpace:"nowrap"}}>
         <span style={{width:5,height:5,borderRadius:"50%",background:"#FF453A",flexShrink:0}}/>

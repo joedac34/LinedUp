@@ -61,6 +61,7 @@ function normalizeGame(g) {
     gamePk: g.gamePk,
     gameDate: g.gameDate || null,
     state,
+    sport: "mlb",
     detail: g.status?.detailedState || "",
     away: {
       name: at.team?.name || "",
@@ -109,6 +110,58 @@ async function fetchDate(date) {
   }
 }
 
+// -- ESPN scoreboard (NFL / NCAAF / NBA) -- free, normalized to the MLB shape above.
+// Phase A: score chip only, so no per-quarter linescore grid is populated.
+const ESPN_SPORTS = {
+  nfl:   { sp: "football",   lg: "nfl" },
+  ncaaf: { sp: "football",   lg: "college-football" },
+  nba:   { sp: "basketball", lg: "nba" },
+};
+function espnState(state) {
+  const t = (state || "").toLowerCase();
+  if (t === "post") return "final";
+  if (t === "in") return "live";
+  return "pre";
+}
+function normalizeEspnEvent(ev, sport) {
+  const comp = (ev.competitions && ev.competitions[0]) || {};
+  const cs = comp.competitors || [];
+  const home = cs.find((c) => c.homeAway === "home") || cs[0] || {};
+  const away = cs.find((c) => c.homeAway === "away") || cs[1] || {};
+  const st = ev.status || comp.status || {};
+  const stype = st.type || {};
+  const nm = (c) => (c.team && (c.team.displayName || c.team.name)) || "";
+  const ab = (c) => (c.team && c.team.abbreviation) || "";
+  const sc = (c) => { const n = Number(c && c.score); return Number.isFinite(n) ? n : null; };
+  return {
+    gamePk: "espn-" + sport + "-" + ev.id,
+    gameDate: ev.date || null,
+    state: espnState(stype.state),
+    sport,
+    detail: stype.shortDetail || stype.detail || stype.description || "",
+    away: { name: nm(away), abbr: ab(away), score: sc(away) },
+    home: { name: nm(home), abbr: ab(home), score: sc(home) },
+    inning: null, half: null, outs: null,
+    bases: { first: false, second: false, third: false },
+    period: st.period != null ? num(st.period) : null,
+    clock: st.displayClock || null,
+    linescore: { innings: [], awayR: sc(away), awayH: null, awayE: null, homeR: sc(home), homeH: null, homeE: null },
+  };
+}
+async function fetchEspnDate(sport, date) {
+  const cfg = ESPN_SPORTS[sport];
+  if (!cfg) return [];
+  const ymd = date.replace(/-/g, "");
+  try {
+    const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/${cfg.sp}/${cfg.lg}/scoreboard?dates=${ymd}`, { headers: { "User-Agent": "PickLock/1.0" } });
+    if (!r.ok) return [];
+    const data = await r.json();
+    return (data.events || []).map((ev) => { try { return normalizeEspnEvent(ev, sport); } catch (e) { return null; } }).filter(Boolean);
+  } catch (e) {
+    return [];
+  }
+}
+
 export default async function handler(req, res) {
   // Public, read-only, heavily cached at the edge. No secrets, no Odds API.
   res.setHeader("Cache-Control", "public, s-maxage=15, stale-while-revalidate=30");
@@ -122,8 +175,13 @@ export default async function handler(req, res) {
   const seen = new Set();
   const games = [];
   for (const d of list) {
-    const gs = await fetchDate(d);
-    for (const g of gs) {
+    const [mlb, nfl, ncaaf, nba] = await Promise.all([
+      fetchDate(d),
+      fetchEspnDate("nfl", d),
+      fetchEspnDate("ncaaf", d),
+      fetchEspnDate("nba", d),
+    ]);
+    for (const g of [...mlb, ...nfl, ...ncaaf, ...nba]) {
       if (g.gamePk != null && seen.has(g.gamePk)) continue;
       if (g.gamePk != null) seen.add(g.gamePk);
       games.push(g);
