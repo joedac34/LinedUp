@@ -2401,7 +2401,7 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
          </div>
          <div style={{textAlign:"right",flexShrink:0}}>
            <div style={{fontSize:11,fontWeight:800,color:IOS.blue}}>{_fmt(pp.game_date)}</div>
-           <div style={{fontSize:10.5,fontWeight:700,color:IOS.label3,marginTop:2}}>{_mx}\u00d7{pp.odds!=null&&pp.odds!==""?(" \u00b7 "+pp.odds):""}</div>
+           <div style={{fontSize:10.5,fontWeight:700,color:IOS.label3,marginTop:2}}>{_mx + "\u00d7" + (pp.odds!=null&&pp.odds!==""?(" \u00b7 "+pp.odds):"")}</div>
          </div>
        </div>
      ); })}
@@ -9131,7 +9131,7 @@ export default function App() {
  const StatLabel = ({children}) => (<div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:"rgba(255,255,255,0.32)",marginBottom:3}}>{children}</div>);
 
  const renderCard = (bet, idx) => {
- const selected = isSoloMode ? soloFreePicks.some(p=>String(p.id)===String(bet.id)) : (activePicks.some(p=>p.bet?.id===bet.id) || isLeg(bet));
+ const selected = isSoloMode ? (bet.id!=null && soloFreePicks.some(p=>p.id!=null && String(p.id)===String(bet.id))) : (activePicks.some(p=>p.bet?.id===bet.id) || isLeg(bet));
  const added = gridJustAdded===bet.id;
  const pct = impliedPct(bet.impliedOdds);
  const read = readFor(pct);
@@ -9279,7 +9279,7 @@ export default function App() {
    setAltSheet(null);
    };
    const renderRow = (bet, idx, isFirst) => {
-   const selected = isSoloMode ? soloFreePicks.some(p=>String(p.id)===String(bet.id)) : (activePicks.some(p=>p.bet&&p.bet.id===bet.id) || isLeg(bet));
+   const selected = isSoloMode ? (bet.id!=null && soloFreePicks.some(p=>p.id!=null && String(p.id)===String(bet.id))) : (activePicks.some(p=>p.bet&&p.bet.id===bet.id) || isLeg(bet));
    const added = gridJustAdded===bet.id;
    const pct = impliedPct(bet.impliedOdds);
    const read = readFor(pct);
