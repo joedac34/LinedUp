@@ -98,7 +98,7 @@ async function probeEspnBox() {
 // ── 3. ESPN teams -> FBS map (name -> abbr/nick/logo) ────────────────────────
 async function probeTeams() {
   try {
-    const r = await j(`${ESPN}/teams?limit=1000`);
+    const r = await j(`${ESPN}/teams?groups=80&limit=500`); // groups=80 = FBS only
     const teams = ((((r.body || {}).sports || [])[0] || {}).leagues || [])[0];
     const list = (teams && teams.teams) || [];
     const map = {};
@@ -121,6 +121,10 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: "Unauthorized" });
   }
   res.setHeader("Cache-Control", "no-store");
+  if ((req.query && (req.query.only === "teams")) ) {
+    const teamMap = await probeTeams();
+    return res.status(200).json({ generatedAt: new Date().toISOString(), teamMap });
+  }
   const [oddsApi, espn, teamMap] = await Promise.all([probeOdds(), probeEspnBox(), probeTeams()]);
   return res.status(200).json({ generatedAt: new Date().toISOString(), oddsApi, espn, teamMap });
 }
