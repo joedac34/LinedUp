@@ -9652,8 +9652,23 @@ export default function App() {
  </div>
  )}
 
+  {/* Solo sport switcher */}
+ {isSoloMode && (
+ <div className="gbx-scroll" style={{display:"flex",gap:7,padding:"2px 16px 8px",overflowX:"auto"}}>
+ {["mlb","nfl","nba","ncaaf"].map(sp=>{
+ const on = sp===soloSport; const sc = SPORTS[sp]?.color || IOS.blue;
+ return (
+ <div key={sp} onClick={()=>{ if(soloSport!==sp) setSoloSportPersist(sp); }} style={{...pillBase,
+ background:on?`${sc}26`:"rgba(255,255,255,0.05)", borderColor:on?`${sc}80`:"rgba(255,255,255,0.1)", color:on?sc:"rgba(255,255,255,0.45)"}}>
+ {SPORTS[sp]?.label || sp.toUpperCase()}
+ </div>
+ );
+ })}
+ </div>
+ )}
+
  {/* Bet type switcher */}
- <div className="gbx-scroll" style={{display:"flex",gap:7,padding:`${sportsList.length>1?0:6}px 16px 9px`,overflowX:"auto"}}>
+ <div className="gbx-scroll" style={{display:"flex",gap:7,padding:`${(sportsList.length>1||isSoloMode)?0:6}px 16px 9px`,overflowX:"auto"}}>
  {(()=>{
  const _gl = allowedTypes.filter(t=>t==="ml"||t==="spread"||t==="ou");
  const _rest = allowedTypes.filter(t=>t!=="ml"&&t!=="spread"&&t!=="ou");
