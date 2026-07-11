@@ -1623,6 +1623,7 @@ function AiInsightBubble({ item, IOS, onAddToSlip }) {
 const SOLO_WEEK_MS = 7*24*60*60*1000;
 const SOLO_WEEK_ANCHOR = Date.UTC(2025, 8, 2, 10, 0, 0); // Tue Sep 2 2025 ~6am ET
 const soloWeekNum = () => Math.floor((Date.now() - SOLO_WEEK_ANCHOR) / SOLO_WEEK_MS) + 1;
+const soloWeekOfDate = (d) => { const t = d ? Date.parse(d) : NaN; return isNaN(t) ? soloWeekNum() : Math.floor((t - SOLO_WEEK_ANCHOR) / SOLO_WEEK_MS) + 1; };
 const soloWeekRange = (n) => {
   const M=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const s = new Date(SOLO_WEEK_ANCHOR + (n-1)*SOLO_WEEK_MS);
@@ -2141,7 +2142,7 @@ function groupPicksByDay(picks){
   const map={};
   (picks||[]).forEach(p=>{ const k=_dayKey(p); (map[k]=map[k]||[]).push(p); });
   const keys=Object.keys(map).sort((a,b)=>{ if(a==="nodate") return 1; if(b==="nodate") return -1; return a<b?-1:a>b?1:0; });
-  return keys.map(k=>{ const ps=map[k]; let w=0,l=0,pts=0,live=false; ps.forEach(p=>{ if(p.result==="W"){w++; pts+=parseFloat(p.points_earned||0);} else if(p.result==="L"){l++;} else if(p.result!=="P"){ live=true; } }); return {key:k,label:_dayLabel(k),picks:ps,w:w,l:l,pts:pts,live:live}; });
+  return keys.map(k=>{ const ps=map[k]; let w=0,l=0,pts=0,live=false; ps.forEach(p=>{ if(p.result==="W"){w++; pts+=parseFloat(p.points_earned||0);} else if(p.result==="L"){l++;} else if(p.result!=="P"){ const _gd=(p.game_date||p.gameTime)?Date.parse(p.game_date||p.gameTime):NaN; if(!isNaN(_gd)&&_gd<=Date.now()){ live=true; } } }); return {key:k,label:_dayLabel(k),picks:ps,w:w,l:l,pts:pts,live:live}; });
 }
 
 function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeague, setNewLeagueStep, setShowBrowse, fetchPublicLeagues, setIsSoloMode, setActiveLeagueId, getOrCreateSoloLeague, soloSavedPicks, setSoloSavedPicks, soloFlexPicks, setSoloFlexPicks, soloSport, setSoloSport, setShowSoloSportPicker, soloSubmitted, setSoloSubmitted, username, soloTopPct, onDeleteSlate, onJoinCode, setShowPaywall, tickerGames=[], espnGames=[], globalRank=null, onOpenLeaderboard, liveGames=[], onOpenGamecast}) {
@@ -2188,6 +2189,8 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
   const curL = _cur.filter(p=>p && p.result==="L").length;
   const curGraded = curW + curL;
   const curPending = _cur.length - curGraded;
+  const curLive = _cur.filter(p=>p && p.result!=="W" && p.result!=="L" && p.result!=="P" && (p.game_date||p.gameTime) && Date.parse(p.game_date||p.gameTime)<=Date.now()).length;
+  const curUpcoming = Math.max(0, curPending - curLive);
   const curPts = _cur.reduce((s,p)=>s+parseFloat((p&&p.points_earned)||0),0);
   const buildingCount = (soloFlexPicks && soloFlexPicks.length) || 0;
   const _okSport = (g)=> !soloSport || !g.sport || g.sport===soloSport;
@@ -2316,7 +2319,7 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:weekHasPicks?10:8}}>
           <div style={{minWidth:0}}>
             <div style={{fontSize:11,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5}}>This Week · {soloWeekRange(currentWeekNum)}</div>
-            <div style={{fontSize:15,fontWeight:800,color:"#fff",marginTop:3}}>{weekHasPicks ? (curGraded>0?(curW+"-"+curL+(curPending>0?(" · "+curPending+" live"):" · final")):(_cur.length+" pick"+(_cur.length>1?"s":"")+" locked")) : "Just you vs the line"}</div>
+            <div style={{fontSize:15,fontWeight:800,color:"#fff",marginTop:3}}>{weekHasPicks ? (curGraded>0?(curW+"-"+curL+(curLive>0?(" · "+curLive+" live"):(curUpcoming>0?(" · "+curUpcoming+" upcoming"):" · final"))):(_cur.length+" pick"+(_cur.length>1?"s":"")+" locked")) : "Just you vs the line"}</div>
           </div>
           {weekHasPicks && <div style={{textAlign:"right",flexShrink:0,marginLeft:10}}>
             <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:22,lineHeight:1,color:curGraded>0&&curPts>0?IOS.green:"#fff"}}>{curGraded>0?((curPts>=0?"+":"")+(Math.round(curPts*10)/10)):_cur.length}<span style={{fontSize:11,color:IOS.label3,fontWeight:700}}>{curGraded>0?" pts":" picks"}</span></div>
@@ -2376,7 +2379,37 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
         </button>
       </div>
 
-      {/* Past weeks */}
+       {/* Upcoming picks (locked-ahead future weeks) */}
+ {(()=>{
+   const _now=Date.now();
+   const _up = (soloWeeks||[]).filter(w=>w.week>currentWeekNum).flatMap(w=>w.picks||[]).filter(pp=>pp&&pp.game_date&&Date.parse(pp.game_date)>_now).sort((a,b)=>Date.parse(a.game_date)-Date.parse(b.game_date));
+   if(!_up.length) return null;
+   const _MU=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+   const _fmt=(d)=>{ const x=new Date(d); return _MU[x.getMonth()]+" "+x.getDate()+" \u00b7 "+x.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}); };
+   return (
+   <div style={{margin:"0 0 14px"}}>
+     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+       <div style={{fontSize:11,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5}}>Upcoming picks</div>
+       <div style={{fontSize:11,fontWeight:800,color:IOS.label3}}>{_up.length} locked ahead</div>
+     </div>
+     {_up.map((pp,ui)=>{ const _sc=(SPORTS[pp.sport]&&SPORTS[pp.sport].color)||IOS.blue; const _mx=pp.multiplier||1; return (
+       <div key={pp.id||ui} style={{display:"flex",alignItems:"center",gap:11,background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"11px 13px",marginBottom:6}}>
+         <div style={{width:3,alignSelf:"stretch",borderRadius:2,background:_sc,minHeight:30}}/>
+         <div style={{flex:1,minWidth:0}}>
+           <div style={{fontSize:13.5,fontWeight:700,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{pp.pick_name||"Pick"}</div>
+           <div style={{fontSize:11,color:IOS.label3,marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{pp.game||""}</div>
+         </div>
+         <div style={{textAlign:"right",flexShrink:0}}>
+           <div style={{fontSize:11,fontWeight:800,color:IOS.blue}}>{_fmt(pp.game_date)}</div>
+           <div style={{fontSize:10.5,fontWeight:700,color:IOS.label3,marginTop:2}}>{_mx}\u00d7{pp.odds!=null&&pp.odds!==""?(" \u00b7 "+pp.odds):""}</div>
+         </div>
+       </div>
+     ); })}
+   </div>
+   );
+ })()}
+
+ {/* Past weeks */}
       {soloLoading ? (
         <div style={{textAlign:"center",padding:"24px",color:IOS.label3,fontSize:13}}>Loading...</div>
       ) : pastWeeks.length === 0 ? null : (
@@ -4295,27 +4328,31 @@ export default function App() {
  if(!lgId){ alert("Couldn't open your solo league."); return; }
  const week = soloWeekNum();
  try {
- const {data:_existWk} = await supabase.from("picks").select("slot").eq("league_id", lgId).eq("user_id", user.id).eq("week", week);
- const _slotBase = (_existWk && _existWk.length) || 0; // append to this week — do not wipe earlier locks
- const rows = soloFreePicks.map((b,i)=>({
- league_id: lgId, user_id: user.id, week,
- slot: `${b.category||"ml"}_${_slotBase+i}`, multiplier: b.mult||1,
+ const _weekOf = (b)=> soloWeekOfDate(b && b.gameTime);
+ const _affWeeks = [...new Set(soloFreePicks.map(_weekOf))];
+ const _baseByWeek = {};
+ for(const _w of _affWeeks){ const {data:_ew} = await supabase.from("picks").select("slot").eq("league_id", lgId).eq("user_id", user.id).eq("week", _w); _baseByWeek[_w] = (_ew && _ew.length) || 0; }
+ const _idxByWeek = {};
+ const rows = soloFreePicks.map((b)=>{ const _w=_weekOf(b); if(_idxByWeek[_w]==null) _idxByWeek[_w]=_baseByWeek[_w]||0; const _si=_idxByWeek[_w]++; return {
+ league_id: lgId, user_id: user.id, week: _w,
+ slot: `${b.category||"ml"}_${_si}`, multiplier: b.mult||1,
  pick_name: b.pick, game: b.game||"", odds: b.odds, implied_odds: b.impliedOdds,
  game_date: b.gameTime||null,
  event_id: b.eventId||null, market_key: b.marketKey||null, outcome: b.outcome||null, outcome_point: (b.point!=null?b.point:null), sel_key: b.selKey||null,
  result: "pending", points_earned: 0,
- }));
+ }; });
  const { error } = await supabase.from("picks").insert(rows);
  if(error){ alert("Error saving picks: " + error.message); return; }
  try{ await supabase.from("leagues").update({sport: soloSport}).eq("id", lgId); }catch(e){}
- const freeSnap = soloFreePicks.map((b,i)=>({pick:b.pick, game:b.game||"", odds:b.odds, impliedOdds:b.impliedOdds, category:b.category, categoryLabel:b.categoryLabel, categoryColor:b.categoryColor, slot:`${b.category||"ml"}_${_slotBase+i}`, gameTime:b.gameTime||null, mult:b.mult||1, eventId:b.eventId||null, marketKey:b.marketKey||null, outcome:b.outcome||null, point:(b.point!=null?b.point:null), selKey:b.selKey||null, id:b.id||null}));
+ // Snapshot reflects THIS week only; future-week picks live in their own bucket and surface in Upcoming.
+ const _curNew = soloFreePicks.filter(b=>_weekOf(b)===week);
+ let _ci = _baseByWeek[week]||0;
+ const freeSnap = _curNew.map((b)=>({pick:b.pick, game:b.game||"", odds:b.odds, impliedOdds:b.impliedOdds, category:b.category, categoryLabel:b.categoryLabel, categoryColor:b.categoryColor, slot:`${b.category||"ml"}_${_ci++}`, gameTime:b.gameTime||null, mult:b.mult||1, eventId:b.eventId||null, marketKey:b.marketKey||null, outcome:b.outcome||null, point:(b.point!=null?b.point:null), selKey:b.selKey||null, id:b.id||null}));
  const _prevSnap = (soloSavedPicks && soloSavedPicks.week===week && Array.isArray(soloSavedPicks.freePicks)) ? soloSavedPicks.freePicks : [];
  const mergedSnap = [..._prevSnap, ...freeSnap];
  const lockedAt = new Date().toISOString();
  const _savedObj = {freePicks: mergedSnap, lockedAt, week};
- setSoloSavedPicks(_savedObj);
- setSoloSubmitted(true);
- try{ localStorage.setItem("picklock_solo_locked", JSON.stringify(_savedObj)); }catch(e){}
+ if(mergedSnap.length){ setSoloSavedPicks(_savedObj); setSoloSubmitted(true); try{ localStorage.setItem("picklock_solo_locked", JSON.stringify(_savedObj)); }catch(e){} }
  setSoloFreePicks([]);
  try{ if(navigator.vibrate) navigator.vibrate([0,30,40,30,60]); }catch(e){}
  setLockRitual(true);
