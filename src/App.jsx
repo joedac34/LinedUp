@@ -8087,6 +8087,7 @@ export default function App() {
    const _t=(iso)=>{ if(!iso) return ""; const d=new Date(iso); if(isNaN(d.getTime())) return ""; const today=new Date(); const sameDay=d.toDateString()===today.toDateString(); const tm=d.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}); return (sameDay?"Today":d.toLocaleDateString([], {weekday:"short"}))+" "+tm; };
    const _lk=(iso)=>{ if(!iso) return ""; const ms=new Date(iso).getTime()-now; if(isNaN(ms)) return ""; if(ms<=0) return "Locked"; const h=Math.floor(ms/3600000); const mm=Math.floor((ms%3600000)/60000); return h>0?("Locks in "+h+"h "+(mm<10?"0":"")+mm+"m"):("Locks in "+mm+"m"); };
    const lp=locked.freePicks||[];
+   const _soloDb=(soloWeeks||[]).flatMap(w=>(w.picks||[]));
    const drafts=soloFreePicks||[];
    const possTotal=lp.reduce((su,b)=>su+(b.mult||1)*ptsFor(b.impliedOdds),0)+drafts.reduce((su,b)=>su+(b.mult||1)*ptsFor(b.impliedOdds),0);
    return (
@@ -8097,6 +8098,8 @@ export default function App() {
          const _gtv=b.gameTime?new Date(b.gameTime).getTime():0; const isLk=(!b.gameTime||isNaN(_gtv))?true:(now>=_gtv);
          const ro=isLk||!b.slot;
          const pp=(b.mult||1)*ptsFor(b.impliedOdds);
+         const _db=_soloDb.find(x=>x.game===b.game && x.pick_name===b.pick);
+         const _scp=_db?{game:_db.game,game_date:_db.game_date||b.gameTime||null,result:_db.result,home_score:_db.home_score,away_score:_db.away_score,pick_name:b.pick,odds:b.odds}:{game:b.game,game_date:b.gameTime||null,result:b.result||"pending",pick_name:b.pick,odds:b.odds};
          return (
          <div key={b.slot||i} style={{position:"relative",background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:14,padding:"12px 13px"}}>
            {!ro && <div onClick={()=>removeSoloPick(b.slot)} style={{position:"absolute",top:10,right:11,width:22,height:22,borderRadius:"50%",background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",color:"rgba(255,255,255,0.45)",fontSize:14,cursor:"pointer"}}>×</div>}
@@ -8110,6 +8113,7 @@ export default function App() {
              <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{[b.game, b.gameTime?_t(b.gameTime):""].filter(Boolean).join(" · ")}</span>
              {b.gameTime && <span style={{color:isLk?IOS.label3:IOS.orange,fontWeight:700,flexShrink:0}}>{" · "+_lk(b.gameTime)}</span>}
            </div>
+           {b.game && (liveMatch(_scp, liveGames) || (_scp.away_score!=null && _scp.home_score!=null)) && <div style={{marginTop:6}}><ScoreChip pick={_scp} live={liveMatch(_scp, liveGames)} onOpen={()=>openGamecast(_scp)}/></div>}
            <div style={{height:1,background:"rgba(255,255,255,0.06)",margin:"10px 0 9px"}}/>
            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
              {ro ? (
