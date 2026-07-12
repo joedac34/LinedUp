@@ -265,6 +265,7 @@ async function fetchScoresESPN(sport) {
           home_team: hn,
           away_team: an,
           completed: !!st.completed,
+          voided: /CANCEL|POSTPON/i.test(st.name || st.description || ""),
           inProgress: st.state === "in",
           date: e.date || null,
           id: e.id || null,
@@ -534,7 +535,19 @@ function gradeProp(pickName, gameField, index, info = {}, gameDate = null) {
     });
     if (hitKey) entries = index[hitKey];
   }
-  if (!entries || !entries.length) { info.reason = "prop_player_not_in_boxscores"; return null; }
+  if (!entries || !entries.length) {
+    // Player absent from all fetched box scores. If a teammate from THIS matchup+date
+    // is in the index the game is final and the player did not play -> void ("P").
+    // Otherwise the game simply is not final yet -> pending.
+    const _t = parseMatchupTeams(gameField);
+    if (_t && _t.length === 2 && index) {
+      const _w = gameDate ? Date.parse(gameDate) : NaN;
+      let _final = false;
+      for (const _nm in index) { for (const _e of index[_nm]) { if (teamInGame(_t[0], _e) && teamInGame(_t[1], _e) && (isNaN(_w) || (!isNaN(_e.date) && Math.abs(_e.date - _w) <= 11 * 3600 * 1000))) { _final = true; break; } } if (_final) break; }
+      if (_final) { info.reason = "prop_player_dnp"; return "P"; }
+    }
+    info.reason = "prop_player_not_in_boxscores"; return null;
+  }
 
   let stats = null;
   if (teams && teams.length === 2) {
@@ -766,6 +779,7 @@ function gradePick(pick, games, playerIndex, info = {}) {
     }
     if (!best || best.diff > 24 * 3600 * 1000) { info.reason = "intended_game_not_in_feed"; return null; }
     game = best.g;
+    if (game.voided) { info.reason = "game_cancelled"; return "P"; }
     // The right game exists but hasn't finished — wait for it, don't grade a sibling.
     if (!game.completed && !game.inProgress) { info.reason = "game_not_started"; return null; }
   } else {

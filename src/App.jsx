@@ -2349,7 +2349,7 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
                       {dOpen && grp.picks.map((p,pi)=>{
                         const res=(p.result||"pending");
                         const rc=res==="W"?IOS.green:res==="L"?IOS.red:res==="P"?IOS.label3:"rgba(255,255,255,0.3)";
-                        const rl=res==="W"?"WON":res==="L"?"LOST":res==="P"?"PUSH":"PENDING";
+                        const rl=res==="W"?"WON":res==="L"?"LOST":res==="P"?"VOID":"PENDING";
                         return (
                           <div key={pi} style={{display:"flex",alignItems:"center",gap:9,padding:"8px 0",borderBottom:pi<grp.picks.length-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
                             <div style={{width:7,height:7,borderRadius:"50%",background:rc,flexShrink:0}}/>
@@ -2450,7 +2450,7 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
                       {dOpen && grp.picks.map((p,pi)=>{
                         const res=(p.result||"pending");
                         const rc=res==="W"?IOS.green:res==="L"?IOS.red:res==="P"?IOS.label3:"rgba(255,255,255,0.3)";
-                        const rl=res==="W"?"WON":res==="L"?"LOST":res==="P"?"PUSH":"PENDING";
+                        const rl=res==="W"?"WON":res==="L"?"LOST":res==="P"?"VOID":"PENDING";
                         return (
                           <div key={pi} style={{display:"flex",alignItems:"center",gap:9,padding:"8px 0",borderBottom:pi<grp.picks.length-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
                             <div style={{width:7,height:7,borderRadius:"50%",background:rc,flexShrink:0}}/>
@@ -2688,6 +2688,7 @@ function _lsOrdinal(n){ n=Number(n)||0; const s=["th","st","nd","rd"], v=n%100; 
 function pickBadge(pick, game){
   if(pick && pick.result==="W") return {txt:"Won",col:"#30D158",bg:"rgba(48,209,88,0.18)"};
   if(pick && pick.result==="L") return {txt:"Lost",col:"#FF453A",bg:"rgba(255,69,58,0.16)"};
+  if(pick && pick.result==="P") return {txt:"Void",col:"#8E8E93",bg:"rgba(142,142,147,0.16)"};
   if(!game) return {txt:"Pending",col:"rgba(255,255,255,0.5)",bg:"rgba(255,255,255,0.08)"};
   if(game.state==="pre") return {txt:"Not started",col:"rgba(255,255,255,0.5)",bg:"rgba(255,255,255,0.08)"};
   const nm=(pick&&pick.pick_name)||"";
