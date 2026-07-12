@@ -9037,10 +9037,10 @@ export default function App() {
  };
 
  // ─── Build the bet list for the selected sport + type ───
- let list = [];
+ let list = []; let lsChips = [];
  if(gridType==="longshot") {
  list = gridBuildMode ? (ALL_BETS||[]).filter(b=> b._sport===gSport) : (ALL_BETS||[]).filter(b=> b._sport===gSport && b.impliedOdds>=400);
- let lsChips=[];
+ lsChips=[];
  if(gridType==="longshot"){
  const _seen=new Set();
  list.forEach(b=>{ const m=lsMarket(b); if(!_seen.has(m.key)){ _seen.add(m.key); lsChips.push(m); } });
