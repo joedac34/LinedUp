@@ -4401,11 +4401,11 @@ export default function App() {
  } catch(e) { alert("Error: " + e.message); }
  };
   // ── Void replace: swap a voided ("P") pick for a same-type/same-mult bet in the same week ──
- const startReplace = (pick) => {
+ const startReplace = (pick, league) => {
    if(!pick) return;
    const parts=String(pick.slot||"ml").split("_");
    const _cat = parts.length>1 ? parts.slice(0,-1).join("_") : (parts[0]||"ml");
-   setReplaceCtx({ voidId:pick.id, mult:pick.multiplier||1, week:pick.week, type:_cat });
+   setReplaceCtx({ voidId:pick.id, mult:pick.multiplier||1, week:pick.week, type:_cat, solo:!league, leagueId:league?league.leagueId:null, slot:pick.slot||null, returnScreen:league?(league.returnScreen||"leagues"):"home" });
    setBuildingSlip(true); setGridTargetSlot(null); setGridPropSub("all");
    setGridType(_cat && _cat.indexOf("_")>-1 ? "period" : _cat);
    setScreen("browser");
@@ -4413,28 +4413,40 @@ export default function App() {
  const doReplaceSave = async (bet) => {
    if(!replaceCtx || !user) return;
    const ctx = replaceCtx;
-   if(soloWeekOfDate(bet.gameTime) !== ctx.week){ setPickConflict("Replacement must be a game in the same week as the voided pick."); setTimeout(()=>setPickConflict(""),3200); return; }
    if(bet.gameTime && Date.parse(bet.gameTime) <= Date.now()){ setPickConflict("That game has already started \u2014 pick one that hasn\u2019t."); setTimeout(()=>setPickConflict(""),3200); return; }
-   const lgId = soloLeagueId || await getOrCreateSoloLeague();
-   if(!lgId){ alert("Couldn\u2019t open your solo league."); return; }
    const cat = ctx.type;
-   const { data:_ew } = await supabase.from("picks").select("slot").eq("league_id", lgId).eq("user_id", user.id).eq("week", ctx.week);
-   const _base = (_ew && _ew.length) || 0;
-   const { data:_ins, error } = await supabase.from("picks").insert({
-     league_id: lgId, user_id: user.id, week: ctx.week,
-     slot: `${cat}_${_base}`, multiplier: ctx.mult,
+   const row = {
+     user_id: user.id, week: ctx.week, multiplier: ctx.mult,
      pick_name: bet.pick, game: bet.game||"", odds: bet.odds, implied_odds: bet.impliedOdds,
      game_date: bet.gameTime||null, event_id: bet.eventId||null, market_key: bet.marketKey||null,
      outcome: bet.outcome||null, outcome_point: (bet.point!=null?bet.point:null), sel_key: bet.selKey||null,
      result: "pending", points_earned: 0,
-   }).select("id");
-   if(error){ alert("Replace failed: " + error.message); return; }
-   const newId = _ins && _ins[0] && _ins[0].id;
-   if(newId){ try{ await supabase.from("picks").update({ replaced_by: String(newId) }).eq("id", ctx.voidId); }catch(e){} }
-   setReplaceCtx(null);
-   setScreen("home");
-   try{ if(navigator.vibrate) navigator.vibrate([0,20,30,20]); }catch(e){}
-   try{ await fetchSoloWeeks(); }catch(e){}
+   };
+   if(ctx.solo){
+     if(soloWeekOfDate(bet.gameTime) !== ctx.week){ setPickConflict("Replacement must be a game in the same week as the voided pick."); setTimeout(()=>setPickConflict(""),3200); return; }
+     const lgId = soloLeagueId || await getOrCreateSoloLeague();
+     if(!lgId){ alert("Couldn\u2019t open your solo league."); return; }
+     const { data:_ew } = await supabase.from("picks").select("slot").eq("league_id", lgId).eq("user_id", user.id).eq("week", ctx.week);
+     const _base = (_ew && _ew.length) || 0;
+     const { data:_ins, error } = await supabase.from("picks").insert({ ...row, league_id: lgId, slot: cat+"_"+_base }).select("id");
+     if(error){ alert("Replace failed: " + error.message); return; }
+     const newId = _ins && _ins[0] && _ins[0].id;
+     if(newId){ try{ await supabase.from("picks").update({ replaced_by: String(newId) }).eq("id", ctx.voidId); }catch(e){} }
+     setReplaceCtx(null); setScreen("home");
+     try{ if(navigator.vibrate) navigator.vibrate([0,20,30,20]); }catch(e){}
+     try{ await fetchSoloWeeks(); }catch(e){}
+   } else {
+     const lgId = ctx.leagueId;
+     if(!lgId){ alert("League not found."); return; }
+     const { data:_ins, error } = await supabase.from("picks").insert({ ...row, league_id: lgId, slot: ctx.slot || (cat+"_0") }).select("id");
+     if(error){ alert("Replace failed: " + error.message); return; }
+     const newId = _ins && _ins[0] && _ins[0].id;
+     if(newId){ try{ await supabase.from("picks").update({ replaced_by: String(newId) }).eq("id", ctx.voidId); }catch(e){} }
+     setReplaceCtx(null); setScreen(ctx.returnScreen || "leagues");
+     try{ if(navigator.vibrate) navigator.vibrate([0,20,30,20]); }catch(e){}
+     try{ await fetchWeekPicks(lgId, ctx.week); }catch(e){}
+     try{ await fetchMyPicks(lgId, ctx.week, user.id); }catch(e){}
+   }
  };
  const clearSoloSlate = async () => {
  if(!user) return;
@@ -5073,12 +5085,13 @@ export default function App() {
  setRealStandings(standings);
  };
  const fetchMyPicks = async (leagueId, week, uid) => { setPicksLoading(true);
- const {data} = await supabase
+ let {data} = await supabase
  .from("picks")
  .select("*")
  .eq("league_id", leagueId)
  .eq("user_id", uid)
  .eq("week", week);
+ data = (data||[]).filter(pp=>!pp.replaced_by); // hide voids already replaced so the slot shows the replacement
  if(data && data.length > 0) {
   // Convert DB picks back into flexPicks format for the locked/edit view
   const _isCustom = data.some(pp=>{const s=pp.slot||""; return !s.startsWith("longshot") && /_\d+$/.test(s);});
@@ -8162,7 +8175,7 @@ export default function App() {
  </div>
  ) : (<>
  <div style={{fontSize:13.5,fontWeight:700,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{name}</div>
- {game&&<div style={{fontSize:10,color:"rgba(255,255,255,0.36)",marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{game}</div>}{slot.bet&&(()=>{ const _db=(weekPicks||[]).find(x=>x.user_id===user?.id&&x.game===game&&x.pick_name===name); const _scp=_db?{game:_db.game,game_date:_db.game_date||slot.bet.gameTime||null,result:_db.result,home_score:_db.home_score,away_score:_db.away_score,pick_name:name,odds:odds}:{game:game,game_date:slot.bet.gameTime||null,result:res,pick_name:name,odds:odds}; return <ScoreChip pick={_scp} live={liveMatch(_scp, liveGames)} onOpen={()=>openGamecast(_scp)}/>; })()}
+ {game&&<div style={{fontSize:10,color:"rgba(255,255,255,0.36)",marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{game}</div>}{slot.bet&&(()=>{ const _db=(weekPicks||[]).find(x=>x.user_id===user?.id&&x.game===game&&x.pick_name===name); const _scp=_db?{game:_db.game,game_date:_db.game_date||slot.bet.gameTime||null,result:_db.result,home_score:_db.home_score,away_score:_db.away_score,pick_name:name,odds:odds}:{game:game,game_date:slot.bet.gameTime||null,result:res,pick_name:name,odds:odds}; return <ScoreChip pick={_scp} live={liveMatch(_scp, liveGames)} onOpen={()=>openGamecast(_scp)}/>; })()}{(()=>{ const _rd=(weekPicks||[]).find(x=>x.user_id===user?.id&&x.game===game&&x.pick_name===name); if(!_rd || _rd.result!=="P" || _rd.replaced_by) return null; return (<div onClick={(e)=>{ e.stopPropagation(); startReplace(_rd,{leagueId:activeLeague.id, returnScreen:"leagues"}); }} style={{marginTop:6,display:"inline-flex",alignItems:"center",fontSize:9.5,fontWeight:800,color:IOS.blue,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.35)",borderRadius:7,padding:"4px 9px",cursor:"pointer"}}>REPLACE</div>); })()}
  </>)}
  </div>
  <div style={{textAlign:"right",flexShrink:0}}>
@@ -9133,9 +9146,9 @@ export default function App() {
  setGridBuildMode(true); setShowMultPick(false);
  };
  const addCard = (bet, catOverride) => {
+   if(replaceCtx){ doReplaceSave(bet); return; }
  const cat = catOverride || (gridType==="longshot" ? "longshot" : gridType);
  if(isSoloMode){
-   if(replaceCtx){ doReplaceSave(bet); return; }
    const _gl=["ml","spread","ou"].includes(cat);
    const _gk=bet.eventId||bet.game||"";
    if(_gl && _gk && soloFreePicks.some(p=>String(p.id)!==String(bet.id) && p.category===cat && (p.eventId||p.game||"")===_gk)){ setPickConflict("You already picked this game's "+(cat==="ou"?"total":(cat==="ml"?"moneyline":"spread"))+". You can't take both sides of the same line."); setTimeout(()=>setPickConflict(""),2600); setGridJustAdded(null); return; }
