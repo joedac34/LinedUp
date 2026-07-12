@@ -3260,7 +3260,9 @@ export default function App() {
  const [freeCat, setFreeCat] = useState("all");
  const parseSlotConfig=(raw)=>{ try{ const a=typeof raw==="string"?JSON.parse(raw):raw; return (Array.isArray(a)&&a.length)?a:null; }catch(e){ return null; } };
  const freshSlots=()=>{ const cfg = !isSoloMode ? parseSlotConfig(activeLeague&&activeLeague.slot_config) : null; return cfg ? cfg.map((c,i)=>({id:i,bet:null,mult:null,category:c.type,slotType:c.type,market:c.market||null,isParlay:false,parlayLegs:[],locked:true})) : EMPTY_FLEX.map(s=>({...s})); };
- useEffect(()=>{ if(isSoloMode) return; setFlexPicks(freshSlots()); }, [activeLeagueId, isSoloMode, activeLeague&&activeLeague.slot_config]);
+ useEffect(()=>{ if(isSoloMode) return; let base = freshSlots(); try{ const _wk=(activeLeague && (activeLeague.current_week||activeLeague.week))||1; const _d = activeLeagueId ? localStorage.getItem(`linedup_draft_${activeLeagueId}_wk${_wk}`) : null; if(_d){ const arr=JSON.parse(_d); if(Array.isArray(arr) && arr.length && arr.some(sl=> sl && !sl.committed && (sl.bet || (sl.isParlay && (sl.parlayLegs||[]).length)))) base = arr; } }catch(e){} setFlexPicks(base); }, [activeLeagueId, isSoloMode, activeLeague&&activeLeague.slot_config]);
+ // Persist the UNLOCKED league draft so an in-progress slip survives leaving/reopening the app.
+ useEffect(()=>{ if(isSoloMode || !activeLeagueId) return; const _wk=(activeLeague && (activeLeague.current_week||activeLeague.week))||1; const _has=(flexPicks||[]).some(sl=> sl && !sl.committed && (sl.bet || (sl.isParlay && (sl.parlayLegs||[]).length))); if(_has){ try{ localStorage.setItem(`linedup_draft_${activeLeagueId}_wk${_wk}`, JSON.stringify(flexPicks)); }catch(e){} } }, [flexPicks, activeLeagueId, isSoloMode]);
  const [soloSavedPicks, setSoloSavedPicks] = useState(null);
  const [soloSubmitted, setSoloSubmitted] = useState(false);
  const [isPro, setIsPro] = useState(()=>{ try { return localStorage.getItem("picklock_is_pro")==="true"; } catch(e){ return false; } });
@@ -7345,6 +7347,7 @@ export default function App() {
  } else { setSavedPicks(null); }
  setFlexPicks(freshSlots());
  try { localStorage.removeItem(`linedup_picks_${activeLeague.id}_wk${wk}`); } catch(e) {}
+ try { localStorage.removeItem(`linedup_draft_${activeLeague.id}_wk${wk}`); } catch(e) {}
  if(isSoloMode){ setSoloSavedPicks(null); try{ localStorage.removeItem("picklock_solo_locked"); }catch(e){} }
  };
  let card=null;
@@ -8272,6 +8275,7 @@ export default function App() {
  setActivePicks(prev=>prev.map(p=> (p.committed && slotStarted(p)) ? p : (p.locked?{id:p.id,bet:null,mult:p.mult,category:(p.slotType||p.category),slotType:(p.slotType||p.category),market:p.market,isParlay:false,parlayLegs:[],locked:true}:{...EMPTY_FLEX[0],id:p.id})));
  setActiveSavedPicks(null);
  try { localStorage.removeItem(`linedup_picks_${activeLeague.id}_wk${activeLeague.current_week||activeLeague.week||1}`); } catch(e) {}
+ try { localStorage.removeItem(`linedup_draft_${activeLeague.id}_wk${activeLeague.current_week||activeLeague.week||1}`); } catch(e) {}
  }
  }} style={{fontSize:13,fontWeight:600,color:IOS.red,cursor:"pointer"}}>Clear</div>
  </div>}
@@ -8671,7 +8675,7 @@ export default function App() {
  const storageKey = `linedup_picks_${activeLeague.id}_wk${weekNum}`;
  try { localStorage.setItem(storageKey, JSON.stringify(locked)); } catch(e) {}
  if(isSoloMode) { setSoloSavedPicks(locked); setSoloSubmitted(true); try{ localStorage.setItem("picklock_solo_locked", JSON.stringify({flexPicks:activePicks, lockedAt:locked.lockedAt, week:weekNum})); }catch(e){} }
- else { setActiveSavedPicks(locked); setActiveSubmitted(true); setBuildingSlip(false); }
+ else { setActiveSavedPicks(locked); setActiveSubmitted(true); setBuildingSlip(false); } try{ localStorage.removeItem(`linedup_draft_${activeLeague.id}_wk${weekNum}`); }catch(e){}
  try{ posthog.capture('slip_locked', { league_id: activeLeague.id, week: weekNum, num_picks: activePicks.filter(p=>p.mult!=null&&(p.isParlay?(p.parlayLegs||[]).length>0:!!p.bet)).length, solo: isSoloMode }); }catch(e){}
  try{ if(navigator.vibrate) navigator.vibrate([0,30,40,30,60]); }catch(e){}
  setLockRitual(true);
@@ -11927,6 +11931,7 @@ export default function App() {
  setSavedPicks(null);
  setFlexPicks(freshSlots());
  try { localStorage.removeItem(`linedup_picks_${activeLeague.id}_wk${currentWeek}`); } catch(e) {}
+ try { localStorage.removeItem(`linedup_draft_${activeLeague.id}_wk${currentWeek}`); } catch(e) {}
  setAdvancingWeek(false);
  }} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:advancingWeek?"rgba(255,255,255,0.08)":IOS.green,border:"none",borderRadius:11,padding:13,fontFamily:"Barlow,sans-serif",fontSize:14,fontWeight:700,color:advancingWeek?"rgba(255,255,255,0.3)":"#04210f",cursor:advancingWeek?"default":"pointer"}}>{advancingWeek?"Advancing...":(<span style={{display:"inline-flex",alignItems:"center",gap:8}}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M5 4l8 8-8 8M14 4l6 8-6 8"/></svg>End Week {activeLeague.current_week||1} {"\u00b7"} Start Week {(activeLeague.current_week||1)+1}</span>)}</button>
      </div>
