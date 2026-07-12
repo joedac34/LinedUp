@@ -12685,7 +12685,7 @@ export default function App() {
           </div>
         )}
         {screen==="chat"&&(
- <>
+ <div className="body" style={{display:"flex",flexDirection:"column",height:"100%",overflow:"hidden"}}>
  <div style={{padding:"10px 20px 14px",display:"flex",alignItems:"center",gap:12,background:"radial-gradient(120% 90% at 90% -10%, rgba(10,132,255,0.18), transparent 55%), linear-gradient(180deg,#0B1A2E 0%,#000 82%)"}}>
  <button onClick={()=>setScreen("home")} style={{background:"rgba(255,255,255,0.08)",border:"none",borderRadius:10,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:17,flexShrink:0}}>‹</button>
  <div>
@@ -12726,7 +12726,7 @@ export default function App() {
  </button>
  </div>
  </div>
- </>
+ </div>
  )}
 
  {/* ══ PROFILE ══ */}
