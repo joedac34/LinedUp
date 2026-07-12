@@ -318,6 +318,7 @@ const STAT_ALIASES = {
   "rbis": ["RBI", "RBIs", "rbi"], "rbi": ["RBI", "RBIs", "rbi"],
   "doubles": ["2B", "doubles"], "triples": ["3B", "triples"],
   "stolen bases": ["SB", "stolenBases"], "stolen base": ["SB", "stolenBases"],
+  "outs": ["outs"], "pitcher outs": ["outs"], "outs recorded": ["outs"],
 };
 
 function normName(s) {
@@ -1074,7 +1075,7 @@ export default async function handler(req, res) {
       const _gradedAtStart = results.graded;
       const byUserMult = {};
       picks.forEach(p => {
-        const key = `${p.user_id}__${p.week}__${p.multiplier}`;
+        const key = p.parlay_legs ? (`${p.user_id}__${p.week}__parlay__${p.id}`) : (`${p.user_id}__${p.week}__${p.multiplier}`);
         if (!byUserMult[key]) byUserMult[key] = [];
         byUserMult[key].push(p);
       });
@@ -1130,6 +1131,23 @@ export default async function handler(req, res) {
         } else {
           // Straight pick
           for (const pick of group) {
+            // ── Solo parlay: one row holds every leg in parlay_legs. Grade each leg and AND them.
+            if (pick.parlay_legs && Array.isArray(pick.parlay_legs) && pick.parlay_legs.length) {
+              const _legs = pick.parlay_legs;
+              const _leg = (l) => ({ user_id: pick.user_id, week: pick.week, multiplier: pick.multiplier, slot: (l.category || "ml") + "_0", pick_name: l.pick, game: l.game || "", game_date: l.gameTime || null, implied_odds: l.impliedOdds, event_id: l.eventId || null, market_key: l.marketKey || null, outcome: l.outcome || null, outcome_point: (l.point != null ? l.point : null), sel_key: l.selKey || null });
+              const _res = _legs.map((l) => gradePick(_leg(l), games, playerIndex, {}));
+              if (_res.some((r) => r === null)) { results.skipped++; noteSkip(pick, "parlay_leg_pending"); continue; }
+              const _kept = _legs.map((_, i) => i).filter((i) => _res[i] !== "P");   // drop voided/pushed legs
+              let _pr, _oddsN = 0;
+              if (_kept.length === 0) { _pr = "P"; }
+              else if (_kept.some((i) => _res[i] === "L")) { _pr = "L"; }
+              else { const _d = _kept.reduce((a, i) => a * (_legs[i].impliedOdds > 0 ? (_legs[i].impliedOdds / 100 + 1) : (100 / Math.abs(_legs[i].impliedOdds) + 1)), 1); _oddsN = _d >= 2 ? Math.round((_d - 1) * 100) : Math.round(-100 / (_d - 1)); _pr = "W"; }
+              const _pts = _pr === "W" ? calcPoints(pick.multiplier, _oddsN) : 0;
+              await sbPatch(`picks?id=eq.${pick.id}`, { result: _pr, points_earned: _pts });
+              try { await notifyPick(pick, league, _pr, _pts, _legs.length); } catch (e) {}
+              results.graded++;
+              continue;
+            }
             const info = {};
             const result = gradePick(pick, games, playerIndex, info);
             if (result === null) { results.skipped++; noteSkip(pick, info.reason || "unknown"); continue; }

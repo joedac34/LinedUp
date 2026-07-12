@@ -2900,7 +2900,7 @@ const _LS_MK = {
   batter_stolen_bases:{key:"sb",label:"Stolen Bases"}, batter_doubles:{key:"doubles",label:"Doubles"},
   batter_triples:{key:"triples",label:"Triples"}, batter_hits_runs_rbis:{key:"hrr",label:"H+R+RBI"},
   pitcher_earned_runs:{key:"er",label:"Earned Runs"}, pitcher_hits_allowed:{key:"hitsallowed",label:"Hits Allowed"},
-  pitcher_walks:{key:"walksallowed",label:"Walks Allowed"},
+  pitcher_walks:{key:"walksallowed",label:"Walks Allowed"}, pitcher_outs:{key:"outs",label:"Outs"},
   player_pass_yds:{key:"passyd",label:"Pass Yards"}, player_rush_yds:{key:"rushyd",label:"Rush Yards"},
   player_reception_yds:{key:"recyd",label:"Rec Yards"}, player_anytime_td:{key:"td",label:"Anytime TD"},
   player_points:{key:"pts",label:"Points"}, player_rebounds:{key:"reb",label:"Rebounds"},
@@ -4038,7 +4038,7 @@ export default function App() {
  const PROP_SUBS_BY_SPORT = {
   nfl:[{id:"all",l:"All"},{id:"pass",l:"Pass"},{id:"rush",l:"Rush"},{id:"rec",l:"Receiving"},{id:"td",l:"TDs"}],
   nba:[{id:"all",l:"All"},{id:"pts",l:"Points"},{id:"reb",l:"Rebounds"},{id:"ast",l:"Assists"},{id:"3pt",l:"Threes"}],
-  mlb:[{id:"all",l:"All"},{id:"hr",l:"HR"},{id:"hits",l:"Hits"},{id:"bases",l:"Total Bases"},{id:"rbi",l:"RBIs"},{id:"runs",l:"Runs"},{id:"walks",l:"Walks"},{id:"sb",l:"SB"},{id:"doubles",l:"2B"},{id:"triples",l:"3B"},{id:"hrr",l:"H+R+RBI"},{id:"k",l:"K"},{id:"er",l:"ER"},{id:"hitsallowed",l:"Hits Alwd"},{id:"walksallowed",l:"BB Alwd"}],
+  mlb:[{id:"all",l:"All"},{id:"hr",l:"HR"},{id:"hits",l:"Hits"},{id:"bases",l:"Total Bases"},{id:"rbi",l:"RBIs"},{id:"runs",l:"Runs"},{id:"walks",l:"Walks"},{id:"sb",l:"SB"},{id:"doubles",l:"2B"},{id:"triples",l:"3B"},{id:"hrr",l:"H+R+RBI"},{id:"k",l:"K"},{id:"er",l:"ER"},{id:"hitsallowed",l:"Hits Alwd"},{id:"walksallowed",l:"BB Alwd"},{id:"outs",l:"Outs"}],
  };
  const DEFAULT_SLOTS=[{type:"ml",mult:1},{type:"prop",mult:2},{type:"ou",mult:3},{type:"spread",mult:4},{type:"longshot",mult:5}];
  const LAYOUT_PRESETS=[
@@ -9117,7 +9117,7 @@ export default function App() {
  td:["player_anytime_td","player_first_td","player_rush_tds","player_reception_tds","player_pass_tds"],
  pts:["player_points","player_points_rebounds_assists"], reb:["player_rebounds"], ast:["player_assists"], "3pt":["player_threes"],
  hr:["batter_home_runs","batter_home_runs_alternate"], hits:["batter_hits"], bases:["batter_total_bases"], rbi:["batter_rbis"], k:["pitcher_strikeouts"],
- runs:["batter_runs_scored"], walks:["batter_walks"], sb:["batter_stolen_bases"], doubles:["batter_doubles"], triples:["batter_triples"], hrr:["batter_hits_runs_rbis"], er:["pitcher_earned_runs"], hitsallowed:["pitcher_hits_allowed"], walksallowed:["pitcher_walks"],
+ runs:["batter_runs_scored"], walks:["batter_walks"], sb:["batter_stolen_bases"], doubles:["batter_doubles"], triples:["batter_triples"], hrr:["batter_hits_runs_rbis"], er:["pitcher_earned_runs"], hitsallowed:["pitcher_hits_allowed"], walksallowed:["pitcher_walks"], outs:["pitcher_outs"],
  };
  const mk = SUB_MK[gridPropSub];
  list = list.filter(b=>{
@@ -9402,7 +9402,7 @@ export default function App() {
 
 
    // --- OPTION A: prop/period/longshot as grouped-by-game rows (same pill language as game lines) ---
-   const ALT_MARKETS = new Set(["spreads","totals","batter_total_bases","batter_hits","batter_rbis","batter_runs_scored","batter_walks","batter_strikeouts","batter_doubles","batter_singles","batter_hits_runs_rbis","pitcher_strikeouts","pitcher_earned_runs","pitcher_hits_allowed","pitcher_walks"]);
+   const ALT_MARKETS = new Set(["spreads","totals","batter_total_bases","batter_hits","batter_rbis","batter_runs_scored","batter_walks","batter_strikeouts","batter_doubles","batter_singles","batter_hits_runs_rbis","pitcher_strikeouts","pitcher_earned_runs","pitcher_hits_allowed","pitcher_walks","pitcher_outs"]);
    const canAlt = (mk) => ALT_MARKETS.has(mk||"");
    const openAltLines = async (bet, meta) => {
    if(!isPro){ if(setShowPaywall) setShowPaywall("alt"); return; }

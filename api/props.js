@@ -14,6 +14,8 @@ const PROP_MARKETS = {
     "batter_doubles","batter_triples","pitcher_walks",
     // batch 3: H+R+RBI (grade.js derives H+R+RBI)
     "batter_hits_runs_rbis","batter_singles",
+    // pitcher outs (outs recorded) — starting-pitcher market, posts near game time:
+    "pitcher_outs",
     // HR is usually a "to hit a HR" (1+) milestone -> alternate key
     "batter_home_runs_alternate",
   ],
@@ -32,6 +34,7 @@ const MARKET_LABELS = {
   pitcher_earned_runs:"Earned Runs", pitcher_hits_allowed:"Hits Allowed",
   batter_doubles:"Doubles", batter_triples:"Triples", pitcher_walks:"Walks Allowed",
   batter_hits_runs_rbis:"Hits+Runs+RBIs", batter_singles:"Singles", batter_home_runs_alternate:"Home Runs",
+  pitcher_outs:"Outs",
 };
 
 export default async function handler(req, res) {
