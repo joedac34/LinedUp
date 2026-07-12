@@ -3256,7 +3256,7 @@ export default function App() {
  ];
  const [flexPicks, setFlexPicks] = useState(EMPTY_FLEX);
  const [soloFlexPicks, setSoloFlexPicks] = useState(EMPTY_FLEX);
- const [soloFreePicks, setSoloFreePicks] = useState([]); const [replaceCtx, setReplaceCtx] = useState(null); // void-replace: {voidId, mult, week, type} // freeform solo slate (variable count)
+ const [soloFreePicks, setSoloFreePicks] = useState([]); const soloDraftReady = useRef(false); const [replaceCtx, setReplaceCtx] = useState(null); // void-replace: {voidId, mult, week, type} // freeform solo slate (variable count)
  const [freeCat, setFreeCat] = useState("all");
  const parseSlotConfig=(raw)=>{ try{ const a=typeof raw==="string"?JSON.parse(raw):raw; return (Array.isArray(a)&&a.length)?a:null; }catch(e){ return null; } };
  const freshSlots=()=>{ const cfg = !isSoloMode ? parseSlotConfig(activeLeague&&activeLeague.slot_config) : null; return cfg ? cfg.map((c,i)=>({id:i,bet:null,mult:null,category:c.type,slotType:c.type,market:c.market||null,isParlay:false,parlayLegs:[],locked:true})) : EMPTY_FLEX.map(s=>({...s})); };
@@ -5352,13 +5352,13 @@ export default function App() {
  leagueSportsToFetch.forEach(sp => fetchLiveOdds(sp));
  if(lg2) {
  const week = lg2.current_week||lg2.week||1;
- if(!buildingSlip) fetchMyPicks(activeLeagueId, week, user.id);
+ fetchMyPicks(activeLeagueId, week, user.id); // load locked picks on entry; slip view prefers an active draft so this never clobbers one
  fetchSchedule(activeLeagueId, user.id);
  fetchLeaguePowerUps(activeLeagueId, user.id);
  // Restore saved picks from localStorage for this specific league+week
  try {
  const stored = localStorage.getItem(`linedup_picks_${activeLeagueId}_wk${week}`);
- if(stored && !buildingSlip) setSavedPicks(JSON.parse(stored));
+ if(stored) setSavedPicks(JSON.parse(stored));
  } catch(e) {}
  }
  },[activeLeagueId, user, screen]);
@@ -5375,6 +5375,20 @@ export default function App() {
  }catch(e){}
  }
  },[isSoloMode, soloWeeks, soloSavedPicks]);
+
+ // Persist + restore the UNLOCKED solo draft so in-progress picks survive leaving/reopening the app.
+ useEffect(()=>{
+   if(!isSoloMode){ return; }
+   try{
+     const _d = localStorage.getItem("picklock_solo_draft");
+     if(_d){ const arr = JSON.parse(_d); if(Array.isArray(arr) && arr.length){ const _live = arr.filter(b=> !b || !b.gameTime || Date.parse(b.gameTime) > Date.now()); if(_live.length) setSoloFreePicks(prev=> (prev && prev.length) ? prev : _live); } }
+   }catch(e){}
+   soloDraftReady.current = true;
+ },[isSoloMode]);
+ useEffect(()=>{
+   if(!soloDraftReady.current) return;
+   try{ if(soloFreePicks && soloFreePicks.length) localStorage.setItem("picklock_solo_draft", JSON.stringify(soloFreePicks)); else localStorage.removeItem("picklock_solo_draft"); }catch(e){}
+ },[soloFreePicks]);
 
  useEffect(()=>{
  if(!activeLeagueId||!user) return;
