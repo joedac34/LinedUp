@@ -133,6 +133,32 @@ function normalizeEspnEvent(ev, sport) {
   const nm = (c) => (c.team && (c.team.displayName || c.team.name)) || "";
   const ab = (c) => (c.team && c.team.abbreviation) || "";
   const sc = (c) => { const n = Number(c && c.score); return Number.isFinite(n) ? n : null; };
+  // Per-quarter/period scoring (football + basketball) for the gamecast grid.
+  const ls = (c) => (c && Array.isArray(c.linescores) ? c.linescores.map((x) => (x && x.value != null ? num(x.value) : null)) : []);
+  const awayLS = ls(away), homeLS = ls(home);
+  const nper = Math.max(awayLS.length, homeLS.length);
+  const periods = [];
+  for (let i = 0; i < nper; i++) periods.push({ num: i + 1, a: awayLS[i] != null ? awayLS[i] : null, h: homeLS[i] != null ? homeLS[i] : null });
+
+  // Football live situation: which side has the ball + down & distance.
+  let situation = null;
+  if (sport === "nfl" || sport === "ncaaf") {
+    const sit = comp.situation || {};
+    const possId = sit.possession != null ? String(sit.possession) : null;
+    const tid = (c) => (c && c.team && c.team.id != null ? String(c.team.id) : null);
+    const cid = (c) => (c && c.id != null ? String(c.id) : null);
+    const possSide = possId
+      ? (possId === tid(home) || possId === cid(home) ? "home"
+         : possId === tid(away) || possId === cid(away) ? "away" : null)
+      : null;
+    situation = {
+      possession: possSide,
+      downDistance: sit.downDistanceText || sit.shortDownDistanceText || null,
+      yardLine: sit.yardLine != null ? num(sit.yardLine) : null,
+      isRedZone: !!sit.isRedZone,
+      lastPlay: (sit.lastPlay && sit.lastPlay.text) || null,
+    };
+  }
   return {
     gamePk: "espn-" + sport + "-" + ev.id,
     gameDate: ev.date || null,
@@ -145,7 +171,8 @@ function normalizeEspnEvent(ev, sport) {
     bases: { first: false, second: false, third: false },
     period: st.period != null ? num(st.period) : null,
     clock: st.displayClock || null,
-    linescore: { innings: [], awayR: sc(away), awayH: null, awayE: null, homeR: sc(home), homeH: null, homeE: null },
+    linescore: { innings: [], periods, awayR: sc(away), awayH: null, awayE: null, homeR: sc(home), homeH: null, homeE: null },
+    situation,
   };
 }
 async function fetchEspnDate(sport, date) {
