@@ -2752,7 +2752,13 @@ function GamecastSheet({ game, pick, onClose }){
   const aSc=game.away.score, hSc=game.home.score;
   const leadA=Number(aSc)>Number(hSc), leadH=Number(hSc)>Number(aSc);
   const up=(game.half==="Top"||game.half==="Middle");
-  const statusTxt= fin?"Final" : live?((game.half||"")+" "+_lsOrdinal(game.inning)+(game.outs!=null?(" \u00b7 "+game.outs+" out"):"")) : "Scheduled";
+  const baseball = game.sport==="mlb" || (game.sport==null && game.inning!=null);
+  const football = game.sport==="nfl" || game.sport==="ncaaf";
+  const sit = game.situation || null;
+  const periodsArr = (game.linescore && game.linescore.periods) || [];
+  const nPer = Math.max(baseball?0:4, periodsArr.length);
+  const _liveStatus = baseball ? ((game.half||"")+" "+_lsOrdinal(game.inning)+(game.outs!=null?(" \u00b7 "+game.outs+" out"):"")) : (game.period!=null ? ((game.clock&&game.clock!=="0:00")?("Q"+game.period+" \u00b7 "+game.clock):(game.detail||("Q"+game.period))) : (game.detail||"Live"));
+  const statusTxt= fin?"Final" : live? _liveStatus : "Scheduled";
   const badge=pickBadge(pick, game);
   const inns=(game.linescore&&game.linescore.innings)||[];
   const n=Math.max(9, inns.length);
@@ -2782,7 +2788,7 @@ function GamecastSheet({ game, pick, onClose }){
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:9}}>
             {pre ? (
               <div style={{fontSize:12,fontWeight:800,color:L2,fontFamily:"'Barlow Semi Condensed',sans-serif"}}>{startT||"TBD"}</div>
-            ) : live ? (<>
+            ) : live ? (baseball ? (<>
               <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:800,color:CY}}>{(up?"\u25B2":"\u25BC")} {_lsOrdinal(game.inning)}</div>
               <div style={{position:"relative",width:46,height:46}}>
                 <div style={{position:"absolute",width:13,height:13,transform:"rotate(45deg)",top:0,left:16.5,background:game.bases&&game.bases.second?YEL:"rgba(255,255,255,0.14)",border:"1px solid "+(game.bases&&game.bases.second?YEL:"rgba(255,255,255,0.2)")}}/>
@@ -2792,7 +2798,16 @@ function GamecastSheet({ game, pick, onClose }){
               <div style={{display:"flex",gap:5}}>
                 {[0,1,2].map(i=>(<span key={i} style={{width:8,height:8,borderRadius:"50%",background:(game.outs||0)>i?RED:"rgba(255,255,255,0.14)"}}/>))}
               </div>
-            </>) : (
+            </>) : (<>
+              <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:15,fontWeight:800,color:CY}}>{"Q"+(game.period||1)}</div>
+              <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:22,fontWeight:800,color:"#fff",lineHeight:1}}>{game.clock||"\u2013"}</div>
+              {football && sit && (sit.possession || sit.downDistance) && (
+                <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1,marginTop:1}}>
+                  {sit.possession && <span style={{fontSize:10.5,fontWeight:800,color:sit.isRedZone?RED:CY,letterSpacing:"0.03em"}}>{(sit.possession==="away"?aAb:hAb)+(sit.isRedZone?" \u00b7 RED ZONE":" ball")}</span>}
+                  {sit.downDistance && <span style={{fontSize:10,fontWeight:700,color:L2,textAlign:"center",maxWidth:140,lineHeight:1.3}}>{sit.downDistance}</span>}
+                </div>
+              )}
+            </>)) : (
               <div style={{fontSize:12,fontWeight:800,color:L2,textTransform:"uppercase",letterSpacing:"0.04em"}}>Final</div>
             )}
           </div>
@@ -2802,8 +2817,8 @@ function GamecastSheet({ game, pick, onClose }){
           </div>
         </div>
 
-        {/* linescore */}
-        {!pre && (
+        {/* linescore (baseball: innings) */}
+        {baseball && !pre && (
           <div style={{padding:"4px 14px 12px",overflowX:"auto"}}>
             <table style={{borderCollapse:"collapse",width:"100%",minWidth:340}}>
               <tbody>
@@ -2833,7 +2848,32 @@ function GamecastSheet({ game, pick, onClose }){
           </div>
         )}
 
-        {/* your pick */}
+        {/* linescore (football/basketball: periods) */}
+        {!baseball && !pre && nPer>0 && (
+          <div style={{padding:"4px 14px 12px",overflowX:"auto"}}>
+            <table style={{borderCollapse:"collapse",width:"100%",minWidth:260}}>
+              <tbody>
+                <tr>
+                  <td style={{width:56}}/>
+                  {Array.from({length:nPer}).map((_,i)=>(<td key={i} style={{textAlign:"center",fontSize:10.5,fontWeight:800,color:L3,padding:"4px 0",borderBottom:"0.5px solid rgba(255,255,255,0.08)"}}>{i<4?("Q"+(i+1)):(i===4?"OT":("OT"+(i-3)))}</td>))}
+                  <td style={{textAlign:"center",fontSize:10.5,fontWeight:800,color:L3,paddingLeft:10,borderBottom:"0.5px solid rgba(255,255,255,0.08)"}}>T</td>
+                </tr>
+                <tr>
+                  <td style={{fontSize:13,fontWeight:700,color:L2,paddingLeft:6}}>{aAb}</td>
+                  {Array.from({length:nPer}).map((_,i)=>cell(periodsArr[i]?periodsArr[i].a:null, (i+1)===(live?game.period:-1)))}
+                  <td style={{textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:800,color:"#fff",paddingLeft:10}}>{aSc!=null?aSc:"\u00b7"}</td>
+                </tr>
+                <tr>
+                  <td style={{fontSize:13,fontWeight:700,color:L2,paddingLeft:6}}>{hAb}</td>
+                  {Array.from({length:nPer}).map((_,i)=>cell(periodsArr[i]?periodsArr[i].h:null, (i+1)===(live?game.period:-1)))}
+                  <td style={{textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:800,color:"#fff",paddingLeft:10}}>{hSc!=null?hSc:"\u00b7"}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+
+                {/* your pick */}
         {pick && (
           <div style={{margin:"8px 16px 4px",background:"#1C1C1E",borderRadius:14,padding:"14px 16px"}}>
             <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.1em",color:L3,textTransform:"uppercase"}}>Your pick{pick.odds?(" \u00b7 "+pick.odds):""}</div>
@@ -2843,7 +2883,7 @@ function GamecastSheet({ game, pick, onClose }){
             </div>
           </div>
         )}
-        <div style={{margin:"12px 20px 0",fontSize:11,color:L3,lineHeight:1.5,textAlign:"center"}}>Live data from MLB StatsAPI. Final W/L is set by grade.js.</div>
+        <div style={{margin:"12px 20px 0",fontSize:11,color:L3,lineHeight:1.5,textAlign:"center"}}>{baseball?"Live data from MLB StatsAPI.":"Live data from ESPN."}{" Final W/L is set by grade.js."}</div>
       </div>
     </div>
   );
