@@ -2145,7 +2145,7 @@ function groupPicksByDay(picks){
   return keys.map(k=>{ const ps=map[k]; let w=0,l=0,pts=0,live=false; ps.forEach(p=>{ if(p.result==="W"){w++; pts+=parseFloat(p.points_earned||0);} else if(p.result==="L"){l++;} else if(p.result!=="P"){ const _gd=(p.game_date||p.gameTime)?Date.parse(p.game_date||p.gameTime):NaN; if(!isNaN(_gd)&&_gd<=Date.now()){ live=true; } } }); return {key:k,label:_dayLabel(k),picks:ps,w:w,l:l,pts:pts,live:live}; });
 }
 
-function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeague, setNewLeagueStep, setShowBrowse, fetchPublicLeagues, setIsSoloMode, setActiveLeagueId, getOrCreateSoloLeague, soloSavedPicks, setSoloSavedPicks, soloFlexPicks, setSoloFlexPicks, soloSport, setSoloSport, setShowSoloSportPicker, soloSubmitted, setSoloSubmitted, username, soloTopPct, onDeleteSlate, onJoinCode, setShowPaywall, tickerGames=[], espnGames=[], globalRank=null, onOpenLeaderboard, liveGames=[], onOpenGamecast}) {
+function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeague, setNewLeagueStep, setShowBrowse, fetchPublicLeagues, setIsSoloMode, setActiveLeagueId, getOrCreateSoloLeague, soloSavedPicks, setSoloSavedPicks, soloFlexPicks, setSoloFlexPicks, soloSport, setSoloSport, setShowSoloSportPicker, soloSubmitted, setSoloSubmitted, username, soloTopPct, onDeleteSlate, onJoinCode, setShowPaywall, tickerGames=[], espnGames=[], globalRank=null, onOpenLeaderboard, liveGames=[], onOpenGamecast, onReplace}) {
   const [shareToast,setShareToast]=useState("");
   const [openSlate,setOpenSlate]=useState(null);
   const [openDays,setOpenDays]=useState({});
@@ -2358,7 +2358,7 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
                               {p.game && <div style={{fontSize:10,color:IOS.label3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.game}</div>}
                             </div>
                             <div style={{fontSize:11,fontWeight:800,color:String(p.odds||"").startsWith("+")?IOS.green:IOS.blue,flexShrink:0}}>{p.odds}</div>
-                            <div style={{minWidth:52,flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1}}><div style={{fontSize:8.5,fontWeight:800,letterSpacing:0.3,color:rc}}>{rl}{res==="W"&&p.points_earned?` +${parseFloat(p.points_earned).toFixed(1)}`:""}</div><ScoreChip pick={p} live={liveMatch(p, liveGames)} onOpen={()=>{ if(onOpenGamecast) onOpenGamecast(p); }}/></div>
+                            <div style={{minWidth:52,flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1}}><div style={{fontSize:8.5,fontWeight:800,letterSpacing:0.3,color:rc}}>{rl}{res==="W"&&p.points_earned?` +${parseFloat(p.points_earned).toFixed(1)}`:""}</div><ScoreChip pick={p} live={liveMatch(p, liveGames)} onOpen={()=>{ if(onOpenGamecast) onOpenGamecast(p); }}/></div>{res==="P" && p.replaced_by && (<span style={{flexShrink:0,fontSize:8.5,fontWeight:800,letterSpacing:0.3,color:IOS.label3}}>REPLACED</span>)}{res==="P" && !p.replaced_by && p.week===currentWeekNum && onReplace && (<div onClick={(e)=>{ e.stopPropagation(); onReplace(p); }} style={{flexShrink:0,fontSize:9.5,fontWeight:800,color:IOS.blue,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.35)",borderRadius:7,padding:"4px 9px",cursor:"pointer"}}>REPLACE</div>)}{res==="P" && !p.replaced_by && p.week<currentWeekNum && (<span style={{flexShrink:0,fontSize:8.5,fontWeight:800,letterSpacing:0.3,color:"#FF9F0A"}}>COOKED</span>)}
                           </div>
                         );
                       })}
@@ -2459,7 +2459,7 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
                               {p.game && <div style={{fontSize:10,color:IOS.label3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.game}</div>}
                             </div>
                             <div style={{fontSize:11,fontWeight:800,color:String(p.odds||"").startsWith("+")?IOS.green:IOS.blue,flexShrink:0}}>{p.odds}</div>
-                            <div style={{minWidth:52,flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1}}><div style={{fontSize:8.5,fontWeight:800,letterSpacing:0.3,color:rc}}>{rl}{res==="W"&&p.points_earned?` +${parseFloat(p.points_earned).toFixed(1)}`:""}</div><ScoreChip pick={p} live={liveMatch(p, liveGames)} onOpen={()=>{ if(onOpenGamecast) onOpenGamecast(p); }}/></div>
+                            <div style={{minWidth:52,flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1}}><div style={{fontSize:8.5,fontWeight:800,letterSpacing:0.3,color:rc}}>{rl}{res==="W"&&p.points_earned?` +${parseFloat(p.points_earned).toFixed(1)}`:""}</div><ScoreChip pick={p} live={liveMatch(p, liveGames)} onOpen={()=>{ if(onOpenGamecast) onOpenGamecast(p); }}/></div>{res==="P" && p.replaced_by && (<span style={{flexShrink:0,fontSize:8.5,fontWeight:800,letterSpacing:0.3,color:IOS.label3}}>REPLACED</span>)}{res==="P" && !p.replaced_by && p.week===currentWeekNum && onReplace && (<div onClick={(e)=>{ e.stopPropagation(); onReplace(p); }} style={{flexShrink:0,fontSize:9.5,fontWeight:800,color:IOS.blue,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.35)",borderRadius:7,padding:"4px 9px",cursor:"pointer"}}>REPLACE</div>)}{res==="P" && !p.replaced_by && p.week<currentWeekNum && (<span style={{flexShrink:0,fontSize:8.5,fontWeight:800,letterSpacing:0.3,color:"#FF9F0A"}}>COOKED</span>)}
                           </div>
                         );
                       })}
@@ -3256,7 +3256,7 @@ export default function App() {
  ];
  const [flexPicks, setFlexPicks] = useState(EMPTY_FLEX);
  const [soloFlexPicks, setSoloFlexPicks] = useState(EMPTY_FLEX);
- const [soloFreePicks, setSoloFreePicks] = useState([]); // freeform solo slate (variable count)
+ const [soloFreePicks, setSoloFreePicks] = useState([]); const [replaceCtx, setReplaceCtx] = useState(null); // void-replace: {voidId, mult, week, type} // freeform solo slate (variable count)
  const [freeCat, setFreeCat] = useState("all");
  const parseSlotConfig=(raw)=>{ try{ const a=typeof raw==="string"?JSON.parse(raw):raw; return (Array.isArray(a)&&a.length)?a:null; }catch(e){ return null; } };
  const freshSlots=()=>{ const cfg = !isSoloMode ? parseSlotConfig(activeLeague&&activeLeague.slot_config) : null; return cfg ? cfg.map((c,i)=>({id:i,bet:null,mult:null,category:c.type,slotType:c.type,market:c.market||null,isParlay:false,parlayLegs:[],locked:true})) : EMPTY_FLEX.map(s=>({...s})); };
@@ -4399,6 +4399,42 @@ export default function App() {
  setLockRitual(true);
  try{ await fetchSoloWeeks(); }catch(e2){}
  } catch(e) { alert("Error: " + e.message); }
+ };
+  // ── Void replace: swap a voided ("P") pick for a same-type/same-mult bet in the same week ──
+ const startReplace = (pick) => {
+   if(!pick) return;
+   const parts=String(pick.slot||"ml").split("_");
+   const _cat = parts.length>1 ? parts.slice(0,-1).join("_") : (parts[0]||"ml");
+   setReplaceCtx({ voidId:pick.id, mult:pick.multiplier||1, week:pick.week, type:_cat });
+   setBuildingSlip(true); setGridTargetSlot(null); setGridPropSub("all");
+   setGridType(_cat && _cat.indexOf("_")>-1 ? "period" : _cat);
+   setScreen("browser");
+ };
+ const doReplaceSave = async (bet) => {
+   if(!replaceCtx || !user) return;
+   const ctx = replaceCtx;
+   if(soloWeekOfDate(bet.gameTime) !== ctx.week){ setPickConflict("Replacement must be a game in the same week as the voided pick."); setTimeout(()=>setPickConflict(""),3200); return; }
+   if(bet.gameTime && Date.parse(bet.gameTime) <= Date.now()){ setPickConflict("That game has already started \u2014 pick one that hasn\u2019t."); setTimeout(()=>setPickConflict(""),3200); return; }
+   const lgId = soloLeagueId || await getOrCreateSoloLeague();
+   if(!lgId){ alert("Couldn\u2019t open your solo league."); return; }
+   const cat = ctx.type;
+   const { data:_ew } = await supabase.from("picks").select("slot").eq("league_id", lgId).eq("user_id", user.id).eq("week", ctx.week);
+   const _base = (_ew && _ew.length) || 0;
+   const { data:_ins, error } = await supabase.from("picks").insert({
+     league_id: lgId, user_id: user.id, week: ctx.week,
+     slot: `${cat}_${_base}`, multiplier: ctx.mult,
+     pick_name: bet.pick, game: bet.game||"", odds: bet.odds, implied_odds: bet.impliedOdds,
+     game_date: bet.gameTime||null, event_id: bet.eventId||null, market_key: bet.marketKey||null,
+     outcome: bet.outcome||null, outcome_point: (bet.point!=null?bet.point:null), sel_key: bet.selKey||null,
+     result: "pending", points_earned: 0,
+   }).select("id");
+   if(error){ alert("Replace failed: " + error.message); return; }
+   const newId = _ins && _ins[0] && _ins[0].id;
+   if(newId){ try{ await supabase.from("picks").update({ replaced_by: String(newId) }).eq("id", ctx.voidId); }catch(e){} }
+   setReplaceCtx(null);
+   setScreen("home");
+   try{ if(navigator.vibrate) navigator.vibrate([0,20,30,20]); }catch(e){}
+   try{ await fetchSoloWeeks(); }catch(e){}
  };
  const clearSoloSlate = async () => {
  if(!user) return;
@@ -6970,7 +7006,7 @@ export default function App() {
  </div>
 
  {/* ══ SOLO MODE HOME SCREEN ══ */}
- {homeMode==="solo" && <SoloHome soloWeeks={soloWeeks} soloLoading={soloLoading} isPro={isPro} IOS={IOS} setScreen={setScreen} setShowNewLeague={setShowNewLeague} setNewLeagueStep={setNewLeagueStep} setShowBrowse={setShowBrowse} fetchPublicLeagues={fetchPublicLeagues} setIsSoloMode={setIsSoloMode} setActiveLeagueId={setActiveLeagueId} getOrCreateSoloLeague={getOrCreateSoloLeague} soloSavedPicks={soloSavedPicks} setSoloSavedPicks={setSoloSavedPicks} soloFlexPicks={soloFlexPicks} setSoloFlexPicks={setSoloFlexPicks} soloSport={soloSport} setSoloSport={setSoloSportPersist} setShowSoloSportPicker={setShowSoloSportPicker} soloSubmitted={soloSubmitted} setSoloSubmitted={setSoloSubmitted} username={userProfile?.username||""} soloTopPct={soloTopPct} onDeleteSlate={deleteSoloSlate} onJoinCode={handleJoinCode} setShowPaywall={setShowPaywall} tickerGames={tickerGames} espnGames={espnGames} globalRank={(()=>{ const rows=lbCache["all"]; if(!rows||!rows.length) return null; const sx=[...rows].sort((a,b)=>(Number(b.points)||0)-(Number(a.points)||0)); const i=sx.findIndex(r=>String(r.user_id)===String(user?.id)); return i>=0?{rank:i+1,total:sx.length}:null; })()} onOpenLeaderboard={()=>{ fetchLeaderboard("all"); setScreen("leaderboard"); }} liveGames={liveGames} onOpenGamecast={openGamecast}/>}
+ {homeMode==="solo" && <SoloHome soloWeeks={soloWeeks} soloLoading={soloLoading} isPro={isPro} IOS={IOS} setScreen={setScreen} setShowNewLeague={setShowNewLeague} setNewLeagueStep={setNewLeagueStep} setShowBrowse={setShowBrowse} fetchPublicLeagues={fetchPublicLeagues} setIsSoloMode={setIsSoloMode} setActiveLeagueId={setActiveLeagueId} getOrCreateSoloLeague={getOrCreateSoloLeague} soloSavedPicks={soloSavedPicks} setSoloSavedPicks={setSoloSavedPicks} soloFlexPicks={soloFlexPicks} setSoloFlexPicks={setSoloFlexPicks} soloSport={soloSport} setSoloSport={setSoloSportPersist} setShowSoloSportPicker={setShowSoloSportPicker} soloSubmitted={soloSubmitted} setSoloSubmitted={setSoloSubmitted} username={userProfile?.username||""} soloTopPct={soloTopPct} onDeleteSlate={deleteSoloSlate} onJoinCode={handleJoinCode} setShowPaywall={setShowPaywall} tickerGames={tickerGames} espnGames={espnGames} globalRank={(()=>{ const rows=lbCache["all"]; if(!rows||!rows.length) return null; const sx=[...rows].sort((a,b)=>(Number(b.points)||0)-(Number(a.points)||0)); const i=sx.findIndex(r=>String(r.user_id)===String(user?.id)); return i>=0?{rank:i+1,total:sx.length}:null; })()} onOpenLeaderboard={()=>{ fetchLeaderboard("all"); setScreen("leaderboard"); }} liveGames={liveGames} onOpenGamecast={openGamecast} onReplace={startReplace}/>}
        {homeMode==="solo" && screen==="home" && (()=>{
          const SP=["mlb","nfl","nba","ncaaf"];
          const games=(tickerGames||[]).filter(g=>g&&g.sport===soloSport);
@@ -8988,6 +9024,8 @@ export default function App() {
  list = (BETS[gridType]||[]).filter(b=> b._sport===gSport);
  }
  { const _seen=new Set(); list = list.filter(b=>{ const k=(b.game||"")+"|"+(b.pick||b.label||b.id||""); if(_seen.has(k)) return false; _seen.add(k); return true; }); }
+    const _replEligible = replaceCtx ? (list||[]).filter(b=> b && b.gameTime && Date.parse(b.gameTime)>Date.now() && soloWeekOfDate(b.gameTime)===replaceCtx.week) : null;
+    const replaceCooked = replaceCtx ? (!_replEligible || _replEligible.length===0) : false;
 
  // Prop sub-category filter
  const propSubsBySport = PROP_SUBS_BY_SPORT;
@@ -9097,6 +9135,7 @@ export default function App() {
  const addCard = (bet, catOverride) => {
  const cat = catOverride || (gridType==="longshot" ? "longshot" : gridType);
  if(isSoloMode){
+   if(replaceCtx){ doReplaceSave(bet); return; }
    const _gl=["ml","spread","ou"].includes(cat);
    const _gk=bet.eventId||bet.game||"";
    if(_gl && _gk && soloFreePicks.some(p=>String(p.id)!==String(bet.id) && p.category===cat && (p.eventId||p.game||"")===_gk)){ setPickConflict("You already picked this game's "+(cat==="ou"?"total":(cat==="ml"?"moneyline":"spread"))+". You can't take both sides of the same line."); setTimeout(()=>setPickConflict(""),2600); setGridJustAdded(null); return; }
@@ -9745,6 +9784,7 @@ export default function App() {
  </div>
  )}
 
+ {replaceCtx && (<div style={{margin:"0 16px 9px",padding:"9px 12px",borderRadius:10,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.35)",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}><div style={{fontSize:11.5,fontWeight:700,color:"#fff",minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{replaceCooked ? ("No open "+String(gSport).toUpperCase()+" games left this week \u2014 switch sport or cancel") : ("Replacing voided "+String(replaceCtx.type).toUpperCase()+" \u00b7 "+replaceCtx.mult+"\u00d7 \u2014 same week only")}</div><div onClick={()=>{ setReplaceCtx(null); setScreen("home"); }} style={{fontSize:11,fontWeight:800,color:IOS.blue,cursor:"pointer",flexShrink:0}}>Cancel</div></div>)}
  {/* Bet type switcher */}
  <div className="gbx-scroll" style={{display:"flex",gap:7,padding:`${(sportsList.length>1||isSoloMode)?0:6}px 16px 9px`,overflowX:"auto"}}>
  {(()=>{
