@@ -3256,7 +3256,7 @@ export default function App() {
  ];
  const [flexPicks, setFlexPicks] = useState(EMPTY_FLEX);
  const [soloFlexPicks, setSoloFlexPicks] = useState(EMPTY_FLEX);
- const [soloFreePicks, setSoloFreePicks] = useState([]); const soloDraftReady = useRef(false); const [replaceCtx, setReplaceCtx] = useState(null); // void-replace: {voidId, mult, week, type} // freeform solo slate (variable count)
+ const [soloFreePicks, setSoloFreePicks] = useState([]); const soloDraftReady = useRef(false); const [soloParlay, setSoloParlay] = useState(null); const [soloParlayMode, setSoloParlayMode] = useState(false); const [replaceCtx, setReplaceCtx] = useState(null); // void-replace: {voidId, mult, week, type} // freeform solo slate (variable count)
  const [freeCat, setFreeCat] = useState("all");
  const parseSlotConfig=(raw)=>{ try{ const a=typeof raw==="string"?JSON.parse(raw):raw; return (Array.isArray(a)&&a.length)?a:null; }catch(e){ return null; } };
  const freshSlots=()=>{ const cfg = !isSoloMode ? parseSlotConfig(activeLeague&&activeLeague.slot_config) : null; return cfg ? cfg.map((c,i)=>({id:i,bet:null,mult:null,category:c.type,slotType:c.type,market:c.market||null,isParlay:false,parlayLegs:[],locked:true})) : EMPTY_FLEX.map(s=>({...s})); };
@@ -4376,21 +4376,19 @@ export default function App() {
  const _baseByWeek = {};
  for(const _w of _affWeeks){ const {data:_ew} = await supabase.from("picks").select("slot").eq("league_id", lgId).eq("user_id", user.id).eq("week", _w); _baseByWeek[_w] = (_ew && _ew.length) || 0; }
  const _idxByWeek = {};
- const rows = soloFreePicks.map((b)=>{ const _w=_weekOf(b); if(_idxByWeek[_w]==null) _idxByWeek[_w]=_baseByWeek[_w]||0; const _si=_idxByWeek[_w]++; return {
- league_id: lgId, user_id: user.id, week: _w,
- slot: `${b.category||"ml"}_${_si}`, multiplier: b.mult||1,
- pick_name: b.pick, game: b.game||"", odds: b.odds, implied_odds: b.impliedOdds,
- game_date: b.gameTime||null,
- event_id: b.eventId||null, market_key: b.marketKey||null, outcome: b.outcome||null, outcome_point: (b.point!=null?b.point:null), sel_key: b.selKey||null,
- result: "pending", points_earned: 0,
- }; });
+ const rows = []; soloFreePicks.forEach((b)=>{ const _w=_weekOf(b); if(_idxByWeek[_w]==null) _idxByWeek[_w]=_baseByWeek[_w]||0; const _si=_idxByWeek[_w]++;
+   if(b.isParlay && Array.isArray(b.parlayLegs) && b.parlayLegs.length){
+     rows.push({ league_id: lgId, user_id: user.id, week: _w, slot: `parlay_${_si}`, multiplier: b.mult||1, pick_name: b.pick, game: b.game||((b.parlayLegs[0]&&b.parlayLegs[0].game)||""), odds: b.odds, implied_odds: b.impliedOdds, game_date: b.gameTime||null, parlay_legs: b.parlayLegs, result: "pending", points_earned: 0 });
+   } else {
+     rows.push({ league_id: lgId, user_id: user.id, week: _w, slot: `${b.category||"ml"}_${_si}`, multiplier: b.mult||1, pick_name: b.pick, game: b.game||"", odds: b.odds, implied_odds: b.impliedOdds, game_date: b.gameTime||null, event_id: b.eventId||null, market_key: b.marketKey||null, outcome: b.outcome||null, outcome_point: (b.point!=null?b.point:null), sel_key: b.selKey||null, result: "pending", points_earned: 0 });
+   } });
  const { error } = await supabase.from("picks").insert(rows);
  if(error){ alert("Error saving picks: " + error.message); return; }
  try{ await supabase.from("leagues").update({sport: soloSport}).eq("id", lgId); }catch(e){}
  // Snapshot reflects THIS week only; future-week picks live in their own bucket and surface in Upcoming.
  const _curNew = soloFreePicks.filter(b=>_weekOf(b)===week);
  let _ci = _baseByWeek[week]||0;
- const freeSnap = _curNew.map((b)=>({pick:b.pick, game:b.game||"", odds:b.odds, impliedOdds:b.impliedOdds, category:b.category, categoryLabel:b.categoryLabel, categoryColor:b.categoryColor, slot:`${b.category||"ml"}_${_ci++}`, gameTime:b.gameTime||null, mult:b.mult||1, eventId:b.eventId||null, marketKey:b.marketKey||null, outcome:b.outcome||null, point:(b.point!=null?b.point:null), selKey:b.selKey||null, id:b.id||null}));
+ const freeSnap = _curNew.map((b)=>({pick:b.pick, game:b.game||"", odds:b.odds, impliedOdds:b.impliedOdds, category:b.category, categoryLabel:b.categoryLabel, categoryColor:b.categoryColor, slot: b.isParlay?(`parlay_${_ci++}`):(`${b.category||"ml"}_${_ci++}`), gameTime:b.gameTime||null, mult:b.mult||1, isParlay:!!b.isParlay, parlayLegs:b.parlayLegs||null, eventId:b.eventId||null, marketKey:b.marketKey||null, outcome:b.outcome||null, point:(b.point!=null?b.point:null), selKey:b.selKey||null, id:b.id||null}));
  const _prevSnap = (soloSavedPicks && soloSavedPicks.week===week && Array.isArray(soloSavedPicks.freePicks)) ? soloSavedPicks.freePicks : [];
  const mergedSnap = [..._prevSnap, ...freeSnap];
  const lockedAt = new Date().toISOString();
@@ -8795,6 +8793,57 @@ export default function App() {
        </div>
      )}
 
+          {/* Build a Parlay entry */}
+     <div onClick={()=>setSoloParlay({legs:[],mult:2})} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,border:"1.5px dashed rgba(255,55,95,0.5)",background:"rgba(255,55,95,0.05)",borderRadius:13,padding:"14px",fontSize:14,fontWeight:800,color:IOS.pink,cursor:"pointer",fontFamily:"Barlow,sans-serif",marginBottom:10}}>
+       <svg width="16" height="16" viewBox="0 0 24 24" fill={IOS.pink} stroke="none"><path d="M13 2L3 14h7v8l10-12h-7z"/></svg>
+       Build a Parlay
+     </div>
+     {soloParlay && (()=>{
+       const legs=soloParlay.legs||[];
+       const _ls = legs.length ? calcLS(legs) : null;
+       const _impNum = _ls ? (_ls.decimal>=2?Math.round((_ls.decimal-1)*100):-Math.round(100/(_ls.decimal-1))) : 0;
+       const _poss = ((soloParlay.mult||2)*ptsFor(_impNum)).toFixed(1);
+       const addToSlip=()=>{
+         const _e=legs.map(l=>l.gameTime?Date.parse(l.gameTime):Infinity).reduce((a,b)=>Math.min(a,b),Infinity);
+         const _gt=isFinite(_e)?new Date(_e).toISOString():null;
+         setSoloFreePicks(prev=>[...prev, {id:"parlay_"+Date.now(), isParlay:true, parlayLegs:legs, mult:soloParlay.mult||2, category:"longshot", categoryLabel:"Parlay", categoryColor:IOS.pink, odds:(_ls?_ls.american:""), impliedOdds:_impNum, pick:legs.length+"-leg parlay", game:((legs[0]&&legs[0].game)||""), gameTime:_gt}]);
+         setSoloParlay(null); setSoloParlayMode(false);
+       };
+       return (
+       <div style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.6)",display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>{ setSoloParlay(null); setSoloParlayMode(false); }}>
+         <div style={{background:"#0d0d12",borderTopLeftRadius:20,borderTopRightRadius:20,border:"0.5px solid rgba(255,255,255,0.1)",padding:"18px 16px calc(env(safe-area-inset-bottom) + 20px)",maxHeight:"85vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
+           <div style={{width:36,height:4,borderRadius:2,background:"rgba(255,255,255,0.2)",margin:"0 auto 14px"}}/>
+           <div style={{textAlign:"center",marginBottom:4}}><span style={{fontSize:20,fontWeight:800,color:IOS.pink}}>New Parlay</span></div>
+           <div style={{textAlign:"center",fontSize:12.5,color:IOS.label3,marginBottom:14}}>Add 2 to 6 legs. All must hit to score.</div>
+           {legs.length===0 ? (
+             <div style={{textAlign:"center",color:IOS.label3,fontSize:13,padding:"24px 0"}}>No legs yet. Tap Add legs to pick from the board.</div>
+           ) : (
+             <div style={{background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"4px 12px",marginBottom:12}}>
+               {legs.map((l,i)=>(
+                 <div key={l.id||i} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 0",borderBottom:i<legs.length-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
+                   <span style={{fontSize:10,fontWeight:800,color:IOS.pink,width:15,flexShrink:0}}>{(i+1)+"."}</span>
+                   <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.pick}</div><div style={{fontSize:10,color:IOS.label3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.game}</div></div>
+                   <span style={{fontSize:12,fontWeight:800,color:(l.odds||"").startsWith("+")?IOS.green:IOS.blue,flexShrink:0}}>{l.odds}</span>
+                   <div onClick={()=>setSoloParlay(pv=>({...pv, legs:(pv.legs||[]).filter(x=>x.id!==l.id)}))} style={{width:22,height:22,borderRadius:"50%",background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",color:"rgba(255,255,255,0.45)",fontSize:14,cursor:"pointer",flexShrink:0}}>{"\u00d7"}</div>
+                 </div>
+               ))}
+             </div>
+           )}
+           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,55,95,0.08)",border:"0.5px solid rgba(255,55,95,0.3)",borderRadius:10,padding:"9px 12px",marginBottom:12}}>
+             <div><div style={{fontSize:8.5,fontWeight:800,textTransform:"uppercase",color:IOS.label3}}>Combined odds</div><div style={{fontSize:19,fontWeight:800,color:IOS.pink,fontFamily:"'Barlow Semi Condensed',sans-serif"}}>{_ls?_ls.american:"—"}</div></div>
+             <div style={{textAlign:"right"}}><div style={{fontSize:8.5,fontWeight:800,textTransform:"uppercase",color:IOS.label3}}>{"At "+(soloParlay.mult||2)+"x · Possible"}</div><div style={{fontSize:19,fontWeight:800,color:"#fff",fontFamily:"'Barlow Semi Condensed',sans-serif"}}>{_poss+" pts"}</div></div>
+           </div>
+           <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:14}}>
+             <span style={{fontSize:8.5,fontWeight:800,textTransform:"uppercase",color:IOS.label3,flexShrink:0}}>Units</span>
+             {[1,2,3,4,5].map(m=>{ const on=(soloParlay.mult||2)===m; return (<div key={m} onClick={()=>setSoloParlay(pv=>({...pv,mult:m}))} style={{flex:1,textAlign:"center",padding:"5px 0",borderRadius:6,fontSize:11,fontWeight:800,cursor:"pointer",background:on?"rgba(255,55,95,0.18)":"rgba(255,255,255,0.04)",border:"1px solid "+(on?IOS.pink:"rgba(255,255,255,0.08)"),color:on?IOS.pink:"rgba(255,255,255,0.4)"}}>{m+"x"}</div>); })}
+           </div>
+           <button onClick={()=>{ setSoloParlayMode(true); setBuildingSlip(true); setGridTargetSlot(null); setGridPropSub("all"); setGridType("ml"); setScreen("browser"); }} style={{width:"100%",background:"rgba(255,255,255,0.06)",border:"0.5px solid rgba(255,255,255,0.14)",borderRadius:12,padding:"12px",fontSize:14,fontWeight:800,color:"#fff",cursor:"pointer",marginBottom:8,fontFamily:"Barlow,sans-serif"}}>{legs.length?("Add more legs ("+legs.length+"/6)"):"Add legs"}</button>
+           <button onClick={addToSlip} disabled={legs.length<2} style={{width:"100%",background:legs.length<2?IOS.bg3:IOS.pink,border:"none",borderRadius:12,padding:"13px",fontSize:15,fontWeight:800,color:legs.length<2?IOS.label3:"#fff",cursor:legs.length<2?"default":"pointer",fontFamily:"Barlow,sans-serif"}}>{legs.length<2?"Add at least 2 legs":"Add parlay to slip"}</button>
+           <button onClick={()=>{ setSoloParlay(null); setSoloParlayMode(false); }} style={{width:"100%",background:"transparent",border:"none",color:IOS.label3,fontSize:13,fontWeight:700,cursor:"pointer",marginTop:10,fontFamily:"Barlow,sans-serif"}}>Cancel</button>
+         </div>
+       </div>
+       );
+     })()}
      <div onClick={()=>{ setBuildingSlip(true); setGridTargetSlot(null); setGridType("ml"); setGridPropSub("all"); setScreen("browser"); }} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,border:"1.5px dashed rgba(255,255,255,0.16)",background:"rgba(255,255,255,0.02)",borderRadius:13,padding:"14px",fontSize:14,fontWeight:800,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif",marginBottom:14}}>
        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
        Add another pick
@@ -9165,6 +9214,7 @@ export default function App() {
  };
  const addCard = (bet, catOverride) => {
    if(replaceCtx){ doReplaceSave(bet); return; }
+   if(isSoloMode && soloParlayMode){ setSoloParlay(pv=>{ if(!pv) return pv; const legs=pv.legs||[]; if(legs.length>=6 || legs.some(l=>l.id===bet.id)) return pv; return {...pv, legs:[...legs, {id:bet.id, pick:bet.pick, game:bet.game||"", odds:bet.odds, impliedOdds:bet.impliedOdds, gameTime:bet.gameTime||null, category:bet.category||gridType, categoryLabel:bet.categoryLabel||null, eventId:bet.eventId||null, marketKey:bet.marketKey||null, outcome:bet.outcome||null, point:(bet.point!=null?bet.point:null), selKey:bet.selKey||null}]}; }); try{ if(navigator.vibrate) navigator.vibrate(12); }catch(e){} return; }
  const cat = catOverride || (gridType==="longshot" ? "longshot" : gridType);
  if(isSoloMode){
    const _gl=["ml","spread","ou"].includes(cat);
@@ -9816,6 +9866,7 @@ export default function App() {
  )}
 
  {replaceCtx && (<div style={{margin:"0 16px 9px",padding:"9px 12px",borderRadius:10,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.35)",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}><div style={{fontSize:11.5,fontWeight:700,color:"#fff",minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{replaceCooked ? ("No open "+String(gSport).toUpperCase()+" games left this week \u2014 switch sport or cancel") : ("Replacing voided "+String(replaceCtx.type).toUpperCase()+" \u00b7 "+replaceCtx.mult+"\u00d7 \u2014 same week only")}</div><div onClick={()=>{ setReplaceCtx(null); setScreen("home"); }} style={{fontSize:11,fontWeight:800,color:IOS.blue,cursor:"pointer",flexShrink:0}}>Cancel</div></div>)}
+ {soloParlayMode && (<div style={{margin:"0 16px 9px",padding:"9px 12px",borderRadius:10,background:"rgba(255,55,95,0.12)",border:"0.5px solid rgba(255,55,95,0.35)",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}><div style={{fontSize:11.5,fontWeight:700,color:"#fff",minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{"Building parlay \u00b7 "+((soloParlay&&soloParlay.legs&&soloParlay.legs.length)||0)+"/6 legs \u2014 tap bets to add"}</div><div onClick={()=>{ setSoloParlayMode(false); setScreen("picks"); }} style={{fontSize:12,fontWeight:800,color:IOS.pink,cursor:"pointer",flexShrink:0}}>Done</div></div>)}
  {/* Bet type switcher */}
  <div className="gbx-scroll" style={{display:"flex",gap:7,padding:`${(sportsList.length>1||isSoloMode)?0:6}px 16px 9px`,overflowX:"auto"}}>
  {(()=>{
