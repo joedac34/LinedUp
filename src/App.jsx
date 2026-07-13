@@ -8811,7 +8811,7 @@ export default function App() {
        };
        return (
        <div style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.6)",display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>{ setSoloParlay(null); setSoloParlayMode(false); }}>
-         <div style={{background:"#0d0d12",borderTopLeftRadius:20,borderTopRightRadius:20,border:"0.5px solid rgba(255,255,255,0.1)",padding:"18px 16px calc(env(safe-area-inset-bottom) + 20px)",maxHeight:"85vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
+         <div style={{background:"#0d0d12",borderTopLeftRadius:20,borderTopRightRadius:20,border:"0.5px solid rgba(255,255,255,0.1)",padding:"18px 16px calc(env(safe-area-inset-bottom) + 88px)",maxHeight:"82vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
            <div style={{width:36,height:4,borderRadius:2,background:"rgba(255,255,255,0.2)",margin:"0 auto 14px"}}/>
            <div style={{textAlign:"center",marginBottom:4}}><span style={{fontSize:20,fontWeight:800,color:IOS.pink}}>New Parlay</span></div>
            <div style={{textAlign:"center",fontSize:12.5,color:IOS.label3,marginBottom:14}}>Add 2 to 6 legs. All must hit to score.</div>
