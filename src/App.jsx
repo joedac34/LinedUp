@@ -8802,7 +8802,7 @@ export default function App() {
        const legs=soloParlay.legs||[];
        const _ls = legs.length ? calcLS(legs) : null;
        const _impNum = _ls ? (_ls.decimal>=2?Math.round((_ls.decimal-1)*100):-Math.round(100/(_ls.decimal-1))) : 0;
-       const _poss = ((soloParlay.mult||2)*ptsFor(_impNum)).toFixed(1);
+       const _poss = _ls ? ((soloParlay.mult||2)*ptsFor(_impNum)).toFixed(1) : null;
        const addToSlip=()=>{
          const _e=legs.map(l=>l.gameTime?Date.parse(l.gameTime):Infinity).reduce((a,b)=>Math.min(a,b),Infinity);
          const _gt=isFinite(_e)?new Date(_e).toISOString():null;
@@ -8831,7 +8831,7 @@ export default function App() {
            )}
            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,55,95,0.08)",border:"0.5px solid rgba(255,55,95,0.3)",borderRadius:10,padding:"9px 12px",marginBottom:12}}>
              <div><div style={{fontSize:8.5,fontWeight:800,textTransform:"uppercase",color:IOS.label3}}>Combined odds</div><div style={{fontSize:19,fontWeight:800,color:IOS.pink,fontFamily:"'Barlow Semi Condensed',sans-serif"}}>{_ls?_ls.american:"—"}</div></div>
-             <div style={{textAlign:"right"}}><div style={{fontSize:8.5,fontWeight:800,textTransform:"uppercase",color:IOS.label3}}>{"At "+(soloParlay.mult||2)+"x · Possible"}</div><div style={{fontSize:19,fontWeight:800,color:"#fff",fontFamily:"'Barlow Semi Condensed',sans-serif"}}>{_poss+" pts"}</div></div>
+             <div style={{textAlign:"right"}}><div style={{fontSize:8.5,fontWeight:800,textTransform:"uppercase",color:IOS.label3}}>{"At "+(soloParlay.mult||2)+"x · Possible"}</div><div style={{fontSize:19,fontWeight:800,color:"#fff",fontFamily:"'Barlow Semi Condensed',sans-serif"}}>{_poss ? (_poss+" pts") : "\u2014"}</div></div>
            </div>
            <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:14}}>
              <span style={{fontSize:8.5,fontWeight:800,textTransform:"uppercase",color:IOS.label3,flexShrink:0}}>Units</span>
