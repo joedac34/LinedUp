@@ -3256,7 +3256,7 @@ export default function App() {
  ];
  const [flexPicks, setFlexPicks] = useState(EMPTY_FLEX);
  const [soloFlexPicks, setSoloFlexPicks] = useState(EMPTY_FLEX);
- const [soloFreePicks, setSoloFreePicks] = useState([]); const soloDraftReady = useRef(false); const [soloParlay, setSoloParlay] = useState(null); const [soloParlayMode, setSoloParlayMode] = useState(false); const [replaceCtx, setReplaceCtx] = useState(null); // void-replace: {voidId, mult, week, type} // freeform solo slate (variable count)
+ const [soloFreePicks, setSoloFreePicks] = useState([]); const soloDraftReady = useRef(false); const [soloParlay, setSoloParlay] = useState(null); const [soloParlayMode, setSoloParlayMode] = useState(false); const [pushNudgeOff, setPushNudgeOff] = useState(()=>{ try{ return localStorage.getItem("picklock_push_nudge")==="1"; }catch(e){ return false; } }); const [replaceCtx, setReplaceCtx] = useState(null); // void-replace: {voidId, mult, week, type} // freeform solo slate (variable count)
  const [freeCat, setFreeCat] = useState("all");
  const parseSlotConfig=(raw)=>{ try{ const a=typeof raw==="string"?JSON.parse(raw):raw; return (Array.isArray(a)&&a.length)?a:null; }catch(e){ return null; } };
  const freshSlots=()=>{ const cfg = !isSoloMode ? parseSlotConfig(activeLeague&&activeLeague.slot_config) : null; return cfg ? cfg.map((c,i)=>({id:i,bet:null,mult:null,category:c.type,slotType:c.type,market:c.market||null,isParlay:false,parlayLegs:[],locked:true})) : EMPTY_FLEX.map(s=>({...s})); };
@@ -6811,6 +6811,27 @@ export default function App() {
  {screen==="home"&&(
  <>
  <div className="body">
+           {(() => {
+             const _sup = (typeof Notification !== "undefined") && ("serviceWorker" in navigator) && ("PushManager" in window);
+             const _perm = _sup ? Notification.permission : "denied";
+             const _subbed = !!(userProfile && userProfile.push_enabled) && _perm === "granted";
+             if (!_sup || _perm === "denied" || _subbed || pushNudgeOff) return null;
+             return (
+             <div style={{display:"flex",alignItems:"center",gap:12,background:"linear-gradient(135deg,rgba(255,55,95,0.14),rgba(10,132,255,0.06))",border:"0.5px solid rgba(255,55,95,0.3)",borderRadius:15,padding:"12px 14px",marginBottom:12}}>
+               <div style={{width:36,height:36,borderRadius:11,background:"rgba(255,55,95,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#FF375F" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+               </div>
+               <div style={{flex:1,minWidth:0}}>
+                 <div style={{fontSize:14,fontWeight:800,color:"#fff"}}>Turn on notifications</div>
+                 <div style={{fontSize:11.5,color:"rgba(255,255,255,0.5)",marginTop:1}}>Get pinged when picks grade, your week is final, and before your slip locks.</div>
+               </div>
+               <div style={{display:"flex",flexDirection:"column",gap:6,flexShrink:0}}>
+                 <div onClick={async()=>{ const ok=await subscribeToPush(); if(ok){ try{ localStorage.setItem("picklock_push_nudge","1"); }catch(e){} setPushNudgeOff(true); } }} style={{background:IOS.pink,color:"#fff",fontSize:12,fontWeight:800,borderRadius:9,padding:"7px 14px",cursor:"pointer",textAlign:"center"}}>Enable</div>
+                 <div onClick={()=>{ try{ localStorage.setItem("picklock_push_nudge","1"); }catch(e){} setPushNudgeOff(true); }} style={{fontSize:10.5,fontWeight:700,color:"rgba(255,255,255,0.4)",textAlign:"center",cursor:"pointer"}}>Not now</div>
+               </div>
+             </div>
+             );
+           })()}
  {(()=>{ const rows=lbCache["all"]; let rk=null,total=0; if(rows&&rows.length){ const sx=[...rows].sort((a,b)=>(Number(b.points)||0)-(Number(a.points)||0)); total=sx.length; const i=sx.findIndex(r=>String(r.user_id)===String(user?.id)); if(i>=0) rk=i+1; } const pct=(rk&&total)?Math.max(1,Math.round(rk/total*100)):null; return (
            <div onClick={()=>{ fetchLeaderboard("all"); setScreen("leaderboard"); }} style={{display:"flex",alignItems:"center",gap:12,background:"linear-gradient(135deg,rgba(10,132,255,0.12),rgba(94,92,230,0.05))",border:"0.5px solid rgba(10,132,255,0.28)",borderRadius:15,padding:"12px 14px",marginBottom:12,cursor:"pointer"}}>
              <div style={{width:36,height:36,borderRadius:11,background:"rgba(10,132,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M8 21V10M16 21V3M4 21v-6"/></svg></div>
