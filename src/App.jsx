@@ -6117,8 +6117,8 @@ export default function App() {
  .win-rarity-pill{border-radius:20px;padding:6px 16px;font-size:13px;font-weight:700;}
 
  /* Chat */
- .chat-bg{background:${IOS.bg};flex:1;display:flex;flex-direction:column;}
- .chat-msgs{flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:10px;}
+ .chat-bg{background:${IOS.bg};flex:1;min-height:0;display:flex;flex-direction:column;}
+ .chat-msgs{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:12px 16px;display:flex;flex-direction:column;gap:10px;}
  .msg-group{display:flex;gap:8px;align-items:flex-end;}
  .msg-group.me{flex-direction:row-reverse;}
  .msg-av{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;color:#fff;}
@@ -12736,7 +12736,7 @@ export default function App() {
           </div>
         )}
         {screen==="chat"&&(
- <div className="body" style={{display:"flex",flexDirection:"column",height:"100%",overflow:"hidden"}}>
+ <div className="body" style={{display:"flex",flexDirection:"column",minHeight:0,overflow:"hidden"}}>
  <div style={{padding:"10px 20px 14px",display:"flex",alignItems:"center",gap:12,background:"radial-gradient(120% 90% at 90% -10%, rgba(10,132,255,0.18), transparent 55%), linear-gradient(180deg,#0B1A2E 0%,#000 82%)"}}>
  <button onClick={()=>setScreen("home")} style={{background:"rgba(255,255,255,0.08)",border:"none",borderRadius:10,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:17,flexShrink:0}}>‹</button>
  <div>
