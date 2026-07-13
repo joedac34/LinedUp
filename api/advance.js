@@ -11,6 +11,22 @@ import { createClient } from "@supabase/supabase-js";
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const GRACE_MS = 3 * 60 * 60 * 1000; // buffer so late finals grade before a week closes
 
+let _notifyBase = "";
+// Fire-and-forget "your week is final" push. Best-effort: never blocks finalization.
+async function sendWeekResult(userId, won, myPts, oppPts, week, leagueName) {
+  if (!_notifyBase || !process.env.CRON_SECRET) return;
+  const mp = parseFloat(Number(myPts || 0).toFixed(1));
+  const op = parseFloat(Number(oppPts || 0).toFixed(1));
+  const body = (won ? "You won " : "You lost ") + mp + "\u2013" + op + " in " + (leagueName || "your league") + ".";
+  try {
+    await fetch(_notifyBase + "/api/notify", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + process.env.CRON_SECRET, "Content-Type": "application/json" },
+      body: JSON.stringify({ userIds: [userId], title: "\uD83C\uDFC1 Week " + week + " is final", body: body, url: "/", category: "notif_results" }),
+    });
+  } catch (e) {}
+}
+
 // ── Playoff field/size helpers (ported verbatim from the client) ──────────────
 function playoffSeeds(total) { const t = Number(total) || 0; return t >= 12 ? 8 : t >= 8 ? 6 : t >= 6 ? 4 : t >= 4 ? 2 : 0; }
 // Explicit config (playoffs_enabled / playoff_size) wins; else smart default. Clamped to {2,4,6,8} and to participant count.
@@ -40,6 +56,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "supabase env not set (VITE_SUPABASE_URL / SUPABASE_SERVICE_KEY)" });
   }
   const supabase = createClient(SB_URL, SB_KEY);
+  _notifyBase = "https://" + (req.headers.host || process.env.VERCEL_URL || "lined-up-murex.vercel.app");
 
   try {
     const { data: leagues, error } = await supabase
@@ -98,6 +115,8 @@ export default async function handler(req, res) {
 // Decide W/L for a closed week from graded picks. Idempotent: only touches matchups that
 // haven't been finalized yet (winner_id IS NULL). Skips bye/placeholder rows.
 async function finalizeWeek(supabase, leagueId, week) {
+  const { data: _lgRow } = await supabase.from("leagues").select("name").eq("id", leagueId).maybeSingle();
+  const _leagueName = (_lgRow && _lgRow.name) || null;
   const { data: wonPicks } = await supabase
     .from("picks").select("user_id, points_earned")
     .eq("league_id", leagueId).eq("week", week).eq("result", "W");
@@ -125,6 +144,7 @@ async function finalizeWeek(supabase, leagueId, week) {
       await supabase.from("users").update({
         pending_result: JSON.stringify({ won: winner === uid, myPts: parseFloat(myPts.toFixed(1)), oppPts: parseFloat(oppPts.toFixed(1)), week }),
       }).eq("id", uid);
+      try { await sendWeekResult(uid, winner === uid, myPts, oppPts, week, _leagueName); } catch (e) {}
     }
   }
 }
