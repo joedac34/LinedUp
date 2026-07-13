@@ -6815,7 +6815,7 @@ export default function App() {
              const _sup = (typeof Notification !== "undefined") && ("serviceWorker" in navigator) && ("PushManager" in window);
              const _perm = _sup ? Notification.permission : "denied";
              const _subbed = !!(userProfile && userProfile.push_enabled) && _perm === "granted";
-             if (!_sup || _perm === "denied" || _subbed || pushNudgeOff) return null;
+             if (!userProfile || !_sup || _perm === "denied" || _subbed || pushNudgeOff) return null; // wait for profile to load — no pre-load flash
              return (
              <div style={{display:"flex",alignItems:"center",gap:12,background:"linear-gradient(135deg,rgba(255,55,95,0.14),rgba(10,132,255,0.06))",border:"0.5px solid rgba(255,55,95,0.3)",borderRadius:15,padding:"12px 14px",marginBottom:12}}>
                <div style={{width:36,height:36,borderRadius:11,background:"rgba(255,55,95,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
