@@ -8,8 +8,9 @@ import { createClient } from '@supabase/supabase-js';
 import webpush from 'web-push';
 
 const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+const _vsubj = process.env.VAPID_SUBJECT || 'admin@picklockapp.com';
 webpush.setVapidDetails(
-  'mailto:' + (process.env.VAPID_SUBJECT || 'admin@picklockapp.com'),
+  (_vsubj.startsWith('mailto:') || _vsubj.startsWith('http')) ? _vsubj : ('mailto:' + _vsubj),
   process.env.VAPID_PUBLIC_KEY,
   process.env.VAPID_PRIVATE_KEY
 );
@@ -68,14 +69,17 @@ export default async function handler(req, res) {
     const { data: subs } = await supabase.from('push_subscriptions').select('*').in('user_id', allowed);
     const payload = JSON.stringify({ title: safeTitle, body: safeText || '', url: clickUrl, tag: category || undefined });
 
-    let sent = 0; const dead = [];
+    let sent = 0; const dead = []; const errors = [];
     await Promise.all((subs || []).map(async row => {
       try { await webpush.sendNotification(row.subscription, payload); sent++; }
-      catch (err) { if (err.statusCode === 404 || err.statusCode === 410) dead.push(row.endpoint); }
+      catch (err) {
+        if (err.statusCode === 404 || err.statusCode === 410) dead.push(row.endpoint);
+        else errors.push({ status: err.statusCode || null, msg: String(err.body || err.message || err).slice(0, 200) });
+      }
     }));
     if (dead.length) await supabase.from('push_subscriptions').delete().in('endpoint', dead);
 
-    return res.status(200).json({ ok: true, sent, pruned: dead.length });
+    return res.status(200).json({ ok: true, sent, pruned: dead.length, ...(errors.length ? { errors } : {}) });
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }
