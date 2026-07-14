@@ -4,7 +4,18 @@ import { supabase } from './supabase';
 // server-side (endpoints derive the user from this token, not the request body).
 async function authHeaders() {
   const h = { "Content-Type": "application/json" };
-  try { const { data } = await supabase.auth.getSession(); const t = data && data.session && data.session.access_token; if (t) h["Authorization"] = "Bearer " + t; } catch (e) {}
+  try {
+    let { data } = await supabase.auth.getSession();
+    let sess = data && data.session;
+    // getSession() can hand back a token that is expired (or nearly so), which the API
+    // rejects with a 401. Refresh when it is missing or within 60s of expiring.
+    const exp = sess && sess.expires_at ? sess.expires_at * 1000 : 0;
+    if (!sess || !sess.access_token || (exp && exp - Date.now() < 60000)) {
+      try { const r = await supabase.auth.refreshSession(); if (r && r.data && r.data.session) sess = r.data.session; } catch (e2) {}
+    }
+    const t = sess && sess.access_token;
+    if (t) h["Authorization"] = "Bearer " + t;
+  } catch (e) {}
   return h;
 }
 import posthog from 'posthog-js';
@@ -4914,8 +4925,8 @@ export default function App() {
  const d = await r.json();
  if(r.ok && d.url){ window.location.href = d.url; return; }
  setCheckoutLoading(null);
- console.warn("checkout error:", d && d.error);
- } catch(e){ setCheckoutLoading(null); console.warn("checkout failed:", e); }
+ alert("Checkout error: " + ((d && d.error) || ("HTTP " + r.status))); console.warn("checkout error:", d && d.error);
+ } catch(e){ setCheckoutLoading(null); alert("Checkout failed: " + ((e && e.message) || e)); console.warn("checkout failed:", e); }
  };
 
  useEffect(()=>{
