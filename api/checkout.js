@@ -14,6 +14,13 @@ const PRICE_BY_PLAN = {
   annual: process.env.STRIPE_PRICE_ANNUAL,
 };
 
+// À-la-carte league price — MUST match the client formula. Recomputed here server-side
+// so a tampered client amount can never change what's charged.
+function leaguePrice(weeks, slots) {
+  const raw = 2 * (Number(weeks) || 0) + 1 * (Number(slots) || 0);
+  return Math.max(10, Math.min(50, Math.floor(raw / 5) * 5));
+}
+
 async function authedUser(req) {
   const h = req.headers.authorization || '';
   const token = h.startsWith('Bearer ') ? h.slice(7) : null;
@@ -32,10 +39,50 @@ export default async function handler(req, res) {
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
     const { plan } = body;
 
+    const origin = req.headers.origin || `https://${req.headers.host}`;
+
+    // ── À-la-carte one-time league unlock ──────────────────────────────────
+    if (plan === 'league') {
+      const leagueId = body.leagueId;
+      if (!leagueId) return res.status(400).json({ error: 'missing leagueId' });
+      const { data: lg } = await supabase
+        .from('leagues')
+        .select('id,name,commissioner_id,season_weeks,slot_config,paid')
+        .eq('id', leagueId)
+        .maybeSingle();
+      if (!lg) return res.status(404).json({ error: 'league not found' });
+      if (lg.commissioner_id !== userId) return res.status(403).json({ error: 'not your league' });
+      if (lg.paid) return res.status(400).json({ error: 'league already unlocked' });
+
+      let slots = 0;
+      try {
+        const cfg = typeof lg.slot_config === 'string' ? JSON.parse(lg.slot_config) : lg.slot_config;
+        slots = Array.isArray(cfg) ? cfg.length : 0;
+      } catch (e) { slots = 0; }
+      const price = leaguePrice(lg.season_weeks, slots);
+
+      const session = await stripe.checkout.sessions.create({
+        mode: 'payment',
+        line_items: [{
+          price_data: {
+            currency: 'usd',
+            product_data: { name: `PickLock League — ${lg.name || 'Custom league'}` },
+            unit_amount: price * 100,
+          },
+          quantity: 1,
+        }],
+        client_reference_id: userId,
+        customer_email: user.email || undefined,
+        metadata: { userId, kind: 'league', leagueId: String(leagueId) },
+        success_url: `${origin}/?checkout=success&league=${leagueId}`,
+        cancel_url: `${origin}/?checkout=cancel&league=${leagueId}`,
+      });
+      return res.status(200).json({ url: session.url, price });
+    }
+
+    // ── Subscription (Pro) ─────────────────────────────────────────────────
     const priceId = PRICE_BY_PLAN[plan] || PRICE_BY_PLAN.monthly;
     if (!priceId) return res.status(500).json({ error: 'price not configured (set STRIPE_PRICE_MONTHLY)' });
-
-    const origin = req.headers.origin || `https://${req.headers.host}`;
 
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',

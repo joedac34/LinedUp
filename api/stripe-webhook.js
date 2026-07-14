@@ -49,6 +49,13 @@ export default async function handler(req, res) {
     switch (event.type) {
       case 'checkout.session.completed': {
         const s = event.data.object;
+        // À-la-carte one-time league unlock: flip that league to paid; do NOT set is_pro.
+        if (s.metadata && s.metadata.kind === 'league') {
+          const leagueId = s.metadata.leagueId;
+          if (leagueId) await supabase.from('leagues').update({ paid: true }).eq('id', leagueId);
+          break;
+        }
+        // Subscription checkout: grant Pro.
         const userId = s.client_reference_id || (s.metadata && s.metadata.userId);
         await setProById(userId, true, {
           stripe_customer_id: s.customer || null,

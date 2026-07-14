@@ -3270,6 +3270,7 @@ export default function App() {
  const [altSheet, setAltSheet] = useState(null);
  const [checkoutLoading, setCheckoutLoading] = useState(null);
  const [showPostLeagueUpsell, setShowPostLeagueUpsell] = useState(false);
+ const [showLeaguePaywall, setShowLeaguePaywall] = useState(null); // {leagueId, price, name} — a-la-carte unlock
  const [activeFlexSlot, setActiveFlexSlot] = useState(null); // index of slot being edited
  const [flexCategory, setFlexCategory] = useState(null); // category being browsed
  const [longshotMode, setLongshotMode] = useState("straight"); // "straight" | "parlay" — for longshot sheet
@@ -4095,6 +4096,8 @@ export default function App() {
  };
  useEffect(()=>{ try{ if(typeof navigator!=="undefined" && "serviceWorker" in navigator){ navigator.serviceWorker.register("/sw.js").catch(()=>{}); } }catch(e){} }, []);
 
+ const leaguePrice = (weeks, slots) => { const raw = 2*(Number(weeks)||0) + 1*(Number(slots)||0); return Math.max(10, Math.min(50, Math.floor(raw/5)*5)); };
+ const startLeagueCheckout = async (leagueId) => { try { const r = await fetch("/api/checkout",{method:"POST",headers:await authHeaders(),body:JSON.stringify({plan:"league",leagueId})}); const d = await r.json(); if(r.ok && d.url){ window.location.href=d.url; return; } alert("Couldn't start checkout: "+((d&&d.error)||"unknown")); } catch(e){ alert("Checkout failed."); } };
  const createLeague = async (name, sportId) => {
  if(!user||!name||!sportId) return;
  if(newLeagueStartMode==="scheduled" && !newLeagueStartAt){ alert("Choose a start date & time for a scheduled league."); return; }
@@ -4103,6 +4106,8 @@ export default function App() {
  const bracketWeeks = {4:2,8:3,16:4,32:5};
  const seasonWeeks = newLeagueType==='bracket' ? (bracketWeeks[newLeagueSize]||3) : newLeagueWeeks;
  const sportsArr = newLeagueSports.length > 0 ? newLeagueSports : [sportId];
+ const _hasCustom = Array.isArray(newLeagueSlots) && newLeagueSlots.length && newLeagueSlots.every(s=>s.type);
+ const _needsPaywall = !isPro && _hasCustom;
  const {data,error} = await supabase.from("leagues").insert({
    name, sport:sportsArr[0], sports:sportsArr, commissioner_id:user.id, invite_code:inviteCode,
    max_members:newLeagueSize, target_size:newLeagueSize, pick_deadline:"Sun 1PM ET",
@@ -4110,16 +4115,22 @@ export default function App() {
    scoring_type:"multiplier_odds", start_mode:newLeagueStartMode||"auto", league_type:newLeagueType||"h2h",
    ...(newLeagueStartMode==="scheduled" && newLeagueStartAt ? {season_start:new Date(newLeagueStartAt).toISOString()} : {}),
    playoffs_enabled:(newLeagueType==='bracket')?false:!!newLeaguePlayoffs, playoff_size:(newLeagueType==='bracket'||!newLeaguePlayoffs)?0:Math.min(newLeaguePlayoffSize,([2,4,6,8].filter(v=>v<=newLeagueSize).pop()||2)),
+   paid: _needsPaywall ? false : true,
  }).select().single();
  if(error){alert(`leagues error: ${error.message} | code: ${error.code} | details: ${error.details}`);setCreatingLeague(false);return;}
  const {error:memberError} = await supabase.from("league_members").insert({league_id:data.id,user_id:user.id,is_commissioner:true});
  if(memberError){alert(`league_members error: ${memberError.message} | code: ${memberError.code}`);setCreatingLeague(false);return;}
  // Best-effort: store custom per-slot config (Pro). Safe no-op until the column exists.
- if(isPro && Array.isArray(newLeagueSlots) && newLeagueSlots.length && newLeagueSlots.every(s=>s.type)){
+ if(_hasCustom && (isPro || _needsPaywall)){
  const _cfg = newLeagueSlots.map((s,i)=>({ type:s.type, mult:(newLeaguePool[i]||1), ...(s.market?{market:s.market}:{}) }));
  await supabase.from("leagues").update({slot_config: JSON.stringify(_cfg)}).eq("id", data.id);
  }
  await fetchLeagues(user.id);
+ if(_needsPaywall){
+ setShowLeaguePaywall({ leagueId:data.id, price:leaguePrice(seasonWeeks, newLeagueSlots.length), name });
+ setCreatingLeague(false);
+ return;
+ }
  setNewLeagueCreated(data);
  setTimeout(()=>{ if(!isPro) setShowPostLeagueUpsell(true); }, 800);
  setCreatingLeague(false);
@@ -13785,6 +13796,26 @@ export default function App() {
  })()}
 
  {/* ══ POST LEAGUE UPSELL ══ */}
+ {showLeaguePaywall && (
+   <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:9999,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>setShowLeaguePaywall(null)}>
+     <div style={{background:"#0d0d12",borderRadius:"20px 20px 0 0",padding:"0 18px calc(env(safe-area-inset-bottom) + 24px)",border:"0.5px solid #1E1E1E"}} onClick={e=>e.stopPropagation()}>
+       <div style={{width:36,height:4,background:"#2A2A2A",borderRadius:2,margin:"12px auto 16px"}}/>
+       <div style={{fontSize:21,fontWeight:800,textAlign:"center",letterSpacing:-0.4,color:"#fff"}}>Unlock your league</div>
+       <div style={{fontSize:12.5,color:IOS.label3,textAlign:"center",margin:"3px 0 16px"}}>Your custom league is ready. Choose how to unlock it:</div>
+       <div onClick={()=>startLeagueCheckout(showLeaguePaywall.leagueId)} style={{borderRadius:15,padding:15,marginBottom:11,cursor:"pointer",background:"linear-gradient(135deg,rgba(255,55,95,0.12),rgba(191,90,242,0.06))",border:"1.5px solid rgba(255,55,95,0.4)"}}>
+         <div style={{fontSize:8.5,fontWeight:800,textTransform:"uppercase",letterSpacing:0.4,padding:"2px 7px",borderRadius:6,display:"inline-block",marginBottom:6,background:"rgba(255,55,95,0.9)",color:"#fff"}}>This league</div>
+         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}><div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Unlock this league</div><div style={{fontSize:19,fontWeight:800,color:"#fff"}}>${showLeaguePaywall.price}</div></div>
+         <div style={{fontSize:11.5,color:"rgba(255,255,255,0.55)",marginTop:4,lineHeight:1.45}}>One-time. Runs this full season for everyone in the league.</div>
+       </div>
+       <div onClick={()=>startCheckout("monthly")} style={{borderRadius:15,padding:15,marginBottom:8,cursor:"pointer",background:"linear-gradient(135deg,rgba(10,132,255,0.14),rgba(94,92,230,0.06))",border:"1.5px solid rgba(10,132,255,0.45)"}}>
+         <div style={{fontSize:8.5,fontWeight:800,textTransform:"uppercase",letterSpacing:0.4,padding:"2px 7px",borderRadius:6,display:"inline-block",marginBottom:6,background:IOS.blue,color:"#fff"}}>Best value</div>
+         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}><div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Go Pro</div><div style={{fontSize:19,fontWeight:800,color:"#fff"}}>$10<span style={{fontSize:12,fontWeight:700,color:IOS.label3}}>/mo</span></div></div>
+         <div style={{fontSize:11.5,color:"rgba(255,255,255,0.55)",marginTop:4,lineHeight:1.45}}>Unlimited custom leagues, multi-sport, Plok AI &amp; full analytics. Or $60/yr.</div>
+       </div>
+       <button onClick={()=>setShowLeaguePaywall(null)} style={{width:"100%",background:"transparent",border:"none",color:IOS.label3,fontSize:13,fontWeight:700,padding:10,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Not now — I'll finish later</button>
+     </div>
+   </div>
+ )}
  {showPostLeagueUpsell && (
    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:9999,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>setShowPostLeagueUpsell(false)}>
      <div style={{background:"#111",borderRadius:"20px 20px 0 0",padding:"0 0 40px",border:"0.5px solid #1E1E1E"}} onClick={e=>e.stopPropagation()}>
