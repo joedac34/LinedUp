@@ -4496,6 +4496,7 @@ export default function App() {
    if(!user || !code) return;
    const {data:league,error}=await supabase.from("leagues").select().eq("invite_code",String(code).toUpperCase().trim()).single();
    if(error||!league){alert("League not found.");return;}
+   if(league.paid===false){ alert("This league isn't active yet — the commissioner still needs to finish setting it up."); return; }
    const {data:currentMembers}=await supabase.from("league_members").select("user_id").eq("league_id",league.id);
    const targetSize = league.target_size||league.max_members||8;
    if(currentMembers && currentMembers.length >= targetSize){alert("This league is already full ("+targetSize+"/"+targetSize+").");return;}
@@ -4524,6 +4525,7 @@ export default function App() {
      .from("leagues")
      .select("*")
      .eq("privacy", "public")
+     .eq("paid", true)
      .order("created_at", {ascending:false})
      .limit(50);
    if(data) {
@@ -4919,7 +4921,7 @@ export default function App() {
    if(!user || !user.id) return;
    let sp; try { sp = new URLSearchParams(window.location.search); } catch(e){ return; }
    if(sp.get("checkout")==="success"){
-     const _r = ()=>{ try{ fetchUserProfile(user.id); }catch(e){} };
+     const _r = ()=>{ try{ fetchUserProfile(user.id); }catch(e){} try{ fetchLeagues(user.id); }catch(e){} };
      _r(); setTimeout(_r, 2500); setTimeout(_r, 6000);
      try{ window.history.replaceState({}, "", window.location.pathname); }catch(e){}
    }
@@ -11082,12 +11084,12 @@ export default function App() {
        const lsp=SPORTS[l.sport];
        const isSelected=l.id===activeLeagueId;
        return (
-       <div key={l.id} onClick={()=>{setActiveLeagueId(l.id);setLeagueSubTab("overview");setLmWeek(null);}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 14px",borderBottom:i<realLeagues.length-1?`0.5px solid ${IOS.sep}`:"none",background:isSelected?"rgba(10,132,255,0.08)":"transparent",cursor:"pointer"}}>
+       <div key={l.id} onClick={()=>{ if(l.paid===false && user && l.commissioner_id===user.id){ startLeagueCheckout(l.id); return; } setActiveLeagueId(l.id);setLeagueSubTab("overview");setLmWeek(null);}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 14px",borderBottom:i<realLeagues.length-1?`0.5px solid ${IOS.sep}`:"none",background:isSelected?"rgba(10,132,255,0.08)":"transparent",cursor:"pointer"}}>
          <div>
            <div style={{display:"flex",alignItems:"center",gap:6}}>
              <div style={{fontSize:13,fontWeight:700,color:isSelected?IOS.blue:"#fff"}}>{l.name}</div>{unreadByLeague[l.id]>0&&<span style={{minWidth:16,height:16,borderRadius:8,background:IOS.pink,color:"#fff",fontSize:10,fontWeight:800,display:"inline-flex",alignItems:"center",justifyContent:"center",padding:"0 4px"}}>{unreadByLeague[l.id]>9?"9+":unreadByLeague[l.id]}</span>}
              {l.privacy==="public"&&<div style={{fontSize:8,fontWeight:700,color:"#30D158",background:"rgba(48,209,88,0.1)",border:"0.5px solid rgba(48,209,88,0.25)",borderRadius:4,padding:"1px 5px",letterSpacing:.3}}>PUBLIC</div>}
-             {l.privacy!=="public"&&<div style={{fontSize:8,fontWeight:700,color:"rgba(255,255,255,0.3)",background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:4,padding:"1px 5px",letterSpacing:.3}}>PRIVATE</div>}
+             {l.privacy!=="public"&&<div style={{fontSize:8,fontWeight:700,color:"rgba(255,255,255,0.3)",background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:4,padding:"1px 5px",letterSpacing:.3}}>PRIVATE</div>}{l.paid===false&&<div style={{fontSize:8,fontWeight:800,color:"#FF9F0A",background:"rgba(255,159,10,0.14)",border:"0.5px solid rgba(255,159,10,0.35)",borderRadius:4,padding:"1px 5px",letterSpacing:.3}}>UNLOCK ${leaguePrice(l.season_weeks,(parseSlotConfig(l.slot_config)||[]).length)}</div>}
            </div>
            <div style={{fontSize:10,color:IOS.label3,marginTop:1}}>{lsp.label} · Wk {l.current_week||1}</div>
          </div>
