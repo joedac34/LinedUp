@@ -13147,13 +13147,6 @@ export default function App() {
  </div>
  </div>
 
- {isPro && (
- <div style={{padding:"0 16px 4px"}}>
- <button onClick={openBillingPortal} style={{width:"100%",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"14px",fontSize:15,fontWeight:600,color:"rgba(255,255,255,0.7)",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
- Manage subscription
- </button>
- </div>
- )}
  {/* How to Play */}
  <div style={{padding:"0 16px 4px"}}>
  <button onClick={()=>setTutorialStep(0)} style={{width:"100%",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"14px",fontSize:15,fontWeight:600,color:"rgba(255,255,255,0.7)",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
@@ -13164,7 +13157,7 @@ export default function App() {
  {/* Sign Out + Delete Account */}
  <div style={{padding:"8px 16px 32px",display:"flex",flexDirection:"column",gap:10}}>
  <button onClick={async()=>{ if(userProfile&&userProfile.push_enabled){ await disablePush(); } else { await subscribeToPush(); } }} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.14)",borderRadius:12,padding:"14px",fontSize:15,fontWeight:600,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}><span>Push notifications</span><span style={{fontSize:13,fontWeight:700,color:(userProfile&&userProfile.push_enabled)?IOS.green:IOS.label3}}>{(userProfile&&userProfile.push_enabled)?"On":"Off"}</span></button>
- {isPro?(<button onClick={async()=>{ try{ const r=await fetch("/api/portal",{method:"POST",headers:await authHeaders(),body:JSON.stringify({userId:user&&user.id})}); const d=await r.json().catch(()=>null); if(r.ok&&d&&d.url){ window.location.href=d.url; } else { alert("Couldn't open the subscription portal - try again in a moment."); } }catch(e){ alert("Couldn't open the subscription portal - try again in a moment."); } }} style={{width:"100%",background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.14)",borderRadius:12,padding:"14px",fontSize:15,fontWeight:600,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Manage subscription</button>):null}
+ {isPro?(<button onClick={openBillingPortal} style={{width:"100%",background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.14)",borderRadius:12,padding:"14px",fontSize:15,fontWeight:600,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Manage subscription</button>):null}
  <button onClick={async()=>{
  await supabase.auth.signOut();
  setUser(null);
