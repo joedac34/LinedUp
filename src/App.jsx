@@ -4098,6 +4098,7 @@ export default function App() {
 
  const leaguePrice = (weeks, slots) => { const raw = 2*(Number(weeks)||0) + 1*(Number(slots)||0); return Math.max(10, Math.min(50, Math.floor(raw/5)*5)); };
  const startLeagueCheckout = async (leagueId) => { try { const r = await fetch("/api/checkout",{method:"POST",headers:await authHeaders(),body:JSON.stringify({plan:"league",leagueId})}); const d = await r.json(); if(r.ok && d.url){ window.location.href=d.url; return; } alert("Couldn't start checkout: "+((d&&d.error)||"unknown")); } catch(e){ alert("Checkout failed."); } };
+ const openBillingPortal = async () => { try { const r = await fetch("/api/portal",{method:"POST",headers:await authHeaders()}); const d = await r.json(); if(r.ok && d.url){ window.location.href=d.url; return; } alert((d&&d.error==="no active subscription to manage") ? "No active subscription to manage." : ("Couldn't open billing: "+((d&&d.error)||"unknown"))); } catch(e){ alert("Couldn't open billing."); } };
  const createLeague = async (name, sportId) => {
  if(!user||!name||!sportId) return;
  if(newLeagueStartMode==="scheduled" && !newLeagueStartAt){ alert("Choose a start date & time for a scheduled league."); return; }
@@ -13146,6 +13147,13 @@ export default function App() {
  </div>
  </div>
 
+ {isPro && (
+ <div style={{padding:"0 16px 4px"}}>
+ <button onClick={openBillingPortal} style={{width:"100%",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"14px",fontSize:15,fontWeight:600,color:"rgba(255,255,255,0.7)",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
+ Manage subscription
+ </button>
+ </div>
+ )}
  {/* How to Play */}
  <div style={{padding:"0 16px 4px"}}>
  <button onClick={()=>setTutorialStep(0)} style={{width:"100%",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"14px",fontSize:15,fontWeight:600,color:"rgba(255,255,255,0.7)",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
