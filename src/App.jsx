@@ -134,6 +134,56 @@ const IOS = {
 };
 
 // ─── SPORT CONFIG ───────────────────────────────────────────────
+// ─── SEASON WINDOWS ────────────────────────────────────────────────────────────
+// Games available per week, by phase. Used to cap custom-league length so every
+// slot stays fillable for the whole season (a league with 4 moneyline slots needs
+// 4 DISTINCT games each week — you cannot take two moneylines on the same game).
+// NFL dates verified for 2026-27. Other leagues are best estimates.
+// ⚠️ UPDATE THESE ANNUALLY.
+const SEASON_WINDOWS = {
+  nfl: [
+    { name:"Regular season",       start:"2026-09-09", end:"2027-01-10", games:15 },
+    { name:"Wild Card",            start:"2027-01-16", end:"2027-01-18", games:6 },
+    { name:"Divisional",           start:"2027-01-23", end:"2027-01-24", games:4 },
+    { name:"Conf. Championships",  start:"2027-01-31", end:"2027-01-31", games:2 },
+    { name:"Super Bowl",           start:"2027-02-14", end:"2027-02-14", games:1 },
+  ],
+  ncaaf: [
+    { name:"Regular season",       start:"2026-08-29", end:"2026-12-05", games:50 },
+    { name:"Bowls / CFP",          start:"2026-12-16", end:"2027-01-11", games:8 },
+  ],
+  nba: [
+    { name:"Regular season",       start:"2026-10-20", end:"2027-04-12", games:40 },
+    { name:"Play-in / Round 1",    start:"2027-04-14", end:"2027-05-02", games:15 },
+    { name:"Conf. Semifinals",     start:"2027-05-03", end:"2027-05-17", games:8 },
+    { name:"Conf. Finals",         start:"2027-05-18", end:"2027-06-01", games:4 },
+    { name:"NBA Finals",           start:"2027-06-03", end:"2027-06-21", games:3 },
+  ],
+  mlb: [
+    { name:"Regular season",       start:"2026-03-25", end:"2026-09-27", games:90 },
+    { name:"Wild Card",            start:"2026-09-29", end:"2026-10-01", games:6 },
+    { name:"Division Series",      start:"2026-10-03", end:"2026-10-11", games:8 },
+    { name:"Championship Series",  start:"2026-10-12", end:"2026-10-21", games:5 },
+    { name:"World Series",         start:"2026-10-23", end:"2026-11-01", games:4 },
+  ],
+};
+const WEEK_MS_C = 7*24*60*60*1000;
+// Slot types that need their OWN game each week (you cannot take both sides of one
+// game's line). Props/longshots/wildcards can share a game, so they only need 1.
+const DISTINCT_GAME_TYPES = ["ml","spread","ou","ml_h1","spread_h1","ou_h1","ml_f5","spread_f5","ou_f5","yrfi","nrfi"];
+// Games available for a sport within a given week window.
+function gamesInWeekFor(sportId, wkStart, wkEnd){
+  const phases = SEASON_WINDOWS[sportId] || [];
+  let g = 0;
+  for(const ph of phases){
+    const ps = Date.parse(ph.start+"T00:00:00Z");
+    const pe = Date.parse(ph.end+"T23:59:59Z");
+    if(isNaN(ps)||isNaN(pe)) continue;
+    if(pe >= wkStart && ps <= wkEnd) g = Math.max(g, ph.games);
+  }
+  return g;
+}
+
 const SPORTS = {
  nfl: {
  id:"nfl", label:"NFL", icon:"", color:"#0A84FF",
@@ -4052,6 +4102,51 @@ export default function App() {
   nba:[{id:"all",l:"All"},{id:"pts",l:"Points"},{id:"reb",l:"Rebounds"},{id:"ast",l:"Assists"},{id:"3pt",l:"Threes"}],
   mlb:[{id:"all",l:"All"},{id:"hr",l:"HR"},{id:"hits",l:"Hits"},{id:"bases",l:"Total Bases"},{id:"rbi",l:"RBIs"},{id:"runs",l:"Runs"},{id:"walks",l:"Walks"},{id:"sb",l:"SB"},{id:"doubles",l:"2B"},{id:"triples",l:"3B"},{id:"hrr",l:"H+R+RBI"},{id:"k",l:"K"},{id:"er",l:"ER"},{id:"hitsallowed",l:"Hits Alwd"},{id:"walksallowed",l:"BB Alwd"},{id:"outs",l:"Outs"}],
  };
+ // ─── LEAGUE LENGTH VALIDATION ────────────────────────────────────────────────
+ // Which of the league's sports can actually fill a given slot?
+ // A slot type may be sport-locked (YRFI = MLB), and a prop slot may be narrowed
+ // to a market that only exists in one sport (TD scorers = NFL/NCAAF only).
+ const slotSportsFor = (slot, leagueSports) => {
+  const st = SLOT_TYPES.find(x=>x.id===slot.type);
+  let sports = (st && st.sports) ? st.sports.slice() : leagueSports.slice();
+  if(slot.type==="prop" && slot.market && slot.market!=="all"){
+   const ms = Object.keys(PROP_SUBS_BY_SPORT).filter(sp=>(PROP_SUBS_BY_SPORT[sp]||[]).some(x=>x.id===slot.market));
+   sports = sports.filter(s=>ms.includes(s));
+  }
+  return sports.filter(s=>leagueSports.includes(s));
+ };
+ // The longest league (in weeks) that stays fully fillable every single week.
+ // Returns { max, reason }. Walks week by week; the first week that cannot be
+ // filled ends the season.
+ const leagueMaxWeeks = (startDate, leagueSports, slots, hardCap=18) => {
+  const start = startDate instanceof Date ? startDate.getTime() : Date.parse(startDate);
+  if(isNaN(start) || !leagueSports || !leagueSports.length || !slots || !slots.length) return { max:hardCap, reason:"" };
+  // group slots by type -> how many distinct games that type needs
+  const byType = {};
+  slots.forEach(sl=>{ if(sl && sl.type) (byType[sl.type] = byType[sl.type] || []).push(sl); });
+  for(let w=1; w<=hardCap; w++){
+   const wkStart = start + (w-1)*WEEK_MS_C;
+   const wkEnd   = start + w*WEEK_MS_C - 1;
+   for(const type of Object.keys(byType)){
+    const group = byType[type];
+    const sports = slotSportsFor(group[0], leagueSports);
+    const need = DISTINCT_GAME_TYPES.includes(type) ? group.length : 1;
+    let avail = 0;
+    sports.forEach(sp=>{ avail += gamesInWeekFor(sp, wkStart, wkEnd); });
+    if(avail < need){
+     const st = SLOT_TYPES.find(x=>x.id===type);
+     const nm = (st && st.l) || type;
+     const reason = !sports.length
+      ? `Your ${nm} slot isn't supported by the sports you picked.`
+      : (need>1
+         ? `${need}\u00D7 ${nm} needs ${need} games a week \u2014 not enough after week ${w-1}.`
+         : `Not enough ${nm} games after week ${w-1}.`);
+     return { max: Math.max(0, w-1), reason };
+    }
+   }
+  }
+  return { max:hardCap, reason:"" };
+ };
  const DEFAULT_SLOTS=[{type:"ml",mult:1},{type:"prop",mult:2},{type:"ou",mult:3},{type:"spread",mult:4},{type:"longshot",mult:5}];
  const LAYOUT_PRESETS=[
   {id:"classic", name:"Classic", desc:"The all-rounder — one of each, escalating multipliers.", slots:[{type:"ml",mult:1},{type:"spread",mult:2},{type:"ou",mult:3},{type:"prop",mult:4},{type:"longshot",mult:5}]},
@@ -4107,6 +4202,10 @@ export default function App() {
  };
  useEffect(()=>{ try{ if(typeof navigator!=="undefined" && "serviceWorker" in navigator){ navigator.serviceWorker.register("/sw.js").catch(()=>{}); } }catch(e){} }, []);
 
+ // Longest league that stays fillable, given the sports + slots chosen right now.
+ const _lgSportsSel = (newLeagueSports && newLeagueSports.length) ? newLeagueSports : (selectedSport?[selectedSport]:[]);
+ const weekCap = leagueMaxWeeks(new Date(), _lgSportsSel, newLeagueSlots, 18);
+ useEffect(()=>{ if(weekCap.max>0 && newLeagueWeeks>weekCap.max) setNewLeagueWeeks(weekCap.max); }, [weekCap.max]);
  const leaguePrice = (weeks, slots) => { const raw = 2*(Number(weeks)||0) + 1*(Number(slots)||0); return Math.max(10, Math.min(50, Math.floor(raw/5)*5)); };
  const startLeagueCheckout = async (leagueId) => { try { const r = await fetch("/api/checkout",{method:"POST",headers:await authHeaders(),body:JSON.stringify({plan:"league",leagueId})}); const d = await r.json(); if(r.ok && d.url){ window.location.href=d.url; return; } alert("Couldn't start checkout: "+((d&&d.error)||"unknown")); } catch(e){ alert("Checkout failed."); } };
  const openBillingPortal = async () => { try { const r = await fetch("/api/portal",{method:"POST",headers:await authHeaders()}); const d = await r.json(); if(r.ok && d.url){ window.location.href=d.url; return; } alert((d&&d.error==="no active subscription to manage") ? "No active subscription to manage." : ("Couldn't open billing: "+((d&&d.error)||"unknown"))); } catch(e){ alert("Couldn't open billing."); } };
@@ -4116,8 +4215,10 @@ export default function App() {
  setCreatingLeague(true);
  const inviteCode = Math.random().toString(36).substring(2,8).toUpperCase();
  const bracketWeeks = {4:2,8:3,16:4,32:5};
- const seasonWeeks = newLeagueType==='bracket' ? (bracketWeeks[newLeagueSize]||3) : newLeagueWeeks;
  const sportsArr = newLeagueSports.length > 0 ? newLeagueSports : [sportId];
+ // Safety net: never persist a league longer than its slots can actually be filled.
+ const _capNow = leagueMaxWeeks(new Date(), sportsArr, newLeagueSlots, 18);
+ const seasonWeeks = newLeagueType==='bracket' ? (bracketWeeks[newLeagueSize]||3) : (_capNow.max>0 ? Math.min(newLeagueWeeks, _capNow.max) : newLeagueWeeks);
  const _hasCustom = Array.isArray(newLeagueSlots) && newLeagueSlots.length && newLeagueSlots.every(s=>s.type);
  const _needsPaywall = !isPro && _hasCustom;
  const {data,error} = await supabase.from("leagues").insert({
@@ -10888,10 +10989,14 @@ export default function App() {
      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
        <div onClick={()=>setNewLeagueWeeks(w=>Math.max(1,w-1))} style={{width:28,height:28,borderRadius:6,background:"#1A1A1A",border:"0.5px solid #2A2A2A",color:"#ccc",fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>−</div>
        <div style={{fontSize:16,fontWeight:700,color:"#fff",minWidth:28,textAlign:"center"}}>{newLeagueWeeks}</div>
-       <div onClick={()=>setNewLeagueWeeks(w=>Math.min(30,w+1))} style={{width:28,height:28,borderRadius:6,background:"#1A1A1A",border:"0.5px solid #2A2A2A",color:"#ccc",fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>+</div>
+       <div onClick={()=>setNewLeagueWeeks(w=>Math.min(weekCap.max>0?weekCap.max:30,w+1))} style={{width:28,height:28,borderRadius:6,background:"#1A1A1A",border:"0.5px solid #2A2A2A",color:(weekCap.max>0&&newLeagueWeeks>=weekCap.max)?"#444":"#ccc",fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",cursor:(weekCap.max>0&&newLeagueWeeks>=weekCap.max)?"default":"pointer"}}>+</div>
        <div style={{fontSize:12,color:"rgba(255,255,255,0.6)",marginLeft:4}}>weeks</div>
      </div>
      <div style={{fontSize:11,color:"rgba(255,255,255,0.45)",marginBottom:16}}>{newLeagueType==="points"?"Ranked by total points at the end":"NFL regular season is 18 weeks"}</div>
+     {weekCap.reason&&(<div style={{display:"flex",gap:7,alignItems:"flex-start",background:"rgba(255,159,10,0.10)",border:"0.5px solid rgba(255,159,10,0.3)",borderRadius:10,padding:"9px 11px",marginTop:-10,marginBottom:14}}>
+       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FF9F0A" strokeWidth="2.2" strokeLinecap="round" style={{flexShrink:0,marginTop:1}}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+       <div style={{fontSize:10.5,color:"rgba(255,255,255,0.62)",lineHeight:1.45}}><b style={{color:"#FF9F0A"}}>Max {weekCap.max} {weekCap.max===1?"week":"weeks"}.</b> {weekCap.reason} Add another sport or change that slot to go longer.</div>
+     </div>)}
      </>
    )}
 
