@@ -4203,7 +4203,7 @@ export default function App() {
  useEffect(()=>{ try{ if(typeof navigator!=="undefined" && "serviceWorker" in navigator){ navigator.serviceWorker.register("/sw.js").catch(()=>{}); } }catch(e){} }, []);
 
  // Longest league that stays fillable, given the sports + slots chosen right now.
- const _lgSportsSel = (newLeagueSports && newLeagueSports.length) ? newLeagueSports : (selectedSport?[selectedSport]:[]);
+ const _lgSportsSel = (newLeagueSports && newLeagueSports.length) ? newLeagueSports : [];
  const weekCap = leagueMaxWeeks(new Date(), _lgSportsSel, newLeagueSlots, 18);
  useEffect(()=>{ if(weekCap.max>0 && newLeagueWeeks>weekCap.max) setNewLeagueWeeks(weekCap.max); }, [weekCap.max]);
  const leaguePrice = (weeks, slots) => { const raw = 2*(Number(weeks)||0) + 1*(Number(slots)||0); return Math.max(10, Math.min(50, Math.floor(raw/5)*5)); };
@@ -9399,6 +9399,15 @@ export default function App() {
  } else if(cat!=="longshot"){
  const existingIdx = activePicks.findIndex(p=>!p.isParlay && p.bet!==null && p.category===cat);
  if(existingIdx!==-1) dest = existingIdx;
+ }
+ // You can't take both sides of the same game's line (mirrors solo mode). Without
+ // this, a custom league with two slots of a type — or flex multiplier stacking —
+ // lets you pick both sides of one game for a guaranteed split.
+ const _glL = ["ml","spread","ou"].includes(cat);
+ const _gkL = bet.eventId||bet.game||"";
+ if(_glL && _gkL && activePicks.some((p,i)=> i!==dest && !p.isParlay && p.bet && p.category===cat && ((p.bet.eventId||p.bet.game||"")===_gkL))){
+  setPickConflict("You already picked this game's "+(cat==="ou"?"total":(cat==="ml"?"moneyline":"spread"))+". You can't take both sides of the same line.");
+  setTimeout(()=>setPickConflict(""),2600); setGridJustAdded(null); return;
  }
  setActivePicks(prev=>prev.map((p,i)=> i===dest ? {...p, bet, category:cat, isParlay:false, parlayLegs:[], mult:((!gridCfg && !isSoloMode && gridFlexMult!=null && cat!=="longshot") ? gridFlexMult : p.mult)} : p));
  try{ posthog.capture('pick_added', { league_id: activeLeague.id, category: cat, market_key: (bet&&bet.marketKey)||null }); }catch(e){}
