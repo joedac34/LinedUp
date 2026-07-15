@@ -736,7 +736,8 @@ const polarToCart=(cx,cy,r,deg)=>{const rad=(deg-90)*Math.PI/180;return{x:cx+r*M
 function puAppliesTo(puId, category, isParlay) {
   if (!puId) return false;
   if (puId === "double") return true;
-  if (puId.indexOf("enhance") === 0) return category === "spread";
+  // Spread enhancers work on any spread line — full game, First 5, or 1st half.
+  if (puId.indexOf("enhance") === 0) return category === "spread" || category === "spread_f5" || category === "spread_h1";
   if (puId === "insurance") return !!isParlay || category === "longshot";
   if (puId === "second") return !isParlay && category !== "longshot";
   return true;
@@ -4010,6 +4011,9 @@ export default function App() {
  const currentWeekPicks = gradingData[activeLeagueId] || [];
  const [activeSlot, setActiveSlot] = useState(null);
  const [myPUs, setMyPUs] = useState([]); // loaded from league_power_ups table
+ // Power-ups are a per-league setting (commissioner, Pro-only). When a league has them
+ // off, members can neither win them on the wheel nor apply them. Solo mode keeps them.
+ const puEnabled = (activeLeague && activeLeague.id && !isSoloMode) ? activeLeague.power_ups_enabled!==false : true;
  const [showPUModal, setShowPUModal] = useState(null); // {context:"picks"|"matchup", slotId, pickIdx}
  const [secondSwap, setSecondSwap] = useState(null); // {pick, category} — live Second Chance target
  const doSecondSwap = async (pick, bet) => {
@@ -4068,6 +4072,7 @@ export default function App() {
  const [browseLoading, setBrowseLoading] = useState(false);
  const [joiningLeagueId, setJoiningLeagueId] = useState(null); // 'h2h' | 'bracket' | 'points'
  const [newLeagueWeeks, setNewLeagueWeeks] = useState(18);
+ const [newLeaguePowerUps, setNewLeaguePowerUps] = useState(true); // Pro-only league setting
  const [newLeagueStep, setNewLeagueStep] = useState(0); // 0=type, 1=details
  const [newLeaguePrivacy, setNewLeaguePrivacy] = useState('private');
  const [newLeaguePlayoffs, setNewLeaguePlayoffs] = useState(true);
@@ -4229,6 +4234,7 @@ export default function App() {
    ...(newLeagueStartMode==="scheduled" && newLeagueStartAt ? {season_start:new Date(newLeagueStartAt).toISOString()} : {}),
    playoffs_enabled:(newLeagueType==='bracket')?false:!!newLeaguePlayoffs, playoff_size:(newLeagueType==='bracket'||!newLeaguePlayoffs)?0:Math.min(newLeaguePlayoffSize,([2,4,6,8].filter(v=>v<=newLeagueSize).pop()||2)),
    paid: _needsPaywall ? false : true,
+   power_ups_enabled: isPro ? !!newLeaguePowerUps : true,
  }).select().single();
  if(error){alert(`leagues error: ${error.message} | code: ${error.code} | details: ${error.details}`);setCreatingLeague(false);return;}
  const {error:memberError} = await supabase.from("league_members").insert({league_id:data.id,user_id:user.id,is_commissioner:true});
@@ -5534,7 +5540,7 @@ export default function App() {
  },[screen, activeLeague?.id]);
 
  const spinWheel=()=>{
- if(spinning)return;
+ if(spinning||!puEnabled)return;
  setSpinning(true);setWonPU(null);
  const segA=360/WHEEL_ITEMS.length;
  const winIdx=Math.floor(Math.random()*WHEEL_ITEMS.length);
@@ -6712,7 +6718,7 @@ export default function App() {
 
  {/* Spin button */}
  <div className="ts-btn" style={{width:"100%",marginBottom:14}}>
- <button className="spin-glow-btn" onClick={()=>{setShowTopScorer(false);setShowWheel(true);}}>
+ <button className="spin-glow-btn" style={{display:puEnabled?undefined:"none"}} onClick={()=>{ if(!puEnabled) return; setShowTopScorer(false);setShowWheel(true);}}>
  Spin the Wheel
  </button>
  </div>
@@ -7580,7 +7586,7 @@ export default function App() {
  </div>
  ))}
  {wheelSpins > 0 && (
- <div className="pu-spin-chip" onClick={()=>setShowWheel(true)}>
+ <div className="pu-spin-chip" style={{display:puEnabled?undefined:"none"}} onClick={()=>{ if(puEnabled) setShowWheel(true); }}>
  <div style={{fontSize:20}}></div>
  <div>
  <div style={{fontSize:13,fontWeight:600,color:"#fff"}}>Spin Wheel</div>
@@ -8750,7 +8756,7 @@ export default function App() {
  {slot.mult&&filled&&<div style={{fontSize:12,fontWeight:700,color:IOS.green,flexShrink:0}}>
  {isDouble?`+${pts} pts (2⃣ doubled!)`:isEnhance&&slot.bet?`+${pts} pts `:`+${pts} pts if win`}
  </div>}
- {(myPUs.filter(p=>p.type==="offensive").length>0||appliedPU)&&slot.mult&&filled&&(
+ {puEnabled&&(myPUs.filter(p=>p.type==="offensive").length>0||appliedPU)&&slot.mult&&filled&&(
  appliedPU ? (
  <div style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:7,background:`${appliedPU.color}15`,border:`1px solid ${appliedPU.color}30`,cursor:"pointer"}}
  onClick={e=>{e.stopPropagation();const r=appliedPU;if(r?.dbId)supabase.from("league_power_ups").update({used:false}).eq("id",r.dbId);setMyPUs(p=>[...p,r]);setActivatedPUs(p=>{const n={...p};delete n[idx];return n;});}}>
@@ -10064,7 +10070,31 @@ export default function App() {
  )}
 
  {replaceCtx && (<div style={{margin:"0 16px 9px",padding:"9px 12px",borderRadius:10,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.35)",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}><div style={{fontSize:11.5,fontWeight:700,color:"#fff",minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{replaceCooked ? ("No open "+String(gSport).toUpperCase()+" games left this week \u2014 switch sport or cancel") : ("Replacing voided "+String(replaceCtx.type).toUpperCase()+" \u00b7 "+replaceCtx.mult+"\u00d7 \u2014 same week only")}</div><div onClick={()=>{ setReplaceCtx(null); setScreen("home"); }} style={{fontSize:11,fontWeight:800,color:IOS.blue,cursor:"pointer",flexShrink:0}}>Cancel</div></div>)}
- {soloParlayMode && (<div style={{margin:"0 16px 9px",padding:"9px 12px",borderRadius:10,background:"rgba(255,55,95,0.12)",border:"0.5px solid rgba(255,55,95,0.35)",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}><div style={{fontSize:11.5,fontWeight:700,color:"#fff",minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{"Building parlay \u00b7 "+((soloParlay&&soloParlay.legs&&soloParlay.legs.length)||0)+"/6 legs \u2014 tap bets to add"}</div><div onClick={()=>{ setSoloParlayMode(false); setScreen("picks"); }} style={{fontSize:12,fontWeight:800,color:IOS.pink,cursor:"pointer",flexShrink:0}}>Done</div></div>)}
+ {soloParlayMode && (()=>{
+       const _sl = (soloParlay && soloParlay.legs) || [];
+       const _lsd = _sl.length>=2 ? calcLS(_sl) : null;
+       const _am = _lsd ? (_lsd.decimal>=2?("+"+Math.round((_lsd.decimal-1)*100)):(""+Math.round(-100/(_lsd.decimal-1)))) : "";
+       const _ready = _sl.length>=2;
+       return (
+       <div style={{margin:"2px 16px 10px",background:"linear-gradient(135deg,rgba(255,55,95,0.18),rgba(255,55,95,0.06))",border:"1px solid rgba(255,55,95,0.45)",borderRadius:14,padding:"10px 12px"}}>
+         <div style={{display:"flex",alignItems:"center",gap:10}}>
+           <div style={{width:32,height:32,borderRadius:10,background:"rgba(255,55,95,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={IOS.pink} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 0 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+           </div>
+           <div style={{flex:1,minWidth:0}}>
+             <div style={{fontSize:8.5,fontWeight:900,letterSpacing:"0.08em",color:IOS.pink}}>{"PARLAY \u00b7 "+_sl.length+" "+(_sl.length===1?"LEG":"LEGS")+(_ready?(" \u00b7 "+_am):"")}</div>
+             <div style={{fontSize:10.5,fontWeight:600,color:"rgba(255,255,255,0.5)",marginTop:1}}>{_ready?"Tap more to add, or a leg below to remove":"Tap bets below to add legs \u2014 need 2+"}</div>
+           </div>
+           <div onClick={()=>{ setSoloParlayMode(false); setScreen("picks"); }} style={{fontFamily:"Barlow",fontSize:12,fontWeight:800,color:_ready?"#08080B":"rgba(255,255,255,0.4)",background:_ready?IOS.pink:"rgba(255,255,255,0.08)",borderRadius:9,padding:"8px 14px",cursor:"pointer",flexShrink:0}}>Done</div>
+         </div>
+         {_sl.length>0 && (
+           <div className="gbx-scroll" style={{display:"flex",gap:6,marginTop:9,overflowX:"auto"}}>
+             {_sl.map((l,i)=>(<div key={i} onClick={()=>setSoloParlay(pv=>({...pv, legs:(pv.legs||[]).filter(x=>String(x.id)!==String(l.id))}))} style={{flexShrink:0,fontSize:10.5,fontWeight:700,padding:"5px 9px",borderRadius:8,background:"rgba(255,55,95,0.14)",color:"#ff8aa6",display:"flex",alignItems:"center",gap:6,cursor:"pointer",whiteSpace:"nowrap"}}>{l.pick} <span style={{opacity:0.7,fontWeight:900}}>{"\u00d7"}</span></div>))}
+           </div>
+         )}
+       </div>
+       );
+     })()}
  {/* Bet type switcher */}
  <div className="gbx-scroll" style={{display:"flex",gap:7,padding:`${(sportsList.length>1||isSoloMode)?0:6}px 16px 9px`,overflowX:"auto"}}>
  {(()=>{
@@ -11036,6 +11066,17 @@ export default function App() {
    {/* Season weeks — h2h and points only */}
    {newLeagueType!=="bracket"&&(
      <>
+     {isPro && (
+     <>
+     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4,marginTop:12}}>
+       <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"rgba(255,255,255,0.6)"}}>Power-Ups</div>
+       <div onClick={()=>setNewLeaguePowerUps(v=>!v)} style={{width:44,height:26,borderRadius:13,background:newLeaguePowerUps?IOS.blue:"#2A2A2A",border:`1px solid ${newLeaguePowerUps?IOS.blue:"#3A3A3A"}`,position:"relative",cursor:"pointer",flexShrink:0}}>
+         <div style={{position:"absolute",top:2,left:newLeaguePowerUps?18:2,width:22,height:22,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
+       </div>
+     </div>
+     <div style={{fontSize:11,color:"rgba(255,255,255,0.45)",marginBottom:8}}>{newLeaguePowerUps?"Members can win and play power-ups (Double Down, Spread boosts, Insurance).":"No power-ups \u2014 picks only, pure skill."}</div>
+     </>
+     )}
      <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"rgba(255,255,255,0.6)",marginBottom:8,marginTop:12}}>Season length</div>
      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
        <div onClick={()=>setNewLeagueWeeks(w=>Math.max(1,w-1))} style={{width:28,height:28,borderRadius:6,background:"#1A1A1A",border:"0.5px solid #2A2A2A",color:"#ccc",fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>−</div>
@@ -13217,7 +13258,7 @@ export default function App() {
  <>
  <div style={{padding:"14px 20px 10px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
  <div style={{fontSize:15,color:IOS.label3}}>{displayPUs.length} power-up{displayPUs.length!==1?"s":""} in inventory</div>
- {displaySpins > 0 && isActiveLeague
+ {displaySpins > 0 && isActiveLeague && puEnabled
  ? <button onClick={()=>setShowWheel(true)} style={{background:`linear-gradient(135deg,${IOS.indigo},${IOS.purple})`,border:"none",borderRadius:10,padding:"8px 16px",fontFamily:"Barlow,sans-serif",fontSize:13,fontWeight:600,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
  Spin Wheel
  <span style={{background:"rgba(255,255,255,0.25)",borderRadius:20,padding:"1px 8px",fontSize:12,fontWeight:800}}>{displaySpins}</span>
