@@ -4011,9 +4011,9 @@ export default function App() {
  const currentWeekPicks = gradingData[activeLeagueId] || [];
  const [activeSlot, setActiveSlot] = useState(null);
  const [myPUs, setMyPUs] = useState([]); // loaded from league_power_ups table
- // Power-ups are a per-league setting (commissioner, Pro-only). When a league has them
- // off, members can neither win them on the wheel nor apply them. Solo mode keeps them.
- const puEnabled = (activeLeague && activeLeague.id && !isSoloMode) ? activeLeague.power_ups_enabled!==false : true;
+ // Power-ups are league-only, and a per-league setting (commissioner, Pro-only). Solo mode
+ // never has them. When a league has them off, members can neither win nor apply them.
+ const puEnabled = !isSoloMode && !!(activeLeague && activeLeague.id) && activeLeague.power_ups_enabled!==false;
  const [showPUModal, setShowPUModal] = useState(null); // {context:"picks"|"matchup", slotId, pickIdx}
  const [secondSwap, setSecondSwap] = useState(null); // {pick, category} — live Second Chance target
  const doSecondSwap = async (pick, bet) => {
