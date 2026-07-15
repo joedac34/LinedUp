@@ -8940,11 +8940,6 @@ export default function App() {
        </div>
      )}
 
-          {/* Build a Parlay entry */}
-     <div onClick={()=>setSoloParlay({legs:[],mult:2})} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,border:"1.5px dashed rgba(255,55,95,0.5)",background:"rgba(255,55,95,0.05)",borderRadius:13,padding:"14px",fontSize:14,fontWeight:800,color:IOS.pink,cursor:"pointer",fontFamily:"Barlow,sans-serif",marginBottom:10}}>
-       <svg width="16" height="16" viewBox="0 0 24 24" fill={IOS.pink} stroke="none"><path d="M13 2L3 14h7v8l10-12h-7z"/></svg>
-       Build a Parlay
-     </div>
      {soloParlay && (()=>{
        const legs=soloParlay.legs||[];
        const _ls = legs.length ? calcLS(legs) : null;
@@ -9089,6 +9084,11 @@ export default function App() {
          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
          Browse all games
        </div>
+          {/* Build a Parlay entry */}
+     <div onClick={()=>setSoloParlay({legs:[],mult:2})} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,border:"1.5px dashed rgba(255,55,95,0.5)",background:"rgba(255,55,95,0.05)",borderRadius:13,padding:"14px",fontSize:14,fontWeight:800,color:IOS.pink,cursor:"pointer",fontFamily:"Barlow,sans-serif",marginBottom:10}}>
+       <svg width="16" height="16" viewBox="0 0 24 24" fill={IOS.pink} stroke="none"><path d="M13 2L3 14h7v8l10-12h-7z"/></svg>
+       Build a Parlay
+     </div>
        <button onClick={lockSoloFreeSlate} disabled={soloFreePicks.length===0} style={{width:"100%",background:soloFreePicks.length?IOS.green:"rgba(255,255,255,0.08)",border:"none",borderRadius:12,padding:"14px",fontSize:15,fontWeight:800,color:soloFreePicks.length?"#fff":"rgba(255,255,255,0.35)",cursor:soloFreePicks.length?"pointer":"default",fontFamily:"Barlow,sans-serif",marginBottom:16}}>
          {soloFreePicks.length ? `Lock Picks · ${soloFreePicks.length} pick${soloFreePicks.length>1?"s":""} · up to ${projTotal.toFixed(1)} pts` : "Add at least 1 pick"}
        </button>
@@ -9359,14 +9359,38 @@ export default function App() {
  } else if(activePicks.findIndex(p=>p.isParlay)===-1){ flagParlay(gridParlayMult); }
  setGridBuildMode(true); setShowMultPick(false);
  };
+ // ─── LINE CONFLICTS ──────────────────────────────────────────────────────────
+ // Lines only conflict within the same scope: a full-game line and a First-5 line
+ // on the same game are independent bets, so they never clash.
+ const LINE_GROUP = { ml:"full", spread:"full", ou:"full", ml_f5:"f5", spread_f5:"f5", ou_f5:"f5", ml_h1:"h1", spread_h1:"h1", ou_h1:"h1" };
+ // Team-side bets — their "outcome" is a team, so two of them on different teams
+ // in the same game is a hedge (e.g. Mets ML + Phillies -1.5).
+ const SIDE_TYPES = ["ml","spread","ml_f5","spread_f5","ml_h1","spread_h1"];
+ const TYPE_SHORT = { ml:"moneyline", spread:"spread", ou:"total", ml_f5:"First 5 moneyline", spread_f5:"First 5 spread", ou_f5:"First 5 total", ml_h1:"1st half moneyline", spread_h1:"1st half spread", ou_h1:"1st half total" };
+ // Returns a conflict message, or null if the bet is allowed.
+ // `existing` items: { id, category, eventId, game, outcome }
+ const lineConflict = (cat, bet, existing) => {
+  const grp = LINE_GROUP[cat]; if(!grp) return null;
+  const gk = (bet && (bet.eventId||bet.game)) || ""; if(!gk) return null;
+  const oc = (bet && bet.outcome) || null;
+  for(const e of (existing||[])){
+   if(!e || !e.category) continue;
+   if(bet && e.id!=null && String(e.id)===String(bet.id)) continue;
+   if(((e.eventId||e.game)||"")!==gk) continue;
+   if(LINE_GROUP[e.category]!==grp) continue;
+   if(e.category===cat) return "You already picked this game's "+(TYPE_SHORT[cat]||cat)+". You can't take both sides of the same line.";
+   if(SIDE_TYPES.includes(cat) && SIDE_TYPES.includes(e.category) && oc && e.outcome && String(e.outcome)!==String(oc))
+    return "You already have "+e.outcome+" in this game \u2014 you can't also take the other side.";
+  }
+  return null;
+ };
  const addCard = (bet, catOverride) => {
    if(replaceCtx){ doReplaceSave(bet); return; }
    if(isSoloMode && soloParlayMode){ setSoloParlay(pv=>{ if(!pv) return pv; const legs=pv.legs||[]; if(legs.length>=6 || legs.some(l=>l.id===bet.id)) return pv; return {...pv, legs:[...legs, {id:bet.id, pick:bet.pick, game:bet.game||"", odds:bet.odds, impliedOdds:bet.impliedOdds, gameTime:bet.gameTime||null, category:bet.category||gridType, categoryLabel:bet.categoryLabel||null, eventId:bet.eventId||null, marketKey:bet.marketKey||null, outcome:bet.outcome||null, point:(bet.point!=null?bet.point:null), selKey:bet.selKey||null}]}; }); try{ if(navigator.vibrate) navigator.vibrate(12); }catch(e){} return; }
  const cat = catOverride || (gridType==="longshot" ? "longshot" : gridType);
  if(isSoloMode){
-   const _gl=["ml","spread","ou"].includes(cat);
-   const _gk=bet.eventId||bet.game||"";
-   if(_gl && _gk && soloFreePicks.some(p=>String(p.id)!==String(bet.id) && p.category===cat && (p.eventId||p.game||"")===_gk)){ setPickConflict("You already picked this game's "+(cat==="ou"?"total":(cat==="ml"?"moneyline":"spread"))+". You can't take both sides of the same line."); setTimeout(()=>setPickConflict(""),2600); setGridJustAdded(null); return; }
+   const _cf = lineConflict(cat, bet, soloFreePicks);
+   if(_cf){ setPickConflict(_cf); setTimeout(()=>setPickConflict(""),2600); setGridJustAdded(null); return; }
    const _CL={ml:"Moneyline",spread:"Spread",ou:"Over/Under",prop:"Prop",longshot:"Longshot"};
    const _CC={ml:IOS.blue,spread:IOS.green,ou:IOS.orange,prop:IOS.yellow,longshot:IOS.pink};
    setSoloFreePicks(prev=> prev.some(p=>String(p.id)===String(bet.id)) ? prev : [...prev, {...bet, category:cat, categoryLabel:_CL[cat]||cat, categoryColor:_CC[cat]||IOS.blue, mult:1}]);
@@ -9403,12 +9427,9 @@ export default function App() {
  // You can't take both sides of the same game's line (mirrors solo mode). Without
  // this, a custom league with two slots of a type — or flex multiplier stacking —
  // lets you pick both sides of one game for a guaranteed split.
- const _glL = ["ml","spread","ou"].includes(cat);
- const _gkL = bet.eventId||bet.game||"";
- if(_glL && _gkL && activePicks.some((p,i)=> i!==dest && !p.isParlay && p.bet && p.category===cat && ((p.bet.eventId||p.bet.game||"")===_gkL))){
-  setPickConflict("You already picked this game's "+(cat==="ou"?"total":(cat==="ml"?"moneyline":"spread"))+". You can't take both sides of the same line.");
-  setTimeout(()=>setPickConflict(""),2600); setGridJustAdded(null); return;
- }
+ const _existL = activePicks.map((p,i)=> (i!==dest && !p.isParlay && p.bet) ? { id:p.bet.id, category:p.category, eventId:p.bet.eventId, game:p.bet.game, outcome:p.bet.outcome } : null).filter(Boolean);
+ const _cfL = lineConflict(cat, bet, _existL);
+ if(_cfL){ setPickConflict(_cfL); setTimeout(()=>setPickConflict(""),2600); setGridJustAdded(null); return; }
  setActivePicks(prev=>prev.map((p,i)=> i===dest ? {...p, bet, category:cat, isParlay:false, parlayLegs:[], mult:((!gridCfg && !isSoloMode && gridFlexMult!=null && cat!=="longshot") ? gridFlexMult : p.mult)} : p));
  try{ posthog.capture('pick_added', { league_id: activeLeague.id, category: cat, market_key: (bet&&bet.marketKey)||null }); }catch(e){}
  setGridJustAdded(bet.id);
