@@ -9324,13 +9324,12 @@ export default function App() {
  const _par = activePicks.find(p=>p.isParlay);
  const _curLegs = _par ? (_par.parlayLegs||[]) : [];
  const _already = _curLegs.some(l=>String(l.id)===String(bet.id)||l.pick===bet.pick);
- const _isGL = (mk)=> mk==="h2h"||mk==="spreads"||mk==="totals";
- const _plyr = (pk)=>((pk||"").split(/\s+(?:Over|Under)\s+/i)[0]||"").trim().toLowerCase();
- if(!_already && bet.eventId && _curLegs.some(l=> String(l.id)!==String(bet.id) && (l.eventId||null)===(bet.eventId||null) && (l.marketKey||null)===(bet.marketKey||null) && (_isGL(bet.marketKey) || _plyr(l.pick)===_plyr(bet.pick)) )){
- setPickConflict("Those two directly conflict \u2014 you can't parlay both sides of the same market.");
- setTimeout(()=>setPickConflict(""),2800); setGridJustAdded(null); return;
+ const _cat = (bet && bet.category) || gridType;
+ if(!_already){
+  const _pc = parlayConflict({...bet, category:_cat}, _curLegs);
+  if(_pc){ setPickConflict(_pc); setTimeout(()=>setPickConflict(""),2800); setGridJustAdded(null); return; }
  }
- const leg = {id:bet.id, pick:bet.pick, game:bet.game||"", eventId:bet.eventId||null, marketKey:bet.marketKey||null, odds:bet.odds, impliedOdds:bet.impliedOdds};
+ const leg = {id:bet.id, pick:bet.pick, game:bet.game||"", eventId:bet.eventId||null, marketKey:bet.marketKey||null, odds:bet.odds, impliedOdds:bet.impliedOdds, category:_cat, outcome:bet.outcome||null};
  setActivePicks(prev=>{
  let found=false;
  let next = prev.map(p=>{
@@ -9384,9 +9383,31 @@ export default function App() {
   }
   return null;
  };
+ // Shared by BOTH parlay builders (solo sheet + league inline bar). A parlay needs
+ // every leg to hit, so contradictory legs are a guaranteed loss — block them.
+ const _isGLMkt = (mk)=> mk==="h2h"||mk==="spreads"||mk==="totals";
+ const _plyrOf = (pk)=>((pk||"").split(/\s+(?:Over|Under)\s+/i)[0]||"").trim().toLowerCase();
+ const parlayConflict = (bet, legs) => {
+  for(const l of (legs||[])){
+   if(!l) continue;
+   if(String(l.id)===String(bet.id)) continue;
+   const sameEvent = (l.eventId||null)===(bet.eventId||null) && !!bet.eventId;
+   if(!sameEvent) continue;
+   // both sides of the same market (or the same player's prop)
+   if((l.marketKey||null)===(bet.marketKey||null) && (_isGLMkt(bet.marketKey) || _plyrOf(l.pick)===_plyrOf(bet.pick)))
+    return "Those two directly conflict \u2014 you can't parlay both sides of the same market.";
+   // opposing teams in the same scope (e.g. Mets ML + Phillies -1.5)
+   if(l.category && bet.category && LINE_GROUP[l.category] && LINE_GROUP[l.category]===LINE_GROUP[bet.category]
+      && SIDE_TYPES.includes(l.category) && SIDE_TYPES.includes(bet.category)
+      && l.outcome && bet.outcome && String(l.outcome)!==String(bet.outcome))
+    return "You already have "+l.outcome+" in this game \u2014 you can't parlay the other side too.";
+  }
+  return null;
+ };
  const addCard = (bet, catOverride) => {
    if(replaceCtx){ doReplaceSave(bet); return; }
-   if(isSoloMode && soloParlayMode){ setSoloParlay(pv=>{ if(!pv) return pv; const legs=pv.legs||[]; if(legs.length>=6 || legs.some(l=>l.id===bet.id)) return pv; return {...pv, legs:[...legs, {id:bet.id, pick:bet.pick, game:bet.game||"", odds:bet.odds, impliedOdds:bet.impliedOdds, gameTime:bet.gameTime||null, category:bet.category||gridType, categoryLabel:bet.categoryLabel||null, eventId:bet.eventId||null, marketKey:bet.marketKey||null, outcome:bet.outcome||null, point:(bet.point!=null?bet.point:null), selKey:bet.selKey||null}]}; }); try{ if(navigator.vibrate) navigator.vibrate(12); }catch(e){} return; }
+   if(isSoloMode && soloParlayMode){ const _pc = parlayConflict({...bet, category:(bet.category||gridType)}, (soloParlay&&soloParlay.legs)||[]); if(_pc){ setPickConflict(_pc); setTimeout(()=>setPickConflict(""),2800); setGridJustAdded(null); return; }
+   setSoloParlay(pv=>{ if(!pv) return pv; const legs=pv.legs||[]; if(legs.length>=6 || legs.some(l=>l.id===bet.id)) return pv; return {...pv, legs:[...legs, {id:bet.id, pick:bet.pick, game:bet.game||"", odds:bet.odds, impliedOdds:bet.impliedOdds, gameTime:bet.gameTime||null, category:bet.category||gridType, categoryLabel:bet.categoryLabel||null, eventId:bet.eventId||null, marketKey:bet.marketKey||null, outcome:bet.outcome||null, point:(bet.point!=null?bet.point:null), selKey:bet.selKey||null}]}; }); try{ if(navigator.vibrate) navigator.vibrate(12); }catch(e){} return; }
  const cat = catOverride || (gridType==="longshot" ? "longshot" : gridType);
  if(isSoloMode){
    const _cf = lineConflict(cat, bet, soloFreePicks);
