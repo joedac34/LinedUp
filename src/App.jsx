@@ -3674,11 +3674,6 @@ export default function App() {
     }catch(e){}
     return { n:0, tot };
   };
-  const plokOpenSlot = (()=>{
-    if(plokSlot!==null) return plokSlot;
-    const i = (flexPicks||[]).findIndex(sl=> sl && !sl.bet);
-    return i;
-  })();
   const plokUserStats = () => {
     const a = allMyStats; if(!a || !a.total) return null;
     return {
@@ -3929,6 +3924,12 @@ export default function App() {
   const [plokRail, setPlokRail] = useState({});
   const [plokFlatType, setPlokFlatType] = useState("all");
   useEffect(()=>{ setPlokSlot(null); setPlokRail({}); setPlokFlatType("all"); }, [activeLeagueId, isSoloMode]);
+  // MUST live below the useState above: this IIFE evaluates during render, so declaring
+  // it beside the other plok helpers put it in the TDZ of plokSlot -> white screen.
+  const plokOpenSlot = (()=>{
+    if(plokSlot!==null) return plokSlot;
+    return (flexPicks||[]).findIndex(sl=> sl && !sl.bet);
+  })();
   const findBetGames = (() => {
     const seen = new Map();
     const findTime = (away, home) => {
