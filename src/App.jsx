@@ -3753,42 +3753,58 @@ export default function App() {
       ? baseSlots.map((sl,i)=>({idx:i, category:sl.category, mult: sl.mult||null}))
       : [{idx:0,category:"ml",mult:null},{idx:1,category:"spread",mult:null},{idx:2,category:"ou",mult:null},{idx:3,category:"prop",mult:null},{idx:4,category:"longshot",mult:null}];
     const neededCats = [...new Set(slotSpec.map(z=>z.category))];
+    // The league's REAL multiplier pool, from slot_config — 1,2,3,3,4,5,6,7 in the live
+    // leagues. Duplicates are meaningful. buildslip used to imply 1-5 and returned 5 picks.
+    const _plokPool = (hasCfg && plokCfg) ? plokCfg.map(c=>c.mult).filter(m=>m!=null) : null;
     const candidates = {}; let haveAny = false;
     neededCats.forEach(cat=>{
-      const list = (ALL_BETS||[]).filter(b=>b.category===cat).slice(0,6).map(b=>({id:b.id, pick:b.pick, odds:b.odds, game:b.game}));
+      const list = betsForSlotType(cat).slice(0,6).map(b=>({id:b.id, pick:b.pick, odds:b.odds, game:b.game}));
       if(list.length) haveAny = true;
       candidates[cat] = list;
     });
+    // Exact id whitelist per category — the only thing standing between a bad model
+    // response and an ungradeable pick.
+    const okIds = {}; neededCats.forEach(cat=>{ okIds[cat] = new Set((candidates[cat]||[]).map(b=>b.id)); });
     if(!haveAny){ setPlokBuild({error:"Odds are still loading for this slate — try again in a moment."}); return; }
     const L = plokLeagueCtx();
     let strategy = "balanced";
     if(L){ if((L.matchupGap!=null&&L.matchupGap<0)||(L.finalWeek&&L.leaderGap!=null&&L.leaderGap>0)) strategy="ceiling"; else if((L.matchupGap!=null&&L.matchupGap>0)||L.leading) strategy="protect"; }
     setPlokBuilding(true); setPlokBuild(null);
     try{
-      const r = await fetch("/api/buildslip", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ sport:(leagueSports[0]||"nfl"), userId:user?.id, persona:plokPersona, userStats:plokUserStats(), leagueCtx:L, strategy, slots:slotSpec, candidates })});
+      const r = await fetch("/api/buildslip", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ multPool: _plokPool, sport:(leagueSports[0]||"nfl"), userId:user?.id, persona:plokPersona, userStats:plokUserStats(), leagueCtx:L, strategy, slots:slotSpec, candidates })});
       const data = await r.json();
       if(!r.ok){ setPlokBuild({error:data.error||"Couldn't build a slip — try again."}); return; }
       const byId = {}; (ALL_BETS||[]).forEach(b=>{ byId[b.id]=b; });
       const flex = baseSlots.map(sl=>({...sl}));
+      const rejected = [];
       (data.picks||[]).forEach(pk=>{
         const idx = pk.idx; if(idx==null || !flex[idx]) return;
         const cat = slotSpec[idx]?.category;
         const mult = (slotSpec[idx]?.mult) || pk.mult || (idx+1);
+        // A pick is only valid if EVERY id it names is eligible for this slot's type.
+        // Otherwise the bet gets stored under the slot's category and graded as that
+        // type — a spread sitting in a YRFI slot would grade as YRFI. Leave it empty.
+        const ids = (pk.ids||[]).filter(Boolean);
+        const ok = okIds[cat];
+        if(!ids.length || !ok || !ids.every(id=>ok.has(id))){ rejected.push(idx); return; }
         if(cat==="longshot"){
-          const legs = (pk.ids||[]).map(id=>byId[id]).filter(Boolean).map(b=>({id:b.id,pick:b.pick,game:b.game||"",odds:b.odds,impliedOdds:b.impliedOdds}));
+          const legs = ids.map(id=>byId[id]).filter(Boolean).map(b=>({id:b.id,pick:b.pick,game:b.game||"",odds:b.odds,impliedOdds:b.impliedOdds}));
           if(legs.length>=2) flex[idx] = {...flex[idx], bet:null, isParlay:true, parlayLegs:legs, category:"longshot", mult, _reason:pk.reason};
+          else rejected.push(idx);
         } else {
-          const b = byId[(pk.ids||[])[0]];
+          const b = byId[ids[0]];
           if(b) flex[idx] = {...flex[idx], bet:b, isParlay:false, parlayLegs:[], category:cat, mult, _reason:pk.reason};
+          else rejected.push(idx);
         }
       });
+      if(rejected.length) console.warn("[plok] dropped ineligible picks for slots", rejected);
       if(!hasCfg){
         const order = flex.map((sl,i)=>i).filter(i=> flex[i].bet || flex[i].isParlay);
         order.sort((a,b)=> (flex[b].mult||0)-(flex[a].mult||0));
         order.forEach((i,rank)=>{ flex[i] = {...flex[i], mult: 5-rank}; });
       }
       const CATMETA = { ml:{label:"Moneyline",color:IOS.blue}, spread:{label:"Spread",color:IOS.green}, ou:{label:"Over/Under",color:IOS.orange}, prop:{label:"Prop",color:IOS.yellow}, longshot:{label:"Parlay",color:IOS.pink} };
-      const items = flex.map(sl=>({ filled: !!(sl.bet||sl.isParlay), meta: CATMETA[sl.category]||{label:sl.category,color:IOS.blue}, mult: sl.mult, reason: sl._reason||"", name: sl.isParlay ? sl.parlayLegs.map(l=>l.pick).join(" + ") : (sl.bet?.pick||"—"), odds: sl.isParlay ? "" : (sl.bet?.odds||"") }))
+      const items = flex.map(sl=>({ filled: !!(sl.bet||sl.isParlay), meta: CATMETA[sl.category]||{label:plokTypeLabel(sl.category),color:plokTypeColor(sl.category)}, mult: sl.mult, reason: sl._reason||"", name: sl.isParlay ? sl.parlayLegs.map(l=>l.pick).join(" + ") : (sl.bet?.pick||"—"), odds: sl.isParlay ? "" : (sl.bet?.odds||"") }))
         .filter(it=>it.filled).sort((a,b)=> (b.mult||0)-(a.mult||0));
       const cleanFlex = flex.map(sl=>{ const c={...sl}; delete c._reason; return c; });
       if(!items.length){ setPlokBuild({error:"Plok couldn't fill the slip from this slate — try again."}); return; }

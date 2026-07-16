@@ -369,6 +369,32 @@ async function logFor(sport, teamId) {
   return { log, season: yr, stale: false };
 }
 
+// ── Shared: compact real form for a matchup. Used by /api/buildslip so Plok's
+// per-pick reasons cite actual numbers instead of "looks solid".
+export async function teamFormFor(sport, game) {
+  const sp = String(sport||"").toLowerCase();
+  if (!ESPN_MAP[sp]) return null;
+  const ck = ["form", sp, game].join("|");
+  const hit = cacheGet(ck);
+  if (hit) return hit;
+  try {
+    const { away, home } = parseTeams(game);
+    const teams = await espnTeams(sp);
+    const aT = matchTeam(teams, away), hT = matchTeam(teams, home);
+    if (!aT || !hT) return null;
+    const [A, H] = await Promise.all([logFor(sp, aT.id), logFor(sp, hT.id)]);
+    const pack = (t, R, venue) => {
+      const f = formSplit(R.log);
+      return { abbr: t.abbr, venue, season: R.season, stale: R.stale,
+               record: f ? f.record : null, n: f ? f.n : 0, pf: f ? f.pf : null, pa: f ? f.pa : null,
+               homeRecord: f ? f.homeRecord : null, awayRecord: f ? f.awayRecord : null };
+    };
+    const out = { away: pack(aT, A, "away"), home: pack(hT, H, "home") };
+    cacheSet(ck, out);
+    return out;
+  } catch { return null; }
+}
+
 // ── Narration: the LLM writes prose about numbers the code already computed ─
 const SYS =
   "You are Plok's Trends & Form lens for a sports pick'em app. You explain FORM and TRENDS — recent results, " +

@@ -67,6 +67,57 @@ function leagueBlock(L) {
   return "\nLEAGUE\n" + lines.join("\n");
 }
 
+import { teamFormFor } from "./trends.js";
+import { buildMlbPack } from "./mlbpack.js";
+
+export const maxDuration = 60;
+
+// Real numbers for each game on the board, so a reason can say "7-3 in L10, opposing
+// starter 7.20 ERA" instead of "strong value in this matchup". ESPN is free — no Odds
+// API credits burned here. Capped + parallel to bound latency.
+const MAX_FORM_GAMES = 5;
+async function formBlock(sport, candidates) {
+  const games = [];
+  for (const list of Object.values(candidates || {})) {
+    for (const b of (list || [])) {
+      if (b && b.game && !games.includes(b.game)) games.push(b.game);
+    }
+  }
+  const use = games.slice(0, MAX_FORM_GAMES);
+  if (!use.length) return "";
+  const rows = await Promise.all(use.map(async (g) => {
+    let form = null, pack = null;
+    try { form = await teamFormFor(sport, g); } catch { form = null; }
+    if (sport === "mlb") { try { pack = await buildMlbPack({ game: g }); } catch { pack = null; } }
+    if (!form && !pack) return null;
+    const bits = [];
+    if (form) {
+      for (const t of [form.away, form.home]) {
+        if (!t || !t.record) continue;
+        const venue = t.venue === "home" ? "home" : "away";
+        let s = `${t.abbr} (${venue}) ${t.record} in last ${t.n}`;
+        if (t.pf != null) s += `, ${t.pf} for / ${t.pa} against per game`;
+        const vr = venue === "home" ? t.homeRecord : t.awayRecord;
+        if (vr) s += `, ${vr} ${venue}`;
+        if (t.stale) s += ` [${t.season} season]`;
+        bits.push(s);
+      }
+    }
+    if (pack && pack.form) {
+      const sp = (side, who) => {
+        const f = pack.form[side], nm = (pack.starters && pack.starters[who] && pack.starters[who].name) || null;
+        if (!f || !nm) return;
+        if (f.last3ERA != null) bits.push(`${nm} (SP) ${Number(f.last3ERA).toFixed(2)} ERA last ${Math.min(f.starts || 3, 3)} starts`);
+        if (f.nrfiN >= 3) bits.push(`${nm} scoreless 1st in ${f.nrfiClean} of last ${f.nrfiN} starts`);
+      };
+      sp("spAway", "away"); sp("spHome", "home");
+    }
+    return bits.length ? `${g}\n  ` + bits.join("\n  ") : null;
+  }));
+  const good = rows.filter(Boolean);
+  return good.length ? `\n\nFORM (real, from box scores — cite these)\n${good.join("\n")}` : "";
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
   if (!OPENAI) return res.status(500).json({ error: "OPENAI_API_KEY not set" });
@@ -81,21 +132,33 @@ export default async function handler(req, res) {
     const personaLine = (ctx.persona && PERSONAS[ctx.persona]) ? PERSONAS[ctx.persona] + " " : "";
 
     const slotLines = slots.map(sl => `- slot ${sl.idx}: category ${sl.category}` + (sl.mult ? ` (fixed mult ${sl.mult})` : "")).join("\n");
+    // The pool comes from the league's slot_config and MAY CONTAIN DUPLICATES (a real
+    // league runs 1,2,3,3,4,5,6,7). Never assume 1-5.
+    const pool = Array.isArray(ctx.multPool) && ctx.multPool.length ? ctx.multPool : slots.map((_, i) => i + 1);
+    const poolLine = pool.join(", ");
     const candBlock = Object.entries(candidates).map(([cat, list]) =>
       `${cat.toUpperCase()}:\n` + (list || []).map(b => `  [${b.id}] ${b.pick} ${b.odds || ""}${b.game ? " — " + b.game : ""}`).join("\n")
     ).join("\n");
 
     const system =
       personaLine +
-      "You are Plok, building a 5-slot PickLock slip for the user. " +
+      `You are Plok, building a ${slots.length}-slot PickLock slip for the user. ` +
       "SLOTS lists each slot (idx, category, and a fixed mult if any). CANDIDATES lists available bets per category, each with an [id]. " +
-      "For EACH slot, choose the single best candidate id of that category. For a 'longshot' slot, choose 2 or 3 candidate ids to form a parlay. Use ONLY ids that appear under that category in CANDIDATES. " +
-      "Assign 'mult' 1-5, each value used EXACTLY once across the slots, UNLESS a slot has a fixed mult (then use it). Put your HIGHEST mult on your HIGHEST-conviction pick. " +
+      `Return EXACTLY ONE pick per slot — ${slots.length} picks, one for every slot idx listed. Never return fewer. ` +
+      "For EACH slot, choose the single best candidate id listed under THAT SLOT'S OWN category. For a 'longshot' slot, choose 2 or 3 candidate ids to form a parlay. " +
+      "Use ONLY ids that appear under that slot's category in CANDIDATES — an id from another category is a hard error, because the pick would be graded as the slot's type and score wrong. " +
+      "If a slot's category has no candidates, omit that slot entirely rather than filling it from another category. " +
+      `Assign multipliers from MULT POOL: [${poolLine}]. Use each entry in the pool EXACTLY once across the slots — the pool may contain duplicates, and a duplicate means that value is used that many times. Do not invent a multiplier outside the pool. UNLESS a slot has a fixed mult (then use it). Put your HIGHEST mult on your HIGHEST-conviction pick. ` +
       "Tune to STRATEGY: 'ceiling' = chase upside / plus-money / variance (user is trailing); 'protect' = safer, lower-variance favorites (user is ahead); 'balanced' = best overall mix. Respect the lens, PROFILE, and LEAGUE. " +
-      "Each pick needs a reason of 12 words or fewer. 'strategy' is a 1-2 sentence summary of the plan for this user's situation. Entertainment, not financial advice; no stake sizing.";
+      "Each pick needs a reason of 14 words or fewer that CITES A CONCRETE NUMBER from FORM or the odds — venue, last-10 record, runs/points for and against, or a starter's ERA. " +
+      "Good: 'Home, 7-3 in last 10, opposing starter 7.20 ERA last 3.' " +
+      "Bad: 'Strong value in this matchup' / 'looks solid given recent form' — no number, says nothing. " +
+      "Use ONLY numbers present in FORM; never invent or recall a stat. If FORM has nothing for that game, say what the price implies instead. " +
+      "'strategy' is a 1-2 sentence summary of the plan for this user's situation. Entertainment, not financial advice; no stake sizing.";
 
+    const form = await formBlock(String(ctx.sport || "").toLowerCase(), candidates);
     const user =
-      `STRATEGY: ${strategy}\n\nSLOTS\n${slotLines}\n\nCANDIDATES\n${candBlock}` +
+      `STRATEGY: ${strategy}\n\nSLOTS\n${slotLines}\n\nMULT POOL: ${poolLine}\n\nCANDIDATES\n${candBlock}${form}` +
       profileBlock(ctx.userStats) + leagueBlock(ctx.leagueCtx);
 
     const r = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -104,7 +167,7 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         model: "gpt-4o-mini",
         temperature: 0.5,
-        max_tokens: 700,
+        max_tokens: 1600,
         messages: [{ role: "system", content: system }, { role: "user", content: user }],
         response_format: { type: "json_schema", json_schema: { name: "slip", strict: true, schema: SCHEMA } },
       }),
