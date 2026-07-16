@@ -1318,6 +1318,31 @@ function playoffFieldFor(league, total){
 }
 // A wildcard slot accepts ANY of these (all gradeable) bet types.
 const WILDCARD_TYPES=["ml","spread","ou","prop","longshot"];
+
+// Lines only conflict within the same scope: a full-game line and a First-5 line
+// on the same game are independent bets, so they never clash.
+const LINE_GROUP = { ml:"full", spread:"full", ou:"full", ml_f5:"f5", spread_f5:"f5", ou_f5:"f5", ml_h1:"h1", spread_h1:"h1", ou_h1:"h1" };
+// Team-side bets — their "outcome" is a team, so two of them on different teams
+// in the same game is a hedge (e.g. Mets ML + Phillies -1.5).
+const SIDE_TYPES = ["ml","spread","ml_f5","spread_f5","ml_h1","spread_h1"];
+const TYPE_SHORT = { ml:"moneyline", spread:"spread", ou:"total", ml_f5:"First 5 moneyline", spread_f5:"First 5 spread", ou_f5:"First 5 total", ml_h1:"1st half moneyline", spread_h1:"1st half spread", ou_h1:"1st half total" };
+// Returns a conflict message, or null if the bet is allowed.
+// `existing` items: { id, category, eventId, game, outcome }
+const lineConflict = (cat, bet, existing) => {
+ const grp = LINE_GROUP[cat]; if(!grp) return null;
+ const gk = (bet && (bet.eventId||bet.game)) || ""; if(!gk) return null;
+ const oc = (bet && bet.outcome) || null;
+ for(const e of (existing||[])){
+  if(!e || !e.category) continue;
+  if(bet && e.id!=null && String(e.id)===String(bet.id)) continue;
+  if(((e.eventId||e.game)||"")!==gk) continue;
+  if(LINE_GROUP[e.category]!==grp) continue;
+  if(e.category===cat) return "You already picked this game's "+(TYPE_SHORT[cat]||cat)+". You can't take both sides of the same line.";
+  if(SIDE_TYPES.includes(cat) && SIDE_TYPES.includes(e.category) && oc && e.outcome && String(e.outcome)!==String(oc))
+   return "You already have "+e.outcome+" in this game \u2014 you can't also take the other side.";
+ }
+ return null;
+};
 function playoffWeeksFor(n){ return n>=2 ? Math.ceil(Math.log2(n)) : 0; }
 // Regular-season weeks = season_weeks minus the reserved playoff rounds (last N weeks).
 function regularSeasonWeeksFor(league, total){ const sw=Number(league&&league.season_weeks||18); const N=playoffFieldFor(league, total); const pw=N>=2?playoffWeeksFor(N):0; return Math.max(1, sw-pw); }
@@ -3558,12 +3583,16 @@ export default function App() {
  if(!cfg) return;
  const periodTypes = [...new Set(cfg.map(x=>x.type).filter(t=>PERIOD_MARKETS[t]))];
  if(!periodTypes.length) return;
- const sp = activeLeague.sport;
- const base = liveOdds[sp];
- if(!base || !base.ml || !base.ml.length) return; // wait for base odds (carries event IDs)
- if(periodTypes.every(t=>Array.isArray(base[t]))) return; // already attempted
- const eventIds = [...new Set(base.ml.map(b=>b.eventId).filter(Boolean))].slice(0,30);
- if(eventIds.length) fetchPeriodOdds(sp, eventIds, periodTypes);
+ // Multi-sport leagues carry sports:[...] and may leave .sport null — reading the
+ // singular here meant liveOdds[undefined], so period odds NEVER loaded and every
+ // NRFI/YRFI/F5 slot sat empty with no error anywhere.
+ (leagueSports||[]).forEach(sp=>{
+  const base = liveOdds[sp];
+  if(!base || !base.ml || !base.ml.length) return; // wait for base odds (carries event IDs)
+  if(periodTypes.every(t=>Array.isArray(base[t]))) return; // already attempted
+  const eventIds = [...new Set(base.ml.map(b=>b.eventId).filter(Boolean))].slice(0,30);
+  if(eventIds.length) fetchPeriodOdds(sp, eventIds, periodTypes);
+ });
  }, [activeLeagueId, isSoloMode, liveOdds, activeLeague&&activeLeague.slot_config]);
 
  // Lazy solo period-odds fetch: only when the Periods view is open (per-event endpoint = cost).
@@ -3639,11 +3668,14 @@ export default function App() {
   const plokAm = (o) => { const n = parseInt(String(o==null?"":o).replace(/\u2212/g,"-").replace(/[^-+0-9]/g,""),10); return isNaN(n) ? -99999 : n; };
   const betsForSlotType = (t) => {
     if(!t) return ALL_BETS||[];
-    if(PERIOD_MARKETS[t]){
-      const out=[];
-      (leagueSports||[]).forEach(sp=>{ const arr=(liveOdds[sp]&&liveOdds[sp][t])||[]; arr.forEach(b=>out.push({...b, category:t, _sport:b._sport||sp})); });
+    // A wildcard slot takes any gradeable type — WILDCARD_TYPES is the same list the
+    // manual grid uses, so Plok and the builder agree on what's legal.
+    if(t==="wildcard"){
+      const out=[]; const seen=new Set();
+      WILDCARD_TYPES.forEach(w=>{ betsForSlotType(w).forEach(b=>{ if(!seen.has(b.id)){ seen.add(b.id); out.push(b); } }); });
       return out;
     }
+    if(PERIOD_MARKETS[t]) return ((BETS && BETS[t]) || []).map(b=>({...b, category:t}));
     const cat = SLOT_OF[t] || t;
     return (ALL_BETS||[]).filter(b=>b.category===cat);
   };
@@ -3654,10 +3686,12 @@ export default function App() {
   };
   const plokTypeLabel = (t) => {
     if(!t) return "Any bet";
+    if(t==="wildcard") return "Wildcard";
     if(PERIOD_MARKETS[t]) return PERIOD_TYPE_LABEL[t] || t;
     return ({ml:"Moneyline", spread:"Spread", ou:"Total", prop:"Player prop", longshot:"Longshot"})[SLOT_OF[t]||t] || t;
   };
   const plokTypeColor = (t) => {
+    if(t==="wildcard") return IOS.purple;
     if(PERIOD_MARKETS[t]) return "#64D2FF";
     return ({ml:IOS.blue, spread:IOS.green, ou:IOS.orange, prop:IOS.purple, longshot:IOS.pink})[SLOT_OF[t]||t] || IOS.blue;
   };
@@ -3776,8 +3810,12 @@ export default function App() {
       if(!r.ok){ setPlokBuild({error:data.error||"Couldn't build a slip — try again."}); return; }
       const byId = {}; (ALL_BETS||[]).forEach(b=>{ byId[b.id]=b; });
       const flex = baseSlots.map(sl=>({...sl}));
-      const rejected = [];
-      (data.picks||[]).forEach(pk=>{
+      const rejected = [], conflicted = [];
+      const taken = []; // accepted bets so far, for lineConflict
+      // Resolve in conviction order (highest mult first) so the pick Plok believes in
+      // most keeps the game, and the loser's slot is left empty rather than contradictory.
+      const ordered = (data.picks||[]).slice().sort((a,b)=>(b.mult||0)-(a.mult||0));
+      ordered.forEach(pk=>{
         const idx = pk.idx; if(idx==null || !flex[idx]) return;
         const cat = slotSpec[idx]?.category;
         const mult = (slotSpec[idx]?.mult) || pk.mult || (idx+1);
@@ -3787,17 +3825,28 @@ export default function App() {
         const ids = (pk.ids||[]).filter(Boolean);
         const ok = okIds[cat];
         if(!ids.length || !ok || !ids.every(id=>ok.has(id))){ rejected.push(idx); return; }
+        // Same rule the manual builders enforce: no two bets that contradict inside one
+        // game (Phillies ML + Mets +1.5). Check against the BET's own category, not the
+        // slot's — a wildcard slot holding a spread still conflicts as a spread.
+        const clash = (b) => lineConflict(b.category || cat, b, taken);
+        const remember = (b) => taken.push({ category:b.category||cat, id:b.id, eventId:b.eventId, game:b.game, outcome:b.outcome });
         if(cat==="longshot"){
-          const legs = ids.map(id=>byId[id]).filter(Boolean).map(b=>({id:b.id,pick:b.pick,game:b.game||"",odds:b.odds,impliedOdds:b.impliedOdds}));
-          if(legs.length>=2) flex[idx] = {...flex[idx], bet:null, isParlay:true, parlayLegs:legs, category:"longshot", mult, _reason:pk.reason};
-          else rejected.push(idx);
+          const raw = ids.map(id=>byId[id]).filter(Boolean);
+          if(raw.length<2){ rejected.push(idx); return; }
+          if(raw.some(clash)){ conflicted.push(idx); return; }
+          const legs = raw.map(b=>({id:b.id,pick:b.pick,game:b.game||"",odds:b.odds,impliedOdds:b.impliedOdds}));
+          flex[idx] = {...flex[idx], bet:null, isParlay:true, parlayLegs:legs, category:"longshot", mult, _reason:pk.reason};
+          raw.forEach(remember);
         } else {
           const b = byId[ids[0]];
-          if(b) flex[idx] = {...flex[idx], bet:b, isParlay:false, parlayLegs:[], category:cat, mult, _reason:pk.reason};
-          else rejected.push(idx);
+          if(!b){ rejected.push(idx); return; }
+          if(clash(b)){ conflicted.push(idx); return; }
+          flex[idx] = {...flex[idx], bet:b, isParlay:false, parlayLegs:[], category:cat, mult, _reason:pk.reason};
+          remember(b);
         }
       });
       if(rejected.length) console.warn("[plok] dropped ineligible picks for slots", rejected);
+      if(conflicted.length) console.warn("[plok] dropped conflicting picks for slots", conflicted);
       if(!hasCfg){
         const order = flex.map((sl,i)=>i).filter(i=> flex[i].bet || flex[i].isParlay);
         order.sort((a,b)=> (flex[b].mult||0)-(flex[a].mult||0));
@@ -3808,7 +3857,11 @@ export default function App() {
         .filter(it=>it.filled).sort((a,b)=> (b.mult||0)-(a.mult||0));
       const cleanFlex = flex.map(sl=>{ const c={...sl}; delete c._reason; return c; });
       if(!items.length){ setPlokBuild({error:"Plok couldn't fill the slip from this slate — try again."}); return; }
-      setPlokBuild({ strategy: data.strategy, items, flex: cleanFlex });
+      const _unfilled = flex.length - items.length;
+      const _note = _unfilled>0
+        ? `Left ${_unfilled} slot${_unfilled===1?"":"s"} empty — nothing on tonight's board fits ${[...new Set(flex.filter(sl=>!(sl.bet||sl.isParlay)).map(sl=>plokTypeLabel(sl.slotType||sl.category)))].join(", ")}. Fill ${_unfilled===1?"it":"them"} yourself, or rebuild closer to game time.`
+        : null;
+      setPlokBuild({ strategy: data.strategy, items, flex: cleanFlex, note: _note });
     }catch(e){ setPlokBuild({error:"Network error — try again."}); }
     finally{ setPlokBuilding(false); }
   };
@@ -9444,30 +9497,6 @@ export default function App() {
  setGridBuildMode(true); setShowMultPick(false);
  };
  // ─── LINE CONFLICTS ──────────────────────────────────────────────────────────
- // Lines only conflict within the same scope: a full-game line and a First-5 line
- // on the same game are independent bets, so they never clash.
- const LINE_GROUP = { ml:"full", spread:"full", ou:"full", ml_f5:"f5", spread_f5:"f5", ou_f5:"f5", ml_h1:"h1", spread_h1:"h1", ou_h1:"h1" };
- // Team-side bets — their "outcome" is a team, so two of them on different teams
- // in the same game is a hedge (e.g. Mets ML + Phillies -1.5).
- const SIDE_TYPES = ["ml","spread","ml_f5","spread_f5","ml_h1","spread_h1"];
- const TYPE_SHORT = { ml:"moneyline", spread:"spread", ou:"total", ml_f5:"First 5 moneyline", spread_f5:"First 5 spread", ou_f5:"First 5 total", ml_h1:"1st half moneyline", spread_h1:"1st half spread", ou_h1:"1st half total" };
- // Returns a conflict message, or null if the bet is allowed.
- // `existing` items: { id, category, eventId, game, outcome }
- const lineConflict = (cat, bet, existing) => {
-  const grp = LINE_GROUP[cat]; if(!grp) return null;
-  const gk = (bet && (bet.eventId||bet.game)) || ""; if(!gk) return null;
-  const oc = (bet && bet.outcome) || null;
-  for(const e of (existing||[])){
-   if(!e || !e.category) continue;
-   if(bet && e.id!=null && String(e.id)===String(bet.id)) continue;
-   if(((e.eventId||e.game)||"")!==gk) continue;
-   if(LINE_GROUP[e.category]!==grp) continue;
-   if(e.category===cat) return "You already picked this game's "+(TYPE_SHORT[cat]||cat)+". You can't take both sides of the same line.";
-   if(SIDE_TYPES.includes(cat) && SIDE_TYPES.includes(e.category) && oc && e.outcome && String(e.outcome)!==String(oc))
-    return "You already have "+e.outcome+" in this game \u2014 you can't also take the other side.";
-  }
-  return null;
- };
  // Shared by BOTH parlay builders (solo sheet + league inline bar). A parlay needs
  // every leg to hit, so contradictory legs are a guaranteed loss — block them.
  const _isGLMkt = (mk)=> mk==="h2h"||mk==="spreads"||mk==="totals";
@@ -12918,6 +12947,7 @@ export default function App() {
                     <div onClick={()=>setPlokBuild(null)} style={{cursor:"pointer",color:"rgba(255,255,255,0.4)",fontSize:17,lineHeight:1}}>×</div>
                   </div>
                   {plokBuild.strategy && <div style={{fontSize:12.5,lineHeight:1.45,color:"rgba(255,255,255,0.82)",marginBottom:12}}>{plokBuild.strategy}</div>}
+                  {plokBuild.note && <div style={{fontSize:11.5,lineHeight:1.45,color:"rgba(255,255,255,0.45)",marginBottom:12,paddingLeft:9,borderLeft:"2px solid rgba(255,159,10,0.5)"}}>{plokBuild.note}</div>}
                   <div style={{display:"flex",flexDirection:"column",gap:9}}>
                     {plokBuild.items.map((it,ii)=>(
                       <div key={ii} style={{display:"flex",alignItems:"flex-start",gap:9}}>

@@ -147,6 +147,7 @@ export default async function handler(req, res) {
       `Return EXACTLY ONE pick per slot — ${slots.length} picks, one for every slot idx listed. Never return fewer. ` +
       "For EACH slot, choose the single best candidate id listed under THAT SLOT'S OWN category. For a 'longshot' slot, choose 2 or 3 candidate ids to form a parlay. " +
       "Use ONLY ids that appear under that slot's category in CANDIDATES — an id from another category is a hard error, because the pick would be graded as the slot's type and score wrong. " +
+      "NEVER pick two bets that contradict each other within the same game: one team's moneyline and the OTHER team's spread, or both sides of a total. Treat each game as one side — if you back the Phillies moneyline, do not also take the Mets spread. A slip that hedges itself wins nothing. " +
       "If a slot's category has no candidates, omit that slot entirely rather than filling it from another category. " +
       `Assign multipliers from MULT POOL: [${poolLine}]. Use each entry in the pool EXACTLY once across the slots — the pool may contain duplicates, and a duplicate means that value is used that many times. Do not invent a multiplier outside the pool. UNLESS a slot has a fixed mult (then use it). Put your HIGHEST mult on your HIGHEST-conviction pick. ` +
       "Tune to STRATEGY: 'ceiling' = chase upside / plus-money / variance (user is trailing); 'protect' = safer, lower-variance favorites (user is ahead); 'balanced' = best overall mix. Respect the lens, PROFILE, and LEAGUE. " +
