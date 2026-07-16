@@ -37,8 +37,9 @@ const ESPN_MAP = {
   mlb: { sp: "baseball", lg: "mlb" },
 };
 
-const MIN_LOG = 6;   // below this a split is noise — say nothing rather than something weak
-const WINDOW = 10;   // "last 10" everywhere
+const MIN_LOG = 6;    // below this a split is noise — say nothing rather than something weak
+const VENUE_MIN = 3;  // a 1-game home "split" is not a trend. Applies to EVERY venue split.
+const WINDOW = 10;    // "last 10" everywhere
 
 async function isPro(userId) {
   if (!userId || !SB_URL || !SB_KEY) return false;
@@ -125,8 +126,9 @@ export function formSplit(log, n = WINDOW) {
   return {
     n: rec.length, record: `${w}-${rec.length - w}`,
     pf: avg("pf"), pa: avg("pa"),
-    homeRecord: home.length ? rc(home) : null, homeN: home.length,
-    awayRecord: away.length ? rc(away) : null, awayN: away.length,
+    // null under VENUE_MIN — "0-1 at home" is a fact, not a trend, and reads as the latter.
+    homeRecord: home.length >= VENUE_MIN ? rc(home) : null, homeN: home.length,
+    awayRecord: away.length >= VENUE_MIN ? rc(away) : null, awayN: away.length,
   };
 }
 
@@ -144,8 +146,8 @@ export function totalSplit(log, line, n = WINDOW) {
   const home = rec.filter((g) => g.home), away = rec.filter((g) => !g.home);
   return {
     line, all: f(rec),
-    home: home.length >= 3 ? f(home) : null,
-    away: away.length >= 3 ? f(away) : null,
+    home: home.length >= VENUE_MIN ? f(home) : null,
+    away: away.length >= VENUE_MIN ? f(away) : null,
     avgTotal: +(rec.reduce((a, g) => a + g.total, 0) / rec.length).toFixed(1),
   };
 }
@@ -164,8 +166,8 @@ export function spreadSplit(log, point, n = WINDOW) {
   const home = rec.filter((g) => g.home), away = rec.filter((g) => !g.home);
   return {
     point, all: f(rec),
-    home: home.length >= 3 ? f(home) : null,
-    away: away.length >= 3 ? f(away) : null,
+    home: home.length >= VENUE_MIN ? f(home) : null,
+    away: away.length >= VENUE_MIN ? f(away) : null,
     avgMargin: +(rec.reduce((a, g) => a + g.margin, 0) / rec.length).toFixed(1),
   };
 }
@@ -173,18 +175,22 @@ export function spreadSplit(log, point, n = WINDOW) {
 const sgn = (p) => (p > 0 ? `+${p}` : `${p}`);
 
 // ── PURE: splits -> trend bullets. Wording is load-bearing. ────────────────
+// Every bullet is tagged {team, kind} so selectBullets can keep the two sides balanced.
+// An untagged global slice let one team's bullets crowd the other's out entirely — and
+// the model then argued from a split the user could not see on screen.
 export function trendBullets(sport, aAbbr, hAbbr, aLog, hLog, lines) {
   const t = [];
   const side = (abbr, log) => {
     const fm = formSplit(log);
-    if (fm) {
-      t.push({
-        dir: parseRec(fm.record) && parseRec(fm.record).w >= Math.ceil(fm.n / 2) ? "up" : "down",
-        text: `${abbr} are ${fm.record} over their last ${fm.n} — ${fm.pf} ${sport === "mlb" ? "runs" : "points"} for, ${fm.pa} against per game.`,
-      });
-      if (fm.homeRecord && fm.awayRecord) {
-        t.push({ dir: "up", text: `Venue split over that stretch: ${abbr} ${fm.homeRecord} at home, ${fm.awayRecord} on the road.` });
-      }
+    if (!fm) return;
+    t.push({
+      team: abbr, kind: "form",
+      dir: parseRec(fm.record) && parseRec(fm.record).w >= Math.ceil(fm.n / 2) ? "up" : "down",
+      text: `${abbr} are ${fm.record} over their last ${fm.n} — ${fm.pf} ${sport === "mlb" ? "runs" : "points"} for, ${fm.pa} against per game.`,
+    });
+    // Both sides must clear VENUE_MIN or this says nothing.
+    if (fm.homeRecord && fm.awayRecord) {
+      t.push({ team: abbr, kind: "venue", dir: "up", text: `Venue split over that stretch: ${abbr} ${fm.homeRecord} at home, ${fm.awayRecord} on the road.` });
     }
   };
   side(aAbbr, aLog);
@@ -192,16 +198,17 @@ export function trendBullets(sport, aAbbr, hAbbr, aLog, hLog, lines) {
 
   const total = lines && lines.total != null ? lines.total : null;
   if (total != null) {
-    const both = [{ ab: aAbbr, log: aLog }, { ab: hAbbr, log: hLog }];
-    for (const b of both) {
+    for (const b of [{ ab: aAbbr, log: aLog }, { ab: hAbbr, log: hLog }]) {
       const ts = totalSplit(b.log, total);
       if (!ts) continue;
       t.push({
+        team: b.ab, kind: "total",
         dir: ts.all.o > ts.all.u ? "up" : "down",
         text: `Apply tonight's ${total} total to ${b.ab}'s last ${ts.all.n} results and ${ts.all.o} clear it, ${ts.all.u} fall short — they've averaged ${ts.avgTotal} combined.`,
       });
       if (ts.home && ts.away) {
         t.push({
+          team: b.ab, kind: "totalVenue",
           dir: ts.home.o >= ts.away.o ? "up" : "down",
           text: `Same number by venue for ${b.ab}: ${ts.home.o} of ${ts.home.n} over at home, ${ts.away.o} of ${ts.away.n} on the road.`,
         });
@@ -209,24 +216,55 @@ export function trendBullets(sport, aAbbr, hAbbr, aLog, hLog, lines) {
     }
   }
 
-  for (const s of (lines && lines.spreads) || []) {
-    const isAway = norm(s.team).includes(norm(aAbbr)) || norm(aAbbr).includes(norm(s.team));
+  for (const sp of (lines && lines.spreads) || []) {
+    const isAway = norm(sp.team).includes(norm(aAbbr)) || norm(aAbbr).includes(norm(sp.team));
     const log = isAway ? aLog : hLog;
     const ab = isAway ? aAbbr : hAbbr;
-    const ss = spreadSplit(log, s.point);
+    const ss = spreadSplit(log, sp.point);
     if (!ss) continue;
     t.push({
+      team: ab, kind: "spread",
       dir: ss.all.c > ss.all.nc ? "up" : "down",
-      text: `Give ${ab} tonight's ${sgn(s.point)} against their last ${ss.all.n} results and ${ss.all.c} land on the right side, ${ss.all.nc} don't — average margin ${sgn(ss.avgMargin)}.`,
+      text: `Give ${ab} tonight's ${sgn(sp.point)} against their last ${ss.all.n} results and ${ss.all.c} land on the right side, ${ss.all.nc} don't — average margin ${sgn(ss.avgMargin)}.`,
     });
     if (ss.home && ss.away) {
       t.push({
+        team: ab, kind: "spreadVenue",
         dir: ss.home.c >= ss.away.c ? "up" : "down",
         text: `${ab} with that number: ${ss.home.c} of ${ss.home.n} at home, ${ss.away.c} of ${ss.away.n} away.`,
       });
     }
   }
   return t;
+}
+
+// ── PURE: pick what to SHOW — balanced across teams, best kind first. ──────
+// Round-robins the two sides so neither can be truncated away, then fills with
+// untagged (MLB starter/bullpen) bullets. Whatever this returns is exactly what the
+// model is allowed to argue from.
+const KIND_RANK = { total: 0, spread: 1, form: 2, totalVenue: 3, spreadVenue: 4, venue: 5 };
+export function selectBullets(bullets, max = 8) {
+  const rank = (b) => (KIND_RANK[b.kind] != null ? KIND_RANK[b.kind] : 9);
+  const teams = [];
+  const byTeam = new Map();
+  const loose = [];
+  for (const b of bullets) {
+    if (!b.team) { loose.push(b); continue; }
+    if (!byTeam.has(b.team)) { byTeam.set(b.team, []); teams.push(b.team); }
+    byTeam.get(b.team).push(b);
+  }
+  for (const k of teams) byTeam.get(k).sort((x, y) => rank(x) - rank(y));
+  const out = [];
+  for (let i = 0; out.length < max; i++) {
+    let added = false;
+    for (const k of teams) {
+      const list = byTeam.get(k);
+      if (i < list.length && out.length < max) { out.push(list[i]); added = true; }
+    }
+    if (!added) break;
+  }
+  for (const b of loose) { if (out.length >= max) break; out.push(b); }
+  return out;
 }
 
 // ── MLB recent-form bullets (DataFeeds layer) ─────────────────────────────
@@ -328,10 +366,18 @@ const SYS =
   "(3) Trend language throughout — form, streak, splits, pace, last-N, home vs road. " +
   "(4) No prices, no stake sizes, no specific bet to place. A qualitative lean or angle is fine. " +
   "(5) Plain and confident. No hype, no emojis. " +
+  "(6) Do not characterise scoring as high, low, strong or struggling unless that team's own number supports it. " +
+  "Never apply one team's characteristic to both teams — if one side averages 3.1 and the other 5.2, they are not " +
+  "both struggling. Read each side on its own numbers. " +
+  "(7) Every figure you cite must appear in FACTS. FACTS is exactly what the user can see on screen, so do not " +
+  "reference a split, average or record that is not there. " +
   "Return JSON: summary (2-3 sentences leading with the most decision-relevant trend); " +
   "bullCase (the strongest trend-based case FOR the side the form favours, anchored to specific numbers from FACTS); " +
-  "bearCase (why the trend may not hold — small sample, split is venue-driven, form vs a soft schedule, " +
-  "the number already reflects it, or the trend is thinner than it looks).";
+  "bearCase (why the trend may not hold). The bearCase MUST identify and engage the single strongest number in " +
+  "FACTS that points AGAINST the lean you took in bullCase, and name that number explicitly. If a team is averaging " +
+  "12 combined runs against a 9.5 total, an under lean has to answer for it. Do not change the subject to a " +
+  "different team or a different market. Beyond that: small sample, venue-driven splits, soft schedule, or the " +
+  "posted number already reflecting the trend are all fair.";
 
 const SCHEMA = {
   type: "object", additionalProperties: false,
@@ -429,15 +475,17 @@ export default async function handler(req, res) {
     }
     if (pack) for (const l of (pack.lines || [])) factLines.push(`${l.label}: ${l.value}`);
 
-    const factText = [...factLines, ...trends.map((t) => `- ${t.text}`)].join("\n");
+    // Pick the visible set FIRST — the model narrates only what the user can see.
+    const shown = selectBullets(trends, 8);
+    const factText = [...factLines, ...shown.map((t) => `- ${t.text}`)].join("\n");
     const gen = await narrate(ctx.game, factText);
 
     const out = {
-      summary: (gen && gen.summary) || (trends.length ? trends.slice(0, 2).map((t) => t.text).join(" ") : "Here's the recent form and season context for this matchup."),
+      summary: (gen && gen.summary) || (shown.length ? shown.slice(0, 2).map((t) => t.text).join(" ") : "Here's the recent form and season context for this matchup."),
       bullCase: (gen && gen.bullCase) || "",
       bearCase: (gen && gen.bearCase) || "",
       keyStats: keyStats.slice(0, 4),
-      trends: trends.slice(0, 6),
+      trends: shown,
       matchup, conviction: null, verdict: "none", model: "trends",
       logSeason, staleSeason: stale,
     };
