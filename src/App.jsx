@@ -4146,6 +4146,8 @@ export default function App() {
   const [modelPicker, setModelPicker] = useState(false);
   // Slot board. plokSlot null = auto (open the first empty slot), -1 = all closed.
   const [plokSlot, setPlokSlot] = useState(null);
+  const [devPanel, setDevPanel] = useState(false);
+  useEffect(()=>{ try{ setDevPanel(localStorage.getItem("picklock_dev")==="1"); }catch(e){ setDevPanel(false); } }, []);
   const [plokChosen, setPlokChosen] = useState(new Set()); // which built rows are ticked
   const [plokSlotBusy, setPlokSlotBusy] = useState(null);
   const [plokSlotErr, setPlokSlotErr] = useState(null);
@@ -5257,11 +5259,21 @@ export default function App() {
  const byStreak = [...uids].sort((a,b)=>stats[b].maxStreak-stats[a].maxStreak);
  const byLongshot = [...uids].sort((a,b)=>stats[b].longshotPts-stats[a].longshotPts);
 
+ // Carry the LEADER's value and YOURS. Previously a trophy only knew who held it, so
+ // the tab was six facts about other people with nothing to compare against.
+ // unit drives formatting: pts | pct | int.
+ const winRate = (uid) => { const st = stats[uid]; if(!st) return 0; const n = st.wins + st.losses; return n ? st.wins/n : 0; };
+ const mkT = (id, name, desc, color, order, val, unit) => {
+  const leadUid = order[0];
+  const lead = val(leadUid) || 0;
+  const mine = (user && user.id && stats[user.id]) ? (val(user.id) || 0) : 0;
+  return { id, name, desc, color, holder:getName(leadUid), isYou:isMe(leadUid), lead, mine, unit };
+ };
  const trophies = [
- { id:"whale", icon:"", name:"The Whale", desc:"Most total points", holder:getName(byPoints[0]), isYou:isMe(byPoints[0]), color:IOS.green },
- { id:"sharp", icon:"", name:"Sharpshooter", desc:"Highest win rate", holder:getName(byWinRate[0]), isYou:isMe(byWinRate[0]), color:IOS.yellow },
- { id:"hot", icon:"", name:"Hot Hand", desc:"Longest win streak", holder:getName(byStreak[0]), isYou:isMe(byStreak[0]), color:IOS.orange },
- { id:"longshot", icon:"", name:"Longshot King", desc:"Most points from longshots",holder:getName(byLongshot[0]), isYou:isMe(byLongshot[0]), color:IOS.pink },
+  mkT("whale","The Whale","Most total points",IOS.green,byPoints,(u)=>stats[u]?stats[u].points:0,"pts"),
+  mkT("sharp","Sharpshooter","Highest win rate",IOS.yellow,byWinRate,winRate,"pct"),
+  mkT("hot","Hot Hand","Longest win streak",IOS.orange,byStreak,(u)=>stats[u]?stats[u].maxStreak:0,"int"),
+  mkT("longshot","Longshot King","Most points from longshots",IOS.pink,byLongshot,(u)=>stats[u]?stats[u].longshotPts:0,"pts"),
  ];
  setLeagueTrophies(trophies);
  };
@@ -11867,16 +11879,41 @@ export default function App() {
        </div>
        <div style={{fontSize:11,fontWeight:800,letterSpacing:".5px",textTransform:"uppercase",color:IOS.label3,margin:"0 4px 8px"}}>Projected seeds</div>
        <div style={{background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:14,overflow:"hidden"}}>
-         {seeded.length===0 ? (<div style={{padding:"22px 16px",textAlign:"center",color:IOS.label3,fontSize:14}}>No graded picks yet</div>) : seeded.map((r,i)=>(
-           <div key={r.userId||i} style={{display:"flex",alignItems:"center",gap:11,padding:"12px 14px",background:r.isYou?"rgba(10,132,255,0.10)":"transparent",borderBottom:i<seeded.length-1?`0.5px solid ${IOS.sep}`:"none"}}>
-             <div style={{width:24,height:24,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:12,background:IOS.blue+"22",color:IOS.blue,flexShrink:0}}>{i+1}</div>
-             <div style={{flex:1,minWidth:0}}>
-               <div style={{fontSize:14,fontWeight:800,color:r.isYou?IOS.blue:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.isYou?"You":r.name}</div>
-               <div style={{fontSize:10.5,color:IOS.label3,fontWeight:600,marginTop:1}}>{r.record||"0-0"} · {r.points!=null?r.points:0} pts</div>
-             </div>
-             <div style={{fontSize:10,fontWeight:800,letterSpacing:".4px",textTransform:"uppercase",color:IOS.label3,flexShrink:0}}>vs #{N-i}</div>
-           </div>
-         ))}
+        {seeded.length===0 ? (<div style={{padding:"22px 16px",textAlign:"center",color:IOS.label3,fontSize:14}}>No graded picks yet</div>) : (()=>{
+          // Show the bubble too — the list used to stop at the cut, so if you missed you
+          // simply weren't on the screen and had no idea by how much.
+          const shown = ms.slice(0, Math.min(ms.length, N+3));
+          const f1 = (n)=>(Math.round(parseFloat(n||0)*10)/10).toFixed(1);
+          const cutPts = ms[N-1] ? parseFloat(ms[N-1].points||0) : 0;
+          const _regDone = (((lg && lg.current_week) || 1) >= startWeek);
+          return shown.map((r,i)=>{
+            const inField = i < N;
+            const out = !inField ? Math.max(0, cutPts - parseFloat(r.points||0)) : 0;
+            return (
+            <Fragment key={r.userId||i}>
+              {i===N && (
+                <div style={{display:"flex",alignItems:"center",gap:8,padding:"9px 14px",background:"rgba(255,69,58,0.04)"}}>
+                  <div style={{flex:1,borderTop:`1.5px dashed ${IOS.red}80`}}/>
+                  <div style={{fontSize:9,fontWeight:900,letterSpacing:"0.12em",color:IOS.red}}>CUT LINE</div>
+                  <div style={{flex:1,borderTop:`1.5px dashed ${IOS.red}80`}}/>
+                </div>
+              )}
+              <div style={{display:"flex",alignItems:"center",gap:11,padding:"12px 14px",background:r.isYou?"rgba(10,132,255,0.10)":"transparent",borderBottom:i<shown.length-1?`0.5px solid ${IOS.sep}`:"none",opacity:inField?1:0.72}}>
+                <div style={{width:24,height:24,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:12,fontWeight:900,flexShrink:0,
+                  background: r.isYou ? IOS.blue : inField ? IOS.yellow : "rgba(255,255,255,0.08)",
+                  color: r.isYou ? "#fff" : inField ? "#000" : IOS.label3}}>{i+1}</div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:14,fontWeight:800,color:r.isYou?IOS.blue:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.isYou?"You":r.name}</div>
+                  <div style={{fontSize:10.5,color:IOS.label3,fontWeight:600,marginTop:1}}>{r.record||"0-0"} · {f1(r.points)} pts</div>
+                </div>
+                <div style={{fontSize:10,fontWeight:800,letterSpacing:".4px",textTransform:"uppercase",flexShrink:0,color:inField?IOS.yellow:(r.isYou?IOS.orange:IOS.label3)}}>
+                  {inField ? (_regDone ? `vs #${N-i}` : "IN") : `${f1(out)} out`}
+                </div>
+              </div>
+            </Fragment>
+            );
+          });
+        })()}
        </div>
      </div>
    );
@@ -12588,7 +12625,11 @@ export default function App() {
  );
  })()}
 
- {(user&&user.id==="769f7ebe-90c2-45f5-99f4-b98b54622f52") && activeLeague.isCommissioner && activeLeague.league_type!=="bracket" && (()=>{
+ {/* Dev panel: hidden. Was gated to a hardcoded user id, so it showed on every league
+     screen — including screenshots. Explicit opt-in now:
+     localStorage.setItem("picklock_dev","1") to test playoffs/crown,
+     localStorage.removeItem("picklock_dev") to hide it. */}
+ {devPanel && activeLeague.isCommissioner && activeLeague.league_type!=="bracket" && (()=>{
    const sw=Number(activeLeague.season_weeks)||18;
    const N=playoffFieldFor(activeLeague, leagueMembers.length||0);
    const pw=playoffWeeksFor(N);
@@ -12672,6 +12713,64 @@ export default function App() {
    );
    return (
      <div style={{margin:"0 16px"}}>
+      {(()=>{
+       // The screen's job is "am I in, and by how much" — not to restate the rules.
+       const me = ms.find(z=>z.isYou);
+       const myRank = me ? (ms.indexOf(me)+1) : null;
+       const inField = myRank!=null && myRank<=N;
+       const cutRow = ms[N-1];
+       const myPts = me ? parseFloat(me.points||0) : 0;
+       const cutPts = cutRow ? parseFloat(cutRow.points||0) : 0;
+       const gap = inField ? Math.max(0, myPts - (ms[N] ? parseFloat(ms[N].points||0) : 0)) : Math.max(0, cutPts - myPts);
+       const weeksLeft = Math.max(0, startWeek - cw);
+       const f1 = (n)=>(Math.round(n*10)/10).toFixed(1);
+       const ord = (n)=> n===1?"st":n===2?"nd":n===3?"rd":"th";
+       const accent = inField ? IOS.yellow : IOS.red;
+       return (
+        <div style={{position:"relative",borderRadius:16,padding:"16px 15px 14px",overflow:"hidden",marginBottom:14,
+         background: inField ? "linear-gradient(160deg,rgba(255,214,10,0.13),rgba(255,159,10,0.05) 60%,rgba(255,255,255,0.02))"
+                             : "linear-gradient(160deg,rgba(255,69,58,0.13),rgba(255,159,10,0.05) 60%,rgba(255,255,255,0.02))",
+         border:`1px solid ${accent}47`}}>
+         <div style={{position:"absolute",top:0,left:0,right:0,height:2.5,background:`linear-gradient(90deg,${accent},${IOS.orange})`}}/>
+         <div style={{textAlign:"center",fontSize:11,fontWeight:800,letterSpacing:"0.14em",textTransform:"uppercase",color:accent,marginBottom:10}}>
+          {myRank==null ? "Playoff picture" : inField ? "You're in the field" : "You're on the outside"}
+         </div>
+         <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
+          <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:62,fontWeight:900,lineHeight:0.85,letterSpacing:-2,color:accent}}>
+           {myRank!=null ? <>{myRank}<span style={{fontSize:30,color:IOS.label3}}>{ord(myRank)}</span></> : "—"}
+          </div>
+          <div style={{textAlign:"left",minWidth:0}}>
+           <div style={{fontSize:24,fontWeight:900,lineHeight:1,color:"#fff"}}>
+            {myRank==null ? "No picks yet" : inField ? `Seed ${myRank}` : `${myRank-N} spot${myRank-N===1?"":"s"} out`}
+           </div>
+           <div style={{fontSize:12.5,color:IOS.label3,marginTop:3,maxWidth:180,lineHeight:1.35}}>
+            {myRank==null ? "Grade some picks to appear in the seeding."
+             : inField ? (ms[N] ? `${f1(gap)} clear of ${N+1}${ord(N+1)}.` : "Holding a spot.")
+             : `${f1(gap)} from the ${N} seed.`}
+           </div>
+          </div>
+         </div>
+         <div style={{display:"flex",background:"rgba(255,255,255,0.04)",borderRadius:11,marginTop:13,overflow:"hidden"}}>
+          <div style={{flex:1,textAlign:"center",padding:"9px 4px",borderRight:"0.5px solid rgba(255,255,255,0.07)"}}>
+           <div style={{fontSize:19,fontWeight:900,fontFamily:"'Barlow Semi Condensed',sans-serif",color:"#fff"}}>{weeksLeft}</div>
+           <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:IOS.label3,marginTop:2}}>{weeksLeft===1?"Week left":"Weeks left"}</div>
+          </div>
+          <div style={{flex:1,textAlign:"center",padding:"9px 4px",borderRight:"0.5px solid rgba(255,255,255,0.07)"}}>
+           <div style={{fontSize:19,fontWeight:900,fontFamily:"'Barlow Semi Condensed',sans-serif",color:inField?IOS.green:IOS.orange}}>{myRank==null?"—":f1(gap)}</div>
+           <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:IOS.label3,marginTop:2}}>{inField?"Cushion":"Gap to "+N+ord(N)}</div>
+          </div>
+          <div style={{flex:1,textAlign:"center",padding:"9px 4px",borderRight:"0.5px solid rgba(255,255,255,0.07)"}}>
+           <div style={{fontSize:19,fontWeight:900,fontFamily:"'Barlow Semi Condensed',sans-serif",color:"#fff"}}>{N}</div>
+           <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:IOS.label3,marginTop:2}}>Field</div>
+          </div>
+          <div style={{flex:1,textAlign:"center",padding:"9px 4px"}}>
+           <div style={{fontSize:19,fontWeight:900,fontFamily:"'Barlow Semi Condensed',sans-serif",color:regDone?IOS.green:IOS.label3}}>{regDone?"Set":"Wk "+startWeek}</div>
+           <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:IOS.label3,marginTop:2}}>Seeds lock</div>
+          </div>
+         </div>
+        </div>
+       );
+      })()}
        <div style={{borderRadius:16,padding:"16px",background:"linear-gradient(160deg,#19191e,#141417)",border:`0.5px solid ${IOS.sep}`,marginBottom:12}}>
          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
            <div style={{fontSize:17,fontWeight:800,color:"#fff"}}>Playoff bracket</div>
@@ -12681,16 +12780,40 @@ export default function App() {
        </div>
        <div style={{fontSize:11,fontWeight:800,letterSpacing:".5px",textTransform:"uppercase",color:IOS.label3,margin:"0 4px 8px"}}>{regDone?"Seeds":"Projected seeds"}</div>
        <div style={{background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:16,overflow:"hidden"}}>
-         {seeded.length===0 ? (<div style={{padding:"22px 16px",textAlign:"center",color:IOS.label3,fontSize:14}}>No graded picks yet</div>) : seeded.map((r,i)=>(
-           <div key={r.userId||i} style={{display:"flex",alignItems:"center",gap:11,padding:"12px 14px",background:r.isYou?"rgba(10,132,255,0.10)":"transparent",borderBottom:i<seeded.length-1?`0.5px solid ${IOS.sep}`:"none"}}>
-             <div style={{width:24,height:24,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:13,color:"#0c0c0e",background:IOS.yellow}}>{i+1}</div>
-             <div style={{flex:1,minWidth:0}}>
-               <div style={{fontSize:14,fontWeight:800,color:r.isYou?IOS.blue:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.isYou?"You":r.name}</div>
-               <div style={{fontSize:10.5,color:IOS.label3,fontWeight:600,marginTop:1}}>{r.record||"0-0"} · {r.points!=null?r.points:0} pts</div>
-             </div>
-             <div style={{fontSize:10,fontWeight:800,letterSpacing:".4px",textTransform:"uppercase",color:IOS.label3}}>vs #{N-i}</div>
-           </div>
-         ))}
+        {seeded.length===0 ? (<div style={{padding:"22px 16px",textAlign:"center",color:IOS.label3,fontSize:14}}>No graded picks yet</div>) : (()=>{
+          // Show the bubble under the line. The list used to stop at the cut, so a player
+          // who missed simply wasn't on screen and couldn't see by how much.
+          const shown = ms.slice(0, Math.min(ms.length, N+3));
+          const f1 = (n)=>(Math.round(parseFloat(n||0)*10)/10).toFixed(1);
+          const cutPts = ms[N-1] ? parseFloat(ms[N-1].points||0) : 0;
+          return shown.map((r,i)=>{
+            const inField = i < N;
+            const out = !inField ? Math.max(0, cutPts - parseFloat(r.points||0)) : 0;
+            return (
+            <Fragment key={r.userId||i}>
+              {i===N && (
+                <div style={{display:"flex",alignItems:"center",gap:8,padding:"9px 14px",background:"rgba(255,69,58,0.04)"}}>
+                  <div style={{flex:1,borderTop:`1.5px dashed ${IOS.red}80`}}/>
+                  <div style={{fontSize:9,fontWeight:900,letterSpacing:"0.12em",color:IOS.red}}>CUT LINE</div>
+                  <div style={{flex:1,borderTop:`1.5px dashed ${IOS.red}80`}}/>
+                </div>
+              )}
+              <div style={{display:"flex",alignItems:"center",gap:11,padding:"12px 14px",background:r.isYou?"rgba(10,132,255,0.10)":"transparent",borderBottom:i<shown.length-1?`0.5px solid ${IOS.sep}`:"none",opacity:inField?1:0.72}}>
+                <div style={{width:24,height:24,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:12,fontWeight:900,flexShrink:0,
+                  background: r.isYou ? IOS.blue : inField ? IOS.yellow : "rgba(255,255,255,0.08)",
+                  color: r.isYou ? "#fff" : inField ? "#000" : IOS.label3}}>{i+1}</div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:14,fontWeight:800,color:r.isYou?IOS.blue:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.isYou?"You":r.name}</div>
+                  <div style={{fontSize:10.5,color:IOS.label3,fontWeight:600,marginTop:1}}>{r.record||"0-0"} · {f1(r.points)} pts</div>
+                </div>
+                <div style={{fontSize:10,fontWeight:800,letterSpacing:".4px",textTransform:"uppercase",flexShrink:0,color:inField?IOS.yellow:(r.isYou?IOS.orange:IOS.label3)}}>
+                  {inField ? (regDone ? `vs #${N-i}` : "IN") : `${f1(out)} out`}
+                </div>
+              </div>
+            </Fragment>
+            );
+          });
+        })()}
        </div>
        {regDone && activeLeague.isCommissioner && seededIds.length===N && (
          <div onClick={doSeed} style={{marginTop:14,background:IOS.blue,borderRadius:12,padding:"14px",textAlign:"center",fontSize:15,fontWeight:800,color:"#fff",cursor:"pointer"}}>Seed the playoff bracket</div>
@@ -12948,39 +13071,104 @@ export default function App() {
  )}
 
  {/* TROPHIES TAB */}
- {leagueTab==="trophies"&&(
- <div style={{paddingBottom:24}}>
- {leagueMembers.filter(m=>!m.isYou).length===0 ? (
- <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:16,padding:"40px 24px",textAlign:"center"}}>
- <div style={{fontSize:48,marginBottom:12}}></div>
- <div style={{fontSize:18,fontWeight:700,color:"#fff",marginBottom:8}}>No Trophies Yet</div>
- <div style={{fontSize:14,color:IOS.label3,lineHeight:1.6}}>Trophies are awarded once members start competing. Invite friends to get started.</div>
- </div>
- ) : leagueTrophies.length===0 ? (
- <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:16,padding:"40px 24px",textAlign:"center"}}>
- <div style={{fontSize:48,marginBottom:12}}>⏳</div>
- <div style={{fontSize:18,fontWeight:700,color:"#fff",marginBottom:8}}>No Graded Picks Yet</div>
- <div style={{fontSize:14,color:IOS.label3,lineHeight:1.6}}>Trophies will appear once picks are graded this week.</div>
- </div>
- ) : (
- <>
- <div style={{padding:"0 20px 14px",fontSize:14,color:IOS.label3}}>Based on graded picks this season</div>
- {leagueTrophies.map(t=>(
- <div key={t.id} style={{margin:"0 16px 10px",background:IOS.bg2,borderRadius:16,padding:"16px",display:"flex",alignItems:"center",gap:14,position:"relative",overflow:"hidden",border:t.isYou?`1px solid ${t.color}30`:"1px solid rgba(255,255,255,0.06)"}}>
- {t.isYou&&<div style={{position:"absolute",left:0,top:0,bottom:0,width:4,background:t.color,borderRadius:"16px 0 0 16px"}}/>}
- <div style={{width:48,height:48,borderRadius:14,background:`${t.color}18`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{trophySVG(t.id,t.color)}</div>
- <div style={{flex:1}}>
- <div style={{fontSize:16,fontWeight:700,color:t.isYou?t.color:"#fff",marginBottom:3}}>{t.name}</div>
- <div style={{fontSize:12,color:IOS.label3,marginBottom:4}}>{t.desc}</div>
- <div style={{fontSize:12,fontWeight:600,color:t.isYou?t.color:IOS.label2}}>{t.isYou?" Currently yours":`Held by ${t.holder}`}</div>
- </div>
- {t.isYou&&<div style={{background:`${t.color}18`,border:`1px solid ${t.color}40`,borderRadius:8,padding:"4px 10px",fontSize:11,fontWeight:700,color:t.color,flexShrink:0}}>YOURS</div>}
- </div>
- ))}
- </>
- )}
- </div>
- )}
+  {leagueTab==="trophies"&&(
+   <div style={{paddingBottom:24}}>
+    {leagueMembers.filter(m=>!m.isYou).length===0 ? (
+     <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:16,padding:"40px 24px",textAlign:"center"}}>
+      <div style={{fontSize:18,fontWeight:700,color:"#fff",marginBottom:8}}>No trophies yet</div>
+      <div style={{fontSize:14,color:IOS.label3,lineHeight:1.6}}>Trophies are awarded once members start competing. Invite friends to get started.</div>
+     </div>
+    ) : leagueTrophies.length===0 ? (
+     <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:16,padding:"40px 24px",textAlign:"center"}}>
+      <div style={{fontSize:18,fontWeight:700,color:"#fff",marginBottom:8}}>No graded picks yet</div>
+      <div style={{fontSize:14,color:IOS.label3,lineHeight:1.6}}>Trophies appear once picks are graded this week.</div>
+     </div>
+    ) : (()=>{
+     // Formatting per trophy unit, and how far you are from taking it.
+     const fmt = (v,u) => u==="pct" ? Math.round(v*100)+"%" : u==="int" ? String(Math.round(v)) : (Math.round(v*10)/10).toFixed(1);
+     const gapOf = (t) => Math.max(0, t.lead - t.mine);
+     const gapTxt = (t) => t.unit==="pct" ? Math.round(gapOf(t)*100)+" pts off"
+       : t.unit==="int" ? (gapOf(t)===0?"tied":Math.round(gapOf(t))+" away")
+       : (Math.round(gapOf(t)*10)/10).toFixed(1)+" behind";
+     const mine = leagueTrophies.filter(t=>t.isYou);
+     // Who holds what — the strip under the hero.
+     const counts = {};
+     leagueTrophies.forEach(t=>{ const k = t.isYou ? "You" : t.holder; counts[k] = (counts[k]||0)+1; });
+     const board = Object.keys(counts).map(k=>({name:k,n:counts[k]})).sort((x,y)=>y.n-x.n).slice(0,4);
+     // Closest steal: the one you don't hold where you're nearest, by share of the leader.
+     const steal = leagueTrophies.filter(t=>!t.isYou && t.lead>0)
+       .map(t=>({t, share: t.mine/t.lead}))
+       .sort((x,y)=>y.share-x.share)[0];
+     return (
+      <>
+       <div style={{position:"relative",margin:"0 16px 14px",borderRadius:16,padding:"16px 15px 14px",overflow:"hidden",background:"linear-gradient(160deg,rgba(255,214,10,0.12),rgba(255,159,10,0.04) 60%,rgba(255,255,255,0.02))",border:"1px solid rgba(255,214,10,0.26)"}}>
+        <div style={{position:"absolute",top:0,left:0,right:0,height:2.5,background:`linear-gradient(90deg,${IOS.yellow},${IOS.orange})`}}/>
+        <div style={{textAlign:"center",fontSize:11,fontWeight:800,letterSpacing:"0.14em",textTransform:"uppercase",color:IOS.yellow,marginBottom:10}}>Trophy case</div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
+         <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:62,fontWeight:900,lineHeight:0.85,letterSpacing:-2,color:mine.length?IOS.yellow:"#fff"}}>
+          {mine.length}<span style={{fontSize:30,color:IOS.label3}}>/{leagueTrophies.length}</span>
+         </div>
+         <div style={{textAlign:"left"}}>
+          <div style={{fontSize:24,fontWeight:900,lineHeight:1,color:"#fff"}}>{mine.length===0?"Nothing.":mine.length===leagueTrophies.length?"Everything.":(mine.length===1?"One.":mine.length+" of them.")}</div>
+          <div style={{fontSize:12.5,color:IOS.label3,marginTop:3}}>{mine.length===0?(steal?"Yet. One's within reach.":"Yet."):"Hold them."}</div>
+         </div>
+        </div>
+        {board.length>1 && (
+         <div style={{display:"flex",background:"rgba(255,255,255,0.04)",borderRadius:11,marginTop:13,overflow:"hidden"}}>
+          {board.map((b,bi)=>(
+           <div key={bi} style={{flex:1,textAlign:"center",padding:"9px 4px",borderRight:bi<board.length-1?"0.5px solid rgba(255,255,255,0.07)":"none"}}>
+            <div style={{fontSize:19,fontWeight:900,fontFamily:"'Barlow Semi Condensed',sans-serif",color:b.name==="You"?IOS.blue:"#fff"}}>{b.n}</div>
+            <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:IOS.label3,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.name}</div>
+           </div>
+          ))}
+         </div>
+        )}
+       </div>
+
+       {steal && (
+        <div style={{display:"flex",alignItems:"center",gap:10,margin:"0 16px 14px",padding:"10px 12px",borderRadius:12,background:`linear-gradient(135deg,${steal.t.color}1f,rgba(255,255,255,0.02))`,border:`1px solid ${steal.t.color}4d`}}>
+         <div style={{width:30,height:30,borderRadius:9,background:`${steal.t.color}2e`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{trophySVG(steal.t.id,steal.t.color)}</div>
+         <div style={{minWidth:0}}>
+          <div style={{fontSize:8.5,fontWeight:900,letterSpacing:"0.1em",textTransform:"uppercase",color:steal.t.color}}>Closest steal</div>
+          <div style={{fontSize:13.5,fontWeight:800,color:"#fff",marginTop:1}}>{steal.t.name}</div>
+          <div style={{fontSize:11,color:IOS.label3}}>{gapTxt(steal.t)} · held by {steal.t.holder}</div>
+         </div>
+        </div>
+       )}
+
+       <div style={{textAlign:"center",fontSize:17,fontWeight:900,color:"#fff",margin:"4px 0 12px"}}>The case</div>
+
+       {leagueTrophies.map(t=>{
+        const pct = t.lead>0 ? Math.max(0,Math.min(1, t.mine/t.lead)) : 0;
+        return (
+         <div key={t.id} style={{position:"relative",margin:"0 16px 8px",borderRadius:13,padding:"11px 12px",overflow:"hidden",background:t.isYou?`linear-gradient(135deg,${IOS.yellow}17,rgba(255,255,255,0.015))`:IOS.bg2,border:t.isYou?`0.5px solid ${IOS.yellow}73`:`0.5px solid ${IOS.sep}`}}>
+          {t.isYou && <div style={{position:"absolute",top:10,right:11,fontSize:8,fontWeight:900,letterSpacing:"0.08em",background:IOS.yellow,color:"#000",padding:"2px 5px",borderRadius:4}}>YOURS</div>}
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+           <div style={{width:36,height:36,borderRadius:11,background:`${t.color}29`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{trophySVG(t.id,t.color)}</div>
+           <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:14.5,fontWeight:900,color:"#fff",letterSpacing:-0.2}}>{t.name}</div>
+            <div style={{fontSize:10.5,color:IOS.label3,marginTop:1}}>{t.desc}</div>
+           </div>
+           <div style={{textAlign:"right",flexShrink:0,paddingTop:t.isYou?12:0}}>
+            <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:21,fontWeight:900,lineHeight:1,color:t.color}}>{fmt(t.lead,t.unit)}</div>
+            <div style={{fontSize:9.5,color:IOS.label4||"rgba(255,255,255,0.25)",fontWeight:700,marginTop:2,maxWidth:86,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.isYou?"You":t.holder}</div>
+           </div>
+          </div>
+          <div style={{height:5,borderRadius:3,background:"rgba(255,255,255,0.07)",marginTop:10,overflow:"hidden",display:"flex"}}>
+           <div style={{height:"100%",borderRadius:3,width:`${(t.isYou?1:pct)*100}%`,background:t.isYou?IOS.yellow:IOS.blue}}/>
+          </div>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:9.5,fontWeight:700,color:"rgba(255,255,255,0.25)",marginTop:5}}>
+           <span>{t.isYou?"Held by you":<>You <b style={{color:IOS.label2}}>{fmt(t.mine,t.unit)}</b></>}</span>
+           <span style={{color: !t.isYou && steal && steal.t.id===t.id ? t.color : undefined}}>{t.isYou?"Defending":gapTxt(t)}</span>
+          </div>
+         </div>
+        );
+       })}
+      </>
+     );
+    })()}
+   </div>
+  )}
 
  {leagueTab==="schedule"&&activeLeague.league_type!=="bracket"&&(
  <>
@@ -13009,6 +13197,55 @@ export default function App() {
  })()}
  {leagueMembers.length >= (activeLeague.target_size||activeLeague.max_members||8) && (
  <>
+      {(()=>{
+       // Hero: your season at a glance. Everything here is already in liveSchedule.
+       const done = (liveSchedule||[]).filter(w=>w.result==="W"||w.result==="L");
+       const wins = done.filter(w=>w.result==="W").length;
+       const pts = done.map(w=>parseFloat(w.myPts||0)).filter(n=>n>0);
+       const best = pts.length?Math.max(...pts):0, worst = pts.length?Math.min(...pts):0;
+       const avg = pts.length?(pts.reduce((a,b)=>a+b,0)/pts.length):0;
+       const cw = activeLeague.current_week||activeLeague.week||1;
+       const nowWk = (liveSchedule||[]).find(w=>w.week===cw);
+       const _sw = Number(activeLeague.season_weeks)||18;
+       const _N = playoffFieldFor(activeLeague, leagueMembers.length||0);
+       const toPO = _N>=2 ? Math.max(0, Math.max(1,_sw-playoffWeeksFor(_N)+1) - cw) : null;
+       const f1 = (n)=>(Math.round(n*10)/10).toFixed(1);
+       return (
+        <div style={{position:"relative",margin:"0 16px 14px",borderRadius:16,padding:"16px 15px 14px",overflow:"hidden",background:"linear-gradient(160deg,rgba(10,132,255,0.14),rgba(191,90,242,0.06) 60%,rgba(255,255,255,0.02))",border:"1px solid rgba(10,132,255,0.28)"}}>
+         <div style={{position:"absolute",top:0,left:0,right:0,height:2.5,background:`linear-gradient(90deg,${IOS.blue},${IOS.purple})`}}/>
+         <div style={{textAlign:"center",fontSize:11,fontWeight:800,letterSpacing:"0.14em",textTransform:"uppercase",color:"#64D2FF",marginBottom:10}}>Your season</div>
+         <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
+          <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:62,fontWeight:900,lineHeight:0.85,letterSpacing:-2,color:"#fff"}}>
+           {wins}<span style={{fontSize:30,color:IOS.label3}}>-{done.length-wins}</span>
+          </div>
+          <div style={{textAlign:"left",minWidth:0}}>
+           <div style={{fontSize:24,fontWeight:900,lineHeight:1,color:nowWk?IOS.blue:"#fff"}}>{nowWk?"Live now":"Week "+cw}</div>
+           <div style={{fontSize:12.5,color:IOS.label3,marginTop:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:170}}>{nowWk?("vs "+nowWk.opp):"No matchup"}</div>
+          </div>
+         </div>
+         <div style={{display:"flex",background:"rgba(255,255,255,0.04)",borderRadius:11,marginTop:13,overflow:"hidden"}}>
+          <div style={{flex:1,textAlign:"center",padding:"9px 4px",borderRight:"0.5px solid rgba(255,255,255,0.07)"}}>
+           <div style={{fontSize:19,fontWeight:900,fontFamily:"'Barlow Semi Condensed',sans-serif",color:IOS.green}}>{best?f1(best):"—"}</div>
+           <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:IOS.label3,marginTop:2}}>Best week</div>
+          </div>
+          <div style={{flex:1,textAlign:"center",padding:"9px 4px",borderRight:"0.5px solid rgba(255,255,255,0.07)"}}>
+           <div style={{fontSize:19,fontWeight:900,fontFamily:"'Barlow Semi Condensed',sans-serif",color:IOS.red}}>{worst?f1(worst):"—"}</div>
+           <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:IOS.label3,marginTop:2}}>Worst</div>
+          </div>
+          <div style={{flex:1,textAlign:"center",padding:"9px 4px",borderRight:toPO!=null?"0.5px solid rgba(255,255,255,0.07)":"none"}}>
+           <div style={{fontSize:19,fontWeight:900,fontFamily:"'Barlow Semi Condensed',sans-serif",color:"#fff"}}>{avg?f1(avg):"—"}</div>
+           <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:IOS.label3,marginTop:2}}>Avg</div>
+          </div>
+          {toPO!=null && (
+           <div style={{flex:1,textAlign:"center",padding:"9px 4px"}}>
+            <div style={{fontSize:19,fontWeight:900,fontFamily:"'Barlow Semi Condensed',sans-serif",color:IOS.purple}}>{toPO}</div>
+            <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:IOS.label3,marginTop:2}}>To playoffs</div>
+           </div>
+          )}
+         </div>
+        </div>
+       );
+      })()}
  {/* Matchup detail overlay */}
  <div style={{background:IOS.bg2,borderRadius:16,margin:"0 16px",overflow:"hidden"}}>
  {liveSchedule.length === 0 ? (
@@ -13033,28 +13270,48 @@ export default function App() {
  .reduce((sum,p)=>sum+parseFloat(p.points_earned||0),0).toFixed(1)) : null;
 
  return (
- <div key={wk.week} className="sch-item"
- style={{...(live?{background:"rgba(10,132,255,0.06)"}:{}), ...(done?{cursor:"pointer"}:{})}}
- onClick={()=>{
- if(done) {
- setSelectedMatchup(wk.week);
- fetchPastMatchupPicks(wk.week, user.id, wk.oppId);
- }
- }}
+ <div key={wk.week}
+  style={{position:"relative",display:"flex",alignItems:"center",gap:11,padding:"11px 12px",margin:"0 0 7px",borderRadius:13,overflow:"hidden",
+   background: showLive&&!done ? `linear-gradient(135deg,${IOS.blue}1a,rgba(255,255,255,0.015))` : IOS.bg3,
+   border: showLive&&!done ? `0.5px solid ${IOS.blue}80` : `0.5px solid ${IOS.sep}`,
+   cursor: done?"pointer":"default"}}
+  onClick={()=>{ if(done){ setSelectedMatchup(wk.week); fetchPastMatchupPicks(wk.week, user.id, wk.oppId); } }}
  >
- <div className={`sch-wk ${live?"live":""}`}>W{wk.week}</div>
- <div className={`sch-opp ${live?"live":done?"done":"up"}`}>{live&&<span style={{color:IOS.blue,marginRight:6}}>●</span>}vs {wk.opp}</div>
- <div className="sch-score" style={{width:70,fontSize:12}}>
- {done&&myPts!==null
- ? <span style={{color:wk.result==="W"?IOS.green:IOS.red,fontWeight:700}}>{myPts}–{oppPts}</span>
- : showLive&&myLivePts!==null
- ? <span style={{color:IOS.blue,fontWeight:700}}>{myLivePts}–{oppLivePts}</span>
- : "—"}
- </div>
- <div style={{display:"flex",alignItems:"center",gap:6}}>
- <div className={`sch-badge ${showLive&&!done?"live":wk.result==="upcoming"?"up":wk.result}`}>{showLive&&!done?"LIVE":wk.result==="upcoming"?"—":wk.result}</div>
- {done&&<div style={{fontSize:16,color:IOS.label3}}>›</div>}
- </div>
+  {done && <div style={{position:"absolute",left:0,top:0,bottom:0,width:3,background:wk.result==="W"?IOS.green:IOS.red}}/>}
+  <div style={{fontSize:10,fontWeight:900,color:showLive&&!done?IOS.blue:"rgba(255,255,255,0.25)",width:20,flexShrink:0}}>W{wk.week}</div>
+  <div style={{width:30,height:30,borderRadius:15,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,color:"#000",
+   background: showLive&&!done ? "#64D2FF" : done ? (wk.result==="W"?"#C7CBD1":"#E0915A") : "rgba(255,255,255,0.14)"}}>
+   {String(wk.opp||"?").slice(0,2).toUpperCase()}
+  </div>
+  <div style={{flex:1,minWidth:0}}>
+   <div style={{fontSize:14,fontWeight:800,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{wk.opp}</div>
+   <div style={{fontSize:11,fontWeight:700,marginTop:2,color:done?IOS.label3:showLive?IOS.blue:IOS.label3}}>
+    {done&&myPts!==null ? <>{myPts} <span style={{color:"rgba(255,255,255,0.25)"}}>—</span> {oppPts}</>
+     : showLive&&myLivePts!==null ? <>{myLivePts} <span style={{color:"rgba(255,255,255,0.25)"}}>—</span> {oppLivePts}</>
+     : "Not played yet"}
+   </div>
+   {(()=>{
+    // Margin bar: a 6-point win and an 87-point beatdown should not look the same.
+    const mine = done ? myPts : (showLive?myLivePts:null);
+    const theirs = done ? oppPts : (showLive?oppLivePts:null);
+    if(mine==null || theirs==null) return null;
+    const diff = mine - theirs;
+    const w = Math.min(48, Math.abs(diff)/2);
+    const col = showLive&&!done ? IOS.blue : diff>=0 ? IOS.green : IOS.red;
+    return (
+     <div style={{height:4,borderRadius:2,background:"rgba(255,255,255,0.06)",marginTop:6,position:"relative",overflow:"hidden"}}>
+      <div style={{position:"absolute",top:0,bottom:0,borderRadius:2,background:col,
+       ...(diff>=0 ? {left:"50%", width:`${Math.max(w,0.6)}%`} : {right:"50%", width:`${Math.max(w,0.6)}%`})}}/>
+     </div>
+    );
+   })()}
+  </div>
+  <div style={{fontSize:11,fontWeight:900,padding:"5px 9px",borderRadius:7,flexShrink:0,
+   background: showLive&&!done ? IOS.blue : wk.result==="W" ? `${IOS.green}29` : wk.result==="L" ? `${IOS.red}24` : "rgba(255,255,255,0.06)",
+   color: showLive&&!done ? "#fff" : wk.result==="W" ? IOS.green : wk.result==="L" ? IOS.red : "rgba(255,255,255,0.25)"}}>
+   {showLive&&!done?"LIVE":wk.result==="upcoming"?"—":wk.result}
+  </div>
+  {done&&<div style={{fontSize:16,color:IOS.label3,flexShrink:0}}>›</div>}
  </div>
  );
  }); })()}
