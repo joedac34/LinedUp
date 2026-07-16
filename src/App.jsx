@@ -1321,11 +1321,14 @@ const WILDCARD_TYPES=["ml","spread","ou","prop","longshot"];
 
 // Lines only conflict within the same scope: a full-game line and a First-5 line
 // on the same game are independent bets, so they never clash.
-const LINE_GROUP = { ml:"full", spread:"full", ou:"full", ml_f5:"f5", spread_f5:"f5", ou_f5:"f5", ml_h1:"h1", spread_h1:"h1", ou_h1:"h1" };
+const LINE_GROUP = { ml:"full", spread:"full", ou:"full", ml_f5:"f5", spread_f5:"f5", ou_f5:"f5", ml_h1:"h1", spread_h1:"h1", ou_h1:"h1", yrfi:"f1", nrfi:"f1" };
+// Straight opposites: same underlying market, opposite sides. NRFI and YRFI are both
+// totals_1st_1_innings — taking both is a guaranteed split, not a hedge you'd choose.
+const OPPOSITE_TYPES = { yrfi:"nrfi", nrfi:"yrfi" };
 // Team-side bets — their "outcome" is a team, so two of them on different teams
 // in the same game is a hedge (e.g. Mets ML + Phillies -1.5).
 const SIDE_TYPES = ["ml","spread","ml_f5","spread_f5","ml_h1","spread_h1"];
-const TYPE_SHORT = { ml:"moneyline", spread:"spread", ou:"total", ml_f5:"First 5 moneyline", spread_f5:"First 5 spread", ou_f5:"First 5 total", ml_h1:"1st half moneyline", spread_h1:"1st half spread", ou_h1:"1st half total" };
+const TYPE_SHORT = { yrfi:"YRFI", nrfi:"NRFI", ml:"moneyline", spread:"spread", ou:"total", ml_f5:"First 5 moneyline", spread_f5:"First 5 spread", ou_f5:"First 5 total", ml_h1:"1st half moneyline", spread_h1:"1st half spread", ou_h1:"1st half total" };
 // Returns a conflict message, or null if the bet is allowed.
 // `existing` items: { id, category, eventId, game, outcome }
 const lineConflict = (cat, bet, existing) => {
@@ -1338,6 +1341,7 @@ const lineConflict = (cat, bet, existing) => {
   if(((e.eventId||e.game)||"")!==gk) continue;
   if(LINE_GROUP[e.category]!==grp) continue;
   if(e.category===cat) return "You already picked this game's "+(TYPE_SHORT[cat]||cat)+". You can't take both sides of the same line.";
+  if(OPPOSITE_TYPES[cat] && OPPOSITE_TYPES[cat]===e.category) return "You already have "+(TYPE_SHORT[e.category]||e.category)+" in this game \u2014 "+(TYPE_SHORT[cat]||cat)+" is the exact opposite bet.";
   if(SIDE_TYPES.includes(cat) && SIDE_TYPES.includes(e.category) && oc && e.outcome && String(e.outcome)!==String(oc))
    return "You already have "+e.outcome+" in this game \u2014 you can't also take the other side.";
  }
@@ -3841,6 +3845,10 @@ export default function App() {
       const flex = baseSlots.map(sl=>({...sl}));
       const rejected = [], conflicted = [];
       const taken = []; // accepted bets so far, for lineConflict
+      const usedSel = new Set(); // selKey/id of everything already on the slip
+      const selOf = (b) => String(b.selKey || b.id);
+      const dupe = (b) => usedSel.has(selOf(b));
+      const claim = (b) => usedSel.add(selOf(b));
       // Resolve in conviction order (highest mult first) so the pick Plok believes in
       // most keeps the game, and the loser's slot is left empty rather than contradictory.
       const ordered = (data.picks||[]).slice().sort((a,b)=>(b.mult||0)-(a.mult||0));
@@ -3857,8 +3865,8 @@ export default function App() {
         // Same rule the manual builders enforce: no two bets that contradict inside one
         // game (Phillies ML + Mets +1.5). Check against the BET's own category, not the
         // slot's — a wildcard slot holding a spread still conflicts as a spread.
-        const clash = (b) => lineConflict(b.category || cat, b, taken);
-        const remember = (b) => taken.push({ category:b.category||cat, id:b.id, eventId:b.eventId, game:b.game, outcome:b.outcome });
+        const clash = (b) => dupe(b) || lineConflict(b.category || cat, b, taken);
+        const remember = (b) => { claim(b); taken.push({ category:b.category||cat, id:b.id, eventId:b.eventId, game:b.game, outcome:b.outcome }); };
         if(cat==="longshot"){
           const raw = ids.map(id=>byId[id]).filter(Boolean);
           if(raw.length<2){ rejected.push(idx); return; }
@@ -3892,26 +3900,14 @@ export default function App() {
         const cat = slotSpec[i] && slotSpec[i].category;
         const list = eligible[cat] || [];
         if(!list.length){ why[i]="none"; return; }
-        if(cat==="longshot"){
-          const legTaken = taken.slice(), legs = [];
-          for(const b of list){
-            if(legs.length>=2) break;
-            if(lineConflict(b.category||cat, b, legTaken)) continue;
-            legs.push(b);
-            legTaken.push({ category:b.category||cat, id:b.id, eventId:b.eventId, game:b.game, outcome:b.outcome });
-          }
-          if(legs.length>=2){
-            const m = nextMult(i);
-            flex[i] = {...flex[i], bet:null, isParlay:true, parlayLegs:legs.map(b=>({id:b.id,pick:b.pick,game:b.game||"",odds:b.odds,impliedOdds:b.impliedOdds})), category:"longshot", mult:m, _reason:"Longest legal prices left on the board."};
-            legs.forEach(b=>taken.push({ category:b.category||cat, id:b.id, eventId:b.eventId, game:b.game, outcome:b.outcome }));
-            autoFilled.push(i);
-          } else why[i]="clash";
-          return;
-        }
-        const b = list.find(x=>!lineConflict(x.category||cat, x, taken));
+        // A longshot is a PRICE (+400 or longer), not a structure — everything in this
+        // pool already qualifies on its own. Take the single best legal one.
+        const b = list.find(x=>!dupe(x) && !lineConflict(x.category||cat, x, taken));
         if(!b){ why[i]="clash"; return; }
         const m = nextMult(i);
-        flex[i] = {...flex[i], bet:b, isParlay:false, parlayLegs:[], category:cat, mult:m, _reason:`Best ${plokTypeLabel(cat).toLowerCase()} left that doesn't clash with your other picks.`};
+        flex[i] = {...flex[i], bet:b, isParlay:false, parlayLegs:[], category:cat, mult:m,
+          _reason: cat==="longshot" ? `Longest legal price left on the board at ${b.odds}.` : `Best ${plokTypeLabel(cat).toLowerCase()} left that doesn't clash with your other picks.`};
+        claim(b);
         taken.push({ category:b.category||cat, id:b.id, eventId:b.eventId, game:b.game, outcome:b.outcome });
         autoFilled.push(i);
       });
