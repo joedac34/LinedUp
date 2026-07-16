@@ -1318,6 +1318,9 @@ function playoffFieldFor(league, total){
 }
 // A wildcard slot accepts ANY of these (all gradeable) bet types.
 const WILDCARD_TYPES=["ml","spread","ou","prop","longshot"];
+// A longshot must be +400 or longer; a parlay may not exceed +1000 combined.
+const LONGSHOT_MIN_ODDS = 400;
+const PARLAY_MAX_ODDS = 1000;
 
 // Lines only conflict within the same scope: a full-game line and a First-5 line
 // on the same game are independent bets, so they never clash.
@@ -3869,7 +3872,17 @@ export default function App() {
         const remember = (b) => { claim(b); taken.push({ category:b.category||cat, id:b.id, eventId:b.eventId, game:b.game, outcome:b.outcome }); };
         if(cat==="longshot"){
           const raw = ids.map(id=>byId[id]).filter(Boolean);
+          // One id is the normal case for a longshot — every candidate is already +400.
+          if(raw.length===1){
+            const b = raw[0];
+            if(clash(b)){ conflicted.push(idx); return; }
+            flex[idx] = {...flex[idx], bet:b, isParlay:false, parlayLegs:[], category:cat, mult, _reason:pk.reason};
+            remember(b);
+            return;
+          }
           if(raw.length<2){ rejected.push(idx); return; }
+          const _dec = calcParlayOddsDecimal(raw);
+          if(parlayAmericanOdds(_dec) > PARLAY_MAX_ODDS){ rejected.push(idx); return; }
           if(raw.some(clash)){ conflicted.push(idx); return; }
           const legs = raw.map(b=>({id:b.id,pick:b.pick,game:b.game||"",odds:b.odds,impliedOdds:b.impliedOdds}));
           flex[idx] = {...flex[idx], bet:null, isParlay:true, parlayLegs:legs, category:"longshot", mult, _reason:pk.reason};
@@ -3918,7 +3931,10 @@ export default function App() {
         order.forEach((i,rank)=>{ flex[i] = {...flex[i], mult: 5-rank}; });
       }
       const CATMETA = { ml:{label:"Moneyline",color:IOS.blue}, spread:{label:"Spread",color:IOS.green}, ou:{label:"Over/Under",color:IOS.orange}, prop:{label:"Prop",color:IOS.yellow}, longshot:{label:"Parlay",color:IOS.pink} };
-      const items = flex.map(sl=>({ filled: !!(sl.bet||sl.isParlay), meta: CATMETA[sl.category]||{label:plokTypeLabel(sl.category),color:plokTypeColor(sl.category)}, mult: sl.mult, reason: sl._reason||"", name: sl.isParlay ? sl.parlayLegs.map(l=>l.pick).join(" + ") : (sl.bet?.pick||"—"), odds: sl.isParlay ? "" : (sl.bet?.odds||"") }))
+      // Every row names its game. "No Run — 1st Inning" is meaningless on its own, and
+      // with one NRFI slot and one YRFI slot the GAME is the pick.
+      const _gameOf = (sl) => sl.isParlay ? [...new Set((sl.parlayLegs||[]).map(l=>l.game).filter(Boolean))].join(" · ") : ((sl.bet && sl.bet.game) || "");
+      const items = flex.map(sl=>({ filled: !!(sl.bet||sl.isParlay), meta: CATMETA[sl.category]||{label:plokTypeLabel(sl.category),color:plokTypeColor(sl.category)}, mult: sl.mult, reason: sl._reason||"", game: _gameOf(sl), name: sl.isParlay ? sl.parlayLegs.map(l=>l.pick).join(" + ") : (sl.bet?.pick||"—"), odds: sl.isParlay ? "" : (sl.bet?.odds||"") }))
         .filter(it=>it.filled).sort((a,b)=> (b.mult||0)-(a.mult||0));
       const cleanFlex = flex.map(sl=>{ const c={...sl}; delete c._reason; return c; });
       if(!items.length){ setPlokBuild({error:"Plok couldn't fill the slip from this slate — try again."}); return; }
@@ -7964,12 +7980,13 @@ export default function App() {
  const poolDistinct = [...new Set(multPool)].sort((a,b)=>a-b);
  const multRemaining = (v, ownMult)=> (poolCounts[v]||0) - ((poolUsedCounts[v]||0) - (ownMult===v?1:0));
  const hasLongshot = activePicks.some(p=> {
- if(p.category==="longshot" && p.bet && p.bet.impliedOdds >= 400) return true;
- if(p.isParlay && p.parlayLegs.length>=2) {
- const dec = calcParlayOddsDecimal(p.parlayLegs);
- return parlayAmericanOdds(dec) >= 400;
- }
- return false;
+  if(p.category==="longshot" && p.bet && p.bet.impliedOdds >= LONGSHOT_MIN_ODDS) return true;
+  if(p.isParlay && p.parlayLegs.length>=2) {
+   const am = parlayAmericanOdds(calcParlayOddsDecimal(p.parlayLegs));
+   // Over the cap does NOT qualify — otherwise the Lock button would accept it.
+   return am >= LONGSHOT_MIN_ODDS && am <= PARLAY_MAX_ODDS;
+  }
+  return false;
  });
  const hasParlay = hasLongshot;
  const allFlexFilled = activePicks.every(p=>p.mult!==null&&(p.isParlay?p.parlayLegs.length>=2:p.bet!==null));
@@ -13027,6 +13044,7 @@ export default function App() {
                             <span style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.04em",textTransform:"uppercase",color:it.meta.color,flexShrink:0}}>{it.meta.label}</span>
                             <span style={{fontSize:13,fontWeight:700,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{it.name}{it.odds?<span style={{color:"rgba(255,255,255,0.4)",fontWeight:600,marginLeft:5}}>{it.odds}</span>:null}</span>
                           </div>
+                          {it.game && <div style={{fontSize:9.5,fontWeight:700,color:"rgba(255,255,255,0.32)",marginTop:1.5,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{it.game}</div>}
                           {it.reason && <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",marginTop:2,lineHeight:1.35}}>{it.reason}</div>}
                         </div>
                       </div>
