@@ -3794,15 +3794,36 @@ export default function App() {
     // The league's REAL multiplier pool, from slot_config — 1,2,3,3,4,5,6,7 in the live
     // leagues. Duplicates are meaningful. buildslip used to imply 1-5 and returned 5 picks.
     const _plokPool = (hasCfg && plokCfg) ? plokCfg.map(c=>c.mult).filter(m=>m!=null) : null;
+    // Full eligible pool per slot type, BEST FIRST. `.slice(0,6)` on an unsorted list
+    // meant the model saw the first six bets, never the best six — plokSortBets never
+    // reached buildslip at all.
+    const eligible = {};
+    neededCats.forEach(cat=>{
+      if(cat==="wildcard"){
+        // Round-robin across the types a wildcard accepts. Straight concatenation put
+        // every moneyline first, so on a one-game slate the six sent were all ML/spread
+        // from the same game — all conflicting — and the props were never seen.
+        const lists = WILDCARD_TYPES.map(w=>plokSortBets(w, betsForSlotType(w)));
+        const out=[], seen=new Set();
+        for(let i=0;;i++){
+          let added=false;
+          for(const list of lists){ if(i<list.length){ const b=list[i]; added=true; if(!seen.has(b.id)){ seen.add(b.id); out.push(b); } } }
+          if(!added) break;
+        }
+        eligible[cat] = out;
+      } else {
+        eligible[cat] = plokSortBets(cat, betsForSlotType(cat));
+      }
+    });
     const candidates = {}; let haveAny = false;
     neededCats.forEach(cat=>{
-      const list = betsForSlotType(cat).slice(0,6).map(b=>({id:b.id, pick:b.pick, odds:b.odds, game:b.game}));
+      const list = eligible[cat].slice(0,6).map(b=>({id:b.id, pick:b.pick, odds:b.odds, game:b.game}));
       if(list.length) haveAny = true;
       candidates[cat] = list;
     });
-    // Exact id whitelist per category — the only thing standing between a bad model
-    // response and an ungradeable pick.
-    const okIds = {}; neededCats.forEach(cat=>{ okIds[cat] = new Set((candidates[cat]||[]).map(b=>b.id)); });
+    // Legality whitelist. Validate against the FULL eligible pool, not just the six we
+    // sent — the six are a suggestion, eligibility is the rule.
+    const okIds = {}; neededCats.forEach(cat=>{ okIds[cat] = new Set((eligible[cat]||[]).map(b=>b.id)); });
     if(!haveAny){ setPlokBuild({error:"Odds are still loading for this slate — try again in a moment."}); return; }
     const L = plokLeagueCtx();
     let strategy = "balanced";
@@ -3812,7 +3833,11 @@ export default function App() {
       const r = await fetch("/api/buildslip", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ multPool: _plokPool, sport:(leagueSports[0]||"nfl"), userId:user?.id, persona:plokPersona, userStats:plokUserStats(), leagueCtx:L, strategy, slots:slotSpec, candidates })});
       const data = await r.json();
       if(!r.ok){ setPlokBuild({error:data.error||"Couldn't build a slip — try again."}); return; }
-      const byId = {}; (ALL_BETS||[]).forEach(b=>{ byId[b.id]=b; });
+      // MUST include period + wildcard bets: ALL_BETS has no NRFI/F5/H1, so a valid
+      // period pick would have failed the byId lookup and been rejected as junk.
+      const byId = {};
+      (ALL_BETS||[]).forEach(b=>{ byId[b.id]=b; });
+      neededCats.forEach(cat=>{ (eligible[cat]||[]).forEach(b=>{ if(!byId[b.id]) byId[b.id]=b; }); });
       const flex = baseSlots.map(sl=>({...sl}));
       const rejected = [], conflicted = [];
       const taken = []; // accepted bets so far, for lineConflict
@@ -3851,6 +3876,46 @@ export default function App() {
       });
       if(rejected.length) console.warn("[plok] dropped ineligible picks for slots", rejected);
       if(conflicted.length) console.warn("[plok] dropped conflicting picks for slots", conflicted);
+
+      // ── Fallback fill ──────────────────────────────────────────────────────
+      // A dropped or skipped pick used to just kill the slot. But taking Phillies ML
+      // only blocks the OPPOSING side — Phillies -1.5 and a second prop are still legal.
+      // Fill what we legally can from the best remaining candidates, and record WHY for
+      // anything still empty, so the note can tell the truth.
+      const why = {}; // slot idx -> "none" | "clash"
+      const autoFilled = [];
+      const _poolLeft = (_plokPool ? _plokPool.slice() : []).sort((a,b)=>a-b);
+      flex.forEach(sl=>{ if((sl.bet||sl.isParlay) && sl.mult!=null){ const k=_poolLeft.indexOf(sl.mult); if(k>=0) _poolLeft.splice(k,1); } });
+      const nextMult = (i) => _poolLeft.length ? _poolLeft.shift() : ((slotSpec[i] && slotSpec[i].mult) || (i+1));
+      flex.forEach((sl,i)=>{
+        if(sl.bet || sl.isParlay) return;
+        const cat = slotSpec[i] && slotSpec[i].category;
+        const list = eligible[cat] || [];
+        if(!list.length){ why[i]="none"; return; }
+        if(cat==="longshot"){
+          const legTaken = taken.slice(), legs = [];
+          for(const b of list){
+            if(legs.length>=2) break;
+            if(lineConflict(b.category||cat, b, legTaken)) continue;
+            legs.push(b);
+            legTaken.push({ category:b.category||cat, id:b.id, eventId:b.eventId, game:b.game, outcome:b.outcome });
+          }
+          if(legs.length>=2){
+            const m = nextMult(i);
+            flex[i] = {...flex[i], bet:null, isParlay:true, parlayLegs:legs.map(b=>({id:b.id,pick:b.pick,game:b.game||"",odds:b.odds,impliedOdds:b.impliedOdds})), category:"longshot", mult:m, _reason:"Longest legal prices left on the board."};
+            legs.forEach(b=>taken.push({ category:b.category||cat, id:b.id, eventId:b.eventId, game:b.game, outcome:b.outcome }));
+            autoFilled.push(i);
+          } else why[i]="clash";
+          return;
+        }
+        const b = list.find(x=>!lineConflict(x.category||cat, x, taken));
+        if(!b){ why[i]="clash"; return; }
+        const m = nextMult(i);
+        flex[i] = {...flex[i], bet:b, isParlay:false, parlayLegs:[], category:cat, mult:m, _reason:`Best ${plokTypeLabel(cat).toLowerCase()} left that doesn't clash with your other picks.`};
+        taken.push({ category:b.category||cat, id:b.id, eventId:b.eventId, game:b.game, outcome:b.outcome });
+        autoFilled.push(i);
+      });
+      if(autoFilled.length) console.warn("[plok] auto-filled slots Plok left empty", autoFilled);
       if(!hasCfg){
         const order = flex.map((sl,i)=>i).filter(i=> flex[i].bet || flex[i].isParlay);
         order.sort((a,b)=> (flex[b].mult||0)-(flex[a].mult||0));
@@ -3861,10 +3926,13 @@ export default function App() {
         .filter(it=>it.filled).sort((a,b)=> (b.mult||0)-(a.mult||0));
       const cleanFlex = flex.map(sl=>{ const c={...sl}; delete c._reason; return c; });
       if(!items.length){ setPlokBuild({error:"Plok couldn't fill the slip from this slate — try again."}); return; }
-      const _unfilled = flex.length - items.length;
-      const _note = _unfilled>0
-        ? `Left ${_unfilled} slot${_unfilled===1?"":"s"} empty — nothing on tonight's board fits ${[...new Set(flex.filter(sl=>!(sl.bet||sl.isParlay)).map(sl=>plokTypeLabel(sl.slotType||sl.category)))].join(", ")}. Fill ${_unfilled===1?"it":"them"} yourself, or rebuild closer to game time.`
-        : null;
+      const _lbl = (i) => plokTypeLabel((slotSpec[i] && slotSpec[i].category) || flex[i].slotType || flex[i].category);
+      const _none  = [...new Set(Object.keys(why).filter(i=>why[i]==="none").map(i=>_lbl(+i)))];
+      const _clash = [...new Set(Object.keys(why).filter(i=>why[i]==="clash").map(i=>_lbl(+i)))];
+      const _bits = [];
+      if(_none.length)  _bits.push(`Nothing on tonight's board fits ${_none.join(", ")}.`);
+      if(_clash.length) _bits.push(`Every ${_clash.join(" and ")} left would clash with a higher pick — one slip can't take both sides of a game.`);
+      const _note = _bits.length ? _bits.join(" ") + " Fill the rest yourself, or rebuild closer to game time." : null;
       setPlokBuild({ strategy: data.strategy, items, flex: cleanFlex, note: _note });
     }catch(e){ setPlokBuild({error:"Network error — try again."}); }
     finally{ setPlokBuilding(false); }
