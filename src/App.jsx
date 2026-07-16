@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, Component } from "react";
+import { useState, useEffect, useRef, Component, Fragment } from "react";
 import { supabase } from './supabase';
 // Attach the current user's Supabase access token so API routes verify the caller
 // server-side (endpoints derive the user from this token, not the request body).
@@ -1318,6 +1318,29 @@ function playoffFieldFor(league, total){
 }
 // A wildcard slot accepts ANY of these (all gradeable) bet types.
 const WILDCARD_TYPES=["ml","spread","ou","prop","longshot"];
+// The Games tab listed everything under one "This Week" header, so tomorrow's slate read
+// as tonight's. Group by LOCAL calendar day. Pure — no state, safe at module scope.
+// NB: new Date(null) is the 1970 epoch, NOT Invalid Date — without the null guard a
+// game with no start time renders its own "Thursday, Jan 1" header.
+const dayKey = (d) => { if (d == null || d === "") return ""; const x = new Date(d); return isNaN(x.getTime()) ? "" : `${x.getFullYear()}-${x.getMonth()}-${x.getDate()}`; };
+const isToday = (d) => { const k = dayKey(d); return !!k && k === dayKey(new Date()); };
+const dayLabel = (d) => {
+  if (!dayKey(d)) return "";
+  const x = new Date(d);
+  const k = dayKey(x);
+  if (k === dayKey(new Date())) return "Today";
+  if (k === dayKey(new Date(Date.now() + 86400000))) return "Tomorrow";
+  return x.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" });
+};
+// Team crests sit on a light chip. ESPN's 500px logos are drawn for light backgrounds —
+// navy/black marks (Yankees, Rockies, Sox) disappear against our dark theme otherwise.
+const Crest = ({ src, abbr, size = 28, radius = 7 }) => (
+  <div style={{width:size,height:size,borderRadius:radius,background:"#fff",padding:size>=26?2.5:2,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden"}}>
+    {src
+      ? <img src={src} style={{width:"100%",height:"100%",objectFit:"contain"}} onError={e=>{e.target.style.display="none";}}/>
+      : <span style={{fontSize:Math.round(size*0.34),fontWeight:900,color:"#111",letterSpacing:-0.3}}>{abbr||""}</span>}
+  </div>
+);
 // A longshot must be +400 or longer; a parlay may not exceed +1000 combined.
 const LONGSHOT_MIN_ODDS = 400;
 const PARLAY_MAX_ODDS = 1000;
@@ -6109,7 +6132,7 @@ export default function App() {
  .wr-gsport{font-size:8.5px;font-weight:800;color:rgba(255,255,255,.35);background:rgba(255,255,255,.06);border-radius:5px;padding:2px 6px;}
  .wr-grow{display:flex;align-items:center;justify-content:space-between;padding:3px 0;}
  .wr-gl{display:flex;align-items:center;gap:8px;min-width:0;}
- .wr-glogo{width:22px;height:22px;border-radius:6px;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;flex-shrink:0;overflow:hidden;}
+ .wr-glogo{width:22px;height:22px;border-radius:6px;background:#fff;padding:2px;color:#111;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;flex-shrink:0;overflow:hidden;}
  .wr-gn{font-size:13px;font-weight:800;}
  .wr-gsc{font-size:16px;font-weight:900;}
  .wr-pickbadge{margin-top:8px;display:flex;align-items:center;gap:5px;font-size:10px;font-weight:800;color:#30D158;background:rgba(48,209,88,.1);border-radius:7px;padding:5px 8px;}
@@ -7493,7 +7516,7 @@ export default function App() {
                 <div style={{padding:"10px 14px"}}>
                   {[{name:g.away,logo:(teamLogo(soloSport,g.away)||espn?.awayLogo),record:espn?.awayRecord},{name:g.home,logo:(teamLogo(soloSport,g.home)||espn?.homeLogo),record:espn?.homeRecord}].map((team,ti)=>(
                     <div key={ti} style={{display:"flex",alignItems:"center",gap:10,marginBottom:ti===0?8:0}}>
-                      {team.logo?<img src={team.logo} style={{width:28,height:28,objectFit:"contain",flexShrink:0}} onError={e=>e.target.style.display="none"}/>:<div style={{width:28,height:28,borderRadius:"50%",background:"rgba(255,255,255,0.1)",flexShrink:0}}/>}
+                      <Crest src={team.logo} abbr={(team.name||"").split(" ").pop()} size={28}/>
                       <div style={{flex:1}}><div style={{fontSize:14,fontWeight:700,color:"#fff"}}>{team.name}</div>{team.record&&<div style={{fontSize:11,color:IOS.label3}}>{team.record}</div>}</div>
                     </div>
                   ))}
@@ -7921,7 +7944,7 @@ export default function App() {
  <div style={{fontSize:32,marginBottom:8}}></div>
  No games found. Check back closer to game day.
  </div>
- ) : (tickerGames||[]).filter(g=>{const _ls=activeLeague?.sports||(activeLeague?.sport?[activeLeague.sport]:[]);return !_ls.length||_ls.includes(g.sport);}).map((g, gi) => {
+ ) : (tickerGames||[]).filter(g=>{const _ls=activeLeague?.sports||(activeLeague?.sport?[activeLeague.sport]:[]);return !_ls.length||_ls.includes(g.sport);}).slice().sort((a,b)=> new Date(a.time) - new Date(b.time)).map((g, gi, _arr) => {
  const away = g.away.split(" ").pop();
  const home = g.home.split(" ").pop();
  const espn = matchEspnGame(espnGames, away, home);
@@ -7930,6 +7953,9 @@ export default function App() {
  const isLive = now >= t && now < new Date(t.getTime() + 4*60*60*1000);
  const isDone = espn?.awayScore && espn?.homeScore && !isLive && !!t && now>=t;
  const gameTime = t.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
+ // A day header whenever the date changes down the sorted list.
+ const _prevT = gi>0 ? _arr[gi-1].time : null;
+ const _newDay = !_prevT || dayKey(_prevT) !== dayKey(g.time);
  // Get odds for this game
  const sportOdds = liveOdds[activeLeague?.sport];
  const mlOdds = (sportOdds?.ml||[]).filter(o=>o.game?.includes(away)||o.game?.includes(home));
@@ -7940,7 +7966,15 @@ export default function App() {
  const hasPick = myPickGames.some(gm=>gm.includes(away.toLowerCase())&&gm.includes(home.toLowerCase()));
 
  return (
- <div key={gi} onClick={async()=>{
+ <Fragment key={gi}>
+  {_newDay && (
+   <div style={{display:"flex",alignItems:"center",gap:9,margin:gi===0?"0 16px 10px":"18px 16px 10px"}}>
+    <div style={{fontSize:11.5,fontWeight:800,letterSpacing:0.6,textTransform:"uppercase",color:isToday(g.time)?IOS.blue:"rgba(255,255,255,0.55)",whiteSpace:"nowrap"}}>{dayLabel(g.time)}</div>
+    <div style={{flex:1,height:"0.5px",background:"rgba(255,255,255,0.1)"}}/>
+    <div style={{fontSize:10.5,fontWeight:700,color:"rgba(255,255,255,0.28)",whiteSpace:"nowrap"}}>{new Date(g.time).toLocaleDateString([],{month:"short",day:"numeric"})}</div>
+   </div>
+  )}
+  <div onClick={async()=>{
  const gameOdds = {ml:mlOdds,spread:spreadOdds,ou:ouOdds};
  setGameSheet({tickerGame:{...g,away,home,isLive,timeStr:gameTime},espnGame:espn,detail:null,odds:gameOdds});
  setGameTeamTab("matchup");
@@ -7956,7 +7990,7 @@ export default function App() {
  {/* Status bar */}
  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 14px",borderBottom:`0.5px solid ${IOS.sep}`}}>
  <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,color:isLive?IOS.green:IOS.label3,textTransform:"uppercase"}}>
- {isLive?"● LIVE":isDone?"Final":gameTime}
+ {isLive?"● LIVE":isDone?"Final":(isToday(g.time)?gameTime:`${new Date(g.time).toLocaleDateString([],{weekday:"short",month:"short",day:"numeric"})} · ${gameTime}`)}
  </div>
  {hasPick && <div style={{fontSize:10,fontWeight:700,color:IOS.blue,letterSpacing:0.5}}>MY PICK</div>}
  </div>
@@ -7966,10 +8000,7 @@ export default function App() {
  {name:g.home,abbr:home,logo:(teamLogo(activeLeague?.sport,g.home)||espn?.homeLogo),score:espn?.homeScore,record:espn?.homeRecord}
  ].map((team,ti)=>(
  <div key={ti} style={{display:"flex",alignItems:"center",gap:10,marginBottom:ti===0?8:0}}>
- {team.logo
- ? <img src={team.logo} style={{width:28,height:28,objectFit:"contain",flexShrink:0}} onError={e=>e.target.style.display="none"}/>
- : <div style={{width:28,height:28,borderRadius:"50%",background:"rgba(255,255,255,0.1)",flexShrink:0}}/>
- }
+ <Crest src={team.logo} abbr={team.abbr} size={28}/>
  <div style={{flex:1}}>
  <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>{team.name}</div>
  {team.record && <div style={{fontSize:11,color:IOS.label3}}>{team.record}</div>}
@@ -7998,6 +8029,7 @@ export default function App() {
  </div>
  )}
  </div>
+     </Fragment>
  );
  })}
  <div style={{height:16}}/>
