@@ -1,8 +1,28 @@
 // api/trends.js — Plok "Trends & Form" lens.
-// Principle: every number here comes from real data (ESPN season splits + H2H for the
-// matchup card across all sports; DataFeeds recent-form game logs for MLB — last-10,
-// starter NRFI rates, rolling ERA). The LLM only NARRATES the supplied facts; it is
-// never asked to invent a stat. Returns the same shape AiInsightBubble already renders.
+//
+// Principle: every number here comes from real data. The LLM narrates facts the code
+// computed; it is never asked to invent, recall or estimate a stat.
+//
+// Sources:
+//   - ESPN /teams/{id}/schedule?season=YYYY&seasontype=2 — full regular-season game log
+//     (final scores, home/away). Probe-verified 7/2026 across NFL/NBA/MLB.
+//   - ESPN standings + H2H via buildMatchup (the matchup card).
+//   - MLB only: buildMlbPack recent-form layer (last-10, starter NRFI rates, rolling ERA).
+//
+// ── Two ESPN traps, both probe-confirmed, both silent if you get them wrong ──
+//  1. score SHAPE. /scoreboard returns competitor.score as a STRING. This endpoint
+//     returns an OBJECT: {value, displayValue}. parseFloat on the object = NaN and every
+//     trend quietly comes back empty. Use scoreVal().
+//  2. season ECHO. The `season` field describes where the LEAGUE is right now, not what
+//     was requested — asking for NFL 2025 regular season in July echoes back
+//     {2025, type 4, Off Season} while correctly returning 17 completed games. Validate
+//     against `requestedSeason`. Never against `season`.
+//
+// ── The ATS guardrail ──
+// We do NOT have historical closing lines, so we can NEVER claim real cover/ATS history.
+// What we compute is different and stated as such: TONIGHT'S number applied backwards
+// over real past results. Every string says so ("with tonight's -3.5 applied..."). If you
+// ever find yourself writing "covered in 6 of 10", stop — that's a claim we can't make.
 
 import { buildMlbPack } from "./mlbpack.js";
 import { buildMatchup } from "./findbet.js";
@@ -10,6 +30,15 @@ import { buildMatchup } from "./findbet.js";
 const OPENAI = process.env.OPENAI_API_KEY;
 const SB_URL = process.env.VITE_SUPABASE_URL;
 const SB_KEY = process.env.SUPABASE_SERVICE_KEY;
+
+const ESPN_MAP = {
+  nfl: { sp: "football", lg: "nfl" },
+  nba: { sp: "basketball", lg: "nba" },
+  mlb: { sp: "baseball", lg: "mlb" },
+};
+
+const MIN_LOG = 6;   // below this a split is noise — say nothing rather than something weak
+const WINDOW = 10;   // "last 10" everywhere
 
 async function isPro(userId) {
   if (!userId || !SB_URL || !SB_KEY) return false;
@@ -25,10 +54,182 @@ async function isPro(userId) {
 const _cache = new Map();
 function cacheGet(k) { const v = _cache.get(k); if (v && Date.now() - v.t < 30 * 60 * 1000) return v.d; return null; }
 function cacheSet(k, d) { _cache.set(k, { t: Date.now(), d }); }
+const _teams = new Map(); // sport -> {t, list}
 
 function parseRec(rec) { const m = String(rec || "").match(/(\d+)\s*-\s*(\d+)/); return m ? { w: +m[1], l: +m[2] } : null; }
+const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
 
-// ── MLB trend bullets from the DataFeeds recent-form layer + season ranks ──
+function parseTeams(game) {
+  const s = String(game || "").trim();
+  if (s.includes("@")) { const p = s.split("@"); return { away: p[0].trim(), home: p[1].trim() }; }
+  const m = s.split(/\s+(?:vs\.?|at)\s+/i);
+  if (m.length === 2) return { away: m[0].trim(), home: m[1].trim() };
+  return { away: "", home: "" };
+}
+
+// ── PURE: season-year resolver ─────────────────────────────────────────────
+// The year means a different thing per sport (probe-confirmed):
+//   MLB 2026 -> the 2026 season.            (calendar year)
+//   NFL 2025 -> Sep 2025 through Jan 2026.  (STARTING year — Jan/Feb belong to prior yr)
+//   NBA 2026 -> the 2025-26 season.         (ENDING year — Oct+ rolls forward)
+// Hardcoding getFullYear() silently pulls the wrong NBA season for ~3 months a year.
+export function seasonYear(sport, now = new Date()) {
+  const y = now.getUTCFullYear(), m = now.getUTCMonth() + 1;
+  if (sport === "nfl") return m >= 8 ? y : y - 1;
+  if (sport === "nba") return m >= 10 ? y + 1 : y;
+  return y; // mlb
+}
+
+// ── PURE: ESPN score object -> number ──────────────────────────────────────
+export function scoreVal(s) {
+  const v = s && typeof s === "object" ? s.value : s;
+  const f = parseFloat(v);
+  return isNaN(f) ? null : f;
+}
+
+// ── PURE: schedule payload -> game log rows (oldest first) ─────────────────
+export function parseLog(json, teamId) {
+  const evs = (json && json.events) || [];
+  const out = [];
+  for (const e of evs) {
+    const c = e && e.competitions && e.competitions[0];
+    if (!c || !(c.status && c.status.type && c.status.type.completed)) continue;
+    const cs = c.competitors || [];
+    const me = cs.find((x) => String(x.id) === String(teamId));
+    const opp = cs.find((x) => String(x.id) !== String(teamId));
+    if (!me || !opp) continue;
+    const pf = scoreVal(me.score), pa = scoreVal(opp.score);
+    if (pf == null || pa == null) continue;
+    out.push({
+      date: String(e.date || "").slice(0, 10),
+      home: me.homeAway === "home" && !c.neutralSite,
+      opp: (opp.team && opp.team.abbreviation) || "",
+      pf, pa,
+      total: pf + pa,
+      margin: pf - pa,
+      win: me.winner === true || pf > pa,
+    });
+  }
+  out.sort((a, b) => a.date.localeCompare(b.date));
+  return out;
+}
+
+// ── PURE: last-N form ──────────────────────────────────────────────────────
+export function formSplit(log, n = WINDOW) {
+  const rec = log.slice(-n);
+  if (rec.length < MIN_LOG) return null;
+  const w = rec.filter((g) => g.win).length;
+  const avg = (k) => +(rec.reduce((a, g) => a + g[k], 0) / rec.length).toFixed(1);
+  const home = rec.filter((g) => g.home), away = rec.filter((g) => !g.home);
+  const rc = (rows) => `${rows.filter((g) => g.win).length}-${rows.filter((g) => !g.win).length}`;
+  return {
+    n: rec.length, record: `${w}-${rec.length - w}`,
+    pf: avg("pf"), pa: avg("pa"),
+    homeRecord: home.length ? rc(home) : null, homeN: home.length,
+    awayRecord: away.length ? rc(away) : null, awayN: away.length,
+  };
+}
+
+// ── PURE: tonight's TOTAL applied backwards, split by venue ────────────────
+// NOT an over/under history — those would need each game's own closing total.
+export function totalSplit(log, line, n = WINDOW) {
+  if (line == null || !isFinite(line)) return null;
+  const rec = log.slice(-n);
+  if (rec.length < MIN_LOG) return null;
+  const f = (rows) => {
+    let o = 0, u = 0, p = 0;
+    for (const g of rows) { if (g.total > line) o++; else if (g.total < line) u++; else p++; }
+    return { o, u, p, n: rows.length };
+  };
+  const home = rec.filter((g) => g.home), away = rec.filter((g) => !g.home);
+  return {
+    line, all: f(rec),
+    home: home.length >= 3 ? f(home) : null,
+    away: away.length >= 3 ? f(away) : null,
+    avgTotal: +(rec.reduce((a, g) => a + g.total, 0) / rec.length).toFixed(1),
+  };
+}
+
+// ── PURE: tonight's SPREAD applied backwards, split by venue ───────────────
+// point is THIS team's number (-3.5 favored, +3.5 dog). Result > 0 = would have covered.
+export function spreadSplit(log, point, n = WINDOW) {
+  if (point == null || !isFinite(point)) return null;
+  const rec = log.slice(-n);
+  if (rec.length < MIN_LOG) return null;
+  const f = (rows) => {
+    let c = 0, nc = 0, p = 0;
+    for (const g of rows) { const r = g.margin + point; if (r > 0) c++; else if (r < 0) nc++; else p++; }
+    return { c, nc, p, n: rows.length };
+  };
+  const home = rec.filter((g) => g.home), away = rec.filter((g) => !g.home);
+  return {
+    point, all: f(rec),
+    home: home.length >= 3 ? f(home) : null,
+    away: away.length >= 3 ? f(away) : null,
+    avgMargin: +(rec.reduce((a, g) => a + g.margin, 0) / rec.length).toFixed(1),
+  };
+}
+
+const sgn = (p) => (p > 0 ? `+${p}` : `${p}`);
+
+// ── PURE: splits -> trend bullets. Wording is load-bearing. ────────────────
+export function trendBullets(sport, aAbbr, hAbbr, aLog, hLog, lines) {
+  const t = [];
+  const side = (abbr, log) => {
+    const fm = formSplit(log);
+    if (fm) {
+      t.push({
+        dir: parseRec(fm.record) && parseRec(fm.record).w >= Math.ceil(fm.n / 2) ? "up" : "down",
+        text: `${abbr} are ${fm.record} over their last ${fm.n} — ${fm.pf} ${sport === "mlb" ? "runs" : "points"} for, ${fm.pa} against per game.`,
+      });
+      if (fm.homeRecord && fm.awayRecord) {
+        t.push({ dir: "up", text: `Venue split over that stretch: ${abbr} ${fm.homeRecord} at home, ${fm.awayRecord} on the road.` });
+      }
+    }
+  };
+  side(aAbbr, aLog);
+  side(hAbbr, hLog);
+
+  const total = lines && lines.total != null ? lines.total : null;
+  if (total != null) {
+    const both = [{ ab: aAbbr, log: aLog }, { ab: hAbbr, log: hLog }];
+    for (const b of both) {
+      const ts = totalSplit(b.log, total);
+      if (!ts) continue;
+      t.push({
+        dir: ts.all.o > ts.all.u ? "up" : "down",
+        text: `Apply tonight's ${total} total to ${b.ab}'s last ${ts.all.n} results and ${ts.all.o} clear it, ${ts.all.u} fall short — they've averaged ${ts.avgTotal} combined.`,
+      });
+      if (ts.home && ts.away) {
+        t.push({
+          dir: ts.home.o >= ts.away.o ? "up" : "down",
+          text: `Same number by venue for ${b.ab}: ${ts.home.o} of ${ts.home.n} over at home, ${ts.away.o} of ${ts.away.n} on the road.`,
+        });
+      }
+    }
+  }
+
+  for (const s of (lines && lines.spreads) || []) {
+    const isAway = norm(s.team).includes(norm(aAbbr)) || norm(aAbbr).includes(norm(s.team));
+    const log = isAway ? aLog : hLog;
+    const ab = isAway ? aAbbr : hAbbr;
+    const ss = spreadSplit(log, s.point);
+    if (!ss) continue;
+    t.push({
+      dir: ss.all.c > ss.all.nc ? "up" : "down",
+      text: `Give ${ab} tonight's ${sgn(s.point)} against their last ${ss.all.n} results and ${ss.all.c} land on the right side, ${ss.all.nc} don't — average margin ${sgn(ss.avgMargin)}.`,
+    });
+    if (ss.home && ss.away) {
+      t.push({
+        dir: ss.home.c >= ss.away.c ? "up" : "down",
+        text: `${ab} with that number: ${ss.home.c} of ${ss.home.n} at home, ${ss.away.c} of ${ss.away.n} away.`,
+      });
+    }
+  }
+  return t;
+}
+
+// ── MLB recent-form bullets (DataFeeds layer) ─────────────────────────────
 function mlbBullets(pack, matchup) {
   const t = [];
   const f = pack.form || {};
@@ -37,20 +238,6 @@ function mlbBullets(pack, matchup) {
   const hAbbr = (matchup && matchup.home && matchup.home.abbr) || pack.home;
   const aSPn = (pack.starters && pack.starters.away && pack.starters.away.name) || "Away SP";
   const hSPn = (pack.starters && pack.starters.home && pack.starters.home.name) || "Home SP";
-
-  // last-10 form
-  if (f.teamAway && f.teamHome) {
-    const a = parseRec(f.teamAway.record), h = parseRec(f.teamHome.record);
-    if (a && h) {
-      if (a.w !== h.w) {
-        const hot = a.w > h.w ? { ab: aAbbr, r: f.teamAway } : { ab: hAbbr, r: f.teamHome };
-        t.push({ dir: "up", text: `${hot.ab} enter hotter — ${hot.r.record} over their last ${hot.r.n}, ${hot.r.rf} runs scored vs ${hot.r.ra} allowed per game.` });
-      } else {
-        t.push({ dir: "up", text: `Even form: both clubs are ${f.teamAway.record} over their last 10.` });
-      }
-    }
-  }
-  // starter NRFI / YRFI
   const nrfi = (sp, name, ab) => {
     if (!sp || !(sp.nrfiN >= 3)) return;
     const pct = sp.nrfiClean / sp.nrfiN;
@@ -59,7 +246,6 @@ function mlbBullets(pack, matchup) {
   };
   nrfi(f.spAway, aSPn, aAbbr);
   nrfi(f.spHome, hSPn, hAbbr);
-  // rolling starter ERA
   const spForm = (sp, name, ab) => {
     if (!sp || sp.last3ERA == null || !(sp.starts >= 2)) return;
     const era = Number(sp.last3ERA), n = Math.min(sp.starts, 3);
@@ -68,12 +254,7 @@ function mlbBullets(pack, matchup) {
   };
   spForm(f.spAway, aSPn, aAbbr);
   spForm(f.spHome, hSPn, hAbbr);
-  // run environment via league ranks
   const ranks = (r) => (r && r.ranks) || {};
-  const aS = ranks(rA).staffERA, hS = ranks(rH).staffERA, aR = ranks(rA).rpg, hR = ranks(rH).rpg;
-  if (aS && hS && aS <= 12 && hS <= 12) t.push({ dir: "down", text: `Two quality staffs (${aAbbr} #${aS}, ${hAbbr} #${hS} in ERA) — profiles toward a lower-scoring game.` });
-  else if (aR && hR && aR <= 12 && hR <= 12) t.push({ dir: "up", text: `Two of the better offenses here (${aAbbr} #${aR}, ${hAbbr} #${hR} in runs/game) — runs could flow.` });
-  // bullpen edge
   const aP = ranks(rA).penERA, hP = ranks(rH).penERA;
   if (aP && hP && Math.abs(aP - hP) >= 10) {
     const better = aP < hP ? aAbbr : hAbbr, worse = aP < hP ? hAbbr : aAbbr;
@@ -82,42 +263,98 @@ function mlbBullets(pack, matchup) {
   return t;
 }
 
-// ── NFL / NBA trend bullets from ESPN season splits + streak + H2H ──
-function teamBullets(m) {
-  const t = [];
-  if (!m) return t;
-  const streak = (s, ab) => {
-    if (!s) return;
-    const win = /^w/i.test(String(s).trim());
-    const n = parseInt(String(s).replace(/\D/g, ""), 10) || 0;
-    if (n >= 2) t.push({ dir: win ? "up" : "down", text: `${ab} ${win ? "are riding" : "are mired in"} a ${n}-game ${win ? "win" : "losing"} streak.` });
-  };
-  streak(m.away.streak, m.away.abbr);
-  streak(m.home.streak, m.home.abbr);
-  const num = (x) => { const f = parseFloat(x); return isNaN(f) ? null : f; };
-  const aS = num(m.away.scored), hA = num(m.home.allowed), hS = num(m.home.scored), aA = num(m.away.allowed);
-  if (aS != null && hA != null && Math.abs(aS - hA) >= 3) t.push({ dir: aS > hA ? "up" : "down", text: `${m.away.abbr} average ${m.away.scored} ${m.scoredLabel || "/g"} into a ${m.home.abbr} defense allowing ${m.home.allowed}.` });
-  if (hS != null && aA != null && Math.abs(hS - aA) >= 3) t.push({ dir: hS > aA ? "up" : "down", text: `${m.home.abbr} put up ${m.home.scored} against a ${m.away.abbr} side giving up ${m.away.allowed}.` });
-  if (m.away.away) t.push({ dir: "up", text: `${m.away.abbr} road form: ${m.away.away}.` });
-  if (m.home.home) t.push({ dir: "up", text: `${m.home.abbr} at home: ${m.home.home}.` });
-  if (m.h2h) t.push({ dir: "up", text: `${m.h2h.label}: ${m.away.abbr} ${m.h2h.away}, ${m.home.abbr} ${m.h2h.home}.` });
-  return t;
+// ── ESPN fetch layer ──────────────────────────────────────────────────────
+async function espnTeams(sport) {
+  const c = _teams.get(sport);
+  if (c && Date.now() - c.t < 24 * 3600 * 1000) return c.list;
+  const em = ESPN_MAP[sport]; if (!em) return [];
+  try {
+    const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/${em.sp}/${em.lg}/teams`);
+    if (!r.ok) return [];
+    const j = await r.json();
+    const raw = (((j.sports || [])[0] || {}).leagues || [])[0];
+    const list = ((raw && raw.teams) || []).map((x) => x.team).filter(Boolean).map((t) => ({
+      id: t.id, abbr: t.abbreviation || "",
+      names: [t.displayName, t.shortDisplayName, t.name, t.location, t.abbreviation].filter(Boolean).map(norm),
+    }));
+    _teams.set(sport, { t: Date.now(), list });
+    return list;
+  } catch { return []; }
 }
 
+export function matchTeam(list, name) {
+  const n = norm(name); if (!n) return null;
+  let hit = list.find((t) => t.names.includes(n));
+  if (hit) return hit;
+  hit = list.find((t) => t.names.some((x) => x && (x.includes(n) || n.includes(x))));
+  if (hit) return hit;
+  const last = n.split(" ").pop();
+  return list.find((t) => t.names.some((x) => x && x.split(" ").pop() === last)) || null;
+}
+
+async function teamLog(sport, teamId, season) {
+  const em = ESPN_MAP[sport]; if (!em) return [];
+  const url = `https://site.api.espn.com/apis/site/v2/sports/${em.sp}/${em.lg}/teams/${teamId}/schedule?season=${season}&seasontype=2`;
+  try {
+    const r = await fetch(url);
+    if (!r.ok) return [];
+    const j = await r.json();
+    // Validate against requestedSeason — `season` echoes the league's CURRENT state.
+    const rs = j.requestedSeason;
+    if (rs && rs.year && String(rs.year) !== String(season)) return [];
+    return parseLog(j, teamId);
+  } catch { return []; }
+}
+
+// Early in a season the log is too short to say anything. Fall back to last season
+// and label it, rather than reporting a 2-game "trend".
+async function logFor(sport, teamId) {
+  const yr = seasonYear(sport);
+  let log = await teamLog(sport, teamId, yr);
+  if (log.length >= MIN_LOG) return { log, season: yr, stale: false };
+  const prev = await teamLog(sport, teamId, yr - 1);
+  if (prev.length >= MIN_LOG) return { log: prev, season: yr - 1, stale: true };
+  return { log, season: yr, stale: false };
+}
+
+// ── Narration: the LLM writes prose about numbers the code already computed ─
+const SYS =
+  "You are Plok's Trends & Form lens for a sports pick'em app. You explain FORM and TRENDS — recent results, " +
+  "streaks, home/road splits, scoring pace, and how a team's recent results sit against tonight's posted number. " +
+  "Rules: (1) Use ONLY the numbers in FACTS. Never invent, estimate or recall a stat. " +
+  "(2) NEVER claim against-the-spread or over/under HISTORY — we do not have past closing lines. Where FACTS " +
+  "describe tonight's number applied backwards over past results, describe it exactly that way (\"applying tonight's " +
+  "number to their last 10\"), never as \"they're 6-4 ATS\" or \"the over is 6-4\". " +
+  "(3) Trend language throughout — form, streak, splits, pace, last-N, home vs road. " +
+  "(4) No prices, no stake sizes, no specific bet to place. A qualitative lean or angle is fine. " +
+  "(5) Plain and confident. No hype, no emojis. " +
+  "Return JSON: summary (2-3 sentences leading with the most decision-relevant trend); " +
+  "bullCase (the strongest trend-based case FOR the side the form favours, anchored to specific numbers from FACTS); " +
+  "bearCase (why the trend may not hold — small sample, split is venue-driven, form vs a soft schedule, " +
+  "the number already reflects it, or the trend is thinner than it looks).";
+
+const SCHEMA = {
+  type: "object", additionalProperties: false,
+  properties: { summary: { type: "string" }, bullCase: { type: "string" }, bearCase: { type: "string" } },
+  required: ["summary", "bullCase", "bearCase"],
+};
+
 async function narrate(game, facts) {
-  if (!OPENAI) return "";
-  const sys = "You are Plok's Trends & Form lens for a sports pick'em app. Using ONLY the facts provided, write a tight 2-3 sentence read of the form and trends in this matchup. Rules: never invent a number or stat not in the facts; do not state a betting price or a specific bet to make; you MAY note a qualitative 'lean' or 'angle' (e.g. NRFI, the over, the hotter side); confident and plain, no hype, no emojis. Lead with the most decision-relevant trend.";
-  const usr = `Matchup: ${game}\n\nFacts:\n${facts}`;
+  if (!OPENAI) return null;
   try {
     const r = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENAI}` },
-      body: JSON.stringify({ model: "gpt-4o-mini", temperature: 0.4, max_tokens: 220, messages: [{ role: "system", content: sys }, { role: "user", content: usr }] }),
+      body: JSON.stringify({
+        model: "gpt-4o-mini", temperature: 0.4, max_tokens: 600,
+        messages: [{ role: "system", content: SYS }, { role: "user", content: `Matchup: ${game}\n\nFACTS:\n${facts}` }],
+        response_format: { type: "json_schema", json_schema: { name: "trends", strict: true, schema: SCHEMA } },
+      }),
     });
-    if (!r.ok) return "";
+    if (!r.ok) return null;
     const d = await r.json();
-    return (d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content || "").trim();
-  } catch { return ""; }
+    return JSON.parse(d.choices[0].message.content);
+  } catch { return null; }
 }
 
 export default async function handler(req, res) {
@@ -128,65 +365,82 @@ export default async function handler(req, res) {
     if (ctx.userId && !(await isPro(ctx.userId))) return res.status(403).json({ error: "Plok is a Pro feature" });
 
     const sport = String(ctx.sport).toLowerCase();
+    const lines = ctx.lines || {};
     const day = new Date().toISOString().slice(0, 10);
-    const key = ["trends", sport, ctx.game, day].join("|");
+    const key = ["trends", sport, ctx.game, lines.total != null ? lines.total : "", day].join("|");
     const cached = cacheGet(key);
     if (cached) return res.status(200).json({ ...cached, cached: true });
 
     let matchup = null;
     try { matchup = await buildMatchup(sport, { game: ctx.game }); } catch { matchup = null; }
 
-    let trends = [];
-    let factLines = [];
-    let pack = null;
+    // ── Game logs (1 fetch per team for a whole season) ──
+    const { away, home } = parseTeams(ctx.game);
+    const teams = await espnTeams(sport);
+    const aT = matchTeam(teams, away), hT = matchTeam(teams, home);
+    let aLog = [], hLog = [], stale = false, logSeason = null;
+    if (aT && hT) {
+      const [A, H] = await Promise.all([logFor(sport, aT.id), logFor(sport, hT.id)]);
+      aLog = A.log; hLog = H.log;
+      stale = A.stale || H.stale;
+      logSeason = A.season;
+    }
+    const aAbbr = (aT && aT.abbr) || (matchup && matchup.away && matchup.away.abbr) || away;
+    const hAbbr = (hT && hT.abbr) || (matchup && matchup.home && matchup.home.abbr) || home;
 
+    let trends = trendBullets(sport, aAbbr, hAbbr, aLog, hLog, lines);
+
+    // MLB: layer the starter/bullpen form on top — it's the sharpest data we have.
+    let pack = null;
     if (sport === "mlb") {
       try { pack = await buildMlbPack({ game: ctx.game }); } catch { pack = null; }
       if (pack) {
         if (!matchup && pack.matchup) matchup = pack.matchup;
-        trends = mlbBullets(pack, matchup);
-        factLines = (pack.lines || []).map((l) => `${l.label}: ${l.value}`);
-        if (pack.note) factLines.unshift(pack.note);
+        trends = [...trends, ...mlbBullets(pack, matchup)];
       }
     }
 
-    if (!trends.length && matchup) trends = teamBullets(matchup);
-    if (matchup && !factLines.length) {
-      const m = matchup;
-      factLines = [
-        `${m.away.abbr} record: ${m.away.overall || "n/a"} (home ${m.away.home || "n/a"}, road ${m.away.away || "n/a"}, streak ${m.away.streak || "n/a"})`,
-        `${m.home.abbr} record: ${m.home.overall || "n/a"} (home ${m.home.home || "n/a"}, road ${m.home.away || "n/a"}, streak ${m.home.streak || "n/a"})`,
-        `${m.scoredLabel || "Scored/g"}: ${m.away.abbr} ${m.away.scored || "n/a"}, ${m.home.abbr} ${m.home.scored || "n/a"}`,
-        `${m.allowedLabel || "Allowed/g"}: ${m.away.abbr} ${m.away.allowed || "n/a"}, ${m.home.abbr} ${m.home.allowed || "n/a"}`,
-      ];
-      if (m.h2h) factLines.push(`${m.h2h.label}: ${m.away.abbr} ${m.h2h.away}, ${m.home.abbr} ${m.h2h.home}`);
-    }
-
-    if (!matchup && !trends.length) {
-      const out = { summary: "No recent form or standings data is posted for this matchup yet — check back closer to game time. This is form analysis, not betting advice.", keyStats: [], trends: [], matchup: null, model: "trends" };
+    if (!trends.length && !matchup) {
+      const out = { summary: "No completed games or standings are posted for this matchup yet, so there's no form to read. Check back closer to game time. This is form analysis, not betting advice.", keyStats: [], trends: [], matchup: null, model: "trends" };
       cacheSet(key, out);
       return res.status(200).json({ ...out, cached: false });
     }
 
+    // keyStats: last-10 form, which is the headline number for this lens.
+    const keyStats = [];
+    const aF = formSplit(aLog), hF = formSplit(hLog);
+    if (aF) keyStats.push({ value: aF.record, label: `${aAbbr} last ${aF.n}` });
+    if (hF) keyStats.push({ value: hF.record, label: `${hAbbr} last ${hF.n}` });
+    if (lines.total != null) {
+      const aTs = totalSplit(aLog, lines.total), hTs = totalSplit(hLog, lines.total);
+      if (aTs) keyStats.push({ value: `${aTs.all.o}/${aTs.all.n}`, label: `${aAbbr} over ${lines.total}` });
+      if (hTs) keyStats.push({ value: `${hTs.all.o}/${hTs.all.n}`, label: `${hAbbr} over ${lines.total}` });
+    }
+
+    const factLines = [];
+    if (stale && logSeason) factLines.push(`NOTE: too few completed games this season — the game log below is the ${logSeason} season. Say so.`);
+    if (lines.total != null) factLines.push(`Tonight's posted total: ${lines.total}`);
+    for (const s of (lines.spreads || [])) factLines.push(`Tonight's posted spread: ${s.team} ${sgn(s.point)}`);
+    if (matchup) {
+      const m = matchup;
+      factLines.push(`${m.away.abbr} season: ${m.away.overall || "n/a"} (home ${m.away.home || "n/a"}, road ${m.away.away || "n/a"}, streak ${m.away.streak || "n/a"})`);
+      factLines.push(`${m.home.abbr} season: ${m.home.overall || "n/a"} (home ${m.home.home || "n/a"}, road ${m.home.away || "n/a"}, streak ${m.home.streak || "n/a"})`);
+      if (m.h2h) factLines.push(`${m.h2h.label}: ${m.away.abbr} ${m.h2h.away}, ${m.home.abbr} ${m.h2h.home}`);
+    }
+    if (pack) for (const l of (pack.lines || [])) factLines.push(`${l.label}: ${l.value}`);
+
     const factText = [...factLines, ...trends.map((t) => `- ${t.text}`)].join("\n");
-    let summary = await narrate(ctx.game, factText);
-    if (!summary) {
-      summary = trends.length ? trends.slice(0, 2).map((t) => t.text).join(" ") : "Here's the recent form and season context for this matchup.";
-    }
+    const gen = await narrate(ctx.game, factText);
 
-    // keyStats only render in the bubble when there's no matchup card — provide a small fallback.
-    let keyStats = [];
-    if (!matchup && pack && pack.rates) {
-      const rA = pack.rates.away || {}, rH = pack.rates.home || {};
-      keyStats = [
-        { value: rA.record || "—", label: `${pack.away} record` },
-        { value: rH.record || "—", label: `${pack.home} record` },
-        { value: rA.rpg != null ? String(rA.rpg) : "—", label: "Away runs/g" },
-        { value: rH.rpg != null ? String(rH.rpg) : "—", label: "Home runs/g" },
-      ];
-    }
-
-    const out = { summary, keyStats, trends: trends.slice(0, 6), matchup, conviction: null, verdict: "none", model: "trends" };
+    const out = {
+      summary: (gen && gen.summary) || (trends.length ? trends.slice(0, 2).map((t) => t.text).join(" ") : "Here's the recent form and season context for this matchup."),
+      bullCase: (gen && gen.bullCase) || "",
+      bearCase: (gen && gen.bearCase) || "",
+      keyStats: keyStats.slice(0, 4),
+      trends: trends.slice(0, 6),
+      matchup, conviction: null, verdict: "none", model: "trends",
+      logSeason, staleSeason: stale,
+    };
     cacheSet(key, out);
     return res.status(200).json({ ...out, cached: false });
   } catch (err) {

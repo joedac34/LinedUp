@@ -3862,7 +3862,8 @@ export default function App() {
       const item = { role:"ai", label:`Trends · ${bet.game}`, bet, category, loading:true };
       setAiThread(prev=>[...prev, { role:"user", text: periodSelLabel(bet) }, item]);
       setAiBusy(true);
-      fetch("/api/trends", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ sport, game: bet.game, userId: user?.id }) })
+      const _tg = findBetGames.find(x=>x.game===bet.game);
+      fetch("/api/trends", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ sport, game: bet.game, userId: user?.id, lines: _tg ? _tg.lines : null }) })
         .then(async r=>{ const data=await r.json(); setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, data:r.ok?data:null, error:r.ok?null:(data.error||"Couldn't load trends")} : x)); })
         .catch(()=> setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, error:"Network error — try again"} : x)))
         .finally(()=> setAiBusy(false));
@@ -3880,11 +3881,17 @@ export default function App() {
       return tg ? tg.time : null;
     };
     for (const b of ALL_BETS) {
-      if (!b.game || seen.has(b.game)) continue;
-      const sp = b._sport || leagueSports[0] || "nfl";
-      const parts = String(b.game).split("@");
-      const away = (parts[0]||"").trim(), home = (parts[1]||"").trim();
-      seen.set(b.game, { game:b.game, sport:sp, away, home, time: findTime(away, home) });
+      if (!b.game) continue;
+      if (!seen.has(b.game)) {
+        const sp = b._sport || leagueSports[0] || "nfl";
+        const parts = String(b.game).split("@");
+        const away = (parts[0]||"").trim(), home = (parts[1]||"").trim();
+        seen.set(b.game, { game:b.game, sport:sp, away, home, time: findTime(away, home), lines:{ total:null, spreads:[] } });
+      }
+      // Carry tonight's posted numbers so the Trends lens can apply them to real game logs.
+      const _g = seen.get(b.game);
+      if (b.marketKey==="totals" && b.point!=null && _g.lines.total==null) _g.lines.total = b.point;
+      if (b.marketKey==="spreads" && b.point!=null && b.outcome && !_g.lines.spreads.some(x=>x.team===b.outcome)) _g.lines.spreads.push({ team:b.outcome, point:b.point });
     }
     return [...seen.values()];
   })();
@@ -3903,7 +3910,7 @@ export default function App() {
     const item = { role:"ai", label, bet:null, category:null, loading:true };
     setAiThread(prev=>[...prev, { role:"user", text:`${_m.name} — ${g.game}` }, item]);
     setAiBusy(true);
-    fetch(plokModel==="trends"?"/api/trends":"/api/findbet", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ sport:g.sport, game:g.game, userId:user?.id, model:plokModel }) })
+    fetch(plokModel==="trends"?"/api/trends":"/api/findbet", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ sport:g.sport, game:g.game, userId:user?.id, model:plokModel, lines:g.lines||null }) })
       .then(async r=>{ const data=await r.json(); setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, data:r.ok?data:null, error:r.ok?null:(data.error||"Couldn't screen this game")} : x)); })
       .catch(()=> setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, error:"Network error — try again"} : x)))
       .finally(()=> setAiBusy(false));
