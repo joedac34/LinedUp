@@ -3381,9 +3381,14 @@ export default function App() {
  const [freeCat, setFreeCat] = useState("all");
  const parseSlotConfig=(raw)=>{ try{ const a=typeof raw==="string"?JSON.parse(raw):raw; return (Array.isArray(a)&&a.length)?a:null; }catch(e){ return null; } };
  const freshSlots=()=>{ const cfg = !isSoloMode ? parseSlotConfig(activeLeague&&activeLeague.slot_config) : null; return cfg ? cfg.map((c,i)=>({id:i,bet:null,mult:null,category:c.type,slotType:c.type,market:c.market||null,isParlay:false,parlayLegs:[],locked:true})) : EMPTY_FLEX.map(s=>({...s})); };
- useEffect(()=>{ if(isSoloMode) return; let base = freshSlots(); try{ const _wk=(activeLeague && (activeLeague.current_week||activeLeague.week))||1; const _d = activeLeagueId ? localStorage.getItem(`linedup_draft_${activeLeagueId}_wk${_wk}`) : null; if(_d){ const arr=JSON.parse(_d); if(Array.isArray(arr) && arr.length && arr.some(sl=> sl && !sl.committed && (sl.bet || (sl.isParlay && (sl.parlayLegs||[]).length)))) base = arr; } }catch(e){} setFlexPicks(base); }, [activeLeagueId, isSoloMode, activeLeague&&activeLeague.slot_config]);
+ const draftReady = useRef(null); // "the draft for this league+week has been loaded"
+ useEffect(()=>{ if(isSoloMode) return; let base = freshSlots(); try{ const _wk=(activeLeague && (activeLeague.current_week||activeLeague.week))||1; const _d = activeLeagueId ? localStorage.getItem(`linedup_draft_${activeLeagueId}_wk${_wk}`) : null; if(_d){ const arr=JSON.parse(_d); if(Array.isArray(arr) && arr.length && arr.some(sl=> sl && !sl.committed && (sl.bet || (sl.isParlay && (sl.parlayLegs||[]).length)))) base = arr; } }catch(e){} setFlexPicks(base); try{ draftReady.current = `${activeLeagueId}_wk${(activeLeague && (activeLeague.current_week||activeLeague.week))||1}`; }catch(e){} }, [activeLeagueId, isSoloMode, activeLeague&&activeLeague.slot_config]);
  // Persist the UNLOCKED league draft so an in-progress slip survives leaving/reopening the app.
- useEffect(()=>{ if(isSoloMode || !activeLeagueId) return; const _wk=(activeLeague && (activeLeague.current_week||activeLeague.week))||1; const _has=(flexPicks||[]).some(sl=> sl && !sl.committed && (sl.bet || (sl.isParlay && (sl.parlayLegs||[]).length))); if(_has){ try{ localStorage.setItem(`linedup_draft_${activeLeagueId}_wk${_wk}`, JSON.stringify(flexPicks)); }catch(e){} } }, [flexPicks, activeLeagueId, isSoloMode]);
+ // Mirror the draft BOTH ways. This used to be write-only: clearing the last pick left
+ // the previous draft in localStorage, so leaving the tab and coming back resurrected
+ // every pick you had just deleted. The ref guard stops the empty first render from
+ // wiping a draft before the load effect above has hydrated it.
+ useEffect(()=>{ if(isSoloMode || !activeLeagueId) return; const _wk=(activeLeague && (activeLeague.current_week||activeLeague.week))||1; const _k=`${activeLeagueId}_wk${_wk}`; if(draftReady.current!==_k) return; const _has=(flexPicks||[]).some(sl=> sl && !sl.committed && (sl.bet || (sl.isParlay && (sl.parlayLegs||[]).length))); try{ if(_has) localStorage.setItem(`linedup_draft_${_k}`, JSON.stringify(flexPicks)); else localStorage.removeItem(`linedup_draft_${_k}`); }catch(e){} }, [flexPicks, activeLeagueId, isSoloMode, activeLeague&&(activeLeague.current_week||activeLeague.week)]);
  const [soloSavedPicks, setSoloSavedPicks] = useState(null);
  const [soloSubmitted, setSoloSubmitted] = useState(false);
  const [isPro, setIsPro] = useState(()=>{ try { return localStorage.getItem("picklock_is_pro")==="true"; } catch(e){ return false; } });
@@ -8835,8 +8840,24 @@ export default function App() {
  <div style={{margin:"0 16px 10px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:14,padding:"12px 14px"}}>
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
  <div style={{fontSize:12,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"rgba(255,255,255,0.4)"}}>Your Slip</div>
- <div style={{fontSize:13,fontWeight:600,color:allFlexFilled?IOS.green:IOS.blue}}>
- {activePicks.filter(p=>p.mult!==null&&(p.isParlay?p.parlayLegs.length>=2:p.bet!==null)).length}/{activePicks.length} picks
+ <div style={{display:"flex",alignItems:"center",gap:10}}>
+  {(()=>{
+   // Clear every UNCOMMITTED pick at once. Locked picks are untouchable — they are
+   // already in the DB and, in a live league, possibly already graded.
+   const _clearable = (activePicks||[]).filter(sl=> sl && !sl.committed && (sl.bet || (sl.isParlay && (sl.parlayLegs||[]).length) || sl.mult!=null)).length;
+   if(!_clearable) return null;
+   return (
+    <div onClick={()=>{
+      if(!window.confirm(`Clear ${_clearable} unlocked pick${_clearable===1?"":"s"}? Locked picks stay.`)) return;
+      setActivePicks((prev)=> (prev||[]).map(sl=> sl && sl.committed ? sl : {...sl, bet:null, mult:null, isParlay:false, parlayLegs:[], _reason:undefined}));
+      const _wk=(activeLeague && (activeLeague.current_week||activeLeague.week))||1;
+      try{ if(!isSoloMode && activeLeagueId) localStorage.removeItem(`linedup_draft_${activeLeagueId}_wk${_wk}`); }catch(e){}
+    }} style={{fontSize:11.5,fontWeight:700,color:IOS.red,cursor:"pointer",padding:"2px 0"}}>Clear slip</div>
+   );
+  })()}
+  <div style={{fontSize:13,fontWeight:600,color:allFlexFilled?IOS.green:IOS.blue}}>
+   {activePicks.filter(p=>p.mult!==null&&(p.isParlay?p.parlayLegs.length>=2:p.bet!==null)).length}/{activePicks.length} picks
+  </div>
  </div>
  </div>
  <div style={{display:"flex",gap:6}}>
