@@ -3629,6 +3629,56 @@ export default function App() {
     ? ALL_BETS.filter(b => ((b.pick||"")+" "+(b.game||"")).toLowerCase().includes(aiInput.trim().toLowerCase())).slice(0,6)
     : [];
   const SLOT_OF = { ml:"ml", moneyline:"ml", spread:"spread", ou:"ou", total:"ou", prop:"prop", longshot:"longshot", parlay:"longshot" };
+  // ─── PLOK SLOT BOARD ──────────────────────────────────────────────────────
+  // Reads slot_config + flexPicks. A slot only ever offers bets it can legally take.
+  const PERIOD_TYPE_LABEL = { ml_h1:"1H Moneyline", spread_h1:"1H Spread", ou_h1:"1H Total", ml_f5:"F5 Moneyline", spread_f5:"F5 Spread", ou_f5:"F5 Total", yrfi:"YRFI", nrfi:"NRFI" };
+  const plokCfg = parseSlotConfig(activeLeague && activeLeague.slot_config);
+  const plokSlotMode = !isSoloMode && !!plokCfg;
+  // Normalise the unicode minus (U+2212) FIRST — the strip regex would eat it and turn
+  // -152 into +152, floating a favourite to the top of the 7x longshot slot silently.
+  const plokAm = (o) => { const n = parseInt(String(o==null?"":o).replace(/\u2212/g,"-").replace(/[^-+0-9]/g,""),10); return isNaN(n) ? -99999 : n; };
+  const betsForSlotType = (t) => {
+    if(!t) return ALL_BETS||[];
+    if(PERIOD_MARKETS[t]){
+      const out=[];
+      (leagueSports||[]).forEach(sp=>{ const arr=(liveOdds[sp]&&liveOdds[sp][t])||[]; arr.forEach(b=>out.push({...b, category:t, _sport:b._sport||sp})); });
+      return out;
+    }
+    const cat = SLOT_OF[t] || t;
+    return (ALL_BETS||[]).filter(b=>b.category===cat);
+  };
+  // The 7x longshot wants the longest price; everything else wants the best edge.
+  const plokSortBets = (t, list) => {
+    if(t==="longshot") return list.slice().sort((a,b)=>plokAm(b.odds)-plokAm(a.odds));
+    return list.slice().sort((a,b)=>((b.edge!=null?b.edge:-999)-(a.edge!=null?a.edge:-999)));
+  };
+  const plokTypeLabel = (t) => {
+    if(!t) return "Any bet";
+    if(PERIOD_MARKETS[t]) return PERIOD_TYPE_LABEL[t] || t;
+    return ({ml:"Moneyline", spread:"Spread", ou:"Total", prop:"Player prop", longshot:"Longshot"})[SLOT_OF[t]||t] || t;
+  };
+  const plokTypeColor = (t) => {
+    if(PERIOD_MARKETS[t]) return "#64D2FF";
+    return ({ml:IOS.blue, spread:IOS.green, ou:IOS.orange, prop:IOS.purple, longshot:IOS.pink})[SLOT_OF[t]||t] || IOS.blue;
+  };
+  // Fills for the ACTIVE league come from flexPicks; other leagues read their own
+  // saved week draft, so the rail can show N/8 without a fetch.
+  const plokLeagueFill = (l) => {
+    const cfg = parseSlotConfig(l && l.slot_config); const tot = cfg ? cfg.length : 0;
+    if(!tot) return { n:0, tot:0 };
+    if(l.id===activeLeagueId && !isSoloMode) return { n:(flexPicks||[]).filter(sl=>sl && sl.bet).length, tot };
+    try{
+      const wk = (l.current_week||l.week)||1;
+      const d = localStorage.getItem(`linedup_draft_${l.id}_wk${wk}`);
+      if(d){ const arr=JSON.parse(d); if(Array.isArray(arr)) return { n:arr.filter(sl=>sl && sl.bet).length, tot }; }
+    }catch(e){}
+    return { n:0, tot };
+  };
+  const plokOpenSlot = (()=>{
+    if(plokSlot!==null) return plokSlot;
+    const i = (flexPicks||[]).findIndex(sl=> sl && !sl.bet);
+    return i;
+  })();
   const plokUserStats = () => {
     const a = allMyStats; if(!a || !a.total) return null;
     return {
@@ -3874,6 +3924,11 @@ export default function App() {
   const [findBetOpen, setFindBetOpen] = useState(false);
   const [plokModel, setPlokModel] = useState("ev");
   const [modelPicker, setModelPicker] = useState(false);
+  // Slot board. plokSlot null = auto (open the first empty slot), -1 = all closed.
+  const [plokSlot, setPlokSlot] = useState(null);
+  const [plokRail, setPlokRail] = useState({});
+  const [plokFlatType, setPlokFlatType] = useState("all");
+  useEffect(()=>{ setPlokSlot(null); setPlokRail({}); setPlokFlatType("all"); }, [activeLeagueId, isSoloMode]);
   const findBetGames = (() => {
     const seen = new Map();
     const findTime = (away, home) => {
@@ -12867,22 +12922,161 @@ export default function App() {
                 </div>
               )}
               {aiThread.length===0 && (
-                <div style={{textAlign:"center",padding:"14px 10px 4px"}}>
-                  <svg width="40" height="40" viewBox="0 0 24 24" fill="rgba(255,255,255,0.5)" style={{marginBottom:12}}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg>
-                  <div style={{fontSize:15,fontWeight:800,color:"#fff",marginBottom:6}}>Break down any bet</div>
-                  <div style={{fontSize:12.5,color:"rgba(255,255,255,0.45)",lineHeight:1.5,maxWidth:260,margin:"0 auto 16px"}}>Tap a bet below, or search a player or team that's on your board.</div>
-                  <div style={{display:"flex",flexWrap:"wrap",gap:7,justifyContent:"center"}}>
-                    {ALL_BETS.slice(0,5).map((b,bi)=>(
-                      <button key={bi} onClick={()=>askFromBet(b,b.category)} style={{padding:"7px 12px",borderRadius:18,background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.1)",color:"rgba(255,255,255,0.85)",fontSize:11.5,fontWeight:700,cursor:"pointer",maxWidth:180,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.pick}</button>
-                    ))}
-                  </div>
-                  <div style={{marginTop:16,paddingTop:16,borderTop:"0.5px solid rgba(255,255,255,0.07)"}}>
-                    <button onClick={()=>{ if(!isPro){setShowPaywall("ai");return;} setFindBetOpen(true); }} style={{display:"inline-flex",alignItems:"center",gap:7,padding:"10px 16px",borderRadius:12,background:IOS.blue,border:"none",color:"#fff",fontSize:13,fontWeight:800,cursor:"pointer"}}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Find a +EV bet</button>
-                    <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:8}}>Plok scans the books for the best price on a game.</div>
-                    <div style={{marginTop:12}}>
-                      <button onClick={buildPlokSlip} style={{display:"inline-flex",alignItems:"center",gap:7,padding:"10px 16px",borderRadius:12,background:"rgba(255,255,255,0.06)",border:`1px solid ${IOS.blue}40`,color:IOS.blue,fontSize:13,fontWeight:800,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7h16M4 12h16M4 17h10"/></svg>Build my whole slip</button>
-                      <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:8}}>{"Plok fills all "+freshSlots().length+(isSoloMode?" slots on your slate.":" slots, tuned to your league spot.")}</div>
+                <div>
+                  {/* ── League rail: switch leagues without leaving Plok ── */}
+                  {(realLeagues||[]).length>0 && (
+                    <div>
+                      <div style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.07em",textTransform:"uppercase",color:"rgba(255,255,255,0.4)",margin:"0 2px 8px",display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
+                        <span>Your leagues</span>
+                        <span style={{fontSize:10,fontWeight:700,letterSpacing:0,textTransform:"none",color:"rgba(255,255,255,0.25)"}}>{(realLeagues||[]).length} active</span>
+                      </div>
+                      <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:3,marginBottom:13}}>
+                        {(realLeagues||[]).map(l=>{
+                          const _f = plokLeagueFill(l);
+                          const _on = !isSoloMode && l.id===activeLeagueId;
+                          const _done = _f.tot>0 && _f.n===_f.tot;
+                          const _C = 2*Math.PI*9;
+                          const _pct = _f.tot ? _f.n/_f.tot : 0;
+                          return (
+                            <div key={l.id} onClick={()=>{ setIsSoloMode(false); setActiveLeagueId(l.id); }} style={{flexShrink:0,display:"flex",alignItems:"center",gap:7,padding:"7px 11px 7px 8px",borderRadius:11,cursor:"pointer",whiteSpace:"nowrap",background:_on?`${IOS.blue}21`:"#141419",border:_on?`0.5px solid ${IOS.blue}80`:"0.5px solid rgba(255,255,255,0.09)"}}>
+                              <svg width="22" height="22" style={{flexShrink:0,transform:"rotate(-90deg)"}}>
+                                <circle cx="11" cy="11" r="9" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="2.5"/>
+                                <circle cx="11" cy="11" r="9" fill="none" stroke={_done?IOS.green:IOS.blue} strokeWidth="2.5" strokeLinecap="round" strokeDasharray={_C} strokeDashoffset={_C*(1-_pct)}/>
+                              </svg>
+                              <div>
+                                <div style={{fontSize:12.5,fontWeight:800,lineHeight:1.1,color:_on?"#fff":"rgba(255,255,255,0.62)"}}>{l.name}</div>
+                                <div style={{fontSize:8.5,fontWeight:700,color:"rgba(255,255,255,0.25)",marginTop:1}}>{_f.tot?`Wk ${(l.current_week||l.week)||1} · ${_f.n}/${_f.tot}`:"No slots"}</div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <div onClick={()=>setIsSoloMode(true)} style={{flexShrink:0,display:"flex",alignItems:"center",gap:7,padding:"7px 11px 7px 8px",borderRadius:11,cursor:"pointer",whiteSpace:"nowrap",background:isSoloMode?`${IOS.blue}21`:"#141419",border:isSoloMode?`0.5px solid ${IOS.blue}80`:"0.5px solid rgba(255,255,255,0.09)"}}>
+                          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.45)" strokeWidth="2" strokeLinecap="round" style={{flexShrink:0}}><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6"/></svg>
+                          <div>
+                            <div style={{fontSize:12.5,fontWeight:800,lineHeight:1.1,color:isSoloMode?"#fff":"rgba(255,255,255,0.62)"}}>Solo</div>
+                            <div style={{fontSize:8.5,fontWeight:700,color:"rgba(255,255,255,0.25)",marginTop:1}}>No slots</div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
+                  )}
+
+                  {/* ── SLOT BOARD: a slot only offers bets it can legally take ── */}
+                  {plokSlotMode ? (
+                    <div>
+                      <div style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.07em",textTransform:"uppercase",color:"rgba(255,255,255,0.4)",margin:"0 2px 8px",display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
+                        <span>Your slip</span>
+                        <span style={{fontSize:10,fontWeight:700,letterSpacing:0,textTransform:"none",color:"rgba(255,255,255,0.25)"}}>{(flexPicks||[]).filter(sl=>sl&&sl.bet).length} of {(flexPicks||[]).length} filled</span>
+                      </div>
+                      {(flexPicks||[]).map((sl,si)=>{
+                        const _t = sl.category || sl.slotType;
+                        const _col = plokTypeColor(_t);
+                        const _done = !!sl.bet;
+                        const _open = plokOpenSlot===si && !_done;
+                        const _elig = _open ? betsForSlotType(_t) : [];
+                        const _games = [...new Set(_elig.map(b=>b.game).filter(Boolean))];
+                        const _key = activeLeagueId+"_"+si;
+                        const _sel = plokRail[_key] || "all";
+                        const _list = plokSortBets(_t, _sel==="all" ? _elig : _elig.filter(b=>b.game===_sel));
+                        return (
+                          <div key={si} style={{background:_done?`linear-gradient(135deg,${IOS.green}10,rgba(255,255,255,0.015))`:"#141419",border:_done?`0.5px solid ${IOS.green}4d`:(_open?`0.5px solid ${IOS.blue}73`:"0.5px solid rgba(255,255,255,0.07)"),borderRadius:13,marginBottom:8,overflow:"hidden"}}>
+                            <div onClick={()=>{ if(_done) return; setPlokSlot(plokOpenSlot===si ? -1 : si); }} style={{display:"flex",alignItems:"center",gap:9,padding:"10px 11px",cursor:_done?"default":"pointer"}}>
+                              <div style={{width:23,height:23,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10.5,fontWeight:900,flexShrink:0,background:_done?`${IOS.green}2e`:"#1e1e25",color:_done?IOS.green:"rgba(255,255,255,0.4)"}}>
+                                {_done ? <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> : si+1}
+                              </div>
+                              <div style={{flex:1,minWidth:0}}>
+                                <div style={{fontSize:12.5,fontWeight:800,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_done ? (sl.bet.pick || plokTypeLabel(_t)) : plokTypeLabel(_t)}</div>
+                                <div style={{fontSize:9.5,color:"rgba(255,255,255,0.4)",marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_done ? `Slot ${si+1} · ${plokTypeLabel(_t)}` : (_open ? `${_elig.length} eligible · ${_t==="longshot"?"longest price first":"best edge first"}` : `Slot ${si+1} · tap to browse`)}</div>
+                              </div>
+                              {_done && sl.bet.odds ? <div style={{fontSize:12.5,fontWeight:900,flexShrink:0,color:String(sl.bet.odds).trim().startsWith("+")?IOS.green:"#fff"}}>{sl.bet.odds}</div> : null}
+                              {sl.mult ? <div style={{fontSize:9.5,fontWeight:900,padding:"3px 6px",borderRadius:5,flexShrink:0,background:_col+"22",color:_col}}>{sl.mult}×</div> : null}
+                            </div>
+                            {_open && (
+                              <div style={{borderTop:"0.5px solid rgba(255,255,255,0.07)",padding:"9px 0 10px"}}>
+                                {_games.length>1 && (
+                                  <div style={{display:"flex",gap:5,overflowX:"auto",padding:"0 10px 8px"}}>
+                                    <div onClick={()=>setPlokRail(prev=>({...prev,[_key]:"all"}))} style={{flexShrink:0,fontSize:10.5,fontWeight:800,padding:"5px 9px",borderRadius:15,cursor:"pointer",whiteSpace:"nowrap",background:_sel==="all"?"rgba(255,255,255,0.12)":"#1e1e25",color:_sel==="all"?"#fff":"rgba(255,255,255,0.4)",border:_sel==="all"?"0.5px solid rgba(255,255,255,0.2)":"0.5px solid rgba(255,255,255,0.08)"}}>All<span style={{color:"rgba(255,255,255,0.25)",marginLeft:3,fontSize:9}}>{_elig.length}</span></div>
+                                    {_games.map(g=>(
+                                      <div key={g} onClick={()=>setPlokRail(prev=>({...prev,[_key]:g}))} style={{flexShrink:0,fontSize:10.5,fontWeight:800,padding:"5px 9px",borderRadius:15,cursor:"pointer",whiteSpace:"nowrap",background:_sel===g?"rgba(255,255,255,0.12)":"#1e1e25",color:_sel===g?"#fff":"rgba(255,255,255,0.4)",border:_sel===g?"0.5px solid rgba(255,255,255,0.2)":"0.5px solid rgba(255,255,255,0.08)"}}>{g}<span style={{color:"rgba(255,255,255,0.25)",marginLeft:3,fontSize:9}}>{_elig.filter(b=>b.game===g).length}</span></div>
+                                    ))}
+                                  </div>
+                                )}
+                                {_list.length>0 ? (
+                                  <div style={{padding:"0 10px",display:"flex",flexDirection:"column",gap:5,maxHeight:196,overflowY:"auto"}}>
+                                    {_list.map((b,bi)=>(
+                                      <div key={bi} onClick={()=>askFromBet(b, PERIOD_MARKETS[_t] ? "period" : b.category)} style={{display:"flex",alignItems:"center",gap:9,background:"#1e1e25",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:10,padding:"8px 10px",cursor:"pointer"}}>
+                                        <div style={{width:2.5,alignSelf:"stretch",borderRadius:2,flexShrink:0,background:_col}}/>
+                                        <div style={{flex:1,minWidth:0}}>
+                                          <div style={{fontSize:12.5,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.pick || plokTypeLabel(_t)}</div>
+                                          <div style={{fontSize:9,color:"rgba(255,255,255,0.25)",marginTop:1.5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.game}</div>
+                                        </div>
+                                        {b.edge!=null && b.edge>0 ? <div style={{fontSize:8,fontWeight:900,padding:"2px 4px",borderRadius:4,flexShrink:0,background:`${IOS.green}26`,color:IOS.green}}>EV +{Number(b.edge).toFixed(1)}%</div> : null}
+                                        <div style={{fontSize:13,fontWeight:900,flexShrink:0,color:String(b.odds||"").trim().startsWith("+")?IOS.green:"#fff"}}>{b.odds}</div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div style={{padding:"14px 12px",textAlign:"center",fontSize:11,color:"rgba(255,255,255,0.25)",lineHeight:1.5}}>No {plokTypeLabel(_t).toLowerCase()} on tonight's board can fill this slot.</div>
+                                )}
+                                <div style={{display:"flex",gap:6,padding:"8px 10px 0"}}>
+                                  <button onClick={buildPlokSlip} style={{flex:1,border:`0.5px solid ${IOS.blue}66`,borderRadius:9,padding:8,fontFamily:"inherit",fontSize:11,fontWeight:800,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:5,background:`${IOS.blue}1f`,color:IOS.blue}}>
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg>
+                                    Plok picks this slot
+                                  </button>
+                                  <button onClick={()=>{ setScreen("picks"); }} style={{flex:1,border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:9,padding:8,fontFamily:"inherit",fontSize:11,fontWeight:800,cursor:"pointer",background:"#1e1e25",color:"rgba(255,255,255,0.62)"}}>Open in slip</button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div>
+                      <div style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.07em",textTransform:"uppercase",color:"rgba(255,255,255,0.4)",margin:"0 2px 8px",display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
+                        <span>Browse the board</span>
+                        <span style={{fontSize:10,fontWeight:700,letterSpacing:0,textTransform:"none",color:"rgba(255,255,255,0.25)"}}>{(ALL_BETS||[]).length} bets</span>
+                      </div>
+                      <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:3,marginBottom:10}}>
+                        {["all","ml","spread","ou","prop","longshot"].map(t=>{
+                          const _n = t==="all" ? (ALL_BETS||[]).length : (ALL_BETS||[]).filter(b=>b.category===t).length;
+                          if(!_n) return null;
+                          const _on = plokFlatType===t;
+                          return (
+                            <div key={t} onClick={()=>setPlokFlatType(t)} style={{flexShrink:0,display:"flex",alignItems:"center",gap:5,fontSize:12,fontWeight:800,padding:"7px 12px",borderRadius:19,cursor:"pointer",whiteSpace:"nowrap",background:_on?`${IOS.blue}24`:"#141419",border:_on?`0.5px solid ${IOS.blue}80`:"0.5px solid rgba(255,255,255,0.1)",color:_on?"#fff":"rgba(255,255,255,0.62)"}}>
+                              {t!=="all" && <span style={{width:6,height:6,borderRadius:3,flexShrink:0,background:plokTypeColor(t)}}/>}
+                              {t==="all" ? "All" : plokTypeLabel(t)}
+                              <span style={{fontSize:9.5,fontWeight:700,color:"rgba(255,255,255,0.25)"}}>{_n}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                        {plokSortBets(plokFlatType, plokFlatType==="all" ? (ALL_BETS||[]) : (ALL_BETS||[]).filter(b=>b.category===plokFlatType)).map((b,bi)=>(
+                          <div key={bi} onClick={()=>askFromBet(b,b.category)} style={{display:"flex",alignItems:"center",gap:9,background:"#141419",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:11,padding:"10px 11px",cursor:"pointer"}}>
+                            <div style={{width:2.5,alignSelf:"stretch",borderRadius:2,flexShrink:0,background:plokTypeColor(b.category)}}/>
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{fontSize:13,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.pick}</div>
+                              <div style={{fontSize:9.5,color:"rgba(255,255,255,0.25)",marginTop:1.5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.game}</div>
+                            </div>
+                            {b.edge!=null && b.edge>0 ? <div style={{fontSize:8,fontWeight:900,padding:"2px 4px",borderRadius:4,flexShrink:0,background:`${IOS.green}26`,color:IOS.green}}>EV +{Number(b.edge).toFixed(1)}%</div> : null}
+                            <div style={{fontSize:13.5,fontWeight:900,flexShrink:0,color:String(b.odds||"").trim().startsWith("+")?IOS.green:"#fff"}}>{b.odds}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Whole-slip + game screener stay reachable. */}
+                  <div style={{marginTop:14,paddingTop:14,borderTop:"0.5px solid rgba(255,255,255,0.07)",display:"flex",gap:7}}>
+                    <button onClick={()=>{ if(!isPro){setShowPaywall("ai");return;} setFindBetOpen(true); }} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,padding:"11px",borderRadius:11,background:"rgba(255,255,255,0.06)",border:"0.5px solid rgba(255,255,255,0.12)",fontFamily:"inherit",fontSize:12,fontWeight:800,color:"rgba(255,255,255,0.62)",cursor:"pointer"}}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.62)" strokeWidth="2.6" strokeLinecap="round"><circle cx="11" cy="11" r="7"/><line x1="20" y1="20" x2="16.7" y2="16.7"/></svg>
+                      Find a +EV bet
+                    </button>
+                    <button onClick={buildPlokSlip} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,padding:"11px",borderRadius:11,background:`${IOS.blue}1f`,border:`0.5px solid ${IOS.blue}66`,fontFamily:"inherit",fontSize:12,fontWeight:800,color:IOS.blue,cursor:"pointer"}}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg>
+                      Build my whole slip
+                    </button>
                   </div>
                 </div>
               )}
