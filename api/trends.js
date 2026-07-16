@@ -178,7 +178,19 @@ const sgn = (p) => (p > 0 ? `+${p}` : `${p}`);
 // Every bullet is tagged {team, kind} so selectBullets can keep the two sides balanced.
 // An untagged global slice let one team's bullets crowd the other's out entirely — and
 // the model then argued from a split the user could not see on screen.
-export function trendBullets(sport, aAbbr, hAbbr, aLog, hLog, lines) {
+export function teamish(x, name, abbr) {
+  const n = norm(x);
+  if (!n) return false;
+  for (const c of [norm(name), norm(abbr)]) {
+    if (!c) continue;
+    if (n === c || n.includes(c) || c.includes(n)) return true;
+    const a = n.split(" ").pop(), b = c.split(" ").pop();
+    if (a && b && a === b) return true; // nickname fallback: "phillies" === "phillies"
+  }
+  return false;
+}
+
+export function trendBullets(sport, aAbbr, hAbbr, aLog, hLog, lines, aName, hName) {
   const t = [];
   const side = (abbr, log) => {
     const fm = formSplit(log);
@@ -204,7 +216,7 @@ export function trendBullets(sport, aAbbr, hAbbr, aLog, hLog, lines) {
       t.push({
         team: b.ab, kind: "total",
         dir: ts.all.o > ts.all.u ? "up" : "down",
-        text: `Apply tonight's ${total} total to ${b.ab}'s last ${ts.all.n} results and ${ts.all.o} clear it, ${ts.all.u} fall short — they've averaged ${ts.avgTotal} combined.`,
+        text: `Apply tonight's ${total} total to ${b.ab}'s last ${ts.all.n} results and ${ts.all.o} clear it, ${ts.all.u} fall short — averaging ${ts.avgTotal.toFixed(1)} combined ${sport === "mlb" ? "runs" : "points"} per game.`,
       });
       if (ts.home && ts.away) {
         t.push({
@@ -217,7 +229,8 @@ export function trendBullets(sport, aAbbr, hAbbr, aLog, hLog, lines) {
   }
 
   for (const sp of (lines && lines.spreads) || []) {
-    const isAway = norm(sp.team).includes(norm(aAbbr)) || norm(aAbbr).includes(norm(sp.team));
+    const isAway = teamish(sp.team, aName, aAbbr), isHome = teamish(sp.team, hName, hAbbr);
+    if (isAway === isHome) continue; // unmatched or matches both -> say nothing, never guess
     const log = isAway ? aLog : hLog;
     const ab = isAway ? aAbbr : hAbbr;
     const ss = spreadSplit(log, sp.point);
@@ -225,7 +238,7 @@ export function trendBullets(sport, aAbbr, hAbbr, aLog, hLog, lines) {
     t.push({
       team: ab, kind: "spread",
       dir: ss.all.c > ss.all.nc ? "up" : "down",
-      text: `Give ${ab} tonight's ${sgn(sp.point)} against their last ${ss.all.n} results and ${ss.all.c} land on the right side, ${ss.all.nc} don't — average margin ${sgn(ss.avgMargin)}.`,
+      text: `Give ${ab} tonight's ${sgn(sp.point)} against their last ${ss.all.n} results and ${ss.all.c} land on the right side, ${ss.all.nc} don't — average margin ${sgn(ss.avgMargin)} per game.`,
     });
     if (ss.home && ss.away) {
       t.push({
@@ -235,7 +248,8 @@ export function trendBullets(sport, aAbbr, hAbbr, aLog, hLog, lines) {
       });
     }
   }
-  return t;
+  const seen = new Set();
+  return t.filter((b) => { if (seen.has(b.text)) return false; seen.add(b.text); return true; });
 }
 
 // ── PURE: pick what to SHOW — balanced across teams, best kind first. ──────
@@ -371,6 +385,10 @@ const SYS =
   "both struggling. Read each side on its own numbers. " +
   "(7) Every figure you cite must appear in FACTS. FACTS is exactly what the user can see on screen, so do not " +
   "reference a split, average or record that is not there. " +
+  "(8) Averages are PER GAME. Never restate a per-game average as a total across the sample. " +
+  "(9) An average can hide skew — a team averaging 12.0 combined while clearing a 9.5 total in only 5 of 10 is " +
+  "being carried by blowouts, not consistently going over. Lead with the hit count; treat the average as context. " +
+  "Where the two disagree, say so plainly. " +
   "Return JSON: summary (2-3 sentences leading with the most decision-relevant trend); " +
   "bullCase (the strongest trend-based case FOR the side the form favours, anchored to specific numbers from FACTS); " +
   "bearCase (why the trend may not hold). The bearCase MUST identify and engage the single strongest number in " +
@@ -434,7 +452,7 @@ export default async function handler(req, res) {
     const aAbbr = (aT && aT.abbr) || (matchup && matchup.away && matchup.away.abbr) || away;
     const hAbbr = (hT && hT.abbr) || (matchup && matchup.home && matchup.home.abbr) || home;
 
-    let trends = trendBullets(sport, aAbbr, hAbbr, aLog, hLog, lines);
+    let trends = trendBullets(sport, aAbbr, hAbbr, aLog, hLog, lines, away, home);
 
     // MLB: layer the starter/bullpen form on top — it's the sharpest data we have.
     let pack = null;
