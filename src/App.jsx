@@ -3813,7 +3813,8 @@ export default function App() {
         const dec = !isNaN(o) ? (o>0?o/100+1:100/Math.abs(o)+1) : 2;
         if(c.result==="W"){ w++; units += (dec-1); } else { l++; units -= 1; }
       });
-      setPlokRecord({ wins:w, losses:l, units:parseFloat(units.toFixed(1)), recent:arr.slice(0,5) });
+      let since=null; try{ const oldest=arr[arr.length-1]; if(oldest && oldest.created_at){ const d=new Date(oldest.created_at); if(!isNaN(d.getTime())) since=d.toLocaleDateString([],{month:"short",year:"numeric"}); } }catch(e){}
+      setPlokRecord({ wins:w, losses:l, units:parseFloat(units.toFixed(1)), recent:arr.slice(0,8), since });
     }catch(e){}
   };
   useEffect(()=>{ if(screen==="ai" && user?.id) fetchPlokRecord(); },[screen, user]);
@@ -4097,7 +4098,6 @@ export default function App() {
  ];
  const PLOK_MODELS=[
   {id:"ev", name:"+EV Hunter", ready:true, color:IOS.green, desc:"De-vigs the market and flags where the best price beats the true line.", icon:<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg>},
-  {id:"livedog", name:"Live Dog", ready:true, color:IOS.orange, desc:"Hunts underdogs the model gives a better shot than the price implies.", icon:<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={IOS.orange} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/></svg>},
   {id:"trends", name:"Trends & Form", ready:true, color:IOS.teal, desc:"Last-10 form, hot/cold streaks, home/road splits and situational edges.", icon:<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={IOS.teal} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 4-5"/></svg>},
   {id:"projection", name:"The Projection", ready:true, color:IOS.blue, desc:"Projects the number from stats and shows it against the line.", icon:<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><line x1="12" y1="1" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="23"/></svg>},
   {id:"clv", name:"CLV Report Card", ready:false, color:IOS.purple, desc:"Did your locked picks beat the closing line? The pro's scorecard.", icon:<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={IOS.purple} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="6"/><path d="M9 13l-2 8 5-3 5 3-2-8"/></svg>},
@@ -12803,9 +12803,26 @@ export default function App() {
                   <div style={{fontSize:10.5,color:"rgba(255,255,255,0.4)",marginTop:2}}>Screening, not advice</div>
                 </div>
               </div>
-              <button onClick={()=>{ if(!isPro){setShowPaywall("ai");return;} setModelPicker(true); }} style={{flexShrink:0,display:"inline-flex",alignItems:"center",gap:5,padding:"7px 11px",borderRadius:10,background:`${IOS.blue}1a`,border:`1px solid ${IOS.blue}40`,color:IOS.blue,fontSize:11.5,fontWeight:800,cursor:"pointer"}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Plok Models</button>
             </div>
             <div className="gbx-scroll" style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:10,padding:"14px 14px 16px"}}>
+              {(()=>{
+                const _lm = PLOK_MODELS.find(x=>x.id===plokModel) || PLOK_MODELS[0];
+                if(!_lm) return null;
+                return (
+                  <div style={{flexShrink:0}}>
+                    <div style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.07em",textTransform:"uppercase",color:"rgba(255,255,255,0.4)",margin:"0 2px 8px"}}>Reading through</div>
+                    <div onClick={()=>{ if(!isPro){setShowPaywall("ai");return;} setModelPicker(true); }} style={{display:"flex",alignItems:"center",gap:10,background:`linear-gradient(135deg,${IOS.blue}21,${IOS.blue}08)`,border:`1px solid ${IOS.blue}59`,borderRadius:13,padding:"11px 13px",cursor:"pointer"}}>
+                      <div style={{width:32,height:32,borderRadius:9,background:_lm.color+"29",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{_lm.icon}</div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(255,255,255,0.4)"}}>Model</div>
+                        <div style={{fontSize:14.5,fontWeight:800,color:"#fff",marginTop:1}}>{_lm.name}</div>
+                        <div style={{fontSize:10.5,color:"rgba(255,255,255,0.4)",marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_lm.desc}</div>
+                      </div>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polyline points="9 18 15 12 9 6"/></svg>
+                    </div>
+                  </div>
+                );
+              })()}
               {plokBuilding && (
                 <div className="ai-rise" style={{display:"flex",alignItems:"center",gap:9,background:"rgba(255,255,255,0.04)",border:`0.5px solid ${IOS.blue}33`,borderRadius:12,padding:"14px"}}>
                   <span className="ai-dot"/><span className="ai-dot" style={{animationDelay:".15s"}}/><span className="ai-dot" style={{animationDelay:".3s"}}/>
@@ -12842,36 +12859,8 @@ export default function App() {
                   </div>
                 </div>
               )}
-              {aiThread.length===0 && plokRecord && (plokRecord.wins+plokRecord.losses)>0 && (()=>{
-                const w=plokRecord.wins, l=plokRecord.losses, u=plokRecord.units;
-                const pct = (w+l)>0 ? Math.round(w/(w+l)*100) : 0; const up = u>=0;
-                const stat = (val,lab,col)=>(<div><div style={{fontSize:23,fontWeight:900,color:col||"#fff",letterSpacing:-0.5,lineHeight:1}}>{val}</div><div style={{fontSize:9,fontWeight:700,color:"rgba(255,255,255,0.4)",marginTop:3,textTransform:"uppercase",letterSpacing:"0.04em"}}>{lab}</div></div>);
-                return (
-                  <div className="ai-rise" style={{background:`linear-gradient(135deg,${IOS.blue}1a,rgba(255,255,255,0.03))`,border:`0.5px solid ${IOS.blue}33`,borderRadius:14,padding:"13px 14px"}}>
-                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-                      <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:"rgba(255,255,255,0.5)"}}>Plok's track record</div>
-                      <div style={{fontSize:9.5,fontWeight:700,color:"rgba(255,255,255,0.35)"}}>graded calls</div>
-                    </div>
-                    <div style={{display:"flex",alignItems:"baseline",gap:18}}>
-                      {stat(`${w}-${l}`,"Record")}
-                      {stat(`${pct}%`,"Hit rate")}
-                      {stat(`${up?"+":""}${u}u`,"Units",up?IOS.green:IOS.red)}
-                    </div>
-                    {plokRecord.recent && plokRecord.recent.length>0 && (
-                      <div style={{marginTop:11,paddingTop:10,borderTop:"0.5px solid rgba(255,255,255,0.07)",display:"flex",flexDirection:"column",gap:6}}>
-                        {plokRecord.recent.slice(0,3).map((c,ci)=>(
-                          <div key={ci} style={{display:"flex",alignItems:"center",gap:8,fontSize:11.5}}>
-                            <span style={{width:16,height:16,borderRadius:4,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:900,color:c.result==="W"?IOS.green:IOS.red,background:c.result==="W"?`${IOS.green}1f`:`${IOS.red}1f`}}>{c.result}</span>
-                            <span style={{flex:1,minWidth:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",color:"rgba(255,255,255,0.75)",fontWeight:600}}>{c.selection}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
               {aiThread.length===0 && (
-                <div style={{margin:"auto 0",textAlign:"center",padding:"20px 10px"}}>
+                <div style={{textAlign:"center",padding:"14px 10px 4px"}}>
                   <svg width="40" height="40" viewBox="0 0 24 24" fill="rgba(255,255,255,0.5)" style={{marginBottom:12}}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg>
                   <div style={{fontSize:15,fontWeight:800,color:"#fff",marginBottom:6}}>Break down any bet</div>
                   <div style={{fontSize:12.5,color:"rgba(255,255,255,0.45)",lineHeight:1.5,maxWidth:260,margin:"0 auto 16px"}}>Tap a bet below, or search a player or team that's on your board.</div>
@@ -12885,11 +12874,53 @@ export default function App() {
                     <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:8}}>Plok scans the books for the best price on a game.</div>
                     <div style={{marginTop:12}}>
                       <button onClick={buildPlokSlip} style={{display:"inline-flex",alignItems:"center",gap:7,padding:"10px 16px",borderRadius:12,background:"rgba(255,255,255,0.06)",border:`1px solid ${IOS.blue}40`,color:IOS.blue,fontSize:13,fontWeight:800,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7h16M4 12h16M4 17h10"/></svg>Build my whole slip</button>
-                      <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:8}}>Plok fills all 5 slots, tuned to your league spot.</div>
+                      <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:8}}>{"Plok fills all "+freshSlots().length+(isSoloMode?" slots on your slate.":" slots, tuned to your league spot.")}</div>
                     </div>
                   </div>
                 </div>
               )}
+              {aiThread.length===0 && plokRecord && (()=>{
+                const _w=plokRecord.wins, _l=plokRecord.losses, _u=plokRecord.units, _n=_w+_l;
+                const MIN_CALLS=25;
+                if(_n<MIN_CALLS){
+                  const _bar = Math.min(100, Math.round(_n/MIN_CALLS*100));
+                  return (
+                    <div className="ai-rise" style={{background:"linear-gradient(160deg,#141419,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:14,padding:"13px 14px"}}>
+                      <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",marginBottom:9}}>
+                        <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:"rgba(255,255,255,0.5)"}}>Building track record</div>
+                        <div style={{fontSize:9.5,fontWeight:700,color:"rgba(255,255,255,0.28)"}}>{_n} of {MIN_CALLS} calls</div>
+                      </div>
+                      <div style={{height:6,borderRadius:3,background:"rgba(255,255,255,0.07)",overflow:"hidden",marginBottom:9}}>
+                        <div style={{height:"100%",width:_bar+"%",borderRadius:3,background:IOS.blue}}/>
+                      </div>
+                      <div style={{fontSize:12,lineHeight:1.5,color:"rgba(255,255,255,0.62)"}}>Plok has made {_n} graded {_n===1?"call":"calls"}. We'll show the record at {MIN_CALLS} — before that it's too small a sample to mean anything.</div>
+                    </div>
+                  );
+                }
+                const _pct = Math.round(_w/_n*100); const _up = _u>=0;
+                const _stat = (val,lab,col)=>(<div><div style={{fontSize:23,fontWeight:900,color:col||"#fff",letterSpacing:-0.5,lineHeight:1}}>{val}</div><div style={{fontSize:9,fontWeight:700,color:"rgba(255,255,255,0.4)",marginTop:3,textTransform:"uppercase",letterSpacing:"0.04em"}}>{lab}</div></div>);
+                return (
+                  <div className="ai-rise" style={{background:`linear-gradient(135deg,${IOS.blue}1a,rgba(255,255,255,0.03))`,border:`0.5px solid ${IOS.blue}33`,borderRadius:14,padding:"13px 14px"}}>
+                    <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",marginBottom:10}}>
+                      <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:"rgba(255,255,255,0.5)"}}>Last {_n} graded calls</div>
+                      {plokRecord.since ? <div style={{fontSize:9.5,fontWeight:700,color:"rgba(255,255,255,0.3)"}}>since {plokRecord.since}</div> : null}
+                    </div>
+                    <div style={{display:"flex",alignItems:"baseline",gap:18}}>
+                      {_stat(`${_w}-${_l}`,"Record")}
+                      {_stat(`${_pct}%`,"Hit rate")}
+                      {_stat(`${_up?"+":""}${_u}u`,"Units",_up?IOS.green:IOS.red)}
+                    </div>
+                    {plokRecord.recent && plokRecord.recent.length>0 && (
+                      <div style={{marginTop:12,paddingTop:11,borderTop:"0.5px solid rgba(255,255,255,0.06)",display:"flex",alignItems:"center",gap:6}}>
+                        {plokRecord.recent.slice(0,8).map((c,ci)=>(
+                          <span key={ci} style={{width:19,height:19,borderRadius:5,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:900,color:c.result==="W"?IOS.green:IOS.red,background:c.result==="W"?`${IOS.green}29`:`${IOS.red}24`}}>{c.result}</span>
+                        ))}
+                        <span style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginLeft:4}}>last {Math.min(plokRecord.recent.length,8)}</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
               {aiThread.map((item,i)=> item.role==="user"
                 ? (<div key={i} style={{alignSelf:"flex-end",maxWidth:"82%",background:IOS.blue,color:"#fff",borderRadius:"14px 14px 4px 14px",padding:"8px 12px",fontSize:13,fontWeight:600,marginLeft:"auto"}}>{item.text}</div>)
                 : (<ErrorBoundary key={i} fallback={<div style={{alignSelf:"flex-start",width:"100%",background:"linear-gradient(160deg,#16161B,#0C0C0F)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:"14px 14px 14px 4px",padding:"13px 14px",fontSize:12.5,color:IOS.red,fontWeight:600}}>Couldn't load this read.</div>}><AiInsightBubble item={item} IOS={IOS} onAddToSlip={()=>{ if(aiAddToSlip(item.bet,item.category)){ setAiThread(prev=>prev.map(x=>x===item?{...x,added:true}:x)); } }} /></ErrorBoundary>)
@@ -13309,7 +13340,6 @@ export default function App() {
  {key:"notif_grades", label:"Picks Graded", sub:"When a pick result comes in", emblem:'<polyline points="20 6 9 17 4 12"/>'},
  {key:"notif_reminder", label:"Pick Reminder", sub:"Reminder before slip locks", emblem:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'},
  {key:"notif_league", label:"League Activity", sub:"New members, chat messages", emblem:'<circle cx="9" cy="7" r="3"/><path d="M2 21v-2a5 5 0 0 1 10 0v2"/><circle cx="17" cy="9" r="2.5"/>'},
- {key:"notif_plok", label:"Plok's Calls", sub:"When Plok finds a high-value bet", emblem:'<polygon points="12 2 15 9 22 9.3 16.5 14 18.5 21 12 17 5.5 21 7.5 14 2 9.3 9 9"/>'},
  ].map((pref,i,arr)=>{
  const val = userProfile?.[pref.key] !== false; // default true
  return (
