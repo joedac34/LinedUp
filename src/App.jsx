@@ -5694,6 +5694,19 @@ export default function App() {
  const [savedPicks, setSavedPicks] = useState(null);
  const [picksLoading, setPicksLoading] = useState(false);
  const [buildingSlip, setBuildingSlip] = useState(false); // user is actively editing/adding to their slip
+ // Entering the builder ALWAYS hydrates it from the locked snapshot and drops the
+ // read-only view. That used to live only on the "Add picks"/"Edit" buttons — which are
+ // hidden while buildingSlip is true — so arriving from the Bet Browser with a partly
+ // submitted slip showed the locked list: no multiplier picker, no lock button, and the
+ // new pick had nowhere to go.
+ useEffect(()=>{
+  if(!buildingSlip) return;
+  if(isSoloMode){
+   if(soloSavedPicks && soloSavedPicks.flexPicks){ setSoloFlexPicks(soloSavedPicks.flexPicks); setSoloSavedPicks(null); setSoloSubmitted(false); }
+  } else {
+   if(savedPicks && savedPicks.flexPicks){ setFlexPicks(savedPicks.flexPicks); setSavedPicks(null); setSubmitted(false); }
+  }
+ }, [buildingSlip, savedPicks, soloSavedPicks, isSoloMode]);
  useEffect(()=>{ if(buildingSlip){ try{ posthog.capture('builder_opened', { league_id: activeLeagueId }); }catch(e){} } }, [buildingSlip]);
  const [selectedMatchup, setSelectedMatchup] = useState(null);
  const [pastMatchupPicks, setPastMatchupPicks] = useState({my:[], opp:[]});
@@ -8746,7 +8759,7 @@ export default function App() {
  </div>
 
  {/* Locked picks view */}
- {activeSavedPicks && activeSavedPicks.flexPicks ? (
+ {activeSavedPicks && activeSavedPicks.flexPicks && !buildingSlip ? (
  <div>
  <div style={{padding:"0 16px 12px"}}>
  <div style={{fontSize:34,fontWeight:800,letterSpacing:-1,color:"#fff",lineHeight:1.05}}>Your Slip</div>
