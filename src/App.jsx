@@ -3934,7 +3934,7 @@ export default function App() {
       // Every row names its game. "No Run — 1st Inning" is meaningless on its own, and
       // with one NRFI slot and one YRFI slot the GAME is the pick.
       const _gameOf = (sl) => sl.isParlay ? [...new Set((sl.parlayLegs||[]).map(l=>l.game).filter(Boolean))].join(" · ") : ((sl.bet && sl.bet.game) || "");
-      const items = flex.map(sl=>({ filled: !!(sl.bet||sl.isParlay), meta: CATMETA[sl.category]||{label:plokTypeLabel(sl.category),color:plokTypeColor(sl.category)}, mult: sl.mult, reason: sl._reason||"", game: _gameOf(sl), name: sl.isParlay ? sl.parlayLegs.map(l=>l.pick).join(" + ") : (sl.bet?.pick||"—"), odds: sl.isParlay ? "" : (sl.bet?.odds||"") }))
+      const items = flex.map((sl,_i)=>({ idx:_i, filled: !!(sl.bet||sl.isParlay), meta: CATMETA[sl.category]||{label:plokTypeLabel(sl.category),color:plokTypeColor(sl.category)}, mult: sl.mult, reason: sl._reason||"", game: _gameOf(sl), name: sl.isParlay ? sl.parlayLegs.map(l=>l.pick).join(" + ") : (sl.bet?.pick||"—"), odds: sl.isParlay ? "" : (sl.bet?.odds||"") }))
         .filter(it=>it.filled).sort((a,b)=> (b.mult||0)-(a.mult||0));
       const cleanFlex = flex.map(sl=>{ const c={...sl}; delete c._reason; return c; });
       if(!items.length){ setPlokBuild({error:"Plok couldn't fill the slip from this slate — try again."}); return; }
@@ -3945,15 +3945,62 @@ export default function App() {
       if(_none.length)  _bits.push(`Nothing on tonight's board fits ${_none.join(", ")}.`);
       if(_clash.length) _bits.push(`Every ${_clash.join(" and ")} left would clash with a higher pick — one slip can't take both sides of a game.`);
       const _note = _bits.length ? _bits.join(" ") + " Fill the rest yourself, or rebuild closer to game time." : null;
+      setPlokChosen(new Set(items.map(it=>it.idx)));
       setPlokBuild({ strategy: data.strategy, items, flex: cleanFlex, note: _note });
     }catch(e){ setPlokBuild({error:"Network error — try again."}); }
     finally{ setPlokBuilding(false); }
   };
+  // Apply ONLY the rows still ticked, and merge them into the slip rather than replacing
+  // it — an untouched slot keeps whatever is already in it.
   const applyPlokSlip = () => {
     if(!plokBuild || !plokBuild.flex) return;
-    if(isSoloMode) setSoloFlexPicks(plokBuild.flex); else setFlexPicks(plokBuild.flex);
-    setPlokBuild(null);
+    const keep = plokChosen;
+    const setP = isSoloMode ? setSoloFlexPicks : setFlexPicks;
+    setP(prev => (prev||[]).map((sl,i)=> (keep.has(i) && plokBuild.flex[i] && (plokBuild.flex[i].bet || plokBuild.flex[i].isParlay)) ? plokBuild.flex[i] : sl));
+    setPlokBuild(null); setPlokChosen(new Set());
     setScreen("picks");
+  };
+  // "Plok picks this slot" — fill ONE slot and leave every other pick alone. This used
+  // to call buildPlokSlip, which rebuilt the entire slip and blew away locked picks.
+  const buildPlokSlot = async (slotIdx) => {
+    if(!isPro){ setShowPaywall("ai"); return; }
+    if(plokSlotBusy!=null) return;
+    const picks = isSoloMode ? soloFlexPicks : flexPicks;
+    const sl = picks && picks[slotIdx];
+    if(!sl) return;
+    const cat = sl.category || sl.slotType;
+    if(!cat) return;
+    // Everything already on the slip is off-limits and must not be contradicted.
+    const taken = [];
+    (picks||[]).forEach((x,i)=>{
+      if(i===slotIdx || !x) return;
+      if(x.isParlay) (x.parlayLegs||[]).forEach(l=>taken.push({ category:"longshot", id:l.id, game:l.game, outcome:l.outcome }));
+      else if(x.bet) taken.push({ category:x.category, id:x.bet.id, eventId:x.bet.eventId, game:x.bet.game, outcome:x.bet.outcome });
+    });
+    const usedSel = new Set(taken.map(t=>String(t.id)));
+    const list = plokSortBets(cat, betsForSlotType(cat))
+      .filter(b=> !usedSel.has(String(b.id)) && !lineConflict(b.category||cat, b, taken));
+    if(!list.length){ setPlokSlotErr({ idx:slotIdx, msg:`Nothing legal left for this ${plokTypeLabel(cat).toLowerCase()} slot — everything on the board clashes with your other picks.` }); return; }
+    setPlokSlotBusy(slotIdx); setPlokSlotErr(null);
+    try{
+      const r = await fetch("/api/buildslip", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
+        sport:(leagueSports[0]||"nfl"), userId:user?.id, persona:plokPersona, userStats:plokUserStats(), leagueCtx:plokLeagueCtx(), strategy:"balanced",
+        multPool: sl.mult ? [sl.mult] : null,
+        slots: [{ idx:0, category:cat, mult: sl.mult||null }],
+        candidates: { [cat]: list.slice(0,6).map(b=>({id:b.id, pick:b.pick, odds:b.odds, game:b.game})) },
+      })});
+      const data = await r.json();
+      const pk = r.ok && (data.picks||[])[0];
+      const ok = new Set(list.map(b=>b.id));
+      const ids = (pk && (pk.ids||[]).filter(x=>ok.has(x))) || [];
+      // Same guard as the full build: the model's id must be legal for this slot, or we
+      // fall back to the best candidate rather than putting a wrong bet in the slot.
+      const chosen = ids.length ? list.find(b=>b.id===ids[0]) : list[0];
+      if(!chosen){ setPlokSlotErr({ idx:slotIdx, msg:"Plok couldn't pick for this slot — try again." }); return; }
+      const setP = isSoloMode ? setSoloFlexPicks : setFlexPicks;
+      setP(prev => (prev||[]).map((x,i)=> i===slotIdx ? {...x, bet:chosen, isParlay:false, parlayLegs:[], category:cat} : x));
+    }catch(e){ setPlokSlotErr({ idx:slotIdx, msg:"Network error — try again." }); }
+    finally{ setPlokSlotBusy(null); }
   };
   // PLOK builds a freeform solo slate: reuse the buildslip engine, then flatten
   // the chosen bets into a flat list (no mults / no forced parlay).
@@ -4076,6 +4123,9 @@ export default function App() {
   const [modelPicker, setModelPicker] = useState(false);
   // Slot board. plokSlot null = auto (open the first empty slot), -1 = all closed.
   const [plokSlot, setPlokSlot] = useState(null);
+  const [plokChosen, setPlokChosen] = useState(new Set()); // which built rows are ticked
+  const [plokSlotBusy, setPlokSlotBusy] = useState(null);
+  const [plokSlotErr, setPlokSlotErr] = useState(null);
   const [plokRail, setPlokRail] = useState({});
   const [plokFlatType, setPlokFlatType] = useState("all");
   useEffect(()=>{ setPlokSlot(null); setPlokRail({}); setPlokFlatType("all"); }, [activeLeagueId, isSoloMode]);
@@ -13037,7 +13087,10 @@ export default function App() {
                   {plokBuild.note && <div style={{fontSize:11.5,lineHeight:1.45,color:"rgba(255,255,255,0.45)",marginBottom:12,paddingLeft:9,borderLeft:"2px solid rgba(255,159,10,0.5)"}}>{plokBuild.note}</div>}
                   <div style={{display:"flex",flexDirection:"column",gap:9}}>
                     {plokBuild.items.map((it,ii)=>(
-                      <div key={ii} style={{display:"flex",alignItems:"flex-start",gap:9}}>
+                      <div key={ii} style={{display:"flex",alignItems:"flex-start",gap:9,opacity:plokChosen.has(it.idx)?1:0.4,transition:"opacity .12s"}}>
+                        <div onClick={()=>setPlokChosen(prev=>{ const n=new Set(prev); if(n.has(it.idx)) n.delete(it.idx); else n.add(it.idx); return n; })} style={{width:22,height:22,flexShrink:0,borderRadius:6,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",background:plokChosen.has(it.idx)?IOS.blue:"rgba(255,255,255,0.06)",border:plokChosen.has(it.idx)?`1px solid ${IOS.blue}`:"1px solid rgba(255,255,255,0.18)"}}>
+                          {plokChosen.has(it.idx) && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                        </div>
                         <div style={{width:30,height:30,flexShrink:0,borderRadius:8,background:`${it.meta.color}1f`,border:`0.5px solid ${it.meta.color}40`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:it.meta.color}}>{it.mult}×</div>
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{display:"flex",alignItems:"baseline",gap:6}}>
@@ -13051,7 +13104,7 @@ export default function App() {
                     ))}
                   </div>
                   <div style={{display:"flex",gap:8,marginTop:13}}>
-                    <button onClick={applyPlokSlip} style={{flex:1,background:IOS.blue,border:"none",borderRadius:11,padding:"11px",fontSize:13,fontWeight:800,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Review &amp; lock in slip</button>
+                    <button onClick={applyPlokSlip} disabled={plokChosen.size===0} style={{flex:1,background:plokChosen.size?IOS.blue:"rgba(255,255,255,0.08)",border:"none",borderRadius:11,padding:"11px",fontSize:13,fontWeight:800,color:plokChosen.size?"#fff":"rgba(255,255,255,0.3)",cursor:plokChosen.size?"pointer":"default",fontFamily:"inherit"}}>{plokChosen.size===0 ? "Pick at least one" : `Add ${plokChosen.size} ${plokChosen.size===1?"pick":"picks"} to slip`}</button>
                     <button onClick={buildPlokSlip} style={{background:"rgba(255,255,255,0.08)",border:"none",borderRadius:11,padding:"11px 14px",fontSize:13,fontWeight:800,color:"rgba(255,255,255,0.8)",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Rebuild</button>
                   </div>
                 </div>
@@ -13153,10 +13206,11 @@ export default function App() {
                                 ) : (
                                   <div style={{padding:"14px 12px",textAlign:"center",fontSize:11,color:"rgba(255,255,255,0.25)",lineHeight:1.5}}>No {plokTypeLabel(_t).toLowerCase()} on tonight's board can fill this slot.</div>
                                 )}
+                                {plokSlotErr && plokSlotErr.idx===si && <div style={{padding:"0 10px 6px",fontSize:10.5,color:IOS.orange,lineHeight:1.4}}>{plokSlotErr.msg}</div>}
                                 <div style={{display:"flex",gap:6,padding:"8px 10px 0"}}>
-                                  <button onClick={buildPlokSlip} style={{flex:1,border:`0.5px solid ${IOS.blue}66`,borderRadius:9,padding:8,fontFamily:"inherit",fontSize:11,fontWeight:800,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:5,background:`${IOS.blue}1f`,color:IOS.blue}}>
+                                  <button onClick={()=>buildPlokSlot(si)} disabled={plokSlotBusy!=null} style={{flex:1,border:`0.5px solid ${IOS.blue}66`,borderRadius:9,padding:8,fontFamily:"inherit",fontSize:11,fontWeight:800,cursor:plokSlotBusy!=null?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:5,background:`${IOS.blue}1f`,color:IOS.blue,opacity:plokSlotBusy!=null&&plokSlotBusy!==si?0.5:1}}>
                                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg>
-                                    Plok picks this slot
+                                    {plokSlotBusy===si ? "Picking…" : "Plok picks this slot"}
                                   </button>
                                   <button onClick={()=>{ setScreen("picks"); }} style={{flex:1,border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:9,padding:8,fontFamily:"inherit",fontSize:11,fontWeight:800,cursor:"pointer",background:"#1e1e25",color:"rgba(255,255,255,0.62)"}}>Open in slip</button>
                                 </div>
