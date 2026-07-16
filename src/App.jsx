@@ -3202,19 +3202,6 @@ export default function App() {
  eventId: game.id, marketKey: "h2h", outcome: o.name, point: null,
  selKey: `${game.id}|h2h|${o.name}|`,
  });
- // Longshots: +400 or better
- if(o.price >= 400) {
- longshot.push({
- id: `live_ls_${gi}_${oi}`,
- game: gameLabel,
- pick: `${o.name} ML`,
- odds: american,
- impliedOdds: o.price,
- gameTime: game.commence_time, awayPitcher: game.away_pitcher||null, homePitcher: game.home_pitcher||null,
- eventId: game.id, marketKey: "h2h", outcome: o.name, point: null,
- selKey: `${game.id}|h2h|${o.name}|`,
- });
- }
  });
 
  // Spreads — both sides
@@ -3276,6 +3263,23 @@ export default function App() {
 
  // Store raw games for the ticker — merge by sport so one sport's fetch doesn't wipe another's
  setTickerGames(prev => { const _fresh = games.map(g => ({ away: g.away_team, home: g.home_team, time: g.commence_time, sport: sportId })); return [...(prev||[]).filter(x => x.sport !== sportId), ..._fresh]; });
+
+ // A longshot is ANY bet priced +400 or longer — NOT just a moneyline. This was
+ // collected inside the h2h loop only, so a +650 spread, a +900 total or a +1100 prop
+ // was invisible to every longshot slot. On a near-even one-game slate (Mets +112 /
+ // Phillies -124) that meant the 7x longshot could never fill from anything.
+ const LS_MIN = 400;
+ const _amt = (b) => (b && b.impliedOdds != null) ? b.impliedOdds
+  : parseInt(String((b && b.odds) || "").replace(/\u2212/g, "-").replace(/[^-+0-9]/g, ""), 10);
+ const _lsSeen = new Set();
+ [...ml, ...spread, ...ou, ...prop].forEach(b => {
+  const a = _amt(b);
+  if (!(a >= LS_MIN)) return;
+  const k = b.selKey || b.id;
+  if (_lsSeen.has(k)) return;
+  _lsSeen.add(k);
+  longshot.push({ ...b, id: `live_ls_${b.id}` });
+ });
 
  setLiveOdds(prev => ({
  ...prev,
@@ -3973,17 +3977,19 @@ export default function App() {
     const isPeriod = category==="period" || !!(bet && PERIOD_MARKETS[bet.category]);
     if(isPeriod && bet && bet.game){
       const sport = bet._sport || leagueSports[0] || "mlb";
-      const item = { role:"ai", label:`Trends · ${bet.game}`, bet, category, loading:true };
-      setAiThread(prev=>[...prev, { role:"user", text: periodSelLabel(bet) }, item]);
+      const _sel = periodSelLabel(bet);
+      const _lensNote = plokModel!=="trends" ? ` · ${(PLOK_MODELS.find(x=>x.id===plokModel)||{}).name||"EV"} can't price period markets` : "";
+      const item = { role:"ai", label:`Trends & Form · ${bet.game}${_lensNote}`, bet, category, loading:true };
+      setAiThread(prev=>[...prev, { role:"user", text: `${_sel} · ${bet.game}` }, item]);
       setAiBusy(true);
       const _tg = findBetGames.find(x=>x.game===bet.game);
-      fetch("/api/trends", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ sport, game: bet.game, userId: user?.id, lines: _tg ? _tg.lines : null }) })
+      fetch("/api/trends", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ sport, game: bet.game, userId: user?.id, lines: _tg ? _tg.lines : null, bet: { betType: bet.category || category, selection: _sel, odds: bet.odds||null, point: bet.point!=null?bet.point:null } }) })
         .then(async r=>{ const data=await r.json(); setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, data:r.ok?data:null, error:r.ok?null:(data.error||"Couldn't load trends")} : x)); })
         .catch(()=> setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, error:"Network error — try again"} : x)))
         .finally(()=> setAiBusy(false));
       return;
     }
-    askInsight(buildBetCtx(bet, category), bet.pick, bet, category);
+    askInsight(buildBetCtx(bet, category), bet.game ? `${bet.pick} · ${bet.game}` : bet.pick, bet, category);
   };
   const [findBetOpen, setFindBetOpen] = useState(false);
   const [plokModel, setPlokModel] = useState("ev");

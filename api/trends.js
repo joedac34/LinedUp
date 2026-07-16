@@ -396,6 +396,21 @@ export async function teamFormFor(sport, game) {
 }
 
 // ── Narration: the LLM writes prose about numbers the code already computed ─
+const BET_FOCUS = {
+  nrfi: "The user asked about NRFI (no run in the 1st inning). Lead with 1st-inning evidence: each starter's scoreless-first rate over his recent starts, and how often these offences score in the 1st. Team last-10 form and full-game totals are weak evidence for a 1st-inning market — say so rather than padding with them.",
+  yrfi: "The user asked about YRFI (a run in the 1st inning). Lead with 1st-inning evidence: each starter's rate of allowing a 1st-inning run, and these offences' early scoring. Full-game form is weak evidence here — say so rather than padding with it.",
+  ou_f5: "The user asked about a FIRST 5 INNINGS total. Lead with the starters — their recent ERA and how deep they go. The bullpens do not pitch this market; full-game totals include innings this bet does not.",
+  ml_f5: "The user asked about a FIRST 5 INNINGS moneyline. Lead with the two starters, not the bullpens or the full-game record.",
+  spread_f5: "The user asked about a FIRST 5 INNINGS run line. Lead with the starters and early scoring, not full-game margins.",
+  ou_h1: "The user asked about a FIRST HALF total. Lead with first-half scoring pace; full-game totals include a half this bet does not.",
+  ml_h1: "The user asked about a FIRST HALF moneyline. Lead with first-half performance, not the final-score record.",
+  spread_h1: "The user asked about a FIRST HALF spread. Lead with first-half margins.",
+  ou: "The user asked about the game TOTAL. Lead with how each side's recent results sit against tonight's number, and the hit count over the average.",
+  ml: "The user asked about the MONEYLINE. Lead with form, venue split and the head-to-head.",
+  spread: "The user asked about the SPREAD. Lead with recent margins against tonight's number and the venue split.",
+  prop: "The user asked about a PLAYER PROP. Team form is weak evidence for one player — say so plainly if that is all the FACTS support.",
+};
+
 const SYS =
   "You are Plok's Trends & Form lens for a sports pick'em app. You explain FORM and TRENDS — recent results, " +
   "streaks, home/road splits, scoring pace, and how a team's recent results sit against tonight's posted number. " +
@@ -429,15 +444,18 @@ const SCHEMA = {
   required: ["summary", "bullCase", "bearCase"],
 };
 
-async function narrate(game, facts) {
+async function narrate(game, facts, bet) {
   if (!OPENAI) return null;
+  const focus = bet && bet.betType && BET_FOCUS[bet.betType]
+    ? `\n\nTHE BET: ${bet.selection || bet.betType}${bet.odds ? " at " + bet.odds : ""}. ${BET_FOCUS[bet.betType]} Every sentence must earn its place against THIS bet — do not write a generic matchup preview.`
+    : "";
   try {
     const r = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENAI}` },
       body: JSON.stringify({
         model: "gpt-4o-mini", temperature: 0.4, max_tokens: 600,
-        messages: [{ role: "system", content: SYS }, { role: "user", content: `Matchup: ${game}\n\nFACTS:\n${facts}` }],
+        messages: [{ role: "system", content: SYS + focus }, { role: "user", content: `Matchup: ${game}\n\nFACTS:\n${facts}` }],
         response_format: { type: "json_schema", json_schema: { name: "trends", strict: true, schema: SCHEMA } },
       }),
     });
@@ -457,7 +475,9 @@ export default async function handler(req, res) {
     const sport = String(ctx.sport).toLowerCase();
     const lines = ctx.lines || {};
     const day = new Date().toISOString().slice(0, 10);
-    const key = ["trends", sport, ctx.game, lines.total != null ? lines.total : "", day].join("|");
+    // The bet is part of the key — otherwise asking NRFI after a moneyline on the same
+    // game just replays the moneyline's cached writeup.
+    const key = ["trends", sport, ctx.game, lines.total != null ? lines.total : "", (ctx.bet && ctx.bet.betType) || "game", day].join("|");
     const cached = cacheGet(key);
     if (cached) return res.status(200).json({ ...cached, cached: true });
 
@@ -519,10 +539,18 @@ export default async function handler(req, res) {
     }
     if (pack) for (const l of (pack.lines || [])) factLines.push(`${l.label}: ${l.value}`);
 
+    // For a 1st-inning market the starter NRFI bullets ARE the evidence — float them to
+    // the top so they survive selection and lead the read.
+    const bt = (ctx.bet && ctx.bet.betType) || null;
+    if (bt === "nrfi" || bt === "yrfi") {
+      const first = trends.filter((t) => /1st|scoreless|NRFI|YRFI/i.test(t.text));
+      const rest = trends.filter((t) => !first.includes(t));
+      trends = [...first, ...rest];
+    }
     // Pick the visible set FIRST — the model narrates only what the user can see.
-    const shown = selectBullets(trends, 8);
+    const shown = bt === "nrfi" || bt === "yrfi" ? trends.slice(0, 8) : selectBullets(trends, 8);
     const factText = [...factLines, ...shown.map((t) => `- ${t.text}`)].join("\n");
-    const gen = await narrate(ctx.game, factText);
+    const gen = await narrate(ctx.game, factText, ctx.bet);
 
     const out = {
       summary: (gen && gen.summary) || (shown.length ? shown.slice(0, 2).map((t) => t.text).join(" ") : "Here's the recent form and season context for this matchup."),
