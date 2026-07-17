@@ -1318,6 +1318,9 @@ function playoffFieldFor(league, total){
 }
 // A wildcard slot accepts ANY of these (all gradeable) bet types.
 const WILDCARD_TYPES=["ml","spread","ou","prop","longshot"];
+// league_id columns are uuid. Anything else and Postgres 400s the whole query — which is
+// exactly what the demo id "lg1" did, on every screen, for every new user.
+const isUuid = (v) => typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 // The Games tab listed everything under one "This Week" header, so tomorrow's slate read
 // as tonight's. Group by LOCAL calendar day. Pure — no state, safe at module scope.
 // NB: new Date(null) is the 1970 epoch, NOT Invalid Date — without the null guard a
@@ -3071,7 +3074,17 @@ export default function App() {
  const [chatMsg, setChatMsg] = useState("");
  const [messages, setMessages] = useState([]);
  const [chatLoading, setChatLoading] = useState(false);
- const [activeLeagueId, setActiveLeagueId] = useState(()=>{ try{ return localStorage.getItem("picklock_active_league")||"lg1"; }catch(e){ return "lg1"; } });
+ // Was defaulting to "lg1" — the hardcoded demo league at line ~389. Every new signup,
+ // fresh device, or cleared localStorage started there and fired league queries at
+ // Postgres with league_id=eq.lg1. Not a uuid, so all of them 400d. The effect below
+ // snaps to a real league once they load.
+ const [activeLeagueId, setActiveLeagueId] = useState(()=>{ try{ const v=localStorage.getItem("picklock_active_league"); return isUuid(v)?v:""; }catch(e){ return ""; } });
+ useEffect(()=>{
+  if(isSoloMode) return;
+  if(!realLeagues || !realLeagues.length) return;
+  if(realLeagues.some(l=>l.id===activeLeagueId)) return;
+  setActiveLeagueId(realLeagues[0].id);   // empty, stale or deleted -> first real league
+ }, [realLeagues, activeLeagueId, isSoloMode]);
  useEffect(()=>{ if(activeLeagueId && activeLeagueId!=="lg1" && activeLeagueId!=="solo"){ try{ localStorage.setItem("picklock_active_league", activeLeagueId); }catch(e){} } }, [activeLeagueId]);
  const [realLeagues, setRealLeagues] = useState([]);
  const [leaguesLoading, setLeaguesLoading] = useState(true);
@@ -5431,6 +5444,7 @@ export default function App() {
  };
 
  const fetchStandings = async (leagueId) => {
+  if(!isUuid(leagueId)) return;   // a non-uuid makes Postgres 400 the whole query
  // Get all members first — always needed regardless of picks
  const {data:members} = await supabase
  .from("league_members")
@@ -5604,6 +5618,7 @@ export default function App() {
 };
 
  const fetchLeagueMembers = async (leagueId, uid) => {
+  if(!isUuid(leagueId)) return;   // a non-uuid makes Postgres 400 the whole query
  const {data} = await supabase
  .from("league_members")
  .select("user_id, is_commissioner")
