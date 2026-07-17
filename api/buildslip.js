@@ -9,16 +9,17 @@
 
 const SB_URL = process.env.VITE_SUPABASE_URL;
 const SB_KEY = process.env.SUPABASE_SERVICE_KEY;
+const SB_ANON = process.env.VITE_SUPABASE_ANON_KEY;
 const OPENAI = process.env.OPENAI_API_KEY;
 const sbHeaders = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, "Content-Type": "application/json" };
 
 async function isPro(userId) {
-  if (!userId || !SB_URL) return true;
+  if (!userId || !SB_URL) return false;   // fail CLOSED
   try {
     const r = await fetch(`${SB_URL}/rest/v1/users?id=eq.${userId}&select=is_pro`, { headers: sbHeaders });
     const rows = await r.json();
     return Array.isArray(rows) && rows[0] && rows[0].is_pro === true;
-  } catch { return true; }
+  } catch { return false; }   // fail CLOSED
 }
 
 const PERSONAS = {
@@ -118,6 +119,25 @@ async function formBlock(sport, candidates) {
   return good.length ? `\n\nFORM (real, from box scores — cite these)\n${good.join("\n")}` : "";
 }
 
+// ── Auth ────────────────────────────────────────────────────────────────────
+// The user comes from the Authorization token, NEVER the request body. Same
+// contract as checkout.js. The old gate was `if (ctx.userId && !isPro(ctx.userId))`:
+// omit userId and the check vanished entirely, and a real Pro user's id (one used
+// to ship hardcoded in the JS bundle) bought anyone a verified-Pro response.
+async function authedUserId(req) {
+  const h = req.headers.authorization || "";
+  const token = h.startsWith("Bearer ") ? h.slice(7) : null;
+  if (!token || !SB_URL || !SB_ANON) return null;
+  try {
+    const r = await fetch(`${SB_URL}/auth/v1/user`, {
+      headers: { apikey: SB_ANON, Authorization: `Bearer ${token}` },
+    });
+    if (!r.ok) return null;
+    const u = await r.json();
+    return u && u.id ? u.id : null;
+  } catch { return null; }
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
   if (!OPENAI) return res.status(500).json({ error: "OPENAI_API_KEY not set" });
@@ -126,7 +146,9 @@ export default async function handler(req, res) {
     const slots = Array.isArray(ctx.slots) ? ctx.slots : [];
     const candidates = ctx.candidates || {};
     if (!slots.length || !Object.keys(candidates).length) return res.status(400).json({ error: "Missing slots or candidates" });
-    if (ctx.userId && !(await isPro(ctx.userId))) return res.status(403).json({ error: "Building slips is a Pro feature" });
+    const _uid = await authedUserId(req);
+    if (!_uid) return res.status(401).json({ error: "Sign in to use Plok" });
+    if (!(await isPro(_uid))) return res.status(403).json({ error: "Building slips is a Pro feature" });
 
     const strategy = ctx.strategy || "balanced";
     const personaLine = (ctx.persona && PERSONAS[ctx.persona]) ? PERSONAS[ctx.persona] + " " : "";

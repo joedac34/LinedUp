@@ -2419,7 +2419,7 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
           <div onClick={async()=>{ if(setIsSoloMode) setIsSoloMode(true); const lgId=await getOrCreateSoloLeague(); if(setActiveLeagueId) setActiveLeagueId(lgId||"solo"); setScreen("picks"); }} style={{marginTop:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6,fontSize:11,fontWeight:800,color:IOS.blue,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:8,padding:"7px",cursor:"pointer"}}>Build today's slate →</div>
         </div>
       ) : (
-        <div onClick={()=>{ if(!isPro){ if(setShowPaywall) setShowPaywall("ai"); return; } if(dayPlay&&dayPlay.loading) return; setDayPlay({loading:true}); fetch("/api/findbet",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sport:soloSport, game:(featGame.away+" @ "+featGame.home)})}).then(async r=>{ const d=await r.json().catch(()=>null); setDayPlay((r.ok&&d&&d.summary)?{data:d}:{error:true}); }).catch(()=>setDayPlay({error:true})); }} style={{display:"flex",alignItems:"center",gap:12,background:"linear-gradient(135deg,rgba(10,132,255,0.16),rgba(94,92,230,0.10))",border:"0.5px solid rgba(10,132,255,0.35)",borderRadius:12,padding:"12px 14px",marginBottom:12,cursor:"pointer"}}>
+        <div onClick={async()=>{ if(!isPro){ if(setShowPaywall) setShowPaywall("ai"); return; } if(dayPlay&&dayPlay.loading) return; setDayPlay({loading:true}); fetch("/api/findbet",{method:"POST",headers: await authHeaders(),body:JSON.stringify({sport:soloSport, game:(featGame.away+" @ "+featGame.home)})}).then(async r=>{ const d=await r.json().catch(()=>null); setDayPlay((r.ok&&d&&d.summary)?{data:d}:{error:true}); }).catch(()=>setDayPlay({error:true})); }} style={{display:"flex",alignItems:"center",gap:12,background:"linear-gradient(135deg,rgba(10,132,255,0.16),rgba(94,92,230,0.10))",border:"0.5px solid rgba(10,132,255,0.35)",borderRadius:12,padding:"12px 14px",marginBottom:12,cursor:"pointer"}}>
           <div style={{width:34,height:34,borderRadius:10,background:"rgba(10,132,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
             {dayPlay&&dayPlay.loading ? <div style={{display:"flex",gap:3}}><span className="ai-dot"/><span className="ai-dot" style={{animationDelay:"0.15s"}}/><span className="ai-dot" style={{animationDelay:"0.3s"}}/></div> : <svg width="18" height="18" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg>}
           </div>
@@ -3865,7 +3865,7 @@ export default function App() {
     if(L){ if((L.matchupGap!=null&&L.matchupGap<0)||(L.finalWeek&&L.leaderGap!=null&&L.leaderGap>0)) strategy="ceiling"; else if((L.matchupGap!=null&&L.matchupGap>0)||L.leading) strategy="protect"; }
     setPlokBuilding(true); setPlokBuild(null);
     try{
-      const r = await fetch("/api/buildslip", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ multPool: _plokPool, sport:(leagueSports[0]||"nfl"), userId:user?.id, persona:plokPersona, userStats:plokUserStats(), leagueCtx:L, strategy, slots:slotSpec, candidates })});
+      const r = await fetch("/api/buildslip", {method:"POST", headers: await authHeaders(), body: JSON.stringify({ multPool: _plokPool, sport:(leagueSports[0]||"nfl"), userId:user?.id, persona:plokPersona, userStats:plokUserStats(), leagueCtx:L, strategy, slots:slotSpec, candidates })});
       const data = await r.json();
       if(!r.ok){ setPlokBuild({error:data.error||"Couldn't build a slip — try again."}); return; }
       // MUST include period + wildcard bets: ALL_BETS has no NRFI/F5/H1, so a valid
@@ -4011,7 +4011,7 @@ export default function App() {
     if(!list.length){ setPlokSlotErr({ idx:slotIdx, msg:`Nothing legal left for this ${plokTypeLabel(cat).toLowerCase()} slot — everything on the board clashes with your other picks.` }); return; }
     setPlokSlotBusy(slotIdx); setPlokSlotErr(null);
     try{
-      const r = await fetch("/api/buildslip", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
+      const r = await fetch("/api/buildslip", {method:"POST", headers: await authHeaders(), body: JSON.stringify({
         sport:(leagueSports[0]||"nfl"), userId:user?.id, persona:plokPersona, userStats:plokUserStats(), leagueCtx:plokLeagueCtx(), strategy:"balanced",
         multPool: sl.mult ? [sl.mult] : null,
         slots: [{ idx:0, category:cat, mult: sl.mult||null }],
@@ -4046,7 +4046,7 @@ export default function App() {
     const slots = Object.keys(candidates).map((c,i)=>({idx:i,category:c,mult:null}));
     setPlokSlateBusy(true); setPlokSlate(null);
     try{
-      const r = await fetch("/api/buildslip",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ sport:soloSport, userId:user?.id, persona:plokPersona, userStats:plokUserStats(), leagueCtx:null, strategy:"balanced", slots, candidates })});
+      const r = await fetch("/api/buildslip",{method:"POST",headers: await authHeaders(),body:JSON.stringify({ sport:soloSport, userId:user?.id, persona:plokPersona, userStats:plokUserStats(), leagueCtx:null, strategy:"balanced", slots, candidates })});
       const data = await r.json();
       if(!r.ok){ setPlokSlate({error:data.error||"Couldn't build a slate — try again."}); return; }
       const byId={}; (ALL_BETS||[]).forEach(b=>{byId[b.id]=b;});
@@ -4100,7 +4100,7 @@ export default function App() {
     const away = eg.awayTeam || tg.away || "Away", home = eg.homeTeam || tg.home || "Home";
     const sp = (activeLeague && activeLeague.sport) || "nfl";
     setGameRead(prev=>({...prev,[gid]:{loading:true}}));
-    fetch("/api/findbet",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ sport:sp, game:(away+" @ "+home), userId:user&&user.id })})
+    authHeaders().then(_h=>fetch("/api/findbet", { method:"POST", headers:_h, body:JSON.stringify({ sport:sp, game:(away+" @ "+home), userId:user&&user.id })}))
       .then(async r=>{ const d=await r.json().catch(()=>null); setGameRead(prev=>({...prev,[gid]: (r.ok && d) ? {data:d} : {error:true}})); })
       .catch(()=> setGameRead(prev=>({...prev,[gid]:{error:true}})));
   },[gameSheet, isPro]);
@@ -4109,7 +4109,7 @@ export default function App() {
     setAiThread(prev=>[...prev, { role:"user", text: label||ctx.selection }, item]);
     setAiBusy(true);
     try{
-      const r = await fetch("/api/insight", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(ctx) });
+      const r = await fetch("/api/insight", { method:"POST", headers: await authHeaders(), body: JSON.stringify(ctx) });
       const data = await r.json();
       setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, data: r.ok?data:null, error: r.ok?null:(data.error||"Couldn't load insight")} : x));
       if(r.ok && data && (data.verdict==="strong"||data.verdict==="lean") && ctx.betType!=="chat" && ctx.game && user?.id){
@@ -4138,7 +4138,7 @@ export default function App() {
       setAiThread(prev=>[...prev, { role:"user", text: `${_sel} · ${bet.game}` }, item]);
       setAiBusy(true);
       const _tg = findBetGames.find(x=>x.game===bet.game);
-      fetch("/api/trends", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ sport, game: bet.game, userId: user?.id, lines: _tg ? _tg.lines : null, bet: { betType: bet.category || category, selection: _sel, odds: bet.odds||null, point: bet.point!=null?bet.point:null } }) })
+      authHeaders().then(_h=>fetch("/api/trends", { method:"POST", headers:_h, body: JSON.stringify({ sport, game: bet.game, userId: user?.id, lines: _tg ? _tg.lines : null, bet: { betType: bet.category || category, selection: _sel, odds: bet.odds||null, point: bet.point!=null?bet.point:null } }) }))
         .then(async r=>{ const data=await r.json(); setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, data:r.ok?data:null, error:r.ok?null:(data.error||"Couldn't load trends")} : x)); })
         .catch(()=> setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, error:"Network error — try again"} : x)))
         .finally(()=> setAiBusy(false));
@@ -4201,7 +4201,7 @@ export default function App() {
     const item = { role:"ai", label, bet:null, category:null, loading:true };
     setAiThread(prev=>[...prev, { role:"user", text:`${_m.name} — ${g.game}` }, item]);
     setAiBusy(true);
-    fetch(plokModel==="trends"?"/api/trends":"/api/findbet", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ sport:g.sport, game:g.game, userId:user?.id, model:plokModel, lines:g.lines||null }) })
+    authHeaders().then(_h=>fetch(plokModel==="trends"?"/api/trends":"/api/findbet", { method:"POST", headers:_h, body: JSON.stringify({ sport:g.sport, game:g.game, userId:user?.id, model:plokModel, lines:g.lines||null }) }))
       .then(async r=>{ const data=await r.json(); setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, data:r.ok?data:null, error:r.ok?null:(data.error||"Couldn't screen this game")} : x)); })
       .catch(()=> setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, error:"Network error — try again"} : x)))
       .finally(()=> setAiBusy(false));
@@ -4213,7 +4213,7 @@ export default function App() {
     const item = { role:"ai", label:"Plok", bet:null, category:null, loading:true };
     setAiThread(prev=>[...prev, { role:"user", text:q }, item]);
     setAiBusy(true);
-    fetch("/api/insight", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ sport:(leagueSports[0]||"nfl"), betType:"chat", selection:q, question:q, userId:user?.id, userStats:plokUserStats(), persona:plokPersona, leagueCtx:plokLeagueCtx() }) })
+    authHeaders().then(_h=>fetch("/api/insight", { method:"POST", headers:_h, body: JSON.stringify({ sport:(leagueSports[0]||"nfl"), betType:"chat", selection:q, question:q, userId:user?.id, userStats:plokUserStats(), persona:plokPersona, leagueCtx:plokLeagueCtx() }) }))
       .then(async r=>{ const data=await r.json(); setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, data:r.ok?data:null, error:r.ok?null:(data.error||"Couldn't reach Plok")} : x)); })
       .catch(()=> setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, error:"Network error — try again"} : x)))
       .finally(()=> setAiBusy(false));
@@ -14312,7 +14312,7 @@ export default function App() {
  : <div><div style={{fontSize:13.5,lineHeight:1.5,color:"rgba(255,255,255,0.88)"}}>{read.data.summary}</div><div style={{fontSize:11,fontWeight:700,color:IOS.blue,marginTop:9}}>See full breakdown ›</div></div>}
  </div>
  ) : (
- <div onClick={()=>{ if(!isPro){ setShowPaywall("ai"); return; } if(read&&read.loading) return; const sp=(activeLeague&&activeLeague.sport)||"nfl"; setGameRead(prev=>({...prev,[gid]:{loading:true}})); fetch("/api/findbet",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sport:sp,game:away+" @ "+home,userId:user&&user.id})}).then(async r=>{ const d=await r.json().catch(()=>null); setGameRead(prev=>({...prev,[gid]: (r.ok&&d)?{data:d}:{error:true}})); }).catch(()=> setGameRead(prev=>({...prev,[gid]:{error:true}}))); }} style={{display:"flex",alignItems:"center",gap:12,background:"linear-gradient(135deg,rgba(10,132,255,0.16),rgba(94,92,230,0.10))",border:"0.5px solid rgba(10,132,255,0.35)",borderRadius:16,padding:"13px 15px",marginBottom:2,cursor:"pointer"}}>
+ <div onClick={async()=>{ if(!isPro){ setShowPaywall("ai"); return; } if(read&&read.loading) return; const sp=(activeLeague&&activeLeague.sport)||"nfl"; setGameRead(prev=>({...prev,[gid]:{loading:true}})); fetch("/api/findbet",{method:"POST",headers: await authHeaders(),body:JSON.stringify({sport:sp,game:away+" @ "+home,userId:user&&user.id})}).then(async r=>{ const d=await r.json().catch(()=>null); setGameRead(prev=>({...prev,[gid]: (r.ok&&d)?{data:d}:{error:true}})); }).catch(()=> setGameRead(prev=>({...prev,[gid]:{error:true}}))); }} style={{display:"flex",alignItems:"center",gap:12,background:"linear-gradient(135deg,rgba(10,132,255,0.16),rgba(94,92,230,0.10))",border:"0.5px solid rgba(10,132,255,0.35)",borderRadius:16,padding:"13px 15px",marginBottom:2,cursor:"pointer"}}>
  <div style={{width:36,height:36,borderRadius:11,background:"rgba(10,132,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="19" height="19" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg></div>
  <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:800,color:"#fff"}}>{read&&read.error?"Read unavailable — tap to retry":"Get Plok's read on this matchup"}</div><div style={{fontSize:11.5,color:IOS.label2,marginTop:1}}>Data-backed matchup read{isPro?"":" · Pro"}</div></div>
  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={IOS.label3} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6"/></svg>
@@ -14709,7 +14709,9 @@ export default function App() {
      powerups:{icon:"bolt",title:"Power-ups are a Pro feature",sub:"Double Down, Spread Enhancer, Insurance and more are unlocked with Commish Pro.",features:["All current and future power-ups","Unlimited picks and custom settings","Multi-sport league support"]},
    };
    const cfg = configs[showPaywall]||configs.picks;
-   const _isDev = (user && user.id === "769f7ebe-90c2-45f5-99f4-b98b54622f52");
+   // Same opt-in as the dev panel. Was a hardcoded user id, which shipped a real
+   // Pro account's UUID in the JS bundle for anyone to read.
+   const _isDev = (()=>{ try{ return localStorage.getItem("picklock_dev")==="1"; }catch(e){ return false; } })();
    return (
      <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:9999,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>setShowPaywall(null)}>
        <div style={{background:"#111",borderRadius:"20px 20px 0 0",padding:"0 0 40px",border:"0.5px solid #1E1E1E"}} onClick={e=>e.stopPropagation()}>

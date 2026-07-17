@@ -30,6 +30,7 @@ import { buildMatchup } from "./findbet.js";
 const OPENAI = process.env.OPENAI_API_KEY;
 const SB_URL = process.env.VITE_SUPABASE_URL;
 const SB_KEY = process.env.SUPABASE_SERVICE_KEY;
+const SB_ANON = process.env.VITE_SUPABASE_ANON_KEY;
 
 const ESPN_MAP = {
   nfl: { sp: "football", lg: "nfl" },
@@ -42,7 +43,7 @@ const VENUE_MIN = 3;  // a 1-game home "split" is not a trend. Applies to EVERY 
 const WINDOW = 10;    // "last 10" everywhere
 
 async function isPro(userId) {
-  if (!userId || !SB_URL || !SB_KEY) return false;
+  if (!userId || !SB_URL || !SB_KEY) return false;   // fail CLOSED
   try {
     const r = await fetch(`${SB_URL}/rest/v1/users?id=eq.${userId}&select=is_pro`, {
       headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
@@ -465,12 +466,33 @@ async function narrate(game, facts, bet) {
   } catch { return null; }
 }
 
+// ── Auth ────────────────────────────────────────────────────────────────────
+// The user comes from the Authorization token, NEVER the request body. Same
+// contract as checkout.js. The old gate was `if (ctx.userId && !isPro(ctx.userId))`:
+// omit userId and the check vanished entirely, and a real Pro user's id (one used
+// to ship hardcoded in the JS bundle) bought anyone a verified-Pro response.
+async function authedUserId(req) {
+  const h = req.headers.authorization || "";
+  const token = h.startsWith("Bearer ") ? h.slice(7) : null;
+  if (!token || !SB_URL || !SB_ANON) return null;
+  try {
+    const r = await fetch(`${SB_URL}/auth/v1/user`, {
+      headers: { apikey: SB_ANON, Authorization: `Bearer ${token}` },
+    });
+    if (!r.ok) return null;
+    const u = await r.json();
+    return u && u.id ? u.id : null;
+  } catch { return null; }
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
   try {
     const ctx = req.body || {};
     if (!ctx.game || !ctx.sport) return res.status(400).json({ error: "Missing game/sport" });
-    if (ctx.userId && !(await isPro(ctx.userId))) return res.status(403).json({ error: "Plok is a Pro feature" });
+    const _uid = await authedUserId(req);
+    if (!_uid) return res.status(401).json({ error: "Sign in to use Plok" });
+    if (!(await isPro(_uid))) return res.status(403).json({ error: "Plok is a Pro feature" });
 
     const sport = String(ctx.sport).toLowerCase();
     const lines = ctx.lines || {};

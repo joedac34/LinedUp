@@ -26,6 +26,7 @@ import { buildMlbProp } from "./mlbprop.js";
 
 const SB_URL  = process.env.VITE_SUPABASE_URL;
 const SB_KEY  = process.env.SUPABASE_SERVICE_KEY;
+const SB_ANON = process.env.VITE_SUPABASE_ANON_KEY;
 const OPENAI  = process.env.OPENAI_API_KEY;
 const SDIO    = process.env.SPORTSDATAIO_KEY;
 
@@ -36,12 +37,12 @@ const num = (x) => { const n = parseFloat(x); return Number.isFinite(n) ? n : nu
 function hashKey(s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return "ins_" + (h >>> 0).toString(36); }
 
 async function isPro(userId) {
-  if (!userId || !SB_URL) return true; // no user passed -> client already gated; don't block
+  if (!userId || !SB_URL) return false;   // fail CLOSED — "the client already gated it" is not a gate
   try {
     const r = await fetch(`${SB_URL}/rest/v1/users?id=eq.${userId}&select=is_pro`, { headers: sbHeaders });
     const rows = await r.json();
     return Array.isArray(rows) && rows[0] && rows[0].is_pro === true;
-  } catch { return true; }
+  } catch { return false; }   // fail CLOSED
 }
 
 async function getCached(key) {
@@ -611,6 +612,25 @@ async function generate(ctx, stats) {
 }
 
 // ── handler ───────────────────────────────────────────────────────────────────
+// ── Auth ────────────────────────────────────────────────────────────────────
+// The user comes from the Authorization token, NEVER the request body. Same
+// contract as checkout.js. The old gate was `if (ctx.userId && !isPro(...))`:
+// omit userId and the check vanished entirely; pass a known Pro id (one ships
+// hardcoded in the JS bundle) and you got a verified-Pro answer.
+async function authedUserId(req) {
+  const h = req.headers.authorization || "";
+  const token = h.startsWith("Bearer ") ? h.slice(7) : null;
+  if (!token || !SB_URL || !SB_ANON) return null;
+  try {
+    const r = await fetch(`${SB_URL}/auth/v1/user`, {
+      headers: { apikey: SB_ANON, Authorization: `Bearer ${token}` },
+    });
+    if (!r.ok) return null;
+    const u = await r.json();
+    return u && u.id ? u.id : null;
+  } catch { return null; }
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
   if (!OPENAI) return res.status(500).json({ error: "OPENAI_API_KEY not set" });
@@ -619,19 +639,22 @@ export default async function handler(req, res) {
     const ctx = req.body || {};
     if (!ctx.selection || !ctx.sport) return res.status(400).json({ error: "Missing bet context" });
 
-    if (ctx.userId && !(await isPro(ctx.userId))) {
-      return res.status(403).json({ error: "AI insight is a Pro feature" });
-    }
+    const _uid = await authedUserId(req);
+    if (!_uid) return res.status(401).json({ error: "Sign in to use Plok" });
+    if (!(await isPro(_uid))) return res.status(403).json({ error: "AI insight is a Pro feature" });
 
     const day = new Date().toISOString().slice(0, 10);
     const leagueSig = ctx.leagueCtx ? `${ctx.leagueCtx.myRank || ""}_${ctx.leagueCtx.matchupGap != null ? Math.round(ctx.leagueCtx.matchupGap) : ""}` : "";
-    const key = hashKey(["v7", ctx.sport, ctx.betType, ctx.selection, ctx.line, ctx.game, ctx.question || "", ctx.userId || "", ctx.persona || "", leagueSig, day].join("|"));
+    const key = hashKey(["v7", ctx.sport, ctx.betType, ctx.selection, ctx.line, ctx.game, ctx.question || "", _uid || "", ctx.persona || "", leagueSig, day].join("|"));
 
     const cached = await getCached(key);
     if (cached) return res.status(200).json({ ...cached, cached: true });
 
     // Only the uncached path costs an OpenAI call — rate-limit that, not cache hits.
-    const identity = ctx.userId || String(req.headers["x-forwarded-for"] || req.headers["x-real-ip"] || "").split(",")[0].trim() || "anon";
+    // Key the rate limit on the VERIFIED user. It used to key on ctx.userId straight
+    // from the body — send a fresh random id each call and the 100/hr cap reset every
+    // time, on your OpenAI bill.
+    const identity = _uid;
     if (!(await underRateLimit(identity))) {
       return res.status(429).json({ error: "You're generating insights very fast — give it a minute and try again." });
     }
