@@ -489,10 +489,11 @@ export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
   try {
     const ctx = req.body || {};
-    if (!ctx.game || !ctx.sport) return res.status(400).json({ error: "Missing game/sport" });
+    // Auth first: never tell an anonymous caller what shape the body should be.
     const _uid = await authedUserId(req);
     if (!_uid) return res.status(401).json({ error: "Sign in to use Plok" });
     if (!(await isPro(_uid))) return res.status(403).json({ error: "Plok is a Pro feature" });
+    if (!ctx.game || !ctx.sport) return res.status(400).json({ error: "Missing game/sport" });
 
     const sport = String(ctx.sport).toLowerCase();
     const lines = ctx.lines || {};

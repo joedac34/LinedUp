@@ -503,11 +503,12 @@ export default async function handler(req, res) {
   if (!ODDS) return res.status(500).json({ error: "ODDS_API_KEY not set" });
   try {
     const ctx = req.body || {};
-    if (!ctx.game || !ctx.sport) return res.status(400).json({ error: "Missing game/sport" });
-    const model = (ctx.model || "ev").toLowerCase();
+    // Auth first: never tell an anonymous caller what shape the body should be.
     const _uid = await authedUserId(req);
     if (!_uid) return res.status(401).json({ error: "Sign in to use Plok" });
     if (!(await isPro(_uid))) return res.status(403).json({ error: "Plok is a Pro feature" });
+    if (!ctx.game || !ctx.sport) return res.status(400).json({ error: "Missing game/sport" });
+    const model = (ctx.model || "ev").toLowerCase();
 
     const day = new Date().toISOString().slice(0, 10);
     const key = hashKey(["findbet", ctx.sport, ctx.game, model, day].join("|"));

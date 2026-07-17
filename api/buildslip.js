@@ -145,10 +145,11 @@ export default async function handler(req, res) {
     const ctx = req.body || {};
     const slots = Array.isArray(ctx.slots) ? ctx.slots : [];
     const candidates = ctx.candidates || {};
-    if (!slots.length || !Object.keys(candidates).length) return res.status(400).json({ error: "Missing slots or candidates" });
+    // Auth first: never tell an anonymous caller what shape the body should be.
     const _uid = await authedUserId(req);
     if (!_uid) return res.status(401).json({ error: "Sign in to use Plok" });
     if (!(await isPro(_uid))) return res.status(403).json({ error: "Building slips is a Pro feature" });
+    if (!slots.length || !Object.keys(candidates).length) return res.status(400).json({ error: "Missing slots or candidates" });
 
     const strategy = ctx.strategy || "balanced";
     const personaLine = (ctx.persona && PERSONAS[ctx.persona]) ? PERSONAS[ctx.persona] + " " : "";

@@ -71,10 +71,18 @@ test('a crashed screen shows the fallback, not a blank page', async ({ page }) =
 });
 
 // ── 3. The Pro gate holds server-side (regression for the 17 Jul auth fix) ──
+// Each endpoint gets a body it would ACCEPT if the caller were signed in, so a 401 can
+// only mean the auth gate fired — not that the payload was the wrong shape.
 test('Plok endpoints reject unauthenticated calls', async ({ request }) => {
-  for (const path of ['/api/buildslip', '/api/findbet', '/api/insight', '/api/trends']) {
-    const r = await request.post(path, { data: { sport: 'mlb', game: 'x @ y', selection: 'x' } });
-    expect(r.status(), `${path} must not answer an anonymous caller`).toBe(401);
+  const cases = [
+    ['/api/buildslip', { sport: 'mlb', slots: [{ idx: 0, category: 'ml' }], candidates: { ml: [{ id: 'x', pick: 'X ML', odds: '-110', game: 'X @ Y' }] } }],
+    ['/api/findbet',   { sport: 'mlb', game: 'New York Mets @ Philadelphia Phillies' }],
+    ['/api/trends',    { sport: 'mlb', game: 'New York Mets @ Philadelphia Phillies' }],
+    ['/api/insight',   { sport: 'mlb', selection: 'Philadelphia Phillies ML', betType: 'ml', game: 'New York Mets @ Philadelphia Phillies' }],
+  ];
+  for (const [path, body] of cases) {
+    const r = await request.post(path, { data: body });
+    expect(r.status(), `${path} must answer an anonymous caller with 401, not ${r.status()}`).toBe(401);
   }
 });
 

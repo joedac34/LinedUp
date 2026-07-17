@@ -637,11 +637,12 @@ export default async function handler(req, res) {
 
   try {
     const ctx = req.body || {};
-    if (!ctx.selection || !ctx.sport) return res.status(400).json({ error: "Missing bet context" });
-
+    // Auth first: never tell an anonymous caller what shape the body should be.
     const _uid = await authedUserId(req);
     if (!_uid) return res.status(401).json({ error: "Sign in to use Plok" });
     if (!(await isPro(_uid))) return res.status(403).json({ error: "AI insight is a Pro feature" });
+    if (!ctx.selection || !ctx.sport) return res.status(400).json({ error: "Missing bet context" });
+
 
     const day = new Date().toISOString().slice(0, 10);
     const leagueSig = ctx.leagueCtx ? `${ctx.leagueCtx.myRank || ""}_${ctx.leagueCtx.matchupGap != null ? Math.round(ctx.leagueCtx.matchupGap) : ""}` : "";
