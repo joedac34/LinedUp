@@ -158,7 +158,8 @@ async function applyCLV() {
 }
 
 export default async function handler(req, res) {
-  if (CRON_SECRET && req.headers.authorization !== `Bearer ${CRON_SECRET}`) {
+  if (!CRON_SECRET) return res.status(500).json({ error: "CRON_SECRET not set" });   // fail CLOSED
+  if (req.headers.authorization !== `Bearer ${CRON_SECRET}`) {
     return res.status(401).json({ error: "unauthorized" });
   }
   if (!ODDS_KEY || !SB_URL) return res.status(500).json({ error: "env not set" });

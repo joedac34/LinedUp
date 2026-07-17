@@ -37,6 +37,13 @@ async function sbInsert(rows) {
 const betTypeFor = (m) => (m === "h2h" ? "ml" : m === "spreads" ? "spread" : m === "totals" ? "ou" : m);
 
 export default async function handler(req, res) {
+  // Cron-only. This spends Odds API credits AND inserts notifications for every Pro
+  // user with the service key (bypassing RLS). It had no auth whatsoever: anyone
+  // could curl it in a loop to drain the quota and spam the whole user base. The
+  // feature is disabled in the UI — that is not the same as being unreachable.
+  const CRON = process.env.CRON_SECRET;
+  if (!CRON) return res.status(500).json({ error: "CRON_SECRET not set" });
+  if ((req.headers.authorization || "") !== `Bearer ${CRON}`) return res.status(401).json({ error: "unauthorized" });
   if (!ODDS || !SB_URL || !SB_KEY) return res.status(500).json({ error: "Missing env (ODDS_API_KEY / VITE_SUPABASE_URL / SUPABASE_SERVICE_KEY)" });
   const q = req.query || {};
   const sports = String(q.sports || "mlb").split(",").map((s) => s.trim()).filter((s) => SPORT_KEYS[s]);

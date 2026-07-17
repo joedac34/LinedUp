@@ -43,7 +43,8 @@ function playoffWeeksFor(n) { return n >= 2 ? Math.ceil(Math.log2(n)) : 0; } // 
 export default async function handler(req, res) {
   // Vercel automatically sends `Authorization: Bearer <CRON_SECRET>` when CRON_SECRET is set.
   const secret = process.env.CRON_SECRET;
-  if (secret && req.headers.authorization !== `Bearer ${secret}`) {
+  if (!secret) return res.status(500).json({ error: "CRON_SECRET not set" });   // fail CLOSED
+  if (req.headers.authorization !== `Bearer ${secret}`) {
     return res.status(401).json({ error: "unauthorized" });
   }
 

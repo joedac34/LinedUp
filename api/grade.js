@@ -18,6 +18,7 @@ const SPORT_KEYS = {
 // ── Supabase REST helpers ─────────────────────────────────────────────────────
 const SB_URL = process.env.VITE_SUPABASE_URL;
 const SB_KEY = process.env.SUPABASE_SERVICE_KEY; // service role key
+const SB_ANON = process.env.VITE_SUPABASE_ANON_KEY;
 
 const sbHeaders = {
   apikey: SB_KEY,
@@ -982,18 +983,52 @@ async function updateMatchupPoints(league, week) {
   } catch (e) { /* best-effort */ }
 }
 
+// ── Who is calling? ─────────────────────────────────────────────────────────
+// Two legitimate callers: the cron (CRON_SECRET) and a league commissioner using the
+// "force grade" button. Everyone else gets nothing. Commissioner status is read from
+// the DB against a verified token — never from the request body, and never from the
+// fact that a button was hidden in the UI.
+async function authedUserId(req) {
+  const h = req.headers.authorization || "";
+  const token = h.startsWith("Bearer ") ? h.slice(7) : null;
+  if (!token || !SB_URL || !SB_ANON) return null;
+  try {
+    const r = await fetch(`${SB_URL}/auth/v1/user`, { headers: { apikey: SB_ANON, Authorization: `Bearer ${token}` } });
+    if (!r.ok) return null;
+    const u = await r.json();
+    return u && u.id ? u.id : null;
+  } catch { return null; }
+}
+async function isCommissionerOf(userId, leagueId) {
+  if (!userId || !leagueId || !SB_URL || !SB_KEY) return false;
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/leagues?id=eq.${leagueId}&select=commissioner_id`, {
+      headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
+    });
+    if (!r.ok) return false;
+    const rows = await r.json();
+    return Array.isArray(rows) && rows[0] && rows[0].commissioner_id === userId;
+  } catch { return false; }
+}
+
 export default async function handler(req, res) {
   // Auth check — allow GET from Vercel cron (Authorization header) or POST with secret
   const cronSecret = process.env.CRON_SECRET;
   const authHeader = req.headers.authorization;
   const bodySecret = req.body?.secret;
 
-  // For Vercel cron (GET): check Authorization header
-  // For manual POST from app: just allow it (commissioner-only button in UI)
-  if (req.method === "GET" && cronSecret) {
-    if (authHeader !== `Bearer ${cronSecret}`) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
+  // EVERY method is checked, and it fails CLOSED. This used to gate GET only —
+  // "for manual POST from app: just allow it (commissioner-only button in UI)" — so
+  // `curl -X POST /api/grade` ran the grader for anyone and burned Odds credits.
+  if (!cronSecret) return res.status(500).json({ error: "CRON_SECRET not set" });
+  const _isCron = authHeader === `Bearer ${cronSecret}` || bodySecret === cronSecret;
+  if (!_isCron) {
+    // The force-grade button: must be a signed-in commissioner OF THIS LEAGUE.
+    const _uid = await authedUserId(req);
+    if (!_uid) return res.status(401).json({ error: "Unauthorized" });
+    const _lg = req.body && req.body.leagueId;
+    if (!_lg) return res.status(400).json({ error: "leagueId required" });
+    if (!(await isCommissionerOf(_uid, _lg))) return res.status(403).json({ error: "Commissioner only" });
   }
 
   try {

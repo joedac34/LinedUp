@@ -97,6 +97,12 @@ function buildDates(q) {
 }
 
 export default async function handler(req, res) {
+  // Cron/backfill only. Unauthenticated, this let anyone loop ?days=30 to burn the
+  // DataFeeds quota and hammer the DB with the service key. Idempotent != free.
+  const CRON = process.env.CRON_SECRET;
+  if (!CRON) return res.status(500).json({ error: "CRON_SECRET not set" });
+  if ((req.headers.authorization || "") !== `Bearer ${CRON}`) return res.status(401).json({ error: "unauthorized" });
+
   if (!TOKEN || !SB_URL || !SB_KEY) return res.status(500).json({ error: "Missing env (DATAFEEDS_TOKEN / VITE_SUPABASE_URL / SUPABASE_SERVICE_KEY)" });
   const dates = buildDates(req.query || {});
   let games = 0; const teamRows = [], playerRows = [];

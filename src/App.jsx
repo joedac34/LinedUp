@@ -12452,7 +12452,7 @@ export default function App() {
  try {
  const r = await fetch("/api/grade", {
  method:"POST",
- headers:{"Content-Type":"application/json"},
+ headers: await authHeaders(),   // /api/grade now verifies commissioner server-side
  body: JSON.stringify({leagueId: activeLeague.id})
  });
  const d = await r.json();
