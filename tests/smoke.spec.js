@@ -21,28 +21,11 @@ const IGNORE = [
 ];
 const isRealError = (t) => !IGNORE.some((r) => r.test(t));
 
-/**
- * Attaches listeners BEFORE navigation so nothing is missed.
- *
- * NOTE: Chrome's console message for a failed request is just "Failed to load resource:
- * the server responded with a status of 400" — no URL. Useless. So we listen on
- * `response` too, which HAS the url, and drop the urlless console duplicates.
- */
+/** Attaches listeners BEFORE navigation so nothing is missed. */
 function watch(page) {
   const errors = [];
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
-  page.on('console', (m) => {
-    const t = m.text();
-    if (m.type() !== 'error') return;
-    if (/Failed to load resource/i.test(t)) return;   // no URL in it; the response listener has it
-    if (isRealError(t)) errors.push(`console: ${t}`);
-  });
-  page.on('response', (r) => {
-    if (r.status() < 400) return;
-    const url = r.url();
-    if (!isRealError(url)) return;
-    errors.push(`HTTP ${r.status()} ${url}`);
-  });
+  page.on('console', (m) => { if (m.type() === 'error' && isRealError(m.text())) errors.push(`console: ${m.text()}`); });
   return errors;
 }
 
@@ -125,12 +108,7 @@ test.describe('signed in', () => {
   for (const tab of ['Home', 'Picks', 'Matchup', 'Leagues', 'Profile']) {
     test(`${tab} tab renders`, async ({ page }) => {
       const errors = watch(page);
-      // The tab bar re-renders as data lands, so a naive click races the re-render and
-      // Playwright reports "element is not stable / detached from the DOM".
-      const target = page.getByText(tab, { exact: true }).last();
-      await target.waitFor({ state: 'visible' });
-      await page.waitForLoadState('networkidle').catch(() => {});
-      await target.click({ timeout: 15_000 });
+      await page.getByText(tab, { exact: true }).last().click();
       await page.waitForTimeout(1500);          // let fetches settle
       await assertRendered(page);
       await assertNoSourceLeak(page);
