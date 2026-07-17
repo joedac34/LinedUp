@@ -1586,7 +1586,15 @@ function BetslipButton({ bet, IOS }){
 class ErrorBoundary extends Component {
  constructor(props){ super(props); this.state={hasError:false}; }
  static getDerivedStateFromError(){ return {hasError:true}; }
- componentDidCatch(err){ try{ console.warn("Plok render error:", err); }catch(e){} }
+ // Was console.warn only — every Plok render crash since launch went into a console
+ // nobody was reading. Report it like everything else.
+ componentDidCatch(err, info){
+  try{ console.error("[picklock] Plok render error:", err); }catch(e){}
+  try{ posthog.captureException
+    ? posthog.captureException(err, { kind:"plok-bubble", componentStack: info && info.componentStack })
+    : posthog.capture("$exception", { $exception_message:String(err && err.message || err), $exception_type:(err && err.name)||"Error", $exception_stack_trace_raw:(err && err.stack)||null, kind:"plok-bubble" });
+  }catch(e){}
+ }
  render(){ return this.state.hasError ? (this.props.fallback||null) : this.props.children; }
 }
 function AiInsightBubble({ item, IOS, onAddToSlip }) {
