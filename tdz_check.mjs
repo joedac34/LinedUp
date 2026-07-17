@@ -27,6 +27,15 @@ const ast = Parser.parse(src, { ecmaVersion: 2022, sourceType: "module", locatio
 
 const isIIFE = (n) => n && n.type === "CallExpression" && !n.arguments.length &&
   (n.callee.type === "ArrowFunctionExpression" || n.callee.type === "FunctionExpression");
+// A useEffect/useMemo/useCallback DEPENDENCY ARRAY is evaluated DURING RENDER, exactly
+// like an IIFE. Put the hook above the useState it depends on and the dep array reads the
+// variable in its TDZ, crashing the whole tree. This checker missed that on 17 Jul 2026
+// and a root crash went to production.
+const HOOKS = new Set(["useEffect", "useLayoutEffect", "useMemo", "useCallback"]);
+const isHookWithDeps = (n) =>
+  n && n.type === "CallExpression" &&
+  n.callee.type === "Identifier" && HOOKS.has(n.callee.name) &&
+  n.arguments.length >= 2 && n.arguments[1] && n.arguments[1].type === "ArrayExpression";
 const FN = new Set(["FunctionDeclaration","FunctionExpression","ArrowFunctionExpression"]);
 
 // Collect const/let declarations per function scope, with their start offsets.
@@ -59,6 +68,24 @@ const problems = [];
 (function scan(node, fnChain) {
   if (!node || typeof node.type !== "string") return;
   const nextChain = FN.has(node.type) ? [...fnChain, node] : fnChain;
+  // Hook dep arrays: only the ARRAY is render-time, not the callback body.
+  if (isHookWithDeps(node)) {
+    const at = node.start;
+    for (const el of node.arguments[1].elements) {
+      if (!el || el.type !== "Identifier") continue;
+      for (const fn of fnChain) {
+        const d = scopes.get(fn);
+        if (d && d.has(el.name) && d.get(el.name) > at) {
+          problems.push({
+            line: src.slice(0, at).split("\n").length,
+            name: node.callee.name + "(...) deps",
+            ident: el.name,
+            declLine: src.slice(0, d.get(el.name)).split("\n").length,
+          });
+        }
+      }
+    }
+  }
   if (node.type === "VariableDeclarator" && isIIFE(node.init)) {
     const at = node.start;
     const name = node.id.name || "(destructured)";
@@ -96,10 +123,10 @@ const problems = [];
 
 const uniq = [...new Map(problems.map(p => [`${p.name}|${p.ident}`, p])).values()];
 if (uniq.length) {
-  console.log(`TDZ RISK in ${file} — render-time IIFE reads a later declaration:\n`);
+  console.log(`TDZ RISK in ${file} — evaluated during render, reads a later declaration:\n`);
   for (const p of uniq.sort((a,b)=>a.line-b.line))
-    console.log(`  line ${p.line}: const ${p.name} = (()=>{...})()  reads '${p.ident}' declared at line ${p.declLine}`);
-  console.log("\nFix: move the IIFE below the declaration it reads.");
+    console.log(`  line ${p.line}: ${p.name.endsWith("deps") ? p.name : "const " + p.name + " = (()=>{...})()"}  reads '${p.ident}' declared at line ${p.declLine}`);
+  console.log("\nFix: move it below the declaration it reads.");
   process.exit(1);
 }
 console.log(`TDZ check clean (${file})`);
