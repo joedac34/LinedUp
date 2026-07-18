@@ -1575,6 +1575,18 @@ function BracketMatchSheet({ d, IOS, onClose, liveGames=[], onOpenGamecast }){
         <div style={{fontSize:14,fontWeight:900,marginTop:2,color:won?IOS.green:lost?"rgba(255,255,255,0.3)":IOS.blue}}>
           {won ? "+"+Number(pk.pts).toFixed(1) : lost ? "0.0" : (reveal && upside>0 ? "to win "+upside.toFixed(1) : "—")}
         </div>
+        {/* The score chip — live or final — and the tap target into the gamecast. The
+            rebuild dropped this; without it there is no way from a slip to a game. */}
+        {reveal && pk.game && (() => {
+          const lg = liveMatch(pk, liveGames);
+          const hasFinal = pk.away_score != null && pk.home_score != null;
+          if (!lg && !hasFinal) return null;
+          return (
+            <div style={{marginTop:5,display:"flex",justifyContent:right?"flex-end":"flex-start"}}>
+              <ScoreChip pick={pk} live={lg} onOpen={()=>{ if(onOpenGamecast) onOpenGamecast(pk); }}/>
+            </div>
+          );
+        })()}
       </div>
     );
   };
@@ -3017,6 +3029,25 @@ function ScoreChip({ pick, live, onOpen }){
 
 // Full gamecast bottom sheet. Rendered at .phone top level so it clears the tab bar.
 function GamecastSheet({ game, pick, onClose }){
+  // Top performers is the ONLY thing the gamecast needs that /api/livescores can't give
+  // us — everything else (inning, outs, bases, at-bat, pitching, decisions) rides along
+  // on the schedule hydrate we already fetch. So: one box score call, when the sheet
+  // opens, never for the chips in a list. feed/live was measured at 0.77MB on a LIVE
+  // game (17 Jul probe) and would be 2-3MB on a final — not something to download
+  // because someone tapped a row.
+  const [box, setBox] = useState(null);
+  useEffect(()=>{
+    if(!game || !game.gamePk || game.sport!=="mlb" || game.state==="pre"){ setBox(null); return; }
+    let dead=false;
+    (async()=>{
+      try{
+        const r = await fetch(`/api/mlbbox?gamePk=${game.gamePk}`);
+        const j = await r.json();
+        if(!dead && j && (j.hitters||j.pitchers)) setBox(j);
+      }catch(e){ /* the sheet renders fine without it */ }
+    })();
+    return ()=>{ dead=true; };
+  }, [game && game.gamePk, game && game.state]);
   if(!game) return null;
   const CY="#64D2FF", YEL="#FFD60A", RED="#FF453A", L2="rgba(255,255,255,0.5)", L3="rgba(255,255,255,0.3)";
   const live=game.state==="live", fin=game.state==="final", pre=game.state==="pre";
@@ -3145,17 +3176,97 @@ function GamecastSheet({ game, pick, onClose }){
           </div>
         )}
 
-                {/* your pick */}
-        {pick && (
-          <div style={{margin:"8px 16px 4px",background:"#1C1C1E",borderRadius:14,padding:"14px 16px"}}>
-            <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.1em",color:L3,textTransform:"uppercase"}}>Your pick{pick.odds?(" \u00b7 "+pick.odds):""}</div>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginTop:5}}>
-              <span style={{fontSize:16,fontWeight:700}}>{pick.pick_name}</span>
-              <span style={{fontSize:11,fontWeight:800,padding:"4px 10px",borderRadius:8,whiteSpace:"nowrap",color:badge.col,background:badge.bg}}>{badge.txt}</span>
-            </div>
+        {/* ── At bat / Pitching (live) or W/L pitcher (final). Both already ride along
+            on the schedule hydrate — livescores.js used to throw them away. ── */}
+        {baseball && !pre && (game.atBat || game.pitching || (game.decisions && game.decisions.winner)) && (
+          <div style={{display:"flex",gap:8,margin:"10px 16px 0"}}>
+            {live && game.atBat && (
+              <div style={{flex:1,minWidth:0,background:"#1C1C1E",border:"0.5px solid rgba(48,209,88,0.3)",borderRadius:11,padding:"9px 11px"}}>
+                <div style={{fontSize:9,fontWeight:900,letterSpacing:"0.1em",color:"#30D158"}}>AT BAT</div>
+                <div style={{fontSize:13,fontWeight:800,marginTop:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{game.atBat}</div>
+                {game.balls!=null && <div style={{fontSize:10.5,color:L3}}>{game.balls}-{game.strikes}{game.outs!=null?` \u00b7 ${game.outs} out`:""}</div>}
+              </div>
+            )}
+            {live && game.pitching && (
+              <div style={{flex:1,minWidth:0,background:"#1C1C1E",border:"0.5px solid rgba(48,209,88,0.3)",borderRadius:11,padding:"9px 11px"}}>
+                <div style={{fontSize:9,fontWeight:900,letterSpacing:"0.1em",color:"#30D158"}}>PITCHING</div>
+                <div style={{fontSize:13,fontWeight:800,marginTop:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{game.pitching}</div>
+                {game.onDeck && <div style={{fontSize:10.5,color:L3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>on deck: {game.onDeck}</div>}
+              </div>
+            )}
+            {fin && game.decisions && game.decisions.winner && (
+              <div style={{flex:1,minWidth:0,background:"#1C1C1E",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:11,padding:"9px 11px"}}>
+                <div style={{fontSize:9,fontWeight:900,letterSpacing:"0.1em",color:L3}}>WIN</div>
+                <div style={{fontSize:13,fontWeight:800,marginTop:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{game.decisions.winner}</div>
+                {game.decisions.save && <div style={{fontSize:10.5,color:L3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>save: {game.decisions.save}</div>}
+              </div>
+            )}
+            {fin && game.decisions && game.decisions.loser && (
+              <div style={{flex:1,minWidth:0,background:"#1C1C1E",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:11,padding:"9px 11px"}}>
+                <div style={{fontSize:9,fontWeight:900,letterSpacing:"0.1em",color:L3}}>LOSS</div>
+                <div style={{fontSize:13,fontWeight:800,marginTop:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{game.decisions.loser}</div>
+              </div>
+            )}
           </div>
         )}
-        <div style={{margin:"12px 20px 0",fontSize:11,color:L3,lineHeight:1.5,textAlign:"center"}}>{baseball?"Live data from MLB StatsAPI.":"Live data from ESPN."}{" Final W/L is set by grade.js."}</div>
+
+        {/* ── Top performers. The one thing that needs a box score. Renders only when it
+            arrives — the sheet is fine without it. ── */}
+        {box && ((box.hitters||[]).length>0 || (box.pitchers||[]).length>0) && (
+          <div style={{margin:"9px 16px 0",background:"#1C1C1E",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:13,padding:"10px 12px"}}>
+            <div style={{fontSize:9,fontWeight:900,letterSpacing:"0.1em",color:L3,marginBottom:2}}>{fin?"TOP PERFORMERS":"TODAY'S LEADERS"}</div>
+            {[...(box.hitters||[]), ...(box.pitchers||[])].map((x,i)=>(
+              <div key={i} style={{display:"flex",alignItems:"center",gap:9,padding:"6px 0",borderTop:i>0?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
+                <div style={{fontSize:8.5,fontWeight:900,letterSpacing:"0.05em",width:34,flexShrink:0,color:x.side==="away"?CY:"#FF9F0A"}}>{x.abbr||""}</div>
+                <div style={{flex:1,minWidth:0,fontSize:12.5,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{x.name}</div>
+                <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:900,color:"rgba(255,255,255,0.5)",flexShrink:0}}>{x.line}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── your pick, pinned ── */}
+
+        {pick && (()=>{
+          const won = pick.result==="W", lost = pick.result==="L";
+          const tint = won?"#30D158":lost?RED:CY;
+          const upside = pickUpside(pick);
+          // Total bets get the track: runs scored against the number you took. Only a
+          // total has a "line" the running score can be measured against — a moneyline
+          // has no such number, so it gets no fake progress bar.
+          const tot = (aSc!=null&&hSc!=null) ? Number(aSc)+Number(hSc) : null;
+          const lineNum = pick.outcome_point!=null ? Math.abs(Number(pick.outcome_point)) : null;
+          const isTotal = String(pick.market_key||"")==="totals" && lineNum!=null && tot!=null;
+          const isUnder = /under/i.test(String(pick.outcome||pick.pick_name||""));
+          const pctOf = isTotal ? Math.min(100,(tot/Math.max(lineNum,0.5))*100) : 0;
+          const gapTxt = !isTotal ? null
+            : fin ? `${tot} of ${lineNum} runs \u00b7 ${isUnder?(tot<lineNum?`won by ${(lineNum-tot).toFixed(1).replace(/\.0$/,"")}`:`lost by ${(tot-lineNum).toFixed(1).replace(/\.0$/,"")}`):(tot>lineNum?`won by ${(tot-lineNum).toFixed(1).replace(/\.0$/,"")}`:`lost by ${(lineNum-tot).toFixed(1).replace(/\.0$/,"")}`)}`
+            : isUnder ? `${tot} of ${lineNum} runs \u00b7 needs ${Math.max(0,(lineNum-tot)).toFixed(1).replace(/\.0$/,"")} more to lose`
+            : `${tot} of ${lineNum} runs \u00b7 needs ${Math.max(0,(lineNum-tot)).toFixed(1).replace(/\.0$/,"")} more to win`;
+          return (
+          <div style={{margin:"10px 16px 4px",borderRadius:14,padding:"12px 14px",
+            background:`linear-gradient(135deg,${tint}26,rgba(255,255,255,0.02))`,border:`1px solid ${tint}59`}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+              <div style={{fontSize:9,fontWeight:900,letterSpacing:"0.09em",color:tint}}>YOUR PICK{won?" \u00b7 WON":lost?" \u00b7 LOST":""}</div>
+              {pick.multiplier?<div style={{fontSize:9.5,fontWeight:900,padding:"2px 6px",borderRadius:5,background:"rgba(255,159,10,0.2)",color:"#FF9F0A"}}>{pick.multiplier}\u00d7</div>:null}
+            </div>
+            <div style={{fontSize:18,fontWeight:900,letterSpacing:-0.3}}>{pick.pick_name}{pick.odds?<span style={{fontSize:13,color:L3,fontWeight:700}}> {pick.odds}</span>:null}</div>
+            {isTotal && (
+              <div style={{height:5,borderRadius:3,background:"rgba(255,255,255,0.08)",marginTop:9,position:"relative",overflow:"hidden"}}>
+                <div style={{position:"absolute",left:0,top:0,bottom:0,borderRadius:3,width:`${pctOf}%`,background:tint}}/>
+                <div style={{position:"absolute",top:-2,bottom:-2,left:"100%",width:2,background:"#FF9F0A"}}/>
+              </div>
+            )}
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:9,paddingTop:9,borderTop:"0.5px solid rgba(255,255,255,0.09)"}}>
+              <div style={{fontSize:11.5,color:"rgba(255,255,255,0.62)"}}>{gapTxt || badge.txt}</div>
+              <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:22,fontWeight:900,color:tint}}>
+                {won?"+"+Number(pick.points_earned||0).toFixed(1):lost?"0.0":(upside>0?"to win "+upside.toFixed(1):"\u2014")}
+              </div>
+            </div>
+          </div>
+          );
+        })()}
+        <div style={{margin:"12px 20px 0",fontSize:11,color:L3,lineHeight:1.5,textAlign:"center"}}>{baseball?"Live scores from MLB.":"Live scores from ESPN."}{" Results are final once the game is official."}</div>
       </div>
     </div>
   );

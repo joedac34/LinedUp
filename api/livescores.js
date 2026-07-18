@@ -23,7 +23,7 @@
  * }
  */
 
-const STAT_URL = "https://statsapi.mlb.com/api/v1/schedule?sportId=1&hydrate=linescore,team&date=";
+const STAT_URL = "https://statsapi.mlb.com/api/v1/schedule?sportId=1&hydrate=linescore,team,decisions&date=";
 
 function etToday() {
   // YYYY-MM-DD in America/New_York (MLB's operating day)
@@ -57,6 +57,7 @@ function normalizeGame(g) {
   }));
 
   const off = ls.offense || {};
+  const def = ls.defense || {};
   return {
     gamePk: g.gamePk,
     gameDate: g.gameDate || null,
@@ -66,21 +67,36 @@ function normalizeGame(g) {
     away: {
       name: at.team?.name || "",
       abbr: at.team?.abbreviation || "",
+      record: at.leagueRecord ? `${at.leagueRecord.wins}-${at.leagueRecord.losses}` : null,
       score: at.score != null ? num(at.score) : (ls.teams?.away?.runs != null ? num(ls.teams.away.runs) : null),
     },
     home: {
       name: ht.team?.name || "",
       abbr: ht.team?.abbreviation || "",
+      record: ht.leagueRecord ? `${ht.leagueRecord.wins}-${ht.leagueRecord.losses}` : null,
       score: ht.score != null ? num(ht.score) : (ls.teams?.home?.runs != null ? num(ls.teams.home.runs) : null),
     },
     inning: ls.currentInning != null ? num(ls.currentInning) : null,
     half: ls.inningState || null, // "Top" | "Middle" | "Bottom" | "End"
     outs: ls.outs != null ? num(ls.outs) : null,
+    balls: ls.balls != null ? num(ls.balls) : null,
+    strikes: ls.strikes != null ? num(ls.strikes) : null,
     bases: {
       first: !!off.first,
       second: !!off.second,
       third: !!off.third,
     },
+    // Already in the payload we fetch — the mapper just dropped it. Feeds the At bat /
+    // Pitching pills on the gamecast. Live only; null once the game is final.
+    atBat: off.batter?.fullName || null,
+    onDeck: off.onDeck?.fullName || null,
+    pitching: def.pitcher?.fullName || null,
+    // W/L pitcher, from hydrate=decisions. Only present once a game is final.
+    decisions: g.decisions ? {
+      winner: g.decisions.winner?.fullName || null,
+      loser: g.decisions.loser?.fullName || null,
+      save: g.decisions.save?.fullName || null,
+    } : null,
     linescore: {
       innings,
       awayR: ls.teams?.away?.runs != null ? num(ls.teams.away.runs) : (at.score != null ? num(at.score) : null),
