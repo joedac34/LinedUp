@@ -759,22 +759,33 @@ function ceilingOf(picks) {
 // isFinal MUST come from the caller (the week/matchup is decided), NOT from "nobody has
 // pending picks". A player who submitted no slip has zero open picks while the week is
 // still wide open — that combination was falsely reading as "Final. You lost."
-function matchupVerdict(me, them, isFinal) {
+// The verdict sentence. `youAre` is "a" | "b" | null:
+//   "a"/"b"  -> the viewer IS that side, so speak in second person ("you're not safe")
+//   null     -> the viewer is a SPECTATOR, so name the players, never say "you"
+// meName/themName are the two players in the same order as me/them.
+function matchupVerdict(me, them, isFinal, opts) {
+ const o = opts || {};
+ const spectator = !o.youAre;
+ const M = o.meName || "They", T = o.themName || "the other player";
  const lead = parseFloat((me.locked - them.locked).toFixed(1));
+ const cap = (s)=> s.charAt(0).toUpperCase()+s.slice(1);
  if(isFinal) {
-  if(lead > 0) return { kind:"won", text:`Final. You won by ${Math.abs(lead)}.` };
-  if(lead < 0) return { kind:"lost", text:`Final. You lost by ${Math.abs(lead)}.` };
+  if(lead > 0) return { kind:"won", text: spectator ? `Final. ${M} won by ${Math.abs(lead)}.` : `Final. You won by ${Math.abs(lead)}.` };
+  if(lead < 0) return { kind:"lost", text: spectator ? `Final. ${T} won by ${Math.abs(lead)}.` : `Final. You lost by ${Math.abs(lead)}.` };
   return { kind:"tied", text:"Final. Tied." };
  }
- // "Clinched"/"eliminated" require the OTHER slip to be locked in too — a player who has
- // played picks and has none pending. An empty slip mid-week is not locked in (they can
- // still submit), so an early lead over it is "leading", not "clinched".
  const themLockedIn = them.total > 0 && them.open === 0;
  const meLockedIn = me.total > 0 && me.open === 0;
- if(themLockedIn && them.ceiling < me.locked) return { kind:"clinched", text:`Clinched. They can't catch you.` };
- if(meLockedIn && me.ceiling < them.locked) return { kind:"eliminated", text:`Out of reach. Your ceiling is ${me.ceiling}.` };
- if(lead > 0) return { kind:"leading", text:`They can still reach ${them.ceiling}. You're not safe yet.` };
- if(lead < 0) return { kind:"trailing", text:`You can still reach ${me.ceiling}. You need ${parseFloat((them.locked-me.locked).toFixed(1))} more.` };
+ if(themLockedIn && them.ceiling < me.locked)
+  return { kind:"clinched", text: spectator ? `${M} clinched — ${T} can't catch up.` : `Clinched. They can't catch you.` };
+ if(meLockedIn && me.ceiling < them.locked)
+  return { kind:"eliminated", text: spectator ? `${cap(T)} has it — ${M}'s ceiling is ${me.ceiling}.` : `Out of reach. Your ceiling is ${me.ceiling}.` };
+ if(lead > 0)
+  return { kind:"leading", text: spectator ? `${M} leads. ${cap(T)} can still reach ${them.ceiling}.` : `They can still reach ${them.ceiling}. You're not safe yet.` };
+ if(lead < 0) {
+  const need = parseFloat((them.locked-me.locked).toFixed(1));
+  return { kind:"trailing", text: spectator ? `${cap(T)} leads by ${need}. ${M} can still reach ${me.ceiling}.` : `You can still reach ${me.ceiling}. You need ${need} more.` };
+ }
  if(me.locked === 0 && them.locked === 0) return { kind:"level", text:`Nothing settled yet. ${me.open+them.open} picks to play.` };
  return { kind:"level", text:`Dead even. ${me.open+them.open} picks still live.` };
 }
@@ -1537,15 +1548,19 @@ function BracketMatchSheet({ d, IOS, onClose, liveGames=[], onOpenGamecast }){
   //    mult x oddsDecimal x 10, same formula that pays it. Nothing here is decorative.
   const cA = ceilingOf(d.a.picks);
   const cB = ceilingOf(d.b.picks);
-  const me = d.a.you ? cA : cB;              // "you" framing follows whoever is you
-  const them = d.a.you ? cB : cA;
+  const youAre = d.a.you ? "a" : (d.b.you ? "b" : null);
+  const iAmA = youAre !== "b";
+  const me = iAmA ? cA : cB;
+  const them = iAmA ? cB : cA;
+  const meName = iAmA ? d.a.name : d.b.name;
+  const themName = iAmA ? d.b.name : d.a.name;
   // A matchup is final only when no pick on either slip is still pending AND at least one
   // side actually submitted. winnerId alone lies mid-week — the week can stamp it before
   // every game has played, which showed "Final. You lost by 30" on a live week.
   const anyPlayed = cA.total > 0 || cB.total > 0;
   const anyOpen = cA.open > 0 || cB.open > 0;
   const reallyFinal = anyPlayed && !anyOpen && !!d.winnerId;
-  const verdict = matchupVerdict(me, them, reallyFinal);
+  const verdict = matchupVerdict(me, them, reallyFinal, { youAre, meName, themName });
   const rows = pairSlips(d.a.picks, d.b.picks);
   const maxCeil = Math.max(cA.ceiling, cB.ceiling, 1);
   const openTotal = cA.open + cB.open;
@@ -1611,7 +1626,7 @@ function BracketMatchSheet({ d, IOS, onClose, liveGames=[], onOpenGamecast }){
           if (!lg && !hasFinal) return null;
           return (
             <div style={{marginTop:5,display:"flex",justifyContent:right?"flex-end":"flex-start"}}>
-              <ScoreChip pick={pk} live={lg} onOpen={()=>{ if(onOpenGamecast) onOpenGamecast(pk); }}/>
+              <ScoreChip pick={pk} live={lg} onOpen={()=>{ if(onOpenGamecast) onOpenGamecast({ ...pk, _ownerName: right ? d.b.name : d.a.name, _ownerIsYou: right ? !!d.b.you : !!d.a.you }); }}/>
             </div>
           );
         })()}
@@ -3342,7 +3357,7 @@ function GamecastSheet({ game, pick, onClose }){
           <div style={{margin:"10px 16px 4px",borderRadius:14,padding:"12px 14px",
             background:`linear-gradient(135deg,${tint}26,rgba(255,255,255,0.02))`,border:`1px solid ${tint}59`}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
-              <div style={{fontSize:9,fontWeight:900,letterSpacing:"0.09em",color:tint}}>YOUR PICK{won?" · WON":lost?" · LOST":""}</div>
+              <div style={{fontSize:9,fontWeight:900,letterSpacing:"0.09em",color:tint}}>{(pick._ownerIsYou===false && pick._ownerName ? (pick._ownerName.toUpperCase()+"\u2019S PICK") : "YOUR PICK")}{won?" \u00b7 WON":lost?" \u00b7 LOST":""}</div>
               {pick.multiplier?<div style={{fontSize:9.5,fontWeight:900,padding:"2px 6px",borderRadius:5,background:"rgba(255,159,10,0.2)",color:"#FF9F0A"}}>{pick.multiplier}×</div>:null}
             </div>
             <div style={{fontSize:18,fontWeight:900,letterSpacing:-0.3}}>{pick.pick_name}{pick.odds?<span style={{fontSize:13,color:L3,fontWeight:700}}> {pick.odds}</span>:null}</div>
