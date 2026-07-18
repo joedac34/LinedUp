@@ -6251,6 +6251,29 @@ export default function App() {
   // clobbering the in-progress draft. That was the "add a pick, it vanishes" bug.
   },[activeLeagueId, user]);
 
+  // Odds fetch is SEPARATE from league-entry so it can retry when realLeagues finally
+  // loads (first entry often runs before the league object exists -> odds fetched for the
+  // wrong/fallback sport, or not at all -> empty Bet Browser until a manual refresh). This
+  // effect carries NO pick/draft logic, so re-running it can never wipe a build.
+  useEffect(()=>{
+    if(isSoloMode || !activeLeagueId || !user) return;
+    const lg2 = realLeagues.find(l=>l.id===activeLeagueId);
+    const sports = lg2?.sports || (lg2?.sport ? [lg2.sport] : (activeLeague?.sport ? [activeLeague.sport] : ["mlb"]));
+    sports.forEach(sp => fetchLiveOdds(sp));
+  }, [activeLeagueId, user, isSoloMode, realLeagues.length, screen==="browser"]);
+
+  // Odds are safe to (re)fetch whenever you enter a league OR open the bet browser — they
+  // only populate liveOdds, never touch flexPicks/savedPicks. This is separate from the
+  // league-entry effect above precisely so navigating to the browser refreshes the board
+  // WITHOUT re-running the pick rehydrate that was wiping the draft.
+  useEffect(()=>{
+    if(isSoloMode || !activeLeagueId || !user) return;
+    if(screen!=="browser" && screen!=="picks") return;
+    const lg2 = realLeagues.find(l=>l.id===activeLeagueId);
+    const sports = lg2?.sports || (lg2?.sport ? [lg2.sport] : [activeLeague?.sport || "nfl"]);
+    sports.forEach(sp => { const have = liveOdds[sp]; if(!have || !have.ml || !have.ml.length) fetchLiveOdds(sp); });
+  }, [activeLeagueId, isSoloMode, user, screen]);
+
  useEffect(()=>{ setBuildingSlip(false); }, [activeLeagueId, isSoloMode]);
 
  // Rehydrate the solo home's locked-slip card after a reload (in-memory state is lost otherwise).
@@ -10207,6 +10230,7 @@ export default function App() {
  if(_cur && !_cur.isParlay && _cur.bet===null && (_st(_cur)===cat || _st(_cur)==="wildcard")) idx=gridTargetSlot;
  if(idx===-1) idx = activePicks.findIndex(p=>!p.isParlay && _st(p)===cat && p.bet===null);
  if(idx===-1) idx = activePicks.findIndex(p=>!p.isParlay && _st(p)==="wildcard" && p.bet===null);
+  if(idx===-1) idx = activePicks.findIndex(p=>!p.isParlay && p.bet===null && !p.committed); // any open slot beats a false "full"
  if(idx===-1){ const _lbl=TYPE_LABELS[cat]||cat; setPickConflict("No open slot for another "+_lbl+" — your "+_lbl+" and wildcard slots are full. Remove one to swap."); setTimeout(()=>setPickConflict(""),3000); setGridJustAdded(null); return; }
  dest = idx;
  } else if(!isSoloMode && gridFlexMult!=null && cat!=="longshot"){
