@@ -6245,7 +6245,11 @@ export default function App() {
  if(stored) setSavedPicks(JSON.parse(stored));
  } catch(e) {}
  }
- },[activeLeagueId, user, screen]);
+  // NOTE: deliberately NOT keyed on `screen`. This is league-ENTRY work (members,
+  // standings, odds, locked picks). Keying on screen re-ran the whole block every time you
+  // navigated Bet Browser -> Picks, which re-fetched odds and rehydrated picks from the DB,
+  // clobbering the in-progress draft. That was the "add a pick, it vanishes" bug.
+  },[activeLeagueId, user]);
 
  useEffect(()=>{ setBuildingSlip(false); }, [activeLeagueId, isSoloMode]);
 
