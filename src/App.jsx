@@ -10208,8 +10208,14 @@ export default function App() {
   // dest still pointing at resolveTarget()'s fallback (slot 0), so the pick silently
   // failed to land when slot 0 was filled or committed. Place into an existing slot of
   // the same type, else the first EMPTY slot, else block with a clear message.
-  let _mi = activePicks.findIndex(p=>!p.isParlay && p.bet!==null && p.category===cat);
-  if(_mi===-1) _mi = activePicks.findIndex(p=>!p.isParlay && p.bet===null);
+  // Honor the slot the user explicitly chose ("Filling Pick 2" -> gridTargetSlot=1). If
+  // that slot is open, fill it. Only then fall back to same-type / first-empty. Ignoring
+  // gridTargetSlot here is what made a tapped pick land somewhere the user was not looking
+  // (or nowhere), so it read as "disappeared".
+  let _mi = -1;
+  if(gridTargetSlot!=null){ const _t=activePicks[gridTargetSlot]; if(_t && !_t.isParlay && _t.bet===null && !_t.committed) _mi = gridTargetSlot; }
+  if(_mi===-1) _mi = activePicks.findIndex(p=>!p.isParlay && p.bet!==null && p.category===cat);
+  if(_mi===-1) _mi = activePicks.findIndex(p=>!p.isParlay && p.bet===null && !p.committed);
   if(_mi===-1){ setPickConflict("Your slip is full — remove a pick to add this one."); setTimeout(()=>setPickConflict(""),2600); setGridJustAdded(null); return; }
   dest = _mi;
  } else if(cat!=="longshot"){
