@@ -792,6 +792,27 @@ function matchupVerdict(me, them, isFinal, opts) {
 
 // Pair the two slips by SLOT so the collision is visible — same slot, same multiplier,
 // different pick. Slot ids look like "spread_3"; the trailing number is the position.
+// The single most interesting pick on a slip, for the list's best-pick chip.
+//   live game  -> highest upside still in play (the sweat)
+//   settled    -> the biggest winner, or if none won, the pick that cost the most
+// Returns null for an empty slip.
+function bestPick(picks) {
+ const list = (picks||[]).filter(Boolean);
+ if(!list.length) return null;
+ const open = list.filter(p => p.result==="pending" || p.result==null || p.result==="");
+ if(open.length){
+  const top = open.reduce((a,b)=> pickUpside(b) > pickUpside(a) ? b : a);
+  return { pick:top, state:"live", worth:pickUpside(top) };
+ }
+ const wins = list.filter(p=>p.result==="W");
+ if(wins.length){
+  const top = wins.reduce((a,b)=> Number(b.points_earned||0) > Number(a.points_earned||0) ? b : a);
+  return { pick:top, state:"won", worth:parseFloat(Number(top.points_earned||0).toFixed(1)) };
+ }
+ const top = list.reduce((a,b)=> pickUpside(b) > pickUpside(a) ? b : a);
+ return { pick:top, state:"lost", worth:pickUpside(top) };
+}
+
 function pairSlips(mine, theirs) {
  // slotId is the full "spread_3"; slot alone may be the truncated prefix.
  const idOf = (p) => String(p.slotId || p.slot || "");
@@ -11110,26 +11131,49 @@ export default function App() {
              const _useLive=!done && mu.week===_curWk;
              const _liveSum=(uid)=>(weekPicks||[]).filter(pp=>pp.user_id===uid && pp.result==="W").reduce((sm,pp)=>sm+parseFloat(pp.points_earned||0),0);
              const p1=_useLive?_liveSum(u1):Number(mu.user1_points||0), p2=_useLive?_liveSum(u2):Number(mu.user2_points||0);
+             const _picksOf=(uid)=>(weekPicks||[]).filter(pp=>pp.user_id===uid);
+             const _cA=ceilingOf(_picksOf(u1)), _cB=ceilingOf(_picksOf(u2));
+             const _maxCeil=Math.max(_cA.ceiling,_cB.ceiling,p1,p2,1);
+             const _bpA=bestPick(_picksOf(u1)), _bpB=bestPick(_picksOf(u2));
              const lead1=done?mu.winner_id===u1:(p1>p2);
              const lead2=done?mu.winner_id===u2:(p2>p1);
              const anyLead=lead1||lead2;
-             const row=(id,pts,lead)=>(
-               <div style={{display:"flex",alignItems:"center",gap:11,padding:"9px 13px",opacity:lead?1:(anyLead?0.6:1)}}>
-                 <div style={{width:32,height:32,borderRadius:9,background:(id===(user&&user.id)?IOS.blue:IOS.indigo)+"33",color:id===(user&&user.id)?IOS.blue:IOS.indigo,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:13,flexShrink:0}}>{nameOf(id).slice(0,2).toUpperCase()}</div>
-                 <div style={{flex:1,fontSize:15,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{nameOf(id)}</div>
-                 <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:21,color:lead?IOS.green:"#fff"}}>{pts.toFixed(1)}</div>
-               </div>
-             );
+             const row=(id,pts,lead,cl)=>{
+               const you=id===(user&&user.id);
+               const tint=you?IOS.blue:(lead?IOS.green:IOS.indigo);
+               const lp=(cl.locked/_maxCeil)*100, mp=(cl.live/_maxCeil)*100;
+               return (
+                <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 13px",opacity:lead?1:(anyLead?0.7:1)}}>
+                  <div style={{width:28,height:28,borderRadius:8,flexShrink:0,background:(you?IOS.blue:IOS.indigo)+"33",color:you?IOS.blue:IOS.indigo,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900}}>{(nameOf(id)||"?").slice(0,2).toUpperCase()}</div>
+                  <div style={{width:96,flexShrink:0,fontSize:13.5,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",color:you?IOS.blue:"#fff"}}>{nameOf(id)}</div>
+                  <div style={{flex:1,height:8,borderRadius:4,background:"rgba(0,0,0,0.4)",position:"relative",overflow:"hidden",boxShadow:"inset 0 1px 2px rgba(0,0,0,0.55)"}}>
+                    <div style={{position:"absolute",left:0,top:0,bottom:0,borderRadius:4,width:lp+"%",background:`linear-gradient(180deg,${tint},${tint}cc)`,boxShadow:`0 0 8px ${tint}55`}}/>
+                    {cl.live>0 && <div style={{position:"absolute",top:0,bottom:0,left:lp+"%",width:mp+"%",background:`repeating-linear-gradient(115deg,${tint}3a 0 4px,transparent 4px 8px)`}}/>}
+                  </div>
+                  <div style={{width:50,textAlign:"right",flexShrink:0,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:19,color:lead?IOS.green:"#fff"}}>{pts.toFixed(1)}</div>
+                </div>
+               );
+             };
              return (
                <div key={mi} onClick={()=>openBracketMatch(mu,"Week "+wkSel)} style={{background:IOS.bg2,border:mine?("1px solid "+IOS.blue+"88"):`1px solid ${IOS.sep}`,borderRadius:14,marginBottom:11,overflow:"hidden",cursor:"pointer"}}>
                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 13px 2px"}}>
                    <div style={{fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",color:mine?IOS.blue:IOS.label3}}>{mine?"Your matchup":"Matchup"}</div>
                    <div style={{fontSize:10,fontWeight:800,padding:"3px 8px",borderRadius:6,background:done?"rgba(255,255,255,0.08)":"rgba(48,209,88,0.14)",color:done?IOS.label2:IOS.green}}>{done?"FINAL":"LIVE"}</div>
                  </div>
-                 {row(u1,p1,lead1)}
+                 {row(u1,p1,lead1,_cA)}
                  <div style={{height:0.5,background:IOS.sep,margin:"0 13px"}}/>
-                 {row(u2,p2,lead2)}
-                 <div style={{fontSize:9.5,color:IOS.label3,fontWeight:600,padding:"6px 13px 9px",display:"flex",alignItems:"center",justifyContent:"space-between"}}><span>Tap to see both slips</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={IOS.label3} strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg></div>
+                 {row(u2,p2,lead2,_cB)}
+                  {(() => {
+                    const chip=(bp,label,align)=>{
+                      const box=(inner)=>(<div style={{flex:1,minWidth:0,background:"rgba(255,255,255,0.03)",borderRadius:9,padding:"7px 9px",textAlign:align}}>{inner}</div>);
+                      const head=(<div style={{fontSize:7.5,fontWeight:900,letterSpacing:0.5,color:"rgba(255,255,255,0.28)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</div>);
+                      if(!bp) return box(<>{head}<div style={{fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.3)",marginTop:2}}>No slip submitted</div></>);
+                      const c=bp.state==="won"?IOS.green:bp.state==="live"?IOS.blue:"rgba(255,255,255,0.3)";
+                      const w=bp.state==="won"?("+"+bp.worth.toFixed(1)):bp.state==="live"?("to win "+bp.worth.toFixed(1)):"0.0";
+                      return box(<>{head}<div style={{fontSize:11.5,fontWeight:800,marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{bp.pick.pick_name||"Pick"}</div><div style={{fontSize:10,fontWeight:800,marginTop:1,color:c,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{(bp.pick.multiplier?bp.pick.multiplier+"\u00d7 \u00b7 ":"")+w}</div></>);
+                    };
+                    return (<div style={{display:"flex",gap:7,padding:"9px 13px 11px"}}>{chip(_bpA,(nameOf(u1)||"").toUpperCase().slice(0,12),"left")}{chip(_bpB,(nameOf(u2)||"").toUpperCase().slice(0,12),"right")}</div>);
+                  })()}
                </div>
              );
            })}
@@ -12194,29 +12238,52 @@ export default function App() {
        const done=mu.winner_id!=null;
        const useLive=!done && wk===curWk;
        const p1=useLive?liveSum(u1):Number(mu.user1_points||0), p2=useLive?liveSum(u2):Number(mu.user2_points||0);
+        const _picksOf=(uid)=>(weekPicks||[]).filter(pp=>pp.user_id===uid);
+        const _cA=ceilingOf(_picksOf(u1)), _cB=ceilingOf(_picksOf(u2));
+        const _maxCeil=Math.max(_cA.ceiling,_cB.ceiling,p1,p2,1);
+        const _bpA=bestPick(_picksOf(u1)), _bpB=bestPick(_picksOf(u2));
        const lead1=done?mu.winner_id===u1:(p1>p2);
        const lead2=done?mu.winner_id===u2:(p2>p1);
        const anyLead=lead1||lead2;
        const badge=done?"FINAL":(wk>curWk?"UPCOMING":"LIVE");
        const badgeBg=done?"rgba(255,255,255,0.08)":(wk>curWk?"rgba(255,255,255,0.06)":"rgba(48,209,88,0.14)");
        const badgeCol=done?IOS.label2:(wk>curWk?IOS.label3:IOS.green);
-       const row=(id,pts,lead)=>(
-         <div style={{display:"flex",alignItems:"center",gap:11,padding:"9px 13px",opacity:lead?1:(anyLead?0.6:1)}}>
-           <div style={{width:32,height:32,borderRadius:9,background:(id===(user&&user.id)?IOS.blue:IOS.indigo)+"33",color:id===(user&&user.id)?IOS.blue:IOS.indigo,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:13,flexShrink:0}}>{nm(id).slice(0,2).toUpperCase()}</div>
-           <div style={{flex:1,fontSize:15,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{nm(id)}</div>
-           <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:21,color:lead?IOS.green:"#fff"}}>{Number(pts).toFixed(1)}</div>
-         </div>
-       );
+        const row=(id,pts,lead,cl)=>{
+          const you=id===(user&&user.id);
+          const tint=you?IOS.blue:(lead?IOS.green:IOS.indigo);
+          const lp=(cl.locked/_maxCeil)*100, mp=(cl.live/_maxCeil)*100;
+          return (
+           <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 13px",opacity:lead?1:(anyLead?0.7:1)}}>
+             <div style={{width:28,height:28,borderRadius:8,flexShrink:0,background:(you?IOS.blue:IOS.indigo)+"33",color:you?IOS.blue:IOS.indigo,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900}}>{(nm(id)||"?").slice(0,2).toUpperCase()}</div>
+             <div style={{width:96,flexShrink:0,fontSize:13.5,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",color:you?IOS.blue:"#fff"}}>{nm(id)}</div>
+             <div style={{flex:1,height:8,borderRadius:4,background:"rgba(0,0,0,0.4)",position:"relative",overflow:"hidden",boxShadow:"inset 0 1px 2px rgba(0,0,0,0.55)"}}>
+               <div style={{position:"absolute",left:0,top:0,bottom:0,borderRadius:4,width:lp+"%",background:`linear-gradient(180deg,${tint},${tint}cc)`,boxShadow:`0 0 8px ${tint}55`}}/>
+               {cl.live>0 && <div style={{position:"absolute",top:0,bottom:0,left:lp+"%",width:mp+"%",background:`repeating-linear-gradient(115deg,${tint}3a 0 4px,transparent 4px 8px)`}}/>}
+             </div>
+             <div style={{width:50,textAlign:"right",flexShrink:0,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:19,color:lead?IOS.green:"#fff"}}>{pts.toFixed(1)}</div>
+           </div>
+          );
+        };
        return (
          <div key={mi} onClick={()=>openBracketMatch(mu,"Week "+wk)} style={{background:IOS.bg2,border:mine?("1px solid "+IOS.blue+"88"):("1px solid "+IOS.sep),borderRadius:14,marginBottom:11,overflow:"hidden",cursor:"pointer"}}>
            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 13px 2px"}}>
              <div style={{fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",color:mine?IOS.blue:IOS.label3}}>{mine?"Your matchup":"Matchup"}</div>
              {badge && <div style={{fontSize:10,fontWeight:800,padding:"3px 8px",borderRadius:6,background:badgeBg,color:badgeCol}}>{badge}</div>}
            </div>
-           {row(u1,p1,lead1)}
+           {row(u1,p1,lead1,_cA)}
            <div style={{height:0.5,background:IOS.sep,margin:"0 13px"}}/>
-           {row(u2,p2,lead2)}
-           <div style={{fontSize:9.5,color:IOS.label3,fontWeight:600,padding:"6px 13px 9px",display:"flex",alignItems:"center",justifyContent:"space-between"}}><span>Tap to see both slips</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={IOS.label3} strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg></div>
+           {row(u2,p2,lead2,_cB)}
+          {(() => {
+            const chip=(bp,label,align)=>{
+              const box=(inner)=>(<div style={{flex:1,minWidth:0,background:"rgba(255,255,255,0.03)",borderRadius:9,padding:"7px 9px",textAlign:align}}>{inner}</div>);
+              const head=(<div style={{fontSize:7.5,fontWeight:900,letterSpacing:0.5,color:"rgba(255,255,255,0.28)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</div>);
+              if(!bp) return box(<>{head}<div style={{fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.3)",marginTop:2}}>No slip submitted</div></>);
+              const c=bp.state==="won"?IOS.green:bp.state==="live"?IOS.blue:"rgba(255,255,255,0.3)";
+              const w=bp.state==="won"?("+"+bp.worth.toFixed(1)):bp.state==="live"?("to win "+bp.worth.toFixed(1)):"0.0";
+              return box(<>{head}<div style={{fontSize:11.5,fontWeight:800,marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{bp.pick.pick_name||"Pick"}</div><div style={{fontSize:10,fontWeight:800,marginTop:1,color:c,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{(bp.pick.multiplier?bp.pick.multiplier+"\u00d7 \u00b7 ":"")+w}</div></>);
+            };
+            return (<div style={{display:"flex",gap:7,padding:"9px 13px 11px"}}>{chip(_bpA,(nm(u1)||"").toUpperCase().slice(0,12),"left")}{chip(_bpB,(nm(u2)||"").toUpperCase().slice(0,12),"right")}</div>);
+          })()}
          </div>
        );
      })}
