@@ -10162,7 +10162,17 @@ export default function App() {
  // One bet per type (longshot legs excepted): if this type is already in the
  // slip, replace that slot instead of stacking a second bet of the same type.
  let dest = target;
- if(gridCfg){
+  // Longshots have their own slot (a "longshot" category slot that can also become a
+  // parlay). It has no dedicated placement below — every branch is gated cat!=='longshot' —
+  // so a straight longshot used to rely entirely on resolveTarget(), landing in slot 0 and
+  // silently failing when that slot was a different type. Target the real longshot slot.
+  if(cat==="longshot"){
+    let _li = activePicks.findIndex(p=> !p.isParlay && (p.category==="longshot"||p.slotType==="longshot") && p.bet===null);
+    if(_li===-1) _li = activePicks.findIndex(p=> (p.category==="longshot"||p.slotType==="longshot") && !p.isParlay);
+    if(_li===-1) _li = activePicks.findIndex(p=> !p.isParlay && p.bet===null && !p.committed);
+    if(_li===-1){ setPickConflict("No open longshot slot — remove one to add this."); setTimeout(()=>setPickConflict(""),2600); setGridJustAdded(null); return; }
+    dest = _li;
+  } else if(gridCfg){
  // Custom league: each slot has a fixed type; a "wildcard" slot accepts any type.
  // Only ever fill an EMPTY slot that accepts this bet. Order: the slot you're actively
  // on (if empty + accepts) -> an empty native-type slot -> an empty wildcard slot.
