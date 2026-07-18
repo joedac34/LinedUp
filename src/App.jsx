@@ -724,6 +724,75 @@ function calcMatchupScore(picks) {
  return picks.reduce((sum,p) => sum + calcPickPoints(p.mult, p.impliedOdds, p.result), 0).toFixed(1);
 }
 
+// ─── MATCHUP MATH ───────────────────────────────────────────────
+// What a pick is WORTH if it lands. Same formula as calcPickPoints, minus the result
+// check — this is the "still possible" number, and it's the whole point of the ceiling.
+function pickUpside(p) {
+ if(!p) return 0;
+ const mult = Number(p.multiplier != null ? p.multiplier : p.mult);
+ const odds = Number(p.implied_odds != null ? p.implied_odds : p.impliedOdds);
+ if(!mult || !odds || !isFinite(mult) || !isFinite(odds)) return 0;
+ return parseFloat((mult * oddsDecimal(odds) * 10).toFixed(1));
+}
+const isSettled = (p) => p && (p.result === "W" || p.result === "L" || p.result === "P");
+
+// locked  = points already banked (wins only; a push scores 0 and is settled)
+// live    = what the unsettled picks are worth if every one of them lands
+// ceiling = the highest score this player can still finish on
+function ceilingOf(picks) {
+ const list = Array.isArray(picks) ? picks.filter(Boolean) : [];
+ const locked = list.filter(p=>p.result==="W").reduce((n,p)=>n+parseFloat(p.points_earned||0),0);
+ const openPicks = list.filter(p=>!isSettled(p));
+ const live = openPicks.reduce((n,p)=>n+pickUpside(p),0);
+ return {
+  locked: parseFloat(locked.toFixed(1)),
+  live: parseFloat(live.toFixed(1)),
+  ceiling: parseFloat((locked+live).toFixed(1)),
+  open: openPicks.length,
+  settled: list.length - openPicks.length,
+  total: list.length,
+ };
+}
+
+// The sentence under the bar. Only says "clinched"/"eliminated" when the MATH says so —
+// i.e. the opponent's ceiling can't reach you even if everything they have left lands.
+function matchupVerdict(me, them) {
+ const lead = parseFloat((me.locked - them.locked).toFixed(1));
+ if(me.open === 0 && them.open === 0) {
+  if(lead > 0) return { kind:"won", text:`Final. You won by ${Math.abs(lead)}.` };
+  if(lead < 0) return { kind:"lost", text:`Final. You lost by ${Math.abs(lead)}.` };
+  return { kind:"tied", text:"Final. Tied." };
+ }
+ if(them.ceiling < me.locked) return { kind:"clinched", text:`Clinched. They can only reach ${them.ceiling}.` };
+ if(me.ceiling < them.locked) return { kind:"eliminated", text:`Out of reach. Your ceiling is ${me.ceiling}.` };
+ if(lead > 0) return { kind:"leading", text:`They can still reach ${them.ceiling}. You're not safe yet.` };
+ if(lead < 0) return { kind:"trailing", text:`You can still reach ${me.ceiling}. You need ${parseFloat((them.locked-me.locked).toFixed(1))}.` };
+ return { kind:"level", text:`Level. ${me.open+them.open} picks still live.` };
+}
+
+// Pair the two slips by SLOT so the collision is visible — same slot, same multiplier,
+// different pick. Slot ids look like "spread_3"; the trailing number is the position.
+function pairSlips(mine, theirs) {
+ // slotId is the full "spread_3"; slot alone may be the truncated prefix.
+ const idOf = (p) => String(p.slotId || p.slot || "");
+ const idxOf = (p) => { const n = parseInt(idOf(p).split("_").pop(),10); return isNaN(n) ? null : n; };
+ const keyOf = (p) => { const i = idxOf(p); return i!=null ? "i"+i : "s"+idOf(p); };
+ const rows = new Map();
+ const put = (p, side) => {
+  const k = keyOf(p);
+  if(!rows.has(k)) rows.set(k, { key:k, idx:idxOf(p), slot:p.slot, mine:null, theirs:null });
+  rows.get(k)[side] = p;
+ };
+ (mine||[]).forEach(p=>put(p,"mine"));
+ (theirs||[]).forEach(p=>put(p,"theirs"));
+ return [...rows.values()].sort((a,b)=>{
+  const am = Number((a.mine||a.theirs||{}).multiplier)||0;
+  const bm = Number((b.mine||b.theirs||{}).multiplier)||0;
+  if(bm !== am) return bm - am;                         // biggest multiplier first
+  return (a.idx==null?99:a.idx) - (b.idx==null?99:b.idx);
+ });
+}
+
 const pad=n=>String(n).padStart(2,"0");
 const acColor=i=>({D:"#5E5CE6",M:"#0A84FF",T:"#FF453A",C:"#30D158",A:"#FF9F0A",R:"#FF375F"}[i]||IOS.purple);
 const rarityColor=r=>r==="legendary"?IOS.pink:r==="rare"?IOS.purple:IOS.green;
@@ -1452,49 +1521,123 @@ function BracketMatchSheet({ d, IOS, onClose, liveGames=[], onOpenGamecast }){
     if(res==="L") return <div className="bmd-res"><div className="rp" style={{color:"rgba(255,255,255,.35)"}}>0.0</div><div className="rl" style={{color:IOS.red}}>Loss</div></div>;
     return <div className="bmd-res"><div className="rp" style={{color:"rgba(255,255,255,.3)"}}>—</div><div className="rl" style={{color:"rgba(255,255,255,.35)"}}>Pending</div></div>;
   };
-  const section = (p, isWinner)=>(
-    <div className="bmd-sec">
-      <div className="bmd-sech">
-        <span className="nm">{p.name}
-          {p.you?<span className="bmd-tag" style={{background:"rgba(10,132,255,.18)",color:IOS.blue}}>YOU</span>:null}
-          {isWinner?<span className="bmd-tag" style={{background:"rgba(48,209,88,.16)",color:IOS.green}}>ADV</span>:null}
-        </span>
-        <span className="tot">{Number(p.total).toFixed(1)} pts</span>
-      </div>
-      {p.picks.length===0 ? <div style={{fontSize:12,color:"rgba(255,255,255,.35)",padding:"6px 0 12px"}}>No slip submitted</div> :
-        p.picks.map((pk,i)=>{
-          const reveal = p.you || pk.locked;
-          return (
-          <div key={i} className="bmd-row">
-            {reveal
-              ? <span className="bmd-chip">{BMD_CHIP[pk.slot]||(pk.slot||"").toUpperCase().slice(0,4)}</span>
-              : <span className="bmd-chip" style={{opacity:.55,display:"inline-flex",alignItems:"center",justifyContent:"center"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>}
-            <div className="bmd-pk">
-              {reveal
-                ? <><div className="pn">{pk.name}</div>{pk.game?<div className="ps" style={{opacity:.6}}>{pk.game}</div>:null}<div className="ps">{pk.sub}</div>{(pk.locked||pk.res==="W"||pk.res==="L")?<ScoreChip pick={pk} live={liveMatch(pk, liveGames)} onOpen={()=>{ if(onOpenGamecast) onOpenGamecast(pk); }}/>:null}</>
-                : <><div className="pn" style={{color:"rgba(255,255,255,.5)"}}>Hidden until lock</div><div className="ps">Reveals when the game starts</div></>}
-            </div>
-            {resCell(pk.res, pk.pts)}
-          </div>
-          );
-        })
-      }
-    </div>
-  );
   const aWin = d.winnerId && d.winnerId===d.u1;
   const bWin = d.winnerId && d.winnerId===d.u2;
+
+  // ── The numbers. All of it is arithmetic on picks we already have: a pick's upside is
+  //    mult x oddsDecimal x 10, same formula that pays it. Nothing here is decorative.
+  const cA = ceilingOf(d.a.picks);
+  const cB = ceilingOf(d.b.picks);
+  const me = d.a.you ? cA : cB;              // "you" framing follows whoever is you
+  const them = d.a.you ? cB : cA;
+  const verdict = matchupVerdict(me, them);
+  const rows = pairSlips(d.a.picks, d.b.picks);
+  const maxCeil = Math.max(cA.ceiling, cB.ceiling, 1);
+  const openTotal = cA.open + cB.open;
+  const vColor = verdict.kind==="clinched"||verdict.kind==="won" ? IOS.green
+               : verdict.kind==="eliminated"||verdict.kind==="lost" ? IOS.red
+               : verdict.kind==="leading" ? IOS.orange : IOS.blue;
+
+  const bar = (c, tint, name) => (
+    <div style={{display:"flex",alignItems:"center",gap:10,padding:"6px 0"}}>
+      <div style={{width:88,flexShrink:0,fontSize:12,fontWeight:800,color:tint,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{name}</div>
+      <div style={{flex:1,height:22,borderRadius:6,background:"rgba(255,255,255,0.05)",position:"relative",overflow:"hidden"}}>
+        <div style={{position:"absolute",left:0,top:0,bottom:0,borderRadius:"6px 0 0 6px",background:tint,width:`${(c.locked/maxCeil)*100}%`}}/>
+        {c.live>0 && (
+          <div title="still live" style={{position:"absolute",top:0,bottom:0,left:`${(c.locked/maxCeil)*100}%`,width:`${(c.live/maxCeil)*100}%`,
+            background:"repeating-linear-gradient(115deg,rgba(255,255,255,0.16) 0 5px,transparent 5px 10px)"}}/>
+        )}
+      </div>
+      <div style={{width:46,textAlign:"right",flexShrink:0,fontSize:15,fontWeight:900,color:c.locked>0?"#fff":"rgba(255,255,255,0.3)"}}>{c.locked.toFixed(1)}</div>
+    </div>
+  );
+
+  // One ledger row = one slot. Same slot, same multiplier, two different picks — that
+  // collision is the whole product and a stacked list hides it.
+  const cell = (pk, right) => {
+    if(!pk) return (
+      <div style={{flex:1,padding:"9px 11px",minWidth:0,textAlign:right?"right":"left"}}>
+        <div style={{fontSize:12.5,fontWeight:700,color:"rgba(255,255,255,0.28)"}}>—</div>
+        <div style={{fontSize:9.5,color:"rgba(255,255,255,0.22)",marginTop:1}}>not filled</div>
+      </div>
+    );
+    const reveal = (right ? d.b.you : d.a.you) || pk.locked;
+    const won = pk.res==="W", lost = pk.res==="L";
+    const upside = pickUpside(pk);
+    return (
+      <div style={{flex:1,padding:"9px 11px",minWidth:0,textAlign:right?"right":"left"}}>
+        <div style={{fontSize:12.5,fontWeight:700,color:reveal?"#fff":"rgba(255,255,255,0.45)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+          {reveal ? pk.name : "Hidden until lock"}
+        </div>
+        <div style={{fontSize:9.5,color:"rgba(255,255,255,0.28)",marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+          {reveal ? (pk.game || "") : "Reveals when the game starts"}
+        </div>
+        <div style={{fontSize:14,fontWeight:900,marginTop:2,color:won?IOS.green:lost?"rgba(255,255,255,0.3)":IOS.blue}}>
+          {won ? "+"+Number(pk.pts).toFixed(1) : lost ? "0.0" : (reveal && upside>0 ? "to win "+upside.toFixed(1) : "—")}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="bmd-bg" onClick={(e)=>{ if(e.currentTarget===e.target) onClose(); }}>
       <div className="bmd">
-        <div className="bmd-top"><div className="bmd-grip"/><div className="bmd-close" onClick={onClose} role="button" aria-label="Close"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></div></div>
+        <div className="bmd-top"><div className="bmd-grip"/><div className="bmd-close" onClick={onClose} role="button" aria-label="Close"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></div></div>
         <div className="bmd-rd">{d.round}</div>
         <div className="bmd-score">
-          <div className={"bmd-side"+(aWin?" win":(d.winnerId?" lose":""))}><div className="n">{d.a.name}</div><div className="pp">{Number(d.a.total).toFixed(1)}</div></div>
-          <div className="bmd-vs">{d.winnerId?"vs":"LIVE"}</div>
-          <div className={"bmd-side"+(bWin?" win":(d.winnerId?" lose":""))}><div className="n">{d.b.name}</div><div className="pp">{Number(d.b.total).toFixed(1)}</div></div>
+          <div className={"bmd-side"+(aWin?" win":(d.winnerId?" lose":""))}><div className="n">{d.a.name}</div><div className="pp">{cA.locked.toFixed(1)}</div></div>
+          <div className="bmd-vs">{d.winnerId?"vs":(openTotal>0?"LIVE":"vs")}</div>
+          <div className={"bmd-side"+(bWin?" win":(d.winnerId?" lose":""))}><div className="n">{d.b.name}</div><div className="pp">{cB.locked.toFixed(1)}</div></div>
         </div>
-        {section(d.a, aWin)}
-        {section(d.b, bWin)}
+
+        {/* ── Ceiling: locked vs still possible. Answers "am I actually safe", which the
+            app could not answer at all before. ── */}
+        <div style={{margin:"4px 14px 0",background:"rgba(255,255,255,0.03)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:14,padding:"11px 13px"}}>
+          <div style={{fontSize:9,fontWeight:900,letterSpacing:"0.1em",textTransform:"uppercase",color:"rgba(255,255,255,0.25)",marginBottom:3}}>Locked vs. still possible</div>
+          {bar(cA, aWin||!d.winnerId ? "#64D2FF" : "rgba(255,255,255,0.3)", d.a.name)}
+          {bar(cB, bWin||!d.winnerId ? IOS.purple : "rgba(255,255,255,0.3)", d.b.name)}
+          {openTotal>0 && (
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:9.5,fontWeight:700,color:"rgba(255,255,255,0.25)",marginTop:6}}>
+              <span>■ settled</span>
+              <span>▨ still live · ceilings {cA.ceiling.toFixed(1)} / {cB.ceiling.toFixed(1)}</span>
+            </div>
+          )}
+          <div style={{textAlign:"center",fontSize:12,fontWeight:800,color:vColor,marginTop:9,lineHeight:1.4}}>{verdict.text}</div>
+        </div>
+
+        {/* ── The ledger ── */}
+        <div style={{margin:"12px 14px 0",background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:14,overflow:"hidden"}}>
+          <div style={{display:"flex",alignItems:"center",padding:"8px 11px",background:"rgba(255,255,255,0.03)",borderBottom:"0.5px solid rgba(255,255,255,0.07)"}}>
+            <div style={{flex:1,fontSize:8.5,fontWeight:900,letterSpacing:"0.07em",color:"rgba(255,255,255,0.28)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{(d.a.name||"").toUpperCase()}</div>
+            <div style={{width:52,textAlign:"center",fontSize:8.5,fontWeight:900,letterSpacing:"0.07em",color:"rgba(255,255,255,0.28)"}}>SLOT</div>
+            <div style={{flex:1,textAlign:"right",fontSize:8.5,fontWeight:900,letterSpacing:"0.07em",color:"rgba(255,255,255,0.28)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{(d.b.name||"").toUpperCase()}</div>
+          </div>
+          {rows.length===0 && <div style={{padding:"20px 14px",textAlign:"center",fontSize:12,color:"rgba(255,255,255,0.3)"}}>No slips submitted</div>}
+          {rows.map((r,i)=>{
+            const ref = r.mine || r.theirs;
+            const mult = ref && ref.multiplier;
+            const type = (ref && (BMD_CHIP[ref.slot] || String(ref.slot||"").toUpperCase().slice(0,4))) || "";
+            const aw = r.mine && r.mine.res==="W", bw = r.theirs && r.theirs.res==="W";
+            const anyLive = (r.mine && r.mine.res==="pend") || (r.theirs && r.theirs.res==="pend");
+            return (
+              <div key={r.key||i} style={{display:"flex",alignItems:"stretch",borderBottom:i<rows.length-1?"0.5px solid rgba(255,255,255,0.05)":"none",
+                background: anyLive ? "rgba(10,132,255,0.06)"
+                          : aw && !bw ? "linear-gradient(90deg,rgba(48,209,88,0.09),transparent 55%)"
+                          : bw && !aw ? "linear-gradient(270deg,rgba(48,209,88,0.09),transparent 55%)" : "transparent"}}>
+                {cell(r.mine, false)}
+                <div style={{width:52,flexShrink:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,
+                  background:"rgba(255,255,255,0.02)",borderLeft:"0.5px solid rgba(255,255,255,0.05)",borderRight:"0.5px solid rgba(255,255,255,0.05)"}}>
+                  {mult ? <div style={{fontSize:11,fontWeight:900,color:"rgba(255,255,255,0.45)"}}>{mult}×</div> : null}
+                  <div style={{fontSize:7.5,fontWeight:900,letterSpacing:"0.05em",color:"rgba(255,255,255,0.25)"}}>{type}</div>
+                </div>
+                {cell(r.theirs, true)}
+              </div>
+            );
+          })}
+        </div>
+        <div style={{textAlign:"center",fontSize:10,color:"rgba(255,255,255,0.25)",padding:"11px 14px 16px"}}>
+          {cA.settled+cB.settled} of {cA.total+cB.total} picks settled{openTotal>0?` · ${openTotal} still live`:""}
+        </div>
       </div>
     </div>
   );
@@ -5659,10 +5802,10 @@ export default function App() {
  const openBracketMatch = async (mu, labelOverride) => {
  try {
  const u1=mu.user1_id, u2=mu.user2_id; if(!u1||!u2) return;
- const { data } = await supabase.from("picks").select("user_id,slot,pick_name,odds,multiplier,result,points_earned,game_date,game,home_score,away_score").eq("league_id",activeLeague.id).eq("week",mu.week).in("user_id",[u1,u2]);
+ const { data } = await supabase.from("picks").select("user_id,slot,pick_name,odds,implied_odds,multiplier,result,points_earned,game_date,game,home_score,away_score").eq("league_id",activeLeague.id).eq("week",mu.week).in("user_id",[u1,u2]);
  const rows = data||[];
  const build = (id, storedPts) => {
- const ps = rows.filter(r=>r.user_id===id).map(r=>({ slot:(r.slot||"").split("_")[0], name:r.pick_name||"Pick", game:r.game||"", sub:(r.multiplier?r.multiplier+"x":"")+(r.odds!=null&&r.odds!==""?" · "+r.odds:""), res:r.result==="W"?"W":(r.result==="L"?"L":"pend"), pts:parseFloat(r.points_earned||0), locked:!!(r.result==="W"||r.result==="L"||(r.game_date&&new Date(r.game_date).getTime()<=Date.now())), result:r.result||null, game_date:r.game_date||null, home_score:(r.home_score!=null?r.home_score:null), away_score:(r.away_score!=null?r.away_score:null), pick_name:r.pick_name||"", odds:r.odds }));
+ const ps = rows.filter(r=>r.user_id===id).map(r=>({ slot:(r.slot||"").split("_")[0], slotId:r.slot||"", multiplier:r.multiplier, implied_odds:r.implied_odds, points_earned:r.points_earned, name:r.pick_name||"Pick", game:r.game||"", sub:(r.multiplier?r.multiplier+"x":"")+(r.odds!=null&&r.odds!==""?" · "+r.odds:""), res:r.result==="W"?"W":(r.result==="L"?"L":"pend"), pts:parseFloat(r.points_earned||0), locked:!!(r.result==="W"||r.result==="L"||(r.game_date&&new Date(r.game_date).getTime()<=Date.now())), result:r.result||null, game_date:r.game_date||null, home_score:(r.home_score!=null?r.home_score:null), away_score:(r.away_score!=null?r.away_score:null), pick_name:r.pick_name||"", odds:r.odds }));
  const computed = ps.reduce((a,pk)=>a+(pk.res==="W"?pk.pts:0),0);
  const mem = leagueMembers.find(x=>x.userId===id);
  return { name: mem?mem.name:"Player", you:id===(user&&user.id), total:(mu.winner_id!=null && storedPts!=null)?Number(storedPts):computed, picks:ps };

@@ -120,6 +120,13 @@ test.describe('signed in', () => {
     await page.getByPlaceholder(/password/i).first().fill(PASSWORD);
     await page.getByRole('button', { name: /sign in|log in/i }).first().click();
     await expect(page.getByText(/Home|Picks|Leagues/i).first()).toBeVisible({ timeout: 20_000 });
+    // Let the app settle on a MODE before any test inspects the nav. It boots into league
+    // mode and can then flip to Solo (or the reverse) once leagues load — so a
+    // point-in-time isVisible() below would see "Matchup", decide the tab exists, and then
+    // find it gone by the time it clicks. That race is why Matchup failed on mobile one
+    // run and desktop the next.
+    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.waitForTimeout(2500);
   });
 
   // The nav changes by mode: league mode is Home/Picks/Matchup/Leagues/Profile, Solo is
@@ -129,6 +136,8 @@ test.describe('signed in', () => {
     test(`${tab} tab renders`, async ({ page }) => {
       const errors = watch(page);
       const nav = page.getByText(tab, { exact: true }).last();
+      // Solo mode is Home/Picks/History/Stats/Profile; league mode swaps in Matchup and
+      // Leagues. A tab that isn't in this mode isn't a failure.
       const present = await nav.isVisible().catch(() => false);
       test.skip(!present, `no "${tab}" tab in this mode`);
       await page.waitForLoadState('networkidle').catch(() => {});
@@ -162,6 +171,47 @@ test.describe('signed in', () => {
       await assertNoSourceLeak(page);
     }
     expect(errors, `errors in league tabs:\n${errors.join('\n')}`).toEqual([]);
+  });
+
+  // ── League mode explicitly ────────────────────────────────────────────────
+  // The tests above take whatever mode the session lands in. This one PUTS the app in
+  // league mode and then insists Matchup exists — because in league mode it must.
+  //
+  // App.jsx:7168 is the contract:
+  //   homeMode==="solo" ? [home,picks,solohistory,solostats,profile]
+  //                     : [home,picks,matchup,leagues,profile]
+  //
+  // READ-ONLY: picking a league from the switcher only sets homeMode/isSoloMode/
+  // activeLeagueId. It writes nothing. (Switching the OTHER way — into Solo — calls
+  // getOrCreateSoloLeague(), which can create a row, so this never does that.)
+  test('switching to league mode reveals the Matchup tab', async ({ page }) => {
+    const errors = watch(page);
+
+    await page.locator('.gh-switch').click();                 // the league chip, top-left
+    const options = page.locator('.gh-opt');
+    await options.first().waitFor({ state: 'visible' });
+
+    // .gh-opt[0] is Solo; anything after it is a real league.
+    const count = await options.count();
+    test.skip(count < 2, 'this account has no leagues to switch into');
+    await options.nth(1).click();
+
+    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.waitForTimeout(2000);
+
+    // In league mode the nav MUST carry Matchup and Leagues, and MUST NOT carry the
+    // solo-only tabs. If this fails, homeMode and the nav have drifted apart.
+    await expect(page.getByText('Matchup', { exact: true }).last()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText('Leagues', { exact: true }).last()).toBeVisible();
+    await expect(page.getByText('History', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('Stats', { exact: true })).toHaveCount(0);
+
+    // And it has to actually open.
+    await page.getByText('Matchup', { exact: true }).last().click({ force: true });
+    await page.waitForTimeout(1500);
+    await assertRendered(page);
+    await assertNoSourceLeak(page);
+    expect(errors, `errors switching to league mode:\n${errors.join('\n')}`).toEqual([]);
   });
 
   // READ-ONLY: opens Plok, asserts the gate. Never clicks "Build my whole slip".
