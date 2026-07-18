@@ -756,18 +756,27 @@ function ceilingOf(picks) {
 
 // The sentence under the bar. Only says "clinched"/"eliminated" when the MATH says so —
 // i.e. the opponent's ceiling can't reach you even if everything they have left lands.
-function matchupVerdict(me, them) {
+// isFinal MUST come from the caller (the week/matchup is decided), NOT from "nobody has
+// pending picks". A player who submitted no slip has zero open picks while the week is
+// still wide open — that combination was falsely reading as "Final. You lost."
+function matchupVerdict(me, them, isFinal) {
  const lead = parseFloat((me.locked - them.locked).toFixed(1));
- if(me.open === 0 && them.open === 0) {
+ if(isFinal) {
   if(lead > 0) return { kind:"won", text:`Final. You won by ${Math.abs(lead)}.` };
   if(lead < 0) return { kind:"lost", text:`Final. You lost by ${Math.abs(lead)}.` };
   return { kind:"tied", text:"Final. Tied." };
  }
- if(them.ceiling < me.locked) return { kind:"clinched", text:`Clinched. They can only reach ${them.ceiling}.` };
- if(me.ceiling < them.locked) return { kind:"eliminated", text:`Out of reach. Your ceiling is ${me.ceiling}.` };
+ // "Clinched"/"eliminated" require the OTHER slip to be locked in too — a player who has
+ // played picks and has none pending. An empty slip mid-week is not locked in (they can
+ // still submit), so an early lead over it is "leading", not "clinched".
+ const themLockedIn = them.total > 0 && them.open === 0;
+ const meLockedIn = me.total > 0 && me.open === 0;
+ if(themLockedIn && them.ceiling < me.locked) return { kind:"clinched", text:`Clinched. They can't catch you.` };
+ if(meLockedIn && me.ceiling < them.locked) return { kind:"eliminated", text:`Out of reach. Your ceiling is ${me.ceiling}.` };
  if(lead > 0) return { kind:"leading", text:`They can still reach ${them.ceiling}. You're not safe yet.` };
- if(lead < 0) return { kind:"trailing", text:`You can still reach ${me.ceiling}. You need ${parseFloat((them.locked-me.locked).toFixed(1))}.` };
- return { kind:"level", text:`Level. ${me.open+them.open} picks still live.` };
+ if(lead < 0) return { kind:"trailing", text:`You can still reach ${me.ceiling}. You need ${parseFloat((them.locked-me.locked).toFixed(1))} more.` };
+ if(me.locked === 0 && them.locked === 0) return { kind:"level", text:`Nothing settled yet. ${me.open+them.open} picks to play.` };
+ return { kind:"level", text:`Dead even. ${me.open+them.open} picks still live.` };
 }
 
 // Pair the two slips by SLOT so the collision is visible — same slot, same multiplier,
@@ -1439,9 +1448,9 @@ const lineConflict = (cat, bet, existing) => {
   if(((e.eventId||e.game)||"")!==gk) continue;
   if(LINE_GROUP[e.category]!==grp) continue;
   if(e.category===cat) return "You already picked this game's "+(TYPE_SHORT[cat]||cat)+". You can't take both sides of the same line.";
-  if(OPPOSITE_TYPES[cat] && OPPOSITE_TYPES[cat]===e.category) return "You already have "+(TYPE_SHORT[e.category]||e.category)+" in this game \u2014 "+(TYPE_SHORT[cat]||cat)+" is the exact opposite bet.";
+  if(OPPOSITE_TYPES[cat] && OPPOSITE_TYPES[cat]===e.category) return "You already have "+(TYPE_SHORT[e.category]||e.category)+" in this game — "+(TYPE_SHORT[cat]||cat)+" is the exact opposite bet.";
   if(SIDE_TYPES.includes(cat) && SIDE_TYPES.includes(e.category) && oc && e.outcome && String(e.outcome)!==String(oc))
-   return "You already have "+e.outcome+" in this game \u2014 you can't also take the other side.";
+   return "You already have "+e.outcome+" in this game — you can't also take the other side.";
  }
  return null;
 };
@@ -1530,7 +1539,13 @@ function BracketMatchSheet({ d, IOS, onClose, liveGames=[], onOpenGamecast }){
   const cB = ceilingOf(d.b.picks);
   const me = d.a.you ? cA : cB;              // "you" framing follows whoever is you
   const them = d.a.you ? cB : cA;
-  const verdict = matchupVerdict(me, them);
+  // A matchup is final only when no pick on either slip is still pending AND at least one
+  // side actually submitted. winnerId alone lies mid-week — the week can stamp it before
+  // every game has played, which showed "Final. You lost by 30" on a live week.
+  const anyPlayed = cA.total > 0 || cB.total > 0;
+  const anyOpen = cA.open > 0 || cB.open > 0;
+  const reallyFinal = anyPlayed && !anyOpen && !!d.winnerId;
+  const verdict = matchupVerdict(me, them, reallyFinal);
   const rows = pairSlips(d.a.picks, d.b.picks);
   const maxCeil = Math.max(cA.ceiling, cB.ceiling, 1);
   const openTotal = cA.open + cB.open;
@@ -1538,19 +1553,32 @@ function BracketMatchSheet({ d, IOS, onClose, liveGames=[], onOpenGamecast }){
                : verdict.kind==="eliminated"||verdict.kind==="lost" ? IOS.red
                : verdict.kind==="leading" ? IOS.orange : IOS.blue;
 
-  const bar = (c, tint, name) => (
-    <div style={{display:"flex",alignItems:"center",gap:10,padding:"6px 0"}}>
+  const bar = (c, tint, name) => {
+    const lockedPct = (c.locked/maxCeil)*100;
+    const livePct = (c.live/maxCeil)*100;
+    return (
+    <div style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0"}}>
       <div style={{width:88,flexShrink:0,fontSize:12,fontWeight:800,color:tint,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{name}</div>
-      <div style={{flex:1,height:22,borderRadius:6,background:"rgba(255,255,255,0.05)",position:"relative",overflow:"hidden"}}>
-        <div style={{position:"absolute",left:0,top:0,bottom:0,borderRadius:"6px 0 0 6px",background:tint,width:`${(c.locked/maxCeil)*100}%`}}/>
+      <div style={{flex:1,height:24,borderRadius:7,background:"rgba(0,0,0,0.35)",position:"relative",overflow:"hidden",
+        boxShadow:"inset 0 1px 2px rgba(0,0,0,0.5), inset 0 0 0 0.5px rgba(255,255,255,0.05)"}}>
+        {/* banked — gradient fill + top sheen + a glow in the team colour */}
+        <div style={{position:"absolute",left:0,top:0,bottom:0,borderRadius:lockedPct>=99?"7px":"7px 0 0 7px",width:`${lockedPct}%`,
+          background:`linear-gradient(180deg,${tint}, ${tint}cc)`,
+          boxShadow:`0 0 10px ${tint}66, inset 0 1px 0 rgba(255,255,255,0.35)`}}>
+          <div style={{position:"absolute",left:0,right:0,top:0,height:"45%",borderRadius:"7px 7px 0 0",background:"linear-gradient(180deg,rgba(255,255,255,0.28),transparent)"}}/>
+        </div>
+        {/* still live — hatched, sitting on top of banked */}
         {c.live>0 && (
-          <div title="still live" style={{position:"absolute",top:0,bottom:0,left:`${(c.locked/maxCeil)*100}%`,width:`${(c.live/maxCeil)*100}%`,
-            background:"repeating-linear-gradient(115deg,rgba(255,255,255,0.16) 0 5px,transparent 5px 10px)"}}/>
+          <div title="still live" style={{position:"absolute",top:0,bottom:0,left:`${lockedPct}%`,width:`${livePct}%`,
+            background:`repeating-linear-gradient(115deg, ${tint}3a 0 5px, transparent 5px 10px)`,
+            borderLeft:`1px solid ${tint}55`}}/>
         )}
       </div>
-      <div style={{width:46,textAlign:"right",flexShrink:0,fontSize:15,fontWeight:900,color:c.locked>0?"#fff":"rgba(255,255,255,0.3)"}}>{c.locked.toFixed(1)}</div>
+      <div style={{width:46,textAlign:"right",flexShrink:0,fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:17,fontWeight:900,
+        color:c.locked>0?"#fff":"rgba(255,255,255,0.3)"}}>{c.locked.toFixed(1)}</div>
     </div>
-  );
+    );
+  };
 
   // One ledger row = one slot. Same slot, same multiplier, two different picks — that
   // collision is the whole product and a stacked list hides it.
@@ -1596,11 +1624,30 @@ function BracketMatchSheet({ d, IOS, onClose, liveGames=[], onOpenGamecast }){
       <div className="bmd">
         <div className="bmd-top"><div className="bmd-grip"/><div className="bmd-close" onClick={onClose} role="button" aria-label="Close"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></div></div>
         <div className="bmd-rd">{d.round}</div>
-        <div className="bmd-score">
-          <div className={"bmd-side"+(aWin?" win":(d.winnerId?" lose":""))}><div className="n">{d.a.name}</div><div className="pp">{cA.locked.toFixed(1)}</div></div>
-          <div className="bmd-vs">{d.winnerId?"vs":(openTotal>0?"LIVE":"vs")}</div>
-          <div className={"bmd-side"+(bWin?" win":(d.winnerId?" lose":""))}><div className="n">{d.b.name}</div><div className="pp">{cB.locked.toFixed(1)}</div></div>
-        </div>
+          {(()=>{
+          const ini = (nm)=> (nm||"?").slice(0,2).toUpperCase();
+          const aTint = aWin||!reallyFinal ? "#64D2FF" : "rgba(255,255,255,0.3)";
+          const bTint = bWin||!reallyFinal ? "#BF5AF2" : "rgba(255,255,255,0.3)";
+          const margin = Math.abs(cA.locked - cB.locked).toFixed(1);
+          return (
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"2px 20px 4px"}}>
+            <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
+              <div style={{width:44,height:44,borderRadius:22,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#000",background:aTint,boxShadow:aWin||!reallyFinal?"0 0 16px #64D2FF55":"none"}}>{d.a.you?"You":ini(d.a.name)}</div>
+              <div style={{fontSize:13,fontWeight:800,color:aWin?"#fff":"rgba(255,255,255,0.7)",maxWidth:110,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.a.name}</div>
+              <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:38,fontWeight:900,lineHeight:1,color:aWin||!reallyFinal?"#fff":"rgba(255,255,255,0.35)"}}>{cA.locked.toFixed(1)}</div>
+            </div>
+            <div style={{width:70,flexShrink:0,textAlign:"center"}}>
+              {openTotal>0 ? <div style={{fontSize:10,fontWeight:900,letterSpacing:"0.1em",color:"#30D158"}}>● LIVE</div> : <div style={{fontSize:10,fontWeight:900,letterSpacing:"0.1em",color:"rgba(255,255,255,0.3)"}}>{reallyFinal?"FINAL":"VS"}</div>}
+              {parseFloat(margin)>0 && <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:15,fontWeight:900,color:"rgba(255,255,255,0.4)",marginTop:3}}>{cA.locked>cB.locked?"+":"\u2212"}{margin}</div>}
+            </div>
+            <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
+              <div style={{width:44,height:44,borderRadius:22,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#000",background:bTint,boxShadow:bWin?"0 0 16px #BF5AF255":"none"}}>{d.b.you?"You":ini(d.b.name)}</div>
+              <div style={{fontSize:13,fontWeight:800,color:bWin?"#fff":"rgba(255,255,255,0.7)",maxWidth:110,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.b.name}</div>
+              <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:38,fontWeight:900,lineHeight:1,color:bWin||!reallyFinal?"#fff":"rgba(255,255,255,0.35)"}}>{cB.locked.toFixed(1)}</div>
+            </div>
+          </div>
+          );
+          })()}
 
         {/* ── Ceiling: locked vs still possible. Answers "am I actually safe", which the
             app could not answer at all before. ── */}
@@ -2420,7 +2467,7 @@ const matchEspnGame = (list, awayName, homeName) => {
 
 // ─── SOLO: group a week's picks into day buckets (chronological; undated last) ───
 function _dayKey(p){ const d=p&&(p.game_date||p.created_at); if(!d) return "nodate"; const dt=new Date(d); if(isNaN(dt)) return "nodate"; const y=dt.getFullYear(),m=String(dt.getMonth()+1).padStart(2,"0"),da=String(dt.getDate()).padStart(2,"0"); return y+"-"+m+"-"+da; }
-function _dayLabel(key){ if(key==="nodate") return "No date"; const parts=key.split("-").map(Number); const dt=new Date(parts[0],parts[1]-1,parts[2]); const wd=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][dt.getDay()]; const mo=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][parts[1]-1]; return wd+" \u00b7 "+mo+" "+parts[2]; }
+function _dayLabel(key){ if(key==="nodate") return "No date"; const parts=key.split("-").map(Number); const dt=new Date(parts[0],parts[1]-1,parts[2]); const wd=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][dt.getDay()]; const mo=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][parts[1]-1]; return wd+" · "+mo+" "+parts[2]; }
 function groupPicksByDay(picks){
   const map={};
   (picks||[]).forEach(p=>{ const k=_dayKey(p); (map[k]=map[k]||[]).push(p); });
@@ -2625,7 +2672,7 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
                           {grp.live&&<span style={{fontSize:8,fontWeight:800,letterSpacing:0.4,color:IOS.green,background:"rgba(48,209,88,0.14)",border:"0.5px solid rgba(48,209,88,0.3)",borderRadius:5,padding:"2px 6px"}}>LIVE</span>}
                         </div>
                         <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-                          <span style={{fontSize:10,fontWeight:700,color:IOS.label3}}>{(grp.w+grp.l>0)?(<><span style={{color:IOS.green}}>{grp.w}W</span>-<span style={{color:IOS.red}}>{grp.l}L</span>{grp.pts>0?(" \u00b7 +"+(Math.round(grp.pts*10)/10)):""}</>):(grp.picks.length+" pick"+(grp.picks.length>1?"s":""))}</span>
+                          <span style={{fontSize:10,fontWeight:700,color:IOS.label3}}>{(grp.w+grp.l>0)?(<><span style={{color:IOS.green}}>{grp.w}W</span>-<span style={{color:IOS.red}}>{grp.l}L</span>{grp.pts>0?(" · +"+(Math.round(grp.pts*10)/10)):""}</>):(grp.picks.length+" pick"+(grp.picks.length>1?"s":""))}</span>
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2.4" strokeLinecap="round" style={{transform:dOpen?"rotate(180deg)":"none",transition:"transform .2s"}}><polyline points="6 9 12 15 18 9"/></svg>
                         </div>
                       </div>
@@ -2668,7 +2715,7 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
    const _up = (soloWeeks||[]).filter(w=>w.week>currentWeekNum).flatMap(w=>w.picks||[]).filter(pp=>pp&&pp.game_date&&Date.parse(pp.game_date)>_now).sort((a,b)=>Date.parse(a.game_date)-Date.parse(b.game_date));
    if(!_up.length) return null;
    const _MU=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-   const _fmt=(d)=>{ const x=new Date(d); return _MU[x.getMonth()]+" "+x.getDate()+" \u00b7 "+x.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}); };
+   const _fmt=(d)=>{ const x=new Date(d); return _MU[x.getMonth()]+" "+x.getDate()+" · "+x.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}); };
    return (
    <div style={{margin:"0 0 14px"}}>
      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
@@ -2684,7 +2731,7 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
          </div>
          <div style={{textAlign:"right",flexShrink:0}}>
            <div style={{fontSize:11,fontWeight:800,color:IOS.blue}}>{_fmt(pp.game_date)}</div>
-           <div style={{fontSize:10.5,fontWeight:700,color:IOS.label3,marginTop:2}}>{_mx + "\u00d7" + (pp.odds!=null&&pp.odds!==""?(" \u00b7 "+pp.odds):"")}</div>
+           <div style={{fontSize:10.5,fontWeight:700,color:IOS.label3,marginTop:2}}>{_mx + "×" + (pp.odds!=null&&pp.odds!==""?(" · "+pp.odds):"")}</div>
          </div>
        </div>
      ); })}
@@ -2726,7 +2773,7 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
                           {grp.live&&<span style={{fontSize:8,fontWeight:800,letterSpacing:0.4,color:IOS.green,background:"rgba(48,209,88,0.14)",border:"0.5px solid rgba(48,209,88,0.3)",borderRadius:5,padding:"2px 6px"}}>LIVE</span>}
                         </div>
                         <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-                          <span style={{fontSize:10,fontWeight:700,color:IOS.label3}}>{(grp.w+grp.l>0)?(<><span style={{color:IOS.green}}>{grp.w}W</span>-<span style={{color:IOS.red}}>{grp.l}L</span>{grp.pts>0?(" \u00b7 +"+(Math.round(grp.pts*10)/10)):""}</>):(grp.picks.length+" pick"+(grp.picks.length>1?"s":""))}</span>
+                          <span style={{fontSize:10,fontWeight:700,color:IOS.label3}}>{(grp.w+grp.l>0)?(<><span style={{color:IOS.green}}>{grp.w}W</span>-<span style={{color:IOS.red}}>{grp.l}L</span>{grp.pts>0?(" · +"+(Math.round(grp.pts*10)/10)):""}</>):(grp.picks.length+" pick"+(grp.picks.length>1?"s":""))}</span>
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2.4" strokeLinecap="round" style={{transform:dOpen?"rotate(180deg)":"none",transition:"transform .2s"}}><polyline points="6 9 12 15 18 9"/></svg>
                         </div>
                       </div>
@@ -3028,6 +3075,18 @@ function ScoreChip({ pick, live, onOpen }){
 }
 
 // Full gamecast bottom sheet. Rendered at .phone top level so it clears the tab bar.
+// Team accent colors for the gamecast hero. MLB only for now (that's the live sport);
+// falls back to the app blue so nothing breaks for NFL/NCAAF.
+const MLB_TEAM_COLOR = {
+  ARI:"#A71930", ATL:"#CE1141", BAL:"#DF4601", BOS:"#BD3039", CHC:"#0E3386", CWS:"#27251F",
+  CIN:"#C6011F", CLE:"#00385D", COL:"#333366", DET:"#0C2340", HOU:"#EB6E1F", KC:"#004687",
+  LAA:"#BA0021", LAD:"#005A9C", MIA:"#00A3E0", MIL:"#FFC52F", MIN:"#002B5C", NYM:"#FF5910",
+  NYY:"#0C2340", OAK:"#003831", ATH:"#003831", PHI:"#E81828", PIT:"#FDB827", SD:"#2F241D",
+  SF:"#FD5A1E", SEA:"#0C2C56", STL:"#C41E3A", TB:"#092C5C", TEX:"#003278", TOR:"#134A8E",
+  WSH:"#AB0003", WSN:"#AB0003",
+};
+const teamAccent = (abbr) => MLB_TEAM_COLOR[String(abbr||"").toUpperCase()] || "#0A84FF";
+
 function GamecastSheet({ game, pick, onClose }){
   // Top performers is the ONLY thing the gamecast needs that /api/livescores can't give
   // us — everything else (inning, outs, bases, at-bat, pitching, decisions) rides along
@@ -3049,7 +3108,7 @@ function GamecastSheet({ game, pick, onClose }){
     return ()=>{ dead=true; };
   }, [game && game.gamePk, game && game.state]);
   if(!game) return null;
-  const CY="#64D2FF", YEL="#FFD60A", RED="#FF453A", L2="rgba(255,255,255,0.5)", L3="rgba(255,255,255,0.3)";
+  const CY="#64D2FF", YEL="#FFD60A", RED="#FF453A", L2="rgba(255,255,255,0.5)", L3="rgba(255,255,255,0.3)", L4="rgba(255,255,255,0.25)";
   const live=game.state==="live", fin=game.state==="final", pre=game.state==="pre";
   const aAb=getAcronym(game.away.name), hAb=getAcronym(game.home.name);
   const aSc=game.away.score, hSc=game.home.score;
@@ -3060,13 +3119,13 @@ function GamecastSheet({ game, pick, onClose }){
   const sit = game.situation || null;
   const periodsArr = (game.linescore && game.linescore.periods) || [];
   const nPer = Math.max(baseball?0:4, periodsArr.length);
-  const _liveStatus = baseball ? ((game.half||"")+" "+_lsOrdinal(game.inning)+(game.outs!=null?(" \u00b7 "+game.outs+" out"):"")) : (game.period!=null ? ((game.clock&&game.clock!=="0:00")?("Q"+game.period+" \u00b7 "+game.clock):(game.detail||("Q"+game.period))) : (game.detail||"Live"));
+  const _liveStatus = baseball ? ((game.half||"")+" "+_lsOrdinal(game.inning)+(game.outs!=null?(" · "+game.outs+" out"):"")) : (game.period!=null ? ((game.clock&&game.clock!=="0:00")?("Q"+game.period+" · "+game.clock):(game.detail||("Q"+game.period))) : (game.detail||"Live"));
   const statusTxt= fin?"Final" : live? _liveStatus : "Scheduled";
   const badge=pickBadge(pick, game);
   const inns=(game.linescore&&game.linescore.innings)||[];
   const n=Math.max(9, inns.length);
   const cur=live?game.inning:-1;
-  const cell=(v,isCur)=>(<td style={{textAlign:"center",padding:"6px 0",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:700,color:isCur?CY:"#fff",background:isCur?"rgba(10,132,255,0.16)":"transparent",borderRadius:isCur?6:0}}>{v==null?"\u00b7":v}</td>);
+  const cell=(v,isCur)=>(<td style={{textAlign:"center",padding:"6px 0",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:700,color:isCur?CY:"#fff",background:isCur?"rgba(10,132,255,0.16)":"transparent",borderRadius:isCur?6:0}}>{v==null?"·":v}</td>);
   const ls=game.linescore||{};
   let startT=""; try{ startT=new Date(game.gameDate).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}); }catch(e){}
 
@@ -3082,44 +3141,80 @@ function GamecastSheet({ game, pick, onClose }){
           <div style={{fontSize:13,color:L3,marginTop:6}}>{game.away.name} @ {game.home.name}</div>
         </div>
 
-        {/* scoreboard */}
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"18px 22px 14px"}}>
-          <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6,width:92}}>
-            <div style={{fontSize:12,fontWeight:800,color:L2}}>{aAb}</div>
-            <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:40,fontWeight:800,lineHeight:1,color:pre?L3:(leadA?"#fff":L3)}}>{pre?"\u2013":aSc}</div>
-          </div>
-          <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:9}}>
-            {pre ? (
-              <div style={{fontSize:12,fontWeight:800,color:L2,fontFamily:"'Barlow Semi Condensed',sans-serif"}}>{startT||"TBD"}</div>
-            ) : live ? (baseball ? (<>
-              <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:800,color:CY}}>{(up?"\u25B2":"\u25BC")} {_lsOrdinal(game.inning)}</div>
-              <div style={{position:"relative",width:46,height:46}}>
-                <div style={{position:"absolute",width:13,height:13,transform:"rotate(45deg)",top:0,left:16.5,background:game.bases&&game.bases.second?YEL:"rgba(255,255,255,0.14)",border:"1px solid "+(game.bases&&game.bases.second?YEL:"rgba(255,255,255,0.2)")}}/>
-                <div style={{position:"absolute",width:13,height:13,transform:"rotate(45deg)",top:16.5,left:0,background:game.bases&&game.bases.third?YEL:"rgba(255,255,255,0.14)",border:"1px solid "+(game.bases&&game.bases.third?YEL:"rgba(255,255,255,0.2)")}}/>
-                <div style={{position:"absolute",width:13,height:13,transform:"rotate(45deg)",top:16.5,left:33,background:game.bases&&game.bases.first?YEL:"rgba(255,255,255,0.14)",border:"1px solid "+(game.bases&&game.bases.first?YEL:"rgba(255,255,255,0.2)")}}/>
+        {/* ── scoreboard: crests + team-color hero, per the mockup ── */}
+        {(()=>{
+          const aLogo = teamLogo(game.sport||"mlb", game.away.name);
+          const hLogo = teamLogo(game.sport||"mlb", game.home.name);
+          const aCol = teamAccent(aAb), hCol = teamAccent(hAb);
+          const crest = (logo, ab) => (
+            <div style={{width:52,height:52,borderRadius:14,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",
+              boxShadow:"0 4px 14px rgba(0,0,0,0.4)",overflow:"hidden",flexShrink:0}}>
+              {logo ? <img src={logo} alt={ab} style={{width:40,height:40,objectFit:"contain"}}
+                onError={(ev)=>{ ev.target.style.display="none"; ev.target.parentNode.innerHTML='<span style="font-size:14px;font-weight:900;color:#111">'+ab+'</span>'; }}/>
+                : <span style={{fontSize:14,fontWeight:900,color:"#111"}}>{ab}</span>}
+            </div>
+          );
+          return (
+          <div style={{position:"relative",overflow:"hidden",padding:"18px 18px 15px"}}>
+            <div style={{position:"absolute",inset:0,background:`linear-gradient(105deg,${aCol}38 0%,${aCol}00 40%,${hCol}00 60%,${hCol}33 100%)`,pointerEvents:"none"}}/>
+            <div style={{position:"relative",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              {/* away */}
+              <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:7,width:96}}>
+                {crest(aLogo, aAb)}
+                <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:15,fontWeight:900,letterSpacing:"0.04em",color:pre?L2:aCol}}>{aAb}</div>
+                {game.away.record && <div style={{fontSize:9.5,fontWeight:700,color:L3}}>{game.away.record}</div>}
               </div>
-              <div style={{display:"flex",gap:5}}>
-                {[0,1,2].map(i=>(<span key={i} style={{width:8,height:8,borderRadius:"50%",background:(game.outs||0)>i?RED:"rgba(255,255,255,0.14)"}}/>))}
+              {/* middle */}
+              <div style={{flex:1,textAlign:"center"}}>
+                {pre ? (
+                  <div style={{fontSize:14,fontWeight:800,color:L2,fontFamily:"'Barlow Semi Condensed',sans-serif"}}>{startT||"TBD"}</div>
+                ) : (
+                  <>
+                    <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:46,fontWeight:900,lineHeight:1,letterSpacing:"-1px"}}>
+                      <span style={{color:leadA?"#fff":L3}}>{aSc}</span>
+                      <span style={{color:L4,fontSize:26,margin:"0 4px"}}>{"\u2013"}</span>
+                      <span style={{color:leadH?"#fff":L3}}>{hSc}</span>
+                    </div>
+                    {live && baseball && (<>
+                      <div style={{fontSize:9.5,fontWeight:900,letterSpacing:"0.1em",color:"#30D158",marginTop:3}}>
+                        <span style={{display:"inline-block",width:6,height:6,borderRadius:3,background:"#30D158",marginRight:5,verticalAlign:"middle"}}/>
+                        {(game.half||"").toUpperCase()} {game.inning}
+                      </div>
+                      <div style={{position:"relative",width:58,height:58,margin:"9px auto 0"}}>
+                        <div style={{position:"absolute",width:14,height:14,transform:"rotate(45deg)",top:23,right:0,background:game.bases&&game.bases.first?YEL:"rgba(255,255,255,0.13)",border:`1px solid ${game.bases&&game.bases.first?YEL:"rgba(255,255,255,0.26)"}`}}/>
+                        <div style={{position:"absolute",width:14,height:14,transform:"rotate(45deg)",top:0,left:22,background:game.bases&&game.bases.second?YEL:"rgba(255,255,255,0.13)",border:`1px solid ${game.bases&&game.bases.second?YEL:"rgba(255,255,255,0.26)"}`}}/>
+                        <div style={{position:"absolute",width:14,height:14,transform:"rotate(45deg)",top:23,left:0,background:game.bases&&game.bases.third?YEL:"rgba(255,255,255,0.13)",border:`1px solid ${game.bases&&game.bases.third?YEL:"rgba(255,255,255,0.26)"}`}}/>
+                      </div>
+                      <div style={{display:"flex",gap:4,justifyContent:"center",alignItems:"center",marginTop:7}}>
+                        <span style={{fontSize:8,fontWeight:900,color:L4,letterSpacing:"0.06em",marginRight:3}}>OUT</span>
+                        {[0,1,2].map(i=>(<span key={i} style={{width:7,height:7,borderRadius:4,background:(game.outs||0)>i?RED:"rgba(255,255,255,0.16)"}}/>))}
+                      </div>
+                    </>)}
+                    {live && football && (<>
+                      <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:900,color:CY,marginTop:2}}>{"Q"+(game.period||1)}{game.clock?(" \u00b7 "+game.clock):""}</div>
+                      {sit && (sit.possession || sit.downDistance) && (
+                        <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1,marginTop:3}}>
+                          {sit.possession && <span style={{fontSize:10.5,fontWeight:800,color:sit.isRedZone?RED:CY,letterSpacing:"0.03em"}}>{(sit.possession||"").toUpperCase()} BALL</span>}
+                          {sit.downDistance && <span style={{fontSize:10,fontWeight:700,color:L2,textAlign:"center",maxWidth:150,lineHeight:1.3}}>{sit.downDistance}</span>}
+                        </div>
+                      )}
+                    </>)}
+                    {fin && (
+                      <div style={{fontSize:10,fontWeight:900,letterSpacing:"0.1em",color:L3,marginTop:3}}>{baseball && game.inning && game.inning!==9 ? `FINAL \u00b7 ${game.inning}` : "FINAL"}</div>
+                    )}
+                  </>
+                )}
               </div>
-            </>) : (<>
-              <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:15,fontWeight:800,color:CY}}>{"Q"+(game.period||1)}</div>
-              <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:22,fontWeight:800,color:"#fff",lineHeight:1}}>{game.clock||"\u2013"}</div>
-              {football && sit && (sit.possession || sit.downDistance) && (
-                <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1,marginTop:1}}>
-                  {sit.possession && <span style={{fontSize:10.5,fontWeight:800,color:sit.isRedZone?RED:CY,letterSpacing:"0.03em"}}>{(sit.possession==="away"?aAb:hAb)+(sit.isRedZone?" \u00b7 RED ZONE":" ball")}</span>}
-                  {sit.downDistance && <span style={{fontSize:10,fontWeight:700,color:L2,textAlign:"center",maxWidth:140,lineHeight:1.3}}>{sit.downDistance}</span>}
-                </div>
-              )}
-            </>)) : (
-              <div style={{fontSize:12,fontWeight:800,color:L2,textTransform:"uppercase",letterSpacing:"0.04em"}}>Final</div>
-            )}
+              {/* home */}
+              <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:7,width:96}}>
+                {crest(hLogo, hAb)}
+                <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:15,fontWeight:900,letterSpacing:"0.04em",color:pre?L2:hCol}}>{hAb}</div>
+                {game.home.record && <div style={{fontSize:9.5,fontWeight:700,color:L3}}>{game.home.record}</div>}
+              </div>
+            </div>
           </div>
-          <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6,width:92}}>
-            <div style={{fontSize:12,fontWeight:800,color:L2}}>{hAb}</div>
-            <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:40,fontWeight:800,lineHeight:1,color:pre?L3:(leadH?"#fff":L3)}}>{pre?"\u2013":hSc}</div>
-          </div>
-        </div>
-
+          );
+        })()}
         {/* linescore (baseball: innings) */}
         {baseball && !pre && (
           <div style={{padding:"4px 14px 12px",overflowX:"auto"}}>
@@ -3136,15 +3231,15 @@ function GamecastSheet({ game, pick, onClose }){
                   <td style={{fontSize:13,fontWeight:700,color:L2,paddingLeft:6}}>{aAb}</td>
                   {Array.from({length:n}).map((_,i)=>cell(inns[i]?inns[i].a:null, (i+1)===cur))}
                   <td style={{textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:800,color:"#fff",paddingLeft:10}}>{ls.awayR!=null?ls.awayR:aSc}</td>
-                  <td style={{textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:700,color:L2}}>{ls.awayH!=null?ls.awayH:"\u00b7"}</td>
-                  <td style={{textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:700,color:L2}}>{ls.awayE!=null?ls.awayE:"\u00b7"}</td>
+                  <td style={{textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:700,color:L2}}>{ls.awayH!=null?ls.awayH:"·"}</td>
+                  <td style={{textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:700,color:L2}}>{ls.awayE!=null?ls.awayE:"·"}</td>
                 </tr>
                 <tr>
                   <td style={{fontSize:13,fontWeight:700,color:L2,paddingLeft:6}}>{hAb}</td>
                   {Array.from({length:n}).map((_,i)=>cell(inns[i]?inns[i].h:null, (i+1)===cur))}
                   <td style={{textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:800,color:"#fff",paddingLeft:10}}>{ls.homeR!=null?ls.homeR:hSc}</td>
-                  <td style={{textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:700,color:L2}}>{ls.homeH!=null?ls.homeH:"\u00b7"}</td>
-                  <td style={{textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:700,color:L2}}>{ls.homeE!=null?ls.homeE:"\u00b7"}</td>
+                  <td style={{textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:700,color:L2}}>{ls.homeH!=null?ls.homeH:"·"}</td>
+                  <td style={{textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:700,color:L2}}>{ls.homeE!=null?ls.homeE:"·"}</td>
                 </tr>
               </tbody>
             </table>
@@ -3164,12 +3259,12 @@ function GamecastSheet({ game, pick, onClose }){
                 <tr>
                   <td style={{fontSize:13,fontWeight:700,color:L2,paddingLeft:6}}>{aAb}</td>
                   {Array.from({length:nPer}).map((_,i)=>cell(periodsArr[i]?periodsArr[i].a:null, (i+1)===(live?game.period:-1)))}
-                  <td style={{textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:800,color:"#fff",paddingLeft:10}}>{aSc!=null?aSc:"\u00b7"}</td>
+                  <td style={{textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:800,color:"#fff",paddingLeft:10}}>{aSc!=null?aSc:"·"}</td>
                 </tr>
                 <tr>
                   <td style={{fontSize:13,fontWeight:700,color:L2,paddingLeft:6}}>{hAb}</td>
                   {Array.from({length:nPer}).map((_,i)=>cell(periodsArr[i]?periodsArr[i].h:null, (i+1)===(live?game.period:-1)))}
-                  <td style={{textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:800,color:"#fff",paddingLeft:10}}>{hSc!=null?hSc:"\u00b7"}</td>
+                  <td style={{textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:800,color:"#fff",paddingLeft:10}}>{hSc!=null?hSc:"·"}</td>
                 </tr>
               </tbody>
             </table>
@@ -3184,7 +3279,7 @@ function GamecastSheet({ game, pick, onClose }){
               <div style={{flex:1,minWidth:0,background:"#1C1C1E",border:"0.5px solid rgba(48,209,88,0.3)",borderRadius:11,padding:"9px 11px"}}>
                 <div style={{fontSize:9,fontWeight:900,letterSpacing:"0.1em",color:"#30D158"}}>AT BAT</div>
                 <div style={{fontSize:13,fontWeight:800,marginTop:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{game.atBat}</div>
-                {game.balls!=null && <div style={{fontSize:10.5,color:L3}}>{game.balls}-{game.strikes}{game.outs!=null?` \u00b7 ${game.outs} out`:""}</div>}
+                {game.balls!=null && <div style={{fontSize:10.5,color:L3}}>{game.balls}-{game.strikes}{game.outs!=null?` · ${game.outs} out`:""}</div>}
               </div>
             )}
             {live && game.pitching && (
@@ -3240,15 +3335,15 @@ function GamecastSheet({ game, pick, onClose }){
           const isUnder = /under/i.test(String(pick.outcome||pick.pick_name||""));
           const pctOf = isTotal ? Math.min(100,(tot/Math.max(lineNum,0.5))*100) : 0;
           const gapTxt = !isTotal ? null
-            : fin ? `${tot} of ${lineNum} runs \u00b7 ${isUnder?(tot<lineNum?`won by ${(lineNum-tot).toFixed(1).replace(/\.0$/,"")}`:`lost by ${(tot-lineNum).toFixed(1).replace(/\.0$/,"")}`):(tot>lineNum?`won by ${(tot-lineNum).toFixed(1).replace(/\.0$/,"")}`:`lost by ${(lineNum-tot).toFixed(1).replace(/\.0$/,"")}`)}`
-            : isUnder ? `${tot} of ${lineNum} runs \u00b7 needs ${Math.max(0,(lineNum-tot)).toFixed(1).replace(/\.0$/,"")} more to lose`
-            : `${tot} of ${lineNum} runs \u00b7 needs ${Math.max(0,(lineNum-tot)).toFixed(1).replace(/\.0$/,"")} more to win`;
+            : fin ? `${tot} of ${lineNum} runs · ${isUnder?(tot<lineNum?`won by ${(lineNum-tot).toFixed(1).replace(/\.0$/,"")}`:`lost by ${(tot-lineNum).toFixed(1).replace(/\.0$/,"")}`):(tot>lineNum?`won by ${(tot-lineNum).toFixed(1).replace(/\.0$/,"")}`:`lost by ${(lineNum-tot).toFixed(1).replace(/\.0$/,"")}`)}`
+            : isUnder ? `${tot} of ${lineNum} runs · needs ${Math.max(0,(lineNum-tot)).toFixed(1).replace(/\.0$/,"")} more to lose`
+            : `${tot} of ${lineNum} runs · needs ${Math.max(0,(lineNum-tot)).toFixed(1).replace(/\.0$/,"")} more to win`;
           return (
           <div style={{margin:"10px 16px 4px",borderRadius:14,padding:"12px 14px",
             background:`linear-gradient(135deg,${tint}26,rgba(255,255,255,0.02))`,border:`1px solid ${tint}59`}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
-              <div style={{fontSize:9,fontWeight:900,letterSpacing:"0.09em",color:tint}}>YOUR PICK{won?" \u00b7 WON":lost?" \u00b7 LOST":""}</div>
-              {pick.multiplier?<div style={{fontSize:9.5,fontWeight:900,padding:"2px 6px",borderRadius:5,background:"rgba(255,159,10,0.2)",color:"#FF9F0A"}}>{pick.multiplier}\u00d7</div>:null}
+              <div style={{fontSize:9,fontWeight:900,letterSpacing:"0.09em",color:tint}}>YOUR PICK{won?" · WON":lost?" · LOST":""}</div>
+              {pick.multiplier?<div style={{fontSize:9.5,fontWeight:900,padding:"2px 6px",borderRadius:5,background:"rgba(255,159,10,0.2)",color:"#FF9F0A"}}>{pick.multiplier}×</div>:null}
             </div>
             <div style={{fontSize:18,fontWeight:900,letterSpacing:-0.3}}>{pick.pick_name}{pick.odds?<span style={{fontSize:13,color:L3,fontWeight:700}}> {pick.odds}</span>:null}</div>
             {isTotal && (
@@ -3260,7 +3355,7 @@ function GamecastSheet({ game, pick, onClose }){
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:9,paddingTop:9,borderTop:"0.5px solid rgba(255,255,255,0.09)"}}>
               <div style={{fontSize:11.5,color:"rgba(255,255,255,0.62)"}}>{gapTxt || badge.txt}</div>
               <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:22,fontWeight:900,color:tint}}>
-                {won?"+"+Number(pick.points_earned||0).toFixed(1):lost?"0.0":(upside>0?"to win "+upside.toFixed(1):"\u2014")}
+                {won?"+"+Number(pick.points_earned||0).toFixed(1):lost?"0.0":(upside>0?"to win "+upside.toFixed(1):"—")}
               </div>
             </div>
           </div>
@@ -3397,7 +3492,7 @@ export default function App() {
      try{
        const { data:_upd } = await supabase.from("leagues").update({ season_start:new Date().toISOString(), current_week:1 }).eq("id",activeLeague.id).is("season_start",null).select("id");
        if(_upd && _upd.length){
-         try{ const {data:_mem}=await supabase.from("league_members").select("user_id").eq("league_id",activeLeague.id); const _ids=(_mem||[]).map(m=>m.user_id); fetch("/api/notify",{method:"POST",headers:await authHeaders(),body:JSON.stringify({ userIds:_ids, title:(activeLeague.name||"Your league")+" is live!", body:"Week 1 is open \u2014 make your picks before they lock.", url:"/", category:"notif_league" })}); }catch(e){}
+         try{ const {data:_mem}=await supabase.from("league_members").select("user_id").eq("league_id",activeLeague.id); const _ids=(_mem||[]).map(m=>m.user_id); fetch("/api/notify",{method:"POST",headers:await authHeaders(),body:JSON.stringify({ userIds:_ids, title:(activeLeague.name||"Your league")+" is live!", body:"Week 1 is open — make your picks before they lock.", url:"/", category:"notif_league" })}); }catch(e){}
        }
        if(user&&user.id) await fetchLeagues(user.id);
      }catch(e){}
@@ -4720,7 +4815,7 @@ export default function App() {
      const reason = !sports.length
       ? `Your ${nm} slot isn't supported by the sports you picked.`
       : (need>1
-         ? `${need}\u00D7 ${nm} needs ${need} games a week \u2014 not enough after week ${w-1}.`
+         ? `${need}\u00D7 ${nm} needs ${need} games a week — not enough after week ${w-1}.`
          : `Not enough ${nm} games after week ${w-1}.`);
      return { max: Math.max(0, w-1), reason };
     }
@@ -5119,7 +5214,7 @@ export default function App() {
  const doReplaceSave = async (bet) => {
    if(!replaceCtx || !user) return;
    const ctx = replaceCtx;
-   if(bet.gameTime && Date.parse(bet.gameTime) <= Date.now()){ setPickConflict("That game has already started \u2014 pick one that hasn\u2019t."); setTimeout(()=>setPickConflict(""),3200); return; }
+   if(bet.gameTime && Date.parse(bet.gameTime) <= Date.now()){ setPickConflict("That game has already started — pick one that hasn\u2019t."); setTimeout(()=>setPickConflict(""),3200); return; }
    const cat = ctx.type;
    const row = {
      user_id: user.id, week: ctx.week, multiplier: ctx.mult,
@@ -7736,7 +7831,7 @@ export default function App() {
    const COL={win:"#30D158",loss:"#FF453A",pend:"#FF9F0A",idle:"rgba(255,255,255,0.16)"};
    const _legLamps=myPicks.map(p=>p.result==="W"?COL.win:(p.result==="L"?COL.loss:COL.pend)).concat(Array(Math.max(0,openSlots)).fill(COL.idle)).slice(0,10);
    const _stripDot=liveCount>0?"#64D2FF":(hit>0?"#30D158":"#FF453A");
-   const _stripText=liveCount>0?(liveCount+" of "+slotCount+" legs live"+(settleMs?(" \u00b7 settles ~"+fmtClk(settleMs)):"")+" \u00b7 "+weekPts+" this week"):(hit+" of "+total+" hit \u00b7 "+weekPts+" pts this week");
+   const _stripText=liveCount>0?(liveCount+" of "+slotCount+" legs live"+(settleMs?(" · settles ~"+fmtClk(settleMs)):"")+" · "+weekPts+" this week"):(hit+" of "+total+" hit · "+weekPts+" pts this week");
    const _buildLabel=isSoloMode?"Build this week's slip":("Build Week "+(activeLeague.current_week||activeLeague.week||1)+" slip");
    const _addLabel=openSlots===1?"Add a pick":("Add "+openSlots+" picks");
    const _openLabel=openSlots+" slot"+(openSlots>1?"s":"")+" open";
@@ -7749,7 +7844,7 @@ export default function App() {
    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",position:"relative"}}>
      <div style={{padding:"13px 12px 12px"}}>
        <div style={_lab}>Seed</div>
-       <div style={_val}>{myRank>0?("#"+myRank):"\u2014"}<span style={{fontSize:13,color:"rgba(255,255,255,0.3)",fontWeight:700}}> /{sorted.length}</span></div>
+       <div style={_val}>{myRank>0?("#"+myRank):"—"}<span style={{fontSize:13,color:"rgba(255,255,255,0.3)",fontWeight:700}}> /{sorted.length}</span></div>
      </div>
      <div style={{padding:"13px 12px 12px",borderLeft:"1px solid rgba(255,255,255,0.08)"}}>
        <div style={_lab}>Record</div>
@@ -7757,7 +7852,7 @@ export default function App() {
      </div>
      <div style={{padding:"13px 12px 12px",borderLeft:"1px solid rgba(255,255,255,0.08)"}}>
        <div style={_lab}>Net pts</div>
-       <div style={{..._val,color:seasonPts>0?"#64D2FF":"rgba(255,255,255,0.3)"}}>{seasonPts>0?Number(seasonPts).toFixed(1):"\u2014"}</div>
+       <div style={{..._val,color:seasonPts>0?"#64D2FF":"rgba(255,255,255,0.3)"}}>{seasonPts>0?Number(seasonPts).toFixed(1):"—"}</div>
      </div>
      <div style={{padding:"13px 12px 12px",borderLeft:"1px solid rgba(255,255,255,0.08)"}}>
        <div style={_lab}>Slip</div>
@@ -7870,7 +7965,7 @@ export default function App() {
      <div style={{fontSize:13,color:IOS.label2,lineHeight:1.5,marginTop:7}}>You chose manual start, so the season hasn’t begun. Start it whenever everyone’s signed and the slate looks right.</div>
      <button onClick={async()=>{ if(!window.confirm("Start the season now? Week 1 opens, the roster locks, and this week\u2019s games become everyone\u2019s first slate. This can\u2019t be undone.")) return; await supabase.from("leagues").update({season_start:new Date().toISOString(),current_week:1}).eq("id",activeLeague.id).is("season_start",null); try{ const {data:_mem}=await supabase.from("league_members").select("user_id").eq("league_id",activeLeague.id); const _ids=(_mem||[]).map(m=>m.user_id); fetch("/api/notify",{method:"POST",headers:await authHeaders(),body:JSON.stringify({userIds:_ids,title:(activeLeague.name||"Your league")+" is live!",body:"Week 1 is open — make your picks before they lock.",url:"/",category:"notif_league"})}); }catch(e){} await fetchLeagues(user.id); }} style={{width:"100%",marginTop:16,background:IOS.blue,border:"none",color:"#fff",borderRadius:13,padding:"15px",fontSize:16,fontWeight:800,fontFamily:"Barlow,sans-serif",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><svg width="16" height="16" viewBox="0 0 24 24" fill="#fff" stroke="none"><polygon points="6 4 20 12 6 20 6 4"/></svg>Start League</button>
      <div style={{marginTop:14,textAlign:"left"}}>
-       {["Week 1 opens and picks go live for everyone","This week\u2019s games become your Week 1 slate","The roster locks \u2014 no new joins after start"].map((t,i)=>(
+       {["Week 1 opens and picks go live for everyone","This week\u2019s games become your Week 1 slate","The roster locks — no new joins after start"].map((t,i)=>(
          <div key={i} style={{display:"flex",gap:9,alignItems:"flex-start",padding:"7px 0",borderTop:i>0?"0.5px solid rgba(255,255,255,0.07)":"none"}}>
            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.4" style={{flexShrink:0,marginTop:1}}><polyline points="20 6 9 17 4 12"/></svg>
            <span style={{fontSize:12.5,color:IOS.label2,lineHeight:1.4}}>{t}</span>
@@ -9599,14 +9694,14 @@ export default function App() {
                    <span style={{fontSize:10,fontWeight:800,color:IOS.pink,width:15,flexShrink:0}}>{(i+1)+"."}</span>
                    <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.pick}</div><div style={{fontSize:10,color:IOS.label3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.game}</div></div>
                    <span style={{fontSize:12,fontWeight:800,color:(l.odds||"").startsWith("+")?IOS.green:IOS.blue,flexShrink:0}}>{l.odds}</span>
-                   <div onClick={()=>setSoloParlay(pv=>({...pv, legs:(pv.legs||[]).filter(x=>x.id!==l.id)}))} style={{width:22,height:22,borderRadius:"50%",background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",color:"rgba(255,255,255,0.45)",fontSize:14,cursor:"pointer",flexShrink:0}}>{"\u00d7"}</div>
+                   <div onClick={()=>setSoloParlay(pv=>({...pv, legs:(pv.legs||[]).filter(x=>x.id!==l.id)}))} style={{width:22,height:22,borderRadius:"50%",background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",color:"rgba(255,255,255,0.45)",fontSize:14,cursor:"pointer",flexShrink:0}}>{"×"}</div>
                  </div>
                ))}
              </div>
            )}
            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,55,95,0.08)",border:"0.5px solid rgba(255,55,95,0.3)",borderRadius:10,padding:"9px 12px",marginBottom:12}}>
              <div><div style={{fontSize:8.5,fontWeight:800,textTransform:"uppercase",color:IOS.label3}}>Combined odds</div><div style={{fontSize:19,fontWeight:800,color:IOS.pink,fontFamily:"'Barlow Semi Condensed',sans-serif"}}>{_ls?_ls.american:"—"}</div></div>
-             <div style={{textAlign:"right"}}><div style={{fontSize:8.5,fontWeight:800,textTransform:"uppercase",color:IOS.label3}}>{"At "+(soloParlay.mult||2)+"x · Possible"}</div><div style={{fontSize:19,fontWeight:800,color:"#fff",fontFamily:"'Barlow Semi Condensed',sans-serif"}}>{_poss ? (_poss+" pts") : "\u2014"}</div></div>
+             <div style={{textAlign:"right"}}><div style={{fontSize:8.5,fontWeight:800,textTransform:"uppercase",color:IOS.label3}}>{"At "+(soloParlay.mult||2)+"x · Possible"}</div><div style={{fontSize:19,fontWeight:800,color:"#fff",fontFamily:"'Barlow Semi Condensed',sans-serif"}}>{_poss ? (_poss+" pts") : "—"}</div></div>
            </div>
            <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:14}}>
              <span style={{fontSize:8.5,fontWeight:800,textTransform:"uppercase",color:IOS.label3,flexShrink:0}}>Units</span>
@@ -10004,12 +10099,12 @@ export default function App() {
    if(!sameEvent) continue;
    // both sides of the same market (or the same player's prop)
    if((l.marketKey||null)===(bet.marketKey||null) && (_isGLMkt(bet.marketKey) || _plyrOf(l.pick)===_plyrOf(bet.pick)))
-    return "Those two directly conflict \u2014 you can't parlay both sides of the same market.";
+    return "Those two directly conflict — you can't parlay both sides of the same market.";
    // opposing teams in the same scope (e.g. Mets ML + Phillies -1.5)
    if(l.category && bet.category && LINE_GROUP[l.category] && LINE_GROUP[l.category]===LINE_GROUP[bet.category]
       && SIDE_TYPES.includes(l.category) && SIDE_TYPES.includes(bet.category)
       && l.outcome && bet.outcome && String(l.outcome)!==String(bet.outcome))
-    return "You already have "+l.outcome+" in this game \u2014 you can't parlay the other side too.";
+    return "You already have "+l.outcome+" in this game — you can't parlay the other side too.";
   }
   return null;
  };
@@ -10261,8 +10356,8 @@ export default function App() {
    else if(gridType==="period"){
    const c=bet.category||gridPeriodSub; const pt=bet.point;
    const scope=(c&&c.indexOf("_f5")>-1)?"First 5":(c&&c.indexOf("_h1")>-1)?"1st Half":"";
-   if(c==="yrfi"){ title=bet.game; subtitle="Yes run \u00b7 1st inning"; sideChip="YES"; }
-   else if(c==="nrfi"){ title=bet.game; subtitle="No run \u00b7 1st inning"; sideChip="NO"; }
+   if(c==="yrfi"){ title=bet.game; subtitle="Yes run · 1st inning"; sideChip="YES"; }
+   else if(c==="nrfi"){ title=bet.game; subtitle="No run · 1st inning"; sideChip="NO"; }
    else if(c==="ou_f5"||c==="ou_h1"){ const side=String(bet.outcome||bet.pick||""); title=bet.game; subtitle=(scope+" "+side+(pt!=null?(" "+pt):"")).trim(); const ls=side.toLowerCase(); sideChip=ls.startsWith("over")?"OVER":ls.startsWith("under")?"UNDER":null; }
    else if(c==="spread_f5"||c==="spread_h1"){ const team=bet.outcome||bet.pick; const sign=pt!=null?(pt>=0?("+"+pt):(""+pt)):""; title=team; subtitle=(scope+" "+sign).trim(); sideChip=sideOf(team,bet.game); }
    else { const team=bet.outcome||bet.pick; title=team; subtitle=(scope+" ML").trim(); sideChip=sideOf(team,bet.game); }
@@ -10348,7 +10443,7 @@ export default function App() {
    const groups={};
    list.forEach(b=>{ const g=b.game||"Other"; if(!groups[g]) groups[g]=[]; groups[g].push(b); });
    const keys=Object.keys(groups).sort((a,b)=> (new Date(groups[a][0].gameTime||0)) - (new Date(groups[b][0].gameTime||0)) );
-   const tag=(gSport?String(gSport).toUpperCase():"")+" \u00b7 "+String(TYPE_LABELS[gridType]||"").toUpperCase();
+   const tag=(gSport?String(gSport).toUpperCase():"")+" · "+String(TYPE_LABELS[gridType]||"").toUpperCase();
    const _dec=(o)=>{ const n=Number(o); if(!n) return 1; return n>0?(1+n/100):(1+100/Math.abs(n)); };
    const _sortBets=(arr)=>{ const k=b=>(b.impliedOdds!=null?b.impliedOdds:Number(String(b.odds).replace("+",""))); if(gridSort==="long") return [...arr].sort((a,b)=>_dec(k(b))-_dec(k(a))); if(gridSort==="short") return [...arr].sort((a,b)=>_dec(k(a))-_dec(k(b))); return arr; };
    return (
@@ -10672,7 +10767,7 @@ export default function App() {
  </div>
  )}
 
- {replaceCtx && (<div style={{margin:"0 16px 9px",padding:"9px 12px",borderRadius:10,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.35)",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}><div style={{fontSize:11.5,fontWeight:700,color:"#fff",minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{replaceCooked ? ("No open "+String(gSport).toUpperCase()+" games left this week \u2014 switch sport or cancel") : ("Replacing voided "+String(replaceCtx.type).toUpperCase()+" \u00b7 "+replaceCtx.mult+"\u00d7 \u2014 same week only")}</div><div onClick={()=>{ setReplaceCtx(null); setScreen("home"); }} style={{fontSize:11,fontWeight:800,color:IOS.blue,cursor:"pointer",flexShrink:0}}>Cancel</div></div>)}
+ {replaceCtx && (<div style={{margin:"0 16px 9px",padding:"9px 12px",borderRadius:10,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.35)",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}><div style={{fontSize:11.5,fontWeight:700,color:"#fff",minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{replaceCooked ? ("No open "+String(gSport).toUpperCase()+" games left this week — switch sport or cancel") : ("Replacing voided "+String(replaceCtx.type).toUpperCase()+" · "+replaceCtx.mult+"× — same week only")}</div><div onClick={()=>{ setReplaceCtx(null); setScreen("home"); }} style={{fontSize:11,fontWeight:800,color:IOS.blue,cursor:"pointer",flexShrink:0}}>Cancel</div></div>)}
  {soloParlayMode && (()=>{
        const _sl = (soloParlay && soloParlay.legs) || [];
        const _lsd = _sl.length>=2 ? calcLS(_sl) : null;
@@ -10685,14 +10780,14 @@ export default function App() {
              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={IOS.pink} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 0 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
            </div>
            <div style={{flex:1,minWidth:0}}>
-             <div style={{fontSize:8.5,fontWeight:900,letterSpacing:"0.08em",color:IOS.pink}}>{"PARLAY \u00b7 "+_sl.length+" "+(_sl.length===1?"LEG":"LEGS")+(_ready?(" \u00b7 "+_am):"")}</div>
-             <div style={{fontSize:10.5,fontWeight:600,color:"rgba(255,255,255,0.5)",marginTop:1}}>{_ready?"Tap more to add, or a leg below to remove":"Tap bets below to add legs \u2014 need 2+"}</div>
+             <div style={{fontSize:8.5,fontWeight:900,letterSpacing:"0.08em",color:IOS.pink}}>{"PARLAY · "+_sl.length+" "+(_sl.length===1?"LEG":"LEGS")+(_ready?(" · "+_am):"")}</div>
+             <div style={{fontSize:10.5,fontWeight:600,color:"rgba(255,255,255,0.5)",marginTop:1}}>{_ready?"Tap more to add, or a leg below to remove":"Tap bets below to add legs — need 2+"}</div>
            </div>
            <div onClick={()=>{ setSoloParlayMode(false); setScreen("picks"); }} style={{fontFamily:"Barlow",fontSize:12,fontWeight:800,color:_ready?"#08080B":"rgba(255,255,255,0.4)",background:_ready?IOS.pink:"rgba(255,255,255,0.08)",borderRadius:9,padding:"8px 14px",cursor:"pointer",flexShrink:0}}>Done</div>
          </div>
          {_sl.length>0 && (
            <div className="gbx-scroll" style={{display:"flex",gap:6,marginTop:9,overflowX:"auto"}}>
-             {_sl.map((l,i)=>(<div key={i} onClick={()=>setSoloParlay(pv=>({...pv, legs:(pv.legs||[]).filter(x=>String(x.id)!==String(l.id))}))} style={{flexShrink:0,fontSize:10.5,fontWeight:700,padding:"5px 9px",borderRadius:8,background:"rgba(255,55,95,0.14)",color:"#ff8aa6",display:"flex",alignItems:"center",gap:6,cursor:"pointer",whiteSpace:"nowrap"}}>{l.pick} <span style={{opacity:0.7,fontWeight:900}}>{"\u00d7"}</span></div>))}
+             {_sl.map((l,i)=>(<div key={i} onClick={()=>setSoloParlay(pv=>({...pv, legs:(pv.legs||[]).filter(x=>String(x.id)!==String(l.id))}))} style={{flexShrink:0,fontSize:10.5,fontWeight:700,padding:"5px 9px",borderRadius:8,background:"rgba(255,55,95,0.14)",color:"#ff8aa6",display:"flex",alignItems:"center",gap:6,cursor:"pointer",whiteSpace:"nowrap"}}>{l.pick} <span style={{opacity:0.7,fontWeight:900}}>{"×"}</span></div>))}
            </div>
          )}
        </div>
@@ -10840,7 +10935,7 @@ export default function App() {
  <div onClick={(e)=>e.stopPropagation()} style={{width:"100%",maxHeight:"90%",background:"#0d0d10",borderTopLeftRadius:20,borderTopRightRadius:20,borderTop:"1px solid #26262a",display:"flex",flexDirection:"column",overflow:"hidden"}}>
  <div style={{width:36,height:4,borderRadius:2,background:"#33333a",margin:"9px auto 4px"}}/>
  <div style={{padding:"6px 16px 4px"}}>
- <div style={{fontSize:16,fontWeight:800}}>{altSheet.isProp?(altSheet.player+" \u00b7 "+altSheet.label):(altSheet.isSpread?((altSheet.bet.outcome||"")+" \u00b7 Run Line"):"Game Total")}</div>
+ <div style={{fontSize:16,fontWeight:800}}>{altSheet.isProp?(altSheet.player+" · "+altSheet.label):(altSheet.isSpread?((altSheet.bet.outcome||"")+" · Run Line"):"Game Total")}</div>
  <div style={{fontSize:11.5,color:"rgba(255,255,255,0.45)",marginTop:1}}>Pick a line — lower pays less, longer pays more</div>
  </div>
  {altSheet.loading ? (
@@ -11677,7 +11772,7 @@ export default function App() {
          <div style={{position:"absolute",top:2,left:newLeaguePowerUps?18:2,width:22,height:22,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
        </div>
      </div>
-     <div style={{fontSize:11,color:"rgba(255,255,255,0.45)",marginBottom:8}}>{newLeaguePowerUps?"Members can win and play power-ups (Double Down, Spread boosts, Insurance).":"No power-ups \u2014 picks only, pure skill."}</div>
+     <div style={{fontSize:11,color:"rgba(255,255,255,0.45)",marginBottom:8}}>{newLeaguePowerUps?"Members can win and play power-ups (Double Down, Spread boosts, Insurance).":"No power-ups — picks only, pure skill."}</div>
      </>
      )}
      <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"rgba(255,255,255,0.6)",marginBottom:8,marginTop:12}}>Season length</div>
@@ -12124,7 +12219,7 @@ export default function App() {
        <div style={{fontSize:13,color:"#fff",fontWeight:700,marginBottom:4}}>No schedule yet</div>
        {(()=>{ const _cm=!!(activeLeague&&activeLeague.isCommissioner)&&((activeLeague&&activeLeague.league_type)||"h2h")==="h2h"&&leagueMembers.length>=2; return (
        <>
-       <div style={{fontSize:11,color:IOS.label3,marginBottom:_cm?12:0}}>{_cm?"Generate the regular-season matchups now \u2014 playoff weeks are reserved automatically.":"Fill up the league to generate the schedule"}</div>
+       <div style={{fontSize:11,color:IOS.label3,marginBottom:_cm?12:0}}>{_cm?"Generate the regular-season matchups now — playoff weeks are reserved automatically.":"Fill up the league to generate the schedule"}</div>
        {_cm && (
        <button onClick={async()=>{
          const memberIds=leagueMembers.map(m=>m.userId).filter(Boolean);
@@ -12589,7 +12684,7 @@ export default function App() {
    const _tLabel=(t)=>({ml:"Moneyline",spread:"Spread",ou:"Total",prop:"Player prop",longshot:"Parlay",wildcard:"Wildcard"}[t]||(t?(""+t).toUpperCase():"Pick"));
    const _privacy=activeLeague.privacy||"private";
    const _code=activeLeague.invite_code||activeLeague.inviteCode||"";
-   const _sportLbl=(SPORTS[activeLeague.sport]&&SPORTS[activeLeague.sport].label)||(activeLeague.sport?(""+activeLeague.sport).toUpperCase():"\u2014");
+   const _sportLbl=(SPORTS[activeLeague.sport]&&SPORTS[activeLeague.sport].label)||(activeLeague.sport?(""+activeLeague.sport).toUpperCase():"—");
    const _panel={background:"#0B0B10",border:"1px solid rgba(255,255,255,0.08)",borderRadius:16,overflow:"hidden",margin:"0 16px 12px"};
    const _eye={fontSize:10,letterSpacing:"0.13em",color:"rgba(255,255,255,0.3)",fontWeight:700,textTransform:"uppercase",margin:"2px 18px 6px"};
    const _crow={padding:14,display:"flex",alignItems:"center",gap:12};
@@ -12611,7 +12706,7 @@ export default function App() {
      </div>
      <div style={{position:"relative",display:"flex",alignItems:"center",gap:7,borderTop:_hair,padding:"9px 12px",fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.6)"}}>
        <span style={{width:6,height:6,borderRadius:"50%",background:isPro?IOS.green:"rgba(255,255,255,0.3)",boxShadow:isPro?"0 0 7px "+IOS.green:"none"}}/>
-       <span style={{color:"#fff"}}>Commish Pro</span>{isPro?" \u00b7 full control":" \u00b7 limited"}
+       <span style={{color:"#fff"}}>Commish Pro</span>{isPro?" · full control":" · limited"}
        <span onClick={()=>isPro?setProStatus(false):setShowPaywall("settings")} style={{marginLeft:"auto",color:IOS.blue,fontWeight:700,cursor:"pointer"}}>{isPro?"Manage":"Unlock"}</span>
      </div>
    </div>
@@ -12666,7 +12761,7 @@ export default function App() {
        {_poOn&&(
        <div style={{display:"flex",alignItems:"center",gap:8,padding:"11px 14px",borderTop:_hair,fontSize:12,color:"rgba(255,255,255,0.6)"}}>
          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={IOS.purple} strokeWidth="2"><path d="M4 4h16v5a8 8 0 0 1-16 0z"/><path d="M12 17v3M8 21h8"/></svg>
-         <span><span style={{color:"#fff"}}>{_regWeeks}</span> regular {"\u00b7"} <span style={{color:"#fff"}}>{_poWeeks}</span> playoff week{_poWeeks===1?"":"s"} {"\u00b7"} top <span style={{color:"#fff"}}>{_field}</span> make it</span>
+         <span><span style={{color:"#fff"}}>{_regWeeks}</span> regular {"·"} <span style={{color:"#fff"}}>{_poWeeks}</span> playoff week{_poWeeks===1?"":"s"} {"·"} top <span style={{color:"#fff"}}>{_field}</span> make it</span>
        </div>
        )}
      </div>
@@ -12677,7 +12772,7 @@ export default function App() {
    <div style={_panel}>
      <div style={_crow}>
        <div style={_ic}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg></div>
-       <div style={{flex:1,minWidth:0}}><div style={_tt}>League size</div><div style={_dd}>{leagueMembers.length} of {_target}{leagueMembers.length>=_target?" \u00b7 full":(" \u00b7 "+(_target-leagueMembers.length)+" spots left")}</div></div>
+       <div style={{flex:1,minWidth:0}}><div style={_tt}>League size</div><div style={_dd}>{leagueMembers.length} of {_target}{leagueMembers.length>=_target?" · full":(" · "+(_target-leagueMembers.length)+" spots left")}</div></div>
      </div>
      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,padding:"0 14px 14px"}}>
        {[6,8,10,12].map(sz=>{ const on=sz===_target; return (
@@ -12720,7 +12815,7 @@ export default function App() {
    <div style={_eye}>Week Control</div>
    <div style={_panel}>
      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 14px",borderBottom:_hair}}>
-       <div style={_lbl9}>Live ops {"\u00b7"} Week {activeLeague.current_week||1} of {activeLeague.season_weeks||18}</div>
+       <div style={_lbl9}>Live ops {"·"} Week {activeLeague.current_week||1} of {activeLeague.season_weeks||18}</div>
        <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:22,color:IOS.blue}}>Wk {activeLeague.current_week||1}</div>
      </div>
      <div style={{padding:14}}>
@@ -12855,7 +12950,7 @@ export default function App() {
  try { localStorage.removeItem(`linedup_picks_${activeLeague.id}_wk${currentWeek}`); } catch(e) {}
  try { localStorage.removeItem(`linedup_draft_${activeLeague.id}_wk${currentWeek}`); } catch(e) {}
  setAdvancingWeek(false);
- }} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:advancingWeek?"rgba(255,255,255,0.08)":IOS.green,border:"none",borderRadius:11,padding:13,fontFamily:"Barlow,sans-serif",fontSize:14,fontWeight:700,color:advancingWeek?"rgba(255,255,255,0.3)":"#04210f",cursor:advancingWeek?"default":"pointer"}}>{advancingWeek?"Advancing...":(<span style={{display:"inline-flex",alignItems:"center",gap:8}}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M5 4l8 8-8 8M14 4l6 8-6 8"/></svg>End Week {activeLeague.current_week||1} {"\u00b7"} Start Week {(activeLeague.current_week||1)+1}</span>)}</button>
+ }} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:advancingWeek?"rgba(255,255,255,0.08)":IOS.green,border:"none",borderRadius:11,padding:13,fontFamily:"Barlow,sans-serif",fontSize:14,fontWeight:700,color:advancingWeek?"rgba(255,255,255,0.3)":"#04210f",cursor:advancingWeek?"default":"pointer"}}>{advancingWeek?"Advancing...":(<span style={{display:"inline-flex",alignItems:"center",gap:8}}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M5 4l8 8-8 8M14 4l6 8-6 8"/></svg>End Week {activeLeague.current_week||1} {"·"} Start Week {(activeLeague.current_week||1)+1}</span>)}</button>
      </div>
    </div>
 
@@ -14507,11 +14602,11 @@ export default function App() {
    const _ssH=(teamH.seasonStats&&teamH.seasonStats.length?teamH.seasonStats:ss1)||[];
    const _num=(v)=>{ const n=parseFloat(String(v==null?"":v).replace(/[^0-9.\-]/g,"")); return isNaN(n)?null:n; };
    const _diff=(ss)=>{ const sc=_num(ss[0]&&ss[0].value), al=_num(ss[1]&&ss[1].value); return (sc!=null&&al!=null)?(sc-al):null; };
-   const _fmtD=(d)=> d==null?"\u2014":((d>=0?"+":"")+d.toFixed(1));
-   const _win=(ss)=> (ss[2]&&ss[2].value)||"\u2014";
+   const _fmtD=(d)=> d==null?"—":((d>=0?"+":"")+d.toFixed(1));
+   const _win=(ss)=> (ss[2]&&ss[2].value)||"—";
    const _diffLabel=((activeLeague&&activeLeague.sport)==="mlb")?"Run Diff":"Pt Diff";
    const _brite=(hex)=>{ try{ let h=String(hex||"").replace("#",""); if(h.length===3) h=h.split("").map(c=>c+c).join(""); const r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16); const lum=(0.299*r+0.587*g+0.114*b)/255; if(lum>=0.62) return hex; const f=lum<0.32?0.64:0.46; return "rgb("+Math.round(r+(255-r)*f)+","+Math.round(g+(255-g)*f)+","+Math.round(b+(255-b)*f)+")"; }catch(e){ return hex||"#fff"; } };
-   const tiles=[{l:_diffLabel,a:_fmtD(_diff(_ssA)),h:_fmtD(_diff(_ssH))},{l:"Last 10",a:teamA.last10||"\u2014",h:teamH.last10||"\u2014"},{l:"Win %",a:_win(_ssA),h:_win(_ssH)},{l:"Streak",a:teamA.streak||((mu&&mu.away&&mu.away.streak)||"\u2014"),h:teamH.streak||((mu&&mu.home&&mu.home.streak)||"\u2014")}];
+   const tiles=[{l:_diffLabel,a:_fmtD(_diff(_ssA)),h:_fmtD(_diff(_ssH))},{l:"Last 10",a:teamA.last10||"—",h:teamH.last10||"—"},{l:"Win %",a:_win(_ssA),h:_win(_ssH)},{l:"Streak",a:teamA.streak||((mu&&mu.away&&mu.away.streak)||"—"),h:teamH.streak||((mu&&mu.home&&mu.home.streak)||"—")}];
    const hasTiles=_dTeams.length>0;
    const _catLabel=(c)=>({avg:"AVG",homeRuns:"HR",RBIs:"RBI",rbi:"RBI",era:"ERA",strikeouts:"K",wins:"W",points:"PPG",rebounds:"REB",assists:"AST",passingYards:"PASS",rushingYards:"RUSH",receivingYards:"REC",passingTouchdowns:"PASS TD"}[c]||String(c||"").toUpperCase());
    const _leadFor=(abbr)=>{ const seen={}; const out=[]; (leaders||[]).forEach(cat=>{ if(cat.category==="MLBRating")return; (cat.leaders||[]).forEach(l=>{ if(l.name&&String(l.team||"").toUpperCase()===String(abbr).toUpperCase()&&!seen[l.name]){ seen[l.name]=1; out.push({cat:cat.category,name:l.name,stat:l.stat,photo:l.photo}); } }); }); return out.slice(0,2); };
@@ -14522,7 +14617,7 @@ export default function App() {
    const _nick={fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:25,lineHeight:0.92,textTransform:"uppercase",letterSpacing:0.3,color:"#fff"};
    const Sec=({t})=>(<div style={{display:"flex",alignItems:"center",gap:11,margin:"22px 4px 11px"}}><span style={{fontSize:10.5,fontWeight:800,letterSpacing:"0.16em",textTransform:"uppercase",color:IOS.label3}}>{t}</span><span style={{flex:1,height:1,background:"rgba(255,255,255,0.07)"}}/></div>);
    const Crest=({logo,color,abbr})=>(<div style={{width:72,height:72,borderRadius:"50%",margin:"0 auto 11px",position:"relative",display:"flex",alignItems:"center",justifyContent:"center",background:color||"#101014",boxShadow:"0 10px 26px -8px rgba(0,0,0,0.7)"}}><div style={{position:"absolute",inset:0,borderRadius:"50%",border:"2px solid rgba(255,255,255,0.18)",zIndex:3}}/>{!logo&&<span style={{position:"absolute",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:23,color:"#fff",letterSpacing:0.5,textShadow:"0 2px 4px rgba(0,0,0,0.4)",zIndex:1}}>{abbr}</span>}{logo?<img src={logo} alt="" style={{width:54,height:54,objectFit:"contain",position:"relative",zIndex:2,filter:"drop-shadow(0 3px 6px rgba(0,0,0,0.5))"}} onError={(e)=>{e.currentTarget.style.display="none";}}/>:null}</div>);
-   const PitCol=({m,color,abbr})=>(<div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",textAlign:"center",gap:3}}><div style={{width:58,height:58,borderRadius:"50%",overflow:"hidden",position:"relative",display:"flex",alignItems:"center",justifyContent:"center",background:color,marginBottom:5,boxShadow:"0 6px 16px -6px rgba(0,0,0,0.6)",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:18,color:"#fff"}}><div style={{position:"absolute",inset:0,borderRadius:"50%",border:"2px solid rgba(255,255,255,0.18)",zIndex:3}}/>{!(m&&m.photo)&&<span style={{zIndex:1}}>{_initials(m?m.name:"")}</span>}{m&&m.photo?<img src={m.photo} alt="" style={{width:"100%",height:"100%",objectFit:"cover",position:"relative",zIndex:2}} onError={(e)=>{e.currentTarget.style.display="none";}}/>:null}</div><div style={{fontSize:14,fontWeight:800,color:"#fff"}}>{m?m.name:"TBD"}</div><div style={{fontSize:9,fontWeight:800,letterSpacing:"0.07em",textTransform:"uppercase",color:IOS.label3}}>{((m&&m.pos)||"SP")+" \u00b7 "+abbr}</div>{m&&(m.wl||m.era)?<div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:700,color:IOS.label2,marginTop:3}}>{[m.wl,(m.era?(m.era+" ERA"):"")].filter(Boolean).join(" \u00b7 ")}</div>:null}</div>);
+   const PitCol=({m,color,abbr})=>(<div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",textAlign:"center",gap:3}}><div style={{width:58,height:58,borderRadius:"50%",overflow:"hidden",position:"relative",display:"flex",alignItems:"center",justifyContent:"center",background:color,marginBottom:5,boxShadow:"0 6px 16px -6px rgba(0,0,0,0.6)",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:18,color:"#fff"}}><div style={{position:"absolute",inset:0,borderRadius:"50%",border:"2px solid rgba(255,255,255,0.18)",zIndex:3}}/>{!(m&&m.photo)&&<span style={{zIndex:1}}>{_initials(m?m.name:"")}</span>}{m&&m.photo?<img src={m.photo} alt="" style={{width:"100%",height:"100%",objectFit:"cover",position:"relative",zIndex:2}} onError={(e)=>{e.currentTarget.style.display="none";}}/>:null}</div><div style={{fontSize:14,fontWeight:800,color:"#fff"}}>{m?m.name:"TBD"}</div><div style={{fontSize:9,fontWeight:800,letterSpacing:"0.07em",textTransform:"uppercase",color:IOS.label3}}>{((m&&m.pos)||"SP")+" · "+abbr}</div>{m&&(m.wl||m.era)?<div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:700,color:IOS.label2,marginTop:3}}>{[m.wl,(m.era?(m.era+" ERA"):"")].filter(Boolean).join(" · ")}</div>:null}</div>);
 
    return (
    <div>
@@ -14547,8 +14642,8 @@ export default function App() {
    {homeSt?<div style={{fontSize:10,fontWeight:700,color:IOS.label3,marginTop:2}}>{homeSt}</div>:null}
    </div>
    </div>
-   {(gameTime||venue||tv)?<div style={{position:"relative",textAlign:"center",marginTop:14,fontSize:12.5,fontWeight:700,color:"#fff"}}>{[gameTime,venue,tv].filter(Boolean).join("  \u00b7  ")}</div>:null}
-   {wx&&(wx.temp!=null||wx.summary)?<div style={{position:"relative",textAlign:"center",marginTop:4,fontSize:11.5,fontWeight:600,color:IOS.label2,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={IOS.label2} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>{[wx.temp!=null?(wx.temp+"\u00b0F"):"",wx.summary].filter(Boolean).join(" \u00b7 ")}</div>:null}
+   {(gameTime||venue||tv)?<div style={{position:"relative",textAlign:"center",marginTop:14,fontSize:12.5,fontWeight:700,color:"#fff"}}>{[gameTime,venue,tv].filter(Boolean).join("  ·  ")}</div>:null}
+   {wx&&(wx.temp!=null||wx.summary)?<div style={{position:"relative",textAlign:"center",marginTop:4,fontSize:11.5,fontWeight:600,color:IOS.label2,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={IOS.label2} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>{[wx.temp!=null?(wx.temp+"\u00b0F"):"",wx.summary].filter(Boolean).join(" · ")}</div>:null}
    {hasWP?(
    <div style={{position:"relative",marginTop:18}}>
    <div style={{position:"absolute",left:0,right:0,top:0,textAlign:"center",fontSize:8.5,fontWeight:800,letterSpacing:"0.16em",color:IOS.label3,textTransform:"uppercase"}}>Win probability</div>
@@ -14602,7 +14697,7 @@ export default function App() {
    {tapeRows.filter(r=>r.k!=="Streak").length>0?(<>
    <Sec t="The Tape"/>
    <div style={_card}>
-   {tapeRows.filter(r=>r.k!=="Streak").map((row,i,arr)=>{ const v0=(row.a==null||row.a==="")?"\u2014":String(row.a), v1=(row.h==null||row.h==="")?"\u2014":String(row.h); const n0=parseFloat(v0), n1=parseFloat(v1); const showBar=row.bar&&!isNaN(n0)&&!isNaN(n1); const lower=/allow/i.test(row.k); let aWin=false,hWin=false,wa=50,wh=50; if(showBar){ const sm=(Math.abs(n0)+Math.abs(n1))||1; wa=Math.max(8,Math.round(Math.abs(n0)/sm*100)); wh=Math.max(8,100-wa); aWin=lower?n0<n1:n0>n1; hWin=lower?n1<n0:n1>n0; } return (
+   {tapeRows.filter(r=>r.k!=="Streak").map((row,i,arr)=>{ const v0=(row.a==null||row.a==="")?"—":String(row.a), v1=(row.h==null||row.h==="")?"—":String(row.h); const n0=parseFloat(v0), n1=parseFloat(v1); const showBar=row.bar&&!isNaN(n0)&&!isNaN(n1); const lower=/allow/i.test(row.k); let aWin=false,hWin=false,wa=50,wh=50; if(showBar){ const sm=(Math.abs(n0)+Math.abs(n1))||1; wa=Math.max(8,Math.round(Math.abs(n0)/sm*100)); wh=Math.max(8,100-wa); aWin=lower?n0<n1:n0>n1; hWin=lower?n1<n0:n1>n0; } return (
    <div key={i} style={{padding:"11px 14px",borderBottom:i<arr.length-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:showBar?8:0}}>
    <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:16,minWidth:54,textAlign:"left",color:_brite(awayColor),display:"flex",alignItems:"center",gap:5}}>{aWin?<span style={{width:5,height:5,borderRadius:"50%",background:awayColor,boxShadow:"0 0 8px "+awayColor}}/>:null}{v0}</span>
@@ -14643,7 +14738,7 @@ export default function App() {
    <div key={ti} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px",borderTop:ti>0?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
    <div style={{width:40,fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:14,fontWeight:900,color:_brite(t.color),flexShrink:0}}>{t.abbr}</div>
    <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-   {t.f.length===0?<span style={{fontSize:11,color:IOS.label3}}>No recent games</span>:t.f.map((g,gi)=>{ const rr=String(g.r||"").toUpperCase(); const win=rr==="W",loss=rr==="L"; return <div key={gi} style={{width:24,height:24,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,background:win?"rgba(48,209,88,0.16)":loss?"rgba(255,69,58,0.16)":"rgba(255,255,255,0.08)",color:win?IOS.green:loss?IOS.red:IOS.label3}}>{rr||"\u00b7"}</div>; })}
+   {t.f.length===0?<span style={{fontSize:11,color:IOS.label3}}>No recent games</span>:t.f.map((g,gi)=>{ const rr=String(g.r||"").toUpperCase(); const win=rr==="W",loss=rr==="L"; return <div key={gi} style={{width:24,height:24,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,background:win?"rgba(48,209,88,0.16)":loss?"rgba(255,69,58,0.16)":"rgba(255,255,255,0.08)",color:win?IOS.green:loss?IOS.red:IOS.label3}}>{rr||"·"}</div>; })}
    </div>
    </div>
    ))}
@@ -14694,7 +14789,7 @@ export default function App() {
    </>):null}
 
    {gameLoading?<div style={{textAlign:"center",padding:"24px",color:IOS.label3,fontSize:13}}>Loading stats…</div>:null}
-   {(!gameLoading&&!det.teams&&!eg)?<div style={{textAlign:"center",padding:"16px 8px 8px",color:IOS.label3,fontSize:13,lineHeight:1.6}}>Detailed stats not available yet \u2014 check back closer to game time.</div>:null}
+   {(!gameLoading&&!det.teams&&!eg)?<div style={{textAlign:"center",padding:"16px 8px 8px",color:IOS.label3,fontSize:13,lineHeight:1.6}}>Detailed stats not available yet — check back closer to game time.</div>:null}
    </div>
 
    {/* Footer CTA */}
