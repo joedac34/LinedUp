@@ -3810,7 +3810,7 @@ export default function App() {
    // So: if the draft context is unchanged and we currently hold live picks, do nothing.
    const _liveNow = (flexPicks||[]).some(sl=> sl && !sl.committed && (sl.bet || (sl.isParlay && (sl.parlayLegs||[]).length)));
    if(draftReady.current===_key && _liveNow) return;
-   let base = freshSlots(); try{ const _d = activeLeagueId ? localStorage.getItem(`linedup_draft_${_key}`) : null; if(_d){ const arr=JSON.parse(_d); if(Array.isArray(arr) && arr.length && arr.some(sl=> sl && !sl.committed && (sl.bet || (sl.isParlay && (sl.parlayLegs||[]).length)))) base = arr; } }catch(e){} setFlexPicks(base); try{ draftReady.current = _key; }catch(e){} }, [activeLeagueId, isSoloMode, activeLeague&&activeLeague.slot_config]);
+   let base = freshSlots(); try{ const _d = activeLeagueId ? localStorage.getItem(`linedup_draft_${_key}`) : null; if(_d){ const arr=JSON.parse(_d); if(Array.isArray(arr) && arr.length && arr.some(sl=> sl && !sl.committed && (sl.bet || (sl.isParlay && (sl.parlayLegs||[]).length)))) base = arr; } }catch(e){} setFlexPicks(base); try{ draftReady.current = _key; }catch(e){} }, [activeLeagueId, isSoloMode, (()=>{ try{ const c=activeLeague&&activeLeague.slot_config; return typeof c==="string"?c:JSON.stringify(c||null); }catch(e){ return null; } })(), (activeLeague&&(activeLeague.current_week||activeLeague.week))||1]);
  // Persist the UNLOCKED league draft so an in-progress slip survives leaving/reopening the app.
  // Mirror the draft BOTH ways. This used to be write-only: clearing the last pick left
  // the previous draft in localStorage, so leaving the tab and coming back resurrected
