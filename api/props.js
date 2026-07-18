@@ -61,55 +61,66 @@ export default async function handler(req, res) {
     const marketsParam = markets.join(",");
     const bookmakers = "draftkings,fanduel,betmgm";
 
-    for (const event of upcomingEvents.slice(0, 6)) {
-      const gameLabel = `${event.away_team} @ ${event.home_team}`;
+    // Was capped at 6 — a 15-game slate showed props for fewer than half the games, so the
+    // later games were unpickable. The 5-min CDN cache above means this cost is paid once
+    // per 5 min across ALL users, not per open, so a full slate is affordable. Hard ceiling
+    // of 18 guards against a freak day (doubleheaders) blowing the Odds quota.
+    const TODAY_CAP = 18;
+    const slate = upcomingEvents.slice(0, TODAY_CAP);
+    // Fetch every game's odds IN PARALLEL. Sequential await in a loop meant 18 games took
+    // 6-9s of round-trips and risked a serverless timeout returning a partial/empty slate.
+    // Promise.all makes 18 games cost about the same wall-time as 1.
+    const results = await Promise.all(slate.map(async (event) => {
       const url = `https://api.the-odds-api.com/v4/sports/${sport}/events/${event.id}/odds?apiKey=${apiKey}&regions=us&markets=${marketsParam}&bookmakers=${bookmakers}&oddsFormat=american`;
       try {
         const r = await fetch(url);
-        if (!r.ok) continue;
-        const data = await r.json();
-        if (!data.bookmakers || !data.bookmakers.length) { if (debugRows) debugRows.push({ game: gameLabel, time: event.commence_time, note: "no bookmakers returned", markets: [] }); continue; }
-        if (debugRows) { const _ks = new Set(); data.bookmakers.forEach(bk => bk.markets?.forEach(m => _ks.add(m.key))); debugRows.push({ game: gameLabel, time: event.commence_time, hasHR: _ks.has("batter_home_runs") || _ks.has("batter_home_runs_alternate"), markets: [..._ks] }); }
+        if (!r.ok) return { event, data: null };
+        return { event, data: await r.json() };
+      } catch (e) { return { event, data: null }; }
+    }));
 
-        // Merge markets across ALL books (each book carries a different subset),
-        // de-duping the same player+market+line+side so we don't triple-list it.
-        const seen = new Set();
-        data.bookmakers.forEach(bk => {
-          bk.markets?.forEach(market => {
-            const marketLabel = MARKET_LABELS[market.key] || market.key;
-            const isTD = market.key === "player_anytime_td" || market.key === "player_first_td";
-            market.outcomes?.forEach(outcome => {
-              // HR alternate returns 1+/2+/3+ milestone lines; keep only the classic "to hit a HR" (1+) line
-              if (market.key === "batter_home_runs_alternate" && outcome.point !== 0.5) return;
-              let label, dedupKey;
-              if (isTD) {
-                const player = outcome.name;
-                label = `${player} - ${marketLabel}`;
-                dedupKey = `${market.key}|${player}`;
-              } else {
-                // Props: description = player name, name = Over/Under, point = line
-                const player = outcome.description || outcome.name;
-                const direction = outcome.name === "Over" || outcome.name === "Under" ? outcome.name : "";
-                const line = outcome.point != null ? outcome.point : "";
-                label = `${player} ${direction} ${line} ${marketLabel}`.replace(/\s+/g, " ").trim();
-                dedupKey = `${market.key}|${player}|${direction}|${line}`;
-              }
-              if (seen.has(dedupKey)) return;
-              seen.add(dedupKey);
-              props.push({
-                id: `prop_${event.id}_${market.key}_${props.length}`,
-                game: gameLabel,
-                gameTime: event.commence_time,   // saved as pick.game_date -> grading binds to THIS game
-                eventId: event.id,
-                pick: label,
-                market: market.key,
-                odds: outcome.price >= 0 ? `+${outcome.price}` : `${outcome.price}`,
-                impliedOdds: outcome.price,
-              });
+    for (const { event, data } of results) {
+      const gameLabel = `${event.away_team} @ ${event.home_team}`;
+      if (!data) { if (debugRows) debugRows.push({ game: gameLabel, time: event.commence_time, note: "fetch failed", markets: [] }); continue; }
+      if (!data.bookmakers || !data.bookmakers.length) { if (debugRows) debugRows.push({ game: gameLabel, time: event.commence_time, note: "no bookmakers returned", markets: [] }); continue; }
+      if (debugRows) { const _ks = new Set(); data.bookmakers.forEach(bk => bk.markets?.forEach(m => _ks.add(m.key))); debugRows.push({ game: gameLabel, time: event.commence_time, hasHR: _ks.has("batter_home_runs") || _ks.has("batter_home_runs_alternate"), markets: [..._ks] }); }
+
+      // Merge markets across ALL books (each book carries a different subset),
+      // de-duping the same player+market+line+side so we don't triple-list it.
+      const seen = new Set();
+      data.bookmakers.forEach(bk => {
+        bk.markets?.forEach(market => {
+          const marketLabel = MARKET_LABELS[market.key] || market.key;
+          const isTD = market.key === "player_anytime_td" || market.key === "player_first_td";
+          market.outcomes?.forEach(outcome => {
+            if (market.key === "batter_home_runs_alternate" && outcome.point !== 0.5) return;
+            let label, dedupKey;
+            if (isTD) {
+              const player = outcome.name;
+              label = `${player} - ${marketLabel}`;
+              dedupKey = `${market.key}|${player}`;
+            } else {
+              const player = outcome.description || outcome.name;
+              const direction = outcome.name === "Over" || outcome.name === "Under" ? outcome.name : "";
+              const line = outcome.point != null ? outcome.point : "";
+              label = `${player} ${direction} ${line} ${marketLabel}`.replace(/\s+/g, " ").trim();
+              dedupKey = `${market.key}|${player}|${direction}|${line}`;
+            }
+            if (seen.has(dedupKey)) return;
+            seen.add(dedupKey);
+            props.push({
+              id: `prop_${event.id}_${market.key}_${props.length}`,
+              game: gameLabel,
+              gameTime: event.commence_time,
+              eventId: event.id,
+              pick: label,
+              market: market.key,
+              odds: outcome.price >= 0 ? `+${outcome.price}` : `${outcome.price}`,
+              impliedOdds: outcome.price,
             });
           });
         });
-      } catch (e) { continue; }
+      });
     }
 
     if (debugRows) return res.status(200).json({ requested: markets, events: debugRows });

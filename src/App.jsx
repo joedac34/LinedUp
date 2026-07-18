@@ -3784,7 +3784,17 @@ export default function App() {
  {id:3, bet:null, mult:null, isParlay:false, parlayLegs:[]},
  {id:4, bet:null, mult:null, isParlay:false, parlayLegs:[]},
  ];
- const [flexPicks, setFlexPicks] = useState(EMPTY_FLEX);
+ // Lazy-init from the active league's slot_config so the FIRST paint already has the
+ // right number of slots. Was useState(EMPTY_FLEX) = always 5, which flashed a stale
+ // 5-slot grid on an 8-slot league until the hydrate effect below corrected it.
+ const [flexPicks, setFlexPicks] = useState(()=>{
+   try{
+     const raw = activeLeague && activeLeague.slot_config;
+     const cfg = raw ? (typeof raw==="string"?JSON.parse(raw):raw) : null;
+     if(Array.isArray(cfg) && cfg.length) return cfg.map((c,i)=>({id:i,bet:null,mult:null,category:c.type,slotType:c.type,market:c.market||null,isParlay:false,parlayLegs:[],locked:true}));
+   }catch(e){}
+   return EMPTY_FLEX.map(s=>({...s}));
+ });
  const [soloFlexPicks, setSoloFlexPicks] = useState(EMPTY_FLEX);
  const [soloFreePicks, setSoloFreePicks] = useState([]); const soloDraftReady = useRef(false); const [soloParlay, setSoloParlay] = useState(null); const [soloParlayMode, setSoloParlayMode] = useState(false); const [pushNudgeOff, setPushNudgeOff] = useState(()=>{ try{ return localStorage.getItem("picklock_push_nudge")==="1"; }catch(e){ return false; } }); const [replaceCtx, setReplaceCtx] = useState(null); // void-replace: {voidId, mult, week, type} // freeform solo slate (variable count)
  const [freeCat, setFreeCat] = useState("all");
@@ -5979,7 +5989,8 @@ export default function App() {
    const groups = {}; const order = [];
    data.forEach(p=>{ const sl=p.slot||""; const key = sl.startsWith("longshot") ? ("longshot_"+p.multiplier) : ("m"+p.multiplier); if(!groups[key]){ groups[key]=[]; order.push(key); } groups[key].push(p); });
    flexPicks = order.map((key,gi)=> buildSlot(groups[key], gi));
-   while(flexPicks.length < 5) flexPicks.push({id:flexPicks.length, bet:null, mult:null, isParlay:false, parlayLegs:[]});
+   const _cfgLen = (parseSlotConfig(activeLeague&&activeLeague.slot_config)||[]).length || flexPicks.length || 5;
+   while(flexPicks.length < _cfgLen) flexPicks.push({id:flexPicks.length, bet:null, mult:null, isParlay:false, parlayLegs:[]});
   }
   setSavedPicks({fromDB: true, flexPicks, dbPicks: data});
  } else {
