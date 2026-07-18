@@ -5963,7 +5963,8 @@ export default function App() {
  data = (data||[]).filter(pp=>!pp.replaced_by); // hide voids already replaced so the slot shows the replacement
  if(data && data.length > 0) {
   // Convert DB picks back into flexPicks format for the locked/edit view
-  const _isCustom = data.some(pp=>{const s=pp.slot||""; return !s.startsWith("longshot") && /_\d+$/.test(s);});
+  const _cfgForCustom = parseSlotConfig(activeLeague&&activeLeague.slot_config);
+   const _isCustom = !!(_cfgForCustom && _cfgForCustom.length) || data.some(pp=>{const s=pp.slot||""; return !s.startsWith("longshot") && /_\d+$/.test(s);});
   const buildSlot = (picks, slotId)=>{
     const isParlay = (picks[0].slot||"").startsWith("longshot");
     const cat = (picks[0].slot||"").split("_")[0];
@@ -5988,7 +5989,18 @@ export default function App() {
    const bySlot = {}; data.forEach(p=>{ const s=p.slot||""; (bySlot[s]=bySlot[s]||[]).push(p); });
    Object.keys(bySlot).forEach(slotName=>{
      let idx = parseInt(String(slotName).split("_").pop(), 10);
-     if(isNaN(idx) || idx<0) idx = base.length; // unknown slot index -> append so the pick is never dropped
+     if(isNaN(idx) || idx<0){
+       // No index suffix on this saved pick (older format). Place it in the config slot
+       // whose TYPE matches the pick, so an 8-slot fixed-type league rehydrates in the
+       // right labelled slots instead of appending past the board (which showed the slip
+       // as a generic 5-slot list).
+       const _pcat = String(slotName).split("_")[0] || (bySlot[slotName][0] && bySlot[slotName][0].category) || "";
+       const _isLong = String(slotName).startsWith("longshot");
+       idx = base.findIndex(b=> !b.bet && !b.isParlay && ((_isLong && (b.slotType==="longshot")) || (b.slotType===_pcat)));
+       if(idx===-1) idx = base.findIndex(b=> !b.bet && !b.isParlay && b.slotType==="wildcard");
+       if(idx===-1) idx = base.findIndex(b=> !b.bet && !b.isParlay);
+       if(idx===-1) idx = base.length;
+     }
      while(idx >= base.length) base.push({id:base.length, bet:null, mult:null, isParlay:false, parlayLegs:[], category:null, slotType:null, market:null, committed:false, commitIds:[]});
      const built = buildSlot(bySlot[slotName], idx);
      base[idx] = {...base[idx], ...built, id: idx, category: base[idx].category||built.category, slotType: base[idx].slotType||built.slotType, market: base[idx].market||built.market};
