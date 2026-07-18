@@ -10181,6 +10181,16 @@ export default function App() {
  let mi = activePicks.findIndex(p=>!p.isParlay && p.mult===gridFlexMult);
  if(mi===-1) mi = activePicks.findIndex(p=>!p.isParlay && p.bet===null);
  if(mi!==-1) dest = mi;
+  } else if(!isSoloMode && cat!=="longshot"){
+  // Flex league, NO multiplier chosen yet. The common path: tap a bet in the browser,
+  // then go back to the slip to set the multiplier. Previously this fell through with
+  // dest still pointing at resolveTarget()'s fallback (slot 0), so the pick silently
+  // failed to land when slot 0 was filled or committed. Place into an existing slot of
+  // the same type, else the first EMPTY slot, else block with a clear message.
+  let _mi = activePicks.findIndex(p=>!p.isParlay && p.bet!==null && p.category===cat);
+  if(_mi===-1) _mi = activePicks.findIndex(p=>!p.isParlay && p.bet===null);
+  if(_mi===-1){ setPickConflict("Your slip is full — remove a pick to add this one."); setTimeout(()=>setPickConflict(""),2600); setGridJustAdded(null); return; }
+  dest = _mi;
  } else if(cat!=="longshot"){
  const existingIdx = activePicks.findIndex(p=>!p.isParlay && p.bet!==null && p.category===cat);
  if(existingIdx!==-1) dest = existingIdx;
@@ -10188,6 +10198,13 @@ export default function App() {
  // You can't take both sides of the same game's line (mirrors solo mode). Without
  // this, a custom league with two slots of a type — or flex multiplier stacking —
  // lets you pick both sides of one game for a guaranteed split.
+  // Safety net: if dest still points at a committed/started slot (resolveTarget can fall
+  // back to slot 0), redirect to the first empty slot rather than silently no-opping the
+  // write. This is what left a tapped pick "just not there".
+  if(dest==null || dest<0 || (activePicks[dest] && activePicks[dest].committed)){
+    const _fe = activePicks.findIndex(p=>!p.isParlay && p.bet===null && !p.committed);
+    if(_fe!==-1) dest = _fe;
+  }
  const _existL = activePicks.map((p,i)=> (i!==dest && !p.isParlay && p.bet) ? { id:p.bet.id, category:p.category, eventId:p.bet.eventId, game:p.bet.game, outcome:p.bet.outcome } : null).filter(Boolean);
  const _cfL = lineConflict(cat, bet, _existL);
  if(_cfL){ setPickConflict(_cfL); setTimeout(()=>setPickConflict(""),2600); setGridJustAdded(null); return; }
