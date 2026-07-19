@@ -3081,7 +3081,13 @@ function liveMatch(pick, games){
   let best=null;
   for(const g of games){
     if(!both(g)) continue;
-    if(!isNaN(want)&&g.gameDate){ const diff=Math.abs(Date.parse(g.gameDate)-want); if(best===null||diff<best.diff) best={g,diff}; }
+    if(!isNaN(want)&&g.gameDate){
+      // A pick cannot belong to a game that ENDED before the pick was scheduled to start.
+      // Without this, a pick on tomorrow's game matched tonight's final of the same teams —
+      // the live feed only spans today+yesterday, so the wrong final was the only candidate.
+      if(g.state==="final" && Date.parse(g.gameDate) < want - 3*3600*1000) continue;
+      const diff=Math.abs(Date.parse(g.gameDate)-want); if(best===null||diff<best.diff) best={g,diff};
+    }
     else {
       // No usable date: prefer a game that ISN'T over (a fresh pick can't be on a final —
       // the doubleheader tiebreak) and only take a final if nothing else matches.
@@ -3090,7 +3096,7 @@ function liveMatch(pick, games){
     }
   }
   if(!best) return null;
-  if(!isNaN(want)&&best.diff>26*3600*1000) return null; // wrong game in a series
+  if(!isNaN(want)&&best.diff>11*3600*1000) return null; // same 11h bind grading uses — a 26h window let "tomorrow's pick" match "tonight's final"
   return best.g;
 }
 function _lsOrdinal(n){ n=Number(n)||0; const s=["th","st","nd","rd"], v=n%100; return n+(s[(v-20)%10]||s[v]||s[0]); }
