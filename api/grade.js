@@ -395,6 +395,22 @@ async function espnRecentEventIds(sp, lg) {
   return uniq;
 }
 
+// A StatsAPI schedule entry counts as a COMPLETED, PLAYED game only if it passes this.
+// MLB marks POSTPONED games abstractGameState "Final" (proved 19 Jul 2026, gamePk 823523:
+// abstract "Final" + detailed "Postponed" — and its box score carried BOTH posted lineups
+// with 31-key all-zero batting lines, which graded every Over on the game as L). So:
+// 1) the dead original slot of a rescheduled game always carries rescheduleDate — skip it;
+// 2) skip Postponed/Cancelled/Suspended detailedStates outright;
+// 3) only then apply the final/completed test.
+function schedGameCompleted(g) {
+  if (!g) return false;
+  if (g.rescheduleDate || g.rescheduleGameDate) return false;   // original slot of a postponed game
+  const det = g.status?.detailedState || "";
+  if (/postpon|cancel|suspend/i.test(det)) return false;        // terminal but never played
+  const st = g.status?.abstractGameState || det;
+  return /final|completed|game over/i.test(st);
+}
+
 // MLB StatsAPI (statsapi.mlb.com) — free, no key. Unlike ESPN's free box score it carries
 // doubles, triples, totalBases and stolenBases, so derived props (e.g. total bases) grade
 // automatically. Same index shape as buildPlayerStatIndex: name -> [{date,home,away,stats}].
@@ -412,8 +428,7 @@ async function buildMlbStatsApiIndex() {
       const data = await r.json();
       for (const dt of (data.dates || [])) {
         for (const g of (dt.games || [])) {
-          const st = g.status?.abstractGameState || g.status?.detailedState || "";
-          if (!/final|completed|game over/i.test(st)) continue;  // only completed games
+          if (!schedGameCompleted(g)) continue;  // only PLAYED completed games — see schedGameCompleted
           if (seenPk.has(g.gamePk)) continue;
           seenPk.add(g.gamePk);
           games.push({ pk: g.gamePk, date: g.gameDate || null, home: g.teams?.home?.team?.name || "", away: g.teams?.away?.team?.name || "" });
@@ -710,7 +725,7 @@ function gameScoreFor(pick, games) {
   if (!isNaN(want)) {
     let best = null;
     for (const g of games) { if (!both(g) || !g.date) continue; const diff = Math.abs(Date.parse(g.date) - want); if (best === null || diff < best.diff) best = { g, diff }; }
-    if (best && best.diff <= 24 * 3600 * 1000) game = best.g;
+    if (best && best.diff <= 11 * 3600 * 1000) game = best.g;
   } else {
     game = games.find(g => both(g)) || null;
   }
@@ -751,6 +766,24 @@ function gradePick(pick, games, playerIndex, info = {}) {
   // ── Prop (player stat): graded from the ESPN box-score index, not team scores.
   //    pick.game holds the player name for props (e.g. "Mikal Bridges").
   if (baseType === "prop" || (slot?.startsWith("longshot_") && parseProp(name))) {
+    // A postponed/cancelled game voids its props exactly like its team picks. pick.game
+    // carries the "Away @ Home" matchup for prop slots AND player-prop longshot legs
+    // (verified against live rows 19 Jul 2026), so find the pick's own game in the ESPN
+    // feed FIRST and honor `voided` before any box-score index is consulted — the index
+    // is the layer MLB's "Postponed = Final" status poisoned.
+    const _mt = parseMatchupTeams(matchup);
+    if (_mt && Array.isArray(games) && games.length) {
+      const _want = pick.game_date ? Date.parse(pick.game_date) : NaN;
+      let _best = null;
+      for (const g of games) {
+        if (!g || !g.date) continue;
+        const _e = { home: g.home_team, away: g.away_team };
+        if (!teamInGame(_mt[0], _e) || !teamInGame(_mt[1], _e)) continue;
+        const _diff = isNaN(_want) ? 0 : Math.abs(Date.parse(g.date) - _want);
+        if (_best === null || _diff < _best.diff) _best = { g, diff: _diff };
+      }
+      if (_best && (isNaN(_want) || _best.diff <= 11 * 3600 * 1000) && _best.g.voided) { info.reason = "game_cancelled"; return "P"; }
+    }
     return gradeProp(name, pick.game, playerIndex || {}, info, pick.game_date);
   }
 
@@ -779,7 +812,11 @@ function gradePick(pick, games, playerIndex, info = {}) {
       const diff = Math.abs(Date.parse(g.date) - wantTime);
       if (best === null || diff < best.diff) best = { g, diff };
     }
-    if (!best || best.diff > 24 * 3600 * 1000) { info.reason = "intended_game_not_in_feed"; return null; }
+    // 11h, matching the prop path — NOT 24h. A same-day makeup of a postponed game can
+    // start 16-23h after the original slot (19 Jul 2026: split DH at +16.4h and +23.2h),
+    // which a 24h window would grade as the pick's own game. 11h still covers legitimate
+    // doubleheader siblings and source time skew.
+    if (!best || best.diff > 11 * 3600 * 1000) { info.reason = "intended_game_not_in_feed"; return null; }
     game = best.g;
     if (game.voided) { info.reason = "game_cancelled"; return "P"; }
     // The right game exists but hasn't finished — wait for it, don't grade a sibling.
@@ -1123,44 +1160,62 @@ export default async function handler(req, res) {
           const legInfos = group.map(() => ({}));
           const legResults = group.map((p, i) => gradePick(p, games, playerIndex, legInfos[i]));
 
-          // Only finalize if ALL legs have a result (no nulls)
-          if (legResults.some(r => r === null)) {
-            results.skipped += group.length;
-            group.forEach((p, i) => { if (legResults[i] === null) noteSkip(p, legInfos[i].reason || "unknown"); });
+          // A voided leg (postponed/cancelled game) settles as "P" RIGHT AWAY so the user
+          // gets the REPLACE button while the week is still open. Because the group query
+          // only pulls result=eq.pending, a settled P leg drops out of this parlay group on
+          // the next run — the parlay then settles over the remaining legs, same semantics
+          // the solo parlay path has always had. A same-slot replacement pick re-enters the
+          // group naturally (same user/week/mult, pending). Previously a P leg made allWon
+          // and anyLost both false and the parlay stalled as "skipped" forever.
+          for (let i = 0; i < group.length; i++) {
+            if (legResults[i] === "P") {
+              await sbPatch(`picks?id=eq.${group[i].id}`, { result: "P", points_earned: 0, ...(gameScoreFor(group[i], games) || {}) });
+              results.graded++;
+            }
+          }
+          const liveIdx = [];
+          for (let i = 0; i < group.length; i++) if (legResults[i] !== "P") liveIdx.push(i);
+          if (!liveIdx.length) continue;                       // every leg voided
+
+          // Only finalize if ALL remaining legs have a result (no nulls)
+          if (liveIdx.some(i => legResults[i] === null)) {
+            results.skipped += liveIdx.length;
+            liveIdx.forEach(i => { if (legResults[i] === null) noteSkip(group[i], legInfos[i].reason || "unknown"); });
             continue;
           }
 
-          const allWon  = legResults.every(r => r === "W");
-          const anyLost = legResults.some(r => r === "L");
+          const live = liveIdx.map(i => group[i]);
+          const allWon  = liveIdx.every(i => legResults[i] === "W");
+          const anyLost = liveIdx.some(i => legResults[i] === "L");
 
           if (allWon) {
-            let totalPts = calcParlayPoints(group[0].multiplier, group);
-            if (group[0].power_up_id === "double") totalPts *= 2;
-            // First leg gets the points, rest get 0
-            for (let i = 0; i < group.length; i++) {
-              await sbPatch(`picks?id=eq.${group[i].id}`, { result: "W", points_earned: i === 0 ? totalPts : 0, ...(gameScoreFor(group[i], games) || {}) });
+            let totalPts = calcParlayPoints(live[0].multiplier, live);
+            if (live[0].power_up_id === "double") totalPts *= 2;
+            // First remaining leg gets the points, rest get 0
+            for (let k = 0; k < live.length; k++) {
+              await sbPatch(`picks?id=eq.${live[k].id}`, { result: "W", points_earned: k === 0 ? totalPts : 0, ...(gameScoreFor(live[k], games) || {}) });
             }
-            await notifyPick(group[0], league, "W", totalPts, group.length);
-            results.graded += group.length;
-          } else if (group[0].power_up_id === "insurance" && legResults.filter(r => r === "L").length === 1) {
-            // Insurance: parlay missed by exactly ONE leg -> score it as if that leg wasn't in it.
-            const winning = group.filter((p, i) => legResults[i] === "W");
-            const insuredPts = winning.length ? calcParlayPoints(group[0].multiplier, winning) : 0;
+            await notifyPick(live[0], league, "W", totalPts, live.length);
+            results.graded += live.length;
+          } else if (live[0].power_up_id === "insurance" && liveIdx.filter(i => legResults[i] === "L").length === 1) {
+            // Insurance: parlay missed by exactly ONE non-void leg -> score it as if that leg wasn't in it.
+            const winning = liveIdx.filter(i => legResults[i] === "W").map(i => group[i]);
+            const insuredPts = winning.length ? calcParlayPoints(live[0].multiplier, winning) : 0;
             let placed = false;
-            for (let i = 0; i < group.length; i++) {
+            for (const i of liveIdx) {
               const give = legResults[i] === "W" && !placed; if (give) placed = true;
               await sbPatch(`picks?id=eq.${group[i].id}`, { result: legResults[i], points_earned: give ? insuredPts : 0, ...(gameScoreFor(group[i], games) || {}) });
             }
-            await notifyPick(group[0], league, "W", insuredPts, group.length);
-            results.graded += group.length;
+            await notifyPick(live[0], league, "W", insuredPts, live.length);
+            results.graded += live.length;
           } else if (anyLost) {
-            for (const p of group) {
+            for (const p of live) {
               await sbPatch(`picks?id=eq.${p.id}`, { result: "L", points_earned: 0, ...(gameScoreFor(p, games) || {}) });
             }
-            await notifyPick(group[0], league, "L", 0, group.length);
-            results.graded += group.length;
+            await notifyPick(live[0], league, "L", 0, live.length);
+            results.graded += live.length;
           } else {
-            results.skipped += group.length; // still pending
+            results.skipped += live.length; // still pending
           }
 
         } else {
@@ -1219,3 +1274,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: err.message });
   }
 }
+
+// Named exports exist ONLY for the fixtures test harness (grade_tests.mjs);
+// the deployed entry point is still the default handler.
+export { gradePick, gradeProp, parseMatchupTeams, teamInGame, schedGameCompleted };
