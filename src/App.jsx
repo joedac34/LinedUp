@@ -9116,7 +9116,6 @@ export default function App() {
  const wk=activeLeague.current_week||activeLeague.week||1;
  const catColors={ml:IOS.blue,prop:IOS.yellow,ou:IOS.orange,spread:IOS.green,longshot:IOS.pink};
  const catLabels={ml:"Moneyline",prop:"Prop",ou:"Over/Under",spread:"Spread",longshot:"Longshot"};
- const catTint={ml:"#0A1628",prop:"#16120A",ou:"#160E04",spread:"#0A1606",longshot:"#16060C"};
  const ptsFor=(slot)=>{const m=slot.mult||1;if(slot.isParlay){const ls=calcLS(slot.parlayLegs);return ls?calcPickPoints(m,ls.decimal>1?(ls.decimal-1)*100:0,"W"):0;}return slot.bet?calcPickPoints(m,slot.bet.impliedOdds,"W"):0;};
  const resultFor=(slot)=>slot.result||slot.bet?.result||null;
  const graded=slots.some(x=>resultFor(x));
@@ -9146,7 +9145,7 @@ export default function App() {
    else { const a=document.createElement("a"); a.href=canvas.toDataURL("image/png"); a.download="picklock-slip.png"; a.click(); try{ await navigator.clipboard.writeText(text); }catch(e){} }
  }catch(e){}};
  const Tile=({val,lbl,color})=>(
- <div style={{flex:1,background:"rgba(255,255,255,0.03)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"11px 8px",textAlign:"center"}}>
+ <div style={{flex:1,background:"#131318",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:13,padding:"11px 8px",textAlign:"center"}}>
  <div style={{fontSize:19,fontWeight:800,letterSpacing:"-0.5px",color}}>{val}</div>
  <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"rgba(255,255,255,0.32)",marginTop:3}}>{lbl}</div>
  </div>
@@ -9163,8 +9162,7 @@ export default function App() {
  `}</style>
 
  {/* Hero */}
- <div style={{background:"linear-gradient(180deg,#0A1C12 0%,#07070A 100%)",position:"relative",overflow:"hidden"}}>
- <div style={{position:"absolute",top:-50,right:-40,width:160,height:160,borderRadius:"50%",background:"radial-gradient(circle,rgba(48,209,88,0.18),transparent 70%)",pointerEvents:"none"}}/>
+ <div style={{background:"#07070A",position:"relative",overflow:"hidden"}}>
  <div style={{padding:"22px 18px 14px",display:"flex",alignItems:"flex-start",justifyContent:"space-between",position:"relative"}}>
  <div>
  <div style={{fontSize:10.5,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(255,255,255,0.38)"}}>{activeLeague.name} · Week {wk}</div>
@@ -9177,8 +9175,8 @@ export default function App() {
  </div>
  <div style={{display:"flex",gap:8,padding:"0 16px 16px",position:"relative"}}>
  {graded
- ? <><Tile val={`${wins}-${losses}`} lbl="Record" color={IOS.blue}/><Tile val={`+${wonTotal.toFixed(1)}`} lbl="Pts Won" color={IOS.green}/><Tile val={lsOdds||"—"} lbl="Longshot" color={IOS.pink}/></>
- : <><Tile val={`${slots.length}/${allSlots.length||5}`} lbl="Picks" color={IOS.blue}/><Tile val={`+${projTotal.toFixed(1)}`} lbl="Proj. Pts" color={IOS.green}/><Tile val={lsOdds||"—"} lbl="Longshot" color={IOS.pink}/></>
+ ? <><Tile val={`${wins}-${losses}`} lbl="Record" color="#fff"/><Tile val={`+${wonTotal.toFixed(1)}`} lbl="Pts Won" color={IOS.green}/><Tile val={lsOdds||"—"} lbl="Longshot" color="#fff"/></>
+ : <><Tile val={`${slots.length}/${allSlots.length||5}`} lbl="Picks" color="#fff"/><Tile val={`+${projTotal.toFixed(1)}`} lbl="Proj. Pts" color={IOS.green}/><Tile val={lsOdds||"—"} lbl="Longshot" color="#fff"/></>
  }
  </div>
  </div>
@@ -9192,43 +9190,50 @@ export default function App() {
  const pts=ptsFor(slot);
  const ls=slot.isParlay?calcLS(slot.parlayLegs):null;
  const odds=slot.isParlay?(ls?ls.american:""):(slot.bet?.odds||"");
- const oddsPos=odds.startsWith("+");
  const name=slot.isParlay?slot.parlayLegs.map(b=>b.pick).join("  ·  "):(slot.bet?.pick||"");
  const game=slot.isParlay?(slot.parlayLegs[0]?.game||""):(slot.bet?.game||"");
  return (
- <div key={i} className="lsx-card" style={{position:"relative",overflow:"hidden",borderRadius:14,
- background:`linear-gradient(155deg,${catTint[cat]} 0%,#0B0B0E 70%)`,border:`1px solid ${c}38`,
- boxShadow:res==="W"?`0 0 0 1px ${IOS.green}55`:res==="L"?`0 0 0 1px ${IOS.red}40`:"0 4px 14px rgba(0,0,0,0.4)",
+ <div key={i} className="lsx-card" style={{position:"relative",overflow:"hidden",borderRadius:15,
+ background:"#131318",border:"0.5px solid rgba(255,255,255,0.07)",
  animation:`lsxRise .34s ease ${Math.min(i,6)*0.04}s both`}}>
- <div style={{position:"absolute",top:0,left:0,bottom:0,width:3,background:c}}/>
- <div style={{position:"absolute",top:-26,right:-26,width:80,height:80,borderRadius:"50%",background:`radial-gradient(circle,${c}22,transparent 70%)`,pointerEvents:"none"}}/>
- <div style={{display:"flex",alignItems:"center",gap:11,padding:"12px 13px 11px 14px"}}>
- <div style={{width:30,height:30,borderRadius:9,background:`${c}1f`,border:`0.5px solid ${c}40`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:c,flexShrink:0}}>{slot.mult}×</div>
- <div style={{flex:1,minWidth:0}}>
- <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:c,marginBottom:2}}>{catLabels[cat]}{slot.isParlay?` · ${slot.parlayLegs.length}-leg parlay`:""}</div>
- {slot.isParlay ? (
- <div style={{display:"flex",flexDirection:"column",gap:4,marginTop:2}}>
- {slot.parlayLegs.map((b,li)=>(
- <div key={li} style={{display:"flex",alignItems:"baseline",gap:7}}>
- <span style={{fontSize:9,fontWeight:800,color:c,flexShrink:0,width:13}}>{li+1}.</span>
- <div style={{minWidth:0,flex:1}}>
- <div style={{fontSize:12.5,fontWeight:700,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{b.pick}{b.odds?<span style={{color:"rgba(255,255,255,0.42)",fontWeight:600,marginLeft:5}}>{b.odds}</span>:null}</div>
- {b.game&&<div style={{fontSize:9.5,color:"rgba(255,255,255,0.34)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{b.game}</div>}
+ {/* Result rail: color exists ONLY for outcomes (approved mockup 19 Jul 2026) */}
+ <div style={{position:"absolute",top:0,left:0,bottom:0,width:3,borderRadius:"3px 0 0 3px",background:res==="W"?IOS.green:res==="L"?IOS.red:res==="P"?"rgba(255,255,255,0.16)":"transparent"}}/>
+ <div style={{padding:"12px 14px 12px 17px"}}>
+ <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:10,marginBottom:3}}>
+ <div style={{display:"flex",alignItems:"center",gap:5,fontSize:9.5,fontWeight:700,letterSpacing:"0.09em",textTransform:"uppercase",color:"rgba(255,255,255,0.30)"}}>
+ <span style={{width:4,height:4,borderRadius:"50%",background:c,display:"inline-block",flexShrink:0}}/>
+ {catLabels[cat]}{slot.isParlay?` · ${slot.parlayLegs.length}-leg parlay`:""}
  </div>
+ <div style={{fontSize:15,fontWeight:800,letterSpacing:"-0.3px",color:IOS.blue,flexShrink:0,opacity:res==="P"?0.45:1}}>{odds}</div>
+ </div>
+ <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:10}}>
+ <div style={{minWidth:0,flex:1,opacity:res==="P"?0.45:1}}>
+ {slot.isParlay ? (
+ <div style={{display:"flex",flexDirection:"column",gap:3}}>
+ {slot.parlayLegs.map((b,li)=>(
+ <div key={li} style={{minWidth:0}}>
+ <div style={{fontSize:14,fontWeight:800,letterSpacing:"-0.2px",color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{b.pick}{b.odds?<span style={{color:"rgba(255,255,255,0.46)",fontWeight:600,marginLeft:6,fontSize:12}}>{b.odds}</span>:null}</div>
+ {b.game&&<div style={{fontSize:10.5,color:"rgba(255,255,255,0.46)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{b.game}</div>}
  </div>
  ))}
  </div>
  ) : (<>
- <div style={{fontSize:13.5,fontWeight:700,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{name}</div>
- {game&&<div style={{fontSize:10,color:"rgba(255,255,255,0.36)",marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{game}</div>}{slot.bet&&(()=>{ const _db=(weekPicks||[]).find(x=>x.user_id===user?.id&&x.game===game&&x.pick_name===name); const _scp=_db?{game:_db.game,game_date:_db.game_date||slot.bet.gameTime||null,result:_db.result,home_score:_db.home_score,away_score:_db.away_score,pick_name:name,odds:odds}:{game:game,game_date:slot.bet.gameTime||null,result:res,pick_name:name,odds:odds}; return <ScoreChip pick={_scp} live={liveMatch(_scp, liveGames)} onOpen={()=>openGamecast(_scp)}/>; })()}{(()=>{ const _rd=(weekPicks||[]).find(x=>x.user_id===user?.id&&x.game===game&&x.pick_name===name); if(!_rd || _rd.result!=="P" || _rd.replaced_by) return null; return (<div onClick={(e)=>{ e.stopPropagation(); startReplace(_rd,{leagueId:activeLeague.id, returnScreen:"leagues"}); }} style={{marginTop:6,display:"inline-flex",alignItems:"center",fontSize:9.5,fontWeight:800,color:IOS.blue,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.35)",borderRadius:7,padding:"4px 9px",cursor:"pointer"}}>REPLACE</div>); })()}
+ <div style={{fontSize:15.5,fontWeight:800,letterSpacing:"-0.2px",lineHeight:1.25,color:"#fff"}}>{name}</div>
+ {game&&<div style={{fontSize:11,color:"rgba(255,255,255,0.46)",marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{game}</div>}
  </>)}
  </div>
- <div style={{textAlign:"right",flexShrink:0}}>
- <div style={{fontSize:14.5,fontWeight:800,letterSpacing:"-0.3px",color:slot.isParlay?IOS.pink:oddsPos?IOS.green:IOS.blue}}>{odds}</div>
- <div style={{fontSize:10,fontWeight:700,marginTop:1,color:res==="L"?"rgba(255,69,58,0.7)":res==="W"?IOS.green:"rgba(255,255,255,0.4)"}}>+{res==="L"?0:pts} pts{!graded?" if win":""}</div>
+ <div style={{fontSize:11,fontWeight:700,flexShrink:0,marginTop:2,whiteSpace:"nowrap",color:res==="W"?IOS.green:res==="L"?IOS.red:"rgba(255,255,255,0.46)"}}>{res==="P"?"voided":`+${res==="L"?0:pts} pts${res?"":" if win"}`}</div>
+ </div>
+ <div style={{display:"flex",alignItems:"center",gap:8,marginTop:10}}>
+ <div style={{width:31,height:24,borderRadius:7,background:"rgba(255,255,255,0.07)",border:"0.5px solid rgba(255,255,255,0.07)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.8)",flexShrink:0}}>{slot.mult}×</div>
+ {slot.bet&&(()=>{ const _db=(weekPicks||[]).find(x=>x.user_id===user?.id&&x.game===game&&x.pick_name===name); const _scp=_db?{game:_db.game,game_date:_db.game_date||slot.bet.gameTime||null,result:_db.result,home_score:_db.home_score,away_score:_db.away_score,pick_name:name,odds:odds}:{game:game,game_date:slot.bet.gameTime||null,result:res,pick_name:name,odds:odds}; return <ScoreChip pick={_scp} live={liveMatch(_scp, liveGames)} onOpen={()=>openGamecast(_scp)}/>; })()}
+ <div style={{flex:1}}/>
+ {res==="W"&&<span style={{fontSize:9,fontWeight:800,letterSpacing:"0.07em",color:IOS.green,background:"rgba(48,209,88,0.10)",border:"0.5px solid rgba(48,209,88,0.25)",borderRadius:6,padding:"3px 7px"}}>WON</span>}
+ {res==="L"&&<span style={{fontSize:9,fontWeight:800,letterSpacing:"0.07em",color:IOS.red,background:"rgba(255,69,58,0.10)",border:"0.5px solid rgba(255,69,58,0.25)",borderRadius:6,padding:"3px 7px"}}>LOST</span>}
+ {res==="P"&&<span style={{fontSize:9,fontWeight:800,letterSpacing:"0.07em",color:"rgba(255,255,255,0.46)",background:"rgba(255,255,255,0.07)",border:"0.5px solid rgba(255,255,255,0.12)",borderRadius:6,padding:"3px 7px"}}>VOID</span>}
+ {(()=>{ const _rd=(weekPicks||[]).find(x=>x.user_id===user?.id&&x.game===game&&x.pick_name===name); if(!_rd || _rd.result!=="P" || _rd.replaced_by) return null; return (<div onClick={(e)=>{ e.stopPropagation(); startReplace(_rd,{leagueId:activeLeague.id, returnScreen:"leagues"}); }} style={{fontSize:10,fontWeight:800,color:IOS.blue,background:"rgba(10,132,255,0.10)",border:"0.5px solid rgba(10,132,255,0.30)",borderRadius:7,padding:"5px 11px",cursor:"pointer"}}>REPLACE</div>); })()}
  </div>
  </div>
- <div className={res?"":"lsx-pending"} style={{height:4,background:res==="W"?IOS.green:res==="L"?IOS.red:undefined}}/>
  </div>
  );
  })}
