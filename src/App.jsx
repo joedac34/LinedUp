@@ -3072,12 +3072,22 @@ function liveMatch(pick, games){
   const both=(g)=> g && g.away && g.home &&
     (_lsTeamEq(teams[0],g.away.name)||_lsTeamEq(teams[0],g.home.name)) &&
     (_lsTeamEq(teams[1],g.away.name)||_lsTeamEq(teams[1],g.home.name));
-  const want=(pick&&pick.game_date)?Date.parse(pick.game_date):NaN;
+  // The pick's start time lives under different keys depending on where it came from:
+  // DB picks carry game_date; in-memory slip picks carry bet.gameTime / gameTime. Missing
+  // this is how a doubleheader pick opened the WRONG game — want parsed NaN and the first
+  // team-name match (the earlier final) won.
+  const _wsrc=(pick&&(pick.game_date||pick.gameTime||(pick.bet&&pick.bet.gameTime)))||"";
+  const want=_wsrc?Date.parse(_wsrc):NaN;
   let best=null;
   for(const g of games){
     if(!both(g)) continue;
     if(!isNaN(want)&&g.gameDate){ const diff=Math.abs(Date.parse(g.gameDate)-want); if(best===null||diff<best.diff) best={g,diff}; }
-    else if(best===null){ best={g,diff:Infinity}; }
+    else {
+      // No usable date: prefer a game that ISN'T over (a fresh pick can't be on a final —
+      // the doubleheader tiebreak) and only take a final if nothing else matches.
+      const rank = g.state==="final" ? 2 : (g.state==="live" ? 0 : 1);
+      if(best===null || (best.diff===Infinity && rank < (best._rank!=null?best._rank:9))) best={g,diff:Infinity,_rank:rank};
+    }
   }
   if(!best) return null;
   if(!isNaN(want)&&best.diff>26*3600*1000) return null; // wrong game in a series
@@ -11529,9 +11539,12 @@ export default function App() {
  const oddsVal = isParlay
  ? (()=>{const legs=picks.map(p=>({impliedOdds:p.implied_odds||0}));return calcLS(legs)?.american||"—";})()
  : picks[0]?.odds;
- const cat = isParlay?"longshot":(picks[0]?.slot||"ml");
+ // DB slot names carry the index suffix ("spread_3") — strip to the type for label and
+ // colour lookups, or the card header leaks the raw name ("SPREAD_3") and colours miss.
+ const _slotType0 = String(picks[0]?.slot||"ml").split("_")[0];
+ const cat = isParlay?"longshot":_slotType0;
  const c = catColors[cat]||IOS.blue;
- const typeLabel = isParlay ? `Longshot · ${picks.length} legs` : slotLabels[picks[0]?.slot]||picks[0]?.slot||"Pick";
+ const typeLabel = isParlay ? `Longshot · ${picks.length} legs` : slotLabels[_slotType0]||_slotType0||"Pick";
  const pickName = isParlay ? `${picks.length}-leg parlay` : (picks[0]?.pick_name||"");
  const gameCtx = !isParlay ? (picks[0]?.game||"") : "";
  const strip = won?IOS.green:lost?IOS.red:c;
