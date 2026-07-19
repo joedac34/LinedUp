@@ -9204,7 +9204,7 @@ export default function App() {
  <span style={{width:4,height:4,borderRadius:"50%",background:c,display:"inline-block",flexShrink:0}}/>
  {catLabels[cat]}{slot.isParlay?` · ${slot.parlayLegs.length}-leg parlay`:""}
  </div>
- <div style={{fontSize:15,fontWeight:800,letterSpacing:"-0.3px",color:IOS.blue,flexShrink:0,opacity:res==="P"?0.45:1}}>{odds}</div>
+ <div style={{fontSize:15,fontWeight:800,letterSpacing:"-0.3px",color:"#fff",flexShrink:0,opacity:res==="P"?0.45:1}}>{odds}</div>
  </div>
  <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:10}}>
  <div style={{minWidth:0,flex:1,opacity:res==="P"?0.45:1}}>
