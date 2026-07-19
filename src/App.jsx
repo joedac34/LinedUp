@@ -5352,7 +5352,7 @@ export default function App() {
      setReplaceCtx(null); setScreen(ctx.returnScreen || "leagues");
      try{ if(navigator.vibrate) navigator.vibrate([0,20,30,20]); }catch(e){}
      try{ await fetchWeekPicks(lgId, ctx.week); }catch(e){}
-     try{ await fetchMyPicks(lgId, ctx.week, user.id); }catch(e){}
+     try{ await fetchMyPicks(lgId, ctx.week, user.id, realLeagues.find(l=>l.id===lgId)); }catch(e){}
    }
  };
  const clearSoloSlate = async () => {
@@ -6004,7 +6004,18 @@ export default function App() {
 
  setRealStandings(standings);
  };
- const fetchMyPicks = async (leagueId, week, uid) => { setPicksLoading(true);
+ const myPicksSeq = useRef(0);
+ // Guard: only the NEWEST fetchMyPicks call may write savedPicks. Without this, the
+ // boot path fires twice (fetchLeagues + the league-entry effect) and the two identical
+ // queries RACE — the loser overwrote the winner, which is how a 5-slot EMPTY_FLEX board
+ // built from a stale (pre-load) activeLeague closure could beat the correct 8-slot one.
+ // Also stops a slow response for league X landing after the user switched to league Y.
+ const fetchMyPicks = async (leagueId, week, uid, lgRow) => { setPicksLoading(true);
+ const _seq = ++myPicksSeq.current;
+ // The league row comes from the CALLER (who always holds the freshest copy) — never
+ // from the activeLeague closure, which is empty during boot and produced the
+ // "custom league renders as a generic 5-slot slate" bug (19 Jul 2026, Diesel League).
+ const _lgRow = lgRow || activeLeague;
  let {data} = await supabase
  .from("picks")
  .select("*")
@@ -6014,7 +6025,7 @@ export default function App() {
  data = (data||[]).filter(pp=>!pp.replaced_by); // hide voids already replaced so the slot shows the replacement
  if(data && data.length > 0) {
   // Convert DB picks back into flexPicks format for the locked/edit view
-  const _cfgForCustom = parseSlotConfig(activeLeague&&activeLeague.slot_config);
+  const _cfgForCustom = parseSlotConfig(_lgRow&&_lgRow.slot_config);
    const _isCustom = !!(_cfgForCustom && _cfgForCustom.length) || data.some(pp=>{const s=pp.slot||""; return !s.startsWith("longshot") && /_\d+$/.test(s);});
   const buildSlot = (picks, slotId)=>{
     const isParlay = (picks[0].slot||"").startsWith("longshot");
@@ -6036,7 +6047,10 @@ export default function App() {
   if(_isCustom){
    // Rebuild the FULL slot config so empty slots stay addable after a partial submit.
    // Each DB slot name encodes its config index (type_idx) — place committed picks there.
-   const base = freshSlots().map(sl=>({...sl, committed:false, commitIds:[]}));
+   const base = (_cfgForCustom
+     ? _cfgForCustom.map((c,i)=>({id:i,bet:null,mult:null,category:c.type,slotType:c.type,market:c.market||null,isParlay:false,parlayLegs:[],locked:true}))
+     : freshSlots()
+   ).map(sl=>({...sl, committed:false, commitIds:[]}));
    // Group by slotGroupKey so all legs of one parlay ("longshot_7_0","longshot_7_1")
    // reunite into ONE slot instead of rehydrating as phantom slots that clobbered the
    // board. Legs sort by their leg number so the parlay displays in the order it was built.
@@ -6066,14 +6080,14 @@ export default function App() {
    const groups = {}; const order = [];
    data.forEach(p=>{ const sl=p.slot||""; const key = sl.startsWith("longshot") ? ("longshot_"+p.multiplier) : ("m"+p.multiplier); if(!groups[key]){ groups[key]=[]; order.push(key); } groups[key].push(p); });
    flexPicks = order.map((key,gi)=> buildSlot(groups[key], gi));
-   const _cfgLen = (parseSlotConfig(activeLeague&&activeLeague.slot_config)||[]).length || flexPicks.length || 5;
+   const _cfgLen = (parseSlotConfig(_lgRow&&_lgRow.slot_config)||[]).length || flexPicks.length || 5;
    while(flexPicks.length < _cfgLen) flexPicks.push({id:flexPicks.length, bet:null, mult:null, isParlay:false, parlayLegs:[]});
   }
-  setSavedPicks({fromDB: true, flexPicks, dbPicks: data});
+  if(_seq===myPicksSeq.current) setSavedPicks({fromDB: true, flexPicks, dbPicks: data});
  } else {
-  setSavedPicks(null);
+  if(_seq===myPicksSeq.current) setSavedPicks(null);
  }
- setPicksLoading(false);
+ if(_seq===myPicksSeq.current) setPicksLoading(false);
  };
  const fetchWeekPicks = async (leagueId, week) => {
  const {data:picks} = await supabase
@@ -6178,7 +6192,7 @@ export default function App() {
  setActiveLeagueId(prev=>{
  const target = valid(prev) ? prev : (valid(savedId) ? savedId : mapped[0].id);
  const tl = mapped.find(l=>l.id===target) || mapped[0];
- fetchMyPicks(tl.id, tl.current_week||tl.week||1, uid);
+ fetchMyPicks(tl.id, tl.current_week||tl.week||1, uid, tl);
  return target;
  });
  }
@@ -6304,7 +6318,7 @@ export default function App() {
  leagueSportsToFetch.forEach(sp => fetchLiveOdds(sp));
  if(lg2) {
  const week = lg2.current_week||lg2.week||1;
- fetchMyPicks(activeLeagueId, week, user.id); // load locked picks on entry; slip view prefers an active draft so this never clobbers one
+ fetchMyPicks(activeLeagueId, week, user.id, lg2); // load locked picks on entry; slip view prefers an active draft so this never clobbers one
  fetchSchedule(activeLeagueId, user.id);
  fetchLeaguePowerUps(activeLeagueId, user.id);
  // Restore saved picks from localStorage for this specific league+week
@@ -8340,7 +8354,7 @@ export default function App() {
  const now=Date.now();
  const clearable=(rows||[]).filter(r=>(r.result==="pending"||!r.result)&&(!r.game_date||new Date(r.game_date).getTime()>now)).map(r=>r.id);
  if(clearable.length) await supabase.from("picks").delete().in("id",clearable);
- await fetchMyPicks(activeLeague.id, wk, user.id);
+ await fetchMyPicks(activeLeague.id, wk, user.id, activeLeague);
  fetchWeekPicks(activeLeague.id, wk);
  } else { setSavedPicks(null); }
  setFlexPicks(freshSlots());
@@ -9282,7 +9296,7 @@ export default function App() {
  const now=Date.now();
  const clearable=(rows||[]).filter(r=>(r.result==="pending"||!r.result)&&(!r.game_date||new Date(r.game_date).getTime()>now)).map(r=>r.id);
  if(clearable.length) await supabase.from("picks").delete().in("id",clearable);
- await fetchMyPicks(activeLeague.id, week, user.id);
+ await fetchMyPicks(activeLeague.id, week, user.id, activeLeague);
  fetchWeekPicks(activeLeague.id, week);
  }
  // keep only started+committed slots locally; reset the rest
