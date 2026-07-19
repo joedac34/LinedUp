@@ -813,10 +813,36 @@ function bestPick(picks) {
  return { pick:top, state:"lost", worth:pickUpside(top) };
 }
 
+// ─── SLOT NAME CANON ────────────────────────────────────────────
+// DB slot names come in three formats and EVERY reader must agree on them:
+//   "spread"        bare type            (legacy flex saves)      -> no index
+//   "spread_3"      type + slot index    (custom-league saves)    -> index 3
+//   "longshot_7_0"  type + slot + LEG    (parlay legs)            -> index 7, leg 0
+// The old parsers did split("_").pop() everywhere, which read a parlay leg's LEG number
+// as its SLOT number — so a 2-leg longshot rehydrated as two phantom slots sitting on
+// top of slots 0 and 1, and paired against the wrong rows in the matchup ledger.
+function slotIdxFromName(name){
+ const parts = String(name||"").split("_");
+ if(parts.length<2) return null;
+ if(parts[0]==="longshot" && parts.length>=3){
+  const n = parseInt(parts[1],10);           // longshot_SLOT_leg -> the FIRST number
+  return isNaN(n) ? null : n;
+ }
+ const n = parseInt(parts[parts.length-1],10);
+ return isNaN(n) ? null : n;
+}
+// Grouping key: all legs of one parlay share a key so they reunite into ONE slot.
+function slotGroupKey(name){
+ const parts = String(name||"").split("_");
+ if(parts[0]==="longshot" && parts.length>=3) return "longshot_"+parts[1];
+ return String(name||"");
+}
+
+
 function pairSlips(mine, theirs) {
  // slotId is the full "spread_3"; slot alone may be the truncated prefix.
  const idOf = (p) => String(p.slotId || p.slot || "");
- const idxOf = (p) => { const n = parseInt(idOf(p).split("_").pop(),10); return isNaN(n) ? null : n; };
+ const idxOf = (p) => slotIdxFromName(idOf(p));
  const keyOf = (p) => { const i = idxOf(p); return i!=null ? "i"+i : "s"+idOf(p); };
  const rows = new Map();
  const put = (p, side) => {
@@ -1471,12 +1497,21 @@ const TYPE_SHORT = { yrfi:"YRFI", nrfi:"NRFI", ml:"moneyline", spread:"spread", 
 // Returns a conflict message, or null if the bet is allowed.
 // `existing` items: { id, category, eventId, game, outcome }
 const lineConflict = (cat, bet, existing) => {
+ // Exact-duplicate check FIRST, before any group gating: the same bet (same id, or the
+ // same pick label in the same game) can never be added twice, whether the copy lives in
+ // a straight slot or inside a longshot parlay. This is category-agnostic on purpose —
+ // props have no LINE_GROUP, which is exactly how "Mike Trout O0.5 Hits" got in twice.
+ for(const e of (existing||[])){
+  if(!e || !bet) continue;
+  const sameId = e.id!=null && bet.id!=null && String(e.id)===String(bet.id);
+  const sameLabel = e.pick && bet.pick && String(e.pick)===String(bet.pick) && ((e.eventId||e.game)||"")===((bet.eventId||bet.game)||"") && ((bet.eventId||bet.game)||"")!=="";
+  if(sameId || sameLabel) return "You already have this exact pick on your slip.";
+ }
  const grp = LINE_GROUP[cat]; if(!grp) return null;
  const gk = (bet && (bet.eventId||bet.game)) || ""; if(!gk) return null;
  const oc = (bet && bet.outcome) || null;
  for(const e of (existing||[])){
   if(!e || !e.category) continue;
-  if(bet && e.id!=null && String(e.id)===String(bet.id)) continue;
   if(((e.eventId||e.game)||"")!==gk) continue;
   if(LINE_GROUP[e.category]!==grp) continue;
   if(e.category===cat) return "You already picked this game's "+(TYPE_SHORT[cat]||cat)+". You can't take both sides of the same line.";
@@ -5986,10 +6021,15 @@ export default function App() {
    // Rebuild the FULL slot config so empty slots stay addable after a partial submit.
    // Each DB slot name encodes its config index (type_idx) — place committed picks there.
    const base = freshSlots().map(sl=>({...sl, committed:false, commitIds:[]}));
-   const bySlot = {}; data.forEach(p=>{ const s=p.slot||""; (bySlot[s]=bySlot[s]||[]).push(p); });
+   // Group by slotGroupKey so all legs of one parlay ("longshot_7_0","longshot_7_1")
+   // reunite into ONE slot instead of rehydrating as phantom slots that clobbered the
+   // board. Legs sort by their leg number so the parlay displays in the order it was built.
+   const bySlot = {}; data.forEach(p=>{ const k=slotGroupKey(p.slot||""); (bySlot[k]=bySlot[k]||[]).push(p); });
    Object.keys(bySlot).forEach(slotName=>{
-     let idx = parseInt(String(slotName).split("_").pop(), 10);
-     if(isNaN(idx) || idx<0){
+     bySlot[slotName].sort((a,b)=>{ const la=parseInt(String(a.slot||"").split("_").pop(),10)||0; const lb=parseInt(String(b.slot||"").split("_").pop(),10)||0; return la-lb; });
+     let idx = slotIdxFromName(bySlot[slotName][0] && bySlot[slotName][0].slot);
+     if(idx==null) idx = -1;
+     if(idx==null || isNaN(idx) || idx<0){
        // No index suffix on this saved pick (older format). Place it in the config slot
        // whose TYPE matches the pick, so an 8-slot fixed-type league rehydrates in the
        // right labelled slots instead of appending past the board (which showed the slip
@@ -8680,7 +8720,13 @@ export default function App() {
  setActivePicks(prev=>prev.map((p,i)=> i===idx ? {...p, committed:false, commitIds:[]} : p));
  try{ fetchWeekPicks(activeLeague.id, _weekNum); }catch(e){}
  };
- const isCustomSlip = activePicks.some(p=>p.locked);
+ // The league config — not UI state — decides whether picks save as "spread_3" (indexed)
+ // or bare "spread". The old check (.some(p=>p.locked)) read a UI flag off the in-memory
+ // slots, so anyone who locked while the slip was in a broken state saved picks under the
+ // WRONG name format, and every downstream reader (rehydrate, matchup pairing) disagreed
+ // about what they were looking at. That mismatch was the root of the phantom-slot,
+ // wrong-count, and missing-longshot bugs.
+ const isCustomSlip = !!parseSlotConfig(activeLeague&&activeLeague.slot_config) || activePicks.some(p=>p.locked);
  return (
  <>
 
@@ -10226,9 +10272,13 @@ export default function App() {
   // so a straight longshot used to rely entirely on resolveTarget(), landing in slot 0 and
   // silently failing when that slot was a different type. Target the real longshot slot.
   if(cat==="longshot"){
-    let _li = activePicks.findIndex(p=> !p.isParlay && (p.category==="longshot"||p.slotType==="longshot") && p.bet===null);
-    if(_li===-1) _li = activePicks.findIndex(p=> (p.category==="longshot"||p.slotType==="longshot") && !p.isParlay);
+    const _lsOf=(p)=>(p.category==="longshot"||p.slotType==="longshot");
+    let _li = activePicks.findIndex(p=> !p.isParlay && _lsOf(p) && p.bet===null);
+    // Never silently replace when something is still open: empty wildcard next (custom
+    // leagues), then any empty slot, and only THEN swap out an existing longshot.
+    if(_li===-1) _li = activePicks.findIndex(p=> !p.isParlay && (p.slotType||p.category)==="wildcard" && p.bet===null);
     if(_li===-1) _li = activePicks.findIndex(p=> !p.isParlay && p.bet===null && !p.committed);
+    if(_li===-1) _li = activePicks.findIndex(p=> _lsOf(p) && !p.isParlay && !p.committed);
     if(_li===-1){ setPickConflict("No open longshot slot — remove one to add this."); setTimeout(()=>setPickConflict(""),2600); setGridJustAdded(null); return; }
     dest = _li;
   } else if(gridCfg){
@@ -10263,8 +10313,8 @@ export default function App() {
   // (or nowhere), so it read as "disappeared".
   let _mi = -1;
   if(gridTargetSlot!=null){ const _t=activePicks[gridTargetSlot]; if(_t && !_t.isParlay && _t.bet===null && !_t.committed) _mi = gridTargetSlot; }
-  if(_mi===-1) _mi = activePicks.findIndex(p=>!p.isParlay && p.bet!==null && p.category===cat);
-  if(_mi===-1) _mi = activePicks.findIndex(p=>!p.isParlay && p.bet===null && !p.committed);
+  if(_mi===-1) _mi = activePicks.findIndex(p=>!p.isParlay && p.bet===null && !p.committed); // an EMPTY slot always beats replacing
+  if(_mi===-1) _mi = activePicks.findIndex(p=>!p.isParlay && p.bet!==null && p.category===cat && !p.committed); // replace only when nothing is open
   if(_mi===-1){ setPickConflict("Your slip is full — remove a pick to add this one."); setTimeout(()=>setPickConflict(""),2600); setGridJustAdded(null); return; }
   dest = _mi;
  } else if(cat!=="longshot"){
@@ -10281,7 +10331,11 @@ export default function App() {
     const _fe = activePicks.findIndex(p=>!p.isParlay && p.bet===null && !p.committed);
     if(_fe!==-1) dest = _fe;
   }
- const _existL = activePicks.map((p,i)=> (i!==dest && !p.isParlay && p.bet) ? { id:p.bet.id, category:p.category, eventId:p.bet.eventId, game:p.bet.game, outcome:p.bet.outcome } : null).filter(Boolean);
+ const _existL = activePicks.flatMap((p,i)=>{
+   if(i===dest) return [];
+   if(p.isParlay) return (p.parlayLegs||[]).map(l=>({ id:l.id, category:"longshot", eventId:l.eventId, game:l.game, outcome:l.outcome, pick:l.pick }));
+   return p.bet ? [{ id:p.bet.id, category:p.category, eventId:p.bet.eventId, game:p.bet.game, outcome:p.bet.outcome, pick:p.bet.pick }] : [];
+ }).filter(Boolean);
  const _cfL = lineConflict(cat, bet, _existL);
  if(_cfL){ setPickConflict(_cfL); setTimeout(()=>setPickConflict(""),2600); setGridJustAdded(null); return; }
  setActivePicks(prev=>prev.map((p,i)=> i===dest ? {...p, bet, category:cat, isParlay:false, parlayLegs:[], mult:((!gridCfg && !isSoloMode && gridFlexMult!=null && cat!=="longshot") ? gridFlexMult : p.mult)} : p));
