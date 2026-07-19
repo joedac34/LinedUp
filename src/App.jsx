@@ -3219,15 +3219,6 @@ function GamecastSheet({ game, pick, onClose }){
   return (
     <div onClick={onClose} style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.62)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:9200}}>
       <div onClick={(e)=>e.stopPropagation()} style={{width:"100%",maxWidth:480,background:"#131315",borderRadius:"22px 22px 0 0",maxHeight:"90%",overflowY:"auto",WebkitOverflowScrolling:"touch",paddingBottom:"calc(20px + env(safe-area-inset-bottom,0px))"}}>
-        <div style={{width:38,height:4,borderRadius:2,background:"rgba(255,255,255,0.22)",margin:"10px auto 4px"}}/>
-        <div style={{padding:"8px 20px 14px",borderBottom:"0.5px solid rgba(255,255,255,0.1)"}}>
-          <div style={{display:"inline-flex",alignItems:"center",gap:7,fontSize:12,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:fin?L2:(live?"#30D158":L2)}}>
-            {live && <span style={{width:6,height:6,borderRadius:"50%",background:RED,flexShrink:0}}/>}
-            {statusTxt}
-          </div>
-          <div style={{fontSize:13,color:L3,marginTop:6}}>{game.away.name} @ {game.home.name}</div>
-        </div>
-
         {/* ── scoreboard: crests + team-color hero, per the mockup ── */}
         {(()=>{
           const aLogo = teamLogo(game.sport||"mlb", game.away.name);
@@ -3242,8 +3233,17 @@ function GamecastSheet({ game, pick, onClose }){
             </div>
           );
           return (
-          <div style={{position:"relative",overflow:"hidden",padding:"18px 18px 15px"}}>
+          <div style={{position:"relative",overflow:"hidden",padding:"0 18px 15px",borderRadius:"22px 22px 0 0"}}>
             <div style={{position:"absolute",inset:0,background:`linear-gradient(105deg,${aCol}38 0%,${aCol}00 40%,${hCol}00 60%,${hCol}33 100%)`,pointerEvents:"none"}}/>
+            {/* handle + status live INSIDE the tinted band so the hero reaches the sheet top */}
+            <div style={{position:"relative",width:38,height:4,borderRadius:2,background:"rgba(255,255,255,0.28)",margin:"10px auto 8px"}}/>
+            <div style={{position:"relative",textAlign:"center",marginBottom:13}}>
+              <div style={{display:"inline-flex",alignItems:"center",gap:7,fontSize:12,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:fin?L2:(live?"#30D158":L2)}}>
+                {live && <span style={{width:6,height:6,borderRadius:"50%",background:RED,flexShrink:0}}/>}
+                {statusTxt}
+              </div>
+              <div style={{fontSize:13,color:L3,marginTop:5}}>{game.away.name} @ {game.home.name}</div>
+            </div>
             <div style={{position:"relative",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
               {/* away */}
               <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:7,width:96}}>
@@ -3380,13 +3380,15 @@ function GamecastSheet({ game, pick, onClose }){
               <div style={{flex:1,minWidth:0,background:"#1C1C1E",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:11,padding:"9px 11px"}}>
                 <div style={{fontSize:9,fontWeight:900,letterSpacing:"0.1em",color:L3}}>WIN</div>
                 <div style={{fontSize:13,fontWeight:800,marginTop:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{game.decisions.winner}</div>
-                {game.decisions.save && <div style={{fontSize:10.5,color:L3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>save: {game.decisions.save}</div>}
+                {box&&box.pitcherLines&&box.pitcherLines[game.decisions.winner]&&<div style={{fontSize:10.5,fontWeight:700,color:L2,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{box.pitcherLines[game.decisions.winner]}</div>}
+                {game.decisions.save && <div style={{fontSize:10.5,color:L3,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>save: {game.decisions.save}</div>}
               </div>
             )}
             {fin && game.decisions && game.decisions.loser && (
               <div style={{flex:1,minWidth:0,background:"#1C1C1E",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:11,padding:"9px 11px"}}>
                 <div style={{fontSize:9,fontWeight:900,letterSpacing:"0.1em",color:L3}}>LOSS</div>
                 <div style={{fontSize:13,fontWeight:800,marginTop:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{game.decisions.loser}</div>
+                {box&&box.pitcherLines&&box.pitcherLines[game.decisions.loser]&&<div style={{fontSize:10.5,fontWeight:700,color:L2,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{box.pitcherLines[game.decisions.loser]}</div>}
               </div>
             )}
           </div>
@@ -9130,8 +9132,8 @@ export default function App() {
  const wonTotal=slots.reduce((a,x)=>a+(resultFor(x)==="W"?ptsFor(x):0),0);
  const wins=slots.filter(x=>resultFor(x)==="W").length;
  const losses=slots.filter(x=>resultFor(x)==="L").length;
- const lsSlot=slots.find(x=>x.category==="longshot"||(x.isParlay&&x.parlayLegs.length>=2));
- const lsOdds=lsSlot?(lsSlot.isParlay?calcLS(lsSlot.parlayLegs)?.american:lsSlot.bet?.odds):null;
+ const hitRate=(wins+losses)>0?Math.round((wins/(wins+losses))*100)+"%":"—";
+ const lockedCt=slots.filter(x=>x.committed).length;
  const onShare=async()=>{try{
    if(document.fonts&&document.fonts.ready){ try{ await document.fonts.ready; }catch(e){} }
    const cp=slots.filter(z=>z.bet||z.isParlay);
@@ -9182,8 +9184,8 @@ export default function App() {
  </div>
  <div style={{display:"flex",gap:8,padding:"0 16px 16px",position:"relative"}}>
  {graded
- ? <><Tile val={`${wins}-${losses}`} lbl="Record" color="#fff"/><Tile val={`+${wonTotal.toFixed(1)}`} lbl="Pts Won" color={IOS.green}/><Tile val={lsOdds||"—"} lbl="Longshot" color="#fff"/></>
- : <><Tile val={`${slots.length}/${allSlots.length||5}`} lbl="Picks" color="#fff"/><Tile val={`+${projTotal.toFixed(1)}`} lbl="Proj. Pts" color={IOS.green}/><Tile val={lsOdds||"—"} lbl="Longshot" color="#fff"/></>
+ ? <><Tile val={`${wins}-${losses}`} lbl="Record" color="#fff"/><Tile val={`+${wonTotal.toFixed(1)}`} lbl="Pts Won" color={IOS.green}/><Tile val={hitRate} lbl="Hit rate" color="#fff"/></>
+ : <><Tile val={`${slots.length}/${allSlots.length||5}`} lbl="Picks" color="#fff"/><Tile val={`+${projTotal.toFixed(1)}`} lbl="Proj. Pts" color={IOS.green}/><Tile val={`${lockedCt}/${slots.length||0}`} lbl="Locked" color="#fff"/></>
  }
  </div>
  </div>
@@ -14917,7 +14919,8 @@ export default function App() {
    const _card={background:"linear-gradient(165deg,#212126,#161619)",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:16,overflow:"hidden"};
    const _nick={fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:25,lineHeight:0.92,textTransform:"uppercase",letterSpacing:0.3,color:"#fff"};
    const Sec=({t})=>(<div style={{display:"flex",alignItems:"center",gap:11,margin:"22px 4px 11px"}}><span style={{fontSize:10.5,fontWeight:800,letterSpacing:"0.16em",textTransform:"uppercase",color:IOS.label3}}>{t}</span><span style={{flex:1,height:1,background:"rgba(255,255,255,0.07)"}}/></div>);
-   const Crest=({logo,color,abbr})=>(<div style={{width:72,height:72,borderRadius:"50%",margin:"0 auto 11px",position:"relative",display:"flex",alignItems:"center",justifyContent:"center",background:color||"#101014",boxShadow:"0 10px 26px -8px rgba(0,0,0,0.7)"}}><div style={{position:"absolute",inset:0,borderRadius:"50%",border:"2px solid rgba(255,255,255,0.18)",zIndex:3}}/>{!logo&&<span style={{position:"absolute",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:23,color:"#fff",letterSpacing:0.5,textShadow:"0 2px 4px rgba(0,0,0,0.4)",zIndex:1}}>{abbr}</span>}{logo?<img src={logo} alt="" style={{width:54,height:54,objectFit:"contain",position:"relative",zIndex:2,filter:"drop-shadow(0 3px 6px rgba(0,0,0,0.5))"}} onError={(e)=>{e.currentTarget.style.display="none";}}/>:null}</div>);
+   // White disc + team-colour ring: navy/black logos (NYY et al) vanished on a team-colour disc.
+   const Crest=({logo,color,abbr})=>(<div style={{width:72,height:72,borderRadius:"50%",margin:"0 auto 11px",position:"relative",display:"flex",alignItems:"center",justifyContent:"center",background:"#fff",boxShadow:"0 10px 26px -8px rgba(0,0,0,0.7)"}}><div style={{position:"absolute",inset:0,borderRadius:"50%",border:`2.5px solid ${color||"rgba(255,255,255,0.18)"}`,zIndex:3}}/>{!logo&&<span style={{position:"absolute",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:23,color:"#111",letterSpacing:0.5,zIndex:1}}>{abbr}</span>}{logo?<img src={logo} alt="" style={{width:52,height:52,objectFit:"contain",position:"relative",zIndex:2}} onError={(e)=>{e.currentTarget.style.display="none";}}/>:null}</div>);
    const PitCol=({m,color,abbr})=>(<div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",textAlign:"center",gap:3}}><div style={{width:58,height:58,borderRadius:"50%",overflow:"hidden",position:"relative",display:"flex",alignItems:"center",justifyContent:"center",background:color,marginBottom:5,boxShadow:"0 6px 16px -6px rgba(0,0,0,0.6)",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:18,color:"#fff"}}><div style={{position:"absolute",inset:0,borderRadius:"50%",border:"2px solid rgba(255,255,255,0.18)",zIndex:3}}/>{!(m&&m.photo)&&<span style={{zIndex:1}}>{_initials(m?m.name:"")}</span>}{m&&m.photo?<img src={m.photo} alt="" style={{width:"100%",height:"100%",objectFit:"cover",position:"relative",zIndex:2}} onError={(e)=>{e.currentTarget.style.display="none";}}/>:null}</div><div style={{fontSize:14,fontWeight:800,color:"#fff"}}>{m?m.name:"TBD"}</div><div style={{fontSize:9,fontWeight:800,letterSpacing:"0.07em",textTransform:"uppercase",color:IOS.label3}}>{((m&&m.pos)||"SP")+" · "+abbr}</div>{m&&(m.wl||m.era)?<div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:700,color:IOS.label2,marginTop:3}}>{[m.wl,(m.era?(m.era+" ERA"):"")].filter(Boolean).join(" · ")}</div>:null}</div>);
 
    return (

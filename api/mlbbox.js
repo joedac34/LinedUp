@@ -108,13 +108,18 @@ export default async function handler(req, res) {
     if (!r.ok) return res.status(200).json({ gamePk, hitters: [], pitchers: [], error: `upstream ${r.status}` });
     const bx = await r.json();
 
-    const out = { gamePk: Number(gamePk), hitters: [], pitchers: [] };
+    const out = { gamePk: Number(gamePk), hitters: [], pitchers: [], pitcherLines: {} };
     collect("away", bx.teams?.away, out);
     collect("home", bx.teams?.home, out);
 
     // Top 2 bats and top 2 arms is what the gamecast shows. Ranking fields never ship.
     out.hitters.sort((a, b) => b._rank - a._rank);
     out.pitchers.sort((a, b) => b._rank - a._rank);
+    // EVERY pitcher's line, keyed by name, BEFORE the top-2 slice — the gamecast's
+    // WIN/LOSS pills need the decision pitchers' stats and those are often not the
+    // top-2 by innings (a closer takes the W, a reliever takes the L). ~10 tiny
+    // strings per game.
+    out.pitchers.forEach((p) => { if (p.name && p.line) out.pitcherLines[p.name] = p.line; });
     out.hitters = out.hitters.slice(0, 2).map(({ _rank, ...x }) => x);
     out.pitchers = out.pitchers.slice(0, 2).map(({ _rank, ...x }) => x);
     out.final = !!(bx.teams?.away?.teamStats?.batting?.atBats && bx.info?.length);
