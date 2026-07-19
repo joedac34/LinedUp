@@ -1820,10 +1820,10 @@ class ErrorBoundary extends Component {
  // Was console.warn only — every Plok render crash since launch went into a console
  // nobody was reading. Report it like everything else.
  componentDidCatch(err, info){
-  try{ console.error("[picklock] Plok render error:", err); }catch(e){}
+  try{ console.error("[picklock] render error ("+(this.props.kind||"plok-bubble")+"):", err); }catch(e){}
   try{ posthog.captureException
-    ? posthog.captureException(err, { kind:"plok-bubble", componentStack: info && info.componentStack })
-    : posthog.capture("$exception", { $exception_message:String(err && err.message || err), $exception_type:(err && err.name)||"Error", $exception_stack_trace_raw:(err && err.stack)||null, kind:"plok-bubble" });
+    ? posthog.captureException(err, { kind:(this.props.kind||"plok-bubble"), componentStack: info && info.componentStack })
+    : posthog.capture("$exception", { $exception_message:String(err && err.message || err), $exception_type:(err && err.name)||"Error", $exception_stack_trace_raw:(err && err.stack)||null, kind:(this.props.kind||"plok-bubble") });
   }catch(e){}
  }
  render(){ return this.state.hasError ? (this.props.fallback||null) : this.props.children; }
@@ -3437,7 +3437,15 @@ function lsMarket(b){
   return {key:(b.category||"other"),label:(b.categoryLabel||"Other")};
 }
 
-export default function App() {
+function App() {
+ // ── Offline awareness: a PWA at a bar loses signal constantly. One banner, honest. ──
+ const [isOffline, setIsOffline] = useState(typeof navigator!=="undefined" ? !navigator.onLine : false);
+ useEffect(()=>{
+   const on=()=>setIsOffline(false), off=()=>setIsOffline(true);
+   window.addEventListener("online",on); window.addEventListener("offline",off);
+   return ()=>{ window.removeEventListener("online",on); window.removeEventListener("offline",off); };
+ }, []);
+
  const [screen, setScreen] = useState("home");
  const [tutorialStep, setTutorialStep] = useState(-1); // -1 = hidden; only shown on fresh signup
  const dismissTutorial = () => {
@@ -7356,6 +7364,11 @@ export default function App() {
  )}
 
  {user && <div className="phone"><div className="app-glow"/><div className="app-grain"/><Confetti show={celebrate}/>
+ {isOffline && <div style={{position:"fixed",top:0,left:0,right:0,zIndex:9500,background:"rgba(255,159,10,0.14)",backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",borderBottom:"0.5px solid rgba(255,159,10,0.35)",padding:"calc(env(safe-area-inset-top,0px) + 8px) 16px 8px",display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
+  <span style={{width:6,height:6,borderRadius:"50%",background:IOS.orange,flexShrink:0}}/>
+  <span style={{fontSize:11.5,fontWeight:700,color:IOS.orange}}>You\u2019re offline \u2014 showing what we\u2019ve got. We\u2019ll reconnect automatically.</span>
+ </div>}
+
  {/* Status bar safe area cover — blends iPhone time/battery into app */}
  <div style={{
  position:"fixed",
@@ -15902,3 +15915,18 @@ export default function App() {
  </div>
  );
 }
+
+// ── Root shell: full-app crash guard. A render error ANYWHERE now shows a branded
+// recovery screen instead of a white screen (the TDZ class of failure), and the error
+// reports through the same PostHog path Plok bubbles use.
+function CrashScreen(){ return (
+ <div style={{position:"fixed",inset:0,background:"#07070A",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:13,padding:"0 38px",textAlign:"center",fontFamily:"Barlow,sans-serif"}}>
+  <div style={{width:58,height:58,borderRadius:"50%",background:"rgba(255,69,58,0.10)",border:"0.5px solid rgba(255,69,58,0.25)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+   <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#FF453A" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+  </div>
+  <div style={{fontSize:19,fontWeight:800,color:"#fff",letterSpacing:"-0.3px"}}>Something broke on our end</div>
+  <div style={{fontSize:13,color:"rgba(255,255,255,0.46)",lineHeight:1.55,maxWidth:280}}>The error has already been reported. Your picks are safe on the server \u2014 reload to pick up where you left off.</div>
+  <button onClick={()=>{ try{ window.location.reload(); }catch(e){} }} style={{marginTop:7,background:"#0A84FF",border:"none",color:"#fff",borderRadius:12,padding:"13px 32px",fontSize:15,fontWeight:800,fontFamily:"Barlow,sans-serif",cursor:"pointer"}}>Reload PickLock</button>
+ </div>
+); }
+export default function AppRoot(){ return (<ErrorBoundary kind="app-root" fallback={<CrashScreen/>}><App/></ErrorBoundary>); }
