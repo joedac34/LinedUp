@@ -10269,7 +10269,11 @@ export default function App() {
    if(replaceCtx){ doReplaceSave(bet); return; }
    if(isSoloMode && soloParlayMode){ const _pc = parlayConflict({...bet, category:(bet.category||gridType)}, (soloParlay&&soloParlay.legs)||[]); if(_pc){ setPickConflict(_pc); setTimeout(()=>setPickConflict(""),2800); setGridJustAdded(null); return; }
    setSoloParlay(pv=>{ if(!pv) return pv; const legs=pv.legs||[]; if(legs.length>=6 || legs.some(l=>l.id===bet.id)) return pv; return {...pv, legs:[...legs, {id:bet.id, pick:bet.pick, game:bet.game||"", odds:bet.odds, impliedOdds:bet.impliedOdds, gameTime:bet.gameTime||null, category:bet.category||gridType, categoryLabel:bet.categoryLabel||null, eventId:bet.eventId||null, marketKey:bet.marketKey||null, outcome:bet.outcome||null, point:(bet.point!=null?bet.point:null), selKey:bet.selKey||null}]}; }); try{ if(navigator.vibrate) navigator.vibrate(12); }catch(e){} return; }
- const cat = catOverride || (gridType==="longshot" ? "longshot" : gridType);
+ // A bet carries its OWN category (yrfi/nrfi/ml/spread/ou/prop) from the odds feed. Trust
+ // that over gridType: yrfi/nrfi are browsed under the innings group where gridType can be
+ // "ou"/"spread", so relying on gridType filed a YRFI into the OU slot and a NRFI into the
+ // SPREAD slot. catOverride still wins (explicit callers); then the bet's category; then gridType.
+ const cat = catOverride || (gridType==="longshot" ? "longshot" : ((bet && bet.category) ? bet.category : gridType));
  if(isSoloMode){
    const _cf = lineConflict(cat, bet, soloFreePicks);
    if(_cf){ setPickConflict(_cf); setTimeout(()=>setPickConflict(""),2600); setGridJustAdded(null); return; }
@@ -10308,7 +10312,9 @@ export default function App() {
  if(_cur && !_cur.isParlay && _cur.bet===null && (_st(_cur)===cat || _st(_cur)==="wildcard")) idx=gridTargetSlot;
  if(idx===-1) idx = activePicks.findIndex(p=>!p.isParlay && _st(p)===cat && p.bet===null);
  if(idx===-1) idx = activePicks.findIndex(p=>!p.isParlay && _st(p)==="wildcard" && p.bet===null);
-  if(idx===-1) idx = activePicks.findIndex(p=>!p.isParlay && p.bet===null && !p.committed); // any open slot beats a false "full"
+  // NO cross-type fallback in a fixed-type league: a yrfi must land in a yrfi (or wildcard)
+  // slot, never in whatever slot happens to be empty. The old "any open slot" line put a
+  // YRFI into the OU slot and a NRFI into the SPREAD slot. Type slot -> wildcard -> block.
  if(idx===-1){ const _lbl=TYPE_LABELS[cat]||cat; setPickConflict("No open slot for another "+_lbl+" — your "+_lbl+" and wildcard slots are full. Remove one to swap."); setTimeout(()=>setPickConflict(""),3000); setGridJustAdded(null); return; }
  dest = idx;
  } else if(!isSoloMode && gridFlexMult!=null && cat!=="longshot"){
