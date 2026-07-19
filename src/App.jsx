@@ -5349,7 +5349,7 @@ export default function App() {
      if(error){ alert("Replace failed: " + error.message); return; }
      const newId = _ins && _ins[0] && _ins[0].id;
      if(newId){ try{ await supabase.from("picks").update({ replaced_by: String(newId) }).eq("id", ctx.voidId); }catch(e){} }
-     setReplaceCtx(null); setScreen(ctx.returnScreen || "leagues");
+     setReplaceCtx(null); setBuildingSlip(false); setScreen(ctx.returnScreen || "leagues");
      try{ if(navigator.vibrate) navigator.vibrate([0,20,30,20]); }catch(e){}
      try{ await fetchWeekPicks(lgId, ctx.week); }catch(e){}
      try{ await fetchMyPicks(lgId, ctx.week, user.id, realLeagues.find(l=>l.id===lgId)); }catch(e){}
@@ -9639,14 +9639,27 @@ export default function App() {
  <div style={{display:"flex",alignItems:"center",gap:8}}>
  {slot.mult&&filled&&(()=>{
  const started=slotStarted(slot);
- if(slot.committed) return (<div style={{display:"flex",alignItems:"center",gap:7}}>
+ if(slot.committed){
+   // A voided pick (postponed/cancelled game) shows VOID + REPLACE in the builder too,
+   // not just the locked-slip view — users who land here otherwise see a dead LOCKED
+   // card with no way out. slot.result is set by the DB rehydrate; the weekPicks lookup
+   // recovers the real row (id/slot/week) that startReplace needs.
+   if(slot.result==="P"){
+     const _rd=(weekPicks||[]).find(x=>x.user_id===user?.id&&slot.commitIds&&slot.commitIds.includes(x.id)&&x.result==="P"&&!x.replaced_by);
+     return (<div style={{display:"flex",alignItems:"center",gap:7}}>
+       <span style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:10,fontWeight:800,color:"rgba(255,255,255,0.55)",background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.16)",borderRadius:7,padding:"4px 8px"}}>VOID</span>
+       {_rd && <span onClick={(e)=>{e.stopPropagation();startReplace(_rd,{leagueId:activeLeague.id,returnScreen:"picks"});}} style={{fontSize:10,fontWeight:800,color:IOS.blue,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.35)",borderRadius:7,padding:"4px 9px",cursor:"pointer"}}>REPLACE</span>}
+     </div>);
+   }
+   return (<div style={{display:"flex",alignItems:"center",gap:7}}>
  <span style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:10,fontWeight:800,color:IOS.green,background:"rgba(48,209,88,0.12)",border:"1px solid rgba(48,209,88,0.3)",borderRadius:7,padding:"4px 8px"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>LOCKED</span>
  {!slotLocked(slot) && <span onClick={(e)=>{e.stopPropagation();unlockSlot(idx);}} style={{fontSize:10.5,fontWeight:700,color:IOS.blue,cursor:"pointer"}}>Unlock</span>}
  </div>);
+ }
  if(started) return (<span style={{fontSize:10,fontWeight:700,color:IOS.label3}}>Game started</span>);
  return (<button onClick={(e)=>{e.stopPropagation();lockSlot(idx);}} style={{fontFamily:"Barlow",display:"inline-flex",alignItems:"center",gap:5,fontSize:11,fontWeight:800,color:"#08080B",background:IOS.green,border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#08080B" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Lock</button>);
  })()}
- {slot.mult&&filled&&<div style={{fontSize:12,fontWeight:700,color:IOS.green,flexShrink:0}}>
+ {slot.mult&&filled&&slot.result!=="P"&&<div style={{fontSize:12,fontWeight:700,color:IOS.green,flexShrink:0}}>
  {isDouble?`+${pts} pts (2⃣ doubled!)`:isEnhance&&slot.bet?`+${pts} pts `:`+${pts} pts if win`}
  </div>}
  {puEnabled&&(myPUs.filter(p=>p.type==="offensive").length>0||appliedPU)&&slot.mult&&filled&&(
