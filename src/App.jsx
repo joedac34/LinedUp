@@ -8543,6 +8543,26 @@ export default function App() {
  // Check if user has a pick on this game
  const myPickNames = (weekPicks||[]).filter(p=>p.user_id===user?.id).map(p=>(p.pick_name||"").toLowerCase()); const myPickGames = (weekPicks||[]).filter(p=>p.user_id===user?.id).map(p=>(p.game||"").toLowerCase());
  const hasPick = myPickGames.some(gm=>gm.includes(away.toLowerCase())&&gm.includes(home.toLowerCase()));
+ // ── redesigned card derivations (approved mockup 19 Jul 2026) ──
+ const _gAb=getAcronym(g.away), _gHb=getAcronym(g.home);
+ // brightness-lift for dark team colours (same rule as the game-detail _brite)
+ const _gb=(hex)=>{ try{ let h=String(hex||"").replace("#",""); if(h.length===3) h=h.split("").map(c=>c+c).join(""); const r0=parseInt(h.slice(0,2),16),g0=parseInt(h.slice(2,4),16),b0=parseInt(h.slice(4,6),16); const lum=(0.299*r0+0.587*g0+0.114*b0)/255; if(lum>=0.62) return "#"+h; const f=lum<0.32?0.64:0.46; return "rgb("+Math.round(r0+(255-r0)*f)+","+Math.round(g0+(255-g0)*f)+","+Math.round(b0+(255-b0)*f)+")"; }catch(e){ return hex||"#0A84FF"; } };
+ const _gAc=_gb(teamAccent(_gAb)), _gHc=_gb(teamAccent(_gHb));
+ const _gAcRaw=teamAccent(_gAb), _gHcRaw=teamAccent(_gHb);
+ const _glv=(liveGames||[]).find(x=>x&&x.away&&x.home&&x.away.name===g.away&&x.home.name===g.home)||null;
+ const _gLiveTxt=(_glv&&_glv.state==="live")?(((_glv.half||"").toUpperCase()+" "+(_glv.inning||""))+(_glv.outs!=null?(" \u00b7 "+_glv.outs+" out"):"")):null;
+ const _gaSc=(_glv&&_glv.away&&_glv.away.score!=null)?_glv.away.score:espn?.awayScore;
+ const _ghSc=(_glv&&_glv.home&&_glv.home.score!=null)?_glv.home.score:espn?.homeScore;
+ const _mlOf=(nm)=>{ const o=mlOdds.find(x=>x.pick===nm)||mlOdds.find(x=>String(x.pick||"").includes(nm.split(" ").pop())); return o?o.odds:null; };
+ const _mlA=_mlOf(g.away), _mlH=_mlOf(g.home);
+ const _spF=spreadOdds.find(o=>/\s-\d/.test(o.pick||""))||spreadOdds[0]||null;
+ const _spParts=_spF?String(_spF.pick||"").trim().split(" "):[];
+ const _spLine=_spParts.length?_spParts[_spParts.length-1]:""; const _spTeam=_spParts.slice(0,-1).join(" ");
+ const _ouO=ouOdds.find(o=>/^over/i.test(o.pick||""))||ouOdds[0]||null;
+ const _ouNum=_ouO?String(_ouO.pick||"").replace(/^(over|under)\s*/i,""):"";
+ const _pit=(pp)=>{ if(!pp||!pp.name) return null; const last=String(pp.name).trim().split(" ").pop(); const rec=String(pp.record||"").replace(/[()]/g,"").trim(); return {last, rec}; };
+ const _pA=_pit(espn?.awayProbable), _pH=_pit(espn?.homeProbable);
+ const _showPit=!isLive&&!isDone&&_pA&&_pH;
 
  return (
  <Fragment key={gi}>
@@ -8565,48 +8585,55 @@ export default function App() {
  }catch(e){}
  finally{setGameLoading(false);}
  }
- }} style={{margin:"0 16px 10px",background:IOS.bg2,borderRadius:14,overflow:"hidden",cursor:"pointer",border:hasPick?`1px solid ${IOS.blue}40`:"1px solid rgba(255,255,255,0.06)"}}>
- {/* Status bar */}
- <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 14px",borderBottom:`0.5px solid ${IOS.sep}`}}>
- <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,color:isLive?IOS.green:IOS.label3,textTransform:"uppercase"}}>
- {isLive?"● LIVE":isDone?"Final":(isToday(g.time)?gameTime:`${new Date(g.time).toLocaleDateString([],{weekday:"short",month:"short",day:"numeric"})} · ${gameTime}`)}
+ }} style={{margin:"0 16px 10px",position:"relative",background:"#131318",borderRadius:15,overflow:"hidden",cursor:"pointer",border:hasPick?"0.5px solid rgba(10,132,255,0.35)":"0.5px solid rgba(255,255,255,0.07)"}}>
+ <div style={{position:"absolute",inset:0,pointerEvents:"none",opacity:0.12,background:`linear-gradient(105deg,${_gAc} 0%,transparent 38%,transparent 62%,${_gHc} 100%)`}}/>
+ <div style={{position:"relative",padding:"12px 14px 13px"}}>
+ {/* header: time / live inning / final — MY PICK right */}
+ <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",marginBottom:10}}>
+ <div style={{fontSize:12.5,fontWeight:800,letterSpacing:"-0.1px",color:isLive?IOS.green:isDone?"rgba(255,255,255,0.46)":"#fff"}}>
+ {isLive&&<span style={{display:"inline-block",width:5,height:5,borderRadius:"50%",background:IOS.red,marginRight:6,verticalAlign:2}}/>}
+ {isLive?(_gLiveTxt||"LIVE"):isDone?"FINAL":(isToday(g.time)?gameTime:`${new Date(g.time).toLocaleDateString([],{weekday:"short",month:"short",day:"numeric"})} \u00b7 ${gameTime}`)}
  </div>
- {hasPick && <div style={{fontSize:10,fontWeight:700,color:IOS.blue,letterSpacing:0.5}}>MY PICK</div>}
+ {hasPick&&<div style={{fontSize:9.5,fontWeight:800,color:IOS.blue,letterSpacing:0.5}}>MY PICK</div>}
  </div>
- {/* Teams */}
- <div style={{padding:"10px 14px"}}>
- {[{name:g.away,abbr:away,logo:(teamLogo(activeLeague?.sport,g.away)||espn?.awayLogo),score:espn?.awayScore,record:espn?.awayRecord},
- {name:g.home,abbr:home,logo:(teamLogo(activeLeague?.sport,g.home)||espn?.homeLogo),score:espn?.homeScore,record:espn?.homeRecord}
- ].map((team,ti)=>(
- <div key={ti} style={{display:"flex",alignItems:"center",gap:10,marginBottom:ti===0?8:0}}>
- <Crest src={team.logo} abbr={team.abbr} size={28}/>
- <div style={{flex:1}}>
- <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>{team.name}</div>
- {team.record && <div style={{fontSize:11,color:IOS.label3}}>{team.record}</div>}
+ {[{name:g.away,abbr:_gAb,logo:(teamLogo(activeLeague?.sport,g.away)||espn?.awayLogo),score:_gaSc,record:espn?.awayRecord,ml:_mlA,ring:_gAcRaw},
+ {name:g.home,abbr:_gHb,logo:(teamLogo(activeLeague?.sport,g.home)||espn?.homeLogo),score:_ghSc,record:espn?.homeRecord,ml:_mlH,ring:_gHcRaw}
+ ].map((team,ti)=>{ const _sc=Number(team.score); const _osc=Number(ti===0?_ghSc:_gaSc); const _dim=(isLive||isDone)&&!isNaN(_sc)&&!isNaN(_osc)&&_sc<_osc; return (
+ <div key={ti} style={{display:"flex",alignItems:"center",gap:10,padding:"4px 0"}}>
+ <div style={{width:30,height:30,borderRadius:"50%",background:"#fff",border:`2px solid ${team.ring||"rgba(0,0,0,0.1)"}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 2px 8px rgba(0,0,0,0.35)",overflow:"hidden"}}>
+ {team.logo?<img src={team.logo} alt={team.abbr} style={{width:20,height:20,objectFit:"contain"}} onError={(ev)=>{ ev.target.style.display="none"; ev.target.parentNode.innerHTML='<span style="font-size:9px;font-weight:900;color:#111;font-family:Barlow">'+team.abbr+'</span>'; }}/>:<span style={{fontSize:9,fontWeight:900,color:"#111"}}>{team.abbr}</span>}
  </div>
- {(isLive||isDone) && team.score!==undefined && (
- <div style={{fontSize:20,fontWeight:800,color:"#fff"}}>{team.score}</div>
- )}
+ <div style={{flex:1,minWidth:0,display:"flex",alignItems:"baseline",gap:7}}>
+ <span style={{fontSize:14.5,fontWeight:800,letterSpacing:"-0.2px",color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{team.name}</span>
+ {team.record&&<span style={{fontSize:10.5,fontWeight:600,color:"rgba(255,255,255,0.30)",flexShrink:0}}>{team.record}</span>}
  </div>
- ))}
+ {(isLive||isDone)&&team.score!=null
+ ? <div style={{fontSize:17,fontWeight:800,fontFamily:"'Barlow Semi Condensed',sans-serif",color:_dim?"rgba(255,255,255,0.30)":"#fff",flexShrink:0}}>{team.score}</div>
+ : (team.ml?<div style={{fontSize:13.5,fontWeight:800,color:"#fff",flexShrink:0}}>{team.ml}</div>:null)}
  </div>
- {/* Odds strip */}
- {mlOdds.length > 0 && (
- <div style={{display:"flex",borderTop:`0.5px solid ${IOS.sep}`}}>
- {[
- {label:"ML", items:mlOdds.slice(0,2)},
- {label:"Spread", items:spreadOdds.slice(0,2)},
- {label:"O/U", items:ouOdds.slice(0,2)},
- ].map((col,ci)=>(
- <div key={ci} style={{flex:1,padding:"8px 6px",borderRight:ci<2?`0.5px solid ${IOS.sep}`:"none",textAlign:"center"}}>
- <div style={{fontSize:9,color:IOS.label3,fontWeight:600,letterSpacing:0.5,marginBottom:4}}>{col.label}</div>
- {col.items.map((o,oi)=>(
- <div key={oi} style={{fontSize:11,fontWeight:700,color:o.odds?.startsWith("+")?IOS.green:IOS.blue,lineHeight:1.4}}>{o.pick?.split(" ").slice(-1)[0]} {o.odds}</div>
- ))}
- </div>
- ))}
+ ); })}
+ {_showPit&&(
+ <div style={{display:"flex",alignItems:"center",gap:7,margin:"8px 0 2px",fontSize:10.5,fontWeight:600,color:"rgba(255,255,255,0.46)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+ <span>{_pA.last}{_pA.rec?<span style={{color:"rgba(255,255,255,0.30)",marginLeft:5}}>{_pA.rec}</span>:null}</span>
+ <span style={{fontSize:8.5,fontWeight:800,color:"rgba(255,255,255,0.30)",letterSpacing:"0.05em"}}>VS</span>
+ <span>{_pH.last}{_pH.rec?<span style={{color:"rgba(255,255,255,0.30)",marginLeft:5}}>{_pH.rec}</span>:null}</span>
  </div>
  )}
+ {!isLive&&!isDone&&(_spF||_ouO)&&(
+ <div style={{display:"flex",gap:7,marginTop:9}}>
+ {_spF&&<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:9,padding:"8px 6px"}}>
+ <span style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.08em",color:"rgba(255,255,255,0.30)",textTransform:"uppercase"}}>Spread</span>
+ <span style={{fontSize:12,fontWeight:800,color:"#fff"}}>{getAcronym(_spTeam)} {_spLine}</span>
+ <span style={{fontSize:10.5,fontWeight:600,color:"rgba(255,255,255,0.46)"}}>{_spF.odds}</span>
+ </div>}
+ {_ouO&&<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:9,padding:"8px 6px"}}>
+ <span style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.08em",color:"rgba(255,255,255,0.30)",textTransform:"uppercase"}}>Total</span>
+ <span style={{fontSize:12,fontWeight:800,color:"#fff"}}>{_ouNum}</span>
+ <span style={{fontSize:10.5,fontWeight:600,color:"rgba(255,255,255,0.46)"}}>{_ouO.odds}</span>
+ </div>}
+ </div>
+ )}
+ </div>
  </div>
      </Fragment>
  );
