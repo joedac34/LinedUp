@@ -8303,15 +8303,13 @@ export default function App() {
  <div className="ios-section" style={{margin:"0 16px 6px"}}>
  <div className="ios-section-header" style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
  <span>Wk {activeLeague.current_week||activeLeague.week||1} Matchup · Live</span>
- <span onClick={()=>setScreen("matchup")} style={{color:sport.color,fontSize:13,textTransform:"none",fontWeight:500,letterSpacing:0,cursor:"pointer"}}>View Details</span>
+ <span onClick={()=>setScreen("matchup")} style={{color:IOS.blue,fontSize:13,textTransform:"none",fontWeight:500,letterSpacing:0,cursor:"pointer"}}>View Details</span>
  </div>
  </div>
- <div onClick={()=>setScreen("matchup")} style={{margin:"0 16px 10px",background:`linear-gradient(155deg,${tint} 0%,#0B0B0E 72%)`,borderRadius:16,padding:"15px 16px",cursor:"pointer",position:"relative",overflow:"hidden",border:`1px solid ${accent}38`,boxShadow:"0 4px 16px rgba(0,0,0,0.4)"}}>
- <div style={{position:"absolute",top:-28,right:-28,width:96,height:96,borderRadius:"50%",background:`radial-gradient(circle,${accent}26,transparent 70%)`,pointerEvents:"none"}}/>
- <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${accent},${accent}55)`}}/>
+ <div onClick={()=>setScreen("matchup")} style={{margin:"0 16px 10px",background:"#131318",borderRadius:16,padding:"15px 16px",cursor:"pointer",position:"relative",overflow:"hidden",border:"0.5px solid rgba(255,255,255,0.07)"}}>
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
  <div>
- <div style={{fontSize:18,fontWeight:800,letterSpacing:-0.5,color:sport.color}}>YOU</div>
+ <div style={{fontSize:18,fontWeight:800,letterSpacing:-0.5,color:IOS.blue}}>YOU</div>
  <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>{myTotal}pts</div>
  </div>
  <div style={{textAlign:"center"}}>
@@ -8319,7 +8317,7 @@ export default function App() {
  <div style={{fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:isTied?IOS.blue:isWinning?IOS.green:IOS.red,marginTop:2}}>{isTied?"You're Tied":isWinning?"You're Leading":"You're Trailing"}</div>
  </div>
  <div style={{textAlign:"right"}}>
- <div style={{fontSize:18,fontWeight:800,letterSpacing:-0.5}}>{oppName}</div>
+ <div style={{fontSize:18,fontWeight:800,letterSpacing:-0.5,color:"rgba(255,255,255,0.46)"}}>{oppName}</div>
  <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>{oppTotal}pts</div>
  </div>
  </div>
@@ -8332,7 +8330,7 @@ export default function App() {
  ))}
  </div>
  <div style={{fontSize:12,color:IOS.label3,display:"flex",alignItems:"center",gap:4}}>
- {myPending>0&&<span style={{color:sport.color,fontWeight:600}}>{myPending} pending</span>}
+ {myPending>0&&<span style={{color:"rgba(255,255,255,0.46)",fontWeight:600}}>{myPending} pending</span>}
  <span style={{fontSize:16,color:IOS.label3}}>›</span>
  </div>
  </div>
@@ -8381,21 +8379,21 @@ export default function App() {
  const locked=!!slot.committed;
  const c=catColors[cat]||IOS.blue;
  return (
- <div key={i} style={{display:"flex",alignItems:"center",gap:5,padding:"5px 9px",borderRadius:8,background:locked?`${c}1a`:"rgba(255,255,255,0.03)",border:locked?`0.5px solid ${c}3d`:"0.5px dashed rgba(255,255,255,0.2)",flexShrink:0,opacity:locked?1:0.85}}>
- {locked&&<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>}
- <span style={{fontSize:11,fontWeight:800,color:locked?c:"rgba(255,255,255,0.5)"}}>{slot.mult}×</span>
- <span style={{fontSize:10.5,fontWeight:700,color:locked?"rgba(255,255,255,0.8)":"rgba(255,255,255,0.45)",letterSpacing:0.3}}>{catAbbr[cat]||"PICK"}{isParlay&&legs.length>0?` ${legs.length}`:""}</span>
+ <div key={i} style={{display:"flex",alignItems:"center",gap:5,padding:"7px 10px",borderRadius:9,background:"rgba(255,255,255,0.05)",border:locked?"0.5px solid rgba(255,255,255,0.07)":"0.5px dashed rgba(255,255,255,0.2)",flexShrink:0,opacity:locked?1:0.85}}>
+ <span style={{width:4,height:4,borderRadius:"50%",background:c,display:"inline-block",flexShrink:0}}/>
+ <span style={{fontSize:11,fontWeight:800,color:"rgba(255,255,255,0.8)"}}>{slot.mult}×</span>
+ <span style={{fontSize:10.5,fontWeight:700,color:locked?"rgba(255,255,255,0.75)":"rgba(255,255,255,0.45)",letterSpacing:0.3}}>{catAbbr[cat]||"PICK"}{isParlay&&legs.length>0?` ${legs.length}`:""}</span>
  {!locked&&<span style={{fontSize:8.5,fontWeight:800,color:IOS.orange,letterSpacing:0.4}}>OPEN</span>}
  {slot.power_up_id&&<PUBadge puId={slot.power_up_id} size={14} />}
  </div>
  );
  });
  card=(
- <div style={{margin:"0 16px 10px",background:allLocked?"linear-gradient(160deg,#0A1606 0%,#0B0B0E 70%)":"linear-gradient(160deg,#16130A 0%,#0B0B0E 70%)",borderRadius:16,overflow:"hidden",border:`1px solid ${accent}4d`,boxShadow:"0 4px 16px rgba(0,0,0,0.4)"}}>
+ <div style={{margin:"0 16px 10px",background:"#131318",borderRadius:16,overflow:"hidden",border:"0.5px solid rgba(255,255,255,0.07)"}}>
  <div style={{padding:"12px 16px 8px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:`0.5px solid ${IOS.sep}`}}>
  <div style={{display:"flex",alignItems:"center",gap:7}}>
- <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
- <div style={{fontSize:12,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:accent}}>{allLocked?`Week ${wk} · Slip Locked`:`Week ${wk} · ${lockedN}/${slots.length} Locked`}</div>
+ <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+ <div style={{fontSize:12,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:"rgba(255,255,255,0.7)"}}>{allLocked?`Week ${wk} · Slip Locked`:`Week ${wk} · ${lockedN}/${slots.length} Locked`}</div>
  </div>
  <div style={{display:"flex",gap:12,alignItems:"center"}}>
  <div style={{fontSize:12,fontWeight:600,color:IOS.blue,cursor:"pointer"}} onClick={()=>setScreen("picks")}>{allLocked?"Edit":"Continue"}</div>
@@ -8403,10 +8401,10 @@ export default function App() {
  </div>
  </div>
  <div style={{display:"flex",gap:6,flexWrap:"wrap",padding:"12px 16px 4px"}}>{pills}</div>
- <div onClick={()=>setScreen("picks")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 14px",margin:"6px 12px 12px",borderRadius:10,background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.08)",cursor:"pointer"}}>
+ <div onClick={()=>setScreen("picks")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 14px",margin:"6px 12px 12px",borderRadius:10,background:"rgba(10,132,255,0.06)",border:"0.5px solid rgba(10,132,255,0.30)",cursor:"pointer"}}>
  <div style={{display:"flex",alignItems:"center",gap:8}}>
  <span style={{fontSize:13.5,fontWeight:700,color:"#fff"}}>{allLocked?"View your picks":(openN+" open · tap to lock")}</span>
- <span style={{fontSize:11,fontWeight:700,color:IOS.green}}>+{totalPossible.toFixed(1)} pts</span>
+ <span style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.46)"}}>+{totalPossible.toFixed(1)} pts possible</span>
  </div>
  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
  </div>
@@ -8479,15 +8477,14 @@ export default function App() {
  const st=(r.streak&&r.streak.count>=1)?`${r.streak.type}${r.streak.count}`:"";
  return (
  <div key={r.rank} style={{display:"flex",alignItems:"center",gap:11,padding:"0 13px",height:big?60:52,marginBottom:8,borderRadius:14,
- background:isMe?"linear-gradient(180deg,#16223e,#0e1422)":"linear-gradient(180deg,#16161d,#0d0d11)",
- border:`1px solid ${isMe?"rgba(10,132,255,0.55)":top?"rgba(245,210,110,0.45)":"rgba(255,255,255,0.07)"}`,
- boxShadow:top?"0 4px 18px -6px rgba(245,210,110,0.28)":isMe?"0 4px 18px -8px rgba(10,132,255,0.4)":"none"}}>
- <div style={{fontSize:big?18:15,fontWeight:900,width:24,textAlign:"center",flexShrink:0,color:top?"#f5d26e":isMe?IOS.blue:"rgba(255,255,255,0.5)"}}>{i+1}</div>
- <div style={{width:big?36:30,height:big?36:30,borderRadius:"50%",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:big?13:11,fontWeight:900,color:"#fff",
- background:isMe?"rgba(10,132,255,0.3)":top?"rgba(245,210,110,0.22)":"rgba(255,255,255,0.1)",
- border:`1px solid ${isMe?"rgba(10,132,255,0.5)":top?"rgba(245,210,110,0.4)":"rgba(255,255,255,0.12)"}`}}>{inits}</div>
+ background:"#131318",
+ border:`0.5px solid ${isMe?"rgba(10,132,255,0.30)":"rgba(255,255,255,0.07)"}`}}>
+ <div style={{fontSize:big?18:15,fontWeight:800,width:24,textAlign:"center",flexShrink:0,color:isMe?IOS.blue:top?"#fff":"rgba(255,255,255,0.46)"}}>{i+1}</div>
+ <div style={{width:big?36:30,height:big?36:30,borderRadius:"50%",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:big?13:11,fontWeight:800,
+ background:isMe?"rgba(10,132,255,0.18)":"rgba(255,255,255,0.08)",
+ color:isMe?IOS.blue:"rgba(255,255,255,0.7)"}}>{inits}</div>
  <div style={{flex:1,minWidth:0}}>
- <div style={{fontSize:big?15:13.5,fontWeight:800,letterSpacing:"-0.2px",color:isMe?IOS.blue:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{nm}</div>
+ <div style={{fontSize:big?15:13.5,fontWeight:700,letterSpacing:"-0.2px",color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{nm}</div>
  <div style={{fontSize:10.5,color:"rgba(255,255,255,0.4)",marginTop:1}}>{r.record||"0-0"}{st?` · ${st}`:""}</div>
  </div>
  <div style={{textAlign:"right",flexShrink:0}}>
@@ -11493,9 +11490,7 @@ export default function App() {
  const statusTxt = isTied?"You're Tied":isWinning?"You're Winning":"You're Trailing";
  return (
  <div style={{position:"sticky",top:0,zIndex:10,background:"#000",padding:"6px 0 8px"}}>
- <div style={{margin:"0 16px",borderRadius:16,padding:"14px 16px",position:"relative",overflow:"hidden",background:`linear-gradient(155deg,${tint} 0%,#0B0B0E 72%)`,border:`1px solid ${accent}38`,boxShadow:"0 4px 16px rgba(0,0,0,0.4)"}}>
- <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${accent},${accent}55)`}}/>
- <div style={{position:"absolute",top:-28,right:-28,width:96,height:96,borderRadius:"50%",background:`radial-gradient(circle,${accent}26,transparent 70%)`,pointerEvents:"none"}}/>
+ <div style={{margin:"0 16px",borderRadius:16,padding:"14px 16px",position:"relative",overflow:"hidden",background:"#131318",border:"0.5px solid rgba(255,255,255,0.07)"}}>
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
  <div style={{minWidth:0,flex:1}}>
  <div style={{fontSize:11,fontWeight:800,letterSpacing:"0.04em",textTransform:"uppercase",color:IOS.blue}}>You</div>
@@ -11506,7 +11501,7 @@ export default function App() {
  <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:accent,marginTop:2}}>{statusTxt}</div>
  </div>
  <div style={{textAlign:"right",minWidth:0,flex:1}}>
- <div style={{fontSize:11,fontWeight:800,letterSpacing:"0.04em",textTransform:"uppercase",color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{oppName}</div>
+ <div style={{fontSize:11,fontWeight:800,letterSpacing:"0.04em",textTransform:"uppercase",color:"rgba(255,255,255,0.46)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{oppName}</div>
  <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>{oppTotal} pts</div>
  </div>
  </div>
@@ -11516,7 +11511,7 @@ export default function App() {
  <div key={ii} style={{width:24,height:24,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,background:pp.result==="W"?"rgba(48,209,88,0.15)":pp.result==="L"?"rgba(255,69,58,0.12)":"rgba(255,255,255,0.06)",color:pp.result==="W"?IOS.green:pp.result==="L"?IOS.red:IOS.label3}}>{pp.result==="W"?"W":pp.result==="L"?"L":"·"}</div>
  ))}
  </div>
- {myPending>0&&<div style={{fontSize:11,color:accent,fontWeight:700}}>{myPending} pending</div>}
+ {myPending>0&&<div style={{fontSize:11,color:"rgba(255,255,255,0.46)",fontWeight:600}}>{myPending} pending</div>}
  </div>
  </div>
  </div>
@@ -11560,10 +11555,9 @@ export default function App() {
  const _graded=picks.some(p=>p.result&&p.result!=="pending");
  const _started=_graded || _earliest===0 || _earliest<=_now; // unknown start time -> reveal (never hide forever)
  if(!_started) return (
- <div style={{flex:1,position:"relative",overflow:"hidden",borderRadius:12,minHeight:68,background:"linear-gradient(155deg,#16121A,#0B0B0E 75%)",border:`1px solid ${IOS.pink}40`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4}}>
- <div style={{position:"absolute",top:0,left:0,bottom:0,width:3,background:IOS.pink}}/>
- <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={IOS.pink} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
- <span style={{fontSize:9.5,fontWeight:800,color:IOS.pink,letterSpacing:0.4}}>LOCKED</span>
+ <div style={{flex:1,borderRadius:12,minHeight:68,background:"#131318",border:"0.5px solid rgba(255,255,255,0.07)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4}}>
+ <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+ <span style={{fontSize:9.5,fontWeight:800,color:"rgba(255,255,255,0.55)",letterSpacing:0.4}}>LOCKED</span>
  <span style={{fontSize:8,fontWeight:600,color:"#666"}}>Reveals at game time</span>
  </div>
  );
@@ -11579,7 +11573,10 @@ export default function App() {
  : picks[0]?.result;
  const won = result==="W";
  const lost = result==="L";
+ const voided = isParlay ? (picks.length>0 && picks.every(p=>p.result==="P")) : picks[0]?.result==="P";
  const pts = won ? parseFloat(picks.reduce((s,p)=>s+parseFloat(p.points_earned||0),0).toFixed(1)) : 0;
+ // Potential points for pending picks — same math the slip uses.
+ const potPts = (()=>{ try{ if(isParlay){ const ls=calcLS(picks.map(p=>({impliedOdds:p.implied_odds||0}))); return ls?parseFloat(calcPickPoints(picks[0]?.multiplier||1,(ls.decimal>1?(ls.decimal-1)*100:0),"W").toFixed(1)):0; } return parseFloat(calcPickPoints(picks[0]?.multiplier||1,picks[0]?.implied_odds||0,"W").toFixed(1)); }catch(e){ return 0; } })();
  const oddsVal = isParlay
  ? (()=>{const legs=picks.map(p=>({impliedOdds:p.implied_odds||0}));return calcLS(legs)?.american||"—";})()
  : picks[0]?.odds;
@@ -11591,36 +11588,32 @@ export default function App() {
  const typeLabel = isParlay ? `Longshot · ${picks.length} legs` : slotLabels[_slotType0]||_slotType0||"Pick";
  const pickName = isParlay ? `${picks.length}-leg parlay` : (picks[0]?.pick_name||"");
  const gameCtx = !isParlay ? (picks[0]?.game||"") : "";
- const strip = won?IOS.green:lost?IOS.red:c;
- const bg = won?"linear-gradient(155deg,#0A1A0E,#0B0B0E 75%)":lost?"linear-gradient(155deg,#1A0A0A,#0B0B0E 75%)":"linear-gradient(155deg,#141418,#0B0B0E 75%)";
- const border = won?IOS.green:lost?IOS.red:`${c}40`;
+ // Colour exists ONLY for outcomes (approved mockup 19 Jul 2026): rail + W/L chip + pts.
+ const strip = won?IOS.green:lost?IOS.red:voided?"rgba(255,255,255,0.16)":"transparent";
  const badgeColor = won?IOS.green:lost?IOS.red:"#555";
- const badgeBg = won?"rgba(48,209,88,0.15)":lost?"rgba(255,59,48,0.12)":"rgba(255,255,255,0.05)";
- const oddsColor = isParlay?IOS.pink:(oddsVal?.startsWith("+")?IOS.green:IOS.blue);
- const ptsBg = won?"rgba(48,209,88,0.1)":lost?"rgba(255,59,48,0.1)":"rgba(255,255,255,0.04)";
- const ptsColor = won?IOS.green:lost?IOS.red:"#555";
- const ptsLabel = won?`+${pts}pts`:lost?"+0pts":"pending";
+ const badgeBg = won?"rgba(48,209,88,0.10)":lost?"rgba(255,69,58,0.10)":"rgba(255,255,255,0.05)";
+ const ptsColor = won?IOS.green:lost?IOS.red:"rgba(255,255,255,0.46)";
+ const ptsLabel = voided?"voided":won?`+${pts} pts`:lost?"+0 pts":`+${potPts} pts if win`;
 
  return (
- <div style={{flex:1,position:"relative",overflow:"hidden",borderRadius:12,padding:"9px 10px 8px 12px",minHeight:68,background:bg,border:`1px solid ${border}`,display:"flex",flexDirection:"column",justifyContent:"space-between",cursor:isParlay?"pointer":undefined}}
+ <div style={{flex:1,position:"relative",overflow:"hidden",borderRadius:12,padding:"9px 10px 8px 12px",minHeight:68,background:"#131318",border:"0.5px solid rgba(255,255,255,0.07)",display:"flex",flexDirection:"column",justifyContent:"space-between",cursor:isParlay?"pointer":undefined}}
  onClick={isParlay?()=>{const el=document.getElementById(expandId);if(el)el.style.display=el.style.display==="block"?"none":"block";}:undefined}>
- <div style={{position:"absolute",top:0,left:0,bottom:0,width:3,background:strip}}/>
- <div style={{position:"absolute",top:-20,right:-20,width:60,height:60,borderRadius:"50%",background:`radial-gradient(circle,${strip}1f,transparent 70%)`,pointerEvents:"none"}}/>
+ <div style={{position:"absolute",top:0,left:0,bottom:0,width:3,borderRadius:"3px 0 0 3px",background:strip}}/>
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
- <div style={{display:"flex",alignItems:"center",gap:4,minWidth:0}}><span style={{fontSize:8,fontWeight:800,color:c,letterSpacing:.4,textTransform:"uppercase",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{typeLabel}</span>{picks[0]?.power_up_id&&<PUBadge puId={picks[0].power_up_id} size={13} />}</div>
- <div style={{display:"flex",alignItems:"center",gap:4,flexShrink:0,marginLeft:4}}>{showMult&&<span style={{fontSize:8.5,fontWeight:900,padding:"2px 5px",borderRadius:5,background:"rgba(255,255,255,0.08)",color:"#fff"}}>{picks[0]?.multiplier}×</span>}<span style={{fontSize:8,fontWeight:800,padding:"2px 5px",borderRadius:4,background:badgeBg,color:badgeColor}}>{won?"W":lost?"L":"–"}</span></div>
+ <div style={{display:"flex",alignItems:"center",gap:4,minWidth:0}}><span style={{width:3.5,height:3.5,borderRadius:"50%",background:c,display:"inline-block",flexShrink:0}}/><span style={{fontSize:8,fontWeight:700,color:"rgba(255,255,255,0.30)",letterSpacing:.5,textTransform:"uppercase",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{typeLabel}</span>{picks[0]?.power_up_id&&<PUBadge puId={picks[0].power_up_id} size={13} />}</div>
+ <div style={{display:"flex",alignItems:"center",gap:4,flexShrink:0,marginLeft:4}}>{showMult&&<span style={{fontSize:8.5,fontWeight:700,padding:"2px 5px",borderRadius:5,background:"rgba(255,255,255,0.07)",border:"0.5px solid rgba(255,255,255,0.07)",color:"rgba(255,255,255,0.8)"}}>{picks[0]?.multiplier}×</span>}{(won||lost)&&<span style={{fontSize:8,fontWeight:800,padding:"2px 5px",borderRadius:4,background:badgeBg,border:`0.5px solid ${won?"rgba(48,209,88,0.25)":"rgba(255,69,58,0.25)"}`,color:badgeColor}}>{won?"W":"L"}</span>}</div>
  </div>
  <div style={{fontSize:11,fontWeight:700,color:"#fff",lineHeight:1.25,marginTop:3,textAlign:"left",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{pickName}</div>
  {gameCtx&&<div style={{fontSize:9,color:"#666",marginTop:1,textAlign:"left",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{gameCtx}</div>}
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:5}}>
- <span style={{fontSize:11,fontWeight:800,color:oddsColor}}>{oddsVal}</span>
- <span style={{fontSize:8.5,fontWeight:700,padding:"2px 5px",borderRadius:5,whiteSpace:"nowrap",background:ptsBg,color:ptsColor}}>{ptsLabel}</span>
+ <span style={{fontSize:11,fontWeight:800,color:"#fff"}}>{oddsVal}</span>
+ <span style={{fontSize:8.5,fontWeight:700,whiteSpace:"nowrap",color:ptsColor}}>{ptsLabel}</span>
  </div>
  {!isParlay && picks[0] && (liveMatch(picks[0], liveGames) || (picks[0].away_score!=null && picks[0].home_score!=null)) && <div style={{marginTop:4}} onClick={(e)=>e.stopPropagation()}><ScoreChip pick={picks[0]} live={liveMatch(picks[0], liveGames)} onOpen={()=>openGamecast(picks[0])}/></div>}
  {isMe && !isParlay && result==="pending" && myPUs.some(p=>p.id==="second") && (
  <button onClick={(e)=>{e.stopPropagation(); setSecondSwap({pick:picks[0], category:(picks[0].slot||"ml").split("_")[0]});}} style={{marginTop:5,width:"100%",padding:"4px",borderRadius:6,border:`1px solid ${IOS.orange}55`,background:`${IOS.orange}1a`,color:IOS.orange,fontSize:8.5,fontWeight:800,letterSpacing:0.3,cursor:"pointer"}}>SECOND CHANCE</button>
  )}
- {isParlay&&<div style={{fontSize:8,color:c,marginTop:3}}>▾ tap to see legs</div>}
+ {isParlay&&<div style={{fontSize:8,color:"rgba(255,255,255,0.40)",marginTop:3}}>▾ tap to see legs</div>}
  {isParlay&&(
  <div id={expandId} style={{display:"none",marginTop:6,borderTop:"0.5px solid rgba(255,255,255,0.08)",paddingTop:5}}>
  {picks.map((leg,li)=>(
@@ -11650,7 +11643,7 @@ export default function App() {
  {renderCard(row.mine, true, "mexp-my-"+row.key, _t, row.mode==="slot", (()=>{ const sp=savedPicks?.flexPicks; if(sp) setFlexPicks(sp); setSavedPicks(null); setSubmitted(false); setBuildingSlip(true); if(row.mode==="slot"){ setGridTargetSlot(row.idx); setGridType(_t||"ml"); setGridPropSub("all"); setScreen("browser"); } else { setScreen("picks"); } }))}
  <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",paddingTop:20,gap:3}}>
  {row.mode==="slot"
- ? <div style={{width:26,height:26,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:900,background:_c+"22",color:_c}}>{_sh||"?"}</div>
+ ? <div style={{width:26,height:26,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:800,background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.07)",color:"rgba(255,255,255,0.30)"}}>{_sh||"?"}</div>
  : <span style={{fontSize:11,fontWeight:900,color:"#333"}}>{row.mult}×</span>}
  </div>
  {renderCard(row.theirs, false, "mexp-opp-"+row.key, _t, row.mode==="slot")}
