@@ -5345,6 +5345,16 @@ export default function App() {
    } else {
      const lgId = ctx.leagueId;
      if(!lgId){ alert("League not found."); return; }
+     // Same-week guard, mirroring the solo branch — the replacement must start inside the
+     // voided pick's league-week window (7d from season_start).
+     const _rlg = realLeagues.find(l=>l.id===lgId) || activeLeague;
+     const _rss = _rlg && _rlg.season_start ? new Date(_rlg.season_start).getTime() : NaN;
+     if(!isNaN(_rss)){
+       const _rwm = 7*24*60*60*1000; const _rt = Date.parse(bet.gameTime);
+       if(!(_rt >= _rss + (ctx.week-1)*_rwm && _rt < _rss + ctx.week*_rwm)){
+         setPickConflict("Replacement must be a game in the same week as the voided pick."); setTimeout(()=>setPickConflict(""),3200); return;
+       }
+     }
      const { data:_ins, error } = await supabase.from("picks").insert({ ...row, league_id: lgId, slot: ctx.slot || (cat+"_0") }).select("id");
      if(error){ alert("Replace failed: " + error.message); return; }
      const newId = _ins && _ins[0] && _ins[0].id;
@@ -10165,7 +10175,19 @@ export default function App() {
  list = (BETS[gridType]||[]).filter(b=> b._sport===gSport);
  }
  { const _seen=new Set(); list = list.filter(b=>{ const k=(b.game||"")+"|"+(b.pick||b.label||b.id||""); if(_seen.has(k)) return false; _seen.add(k); return true; }); }
-    const _replEligible = replaceCtx ? (list||[]).filter(b=> b && b.gameTime && Date.parse(b.gameTime)>Date.now() && soloWeekOfDate(b.gameTime)===replaceCtx.week) : null;
+    // League weeks are 7-day windows from season_start — soloWeekOfDate numbers weeks from
+    // a different epoch entirely, which made every league replace claim "no open games left"
+    // (19 Jul 2026). Solo replaces still use the solo calendar.
+    const _replEligible = replaceCtx ? (list||[]).filter(b=>{
+      if(!b || !b.gameTime) return false;
+      const _t = Date.parse(b.gameTime); if(!(_t>Date.now())) return false;
+      if(replaceCtx.solo) return soloWeekOfDate(b.gameTime)===replaceCtx.week;
+      const _lg = realLeagues.find(l=>l.id===replaceCtx.leagueId) || activeLeague;
+      const _ss = _lg && _lg.season_start ? new Date(_lg.season_start).getTime() : NaN;
+      if(isNaN(_ss)) return true; // no start on record: never false-negative the whole slate
+      const _wm = 7*24*60*60*1000;
+      return _t >= _ss + (replaceCtx.week-1)*_wm && _t < _ss + replaceCtx.week*_wm;
+    }) : null;
     const replaceCooked = replaceCtx ? (!_replEligible || _replEligible.length===0) : false;
 
  // Prop sub-category filter
