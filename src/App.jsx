@@ -618,55 +618,10 @@ const _UNUSED_MH = [
  },
 ];
 
-const STANDINGS = [
- { rank:1, name:"Dave K.", record:"9-1", units:"+22.0", roi:"+32%", streak:"W5", wpct:"90%", wr:["W","W","W","L","W","W","W","W","W","W"] },
- { rank:2, name:"Joe", record:"7-3", units:"+12.5", roi:"+18%", streak:"W3", wpct:"70%", wr:["W","W","L","W","L","W","-","-","-","-"] },
- { rank:3, name:"Mike D.", record:"6-4", units:"+4.2", roi:"+6%", streak:"L1", wpct:"60%", wr:["W","L","W","W","L","L","-","-","-","-"] },
- { rank:4, name:"Chris R.", record:"5-5", units:"-1.8", roi:"-3%", streak:"W1", wpct:"50%", wr:["L","W","L","W","L","W","-","-","-","-"] },
- { rank:5, name:"Tom B.", record:"3-7", units:"-9.4", roi:"-14%", streak:"L3", wpct:"30%", wr:["W","L","L","L","W","L","-","-","-","-"] },
- { rank:6, name:"Alex M.", record:"4-6", units:"-5.1", roi:"-8%", streak:"L2", wpct:"40%", wr:["L","W","L","W","L","L","-","-","-","-"] },
- { rank:7, name:"Ryan S.", record:"3-7", units:"-11.2", roi:"-17%", streak:"L4", wpct:"30%", wr:["W","L","L","L","L","L","-","-","-","-"] },
- { rank:8, name:"Jake P.", record:"2-8", units:"-15.8", roi:"-24%", streak:"L5", wpct:"20%", wr:["L","L","L","W","L","L","-","-","-","-"] },
-];
-
-const GAPER_MEMBERS = ["joe", "mlaforte", "esoumekhian", "dyaffe", "aweinstock", "Player6"];
-
-const SCHEDULE = []; // replaced by real Supabase data
-const _UNUSED_SCHEDULE = [
- { week:1, opp:"mlaforte", ms:null, os:null, result:"live" },
- { week:2, opp:"esoumekhian", ms:null, os:null, result:"upcoming" },
- { week:3, opp:"dyaffe", ms:null, os:null, result:"upcoming" },
- { week:4, opp:"aweinstock", ms:null, os:null, result:"upcoming" },
- { week:5, opp:"Player6", ms:null, os:null, result:"upcoming" },
- { week:6, opp:"mlaforte", ms:null, os:null, result:"upcoming" },
- { week:7, opp:"esoumekhian", ms:null, os:null, result:"upcoming" },
- { week:8, opp:"dyaffe", ms:null, os:null, result:"upcoming" },
- { week:9, opp:"aweinstock", ms:null, os:null, result:"upcoming" },
- { week:10, opp:"Player6", ms:null, os:null, result:"upcoming" },
- { week:11, opp:"mlaforte", ms:null, os:null, result:"upcoming" },
- { week:12, opp:"esoumekhian", ms:null, os:null, result:"upcoming" },
- { week:13, opp:"dyaffe", ms:null, os:null, result:"upcoming" },
- { week:14, opp:"aweinstock", ms:null, os:null, result:"upcoming" },
- { week:15, opp:"Player6", ms:null, os:null, result:"upcoming" },
- { week:16, opp:"mlaforte", ms:null, os:null, result:"upcoming" },
- { week:17, opp:"esoumekhian", ms:null, os:null, result:"upcoming" },
- { week:18, opp:"dyaffe", ms:null, os:null, result:"upcoming" },
-];
-
-const CHAT = [
- { id:1, user:"Dave K.", init:"D", time:"2h", text:"lmaooo that KC cover was filthy ", me:false },
- { id:2, user:"Mike D.", init:"M", time:"2h", text:"bro refs saved KC again", me:false },
- { id:3, user:"Joe", init:"J", time:"1h 52", text:"I had Chiefs too, easy money ", me:true },
- { id:4, user:"Tom B.", init:"T", time:"1h 45", text:"nobody talk to me rn", me:false },
- { id:5, user:"Dave K.", init:"D", time:"1h 40", text:"standings lookin scary. someone stop me", me:false },
- { id:6, user:"Chris R.",init:"C", time:"1h 30", text:"Joe you're the only one who can catch Dave ", me:false },
- { id:7, user:"Joe", init:"J", time:"1h 20", text:"I got Dave week 7. it's on sight", me:true },
- { id:8, user:"Dave K.", init:"D", time:"1h 18", text:" prepare yourself", me:false },
- { id:9, user:"Ryan S.", init:"R", time:"45m", text:"MNF needs to hurry up I can't sit at the bottom", me:false },
- { id:10, user:"Joe", init:"J", time:"12m", text:"Bills -6.5 lock of the week. trust me ", me:true },
- { id:11, user:"Mike D.", init:"M", time:"10m", text:"last time you said that you took Cowboys +7 ", me:false },
- { id:12, user:"Tom B.", init:"T", time:"5m", text:"^^^ ", me:false },
-];
+// ── Skeleton shimmer for loading placeholders (replaces the May-era mock-data
+// constants that used to live here — STANDINGS/CHAT/etc, all dead since Supabase). ──
+try{ if(typeof document!=="undefined" && !document.getElementById("pk-shim-kf")){ const _st=document.createElement("style"); _st.id="pk-shim-kf"; _st.textContent="@keyframes pkShim{0%{background-position:-240px 0}100%{background-position:240px 0}}"; document.head.appendChild(_st); } }catch(e){}
+const Skel = ({w="100%",h=12,r=7,style}) => (<div style={{width:w,height:h,borderRadius:r,background:"linear-gradient(90deg,rgba(255,255,255,0.05),rgba(255,255,255,0.11),rgba(255,255,255,0.05))",backgroundSize:"240px 100%",animation:"pkShim 1.4s linear infinite",flexShrink:0,...style}}/>);
 
 const WHEEL_ITEMS = ["double","enhance15","insurance","second","enhance3","enhance45"].map(_id=>POWER_UPS.find(p=>p.id===_id)).filter(Boolean);
 
@@ -8475,7 +8430,13 @@ export default function App() {
  </div>
  </div>
  <div style={{margin:"0 16px"}}>
- {[...baseStandings].sort((a,b)=>{
+ {baseStandings.length===0 ? [0,1,2].map(i=>(
+ <div key={"sk"+i} style={{display:"flex",alignItems:"center",gap:11,padding:"0 13px",height:56,marginBottom:8,borderRadius:14,background:"#131318",border:"0.5px solid rgba(255,255,255,0.07)"}}>
+ <Skel w={16} h={15}/><Skel w={32} h={32} r={16}/>
+ <div style={{flex:1}}><Skel w="52%" h={13} style={{marginBottom:6}}/><Skel w="28%" h={9}/></div>
+ <Skel w={46} h={16}/>
+ </div>
+ )) : [...baseStandings].sort((a,b)=>{
  const aw=parseInt((a.record||"0-0").split("-")[0])||0;
  const bw=parseInt((b.record||"0-0").split("-")[0])||0;
  if(bw!==aw) return bw-aw;
@@ -8519,10 +8480,20 @@ export default function App() {
  </div>
 
  {(tickerGames||[]).filter(g=>{const _ls=activeLeague?.sports||(activeLeague?.sport?[activeLeague.sport]:[]);return !_ls.length||_ls.includes(g.sport);}).length === 0 ? (
+ (!liveOdds[activeLeague?.sport] ? (
+ <div style={{padding:"0 16px"}}>{[0,1,2].map(i=>(
+ <div key={i} style={{background:"#131318",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:15,padding:"12px 14px",marginBottom:10}}>
+ <Skel w={110} h={12} style={{marginBottom:12}}/>
+ <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:9}}><Skel w={30} h={30} r={15}/><Skel w="55%" h={14}/><div style={{flex:1}}/><Skel w={44} h={13}/></div>
+ <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:11}}><Skel w={30} h={30} r={15}/><Skel w="50%" h={14}/><div style={{flex:1}}/><Skel w={44} h={13}/></div>
+ <div style={{display:"flex",gap:7}}><Skel h={32} r={9} style={{flex:1,width:"auto"}}/><Skel h={32} r={9} style={{flex:1,width:"auto"}}/></div>
+ </div>
+ ))}</div>
+ ) : (
  <div style={{textAlign:"center",padding:"40px 24px",color:IOS.label3,fontSize:14}}>
- <div style={{fontSize:32,marginBottom:8}}></div>
  No games found. Check back closer to game day.
  </div>
+ ))
  ) : (tickerGames||[]).filter(g=>{const _ls=activeLeague?.sports||(activeLeague?.sport?[activeLeague.sport]:[]);return !_ls.length||_ls.includes(g.sport);}).slice().sort((a,b)=> new Date(a.time) - new Date(b.time)).map((g, gi, _arr) => {
  const away = g.away.split(" ").pop();
  const home = g.home.split(" ").pop();
@@ -8648,7 +8619,7 @@ export default function App() {
 
  {/* ══ PICKS ══ */}
  {screen==="picks"&&!isSoloMode&&(()=>{ if(seasonNotStarted){ return notStartedBody; }
- if(!buildingSlip && picksLoading && !(savedPicks&&savedPicks.flexPicks)) return (<div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:"120px 0"}}><div style={{width:28,height:28,borderRadius:"50%",border:"2.5px solid rgba(255,255,255,0.12)",borderTopColor:IOS.blue,animation:"spin 0.7s linear infinite"}}/></div>);
+ if(!buildingSlip && picksLoading && !(savedPicks&&savedPicks.flexPicks)) return (<div style={{padding:"18px 16px"}}><Skel w={150} h={24} r={8}/><div style={{display:"flex",gap:9,margin:"16px 0 18px"}}>{[0,1,2].map(i=><Skel key={i} h={62} r={13} style={{flex:1,width:"auto"}}/>)}</div>{[0,1,2].map(i=>(<div key={i} style={{background:"#131318",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:15,padding:"14px 15px",marginBottom:10}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:11}}><Skel w={92} h={10}/><Skel w={46} h={14}/></div><Skel w="68%" h={16} style={{marginBottom:8}}/><Skel w="44%" h={11} style={{marginBottom:13}}/><div style={{display:"flex",gap:8}}><Skel w={31} h={24}/><Skel w={92} h={24}/></div></div>))}</div>);
  // Use separate state for solo mode vs league mode
  const activePicks = isSoloMode ? soloFlexPicks : flexPicks;
  const setActivePicks = isSoloMode ? setSoloFlexPicks : setFlexPicks;
@@ -10749,6 +10720,14 @@ export default function App() {
    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2.5" style={{transform:gridOpenGames[gk]?"rotate(180deg)":"none",transition:"transform .18s",flexShrink:0}}><polyline points="6 9 12 15 18 9"/></svg>
    </div>
    </div>
+   {/* First-inning bets live and die on the starters — show the pitching matchup. */}
+   {(gridType==="yrfi"||gridType==="nrfi")&&(()=>{ const _p=gk.split(" @ "); if(_p.length!==2) return null; const _e=matchEspnGame(espnGames,_p[0].split(" ").pop(),_p[1].split(" ").pop()); const _pa=_e&&_e.awayProbable, _ph=_e&&_e.homeProbable; if(!_pa&&!_ph) return null; const _fmt=(x)=>x&&x.name?(String(x.name).split(" ").pop()+(x.record?(" "+String(x.record).replace(/[()]/g,"")):"")):"TBD"; return (
+   <div style={{display:"flex",alignItems:"center",gap:6,padding:"0 13px 9px",marginTop:-3,fontSize:10.5,fontWeight:600,color:"rgba(255,255,255,0.46)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+   <span>{_fmt(_pa)}</span>
+   <span style={{fontSize:8.5,fontWeight:800,color:"rgba(255,255,255,0.30)",letterSpacing:"0.05em"}}>VS</span>
+   <span>{_fmt(_ph)}</span>
+   </div>
+   ); })()}
    </div>
    {gridOpenGames[gk] && <div style={{borderTop:"1px solid rgba(255,255,255,0.07)"}}>{gridType==="prop" ? renderPropPairs(bets) : (gridType==="longshot"?_sortBets(bets):bets).map((bet,idx)=>renderRow(bet,idx,idx===0))}</div>}
    </div>
