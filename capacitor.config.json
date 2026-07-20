@@ -1,5 +1,10 @@
 {
   "appId": "com.picklock.app",
   "appName": "PickLock",
-  "webDir": "dist"
+  "webDir": "dist",
+  "backgroundColor": "#0A0A0E",
+  "ios": {
+    "contentInset": "automatic",
+    "backgroundColor": "#0A0A0E"
+  }
 }
