@@ -21,6 +21,35 @@ const ODDS   = process.env.ODDS_API_KEY;
 const sbHeaders = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, "Content-Type": "application/json" };
 const SPORT_KEYS = { nfl: "americanfootball_nfl", nba: "basketball_nba", mlb: "baseball_mlb" };
 
+// ── per-identity rate limit on the EXPENSIVE (uncached) path ──────────────────
+// Same pattern + SAME table as insight.js (insight_rate): one shared hourly Plok
+// budget per identity across surfaces. Fails OPEN — a real user is never blocked
+// by a missing table or a network blip.
+const RL_LIMIT = 100;
+const RL_WINDOW_MS = 3600 * 1000;
+async function underRateLimit(identity) {
+  if (!identity || !SB_URL) return true;
+  try {
+    const nowMs = Date.now();
+    const r = await fetch(`${SB_URL}/rest/v1/insight_rate?identity=eq.${encodeURIComponent(identity)}&select=window_start,count`, { headers: sbHeaders });
+    const rows = await r.json();
+    const row = Array.isArray(rows) && rows[0] ? rows[0] : null;
+    let count = 0;
+    let windowStart = new Date(nowMs).toISOString();
+    if (row && row.window_start && (nowMs - new Date(row.window_start).getTime()) < RL_WINDOW_MS) {
+      count = row.count || 0;
+      windowStart = row.window_start;
+      if (count >= RL_LIMIT) return false;
+    }
+    await fetch(`${SB_URL}/rest/v1/insight_rate`, {
+      method: "POST",
+      headers: { ...sbHeaders, Prefer: "resolution=merge-duplicates" },
+      body: JSON.stringify({ identity, window_start: windowStart, count: count + 1 }),
+    });
+    return true;
+  } catch { return true; }
+}
+
 const hashKey = (s) => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return "fb4_" + (h >>> 0).toString(36); };
 const amToProb = (o) => (o < 0 ? Math.abs(o) / (Math.abs(o) + 100) : 100 / (o + 100));
 const amToDec  = (o) => (o < 0 ? 1 + 100 / Math.abs(o) : 1 + o / 100);
@@ -514,6 +543,8 @@ export default async function handler(req, res) {
     const key = hashKey(["findbet", ctx.sport, ctx.game, model, day].join("|"));
     const cached = await getCached(key);
     if (cached) return res.status(200).json({ ...cached, cached: true });
+    // Cache miss = real OpenAI + Odds API spend from here down. Cap it per user.
+    if (!(await underRateLimit(`fb:${_uid}`))) return res.status(429).json({ error: "Plok needs a breather — try again in a bit." });
 
     let matchup = null;
     try { matchup = await buildMatchup(ctx.sport, ctx); } catch { matchup = null; }

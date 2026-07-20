@@ -1,6 +1,24 @@
+import { logUsage } from "./_usage.js";
+
+// Only sports PickLock actually offers. An open proxy with a free-text sport param
+// is a quota-drain vector (and junk query params bust the edge cache per-URL).
+const SPORT_ALLOW = new Set(["baseball_mlb","americanfootball_nfl","americanfootball_ncaaf","basketball_nba"]);
+
+// In-memory per-sport throttle: no matter the request volume (or cache-busting),
+// this lambda instance calls the Odds API at most once per sport per window.
+const _mem = new Map(); // sport -> { at, payload }
+const MEM_TTL = 120 * 1000;
+
 export default async function handler(req, res) {
   const { sport } = req.query;
   if (!sport) return res.status(400).json({ error: "Missing sport parameter" });
+  if (!SPORT_ALLOW.has(sport)) return res.status(400).json({ error: "Unsupported sport" });
+  const _hit = _mem.get(sport);
+  if (_hit && Date.now() - _hit.at < MEM_TTL) {
+    logUsage("odds", { upstream: 0, sport, cached: true });
+    res.setHeader("Cache-Control", "public, s-maxage=180, stale-while-revalidate=300");
+    return res.status(200).json(_hit.payload);
+  }
 
   const apiKey = process.env.ODDS_API_KEY;
   if (!apiKey) return res.status(500).json({ error: "API key not configured" });
@@ -181,7 +199,10 @@ export default async function handler(req, res) {
     } else {
       res.setHeader("Cache-Control", "public, s-maxage=15");
     }
-    return res.status(200).json({ games, remaining, used });
+    const _payload = { games, remaining, used };
+    if (games.length > 0) _mem.set(sport, { at: Date.now(), payload: _payload });
+    logUsage("odds", { upstream: 1, sport, games: games.length, remaining: remaining != null ? Number(remaining) : null });
+    return res.status(200).json(_payload);
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch odds" });
   }
