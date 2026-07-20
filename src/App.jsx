@@ -6219,6 +6219,16 @@ function App() {
  const [gifLoading,setGifLoading]=useState(false);
  const gifDebounce=useRef(null);
  const longPressT=useRef(null);
+ // Close the reaction picker on any tap outside it. A document listener instead of a
+ // z-indexed overlay: the chat sits inside several CSS stacking contexts (.body etc.),
+ // where overlay-vs-picker z-order is fragile. Deferred a tick so the opening long-press
+ // doesn't immediately close it.
+ useEffect(()=>{
+   if(reactFor==null) return;
+   const close=(e)=>{ try{ if(e.target && e.target.closest && e.target.closest(".pk-react-picker")) return; }catch(err){} setReactFor(null); };
+   const t=setTimeout(()=>document.addEventListener("pointerdown",close,true),50);
+   return ()=>{ clearTimeout(t); document.removeEventListener("pointerdown",close,true); };
+ }, [reactFor]);
  const fetchGifs=async(q)=>{ setGifLoading(true); try{ const r=await fetch("/api/gifs"+(q?("?q="+encodeURIComponent(q)):"")); const j=await r.json(); setGifResults(Array.isArray(j.gifs)?j.gifs:[]); }catch(e){ setGifResults([]); } setGifLoading(false); };
  const openGifSheet=()=>{ setGifOpen(true); setGifQ(""); fetchGifs(""); };
  const onGifQ=(v)=>{ setGifQ(v); if(gifDebounce.current) clearTimeout(gifDebounce.current); gifDebounce.current=setTimeout(()=>fetchGifs(v.trim()),350); };
@@ -14503,8 +14513,8 @@ function App() {
  <div className="msg-col" style={{position:"relative"}}>
  {!isMe&&<div className="msg-sender">{msg.username||"Unknown"}</div>}
  {reactFor===msg.id&&(
- <div style={{position:"absolute",top:-44,[isMe?"right":"left"]:0,zIndex:6,background:"#1B1B21",border:"0.5px solid rgba(255,255,255,0.14)",borderRadius:22,padding:"6px 8px",display:"flex",gap:2,boxShadow:"0 12px 34px rgba(0,0,0,0.6)"}}>
- {REACTION_SET.map(em=>(<span key={em} onClick={(e)=>{e.stopPropagation();toggleReaction(msg.id,em);}} style={{fontSize:20,padding:"3px 5px",borderRadius:12,cursor:"pointer"}}>{em}</span>))}
+ <div className="pk-react-picker" style={{position:"absolute",top:-44,[isMe?"right":"left"]:0,zIndex:80,background:"#1B1B21",border:"0.5px solid rgba(255,255,255,0.14)",borderRadius:22,padding:"6px 8px",display:"flex",gap:2,boxShadow:"0 12px 34px rgba(0,0,0,0.6)"}}>
+ {REACTION_SET.map(em=>(<span key={em} onPointerUp={(e)=>{e.preventDefault();e.stopPropagation();toggleReaction(msg.id,em);}} onClick={(e)=>e.stopPropagation()} style={{fontSize:20,padding:"3px 5px",borderRadius:12,cursor:"pointer",userSelect:"none",WebkitUserSelect:"none",touchAction:"manipulation"}}>{em}</span>))}
  </div>
  )}
  <div className={`bubble ${isMe?"me":"them"}`}
@@ -14526,7 +14536,6 @@ function App() {
  );
  })}
  </div>
- {reactFor!=null&&<div onClick={()=>setReactFor(null)} style={{position:"fixed",inset:0,zIndex:5}}/>}
  {gifOpen&&(
  <div onClick={()=>setGifOpen(false)} style={{position:"fixed",inset:0,zIndex:40,background:"rgba(0,0,0,0.45)"}}>
  <div onClick={(e)=>e.stopPropagation()} style={{position:"absolute",left:0,right:0,bottom:0,background:"#131318",borderRadius:"20px 20px 0 0",borderTop:"0.5px solid rgba(255,255,255,0.12)",padding:"10px 14px calc(env(safe-area-inset-bottom,0px) + 16px)",maxHeight:"62vh",display:"flex",flexDirection:"column",boxShadow:"0 -14px 40px rgba(0,0,0,0.55)"}}>
