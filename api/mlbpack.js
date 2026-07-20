@@ -1,6 +1,10 @@
 /**
  * /api/mlbpack.js — Plok MLB scouting pack (DataFeeds / Rolling Insights)
  *
+ * TEAM last-10 comes from trends.js's shared ESPN computation — one source of
+ * truth with the Trends & Form product. mlb_team_logs keeps player-level jobs
+ * (hitter form, NRFI rates, rolling ERA) where DataFeeds is genuinely needed.
+ *
  * Phase 1: season-level. Pulls schedule (probable SPs), team-info (venue/coords),
  * team-stats (batting totals), player-stats (per-player batting/pitching), depth-charts
  * (projected lineup + bullpen), injuries. Computes per-game rates + LEAGUE RANKS, the two
@@ -16,6 +20,8 @@
  */
 
 const TOKEN = process.env.DATAFEEDS_TOKEN;
+import { espnTeamForm } from "./trends.js";
+
 const BASE = "http://rest.datafeeds.rolling-insights.com/api/v1";
 
 // ── tiny in-memory cache (league-wide pulls reused across warm invocations) ──
@@ -75,16 +81,6 @@ async function pitcherForm(pid) {
   const clean = inn1.filter((g) => n(g.inn1_allowed) === 0).length;
   return { last3ERA: ip ? r2(9 * er / ip) : null, last3IP: r1(ip), starts: rows.length, nrfiClean: clean, nrfiN: inn1.length };
 }
-async function teamForm(tid) {
-  if (tid == null) return null;
-  const rows = await sbRows(`mlb_team_logs?team_id=eq.${tid}&order=game_date.desc&limit=10&select=won,runs_for,runs_against`);
-  if (!rows.length) return null;
-  const w = rows.filter((r) => r.won).length;
-  const rf = rows.reduce((s2, r) => s2 + n(r.runs_for), 0) / rows.length;
-  const ra = rows.reduce((s2, r) => s2 + n(r.runs_against), 0) / rows.length;
-  return { record: `${w}-${rows.length - w}`, rf: r1(rf), ra: r1(ra), n: rows.length };
-}
-
 // Resolve a team object from a free-text side ("Baltimore Orioles", "Orioles", "BAL", "@ Mariners")
 function resolveTeam(teams, str) {
   const q = norm(str);
@@ -303,10 +299,10 @@ export async function buildMlbPack(ctx = {}) {
   // ── DATA lines for insight.js (label/value) ──
   const rk = (r) => (r ? ` (${ord(r)})` : "");
   const lines = [];
-  lines.push({ label: `${away.team} record`, value: aR.record || "—" });
-  lines.push({ label: `${home.team} record`, value: hR.record || "—" });
-  if (aR.rpg != null) lines.push({ label: `${away.abbrv} runs/game`, value: `${aR.rpg}${rk(aR.ranks?.rpg)}` });
-  if (hR.rpg != null) lines.push({ label: `${home.abbrv} runs/game`, value: `${hR.rpg}${rk(hR.ranks?.rpg)}` });
+  lines.push({ label: `${away.team} record (season)`, value: aR.record || "—" });
+  lines.push({ label: `${home.team} record (season)`, value: hR.record || "—" });
+  if (aR.rpg != null) lines.push({ label: `${away.abbrv} runs/game (season)`, value: `${aR.rpg}${rk(aR.ranks?.rpg)}` });
+  if (hR.rpg != null) lines.push({ label: `${home.abbrv} runs/game (season)`, value: `${hR.rpg}${rk(hR.ranks?.rpg)}` });
   if (aR.ops != null) lines.push({ label: `${away.abbrv} team OPS`, value: `${fmt3(aR.ops)}${rk(aR.ranks?.ops)}` });
   if (hR.ops != null) lines.push({ label: `${home.abbrv} team OPS`, value: `${fmt3(hR.ops)}${rk(hR.ranks?.ops)}` });
   if (aR.staffERA != null) lines.push({ label: `${away.abbrv} staff ERA`, value: `${aR.staffERA}${rk(aR.ranks?.staffERA)}` });
@@ -324,7 +320,7 @@ export async function buildMlbPack(ctx = {}) {
 
   // ── derived recent-form layer (from banked game logs; silently skipped if empty) ──
   const [aTF, hTF, aPF, hPF, aH0, aH1, hH0, hH1] = await Promise.all([
-    teamForm(away.team_id), teamForm(home.team_id),
+    espnTeamForm("mlb", away.team), espnTeamForm("mlb", home.team),
     pitcherForm(awaySP && awaySP.player_id), pitcherForm(homeSP && homeSP.player_id),
     hitterForm(aHit[0] && aHit[0].id), hitterForm(aHit[1] && aHit[1].id),
     hitterForm(hHit[0] && hHit[0].id), hitterForm(hHit[1] && hHit[1].id),
@@ -335,8 +331,8 @@ export async function buildMlbPack(ctx = {}) {
   const pushHForm = (label, f) => { if (!f) return; lines.push({ label,
     value: `${fmt3(f.avg)} over last ${f.of}, ${f.hr} HR, hit in ${f.hitG} of ${f.of}` +
       (f.streak > 1 ? `, ${f.streak}-game hit streak` : "") + splitStr(f) }); };
-  if (aTF) lines.push({ label: `${away.abbrv} last 10`, value: `${aTF.record} · ${aTF.rf} RF / ${aTF.ra} RA` });
-  if (hTF) lines.push({ label: `${home.abbrv} last 10`, value: `${hTF.record} · ${hTF.rf} RF / ${hTF.ra} RA` });
+  if (aTF) lines.push({ label: `${away.abbrv} last 10 (L10)`, value: `${aTF.record} · ${aTF.pf} RF / ${aTF.pa} RA per game` });
+  if (hTF) lines.push({ label: `${home.abbrv} last 10 (L10)`, value: `${hTF.record} · ${hTF.pf} RF / ${hTF.pa} RA per game` });
   if (aPF && aSP) lines.push({ label: `${away.abbrv} SP recent`, value: `${aSP.name}: last ${Math.min(aPF.starts,3)} starts ${aPF.last3ERA != null ? Number(aPF.last3ERA).toFixed(2) + " ERA" : "—"}` + (aPF.nrfiN ? ` · scoreless 1st in ${aPF.nrfiClean} of ${aPF.nrfiN} starts` : "") });
   if (hPF && hSP) lines.push({ label: `${home.abbrv} SP recent`, value: `${hSP.name}: last ${Math.min(hPF.starts,3)} starts ${hPF.last3ERA != null ? Number(hPF.last3ERA).toFixed(2) + " ERA" : "—"}` + (hPF.nrfiN ? ` · scoreless 1st in ${hPF.nrfiClean} of ${hPF.nrfiN} starts` : "") });
   if (aHit[0]) pushHForm(`${away.abbrv} form — ${aHit[0].name}`, aH0);

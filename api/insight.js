@@ -572,6 +572,7 @@ async function generate(ctx, stats) {
       : "";
     system = personaLine +
       "You are Plok, a sharp, concise sports-betting analyst. " +
+      "NUMBERS RULE: every number you output must be copied VERBATIM from DATA, including its timeframe tag when one is shown (e.g. '(L10)', '(season)') — never compute, convert, round, or estimate numbers yourself, and never invent a stat that is not in DATA. If DATA lacks a number you want, describe the situation without one. " +
       "Use ONLY the figures in the DATA block — never invent, estimate, or recall numbers from memory. If a relevant stat is missing, speak qualitatively without stating a number. " +
       "For a game bet, DATA gives accurate season figures for BOTH teams (records, home/road, per-game scoring and allowed, streak, head-to-head). For a player prop, DATA gives that player's recent game-log stats IF they were found. " +
       "For MLB game bets, DATA may also include each side's league RANKS, the probable starting pitchers' lines, key hitters, injuries, and weather — name the probable starters and weave the most decisive of these into the read. " +
@@ -600,7 +601,7 @@ async function generate(ctx, stats) {
     headers: { Authorization: `Bearer ${OPENAI}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model: "gpt-4o-mini",
-      temperature: 0.4,
+      temperature: 0.2,
       max_tokens: 700,
       messages: [{ role: "system", content: system }, { role: "user", content: user }],
       response_format: { type: "json_schema", json_schema: { name: "insight", strict: true, schema: SCHEMA } },
@@ -608,7 +609,56 @@ async function generate(ctx, stats) {
   });
   if (!r.ok) throw new Error(`OpenAI ${r.status}: ${await r.text()}`);
   const data = await r.json();
-  return JSON.parse(data.choices[0].message.content);
+  const parsed = JSON.parse(data.choices[0].message.content);
+
+  // ── Numbers validator ──────────────────────────────────────────────────────
+  // Every multi-digit / decimal number in the output must literally appear in
+  // the prompt (DATA block, question, odds). LLMs narrate; they never originate
+  // numbers — this is what killed the "8-2 vs 7-3" contradiction class.
+  // Single digits pass freely (innings, counts, list positions — too noisy to
+  // police, too small to mislead).
+  const _src = `${system}\n${user}`;
+  const _collect = (o) => {
+    let t = "";
+    const walk = (v) => {
+      if (v == null) return;
+      if (typeof v === "string") t += " " + v;
+      else if (Array.isArray(v)) v.forEach(walk);
+      else if (typeof v === "object") Object.values(v).forEach(walk);
+    };
+    walk(o); return t;
+  };
+  const _numsOk = (o) => {
+    const toks = (_collect(o).match(/\d+(?:\.\d+)?/g) || []);
+    for (const tk of toks) { if (tk.length >= 2 || tk.includes(".")) { if (!_src.includes(tk)) return false; } }
+    return true;
+  };
+  if (_numsOk(parsed)) return parsed;
+
+  // One strict retry; if it still drifts, serve it but flag for the logs.
+  const r2 = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${OPENAI}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      temperature: 0,
+      max_tokens: 700,
+      messages: [
+        { role: "system", content: system + " STRICT MODE: your previous draft contained numbers not present in DATA. Use ONLY numbers that appear verbatim in DATA." },
+        { role: "user", content: user },
+      ],
+      response_format: { type: "json_schema", json_schema: { name: "insight", strict: true, schema: SCHEMA } },
+    }),
+  });
+  if (r2.ok) {
+    try {
+      const p2 = JSON.parse((await r2.json()).choices[0].message.content);
+      if (_numsOk(p2)) return p2;
+      try { console.warn("[plok] numbers validator failed twice"); } catch (e) {}
+      return p2;
+    } catch (e) { /* fall through to first draft */ }
+  }
+  return parsed;
 }
 
 // ── handler ───────────────────────────────────────────────────────────────────

@@ -345,6 +345,22 @@ export function matchTeam(list, name) {
   return list.find((t) => t.names.some((x) => x && x.split(" ").pop() === last)) || null;
 }
 
+// ── SHARED single-source team form ────────────────────────────────────────
+// mlbpack imports this so "last 10" is ONE computation everywhere it appears
+// (the ESPN schedule) — never a second pipeline. The 19 Jul 2026 incident:
+// Trends said PIT 7-3/6.9 while Insight said 8-2/7.3 for the same team on the
+// same night, because Insight read a synced table that lagged ESPN by a game.
+export async function espnTeamForm(sport, teamName) {
+  try {
+    const list = await espnTeams(sport);
+    const t = matchTeam(list, teamName);
+    if (!t) return null;
+    const log = await teamLog(sport, t.id, seasonYear(sport));
+    const fm = formSplit(log);
+    return fm ? { ...fm, abbr: t.abbr } : null;
+  } catch { return null; }
+}
+
 async function teamLog(sport, teamId, season) {
   const em = ESPN_MAP[sport]; if (!em) return [];
   const url = `https://site.api.espn.com/apis/site/v2/sports/${em.sp}/${em.lg}/teams/${teamId}/schedule?season=${season}&seasontype=2`;
