@@ -6055,7 +6055,7 @@ function App() {
      }
      while(idx >= base.length) base.push({id:base.length, bet:null, mult:null, isParlay:false, parlayLegs:[], category:null, slotType:null, market:null, committed:false, commitIds:[]});
      const built = buildSlot(bySlot[slotName], idx);
-     base[idx] = {...base[idx], ...built, id: idx, category: base[idx].category||built.category, slotType: base[idx].slotType||built.slotType, market: base[idx].market||built.market};
+     base[idx] = {...base[idx], ...built, id: idx, category: built.category||base[idx].category, slotType: built.slotType||base[idx].slotType, market: base[idx].market||built.market};
    });
    flexPicks = base;
   } else {
@@ -6065,7 +6065,10 @@ function App() {
    const _cfgLen = (parseSlotConfig(_lgRow&&_lgRow.slot_config)||[]).length || flexPicks.length || 5;
    while(flexPicks.length < _cfgLen) flexPicks.push({id:flexPicks.length, bet:null, mult:null, isParlay:false, parlayLegs:[]});
   }
-  if(_seq===myPicksSeq.current) setSavedPicks({fromDB: true, flexPicks, dbPicks: data});
+  if(_seq===myPicksSeq.current){
+   setSavedPicks({fromDB: true, flexPicks, dbPicks: data});
+   try{ localStorage.setItem(`linedup_picks_${leagueId}_wk${week}`, JSON.stringify({fromDB:true, flexPicks})); }catch(e){}
+  }
  } else {
   if(_seq===myPicksSeq.current) setSavedPicks(null);
  }
@@ -9203,7 +9206,7 @@ function App() {
  const canEdit=slots.some(x=>!slotLocked(x)) || emptyLeft>0;
  const wk=activeLeague.current_week||activeLeague.week||1;
  const catColors={ml:IOS.blue,prop:IOS.yellow,ou:IOS.orange,spread:IOS.green,longshot:IOS.pink};
- const catLabels={ml:"Moneyline",prop:"Prop",ou:"Over/Under",spread:"Spread",longshot:"Longshot"};
+ const catLabels={ml:"Moneyline",prop:"Prop",ou:"Over/Under",spread:"Spread",longshot:"Longshot",yrfi:"YRFI",nrfi:"NRFI",wildcard:"Wildcard"};
  const ptsFor=(slot)=>{const m=slot.mult||1;if(slot.isParlay){const ls=calcLS(slot.parlayLegs);return ls?calcPickPoints(m,ls.decimal>1?(ls.decimal-1)*100:0,"W"):0;}return slot.bet?calcPickPoints(m,slot.bet.impliedOdds,"W"):0;};
  const resultFor=(slot)=>slot.result||slot.bet?.result||null;
  const graded=slots.some(x=>resultFor(x));
@@ -9555,7 +9558,7 @@ function App() {
  const parlayOdds = slot.isParlay && slot.parlayLegs.length>=2 ? calcLS(slot.parlayLegs) : null;
  const multColors = {1:"#3A9EE0", 2:"#3A9EE0", 3:"#3A9EE0", 4:"#3A9EE0", 5:"#3A9EE0"};
  const catColors = {ml:IOS.blue, prop:IOS.yellow, ou:IOS.orange, spread:IOS.green, longshot:IOS.pink};
- const catLabels = {ml:"MONEYLINE", prop:"PROP", ou:"OVER/UNDER", spread:"SPREAD", longshot:"LONGSHOT"};
+ const catLabels = {ml:"MONEYLINE", prop:"PROP", ou:"OVER/UNDER", spread:"SPREAD", longshot:"LONGSHOT", yrfi:"YRFI", nrfi:"NRFI", wildcard:"WILDCARD"};
  const appliedPU = activatedPUs[idx];
  const isDouble = appliedPU?.id==="double";
  const isEnhance = appliedPU?.id==="enhance";

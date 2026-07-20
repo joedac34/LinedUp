@@ -560,7 +560,7 @@ function gradeProp(pickName, gameField, index, info = {}, gameDate = null) {
     if (_t && _t.length === 2 && index) {
       const _w = gameDate ? Date.parse(gameDate) : NaN;
       let _final = false;
-      for (const _nm in index) { for (const _e of index[_nm]) { if (teamInGame(_t[0], _e) && teamInGame(_t[1], _e) && (isNaN(_w) || (!isNaN(_e.date) && Math.abs(_e.date - _w) <= 11 * 3600 * 1000))) { _final = true; break; } } if (_final) break; }
+      for (const _nm in index) { for (const _e of index[_nm]) { if (teamInGame(_t[0], _e) && teamInGame(_t[1], _e) && (isNaN(_w) || (!isNaN(_e.date) && Math.abs(_e.date - _w) <= 2 * 3600 * 1000))) { _final = true; break; } } if (_final) break; }
       if (_final) { info.reason = "prop_player_dnp"; return "P"; }
     }
     info.reason = "prop_player_not_in_boxscores"; return null;
@@ -577,7 +577,9 @@ function gradeProp(pickName, gameField, index, info = {}, gameDate = null) {
     if (!cands.length) { info.reason = "prop_game_not_final"; return null; }
     const want = gameDate ? Date.parse(gameDate) : NaN;
     if (!isNaN(want)) {
-      const sameGame = cands.filter(e => !isNaN(e.date) && Math.abs(e.date - want) <= 11 * 3600 * 1000);
+      // 2h, NOT 11h: the finals-only index makes a DH sibling the sole candidate
+      // until the pick's own game finishes (19 Jul 2026, Chisholm G2-vs-G1 incident).
+      const sameGame = cands.filter(e => !isNaN(e.date) && Math.abs(e.date - want) <= 2 * 3600 * 1000);
       if (!sameGame.length) { info.reason = "prop_game_not_final"; return null; }   // its game isn't final yet
       sameGame.sort((a, b) => Math.abs(a.date - want) - Math.abs(b.date - want));
       stats = sameGame[0].stats;
@@ -595,7 +597,7 @@ function gradeProp(pickName, gameField, index, info = {}, gameDate = null) {
     if (!isNaN(want)) {
       let best = null;
       for (const e of entries) { if (isNaN(e.date)) continue; const diff = Math.abs(e.date - want); if (best === null || diff < best.diff) best = { e, diff }; }
-      if (!best || best.diff > 11 * 3600 * 1000) { info.reason = "prop_game_not_final"; return null; }
+      if (!best || best.diff > 2 * 3600 * 1000) { info.reason = "prop_game_not_final"; return null; }  // 2h: DH-sibling safe
       stats = best.e.stats;
     } else {
       let latest = null;
