@@ -6209,6 +6209,39 @@ function App() {
  if(phone) phone.style.overflow = selectedMatchup ? 'visible' : 'hidden';
  }, [selectedMatchup]); // week number of selected past matchup // locked picks for the week
  const chatRef=useRef(null);
+ // ── Chat reactions + GIFs (approved mockup 19 Jul 2026) ──
+ const REACTION_SET=["\uD83D\uDC4D","\uD83D\uDE02","\uD83D\uDD25","\uD83D\uDC80","\uD83C\uDFAF","\uD83E\uDD21"];
+ const [chatReactions,setChatReactions]=useState({});   // message_id -> [{user_id,emoji}]
+ const [reactFor,setReactFor]=useState(null);           // message id with picker open
+ const [gifOpen,setGifOpen]=useState(false);
+ const [gifQ,setGifQ]=useState("");
+ const [gifResults,setGifResults]=useState([]);
+ const [gifLoading,setGifLoading]=useState(false);
+ const gifDebounce=useRef(null);
+ const longPressT=useRef(null);
+ const fetchGifs=async(q)=>{ setGifLoading(true); try{ const r=await fetch("/api/gifs"+(q?("?q="+encodeURIComponent(q)):"")); const j=await r.json(); setGifResults(Array.isArray(j.gifs)?j.gifs:[]); }catch(e){ setGifResults([]); } setGifLoading(false); };
+ const openGifSheet=()=>{ setGifOpen(true); setGifQ(""); fetchGifs(""); };
+ const onGifQ=(v)=>{ setGifQ(v); if(gifDebounce.current) clearTimeout(gifDebounce.current); gifDebounce.current=setTimeout(()=>fetchGifs(v.trim()),350); };
+ const toggleReaction=async(msgId,emoji)=>{
+   if(!user||!activeLeague||String(msgId).startsWith("temp_")) return;
+   const cur=chatReactions[msgId]||[];
+   const mine=cur.find(x=>x.user_id===user.id&&x.emoji===emoji);
+   setChatReactions(prev=>({...prev,[msgId]: mine? (prev[msgId]||[]).filter(x=>!(x.user_id===user.id&&x.emoji===emoji)) : [...(prev[msgId]||[]),{user_id:user.id,emoji}]}));
+   setReactFor(null);
+   try{
+     if(mine) await supabase.from("chat_reactions").delete().eq("message_id",msgId).eq("user_id",user.id).eq("emoji",emoji);
+     else await supabase.from("chat_reactions").insert({message_id:msgId,user_id:user.id,league_id:activeLeague.id,emoji});
+   }catch(e){}
+ };
+ const sendGif=async(g)=>{
+   if(!user||!activeLeague||!g) return;
+   setGifOpen(false);
+   const username=userProfile?.username||user.email?.split("@")[0]||"Unknown";
+   const optimistic={id:"temp_"+Date.now(),league_id:activeLeague.id,user_id:user.id,username,message:"[GIF]",gif_url:g.full,created_at:new Date().toISOString()};
+   setMessages(prev=>[...prev,optimistic]);
+   setTimeout(()=>{if(chatRef.current)chatRef.current.scrollTop=chatRef.current.scrollHeight;},50);
+   try{ await supabase.from("league_messages").insert({league_id:activeLeague.id,user_id:user.id,username,message:"[GIF]",gif_url:g.full}); }catch(e){}
+ };
 
  const fetchMessages = async (leagueId) => {
  setChatLoading(true);
@@ -6219,6 +6252,11 @@ function App() {
  .order("created_at", {ascending: true})
  .limit(100);
  if(data) setMessages(data);
+ try{
+   const {data:rx}=await supabase.from("chat_reactions").select("message_id,user_id,emoji").eq("league_id",leagueId);
+   const _m={}; (rx||[]).forEach(r=>{ (_m[r.message_id]=_m[r.message_id]||[]).push({user_id:r.user_id,emoji:r.emoji}); });
+   setChatReactions(_m);
+ }catch(e){}
  setChatLoading(false);
  };
 
@@ -6241,6 +6279,19 @@ function App() {
  return [...filtered, payload.new];
  });
  setTimeout(()=>{if(chatRef.current)chatRef.current.scrollTop=chatRef.current.scrollHeight;},50);
+ })
+ .on("postgres_changes", {
+ event: "*",
+ schema: "public",
+ table: "chat_reactions",
+ filter: `league_id=eq.${leagueId}`,
+ }, payload => {
+ setChatReactions(prev=>{
+   const next={...prev};
+   if(payload.eventType==="INSERT"){ const r=payload.new; const arr=(next[r.message_id]||[]); if(!arr.some(x=>x.user_id===r.user_id&&x.emoji===r.emoji)) next[r.message_id]=[...arr,{user_id:r.user_id,emoji:r.emoji}]; }
+   else if(payload.eventType==="DELETE"){ const r=payload.old; if(r&&r.message_id) next[r.message_id]=(next[r.message_id]||[]).filter(x=>!(x.user_id===r.user_id&&x.emoji===r.emoji)); }
+   return next;
+ });
  })
  .subscribe();
  };
@@ -14442,19 +14493,60 @@ function App() {
  const isMe = msg.user_id === user?.id;
  const initial = (msg.username?.[0]||"?").toUpperCase();
  const timeStr = new Date(msg.created_at).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
+ const rx=chatReactions[msg.id]||[];
+ const rxAgg=[]; rx.forEach(r=>{ const f=rxAgg.find(x=>x.emoji===r.emoji); if(f){f.n++; if(r.user_id===user?.id)f.mine=true;} else rxAgg.push({emoji:r.emoji,n:1,mine:r.user_id===user?.id}); });
+ const startLP=()=>{ if(String(msg.id).startsWith("temp_")) return; longPressT.current=setTimeout(()=>setReactFor(msg.id),420); };
+ const cancelLP=()=>{ if(longPressT.current){ clearTimeout(longPressT.current); longPressT.current=null; } };
  return (
  <div key={msg.id} className={`msg-group ${isMe?"me":""}`}>
  {!isMe&&<div className="msg-av" style={{background:acColor(initial)}}>{initial}</div>}
- <div className="msg-col">
+ <div className="msg-col" style={{position:"relative"}}>
  {!isMe&&<div className="msg-sender">{msg.username||"Unknown"}</div>}
- <div className={`bubble ${isMe?"me":"them"}`}>{msg.message}</div>
+ {reactFor===msg.id&&(
+ <div style={{position:"absolute",top:-44,[isMe?"right":"left"]:0,zIndex:6,background:"#1B1B21",border:"0.5px solid rgba(255,255,255,0.14)",borderRadius:22,padding:"6px 8px",display:"flex",gap:2,boxShadow:"0 12px 34px rgba(0,0,0,0.6)"}}>
+ {REACTION_SET.map(em=>(<span key={em} onClick={(e)=>{e.stopPropagation();toggleReaction(msg.id,em);}} style={{fontSize:20,padding:"3px 5px",borderRadius:12,cursor:"pointer"}}>{em}</span>))}
+ </div>
+ )}
+ <div className={`bubble ${isMe?"me":"them"}`}
+   onTouchStart={startLP} onTouchEnd={cancelLP} onTouchMove={cancelLP}
+   onContextMenu={(e)=>{ e.preventDefault(); if(!String(msg.id).startsWith("temp_")) setReactFor(reactFor===msg.id?null:msg.id); }}
+   style={msg.gif_url?{padding:4,overflow:"hidden"}:undefined}>
+ {msg.gif_url
+   ? <img src={msg.gif_url} alt="GIF" style={{display:"block",maxWidth:210,maxHeight:180,borderRadius:11}} onError={(e)=>{e.currentTarget.outerHTML="[GIF]";}}/>
+   : msg.message}
+ </div>
+ {rxAgg.length>0&&(
+ <div style={{display:"flex",gap:4,marginTop:3,flexWrap:"wrap",justifyContent:isMe?"flex-end":"flex-start"}}>
+ {rxAgg.map(r=>(<div key={r.emoji} onClick={()=>toggleReaction(msg.id,r.emoji)} style={{display:"flex",alignItems:"center",gap:4,background:r.mine?"rgba(10,132,255,0.14)":"rgba(255,255,255,0.06)",border:r.mine?"0.5px solid rgba(10,132,255,0.35)":"0.5px solid rgba(255,255,255,0.09)",borderRadius:11,padding:"2px 8px",fontSize:12,cursor:"pointer"}}>{r.emoji}<span style={{fontSize:10,fontWeight:800,color:r.mine?IOS.blue:"rgba(255,255,255,0.5)"}}>{r.n}</span></div>))}
+ </div>
+ )}
  <div className="msg-time">{timeStr}</div>
  </div>
  </div>
  );
  })}
  </div>
+ {reactFor!=null&&<div onClick={()=>setReactFor(null)} style={{position:"fixed",inset:0,zIndex:5}}/>}
+ {gifOpen&&(
+ <div onClick={()=>setGifOpen(false)} style={{position:"fixed",inset:0,zIndex:40,background:"rgba(0,0,0,0.45)"}}>
+ <div onClick={(e)=>e.stopPropagation()} style={{position:"absolute",left:0,right:0,bottom:0,background:"#131318",borderRadius:"20px 20px 0 0",borderTop:"0.5px solid rgba(255,255,255,0.12)",padding:"10px 14px calc(env(safe-area-inset-bottom,0px) + 16px)",maxHeight:"62vh",display:"flex",flexDirection:"column",boxShadow:"0 -14px 40px rgba(0,0,0,0.55)"}}>
+ <div style={{width:38,height:4,borderRadius:2,background:"rgba(255,255,255,0.22)",margin:"0 auto 12px"}}/>
+ <input autoFocus value={gifQ} onChange={e=>onGifQ(e.target.value)} placeholder="Search KLIPY" style={{height:38,borderRadius:12,background:"rgba(255,255,255,0.06)",border:"0.5px solid rgba(255,255,255,0.09)",padding:"0 14px",fontSize:13.5,color:"#fff",outline:"none",fontFamily:"Barlow,sans-serif",marginBottom:12}}/>
+ <div style={{flex:1,overflowY:"auto"}}>
+ {gifLoading&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7}}>{[0,1,2,3,4,5].map(i=><Skel key={i} h={104} r={11} style={{width:"auto"}}/>)}</div>}
+ {!gifLoading&&gifResults.length===0&&<div style={{textAlign:"center",color:"rgba(255,255,255,0.4)",fontSize:12.5,padding:"28px 0"}}>No GIFs found{gifQ?" for that search":""}.</div>}
+ {!gifLoading&&gifResults.length>0&&(
+ <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7}}>
+ {gifResults.map(g=>(<div key={g.id} onClick={()=>sendGif(g)} style={{borderRadius:11,overflow:"hidden",cursor:"pointer",background:"rgba(255,255,255,0.04)",aspectRatio:"1"}}><img src={g.preview} alt="" loading="lazy" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/></div>))}
+ </div>
+ )}
+ </div>
+ <div style={{fontSize:8,color:"rgba(255,255,255,0.3)",textAlign:"right",marginTop:8,letterSpacing:"0.06em"}}>POWERED BY KLIPY</div>
+ </div>
+ </div>
+ )}
  <div className="chat-input-bar">
+ <button onClick={openGifSheet} style={{flexShrink:0,height:36,padding:"0 11px",borderRadius:10,background:"rgba(255,255,255,0.07)",border:"0.5px solid rgba(255,255,255,0.09)",fontSize:10,fontWeight:800,letterSpacing:"0.06em",color:"rgba(255,255,255,0.75)",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>GIF</button>
  <input className="chat-field" placeholder="Message..." value={chatMsg} onChange={e=>setChatMsg(e.target.value)} onKeyDown={e=>e.key==="Enter"&&sendMsg()}/>
  <button className="chat-send" disabled={!chatMsg.trim()} onClick={sendMsg}>
  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
