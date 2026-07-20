@@ -20,6 +20,13 @@ async function authHeaders() {
 }
 import posthog from 'posthog-js';
 
+// ── Native wrap (Capacitor) support ───────────────────────────────────────────
+// Inside the iOS/Android wrap the app is served from capacitor://localhost, so
+// relative /api/* fetches have no origin server behind them. API_BASE stays ""
+// on the web (zero behavior change) and points at prod inside the wrap.
+const IS_NATIVE = typeof window!=="undefined" && !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+const API_BASE = IS_NATIVE ? "https://app.picklockapp.com" : "";
+
 // ─── TEAM ACRONYM HELPER (module scope: shared across components) ───
  const getAcronym = (name, isProp=false) => {
  if(!name) return "?";
@@ -1797,7 +1804,7 @@ function BetslipButton({ bet, IOS }){
   useEffect(()=>{
     if(!BETSLIP_ENABLED || !betslipAllowedHere() || !bet || !bet.game){ setLoading(false); return; }
     let alive = true; setLoading(true);
-    fetch("/api/betslip",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ sport:bet._sport||bet.sport, game:bet.game, category:bet.category, pick:bet.pick, point:bet.line })})
+    fetch(API_BASE+"/api/betslip",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ sport:bet._sport||bet.sport, game:bet.game, category:bet.category, pick:bet.pick, point:bet.line })})
       .then(r=>r.json()).then(d=>{ if(alive){ setData(d); setLoading(false); } })
       .catch(()=>{ if(alive) setLoading(false); });
     return ()=>{ alive=false; };
@@ -2658,7 +2665,7 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
           <div onClick={async()=>{ if(setIsSoloMode) setIsSoloMode(true); const lgId=await getOrCreateSoloLeague(); if(setActiveLeagueId) setActiveLeagueId(lgId||"solo"); setScreen("picks"); }} style={{marginTop:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6,fontSize:11,fontWeight:800,color:IOS.blue,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:8,padding:"7px",cursor:"pointer"}}>Build today's slate →</div>
         </div>
       ) : (
-        <div onClick={async()=>{ if(!isPro){ if(setShowPaywall) setShowPaywall("ai"); return; } if(dayPlay&&dayPlay.loading) return; setDayPlay({loading:true}); fetch("/api/findbet",{method:"POST",headers: await authHeaders(),body:JSON.stringify({sport:soloSport, game:(featGame.away+" @ "+featGame.home)})}).then(async r=>{ const d=await r.json().catch(()=>null); setDayPlay((r.ok&&d&&d.summary)?{data:d}:{error:true}); }).catch(()=>setDayPlay({error:true})); }} style={{display:"flex",alignItems:"center",gap:12,background:"linear-gradient(135deg,rgba(10,132,255,0.16),rgba(94,92,230,0.10))",border:"0.5px solid rgba(10,132,255,0.35)",borderRadius:12,padding:"12px 14px",marginBottom:12,cursor:"pointer"}}>
+        <div onClick={async()=>{ if(!isPro){ if(setShowPaywall) setShowPaywall("ai"); return; } if(dayPlay&&dayPlay.loading) return; setDayPlay({loading:true}); fetch(API_BASE+"/api/findbet",{method:"POST",headers: await authHeaders(),body:JSON.stringify({sport:soloSport, game:(featGame.away+" @ "+featGame.home)})}).then(async r=>{ const d=await r.json().catch(()=>null); setDayPlay((r.ok&&d&&d.summary)?{data:d}:{error:true}); }).catch(()=>setDayPlay({error:true})); }} style={{display:"flex",alignItems:"center",gap:12,background:"linear-gradient(135deg,rgba(10,132,255,0.16),rgba(94,92,230,0.10))",border:"0.5px solid rgba(10,132,255,0.35)",borderRadius:12,padding:"12px 14px",marginBottom:12,cursor:"pointer"}}>
           <div style={{width:34,height:34,borderRadius:10,background:"rgba(10,132,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
             {dayPlay&&dayPlay.loading ? <div style={{display:"flex",gap:3}}><span className="ai-dot"/><span className="ai-dot" style={{animationDelay:"0.15s"}}/><span className="ai-dot" style={{animationDelay:"0.3s"}}/></div> : <svg width="18" height="18" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg>}
           </div>
@@ -2923,7 +2930,7 @@ function LineupSection({ away, home, date, firstPitchLabel, IOS }) {
   useEffect(()=>{
     let alive=true; setLoading(true);
     const qs=new URLSearchParams({away:away||"",home:home||"",date:date||""});
-    fetch("/api/lineup?"+qs.toString()).then(r=>r.json()).then(j=>{ if(alive){ setData(j); setLoading(false); } }).catch(()=>{ if(alive){ setData(null); setLoading(false); } });
+    fetch(API_BASE+"/api/lineup?"+qs.toString()).then(r=>r.json()).then(j=>{ if(alive){ setData(j); setLoading(false); } }).catch(()=>{ if(alive){ setData(null); setLoading(false); } });
     return ()=>{ alive=false; };
   },[away,home,date]);
   const cur=data?(side==="away"?data.away:data.home):null;
@@ -2982,7 +2989,7 @@ function StatTiles({ tiles, sport, away, home, date, aColor, hColor, IOS, mt }) 
     if(sport!=="mlb") return;
     let alive=true;
     const qs=new URLSearchParams({away:away||"",home:home||"",date:date||""});
-    fetch("/api/lineup?"+qs.toString()).then(r=>r.json()).then(j=>{ if(alive) setTs(j); }).catch(()=>{});
+    fetch(API_BASE+"/api/lineup?"+qs.toString()).then(r=>r.json()).then(j=>{ if(alive) setTs(j); }).catch(()=>{});
     return ()=>{ alive=false; };
   },[sport,away,home,date]);
   const fmtD=(d)=> (d==null?null:((d>=0?"+":"")+d));
@@ -3142,7 +3149,7 @@ function GamecastSheet({ game, pick, onClose }){
     let dead=false;
     (async()=>{
       try{
-        const r = await fetch(`/api/mlbbox?gamePk=${game.gamePk}`);
+        const r = await fetch(API_BASE+`/api/mlbbox?gamePk=${game.gamePk}`);
         const j = await r.json();
         if(!dead && j && (j.hitters||j.pitchers)) setBox(j);
       }catch(e){ /* the sheet renders fine without it */ }
@@ -3544,7 +3551,7 @@ function App() {
      try{
        const { data:_upd } = await supabase.from("leagues").update({ season_start:new Date().toISOString(), current_week:1 }).eq("id",activeLeague.id).is("season_start",null).select("id");
        if(_upd && _upd.length){
-         try{ const {data:_mem}=await supabase.from("league_members").select("user_id").eq("league_id",activeLeague.id); const _ids=(_mem||[]).map(m=>m.user_id); fetch("/api/notify",{method:"POST",headers:await authHeaders(),body:JSON.stringify({ userIds:_ids, title:(activeLeague.name||"Your league")+" is live!", body:"Week 1 is open — make your picks before they lock.", url:"/", category:"notif_league" })}); }catch(e){}
+         try{ const {data:_mem}=await supabase.from("league_members").select("user_id").eq("league_id",activeLeague.id); const _ids=(_mem||[]).map(m=>m.user_id); fetch(API_BASE+"/api/notify",{method:"POST",headers:await authHeaders(),body:JSON.stringify({ userIds:_ids, title:(activeLeague.name||"Your league")+" is live!", body:"Week 1 is open — make your picks before they lock.", url:"/", category:"notif_league" })}); }catch(e){}
        }
        if(user&&user.id) await fetchLeagues(user.id);
      }catch(e){}
@@ -3569,7 +3576,7 @@ function App() {
     const pull = async () => {
       try {
         const today=_etDate(new Date()), yest=_etDate(new Date(Date.now()-86400000));
-        const r = await fetch(`/api/livescores?dates=${today},${yest}`);
+        const r = await fetch(API_BASE+`/api/livescores?dates=${today},${yest}`);
         const j = await r.json();
         if (alive && j && Array.isArray(j.games)) setLiveGames(j.games);
       } catch(e){}
@@ -3584,7 +3591,7 @@ function App() {
       try {
         const d = new Date(pick.game_date);
         const ds=_etDate(d), dp=_etDate(new Date(d.getTime()-86400000)), dn=_etDate(new Date(d.getTime()+86400000));
-        const r = await fetch(`/api/livescores?dates=${ds},${dp},${dn}`);
+        const r = await fetch(API_BASE+`/api/livescores?dates=${ds},${dp},${dn}`);
         const j = await r.json();
         if (j && Array.isArray(j.games)) g = liveMatch(pick, j.games);
       } catch(e){}
@@ -3624,7 +3631,7 @@ function App() {
  if(!sportKey) { setOddsLoading(false); return; }
 
  // Fetch h2h + spreads + totals in one call
- const res = await fetch(`/api/odds?sport=${sportKey}`);
+ const res = await fetch(API_BASE+`/api/odds?sport=${sportKey}`);
  if(!res.ok) throw new Error(`API error ${res.status}`);
  const payload = await res.json();
  console.log(`[odds] ${sportId} payload keys:`, Object.keys(payload), "games:", (payload.games||payload)?.length);
@@ -3696,7 +3703,7 @@ function App() {
  // Fetch live player props from separate endpoint
  let prop = []; // live props only — blank if the feed has none for this sport
  try {
- const propsRes = await fetch(`/api/props?sport=${sportKey}`);
+ const propsRes = await fetch(API_BASE+`/api/props?sport=${sportKey}`);
  if(propsRes.ok) {
  const propsPayload = await propsRes.json();
  if(propsPayload.props && propsPayload.props.length > 0) {
@@ -3709,7 +3716,7 @@ function App() {
 
  // Fetch ESPN scoreboard to get event IDs for game detail sheet
  try {
- const espnRes = await fetch(`/api/espn?sport=${sportKey}`);
+ const espnRes = await fetch(API_BASE+`/api/espn?sport=${sportKey}`);
  if(espnRes.ok) {
  const espnPayload = await espnRes.json();
  if(espnPayload.games) setEspnGames(prev => [...(prev||[]).filter(x => x._sport !== sportId), ...espnPayload.games.map(x => ({...x, _sport: sportId}))]);
@@ -3758,7 +3765,7 @@ function App() {
  const marketKeys = [...new Set(periodTypes.map(t=>PERIOD_MARKETS[t]).filter(Boolean))];
  if(!marketKeys.length) return;
  try {
- const res = await fetch(`/api/eventodds?sport=${sportKey}&events=${eventIds.join(",")}&markets=${marketKeys.join(",")}`);
+ const res = await fetch(API_BASE+`/api/eventodds?sport=${sportKey}&events=${eventIds.join(",")}&markets=${marketKeys.join(",")}`);
  if(!res.ok) return;
  const data = await res.json();
  const grouped = {}; periodTypes.forEach(t=>{ grouped[t]=[]; });
@@ -3865,7 +3872,7 @@ function App() {
  const sig=ids.join(",");
  if(sig===lineMovesRef.current) return;
  lineMovesRef.current=sig;
- (async()=>{ try{ const r=await fetch(`/api/linemoves?events=${encodeURIComponent(sig)}`); if(r.ok){ const d=await r.json(); setLineMoves(d.moves||{}); } }catch(e){} })();
+ (async()=>{ try{ const r=await fetch(API_BASE+`/api/linemoves?events=${encodeURIComponent(sig)}`); if(r.ok){ const d=await r.json(); setLineMoves(d.moves||{}); } }catch(e){} })();
  }, [screen, BETS]);
  const [showSwitcher, setShowSwitcher] = useState(false);
  const [showMultPick, setShowMultPick] = useState(false); // bet-browser slot/multiplier picker
@@ -4309,7 +4316,7 @@ function App() {
     if(L){ if((L.matchupGap!=null&&L.matchupGap<0)||(L.finalWeek&&L.leaderGap!=null&&L.leaderGap>0)) strategy="ceiling"; else if((L.matchupGap!=null&&L.matchupGap>0)||L.leading) strategy="protect"; }
     setPlokBuilding(true); setPlokBuild(null);
     try{
-      const r = await fetch("/api/buildslip", {method:"POST", headers: await authHeaders(), body: JSON.stringify({ multPool: _plokPool, sport:(leagueSports[0]||"nfl"), userId:user?.id, persona:plokPersona, userStats:plokUserStats(), leagueCtx:L, strategy, slots:slotSpec, candidates })});
+      const r = await fetch(API_BASE+"/api/buildslip", {method:"POST", headers: await authHeaders(), body: JSON.stringify({ multPool: _plokPool, sport:(leagueSports[0]||"nfl"), userId:user?.id, persona:plokPersona, userStats:plokUserStats(), leagueCtx:L, strategy, slots:slotSpec, candidates })});
       const data = await r.json();
       if(!r.ok){ setPlokBuild({error:data.error||"Couldn't build a slip — try again."}); return; }
       // MUST include period + wildcard bets: ALL_BETS has no NRFI/F5/H1, so a valid
@@ -4455,7 +4462,7 @@ function App() {
     if(!list.length){ setPlokSlotErr({ idx:slotIdx, msg:`Nothing legal left for this ${plokTypeLabel(cat).toLowerCase()} slot — everything on the board clashes with your other picks.` }); return; }
     setPlokSlotBusy(slotIdx); setPlokSlotErr(null);
     try{
-      const r = await fetch("/api/buildslip", {method:"POST", headers: await authHeaders(), body: JSON.stringify({
+      const r = await fetch(API_BASE+"/api/buildslip", {method:"POST", headers: await authHeaders(), body: JSON.stringify({
         sport:(leagueSports[0]||"nfl"), userId:user?.id, persona:plokPersona, userStats:plokUserStats(), leagueCtx:plokLeagueCtx(), strategy:"balanced",
         multPool: sl.mult ? [sl.mult] : null,
         slots: [{ idx:0, category:cat, mult: sl.mult||null }],
@@ -4490,7 +4497,7 @@ function App() {
     const slots = Object.keys(candidates).map((c,i)=>({idx:i,category:c,mult:null}));
     setPlokSlateBusy(true); setPlokSlate(null);
     try{
-      const r = await fetch("/api/buildslip",{method:"POST",headers: await authHeaders(),body:JSON.stringify({ sport:soloSport, userId:user?.id, persona:plokPersona, userStats:plokUserStats(), leagueCtx:null, strategy:"balanced", slots, candidates })});
+      const r = await fetch(API_BASE+"/api/buildslip",{method:"POST",headers: await authHeaders(),body:JSON.stringify({ sport:soloSport, userId:user?.id, persona:plokPersona, userStats:plokUserStats(), leagueCtx:null, strategy:"balanced", slots, candidates })});
       const data = await r.json();
       if(!r.ok){ setPlokSlate({error:data.error||"Couldn't build a slate — try again."}); return; }
       const byId={}; (ALL_BETS||[]).forEach(b=>{byId[b.id]=b;});
@@ -4544,7 +4551,7 @@ function App() {
     const away = eg.awayTeam || tg.away || "Away", home = eg.homeTeam || tg.home || "Home";
     const sp = (activeLeague && activeLeague.sport) || "nfl";
     setGameRead(prev=>({...prev,[gid]:{loading:true}}));
-    authHeaders().then(_h=>fetch("/api/findbet", { method:"POST", headers:_h, body:JSON.stringify({ sport:sp, game:(away+" @ "+home), userId:user&&user.id })}))
+    authHeaders().then(_h=>fetch(API_BASE+"/api/findbet", { method:"POST", headers:_h, body:JSON.stringify({ sport:sp, game:(away+" @ "+home), userId:user&&user.id })}))
       .then(async r=>{ const d=await r.json().catch(()=>null); setGameRead(prev=>({...prev,[gid]: (r.ok && d) ? {data:d} : {error:true}})); })
       .catch(()=> setGameRead(prev=>({...prev,[gid]:{error:true}})));
   },[gameSheet, isPro]);
@@ -4553,7 +4560,7 @@ function App() {
     setAiThread(prev=>[...prev, { role:"user", text: label||ctx.selection }, item]);
     setAiBusy(true);
     try{
-      const r = await fetch("/api/insight", { method:"POST", headers: await authHeaders(), body: JSON.stringify(ctx) });
+      const r = await fetch(API_BASE+"/api/insight", { method:"POST", headers: await authHeaders(), body: JSON.stringify(ctx) });
       const data = await r.json();
       setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, data: r.ok?data:null, error: r.ok?null:(data.error||"Couldn't load insight")} : x));
       if(r.ok && data && (data.verdict==="strong"||data.verdict==="lean") && ctx.betType!=="chat" && ctx.game && user?.id){
@@ -4582,7 +4589,7 @@ function App() {
       setAiThread(prev=>[...prev, { role:"user", text: `${_sel} · ${bet.game}` }, item]);
       setAiBusy(true);
       const _tg = findBetGames.find(x=>x.game===bet.game);
-      authHeaders().then(_h=>fetch("/api/trends", { method:"POST", headers:_h, body: JSON.stringify({ sport, game: bet.game, userId: user?.id, lines: _tg ? _tg.lines : null, bet: { betType: bet.category || category, selection: _sel, odds: bet.odds||null, point: bet.point!=null?bet.point:null } }) }))
+      authHeaders().then(_h=>fetch(API_BASE+"/api/trends", { method:"POST", headers:_h, body: JSON.stringify({ sport, game: bet.game, userId: user?.id, lines: _tg ? _tg.lines : null, bet: { betType: bet.category || category, selection: _sel, odds: bet.odds||null, point: bet.point!=null?bet.point:null } }) }))
         .then(async r=>{ const data=await r.json(); setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, data:r.ok?data:null, error:r.ok?null:(data.error||"Couldn't load trends")} : x)); })
         .catch(()=> setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, error:"Network error — try again"} : x)))
         .finally(()=> setAiBusy(false));
@@ -4657,7 +4664,7 @@ function App() {
     const item = { role:"ai", label:"Plok", bet:null, category:null, loading:true };
     setAiThread(prev=>[...prev, { role:"user", text:q }, item]);
     setAiBusy(true);
-    authHeaders().then(_h=>fetch("/api/insight", { method:"POST", headers:_h, body: JSON.stringify({ sport:(leagueSports[0]||"nfl"), betType:"chat", selection:q, question:q, userId:user?.id, userStats:plokUserStats(), persona:plokPersona, leagueCtx:plokLeagueCtx() }) }))
+    authHeaders().then(_h=>fetch(API_BASE+"/api/insight", { method:"POST", headers:_h, body: JSON.stringify({ sport:(leagueSports[0]||"nfl"), betType:"chat", selection:q, question:q, userId:user?.id, userStats:plokUserStats(), persona:plokPersona, leagueCtx:plokLeagueCtx() }) }))
       .then(async r=>{ const data=await r.json(); setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, data:r.ok?data:null, error:r.ok?null:(data.error||"Couldn't reach Plok")} : x)); })
       .catch(()=> setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, error:"Network error — try again"} : x)))
       .finally(()=> setAiBusy(false));
@@ -4936,26 +4943,26 @@ function App() {
      const reg = await navigator.serviceWorker.ready;
      let sub = await reg.pushManager.getSubscription();
      if(!sub){ sub = await reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey:_urlB64ToUint8(PUSH_VAPID_PUBLIC) }); }
-     const r = await fetch("/api/push-subscribe",{ method:"POST", headers:await authHeaders(), body:JSON.stringify({ userId:user.id, subscription:sub.toJSON?sub.toJSON():sub }) });
+     const r = await fetch(API_BASE+"/api/push-subscribe",{ method:"POST", headers:await authHeaders(), body:JSON.stringify({ userId:user.id, subscription:sub.toJSON?sub.toJSON():sub }) });
      if(!r.ok){ return false; }
      setUserProfile(prev=>({...(prev||{}), push_enabled:true }));
      return true;
    } catch(e) { console.error("push subscribe failed", e); alert("Couldn't enable push: "+((e&&e.message)||e)); return false; }
  };
  const disablePush = async () => {
-   try { const reg = await navigator.serviceWorker.ready; const sub = await reg.pushManager.getSubscription(); if(sub){ try{ await fetch("/api/push-subscribe",{ method:"DELETE", headers:await authHeaders(), body:JSON.stringify({ endpoint:sub.endpoint }) }); }catch(e){} try{ await sub.unsubscribe(); }catch(e){} } } catch(e) {}
+   try { const reg = await navigator.serviceWorker.ready; const sub = await reg.pushManager.getSubscription(); if(sub){ try{ await fetch(API_BASE+"/api/push-subscribe",{ method:"DELETE", headers:await authHeaders(), body:JSON.stringify({ endpoint:sub.endpoint }) }); }catch(e){} try{ await sub.unsubscribe(); }catch(e){} } } catch(e) {}
    try { if(user&&user.id) await supabase.from("users").update({ push_enabled:false }).eq("id", user.id); } catch(e) {}
    setUserProfile(prev=>({...(prev||{}), push_enabled:false }));
  };
- useEffect(()=>{ try{ if(typeof navigator!=="undefined" && "serviceWorker" in navigator){ navigator.serviceWorker.register("/sw.js").catch(()=>{}); } }catch(e){} }, []);
+ useEffect(()=>{ try{ if(!IS_NATIVE && typeof navigator!=="undefined" && "serviceWorker" in navigator){ navigator.serviceWorker.register("/sw.js").catch(()=>{}); } }catch(e){} }, []);
 
  // Longest league that stays fillable, given the sports + slots chosen right now.
  const _lgSportsSel = (newLeagueSports && newLeagueSports.length) ? newLeagueSports : [];
  const weekCap = leagueMaxWeeks(new Date(), _lgSportsSel, newLeagueSlots, 18);
  useEffect(()=>{ if(weekCap.max>0 && newLeagueWeeks>weekCap.max) setNewLeagueWeeks(weekCap.max); }, [weekCap.max]);
  const leaguePrice = (weeks, slots) => { const raw = 2*(Number(weeks)||0) + 1*(Number(slots)||0); return Math.max(10, Math.min(50, Math.floor(raw/5)*5)); };
- const startLeagueCheckout = async (leagueId) => { try { const r = await fetch("/api/checkout",{method:"POST",headers:await authHeaders(),body:JSON.stringify({plan:"league",leagueId})}); const d = await r.json(); if(r.ok && d.url){ window.location.href=d.url; return; } alert("Couldn't start checkout: "+((d&&d.error)||"unknown")); } catch(e){ alert("Checkout failed."); } };
- const openBillingPortal = async () => { try { const r = await fetch("/api/portal",{method:"POST",headers:await authHeaders()}); const d = await r.json(); if(r.ok && d.url){ window.location.href=d.url; return; } alert((d&&d.error==="no active subscription to manage") ? "No active subscription to manage." : ("Couldn't open billing: "+((d&&d.error)||"unknown"))); } catch(e){ alert("Couldn't open billing."); } };
+ const startLeagueCheckout = async (leagueId) => { try { const r = await fetch(API_BASE+"/api/checkout",{method:"POST",headers:await authHeaders(),body:JSON.stringify({plan:"league",leagueId})}); const d = await r.json(); if(r.ok && d.url){ window.location.href=d.url; return; } alert("Couldn't start checkout: "+((d&&d.error)||"unknown")); } catch(e){ alert("Checkout failed."); } };
+ const openBillingPortal = async () => { try { const r = await fetch(API_BASE+"/api/portal",{method:"POST",headers:await authHeaders()}); const d = await r.json(); if(r.ok && d.url){ window.location.href=d.url; return; } alert((d&&d.error==="no active subscription to manage") ? "No active subscription to manage." : ("Couldn't open billing: "+((d&&d.error)||"unknown"))); } catch(e){ alert("Couldn't open billing."); } };
  const createLeague = async (name, sportId) => {
  if(!user||!name||!sportId) return;
  if(newLeagueStartMode==="scheduled" && !newLeagueStartAt){ alert("Choose a start date & time for a scheduled league."); return; }
@@ -5790,7 +5797,7 @@ function App() {
  if(!user || !user.id){ setShowPaywall(null); setScreen("auth"); return; }
  try {
  setCheckoutLoading(plan);
- const r = await fetch("/api/checkout", { method:"POST", headers:await authHeaders(), body: JSON.stringify({ plan, userId:user.id, email:(userProfile&&userProfile.email)||user.email||null }) });
+ const r = await fetch(API_BASE+"/api/checkout", { method:"POST", headers:await authHeaders(), body: JSON.stringify({ plan, userId:user.id, email:(userProfile&&userProfile.email)||user.email||null }) });
  const d = await r.json();
  if(r.ok && d.url){ window.location.href = d.url; return; }
  setCheckoutLoading(null);
@@ -6229,7 +6236,7 @@ function App() {
    const t=setTimeout(()=>document.addEventListener("pointerdown",close,true),50);
    return ()=>{ clearTimeout(t); document.removeEventListener("pointerdown",close,true); };
  }, [reactFor]);
- const fetchGifs=async(q)=>{ setGifLoading(true); try{ const r=await fetch("/api/gifs"+(q?("?q="+encodeURIComponent(q)):"")); const j=await r.json(); setGifResults(Array.isArray(j.gifs)?j.gifs:[]); }catch(e){ setGifResults([]); } setGifLoading(false); };
+ const fetchGifs=async(q)=>{ setGifLoading(true); try{ const r=await fetch(API_BASE+"/api/gifs"+(q?("?q="+encodeURIComponent(q)):"")); const j=await r.json(); setGifResults(Array.isArray(j.gifs)?j.gifs:[]); }catch(e){ setGifResults([]); } setGifLoading(false); };
  const openGifSheet=()=>{ setGifOpen(true); setGifQ(""); fetchGifs(""); };
  const onGifQ=(v)=>{ setGifQ(v); if(gifDebounce.current) clearTimeout(gifDebounce.current); gifDebounce.current=setTimeout(()=>fetchGifs(v.trim()),350); };
  const toggleReaction=async(msgId,emoji)=>{
@@ -7915,7 +7922,7 @@ function App() {
  setGameLoading(true);
  try {
  const sportKey = SPORT_KEYS[activeLeague?.sport];
- const r = await fetch(`/api/espn?sport=${sportKey}&gameId=${espn.id}`);
+ const r = await fetch(API_BASE+`/api/espn?sport=${sportKey}&gameId=${espn.id}`);
  if(r.ok) {
  const d = await r.json();
  setGameSheet(prev => ({...prev, detail: d}));
@@ -8119,7 +8126,7 @@ function App() {
               const spreadOdds=(so?.spread||[]).filter(o=>o.game?.includes(away)||o.game?.includes(home));
               const ouOdds=(so?.ou||[]).filter(o=>o.game?.includes(away)||o.game?.includes(home));
               return (
-              <div key={gi} onClick={async()=>{ const gameOdds={ml:mlOdds,spread:spreadOdds,ou:ouOdds}; setGameSheet({tickerGame:{...g,away,home,isLive,timeStr:gameTime},espnGame:espn,detail:null,odds:gameOdds}); setGameTeamTab("matchup"); if(espn?.id){ setGameLoading(true); try{ const r=await fetch(`/api/espn?sport=${SPORT_KEYS[soloSport]}&gameId=${espn.id}`); if(r.ok){const d=await r.json();setGameSheet(prev=>({...prev,detail:d}));} }catch(e){} finally{setGameLoading(false);} } }} style={{margin:"0 0 10px",background:IOS.bg2,borderRadius:14,overflow:"hidden",cursor:"pointer",border:"1px solid rgba(255,255,255,0.06)"}}>
+              <div key={gi} onClick={async()=>{ const gameOdds={ml:mlOdds,spread:spreadOdds,ou:ouOdds}; setGameSheet({tickerGame:{...g,away,home,isLive,timeStr:gameTime},espnGame:espn,detail:null,odds:gameOdds}); setGameTeamTab("matchup"); if(espn?.id){ setGameLoading(true); try{ const r=await fetch(API_BASE+`/api/espn?sport=${SPORT_KEYS[soloSport]}&gameId=${espn.id}`); if(r.ok){const d=await r.json();setGameSheet(prev=>({...prev,detail:d}));} }catch(e){} finally{setGameLoading(false);} } }} style={{margin:"0 0 10px",background:IOS.bg2,borderRadius:14,overflow:"hidden",cursor:"pointer",border:"1px solid rgba(255,255,255,0.06)"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 14px",borderBottom:`0.5px solid ${IOS.sep}`}}>
                   <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,color:isLive?IOS.green:IOS.label3,textTransform:"uppercase"}}>{isLive?"\u25cf LIVE":gameTime}</div>
                   <div style={{fontSize:9,fontWeight:800,letterSpacing:0.5,color:IOS.label3,textTransform:"uppercase"}}>{(SPORTS[soloSport]&&SPORTS[soloSport].label)||""}</div>
@@ -8169,7 +8176,7 @@ function App() {
      <div style={{display:"inline-flex",alignItems:"center",gap:5,background:"rgba(48,209,88,0.14)",border:"0.5px solid rgba(48,209,88,0.3)",borderRadius:999,padding:"4px 11px",fontSize:11,fontWeight:800,color:IOS.green}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>Roster full · {(activeLeague.memberCount||0)}/{_lgTarget}</div>
      <div style={{fontSize:20,fontWeight:900,color:"#fff",marginTop:11,letterSpacing:-0.3}}>Roster’s full</div>
      <div style={{fontSize:13,color:IOS.label2,lineHeight:1.5,marginTop:7}}>You chose manual start, so the season hasn’t begun. Start it whenever everyone’s signed and the slate looks right.</div>
-     <button onClick={async()=>{ if(!window.confirm("Start the season now? Week 1 opens, the roster locks, and this week\u2019s games become everyone\u2019s first slate. This can\u2019t be undone.")) return; await supabase.from("leagues").update({season_start:new Date().toISOString(),current_week:1}).eq("id",activeLeague.id).is("season_start",null); try{ const {data:_mem}=await supabase.from("league_members").select("user_id").eq("league_id",activeLeague.id); const _ids=(_mem||[]).map(m=>m.user_id); fetch("/api/notify",{method:"POST",headers:await authHeaders(),body:JSON.stringify({userIds:_ids,title:(activeLeague.name||"Your league")+" is live!",body:"Week 1 is open — make your picks before they lock.",url:"/",category:"notif_league"})}); }catch(e){} await fetchLeagues(user.id); }} style={{width:"100%",marginTop:16,background:IOS.blue,border:"none",color:"#fff",borderRadius:13,padding:"15px",fontSize:16,fontWeight:800,fontFamily:"Barlow,sans-serif",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><svg width="16" height="16" viewBox="0 0 24 24" fill="#fff" stroke="none"><polygon points="6 4 20 12 6 20 6 4"/></svg>Start League</button>
+     <button onClick={async()=>{ if(!window.confirm("Start the season now? Week 1 opens, the roster locks, and this week\u2019s games become everyone\u2019s first slate. This can\u2019t be undone.")) return; await supabase.from("leagues").update({season_start:new Date().toISOString(),current_week:1}).eq("id",activeLeague.id).is("season_start",null); try{ const {data:_mem}=await supabase.from("league_members").select("user_id").eq("league_id",activeLeague.id); const _ids=(_mem||[]).map(m=>m.user_id); fetch(API_BASE+"/api/notify",{method:"POST",headers:await authHeaders(),body:JSON.stringify({userIds:_ids,title:(activeLeague.name||"Your league")+" is live!",body:"Week 1 is open — make your picks before they lock.",url:"/",category:"notif_league"})}); }catch(e){} await fetchLeagues(user.id); }} style={{width:"100%",marginTop:16,background:IOS.blue,border:"none",color:"#fff",borderRadius:13,padding:"15px",fontSize:16,fontWeight:800,fontFamily:"Barlow,sans-serif",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><svg width="16" height="16" viewBox="0 0 24 24" fill="#fff" stroke="none"><polygon points="6 4 20 12 6 20 6 4"/></svg>Start League</button>
      <div style={{marginTop:14,textAlign:"left"}}>
        {["Week 1 opens and picks go live for everyone","This week\u2019s games become your Week 1 slate","The roster locks — no new joins after start"].map((t,i)=>(
          <div key={i} style={{display:"flex",gap:9,alignItems:"flex-start",padding:"7px 0",borderTop:i>0?"0.5px solid rgba(255,255,255,0.07)":"none"}}>
@@ -8203,7 +8210,7 @@ function App() {
  const gameOdds={ml:(so?.ml||[]).filter(o=>o.game?.includes(away)||o.game?.includes(home)),spread:(so?.spread||[]).filter(o=>o.game?.includes(away)||o.game?.includes(home)),ou:(so?.ou||[]).filter(o=>o.game?.includes(away)||o.game?.includes(home))};
  setGameSheet({tickerGame:{...g,away,home,isLive,timeStr:gameTime},espnGame:espn,detail:null,odds:gameOdds});
  setGameTeamTab("matchup");
- if(espn?.id){ setGameLoading(true); try{ const r=await fetch(`/api/espn?sport=${SPORT_KEYS[activeLeague?.sport]}&gameId=${espn.id}`); if(r.ok){const d=await r.json();setGameSheet(prev=>({...prev,detail:d}));} }catch(e){} finally{setGameLoading(false);} }
+ if(espn?.id){ setGameLoading(true); try{ const r=await fetch(API_BASE+`/api/espn?sport=${SPORT_KEYS[activeLeague?.sport]}&gameId=${espn.id}`); if(r.ok){const d=await r.json();setGameSheet(prev=>({...prev,detail:d}));} }catch(e){} finally{setGameLoading(false);} }
  };
  return (
  <>
@@ -8625,7 +8632,7 @@ function App() {
  if(espn?.id){
  setGameLoading(true);
  try{
- const r=await fetch(`/api/espn?sport=${SPORT_KEYS[activeLeague?.sport]}&gameId=${espn.id}`);
+ const r=await fetch(API_BASE+`/api/espn?sport=${SPORT_KEYS[activeLeague?.sport]}&gameId=${espn.id}`);
  if(r.ok){const d=await r.json();setGameSheet(prev=>({...prev,detail:d}));}
  }catch(e){}
  finally{setGameLoading(false);}
@@ -10649,7 +10656,7 @@ function App() {
    const _spk = {mlb:"baseball_mlb",nfl:"americanfootball_nfl",nba:"basketball_nba",nhl:"icehockey_nhl",ncaaf:"americanfootball_ncaaf"}; const _rawSp = bet._sport||bet.sport||"mlb"; const q = new URLSearchParams({ sport: (_spk[_rawSp]||_rawSp||"baseball_mlb"), event: bet.eventId||"", market: mk });
    if(isProp && player) q.set("player", player);
    if(isSpread && bet.outcome) q.set("name", bet.outcome);
-   const r = await fetch("/api/altlines?"+q.toString(), { cache: "no-store" });
+   const r = await fetch(API_BASE+"/api/altlines?"+q.toString(), { cache: "no-store" });
    const d = await r.json().catch(()=>({sides:[]}));
    setAltSheet(a=> a ? {...a, loading:false, sides:(d.sides||[])} : a);
    } catch(e){ setAltSheet(a=> a ? {...a, loading:false, sides:[]} : a); }
@@ -13208,7 +13215,7 @@ function App() {
        </div>
        <button onClick={async()=>{
  try {
- const r = await fetch("/api/grade", {
+ const r = await fetch(API_BASE+"/api/grade", {
  method:"POST",
  headers: await authHeaders(),   // /api/grade now verifies commissioner server-side
  body: JSON.stringify({leagueId: activeLeague.id})
@@ -15111,7 +15118,7 @@ function App() {
  : <div><div style={{fontSize:13.5,lineHeight:1.5,color:"rgba(255,255,255,0.88)"}}>{read.data.summary}</div><div style={{fontSize:11,fontWeight:700,color:IOS.blue,marginTop:9}}>See full breakdown ›</div></div>}
  </div>
  ) : (
- <div onClick={async()=>{ if(!isPro){ setShowPaywall("ai"); return; } if(read&&read.loading) return; const sp=(activeLeague&&activeLeague.sport)||"nfl"; setGameRead(prev=>({...prev,[gid]:{loading:true}})); fetch("/api/findbet",{method:"POST",headers: await authHeaders(),body:JSON.stringify({sport:sp,game:away+" @ "+home,userId:user&&user.id})}).then(async r=>{ const d=await r.json().catch(()=>null); setGameRead(prev=>({...prev,[gid]: (r.ok&&d)?{data:d}:{error:true}})); }).catch(()=> setGameRead(prev=>({...prev,[gid]:{error:true}}))); }} style={{display:"flex",alignItems:"center",gap:12,background:"linear-gradient(135deg,rgba(10,132,255,0.16),rgba(94,92,230,0.10))",border:"0.5px solid rgba(10,132,255,0.35)",borderRadius:16,padding:"13px 15px",marginBottom:2,cursor:"pointer"}}>
+ <div onClick={async()=>{ if(!isPro){ setShowPaywall("ai"); return; } if(read&&read.loading) return; const sp=(activeLeague&&activeLeague.sport)||"nfl"; setGameRead(prev=>({...prev,[gid]:{loading:true}})); fetch(API_BASE+"/api/findbet",{method:"POST",headers: await authHeaders(),body:JSON.stringify({sport:sp,game:away+" @ "+home,userId:user&&user.id})}).then(async r=>{ const d=await r.json().catch(()=>null); setGameRead(prev=>({...prev,[gid]: (r.ok&&d)?{data:d}:{error:true}})); }).catch(()=> setGameRead(prev=>({...prev,[gid]:{error:true}}))); }} style={{display:"flex",alignItems:"center",gap:12,background:"linear-gradient(135deg,rgba(10,132,255,0.16),rgba(94,92,230,0.10))",border:"0.5px solid rgba(10,132,255,0.35)",borderRadius:16,padding:"13px 15px",marginBottom:2,cursor:"pointer"}}>
  <div style={{width:36,height:36,borderRadius:11,background:"rgba(10,132,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="19" height="19" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg></div>
  <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:800,color:"#fff"}}>{read&&read.error?"Read unavailable — tap to retry":"Get Plok's read on this matchup"}</div><div style={{fontSize:11.5,color:IOS.label2,marginTop:1}}>Data-backed matchup read{isPro?"":" · Pro"}</div></div>
  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={IOS.label3} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6"/></svg>
