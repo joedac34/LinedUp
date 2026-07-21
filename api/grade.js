@@ -1096,7 +1096,11 @@ export default async function handler(req, res) {
       const picks = await sbGet(
         _isSolo
           ? `picks?league_id=eq.${league.id}&result=eq.pending&select=*`
-          : `picks?league_id=eq.${league.id}&week=eq.${league.current_week}&result=eq.pending&select=*`
+          // Leagues too: grade EVERY pending week, not just current_week. The week
+          // rollover (Tue 13:00Z) was permanently orphaning any pick whose game
+          // finished after advance — 22 Jul 2026: three Tue-night picks stranded
+          // pending because the league was already on week 4 when they went final.
+          : `picks?league_id=eq.${league.id}&result=eq.pending&select=*`
       );
       if (!Array.isArray(picks) || picks.length === 0) { if (!_isSolo) await updateMatchupPoints(league, league.current_week); continue; }
 
