@@ -1495,6 +1495,13 @@ function BracketView({ matchups, members, uid, IOS, onOpenMatch, live, onChampio
   if(!weeks.length) return <div style={{padding:"44px 24px",textAlign:"center",color:IOS.label3,fontSize:14,lineHeight:1.6}}>The bracket appears once the league fills and the tournament starts.</div>;
   weeks.forEach(w=> byWeek[w].sort((a,b)=> (parseInt(((a.bracket_match_id||"").split("M")[1])||0)) - (parseInt(((b.bracket_match_id||"").split("M")[1])||0))));
   const H=500;
+  // Real seeds: byes are the top seeds (BYE seats get no number), then the rest in
+  // bracket order. A 6-team field shows seeds 1-6, not 8 with byes counted as seeds.
+  const _fr = byWeek[weeks[0]] || [];
+  const seedMap = {}; let _sn = 1; const _byes = [], _games = [];
+  _fr.forEach(mu=>{ const a=mu.user1_id, b=mu.user2_id; const bye = !!mu.winner_id && !(a&&b); if(bye){ const who=a||b; if(who) _byes.push(who); } else { if(a) _games.push(a); if(b) _games.push(b); } });
+  _byes.forEach(id=>{ seedMap[id]=_sn++; });
+  _games.forEach(id=>{ seedMap[id]=_sn++; });
   const finalRound = byWeek[weeks[weeks.length-1]];
   const championId = (finalRound && finalRound.length===1) ? finalRound[0].winner_id : null;
   const seat = (uId, nm, pts, decided, isWin, pos, livePts, showLive)=>(
@@ -1527,8 +1534,8 @@ function BracketView({ matchups, members, uid, IOS, onOpenMatch, live, onChampio
                   <div key={mu.id||mi} className="brk-cell" style={{animationDelay:(ri*0.1 + mi*0.05)+"s"}}>
                     <div className={"brk-match"+(youHere?" you":"")+(both?"":" dead")+(showLive?" live":"")} onClick={()=>{ if(both) onOpenMatch(mu); }}>
                       {ri>0 && <div className="brk-stub"/>}
-                      {seat(u1, u1?nameOf(u1):(isBye?"BYE":null), isBye?null:mu.user1_points, decided, mu.winner_id===u1, ri===0?(mi*2+1):"", lt[u1], showLive)}
-                      {seat(u2, u2?nameOf(u2):(isBye?"BYE":null), isBye?null:mu.user2_points, decided, mu.winner_id===u2, ri===0?(mi*2+2):"", lt[u2], showLive)}
+                      {seat(u1, u1?nameOf(u1):(isBye?"BYE":null), isBye?null:mu.user1_points, decided, mu.winner_id===u1, ri===0?(seedMap[u1]||""):"", lt[u1], showLive)}
+                      {seat(u2, u2?nameOf(u2):(isBye?"BYE":null), isBye?null:mu.user2_points, decided, mu.winner_id===u2, ri===0?(seedMap[u2]||""):"", lt[u2], showLive)}
                     </div>
                     {!isLast && <div className={"brk-conn "+(down?"down":"up")} style={{height:elbow}}/>}
                     {isLast && <div className="brk-connf"/>}
@@ -1553,6 +1560,7 @@ function BracketView({ matchups, members, uid, IOS, onOpenMatch, live, onChampio
 }
 const BMD_CHIP = { ml:"ML", spread:"SPR", ou:"O/U", prop:"PROP", longshot:"LONG" };
 function MatchBody({ d, IOS, liveGames=[], onOpenGamecast }){
+  const [openRows, setOpenRows] = useState({});
   if(!d) return null;
   const resCell = (res, pts)=>{
     if(res==="W") return <div className="bmd-res"><div className="rp" style={{color:IOS.green}}>+{Number(pts).toFixed(1)}</div><div className="rl" style={{color:IOS.green}}>Win</div></div>;
@@ -1615,7 +1623,7 @@ function MatchBody({ d, IOS, liveGames=[], onOpenGamecast }){
 
   // One ledger row = one slot. Same slot, same multiplier, two different picks — that
   // collision is the whole product and a stacked list hides it.
-  const cell = (pk, right) => {
+  const cell = (pk, right, expanded) => {
     if(!pk) return (
       <div style={{flex:1,padding:"9px 11px",minWidth:0,textAlign:right?"right":"left"}}>
         <div style={{fontSize:12.5,fontWeight:700,color:"rgba(255,255,255,0.28)"}}>—</div>
@@ -1627,10 +1635,10 @@ function MatchBody({ d, IOS, liveGames=[], onOpenGamecast }){
     const upside = pickUpside(pk);
     return (
       <div style={{flex:1,padding:"9px 11px",minWidth:0,textAlign:right?"right":"left"}}>
-        <div style={{fontSize:12.5,fontWeight:700,color:reveal?"#fff":"rgba(255,255,255,0.45)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+        <div style={{fontSize:12.5,fontWeight:700,color:reveal?"#fff":"rgba(255,255,255,0.45)",overflow:expanded?"visible":"hidden",textOverflow:expanded?"clip":"ellipsis",whiteSpace:expanded?"normal":"nowrap",wordBreak:expanded?"break-word":"normal"}}>
           {reveal ? pk.name : "Hidden until lock"}
         </div>
-        <div style={{fontSize:9.5,color:"rgba(255,255,255,0.28)",marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+        <div style={{fontSize:9.5,color:"rgba(255,255,255,0.28)",marginTop:1,overflow:expanded?"visible":"hidden",textOverflow:expanded?"clip":"ellipsis",whiteSpace:expanded?"normal":"nowrap"}}>
           {reveal ? (pk.game || "") : "Reveals when the game starts"}
         </div>
         <div style={{fontSize:14,fontWeight:900,marginTop:2,color:won?IOS.green:lost?"rgba(255,255,255,0.3)":IOS.blue}}>
@@ -1658,7 +1666,6 @@ function MatchBody({ d, IOS, liveGames=[], onOpenGamecast }){
           const ini = (nm)=> (nm||"?").slice(0,2).toUpperCase();
           const aTint = aWin||!reallyFinal ? "#64D2FF" : "rgba(255,255,255,0.3)";
           const bTint = bWin||!reallyFinal ? "#0A84FF" : "rgba(255,255,255,0.3)";
-          const margin = Math.abs(cA.locked - cB.locked).toFixed(1);
           return (
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"2px 20px 4px"}}>
             <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
@@ -1668,7 +1675,6 @@ function MatchBody({ d, IOS, liveGames=[], onOpenGamecast }){
             </div>
             <div style={{width:70,flexShrink:0,textAlign:"center"}}>
               {openTotal>0 ? <div style={{fontSize:10,fontWeight:900,letterSpacing:"0.1em",color:"#30D158"}}>● LIVE</div> : <div style={{fontSize:10,fontWeight:900,letterSpacing:"0.1em",color:"rgba(255,255,255,0.3)"}}>{reallyFinal?"FINAL":"VS"}</div>}
-              {parseFloat(margin)>0 && <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:15,fontWeight:900,color:"rgba(255,255,255,0.4)",marginTop:3}}>{cA.locked>cB.locked?"+":"\u2212"}{margin}</div>}
             </div>
             <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
               <div style={{width:44,height:44,borderRadius:22,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#000",background:bTint,boxShadow:bWin?"0 0 16px #0A84FF55":"none"}}>{d.b.you?"You":ini(d.b.name)}</div>
@@ -1713,13 +1719,14 @@ function MatchBody({ d, IOS, liveGames=[], onOpenGamecast }){
                 background: anyLive ? "rgba(10,132,255,0.06)"
                           : aw && !bw ? "linear-gradient(90deg,rgba(48,209,88,0.09),transparent 55%)"
                           : bw && !aw ? "linear-gradient(270deg,rgba(48,209,88,0.09),transparent 55%)" : "transparent"}}>
-                {cell(r.mine, false)}
-                <div style={{width:52,flexShrink:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,
+                {cell(r.mine, false, openRows[i])}
+                <div onClick={(e)=>{e.stopPropagation(); setOpenRows(o=>({...o,[i]:!o[i]}));}} style={{width:52,flexShrink:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,cursor:"pointer",
                   background:"rgba(255,255,255,0.02)",borderLeft:"0.5px solid rgba(255,255,255,0.05)",borderRight:"0.5px solid rgba(255,255,255,0.05)"}}>
                   {mult ? <div style={{fontSize:11,fontWeight:900,color:"rgba(255,255,255,0.45)"}}>{mult}×</div> : null}
                   <div style={{fontSize:7.5,fontWeight:900,letterSpacing:"0.05em",color:"rgba(255,255,255,0.25)"}}>{type}</div>
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{marginTop:1,transform:openRows[i]?"rotate(180deg)":"none",transition:"transform .18s"}}><path d="M6 9l6 6 6-6"/></svg>
                 </div>
-                {cell(r.theirs, true)}
+                {cell(r.theirs, true, openRows[i])}
               </div>
             );
           })}
@@ -6814,7 +6821,7 @@ function App() {
  .wr-gap{font-size:11px;color:rgba(255,255,255,.55);margin-top:7px;}
  .wr-carousel{display:flex;gap:10px;overflow-x:auto;padding:2px 16px 6px;}
  .wr-carousel::-webkit-scrollbar{display:none;}
- .wr-gc{flex-shrink:0;width:214px;background:linear-gradient(165deg,#15151c,#0d0d11);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:11px;cursor:pointer;}
+ .wr-gc{flex-shrink:0;width:246px;background:linear-gradient(165deg,#15151c,#0d0d11);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:11px;cursor:pointer;}
  .wr-gc.picked{border-color:rgba(10,132,255,.45);}
  .wr-gctop{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
  .wr-gtime{font-size:10px;font-weight:800;color:rgba(255,255,255,.5);}
@@ -8321,6 +8328,7 @@ function App() {
  const sp2=(so?.spread||[]).filter(o=>o.game?.includes(away)||o.game?.includes(home));
  const ou=(so?.ou||[]).filter(o=>o.game?.includes(away)||o.game?.includes(home));
  const hasPick=myPickGames.some(gm=>gm.includes(away.toLowerCase())&&gm.includes(home.toLowerCase()));
+ const _pit=ml[0]||sp2[0]||ou[0]; const _ap=_pit&&_pit.awayPitcher; const _hp=_pit&&_pit.homePitcher; const _isMlb=activeLeague?.sport==="mlb";
  return (
  <div key={gi} className={"wr-gc"+(hasPick?" picked":"")} onClick={()=>openG(g,away,home,espn,gameTime,isLive)}>
  <div className="wr-gctop">{isLive?<span className="wr-glive"><span className="wr-dot"/>LIVE</span>:isDone?<span className="wr-gtime">Final</span>:<span className="wr-gtime">{gameTime}</span>}<span className="wr-gsport">{SPORTS[activeLeague?.sport]?.label||""}</span></div>
@@ -8330,8 +8338,9 @@ function App() {
  {(isLive||isDone)&&tm.sc!=null&&<div className="wr-gsc">{tm.sc}</div>}
  </div>
  ))}
- {ml.length>0 ? <div style={{display:"flex",gap:5,marginTop:9}}>
- {[{k:"SP",it:sp2[0]},{k:"TOT",it:ou[0]},{k:"ML",it:ml[0]}].map((c,ci)=>c.it?(<div key={ci} style={{flex:1,textAlign:"center",background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:7,padding:"5px 2px",minWidth:0}}><div style={{fontSize:8,fontWeight:800,color:"rgba(255,255,255,0.4)",textTransform:"uppercase"}}>{c.k}</div><div style={{fontSize:10.5,fontWeight:800,color:"#fff",marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.it.pick?.split(" ").slice(-1)[0]} {c.it.odds}</div></div>):<div key={ci} style={{flex:1}}/>)}
+ {_isMlb && (_ap||_hp) && <div style={{display:"flex",alignItems:"center",gap:6,margin:"9px 0 0",padding:"6px 8px",background:"rgba(255,255,255,0.03)",borderRadius:8}}><span style={{fontSize:7.5,fontWeight:900,letterSpacing:"0.06em",color:"rgba(255,255,255,0.4)",flexShrink:0}}>P</span><div style={{flex:1,minWidth:0,fontSize:10,fontWeight:700,color:"rgba(255,255,255,0.82)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{_ap||"TBD"}</div><span style={{fontSize:8,fontWeight:800,color:"rgba(255,255,255,0.35)",flexShrink:0}}>vs</span><div style={{flex:1,minWidth:0,textAlign:"right",fontSize:10,fontWeight:700,color:"rgba(255,255,255,0.82)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{_hp||"TBD"}</div></div>}
+ {ml.length>0 ? <div style={{display:"flex",gap:6,marginTop:9}}>
+ {[{k:"SP",it:sp2[0]},{k:"TOT",it:ou[0]},{k:"ML",it:ml[0]}].map((c,ci)=>c.it?(<div key={ci} style={{flex:1,textAlign:"center",background:"rgba(255,255,255,0.04)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:9,padding:"6px 4px",minWidth:0}}><div style={{fontSize:8,fontWeight:900,letterSpacing:"0.05em",color:"rgba(255,255,255,0.4)",textTransform:"uppercase"}}>{c.k}</div><div style={{fontSize:11,fontWeight:800,color:"#fff",marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.it.pick?.split(" ").slice(-1)[0]} <span style={{color:"rgba(255,255,255,0.55)",fontWeight:700,fontSize:9.5}}>{c.it.odds}</span></div></div>):<div key={ci} style={{flex:1}}/>)}
  </div> : <div style={{marginTop:9,fontSize:9.5,fontWeight:700,color:"rgba(255,255,255,0.38)",textAlign:"center"}}>Lines not posted yet</div>}
  {hasPick&&<div className="wr-pickbadge"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#30D158" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>On your slip</div>}
  </div>
