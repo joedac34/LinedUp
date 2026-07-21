@@ -1552,7 +1552,7 @@ function BracketView({ matchups, members, uid, IOS, onOpenMatch, live, onChampio
   );
 }
 const BMD_CHIP = { ml:"ML", spread:"SPR", ou:"O/U", prop:"PROP", longshot:"LONG" };
-function BracketMatchSheet({ d, IOS, onClose, liveGames=[], onOpenGamecast }){
+function MatchBody({ d, IOS, liveGames=[], onOpenGamecast }){
   if(!d) return null;
   const resCell = (res, pts)=>{
     if(res==="W") return <div className="bmd-res"><div className="rp" style={{color:IOS.green}}>+{Number(pts).toFixed(1)}</div><div className="rl" style={{color:IOS.green}}>Win</div></div>;
@@ -1653,14 +1653,11 @@ function BracketMatchSheet({ d, IOS, onClose, liveGames=[], onOpenGamecast }){
   };
 
   return (
-    <div className="bmd-bg" onClick={(e)=>{ if(e.currentTarget===e.target) onClose(); }}>
-      <div className="bmd">
-        <div className="bmd-top"><div className="bmd-grip"/><div className="bmd-close" onClick={onClose} role="button" aria-label="Close"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></div></div>
-        <div className="bmd-rd">{d.round}</div>
+    <>
           {(()=>{
           const ini = (nm)=> (nm||"?").slice(0,2).toUpperCase();
           const aTint = aWin||!reallyFinal ? "#64D2FF" : "rgba(255,255,255,0.3)";
-          const bTint = bWin||!reallyFinal ? "#BF5AF2" : "rgba(255,255,255,0.3)";
+          const bTint = bWin||!reallyFinal ? "#0A84FF" : "rgba(255,255,255,0.3)";
           const margin = Math.abs(cA.locked - cB.locked).toFixed(1);
           return (
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"2px 20px 4px"}}>
@@ -1674,7 +1671,7 @@ function BracketMatchSheet({ d, IOS, onClose, liveGames=[], onOpenGamecast }){
               {parseFloat(margin)>0 && <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:15,fontWeight:900,color:"rgba(255,255,255,0.4)",marginTop:3}}>{cA.locked>cB.locked?"+":"\u2212"}{margin}</div>}
             </div>
             <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
-              <div style={{width:44,height:44,borderRadius:22,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#000",background:bTint,boxShadow:bWin?"0 0 16px #BF5AF255":"none"}}>{d.b.you?"You":ini(d.b.name)}</div>
+              <div style={{width:44,height:44,borderRadius:22,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#000",background:bTint,boxShadow:bWin?"0 0 16px #0A84FF55":"none"}}>{d.b.you?"You":ini(d.b.name)}</div>
               <div style={{fontSize:13,fontWeight:800,color:bWin?"#fff":"rgba(255,255,255,0.7)",maxWidth:110,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.b.name}</div>
               <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:38,fontWeight:900,lineHeight:1,color:bWin||!reallyFinal?"#fff":"rgba(255,255,255,0.35)"}}>{cB.locked.toFixed(1)}</div>
             </div>
@@ -1687,7 +1684,7 @@ function BracketMatchSheet({ d, IOS, onClose, liveGames=[], onOpenGamecast }){
         <div style={{margin:"4px 14px 0",background:"rgba(255,255,255,0.03)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:14,padding:"11px 13px"}}>
           <div style={{fontSize:9,fontWeight:900,letterSpacing:"0.1em",textTransform:"uppercase",color:"rgba(255,255,255,0.25)",marginBottom:3}}>Locked vs. still possible</div>
           {bar(cA, aWin||!d.winnerId ? "#64D2FF" : "rgba(255,255,255,0.3)", d.a.name)}
-          {bar(cB, bWin||!d.winnerId ? IOS.purple : "rgba(255,255,255,0.3)", d.b.name)}
+          {bar(cB, bWin||!d.winnerId ? IOS.blue : "rgba(255,255,255,0.3)", d.b.name)}
           {openTotal>0 && (
             <div style={{display:"flex",justifyContent:"space-between",fontSize:9.5,fontWeight:700,color:"rgba(255,255,255,0.25)",marginTop:6}}>
               <span>■ settled</span>
@@ -1730,6 +1727,28 @@ function BracketMatchSheet({ d, IOS, onClose, liveGames=[], onOpenGamecast }){
         <div style={{textAlign:"center",fontSize:10,color:"rgba(255,255,255,0.25)",padding:"11px 14px 16px"}}>
           {cA.settled+cB.settled} of {cA.total+cB.total} picks settled{openTotal>0?` · ${openTotal} still live`:""}
         </div>
+    </>
+  );
+}
+function BracketMatchSheet({ d, IOS, onClose, liveGames=[], onOpenGamecast }){
+  const slides = d ? (d.slides && d.slides.length ? d.slides : [d]) : [];
+  const startIdx = (d && d.index) || 0;
+  const pagerRef = useRef(null);
+  const [pgIdx, setPgIdx] = useState(startIdx);
+  useEffect(()=>{ const el=pagerRef.current; if(el){ el.scrollLeft = startIdx * el.clientWidth; } }, []);
+  if(!d) return null;
+  const onPagerScroll = ()=>{ const el=pagerRef.current; if(!el) return; const i=Math.round(el.scrollLeft/Math.max(1,el.clientWidth)); if(i!==pgIdx) setPgIdx(i); };
+  const many = slides.length > 1;
+  return (
+    <div className="bmd-bg" onClick={(e)=>{ if(e.currentTarget===e.target) onClose(); }}>
+      <div className="bmd bmd-flex">
+        <div className="bmd-top"><div className="bmd-grip"/><div className="bmd-close" onClick={onClose} role="button" aria-label="Close"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></div></div>
+        <div className="bmd-rd">{d.round}{many?` · Matchup ${pgIdx+1} of ${slides.length}`:""}</div>
+        <div className="bmd-pager" ref={pagerRef} onScroll={onPagerScroll}>
+          {slides.map((sd,i)=>(<div className="bmd-slide" key={i}><MatchBody d={sd} IOS={IOS} liveGames={liveGames} onOpenGamecast={onOpenGamecast}/></div>))}
+        </div>
+        {many && <div className="bmd-dots">{slides.map((_,i)=><div key={i} className={"bmd-dot"+(i===pgIdx?" on":"")}/>)}</div>}
+        {many && <div className="bmd-hint">Swipe for the next matchup <span className="bmd-ar">{"\u203a"}</span></div>}
       </div>
     </div>
   );
@@ -6181,6 +6200,24 @@ function App() {
  } catch(e) {}
  };
 
+ const openMatchupPager = async (list, tappedIdx, label, week) => {
+   try {
+     const ms = (list||[]).filter(m=>m && m.user1_id && m.user2_id);
+     if(!ms.length) return;
+     const ids = [...new Set(ms.flatMap(m=>[m.user1_id,m.user2_id]))];
+     const { data } = await supabase.from("picks").select("user_id,slot,pick_name,odds,implied_odds,multiplier,result,points_earned,game_date,game,home_score,away_score").eq("league_id",activeLeague.id).eq("week",week).in("user_id",ids);
+     const rows = data||[];
+     const build = (id, storedPts, winnerId) => {
+       const ps = rows.filter(r=>r.user_id===id).map(r=>({ slot:(r.slot||"").split("_")[0], slotId:r.slot||"", multiplier:r.multiplier, implied_odds:r.implied_odds, points_earned:r.points_earned, name:r.pick_name||"Pick", game:r.game||"", sub:(r.multiplier?r.multiplier+"x":"")+(r.odds!=null&&r.odds!==""?" · "+r.odds:""), res:r.result==="W"?"W":(r.result==="L"?"L":"pend"), pts:parseFloat(r.points_earned||0), locked:!!(r.result==="W"||r.result==="L"||(r.game_date&&new Date(r.game_date).getTime()<=Date.now())), result:r.result||null, game_date:r.game_date||null, home_score:(r.home_score!=null?r.home_score:null), away_score:(r.away_score!=null?r.away_score:null), pick_name:r.pick_name||"", odds:r.odds }));
+       const computed = ps.reduce((a,pk)=>a+(pk.res==="W"?pk.pts:0),0);
+       const mem = leagueMembers.find(x=>x.userId===id);
+       return { name: mem?mem.name:"Player", you:id===(user&&user.id), total:(winnerId!=null && storedPts!=null)?Number(storedPts):computed, picks:ps };
+     };
+     const slides = ms.map(mu=>({ week:mu.week, winnerId:mu.winner_id, u1:mu.user1_id, u2:mu.user2_id, a:build(mu.user1_id, mu.user1_points, mu.winner_id), b:build(mu.user2_id, mu.user2_points, mu.winner_id) }));
+     let si = tappedIdx||0; if(si<0) si=0; if(si>=slides.length) si=slides.length-1;
+     setBracketDetail({ round: label, week, slides, index: si });
+   } catch(e) {}
+ };
  const fetchAllMatchups = async (leagueId) => { try{ const { data } = await supabase.from("matchups").select("*").eq("league_id", leagueId); setAllMatchups(data||[]); }catch(e){} };
  useEffect(()=>{ if(screen==="matchup" && activeLeague && (activeLeague.league_type||"h2h")==="h2h" && activeLeague.id){ fetchAllMatchups(activeLeague.id); fetchWeekPicks(activeLeague.id, activeLeague.current_week||activeLeague.week||1); setMWeek(activeLeague.current_week||activeLeague.week||1); setBracketDetail(null); setMatchupView("mine"); } }, [screen, activeLeagueId]);
 
@@ -6897,13 +6934,24 @@ function App() {
  .brk-cup .lab{font-size:9.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#FFD60A;margin-top:8px;}
  .brk-cup .cn{font-size:16px;font-weight:900;margin-top:5px;}
  .brk-cup .cn.tbd{color:rgba(255,255,255,.4);font-style:italic;}
- .bmd-bg{position:fixed;inset:0;z-index:9600;background:rgba(2,3,8,.72);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);display:flex;align-items:flex-end;justify-content:center;}
- .bmd{width:390px;max-width:100vw;max-height:calc(100vh - 132px);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;background:#111;border-radius:22px 22px 0 0;border:1px solid rgba(255,255,255,.1);animation:bmdUp .26s cubic-bezier(.2,.8,.2,1);padding-bottom:calc(env(safe-area-inset-bottom, 0px) + 92px);}
+ .bmd-bg{position:fixed;inset:0;z-index:9600;background:rgba(2,3,8,.72);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);display:flex;align-items:flex-end;justify-content:center;padding-top:calc(env(safe-area-inset-top, 44px) + 6px);box-sizing:border-box;}
+ .bmd{width:390px;max-width:100vw;height:100%;max-height:100%;background:#111;border-radius:22px 22px 0 0;border:1px solid rgba(255,255,255,.1);animation:bmdUp .26s cubic-bezier(.2,.8,.2,1);box-sizing:border-box;padding-bottom:calc(env(safe-area-inset-bottom, 0px) + 76px);}
+ .bmd-flex{display:flex;flex-direction:column;overflow:hidden;}
+ .bmd-pager{flex:1;min-height:0;display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;scrollbar-width:none;}
+ .bmd-pager::-webkit-scrollbar{display:none;}
+ .bmd-slide{min-width:100%;scroll-snap-align:center;overflow-y:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+ .bmd-slide::-webkit-scrollbar{display:none;}
+ .bmd-dots{flex-shrink:0;display:flex;align-items:center;justify-content:center;gap:7px;padding:8px 0 3px;}
+ .bmd-dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.22);transition:all .25s;}
+ .bmd-dot.on{background:#0A84FF;width:22px;border-radius:4px;}
+ .bmd-hint{flex-shrink:0;text-align:center;font-size:10px;font-weight:700;letter-spacing:.04em;color:rgba(255,255,255,.4);padding-bottom:4px;}
+ .bmd-ar{display:inline-block;animation:bmdNudge 1.6s ease-in-out infinite;}
+ @keyframes bmdNudge{0%,100%{transform:translateX(0);opacity:.4;}50%{transform:translateX(3px);opacity:.9;}}
  @keyframes bmdUp{from{transform:translateY(40px);}to{transform:translateY(0);}}
  .bmd-grip{width:38px;height:4px;border-radius:3px;background:rgba(255,255,255,.2);margin:10px auto 8px;}
- .bmd-top{position:sticky;top:0;z-index:12;background:#111;min-height:38px;}
+ .bmd-top{position:relative;flex-shrink:0;z-index:12;background:#111;min-height:34px;}
  .bmd-close{position:absolute;top:6px;right:12px;width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;color:#fff;cursor:pointer;}
- .bmd-rd{text-align:center;font-size:10px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:12px;}
+ .bmd-rd{text-align:center;font-size:10px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:10px;flex-shrink:0;}
  .bmd-score{display:flex;align-items:center;justify-content:center;gap:10px;padding:0 18px 16px;border-bottom:1px solid rgba(255,255,255,.08);}
  .bmd-side{flex:1;text-align:center;min-width:0;}
  .bmd-side .n{font-size:14px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -11504,7 +11552,7 @@ function App() {
                );
              };
              return (
-               <div key={mi} onClick={()=>openBracketMatch(mu,"Week "+wkSel)} style={{background:IOS.bg2,border:mine?("1px solid "+IOS.blue+"88"):`1px solid ${IOS.sep}`,borderRadius:14,marginBottom:11,overflow:"hidden",cursor:"pointer"}}>
+               <div key={mi} onClick={()=>openMatchupPager(weekMs, mi, "Week "+wkSel, wkSel)} style={{background:IOS.bg2,border:mine?("1px solid "+IOS.blue+"88"):`1px solid ${IOS.sep}`,borderRadius:14,marginBottom:11,overflow:"hidden",cursor:"pointer"}}>
                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 13px 2px"}}>
                    <div style={{fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",color:mine?IOS.blue:IOS.label3}}>{mine?"Your matchup":"Matchup"}</div>
                    <div style={{fontSize:10,fontWeight:800,padding:"3px 8px",borderRadius:6,background:done?"rgba(255,255,255,0.08)":"rgba(48,209,88,0.14)",color:done?IOS.label2:IOS.green}}>{done?"FINAL":"LIVE"}</div>
@@ -12617,7 +12665,7 @@ function App() {
           );
         };
        return (
-         <div key={mi} onClick={()=>openBracketMatch(mu,"Week "+wk)} style={{background:IOS.bg2,border:mine?("1px solid "+IOS.blue+"88"):("1px solid "+IOS.sep),borderRadius:14,marginBottom:11,overflow:"hidden",cursor:"pointer"}}>
+         <div key={mi} onClick={()=>openMatchupPager(weekMs, mi, "Week "+wk, wk)} style={{background:IOS.bg2,border:mine?("1px solid "+IOS.blue+"88"):("1px solid "+IOS.sep),borderRadius:14,marginBottom:11,overflow:"hidden",cursor:"pointer"}}>
            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 13px 2px"}}>
              <div style={{fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",color:mine?IOS.blue:IOS.label3}}>{mine?"Your matchup":"Matchup"}</div>
              {badge && <div style={{fontSize:10,fontWeight:800,padding:"3px 8px",borderRadius:6,background:badgeBg,color:badgeCol}}>{badge}</div>}
