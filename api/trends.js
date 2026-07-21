@@ -139,6 +139,8 @@ export function totalSplit(log, line, n = WINDOW) {
   if (line == null || !isFinite(line)) return null;
   const rec = log.slice(-n);
   if (rec.length < MIN_LOG) return null;
+  // Per-game sequence, oldest -> newest, for the ten-cell strip UI.
+  const cells = rec.map((g) => (g.total > line ? "o" : g.total < line ? "u" : "p"));
   const f = (rows) => {
     let o = 0, u = 0, p = 0;
     for (const g of rows) { if (g.total > line) o++; else if (g.total < line) u++; else p++; }
@@ -150,6 +152,7 @@ export function totalSplit(log, line, n = WINDOW) {
     home: home.length >= VENUE_MIN ? f(home) : null,
     away: away.length >= VENUE_MIN ? f(away) : null,
     avgTotal: +(rec.reduce((a, g) => a + g.total, 0) / rec.length).toFixed(1),
+    cells,
   };
 }
 
@@ -159,6 +162,7 @@ export function spreadSplit(log, point, n = WINDOW) {
   if (point == null || !isFinite(point)) return null;
   const rec = log.slice(-n);
   if (rec.length < MIN_LOG) return null;
+  const cells = rec.map((g) => (g.margin + point > 0 ? "c" : g.margin + point < 0 ? "n" : "p"));
   const f = (rows) => {
     let c = 0, nc = 0, p = 0;
     for (const g of rows) { const r = g.margin + point; if (r > 0) c++; else if (r < 0) nc++; else p++; }
@@ -170,6 +174,7 @@ export function spreadSplit(log, point, n = WINDOW) {
     home: home.length >= VENUE_MIN ? f(home) : null,
     away: away.length >= VENUE_MIN ? f(away) : null,
     avgMargin: +(rec.reduce((a, g) => a + g.margin, 0) / rec.length).toFixed(1),
+    cells,
   };
 }
 
@@ -599,6 +604,25 @@ export default async function handler(req, res) {
       trends: shown,
       matchup, conviction: null, verdict: "none", model: "trends",
       logSeason, staleSeason: stale,
+      // Ten-cell strip data for the redesigned card (approved mockup 21 Jul 2026).
+      strips: (() => {
+        try {
+          const st = {};
+          if (lines.total != null) {
+            const aTs = totalSplit(aLog, lines.total), hTs = totalSplit(hLog, lines.total);
+            if (aTs || hTs) st.total = { line: lines.total,
+              away: aTs ? { ab: aAbbr, cells: aTs.cells, o: aTs.all.o, n: aTs.all.n, avg: aTs.avgTotal } : null,
+              home: hTs ? { ab: hAbbr, cells: hTs.cells, o: hTs.all.o, n: hTs.all.n, avg: hTs.avgTotal } : null };
+          }
+          const sp0 = (lines.spreads || [])[0];
+          if (sp0) {
+            const isA = teamish(sp0.team, aName, aAbbr);
+            const ss = spreadSplit(isA ? aLog : hLog, sp0.point);
+            if (ss) st.spread = { team: isA ? aAbbr : hAbbr, point: sp0.point, cells: ss.cells, c: ss.all.c, n: ss.all.n, avgMargin: ss.avgMargin };
+          }
+          return Object.keys(st).length ? st : null;
+        } catch (e) { return null; }
+      })(),
     };
     cacheSet(key, out);
     return res.status(200).json({ ...out, cached: false });

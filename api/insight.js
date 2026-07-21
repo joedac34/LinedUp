@@ -511,6 +511,52 @@ async function generate(ctx, stats) {
     (ctx.userStats.byType ? "\n- By bet type: " + Object.entries(ctx.userStats.byType).map(([k, v]) => `${k} ${v.record} (${v.pct}%)`).join(", ") : "") +
     (ctx.userSlot ? `\n- THIS bet type (${ctx.userSlot.label}): ${ctx.userSlot.record} (${ctx.userSlot.pct}%)  <- most relevant` : "")
   ) : "";
+  // ── +EV Hunter (server-computed; the LLM only writes prose) ────────────────
+  // ML only: win probability via pythagorean expectation on expected runs
+  // (exp 1.83), blended 70/30 season/L10 when L10 exists. Spread/total need a
+  // COVER-probability model — they keep the legacy card until that's real.
+  const hunterFor = (ctx2, stats2) => {
+    try {
+      if (ctx2.betType !== "ml" || ctx2.odds == null) return null;
+      const m = stats2 && stats2.matchup; if (!m || !m.away || !m.home) return null;
+      const nn = (x) => { const v = Number(x); return Number.isFinite(v) ? v : null; };
+      const aS = nn(m.away.scored), hS = nn(m.home.scored);
+      // "allowed" is staff ERA for MLB — a run-allowed proxy; consistent across sides.
+      const aA = nn(m.away.allowed), hA = nn(m.home.allowed);
+      if (aS == null || hS == null || aA == null || hA == null) return null;
+      const pyth = (f, a) => { const x = Math.pow(f, 1.83), y = Math.pow(a, 1.83); return x / (x + y); };
+      const expA = (aS + hA) / 2, expH = (hS + aA) / 2;
+      const seasonHomeP = pyth(expH, expA);
+      let blendHomeP = seasonHomeP;
+      const al = m.away.l10, hl = m.home.l10;
+      if (al && hl && nn(al.pf) != null && nn(hl.pf) != null) {
+        const bA = 0.7 * aS + 0.3 * nn(al.pf), bAa = 0.7 * aA + 0.3 * nn(al.pa);
+        const bH = 0.7 * hS + 0.3 * nn(hl.pf), bHa = 0.7 * hA + 0.3 * nn(hl.pa);
+        blendHomeP = pyth((bH + bAa) / 2, (bA + bHa) / 2);
+      }
+      // Which side did they pick?
+      const sel = String(ctx2.selection || "").toLowerCase();
+      const isHome = sel.includes(String(m.home.name || "").toLowerCase()) || sel.includes(String(m.home.abbr || "").toLowerCase());
+      const isAway = sel.includes(String(m.away.name || "").toLowerCase()) || sel.includes(String(m.away.abbr || "").toLowerCase());
+      if (!isHome && !isAway) return null;
+      const seasonP = isHome ? seasonHomeP : 1 - seasonHomeP;
+      const modelP = isHome ? blendHomeP : 1 - blendHomeP;
+      const o = nn(ctx2.odds); if (o == null || o === 0) return null;
+      const impliedP = o < 0 ? (-o) / (-o + 100) : 100 / (o + 100);
+      const edge = +( (modelP - impliedP) * 100 ).toFixed(1);
+      const form = +( (modelP - seasonP) * 100 ).toFixed(1);
+      const price = +( edge - form ).toFixed(1);
+      const verdict = edge >= 7 ? "PLAY" : edge >= 3 ? "LEAN PLAY" : edge >= 0.5 ? "THIN" : "PASS";
+      const components = [{ label: "Price", value: price }];
+      if (al && hl) components.push({ label: "Form (L10)", value: form });
+      // Mechanical Your Record — never LLM-written.
+      let yourRecord = null;
+      if (ctx2.userSlot && ctx2.userSlot.record) yourRecord = `${ctx2.userSlot.record} on ${(ctx2.userSlot.label || "this bet type").toLowerCase()}s`;
+      if (ctx2.userStats && ctx2.userStats.record) yourRecord = (yourRecord ? yourRecord + " · " : "") + `${ctx2.userStats.record} overall`;
+      return { verdict, edgePts: edge, modelProb: +(modelP * 100).toFixed(1), impliedProb: +(impliedP * 100).toFixed(1), odds: ctx2.odds, components, yourRecord };
+    } catch (e) { return null; }
+  };
+
   const PERSONAS = {
     sharp: "PERSONA: THE SHARP. Judge this bet purely on price and expected value. You are risk-averse and unsentimental about names or narratives — the number is everything. Pass quickly and often when the edge isn't there, and skew conviction toward sound prices and away from juice. Tone: clipped, no fluff. ",
     degen: "PERSONA: THE DEGEN. You hunt ceiling and upside, weight the size of the payoff heavily, and have a real appetite for plus-money and longshots — while staying honest that variance is high. Skew conviction up on high-payoff spots you can justify from DATA. Tone: high-energy, fearless. ",
@@ -560,6 +606,15 @@ async function generate(ctx, stats) {
         stats.lines = _proj.concat(stats.lines||[]);
       }
     }
+    const _hunter = hunterFor(ctx, stats);
+    stats._hunter = _hunter || null; // handler attaches this to the response
+    if (_hunter) {
+      stats.lines = [
+        { label: "Model win probability", value: `${_hunter.modelProb}%` },
+        { label: `Implied by ${_hunter.odds}`, value: `${_hunter.impliedProb}%` },
+        { label: "Edge", value: `${_hunter.edgePts} pts of win probability` },
+      ].concat(stats.lines || []);
+    }
     const dataBlock = (stats.lines && stats.lines.length)
       ? stats.lines.map(l => `- ${l.label}: ${l.value}`).join("\n")
       : "(no live stats were available for this selection)";
@@ -568,7 +623,9 @@ async function generate(ctx, stats) {
       : ctx.betType === "spread"
       ? "This is a SPREAD: the question is whether the selected side COVERS the number, not just wins. Lead with the model projected margin/score vs the line — does the favorite win by more than the number, or the underdog stay within it. "
       : ctx.betType === "ml"
-      ? "This is a MONEYLINE: the question is who wins outright. Lead with records, form, H2H and the model projected margin as a win-probability lean, and weigh the odds for value. "
+      ? (typeof _hunter !== "undefined" && _hunter
+        ? `This is a MONEYLINE priced at ${_hunter.odds}. The verdict (${_hunter.verdict}) and the edge (${_hunter.edgePts} pts) are ALREADY COMPUTED — do not re-derive or contradict them. Write THE SHARP's read of that price in at most 4 clipped sentences for the summary: why the number is or isn't mispriced, using ONLY figures from DATA. Return keyStats and trends as EMPTY arrays and bullCase/bearCase/yourAngle as empty strings — the card renders the computed numbers itself. `
+        : "This is a MONEYLINE: the question is who wins outright. Lead with records, form, H2H and the model projected margin as a win-probability lean, and weigh the odds for value. ")
       : "";
     system = personaLine +
       "You are Plok, a sharp, concise sports-betting analyst. " +
@@ -713,6 +770,7 @@ export default async function handler(req, res) {
     const stats = await fetchSportsData(ctx);
     const out = await generate(ctx, stats);
     if (stats.matchup) out.matchup = stats.matchup;
+    out.hunter = stats._hunter || null;
     if (ctx.betType === "prop") out.keyStats = (stats.lines && stats.lines.length) ? stats.lines.slice(0, 4) : [];
     await storeCache(key, out);
 
