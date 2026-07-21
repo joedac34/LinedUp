@@ -1867,10 +1867,47 @@ function AiInsightBubble({ item, IOS, onAddToSlip }) {
   const shownSummary = summaryWords.slice(0, words).join(" ");
   const typing = words < summaryWords.length;
   return wrap(<div>
+    {!data.hunter && (
     <div style={{fontSize:13,lineHeight:1.5,color:"rgba(255,255,255,0.86)",marginBottom:(data.matchup||(data.keyStats&&data.keyStats.length))?11:8}}>
       {shownSummary}{typing && <span className="ai-caret"/>}
     </div>
-    {phase>=1 && data.matchup && data.matchup.away && data.matchup.home && (
+    )}
+    {/* ── +EV HUNTER card (approved mockup 21 Jul 2026): server-computed numbers, LLM prose demoted to one quote ── */}
+    {data.hunter && (()=>{ const h=data.hunter; const vc = h.verdict==="PLAY"||h.verdict==="LEAN PLAY" ? IOS.green : h.verdict==="THIN" ? IOS.orange : IOS.red; const compMax = Math.max(1, ...h.components.map(c=>Math.abs(c.value))); return (<div className="ai-rise">
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.04)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:13,padding:"13px 14px",marginBottom:8}}>
+        <div><div style={{fontSize:20,fontWeight:800,letterSpacing:"-0.4px",color:vc}}>{h.verdict}</div><div style={{fontSize:8.5,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)",marginTop:2}}>The Sharp\u2019s read</div></div>
+        <div style={{textAlign:"right"}}><div style={{fontSize:24,fontWeight:800,letterSpacing:"-0.8px",color:vc,fontFamily:"'Barlow Semi Condensed',sans-serif"}}>{h.edgePts>0?"+":""}{h.edgePts}</div><div style={{fontSize:8.5,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)"}}>pts of edge</div></div>
+      </div>
+      <div style={{display:"flex",gap:7,marginBottom:8}}>
+        {[{n:h.modelProb+"%",l:"Model win prob",c:"#fff"},{n:h.impliedProb+"%",l:"Implied by "+h.odds,c:"rgba(255,255,255,0.46)"},{n:String(h.odds),l:"Price",c:vc}].map((b,bi)=>(
+          <div key={bi} style={{flex:1,background:"rgba(255,255,255,0.04)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:11,padding:"10px 6px",textAlign:"center"}}>
+            <div style={{fontSize:16,fontWeight:800,letterSpacing:"-0.3px",color:b.c}}>{b.n}</div>
+            <div style={{fontSize:7.5,fontWeight:700,letterSpacing:"0.07em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)",marginTop:3,whiteSpace:"nowrap"}}>{b.l}</div>
+          </div>))}
+      </div>
+      <div style={{background:"rgba(255,255,255,0.04)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"11px 13px",marginBottom:8}}>
+        <div style={{fontSize:8.5,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)",marginBottom:8}}>Where the edge comes from</div>
+        {h.components.map((c,ci)=>(<div key={ci} style={{display:"flex",alignItems:"center",gap:9,marginBottom:ci<h.components.length-1?7:0}}>
+          <span style={{width:76,fontSize:10.5,fontWeight:600,color:"rgba(255,255,255,0.46)",flexShrink:0}}>{c.label}</span>
+          <div style={{flex:1,height:5,borderRadius:3,background:"rgba(255,255,255,0.07)",overflow:"hidden"}}><div style={{height:"100%",width:`${Math.min(100,Math.abs(c.value)/compMax*100)}%`,borderRadius:3,background:c.value>=0?IOS.green:IOS.red}}/></div>
+          <span style={{width:36,textAlign:"right",fontSize:10.5,fontWeight:800,color:c.value>=0?IOS.green:IOS.red,flexShrink:0}}>{c.value>=0?"+":""}{c.value}</span>
+        </div>))}
+      </div>
+      <div style={{background:"rgba(255,255,255,0.04)",border:"0.5px solid rgba(255,255,255,0.08)",borderLeft:`2px solid ${IOS.blue}`,borderRadius:11,padding:"10px 12px",marginBottom:8,fontSize:12.5,lineHeight:1.5,color:"rgba(255,255,255,0.8)"}}>{shownSummary}{typing && <span className="ai-caret"/>}</div>
+      {h.yourRecord && (<div style={{display:"flex",alignItems:"center",gap:8,padding:"9px 12px",background:"rgba(10,132,255,0.06)",border:"0.5px solid rgba(10,132,255,0.25)",borderRadius:10,marginBottom:8,fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.7)"}}><span style={{fontSize:8,fontWeight:800,letterSpacing:"0.07em",color:IOS.blue,flexShrink:0}}>YOUR RECORD</span>{h.yourRecord}</div>)}
+    </div>); })()}
+    {/* ── Trends & Form ten-cell strips (approved mockup 21 Jul 2026) ── */}
+    {phase>=1 && data.strips && (()=>{ const st=data.strips; const Strip=({cells})=>(<div style={{flex:1,display:"flex",gap:3}}>{(cells||[]).map((c,ci)=>(<div key={ci} style={{flex:1,height:13,borderRadius:3,background:c==="o"||c==="c"?"rgba(48,209,88,0.55)":"rgba(255,255,255,0.10)"}}/>))}</div>); return (<div className="ai-rise" style={{marginBottom:11}}>
+      {st.total && (<div style={{background:"rgba(255,255,255,0.04)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"11px 12px",marginBottom:7}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:9}}><span style={{fontSize:11.5,fontWeight:800}}>Tonight\u2019s total {st.total.line}, applied backwards</span><span style={{fontSize:8,fontWeight:700,letterSpacing:"0.08em",color:"rgba(255,255,255,0.3)"}}>LAST 10</span></div>
+        {[st.total.away,st.total.home].filter(Boolean).map((t,ti)=>(<div key={ti} style={{display:"flex",alignItems:"center",gap:8,marginBottom:ti===0?7:0}}><span style={{width:32,fontSize:11,fontWeight:800,flexShrink:0}}>{t.ab}</span><Strip cells={t.cells}/><span style={{width:48,textAlign:"right",fontSize:10.5,fontWeight:800,color:t.o>=Math.ceil(t.n*0.7)?IOS.green:"#fff",flexShrink:0}}>{t.o} over</span></div>))}
+      </div>)}
+      {st.spread && (<div style={{background:"rgba(255,255,255,0.04)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"11px 12px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:9}}><span style={{fontSize:11.5,fontWeight:800}}>Spread {st.spread.team} {st.spread.point>0?"+":""}{st.spread.point}, applied backwards</span><span style={{fontSize:8,fontWeight:700,letterSpacing:"0.08em",color:"rgba(255,255,255,0.3)"}}>LAST 10</span></div>
+        <div style={{display:"flex",alignItems:"center",gap:8}}><span style={{width:32,fontSize:11,fontWeight:800,flexShrink:0}}>{st.spread.team}</span><Strip cells={st.spread.cells}/><span style={{width:52,textAlign:"right",fontSize:10.5,fontWeight:800,color:st.spread.c>=Math.ceil(st.spread.n*0.7)?IOS.green:"#fff",flexShrink:0}}>{st.spread.c} cover</span></div>
+      </div>)}
+    </div>); })()}
+    {phase>=1 && data.matchup && data.matchup.away && data.matchup.home && data.model!=="trends" && !data.hunter && (
       <div className="ai-rise" style={{marginBottom:11,borderRadius:11,overflow:"hidden",border:"0.5px solid rgba(255,255,255,0.09)"}}>
         <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",alignItems:"center",padding:"8px 12px",background:"rgba(255,255,255,0.05)"}}>
           <div style={{fontSize:13,fontWeight:800,color:IOS.blue,textAlign:"left",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{data.matchup.away.abbr||data.matchup.away.name}</div>
@@ -1900,7 +1937,7 @@ function AiInsightBubble({ item, IOS, onAddToSlip }) {
         )}
       </div>
     )}
-    {phase>=1 && data.yourAngle && (
+    {phase>=1 && data.yourAngle && !data.hunter && (
       <div className="ai-rise" style={{display:"flex",alignItems:"flex-start",gap:8,background:`linear-gradient(135deg,${IOS.blue}1f,${IOS.indigo}12)`,border:`0.5px solid ${IOS.blue}3a`,borderRadius:11,padding:"10px 12px",marginBottom:11}}>
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginTop:1}}><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 12 0v1"/><path d="M17.5 7.5l1.5 1.5 3-3"/></svg>
         <div>
@@ -1909,7 +1946,7 @@ function AiInsightBubble({ item, IOS, onAddToSlip }) {
         </div>
       </div>
     )}
-    {phase>=1 && data.verdict && data.verdict!=="none" && (()=>{
+    {phase>=1 && data.verdict && data.verdict!=="none" && !data.hunter && (()=>{
       const v = data.verdict;
       const conv = Math.max(0, Math.min(100, data.conviction||0));
       const isPass = v==="pass"||v==="fade";
@@ -1937,7 +1974,7 @@ function AiInsightBubble({ item, IOS, onAddToSlip }) {
         </div>
       );
     })()}
-    {phase>=1 && !data.matchup && data.keyStats && data.keyStats.length>0 && (
+    {phase>=1 && !data.hunter && !data.matchup && data.keyStats && data.keyStats.length>0 && (
       <div className="ai-rise" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7,marginBottom:11}}>
         {data.keyStats.slice(0,4).map((s,si)=>(
           <div key={si} style={{background:"rgba(255,255,255,0.04)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:9,padding:"8px 10px"}}>
@@ -1947,7 +1984,7 @@ function AiInsightBubble({ item, IOS, onAddToSlip }) {
         ))}
       </div>
     )}
-    {phase>=2 && data.trends && data.trends.length>0 && (
+    {phase>=2 && !data.hunter && data.trends && data.trends.length>0 && (
       <div className="ai-rise" style={{display:"flex",flexDirection:"column",gap:5,marginBottom:11}}>
         {data.trends.map((tr,ti)=>(
           <div key={ti} style={{display:"flex",alignItems:"flex-start",gap:7,fontSize:12,color:"rgba(255,255,255,0.7)"}}>
@@ -1959,7 +1996,7 @@ function AiInsightBubble({ item, IOS, onAddToSlip }) {
         ))}
       </div>
     )}
-    {phase>=3 && data.bullCase && (
+    {phase>=3 && !data.hunter && data.bullCase && (
       <div className="ai-rise" style={{borderLeft:"3px solid "+IOS.green,paddingLeft:9,marginBottom:8}}>
         <div style={{fontSize:9,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:IOS.green,marginBottom:2}}>Bull case</div>
         <div style={{fontSize:12.5,lineHeight:1.45,color:"rgba(255,255,255,0.8)"}}>{data.bullCase}</div>
@@ -11636,7 +11673,11 @@ function App() {
  const oppPicksByMult = {};
  oppUserPicks.forEach(p=>{ if(!oppPicksByMult[p.multiplier]) oppPicksByMult[p.multiplier]=[]; oppPicksByMult[p.multiplier].push(p); });
  const SLOT_SHORT={ml:"ML",prop:"PROP",ou:"O/U",spread:"SPR",longshot:"LS"};
- const _slotIdx=(p)=>{ const a=String(p.slot||"").split("_"); if(a[0]==="longshot") return a.length>=3?(parseInt(a[1],10)||0):0; const n=parseInt(a[a.length-1],10); return isNaN(n)?0:n; };
+ const _slotIdx=(p)=>{ const a=String(p.slot||"").split("_"); if(a[0]==="longshot") return parseInt(a[1],10)||0; const n=parseInt(a[a.length-1],10); return isNaN(n)?0:n; };
+ // ^ a[1] is the slot index for BOTH longshot shapes: legs ("longshot_7_0") AND
+ //   straight singles ("longshot_7"). The old `a.length>=3 ? ... : 0` sent every
+ //   straight longshot single to slot 0, where it merged with the ML pick into a
+ //   phantom rendered parlay (20 Jul 2026, Joe's own Bonkers slip).
  const _cfg = parseSlotConfig(activeLeague && activeLeague.slot_config);
  let matchRows=[];
  if(_cfg){
