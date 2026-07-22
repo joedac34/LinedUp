@@ -1633,8 +1633,9 @@ function MatchBody({ d, IOS, liveGames=[], onOpenGamecast }){
     const reveal = (right ? d.b.you : d.a.you) || pk.locked;
     const won = pk.res==="W", lost = pk.res==="L";
     const upside = pickUpside(pk);
+    const _cbg = !reveal ? "transparent" : (won ? "rgba(48,209,88,0.10)" : lost ? "rgba(255,69,58,0.09)" : "rgba(10,132,255,0.07)");
     return (
-      <div style={{flex:1,padding:"9px 11px",minWidth:0,textAlign:right?"right":"left"}}>
+      <div style={{flex:1,padding:"9px 11px",minWidth:0,textAlign:right?"right":"left",background:_cbg}}>
         <div style={{fontSize:12.5,fontWeight:700,color:reveal?"#fff":"rgba(255,255,255,0.45)",overflow:expanded?"visible":"hidden",textOverflow:expanded?"clip":"ellipsis",whiteSpace:expanded?"normal":"nowrap",wordBreak:expanded?"break-word":"normal"}}>
           {reveal ? pk.name : "Hidden until lock"}
         </div>
@@ -1715,10 +1716,7 @@ function MatchBody({ d, IOS, liveGames=[], onOpenGamecast }){
             const aw = r.mine && r.mine.res==="W", bw = r.theirs && r.theirs.res==="W";
             const anyLive = (r.mine && r.mine.res==="pend") || (r.theirs && r.theirs.res==="pend");
             return (
-              <div key={r.key||i} style={{display:"flex",alignItems:"stretch",borderBottom:i<rows.length-1?"0.5px solid rgba(255,255,255,0.05)":"none",
-                background: anyLive ? "rgba(10,132,255,0.06)"
-                          : aw && !bw ? "linear-gradient(90deg,rgba(48,209,88,0.09),transparent 55%)"
-                          : bw && !aw ? "linear-gradient(270deg,rgba(48,209,88,0.09),transparent 55%)" : "transparent"}}>
+              <div key={r.key||i} style={{display:"flex",alignItems:"stretch",borderBottom:i<rows.length-1?"0.5px solid rgba(255,255,255,0.05)":"none",background:"transparent"}}>
                 {cell(r.mine, false, openRows[i])}
                 <div onClick={(e)=>{e.stopPropagation(); setOpenRows(o=>({...o,[i]:!o[i]}));}} style={{width:52,flexShrink:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,cursor:"pointer",
                   background:"rgba(255,255,255,0.02)",borderLeft:"0.5px solid rgba(255,255,255,0.05)",borderRight:"0.5px solid rgba(255,255,255,0.05)"}}>
@@ -6197,7 +6195,7 @@ function App() {
  const { data } = await supabase.from("picks").select("user_id,slot,pick_name,odds,implied_odds,multiplier,result,points_earned,game_date,game,home_score,away_score").eq("league_id",activeLeague.id).eq("week",mu.week).in("user_id",[u1,u2]);
  const rows = data||[];
  const build = (id, storedPts) => {
- const ps = rows.filter(r=>r.user_id===id).map(r=>({ slot:(r.slot||"").split("_")[0], slotId:r.slot||"", multiplier:r.multiplier, implied_odds:r.implied_odds, points_earned:r.points_earned, name:r.pick_name||"Pick", game:r.game||"", sub:(r.multiplier?r.multiplier+"x":"")+(r.odds!=null&&r.odds!==""?" · "+r.odds:""), res:r.result==="W"?"W":(r.result==="L"?"L":"pend"), pts:parseFloat(r.points_earned||0), locked:!!(r.result==="W"||r.result==="L"||(r.game_date&&new Date(r.game_date).getTime()<=Date.now())), result:r.result||null, game_date:r.game_date||null, home_score:(r.home_score!=null?r.home_score:null), away_score:(r.away_score!=null?r.away_score:null), pick_name:r.pick_name||"", odds:r.odds }));
+ const ps = rows.filter(r=>r.user_id===id && r.result!=="P").map(r=>({ slot:(r.slot||"").split("_")[0], slotId:r.slot||"", multiplier:r.multiplier, implied_odds:r.implied_odds, points_earned:r.points_earned, name:r.pick_name||"Pick", game:r.game||"", sub:(r.multiplier?r.multiplier+"x":"")+(r.odds!=null&&r.odds!==""?" · "+r.odds:""), res:r.result==="W"?"W":(r.result==="L"?"L":"pend"), pts:parseFloat(r.points_earned||0), locked:!!(r.result==="W"||r.result==="L"||(r.game_date&&new Date(r.game_date).getTime()<=Date.now())), result:r.result||null, game_date:r.game_date||null, home_score:(r.home_score!=null?r.home_score:null), away_score:(r.away_score!=null?r.away_score:null), pick_name:r.pick_name||"", odds:r.odds }));
  const computed = ps.reduce((a,pk)=>a+(pk.res==="W"?pk.pts:0),0);
  const mem = leagueMembers.find(x=>x.userId===id);
  return { name: mem?mem.name:"Player", you:id===(user&&user.id), total:(mu.winner_id!=null && storedPts!=null)?Number(storedPts):computed, picks:ps };
@@ -6215,7 +6213,7 @@ function App() {
      const { data } = await supabase.from("picks").select("user_id,slot,pick_name,odds,implied_odds,multiplier,result,points_earned,game_date,game,home_score,away_score").eq("league_id",activeLeague.id).eq("week",week).in("user_id",ids);
      const rows = data||[];
      const build = (id, storedPts, winnerId) => {
-       const ps = rows.filter(r=>r.user_id===id).map(r=>({ slot:(r.slot||"").split("_")[0], slotId:r.slot||"", multiplier:r.multiplier, implied_odds:r.implied_odds, points_earned:r.points_earned, name:r.pick_name||"Pick", game:r.game||"", sub:(r.multiplier?r.multiplier+"x":"")+(r.odds!=null&&r.odds!==""?" · "+r.odds:""), res:r.result==="W"?"W":(r.result==="L"?"L":"pend"), pts:parseFloat(r.points_earned||0), locked:!!(r.result==="W"||r.result==="L"||(r.game_date&&new Date(r.game_date).getTime()<=Date.now())), result:r.result||null, game_date:r.game_date||null, home_score:(r.home_score!=null?r.home_score:null), away_score:(r.away_score!=null?r.away_score:null), pick_name:r.pick_name||"", odds:r.odds }));
+       const ps = rows.filter(r=>r.user_id===id && r.result!=="P").map(r=>({ slot:(r.slot||"").split("_")[0], slotId:r.slot||"", multiplier:r.multiplier, implied_odds:r.implied_odds, points_earned:r.points_earned, name:r.pick_name||"Pick", game:r.game||"", sub:(r.multiplier?r.multiplier+"x":"")+(r.odds!=null&&r.odds!==""?" · "+r.odds:""), res:r.result==="W"?"W":(r.result==="L"?"L":"pend"), pts:parseFloat(r.points_earned||0), locked:!!(r.result==="W"||r.result==="L"||(r.game_date&&new Date(r.game_date).getTime()<=Date.now())), result:r.result||null, game_date:r.game_date||null, home_score:(r.home_score!=null?r.home_score:null), away_score:(r.away_score!=null?r.away_score:null), pick_name:r.pick_name||"", odds:r.odds }));
        const computed = ps.reduce((a,pk)=>a+(pk.res==="W"?pk.pts:0),0);
        const mem = leagueMembers.find(x=>x.userId===id);
        return { name: mem?mem.name:"Player", you:id===(user&&user.id), total:(winnerId!=null && storedPts!=null)?Number(storedPts):computed, picks:ps };
@@ -6941,7 +6939,7 @@ function App() {
  .brk-cup .lab{font-size:9.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#FFD60A;margin-top:8px;}
  .brk-cup .cn{font-size:16px;font-weight:900;margin-top:5px;}
  .brk-cup .cn.tbd{color:rgba(255,255,255,.4);font-style:italic;}
- .bmd-bg{position:fixed;inset:0;z-index:9600;background:rgba(2,3,8,.72);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);display:flex;align-items:flex-end;justify-content:center;padding-top:max(72px, calc(env(safe-area-inset-top, 0px) + 10px));box-sizing:border-box;}
+ .bmd-bg{position:fixed;inset:0;z-index:9600;background:rgba(2,3,8,.72);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);display:flex;align-items:flex-end;justify-content:center;padding-top:max(92px, calc(env(safe-area-inset-top, 0px) + 18px));box-sizing:border-box;}
  .bmd{width:390px;max-width:100vw;height:100%;max-height:100%;background:#111;border-radius:22px 22px 0 0;border:1px solid rgba(255,255,255,.1);animation:bmdUp .26s cubic-bezier(.2,.8,.2,1);box-sizing:border-box;padding-bottom:calc(env(safe-area-inset-bottom, 0px) + 76px);}
  .bmd-flex{display:flex;flex-direction:column;overflow:hidden;}
  .bmd-pager{flex:1;min-height:0;display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;scrollbar-width:none;}
