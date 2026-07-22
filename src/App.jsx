@@ -1561,6 +1561,7 @@ function BracketView({ matchups, members, uid, IOS, onOpenMatch, live, onChampio
 const BMD_CHIP = { ml:"ML", spread:"SPR", ou:"O/U", prop:"PROP", longshot:"LONG" };
 function MatchBody({ d, IOS, liveGames=[], onOpenGamecast }){
   const [openRows, setOpenRows] = useState({});
+  const [openVoid, setOpenVoid] = useState({});
   if(!d) return null;
   const resCell = (res, pts)=>{
     if(res==="W") return <div className="bmd-res"><div className="rp" style={{color:IOS.green}}>+{Number(pts).toFixed(1)}</div><div className="rl" style={{color:IOS.green}}>Win</div></div>;
@@ -1632,19 +1633,36 @@ function MatchBody({ d, IOS, liveGames=[], onOpenGamecast }){
     );
     const reveal = (right ? d.b.you : d.a.you) || pk.locked;
     const won = pk.res==="W", lost = pk.res==="L";
+    const voided = !!pk.voidedUnreplaced;
     const upside = pickUpside(pk);
-    const _cbg = !reveal ? "transparent" : (won ? "rgba(48,209,88,0.10)" : lost ? "rgba(255,69,58,0.09)" : "rgba(10,132,255,0.07)");
+    const _cbg = !reveal || voided ? "transparent" : (won ? "rgba(48,209,88,0.10)" : lost ? "rgba(255,69,58,0.09)" : "rgba(10,132,255,0.07)");
+    const _vk = (right?"r_":"l_")+(pk.slotId||pk.name||"");
+    const _drawerOpen = expanded || !!openVoid[_vk];
+    const _vdate = (dt)=>{ try{ return new Date(dt).toLocaleDateString("en-US",{month:"short",day:"numeric"}).toUpperCase(); }catch(e){ return ""; } };
     return (
       <div style={{flex:1,padding:"9px 11px",minWidth:0,textAlign:right?"right":"left",background:_cbg}}>
-        <div style={{fontSize:12.5,fontWeight:700,color:reveal?"#fff":"rgba(255,255,255,0.45)",overflow:expanded?"visible":"hidden",textOverflow:expanded?"clip":"ellipsis",whiteSpace:expanded?"normal":"nowrap",wordBreak:expanded?"break-word":"normal"}}>
+        <div style={{fontSize:12.5,fontWeight:700,color:voided?"rgba(255,255,255,0.42)":(reveal?"#fff":"rgba(255,255,255,0.45)"),textDecoration:voided?"line-through":"none",textDecorationColor:"rgba(255,69,58,0.7)",overflow:expanded?"visible":"hidden",textOverflow:expanded?"clip":"ellipsis",whiteSpace:expanded?"normal":"nowrap",wordBreak:expanded?"break-word":"normal"}}>
           {reveal ? pk.name : "Hidden until lock"}
         </div>
         <div style={{fontSize:9.5,color:"rgba(255,255,255,0.28)",marginTop:1,overflow:expanded?"visible":"hidden",textOverflow:expanded?"clip":"ellipsis",whiteSpace:expanded?"normal":"nowrap"}}>
           {reveal ? (pk.game || "") : "Reveals when the game starts"}
         </div>
-        <div style={{fontSize:14,fontWeight:900,marginTop:2,color:won?IOS.green:lost?"rgba(255,255,255,0.3)":IOS.blue}}>
-          {won ? "+"+Number(pk.pts).toFixed(1) : lost ? "0.0" : (reveal && upside>0 ? "to win "+upside.toFixed(1) : "—")}
+        <div style={{fontSize:voided?11:14,fontWeight:900,marginTop:2,color:voided?"#FF9F0A":won?IOS.green:lost?"rgba(255,255,255,0.3)":IOS.blue}}>
+          {voided ? "VOIDED · 0.0" : won ? "+"+Number(pk.pts).toFixed(1) : lost ? "0.0" : (reveal && upside>0 ? "to win "+upside.toFixed(1) : "—")}
         </div>
+        {reveal && pk.replacedFrom && (
+          <div style={{marginTop:5}}>
+            <div onClick={(e)=>{ e.stopPropagation(); setOpenVoid(o=>({...o,[_vk]:!o[_vk]})); }} style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:8.5,fontWeight:800,letterSpacing:"0.04em",color:"#FF9F0A",background:"rgba(255,159,10,0.12)",border:"0.5px solid rgba(255,159,10,0.3)",borderRadius:5,padding:"2px 6px",cursor:"pointer"}}>
+              {_drawerOpen ? "⟲ REPLACED" : "⟲ REPLACED · view original"}
+            </div>
+            {_drawerOpen && (
+              <div style={{marginTop:6,padding:"6px 9px",background:"rgba(255,159,10,0.05)",borderLeft:right?"none":"2px solid rgba(255,159,10,0.45)",borderRight:right?"2px solid rgba(255,159,10,0.45)":"none",borderRadius:6}}>
+                <div style={{fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.42)",textDecoration:"line-through",textDecorationColor:"rgba(255,69,58,0.7)"}}>{pk.replacedFrom.name}</div>
+                <div style={{fontSize:8.5,fontWeight:700,color:"#FF9F0A",marginTop:2,letterSpacing:"0.03em"}}>{"VOIDED"+(pk.replacedFrom.date?" · "+_vdate(pk.replacedFrom.date):"")}</div>
+              </div>
+            )}
+          </div>
+        )}
         {/* The score chip — live or final — and the tap target into the gamecast. The
             rebuild dropped this; without it there is no way from a slip to a game. */}
         {reveal && pk.game && (() => {
@@ -6198,10 +6216,18 @@ function App() {
  const openBracketMatch = async (mu, labelOverride) => {
  try {
  const u1=mu.user1_id, u2=mu.user2_id; if(!u1||!u2) return;
- const { data } = await supabase.from("picks").select("user_id,slot,pick_name,odds,implied_odds,multiplier,result,points_earned,game_date,game,home_score,away_score").eq("league_id",activeLeague.id).eq("week",mu.week).in("user_id",[u1,u2]);
+ const { data } = await supabase.from("picks").select("id,replaced_by,user_id,slot,pick_name,odds,implied_odds,multiplier,result,points_earned,game_date,game,home_score,away_score").eq("league_id",activeLeague.id).eq("week",mu.week).in("user_id",[u1,u2]);
  const rows = data||[];
  const build = (id, storedPts) => {
- const ps = rows.filter(r=>r.user_id===id && r.result!=="P").map(r=>({ slot:(r.slot||"").split("_")[0], slotId:r.slot||"", multiplier:r.multiplier, implied_odds:r.implied_odds, points_earned:r.points_earned, name:r.pick_name||"Pick", game:r.game||"", sub:(r.multiplier?r.multiplier+"x":"")+(r.odds!=null&&r.odds!==""?" · "+r.odds:""), res:r.result==="W"?"W":(r.result==="L"?"L":"pend"), pts:parseFloat(r.points_earned||0), locked:!!(r.result==="W"||r.result==="L"||(r.game_date&&new Date(r.game_date).getTime()<=Date.now())), result:r.result||null, game_date:r.game_date||null, home_score:(r.home_score!=null?r.home_score:null), away_score:(r.away_score!=null?r.away_score:null), pick_name:r.pick_name||"", odds:r.odds }));
+ const mine = rows.filter(r=>r.user_id===id);
+ const mapPick = (r)=>({ slot:(r.slot||"").split("_")[0], slotId:r.slot||"", multiplier:r.multiplier, implied_odds:r.implied_odds, points_earned:r.points_earned, name:r.pick_name||"Pick", game:r.game||"", sub:(r.multiplier?r.multiplier+"x":"")+(r.odds!=null&&r.odds!==""?" · "+r.odds:""), res:r.result==="W"?"W":(r.result==="L"?"L":"pend"), pts:parseFloat(r.points_earned||0), locked:!!(r.result==="W"||r.result==="L"||r.result==="P"||(r.game_date&&new Date(r.game_date).getTime()<=Date.now())), result:r.result||null, game_date:r.game_date||null, home_score:(r.home_score!=null?r.home_score:null), away_score:(r.away_score!=null?r.away_score:null), pick_name:r.pick_name||"", odds:r.odds });
+ // Pair each voided pick with its replacement so the UI can show the crossed-out
+ // original in a drawer under the replacement. Unreplaced voids stay as their own
+ // entries (crossed out inline) so an empty-scoring slot explains itself.
+ const voidByReplacement = {};
+ mine.filter(r=>r.result==="P" && r.replaced_by).forEach(r=>{ voidByReplacement[r.replaced_by] = r; });
+ const ps = mine.filter(r=>r.result!=="P").map(r=>{ const o = mapPick(r); const v = voidByReplacement[r.id]; if(v) o.replacedFrom = { name: v.pick_name||"Pick", game: v.game||"", date: v.game_date||null }; return o; });
+ mine.filter(r=>r.result==="P" && !r.replaced_by).forEach(r=>{ const o = mapPick(r); o.voidedUnreplaced = true; ps.push(o); });
  const computed = ps.reduce((a,pk)=>a+(pk.res==="W"?pk.pts:0),0);
  const mem = leagueMembers.find(x=>x.userId===id);
  return { name: mem?mem.name:"Player", you:id===(user&&user.id), total:(mu.winner_id!=null && storedPts!=null)?Number(storedPts):computed, picks:ps };
@@ -6216,10 +6242,18 @@ function App() {
      const ms = (list||[]).filter(m=>m && m.user1_id && m.user2_id);
      if(!ms.length) return;
      const ids = [...new Set(ms.flatMap(m=>[m.user1_id,m.user2_id]))];
-     const { data } = await supabase.from("picks").select("user_id,slot,pick_name,odds,implied_odds,multiplier,result,points_earned,game_date,game,home_score,away_score").eq("league_id",activeLeague.id).eq("week",week).in("user_id",ids);
+     const { data } = await supabase.from("picks").select("id,replaced_by,user_id,slot,pick_name,odds,implied_odds,multiplier,result,points_earned,game_date,game,home_score,away_score").eq("league_id",activeLeague.id).eq("week",week).in("user_id",ids);
      const rows = data||[];
      const build = (id, storedPts, winnerId) => {
-       const ps = rows.filter(r=>r.user_id===id && r.result!=="P").map(r=>({ slot:(r.slot||"").split("_")[0], slotId:r.slot||"", multiplier:r.multiplier, implied_odds:r.implied_odds, points_earned:r.points_earned, name:r.pick_name||"Pick", game:r.game||"", sub:(r.multiplier?r.multiplier+"x":"")+(r.odds!=null&&r.odds!==""?" · "+r.odds:""), res:r.result==="W"?"W":(r.result==="L"?"L":"pend"), pts:parseFloat(r.points_earned||0), locked:!!(r.result==="W"||r.result==="L"||(r.game_date&&new Date(r.game_date).getTime()<=Date.now())), result:r.result||null, game_date:r.game_date||null, home_score:(r.home_score!=null?r.home_score:null), away_score:(r.away_score!=null?r.away_score:null), pick_name:r.pick_name||"", odds:r.odds }));
+       const mine = rows.filter(r=>r.user_id===id);
+ const mapPick = (r)=>({ slot:(r.slot||"").split("_")[0], slotId:r.slot||"", multiplier:r.multiplier, implied_odds:r.implied_odds, points_earned:r.points_earned, name:r.pick_name||"Pick", game:r.game||"", sub:(r.multiplier?r.multiplier+"x":"")+(r.odds!=null&&r.odds!==""?" · "+r.odds:""), res:r.result==="W"?"W":(r.result==="L"?"L":"pend"), pts:parseFloat(r.points_earned||0), locked:!!(r.result==="W"||r.result==="L"||r.result==="P"||(r.game_date&&new Date(r.game_date).getTime()<=Date.now())), result:r.result||null, game_date:r.game_date||null, home_score:(r.home_score!=null?r.home_score:null), away_score:(r.away_score!=null?r.away_score:null), pick_name:r.pick_name||"", odds:r.odds });
+ // Pair each voided pick with its replacement so the UI can show the crossed-out
+ // original in a drawer under the replacement. Unreplaced voids stay as their own
+ // entries (crossed out inline) so an empty-scoring slot explains itself.
+ const voidByReplacement = {};
+ mine.filter(r=>r.result==="P" && r.replaced_by).forEach(r=>{ voidByReplacement[r.replaced_by] = r; });
+ const ps = mine.filter(r=>r.result!=="P").map(r=>{ const o = mapPick(r); const v = voidByReplacement[r.id]; if(v) o.replacedFrom = { name: v.pick_name||"Pick", game: v.game||"", date: v.game_date||null }; return o; });
+ mine.filter(r=>r.result==="P" && !r.replaced_by).forEach(r=>{ const o = mapPick(r); o.voidedUnreplaced = true; ps.push(o); });
        const computed = ps.reduce((a,pk)=>a+(pk.res==="W"?pk.pts:0),0);
        const mem = leagueMembers.find(x=>x.userId===id);
        return { name: mem?mem.name:"Player", you:id===(user&&user.id), total:(winnerId!=null && storedPts!=null)?Number(storedPts):computed, picks:ps };
