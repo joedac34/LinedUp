@@ -3903,7 +3903,12 @@ function App() {
  useEffect(()=>{ if(isSoloMode || !activeLeagueId) return; const _wk=(activeLeague && (activeLeague.current_week||activeLeague.week))||1; const _k=`${activeLeagueId}_wk${_wk}`; if(draftReady.current!==_k) return; const _has=(flexPicks||[]).some(sl=> sl && !sl.committed && (sl.bet || (sl.isParlay && (sl.parlayLegs||[]).length))); try{ if(_has) localStorage.setItem(`linedup_draft_${_k}`, JSON.stringify(flexPicks)); else localStorage.removeItem(`linedup_draft_${_k}`); }catch(e){} }, [flexPicks, activeLeagueId, isSoloMode, activeLeague&&(activeLeague.current_week||activeLeague.week)]);
  const [soloSavedPicks, setSoloSavedPicks] = useState(null);
  const [soloSubmitted, setSoloSubmitted] = useState(false);
- const [isPro, setIsPro] = useState(()=>{ try { return localStorage.getItem("picklock_is_pro")==="true"; } catch(e){ return false; } });
+ // In the native (App Store) build every tester gets Pro for free: Apple requires IAP
+ // (not Stripe) for digital goods sold in-app, so the iOS build sells nothing. This is
+ // a client-side display override only — users.is_pro in the DB is still written solely
+ // by the Stripe webhook, and the web/PWA keeps Stripe checkout unchanged.
+ const [isProState, setIsPro] = useState(()=>{ try { return localStorage.getItem("picklock_is_pro")==="true"; } catch(e){ return false; } });
+ const isPro = IS_NATIVE || isProState;
  const [showPaywall, setShowPaywall] = useState(null);
  const [altSheet, setAltSheet] = useState(null);
  const [checkoutLoading, setCheckoutLoading] = useState(null);
@@ -5022,7 +5027,7 @@ function App() {
  const weekCap = leagueMaxWeeks(new Date(), _lgSportsSel, newLeagueSlots, 18);
  useEffect(()=>{ if(weekCap.max>0 && newLeagueWeeks>weekCap.max) setNewLeagueWeeks(weekCap.max); }, [weekCap.max]);
  const leaguePrice = (weeks, slots) => { const raw = 2*(Number(weeks)||0) + 1*(Number(slots)||0); return Math.max(10, Math.min(50, Math.floor(raw/5)*5)); };
- const startLeagueCheckout = async (leagueId) => { try { const r = await fetch(API_BASE+"/api/checkout",{method:"POST",headers:await authHeaders(),body:JSON.stringify({plan:"league",leagueId})}); const d = await r.json(); if(r.ok && d.url){ window.location.href=d.url; return; } alert("Couldn't start checkout: "+((d&&d.error)||"unknown")); } catch(e){ alert("Checkout failed."); } };
+ const startLeagueCheckout = async (leagueId) => { if(IS_NATIVE) return; try { const r = await fetch(API_BASE+"/api/checkout",{method:"POST",headers:await authHeaders(),body:JSON.stringify({plan:"league",leagueId})}); const d = await r.json(); if(r.ok && d.url){ window.location.href=d.url; return; } alert("Couldn't start checkout: "+((d&&d.error)||"unknown")); } catch(e){ alert("Checkout failed."); } };
  const openBillingPortal = async () => { try { const r = await fetch(API_BASE+"/api/portal",{method:"POST",headers:await authHeaders()}); const d = await r.json(); if(r.ok && d.url){ window.location.href=d.url; return; } alert((d&&d.error==="no active subscription to manage") ? "No active subscription to manage." : ("Couldn't open billing: "+((d&&d.error)||"unknown"))); } catch(e){ alert("Couldn't open billing."); } };
  const createLeague = async (name, sportId) => {
  if(!user||!name||!sportId) return;
@@ -5855,6 +5860,7 @@ function App() {
  // is_pro is written ONLY by the Stripe webhook (server-side). Never from the client.
  };
  const startCheckout = async (plan) => {
+ if(IS_NATIVE){ setShowPaywall(null); return; } // no purchases in the App Store build
  if(!user || !user.id){ setShowPaywall(null); setScreen("auth"); return; }
  try {
  setCheckoutLoading(plan);
@@ -15012,7 +15018,7 @@ function App() {
  {/* Sign Out + Delete Account */}
  <div style={{padding:"8px 16px 32px",display:"flex",flexDirection:"column",gap:10}}>
  <button onClick={async()=>{ if(userProfile&&userProfile.push_enabled){ await disablePush(); } else { await subscribeToPush(); } }} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.14)",borderRadius:12,padding:"14px",fontSize:15,fontWeight:600,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}><span>Push notifications</span><span style={{fontSize:13,fontWeight:700,color:(userProfile&&userProfile.push_enabled)?IOS.green:IOS.label3}}>{(userProfile&&userProfile.push_enabled)?"On":"Off"}</span></button>
- {isPro?(<button onClick={openBillingPortal} style={{width:"100%",background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.14)",borderRadius:12,padding:"14px",fontSize:15,fontWeight:600,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Manage subscription</button>):null}
+ {(isPro&&!IS_NATIVE)?(<button onClick={openBillingPortal} style={{width:"100%",background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.14)",borderRadius:12,padding:"14px",fontSize:15,fontWeight:600,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Manage subscription</button>):null}
  <button onClick={async()=>{
  await supabase.auth.signOut();
  setUser(null);
@@ -15605,7 +15611,7 @@ function App() {
  )}
 
  {/* ══ PAYWALL SHEET ══ */}
- {showPaywall && (()=>{
+ {!IS_NATIVE && showPaywall && (()=>{
    const configs = {
      ai:{icon:"star",title:"Unlock Plok + Pro",sub:"Plok is your AI betting analyst — data-backed reads on every game and prop, a +EV bet finder, and unlimited insights.",features:["Plok AI analyst on every bet & prop","+EV bet finder","Recent form, splits, matchup & injuries","Multi-sport leagues & custom settings"]},
      picks:{icon:"ti-plus",title:"Unlimited picks",sub:"Commish Pro lets you add as many pick slots as you want each week.",features:["Unlimited pick slots per week","Custom multipliers on any slot","NFL, NBA, MLB, NHL","Power-ups and custom bet types"]},
@@ -15657,7 +15663,7 @@ function App() {
  })()}
 
  {/* ══ POST LEAGUE UPSELL ══ */}
- {showLeaguePaywall && (
+ {!IS_NATIVE && showLeaguePaywall && (
    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:9999,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>setShowLeaguePaywall(null)}>
      <div style={{background:"#0d0d12",borderRadius:"20px 20px 0 0",padding:"0 18px calc(env(safe-area-inset-bottom) + 24px)",border:"0.5px solid #1E1E1E"}} onClick={e=>e.stopPropagation()}>
        <div style={{width:36,height:4,background:"#2A2A2A",borderRadius:2,margin:"12px auto 16px"}}/>
@@ -15677,7 +15683,7 @@ function App() {
      </div>
    </div>
  )}
- {showPostLeagueUpsell && (
+ {!IS_NATIVE && showPostLeagueUpsell && (
    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:9999,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>setShowPostLeagueUpsell(false)}>
      <div style={{background:"#111",borderRadius:"20px 20px 0 0",padding:"0 0 40px",border:"0.5px solid #1E1E1E"}} onClick={e=>e.stopPropagation()}>
        <div style={{width:36,height:4,background:"#2A2A2A",borderRadius:2,margin:"12px auto 20px"}}/>
