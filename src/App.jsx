@@ -11701,7 +11701,13 @@ function App() {
  const _sRegWeeks = regularSeasonWeeksFor(activeLeague, _sTotal);
  const _sCurWk = activeLeague.current_week||activeLeague.week||1;
  const _sMe = (realStandings||[]).find(s=>s.isYou);
- if(matchupView==="mine" && _sPlayoffN>=2 && _sCurWk>_sRegWeeks && _sMe && _sMe.rank>_sPlayoffN){
+ // Eliminated = playoffs are running and you are in none of this week's matchups.
+ // Asking the bracket directly (instead of inferring from standings rank) also covers
+ // a member removed from the bracket by hand while still ranked inside the cut.
+ // _sWkMs.length>0 guards the load: no rows yet means "unknown", not "eliminated".
+ const _sWkMs = (allMatchups||[]).filter(m=>m.week===_sCurWk);
+ const _sInBracket = _sWkMs.some(m=>m.user1_id===(user&&user.id) || m.user2_id===(user&&user.id));
+ if(matchupView==="mine" && _sPlayoffN>=2 && _sCurWk>_sRegWeeks && _sMe && _sWkMs.length>0 && !_sInBracket){
    const _pw=_sMe.wins||0, _pl=_sMe.losses||0; const _hit=(_pw+_pl)>0?Math.round(_pw/(_pw+_pl)*100):null;
    const _topScorer=[...(realStandings||[])].sort((a,b)=>b.points-a.points)[0];
    const _leader=(realStandings||[])[0];
@@ -11716,7 +11722,7 @@ function App() {
          <div style={{fontSize:11,fontWeight:900,letterSpacing:"0.16em",color:"rgba(255,255,255,0.38)",textTransform:"uppercase"}}>Regular season · Final</div>
          <div style={{fontSize:30,fontWeight:900,letterSpacing:"-1px",color:"#fff",marginTop:4}}>{_ord(_sMe.rank)} <span style={{fontSize:18,color:"rgba(255,255,255,0.38)"}}>of {_sTotal}</span></div>
          <div style={{fontSize:13,color:IOS.label2,fontWeight:600,marginTop:4}}>{activeLeague.name}</div>
-         <div style={{display:"inline-block",marginTop:11,fontSize:10,fontWeight:800,letterSpacing:"0.05em",color:"#FF9F0A",background:"rgba(255,159,10,0.12)",border:"0.5px solid rgba(255,159,10,0.3)",borderRadius:6,padding:"4px 10px"}}>MISSED PLAYOFFS · TOP {_sPlayoffN} ADVANCED</div>
+         <div style={{display:"inline-block",marginTop:11,fontSize:10,fontWeight:800,letterSpacing:"0.05em",color:"#FF9F0A",background:"rgba(255,159,10,0.12)",border:"0.5px solid rgba(255,159,10,0.3)",borderRadius:6,padding:"4px 10px"}}>{_sMe.rank<=_sPlayoffN ? "NOT IN THE BRACKET" : "MISSED PLAYOFFS \u00b7 TOP "+_sPlayoffN+" ADVANCED"}</div>
        </div>
        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9,marginTop:18}}>
          <div style={_tile}><div style={_tv}>{_sMe.record}</div><div style={_tk}>Final Record</div></div>
