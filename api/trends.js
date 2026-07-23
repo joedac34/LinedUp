@@ -606,22 +606,29 @@ export default async function handler(req, res) {
       logSeason, staleSeason: stale,
       // Ten-cell strip data for the redesigned card (approved mockup 21 Jul 2026).
       strips: (() => {
+        // Each branch is guarded on its own: a failure building the spread strip must not
+        // silently erase the total strip (that bug shipped once — `aName` was out of scope
+        // here, it threw, and the whole card fell back to plain bullets for a day).
+        const st = {};
         try {
-          const st = {};
           if (lines.total != null) {
             const aTs = totalSplit(aLog, lines.total), hTs = totalSplit(hLog, lines.total);
             if (aTs || hTs) st.total = { line: lines.total,
               away: aTs ? { ab: aAbbr, cells: aTs.cells, o: aTs.all.o, n: aTs.all.n, avg: aTs.avgTotal } : null,
               home: hTs ? { ab: hAbbr, cells: hTs.cells, o: hTs.all.o, n: hTs.all.n, avg: hTs.avgTotal } : null };
           }
+        } catch (e) { /* total strip unavailable */ }
+        try {
           const sp0 = (lines.spreads || [])[0];
           if (sp0) {
-            const isA = teamish(sp0.team, aName, aAbbr);
+            // `away`/`home` are the full team names in this scope (parseTeams above);
+            // trendBullets receives them as its aName/hName parameters.
+            const isA = teamish(sp0.team, away, aAbbr);
             const ss = spreadSplit(isA ? aLog : hLog, sp0.point);
             if (ss) st.spread = { team: isA ? aAbbr : hAbbr, point: sp0.point, cells: ss.cells, c: ss.all.c, n: ss.all.n, avgMargin: ss.avgMargin };
           }
-          return Object.keys(st).length ? st : null;
-        } catch (e) { return null; }
+        } catch (e) { /* spread strip unavailable */ }
+        return Object.keys(st).length ? st : null;
       })(),
     };
     cacheSet(key, out);
