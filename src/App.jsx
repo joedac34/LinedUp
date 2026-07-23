@@ -4741,7 +4741,7 @@ function App() {
     const item = { role:"ai", label, bet:null, category:null, loading:true };
     setAiThread(prev=>[...prev, { role:"user", text:`${_m.name} — ${g.game}` }, item]);
     setAiBusy(true);
-    authHeaders().then(_h=>fetch(plokModel==="trends"?"/api/trends":"/api/findbet", { method:"POST", headers:_h, body: JSON.stringify({ sport:g.sport, game:g.game, userId:user?.id, model:plokModel, lines:g.lines||null }) }))
+    authHeaders().then(_h=>fetch(API_BASE+(plokModel==="trends"?"/api/trends":"/api/findbet"), { method:"POST", headers:_h, body: JSON.stringify({ sport:g.sport, game:g.game, userId:user?.id, model:plokModel, lines:g.lines||null }) }))
       .then(async r=>{ const data=await r.json(); setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, data:r.ok?data:null, error:r.ok?null:(data.error||"Couldn't screen this game")} : x)); })
       .catch(()=> setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, error:"Network error — try again"} : x)))
       .finally(()=> setAiBusy(false));
