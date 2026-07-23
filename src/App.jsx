@@ -25,6 +25,12 @@ import posthog from 'posthog-js';
 // relative /api/* fetches have no origin server behind them. API_BASE stays ""
 // on the web (zero behavior change) and points at prod inside the wrap.
 const IS_NATIVE = typeof window!=="undefined" && !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+// Capacitor already insets the webview inside the safe area (measured 23 Jul 2026 on a
+// 428x926 device: innerHeight 845 = 926 - 47 top - 34 bottom). Adding env(safe-area-*)
+// padding on top of that double-counts and leaves a dead black band under the status
+// bar. Flag the native build so the CSS vars below resolve to 0 there; the PWA runs
+// edge-to-edge and still needs the real insets, so it is untouched.
+if (IS_NATIVE && typeof document !== "undefined") document.documentElement.classList.add("native-insets");
 const API_BASE = IS_NATIVE ? "https://app.picklockapp.com" : "";
 
 // ─── TEAM ACRONYM HELPER (module scope: shared across components) ───
@@ -3259,7 +3265,7 @@ function GamecastSheet({ game, pick, onClose }){
 
   return (
     <div onClick={onClose} style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.62)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:9200}}>
-      <div onClick={(e)=>e.stopPropagation()} style={{width:"100%",maxWidth:480,background:"#131315",borderRadius:"22px 22px 0 0",maxHeight:"90%",overflowY:"auto",WebkitOverflowScrolling:"touch",paddingBottom:"calc(20px + env(safe-area-inset-bottom,0px))"}}>
+      <div onClick={(e)=>e.stopPropagation()} style={{width:"100%",maxWidth:480,background:"#131315",borderRadius:"22px 22px 0 0",maxHeight:"90%",overflowY:"auto",WebkitOverflowScrolling:"touch",paddingBottom:"calc(20px + var(--sa-bot))"}}>
         {/* ── scoreboard: crests + team-color hero, per the mockup ── */}
         {(()=>{
           const aLogo = teamLogo(game.sport||"mlb", game.away.name);
@@ -6685,15 +6691,17 @@ function App() {
  const css=`
  @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&display=swap');
  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+ :root{--sa-top:env(safe-area-inset-top,0px);--sa-bot:env(safe-area-inset-bottom,0px);}
+ html.native-insets{--sa-top:0px;--sa-bot:0px;}
  ::-webkit-scrollbar{display:none;}
 
- html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;position:fixed;width:100%;top:0;left:0;background:#000;} #root{height:100%;overflow:hidden;background:#000;} .phone{width:100%;max-width:480px;margin:0 auto;height:100vh;height:100dvh;max-height:100dvh;background:#000;position:relative;overflow:hidden;display:flex;flex-direction:column;font-family:'Barlow',system-ui,-apple-system,sans-serif;color:#fff;-webkit-font-smoothing:antialiased;padding-top:env(safe-area-inset-top,0px);box-sizing:border-box;}
+ html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;position:fixed;width:100%;top:0;left:0;background:#000;} #root{height:100%;overflow:hidden;background:#000;} .phone{width:100%;max-width:480px;margin:0 auto;height:100vh;height:100dvh;max-height:100dvh;background:#000;position:relative;overflow:hidden;display:flex;flex-direction:column;font-family:'Barlow',system-ui,-apple-system,sans-serif;color:#fff;-webkit-font-smoothing:antialiased;padding-top:var(--sa-top);box-sizing:border-box;}
 
  /* iOS Status Bar */
 
 
  /* Large Title Navigation (iOS style) */
- .nav-header{padding:env(safe-area-inset-top,44px) 20px 12px;position:relative;z-index:5;background:#000;}
+ .nav-header{padding:var(--sa-top) 20px 12px;position:relative;z-index:5;background:#000;}
  .nav-header.large{padding-bottom:8px;}
  .nav-title-small{font-size:17px;font-weight:600;letter-spacing:-0.4px;color:#fff;text-align:center;padding:12px 0 8px;}
  .nav-title-large{font-size:34px;font-weight:700;letter-spacing:-0.5px;color:#fff;line-height:1.35;padding:1px 0;}
@@ -6748,7 +6756,7 @@ function App() {
 
  /* Scrollable body */
  .body{flex:1;min-height:0;overflow-y:auto;position:relative;z-index:1;padding-top:0;overscroll-behavior:contain;}
- .body-pad{padding-bottom:calc(100px + env(safe-area-inset-bottom,0px));}
+ .body-pad{padding-bottom:calc(100px + var(--sa-bot));}
  .app-header{flex-shrink:0;z-index:25;position:relative;display:flex;align-items:center;gap:8px;height:52px;padding:0 14px;background:linear-gradient(180deg,#10101a 0%,#0b0b0e 100%);border-bottom:0.5px solid rgba(255,255,255,0.08);box-shadow:0 6px 18px rgba(0,0,0,0.45);}
  .gh-left{display:flex;align-items:center;min-width:0;flex-shrink:0;}
  .gh-center{flex:1;min-width:0;}
@@ -6761,7 +6769,7 @@ function App() {
  .gh-badge{position:absolute;top:-3px;right:-3px;min-width:16px;height:16px;border-radius:8px;background:${IOS.pink};color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 4px;border:1.5px solid #0b0b0e;}
  .gh-avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,${IOS.blue},${IOS.indigo});display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;cursor:pointer;color:#fff;}
  .gh-sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9000;display:flex;flex-direction:column;justify-content:flex-end;}
- .gh-sheet{background:#0c0c10;border-top-left-radius:22px;border-top-right-radius:22px;border-top:0.5px solid rgba(255,255,255,0.09);padding:0 0 calc(14px + env(safe-area-inset-bottom,0px));max-height:75vh;overflow-y:auto;}
+ .gh-sheet{background:#0c0c10;border-top-left-radius:22px;border-top-right-radius:22px;border-top:0.5px solid rgba(255,255,255,0.09);padding:0 0 calc(14px + var(--sa-bot));max-height:75vh;overflow-y:auto;}
  .gh-grip{width:38px;height:4px;border-radius:2px;background:rgba(255,255,255,0.2);margin:10px auto 6px;}
  .gh-sheet-h{font-size:12px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:rgba(255,255,255,0.4);padding:8px 20px 6px;}
  .gh-opt{display:flex;align-items:center;gap:12px;padding:13px 20px;cursor:pointer;}
@@ -6979,8 +6987,8 @@ function App() {
  .brk-cup .lab{font-size:9.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#FFD60A;margin-top:8px;}
  .brk-cup .cn{font-size:16px;font-weight:900;margin-top:5px;}
  .brk-cup .cn.tbd{color:rgba(255,255,255,.4);font-style:italic;}
- .bmd-bg{position:fixed;inset:0;z-index:9600;background:rgba(2,3,8,.72);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);display:flex;align-items:flex-end;justify-content:center;padding-top:max(92px, calc(env(safe-area-inset-top, 0px) + 18px));box-sizing:border-box;}
- .bmd{width:390px;max-width:100vw;height:100%;max-height:100%;background:#111;border-radius:22px 22px 0 0;border:1px solid rgba(255,255,255,.1);animation:bmdUp .26s cubic-bezier(.2,.8,.2,1);box-sizing:border-box;padding-bottom:calc(env(safe-area-inset-bottom, 0px) + 76px);}
+ .bmd-bg{position:fixed;inset:0;z-index:9600;background:rgba(2,3,8,.72);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);display:flex;align-items:flex-end;justify-content:center;padding-top:max(92px, calc(var(--sa-top) + 18px));box-sizing:border-box;}
+ .bmd{width:390px;max-width:100vw;height:100%;max-height:100%;background:#111;border-radius:22px 22px 0 0;border:1px solid rgba(255,255,255,.1);animation:bmdUp .26s cubic-bezier(.2,.8,.2,1);box-sizing:border-box;padding-bottom:calc(var(--sa-bot) + 76px);}
  .bmd-flex{display:flex;flex-direction:column;overflow:hidden;}
  .bmd-pager{flex:1;min-height:0;display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;scrollbar-width:none;}
  .bmd-pager::-webkit-scrollbar{display:none;}
@@ -7314,7 +7322,7 @@ function App() {
  @keyframes champGlow{0%,100%{box-shadow:0 4px 22px rgba(255,193,7,0.18);}50%{box-shadow:0 4px 30px rgba(255,193,7,0.34);}}
 
  /* iOS Tab Bar */
- .tab-bar{flex-shrink:0;background:rgba(28,28,30,0.92);backdrop-filter:blur(20px) saturate(180%);border-top:0.5px solid rgba(255,255,255,0.08);display:flex;padding:8px 0;padding-bottom:calc(8px + env(safe-area-inset-bottom,0px));position:sticky;bottom:0;z-index:20;}
+ .tab-bar{flex-shrink:0;background:rgba(28,28,30,0.92);backdrop-filter:blur(20px) saturate(180%);border-top:0.5px solid rgba(255,255,255,0.08);display:flex;padding:8px 0;padding-bottom:calc(8px + var(--sa-bot));position:sticky;bottom:0;z-index:20;}
  .tab-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:4px 0;transition:opacity .15s;}
  .tab-item:active{opacity:0.6;}
  .tab-icon{font-size:22px;line-height:1;}
@@ -7482,7 +7490,7 @@ function App() {
 
  {/* ══ AUTH SCREEN ══ */}
  {!user && (
- <div style={{position:"relative",width:"100%",maxWidth:480,margin:"0 auto",boxSizing:"border-box",minHeight:"100dvh",overflowY:"auto",overflowX:"hidden",background:"radial-gradient(120% 70% at 50% -10%, rgba(10,132,255,0.18), transparent 55%), radial-gradient(85% 50% at 85% 112%, rgba(94,92,230,0.16), transparent 60%), #07070C",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"calc(env(safe-area-inset-top) + 30px) 28px calc(env(safe-area-inset-bottom) + 30px)",fontFamily:"'Barlow',sans-serif"}}>
+ <div style={{position:"relative",width:"100%",maxWidth:480,margin:"0 auto",boxSizing:"border-box",minHeight:"100dvh",overflowY:"auto",overflowX:"hidden",background:"radial-gradient(120% 70% at 50% -10%, rgba(10,132,255,0.18), transparent 55%), radial-gradient(85% 50% at 85% 112%, rgba(94,92,230,0.16), transparent 60%), #07070C",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"calc(var(--sa-top) + 30px) 28px calc(var(--sa-bot) + 30px)",fontFamily:"'Barlow',sans-serif"}}>
 
  {/* Floating odds chips */}
  <div style={{position:"absolute",inset:0,overflow:"hidden",pointerEvents:"none"}}>
@@ -7565,7 +7573,7 @@ function App() {
  )}
 
  {user && <div className="phone"><div className="app-glow"/><div className="app-grain"/><Confetti show={celebrate}/>
- {isOffline && <div style={{position:"fixed",top:0,left:0,right:0,zIndex:9500,background:"rgba(255,159,10,0.14)",backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",borderBottom:"0.5px solid rgba(255,159,10,0.35)",padding:"calc(env(safe-area-inset-top,0px) + 8px) 16px 8px",display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
+ {isOffline && <div style={{position:"fixed",top:0,left:0,right:0,zIndex:9500,background:"rgba(255,159,10,0.14)",backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",borderBottom:"0.5px solid rgba(255,159,10,0.35)",padding:"calc(var(--sa-top) + 8px) 16px 8px",display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
   <span style={{width:6,height:6,borderRadius:"50%",background:IOS.orange,flexShrink:0}}/>
   <span style={{fontSize:11.5,fontWeight:700,color:IOS.orange}}>You\u2019re offline \u2014 showing what we\u2019ve got. We\u2019ll reconnect automatically.</span>
  </div>}
@@ -7577,7 +7585,7 @@ function App() {
  left:"50%",
  transform:"translateX(-50%)",
  width:390,
- height:"env(safe-area-inset-top, 44px)",
+ height:"var(--sa-top)",
  background:"#000",
  zIndex:999,
  pointerEvents:"none",
@@ -9374,7 +9382,7 @@ function App() {
  </div>
  );
  return (
- <div className="lsx-scroll" style={{position:"absolute",inset:0,zIndex:10,background:"#07070A",overflowY:"auto",WebkitOverflowScrolling:"touch",paddingTop:"calc(env(safe-area-inset-top, 44px) + 52px)",paddingBottom:"calc(env(safe-area-inset-bottom, 0px) + 76px)"}}>
+ <div className="lsx-scroll" style={{position:"absolute",inset:0,zIndex:10,background:"#07070A",overflowY:"auto",WebkitOverflowScrolling:"touch",paddingTop:"calc(var(--sa-top) + 52px)",paddingBottom:"calc(var(--sa-bot) + 76px)"}}>
  <style>{`
  @keyframes lsxRise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
  @keyframes lsxPulse{0%,100%{opacity:1}50%{opacity:.3}}
@@ -10093,7 +10101,7 @@ function App() {
        };
        return (
        <div style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.6)",display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>{ setSoloParlay(null); setSoloParlayMode(false); }}>
-         <div style={{background:"#0d0d12",borderTopLeftRadius:20,borderTopRightRadius:20,border:"0.5px solid rgba(255,255,255,0.1)",padding:"18px 16px calc(env(safe-area-inset-bottom) + 88px)",maxHeight:"82vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
+         <div style={{background:"#0d0d12",borderTopLeftRadius:20,borderTopRightRadius:20,border:"0.5px solid rgba(255,255,255,0.1)",padding:"18px 16px calc(var(--sa-bot) + 88px)",maxHeight:"82vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
            <div style={{width:36,height:4,borderRadius:2,background:"rgba(255,255,255,0.2)",margin:"0 auto 14px"}}/>
            <div style={{textAlign:"center",marginBottom:4}}><span style={{fontSize:20,fontWeight:800,color:IOS.pink}}>New Parlay</span></div>
            <div style={{textAlign:"center",fontSize:12.5,color:IOS.label3,marginBottom:14}}>Add 2 to 6 legs. All must hit to score.</div>
@@ -11441,7 +11449,7 @@ function App() {
  </div>);
  })}
  </div>
- <div onClick={addAltPick} style={{margin:"6px 16px 0",marginBottom:"calc(18px + env(safe-area-inset-bottom,0px))",padding:15,borderRadius:13,background:IOS.blue,color:"#fff",fontSize:15.5,fontWeight:800,textAlign:"center",cursor:"pointer",flexShrink:0}}>Add to slip</div>
+ <div onClick={addAltPick} style={{margin:"6px 16px 0",marginBottom:"calc(18px + var(--sa-bot))",padding:15,borderRadius:13,background:IOS.blue,color:"#fff",fontSize:15.5,fontWeight:800,textAlign:"center",cursor:"pointer",flexShrink:0}}>Add to slip</div>
  </>);
  })() : (
  <div style={{textAlign:"center",color:"rgba(255,255,255,0.4)",fontSize:13,padding:"40px 20px 46px"}}>No alternate lines available for this bet right now.</div>
@@ -11556,7 +11564,7 @@ function App() {
      </div>
      {matchupView==="league" && (
        <div style={{position:"fixed",left:0,right:0,top:0,bottom:0,background:"#000",zIndex:160,display:"flex",flexDirection:"column"}}>
-         <div style={{padding:"calc(env(safe-area-inset-top, 44px) + 56px) 16px 10px",display:"flex",alignItems:"center",borderBottom:`0.5px solid ${IOS.sep}`}}>
+         <div style={{padding:"calc(var(--sa-top) + 56px) 16px 10px",display:"flex",alignItems:"center",borderBottom:`0.5px solid ${IOS.sep}`}}>
            <div onClick={()=>setMatchupView("mine")} style={{cursor:"pointer",display:"flex",alignItems:"center",gap:4,color:IOS.blue,fontSize:15,fontWeight:700,width:120}}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.4"><path d="M15 18l-6-6 6-6"/></svg>My Matchup</div>
            <div style={{flex:1,textAlign:"center",fontSize:16,fontWeight:800}}>League Matchups</div>
            <div style={{width:120}}/>
@@ -14734,7 +14742,7 @@ function App() {
  </div>
  {gifOpen&&(
  <div onClick={()=>setGifOpen(false)} style={{position:"fixed",inset:0,zIndex:40,background:"rgba(0,0,0,0.45)"}}>
- <div onClick={(e)=>e.stopPropagation()} style={{position:"absolute",left:0,right:0,bottom:0,background:"#131318",borderRadius:"20px 20px 0 0",borderTop:"0.5px solid rgba(255,255,255,0.12)",padding:"10px 14px calc(env(safe-area-inset-bottom,0px) + 16px)",maxHeight:"62vh",display:"flex",flexDirection:"column",boxShadow:"0 -14px 40px rgba(0,0,0,0.55)"}}>
+ <div onClick={(e)=>e.stopPropagation()} style={{position:"absolute",left:0,right:0,bottom:0,background:"#131318",borderRadius:"20px 20px 0 0",borderTop:"0.5px solid rgba(255,255,255,0.12)",padding:"10px 14px calc(var(--sa-bot) + 16px)",maxHeight:"62vh",display:"flex",flexDirection:"column",boxShadow:"0 -14px 40px rgba(0,0,0,0.55)"}}>
  <div style={{width:38,height:4,borderRadius:2,background:"rgba(255,255,255,0.22)",margin:"0 auto 12px"}}/>
  <input autoFocus value={gifQ} onChange={e=>onGifQ(e.target.value)} placeholder="Search KLIPY" style={{height:38,borderRadius:12,background:"rgba(255,255,255,0.06)",border:"0.5px solid rgba(255,255,255,0.09)",padding:"0 14px",fontSize:13.5,color:"#fff",outline:"none",fontFamily:"Barlow,sans-serif",marginBottom:12}}/>
  <div style={{flex:1,overflowY:"auto"}}>
@@ -15413,7 +15421,7 @@ function App() {
    </div>
 
    {/* Footer CTA */}
-   <div style={{padding:"16px 16px calc(20px + env(safe-area-inset-bottom))"}}>
+   <div style={{padding:"16px 16px calc(20px + var(--sa-bot))"}}>
    <div onClick={()=>{ setGameSheet(null); setScreen("picks"); }} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"linear-gradient(135deg,"+IOS.blue+",#5e5ce6)",borderRadius:14,padding:14,fontWeight:800,fontSize:15,color:"#fff",cursor:"pointer",boxShadow:"0 10px 26px -8px rgba(10,132,255,0.6)"}}>
    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg> Add a pick from this game
    </div>
@@ -15749,7 +15757,7 @@ function App() {
  {/* ══ POST LEAGUE UPSELL ══ */}
  {!IS_NATIVE && showLeaguePaywall && (
    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:9999,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>setShowLeaguePaywall(null)}>
-     <div style={{background:"#0d0d12",borderRadius:"20px 20px 0 0",padding:"0 18px calc(env(safe-area-inset-bottom) + 24px)",border:"0.5px solid #1E1E1E"}} onClick={e=>e.stopPropagation()}>
+     <div style={{background:"#0d0d12",borderRadius:"20px 20px 0 0",padding:"0 18px calc(var(--sa-bot) + 24px)",border:"0.5px solid #1E1E1E"}} onClick={e=>e.stopPropagation()}>
        <div style={{width:36,height:4,background:"#2A2A2A",borderRadius:2,margin:"12px auto 16px"}}/>
        <div style={{fontSize:21,fontWeight:800,textAlign:"center",letterSpacing:-0.4,color:"#fff"}}>Unlock your league</div>
        <div style={{fontSize:12.5,color:IOS.label3,textAlign:"center",margin:"3px 0 16px"}}>Your custom league is ready. Choose how to unlock it:</div>
@@ -16226,4 +16234,4 @@ function CrashScreen(){ return (
   <button onClick={()=>{ try{ window.location.reload(); }catch(e){} }} style={{marginTop:7,background:"#0A84FF",border:"none",color:"#fff",borderRadius:12,padding:"13px 32px",fontSize:15,fontWeight:800,fontFamily:"Barlow,sans-serif",cursor:"pointer"}}>Reload PickLock</button>
  </div>
 ); }
-export default function AppRoot(){ return (<ErrorBoundary kind="app-root" fallback={<CrashScreen/>}><App/></ErrorBoundary>); }
+export default function AppRoot(){ return (<ErrorBoundary kind="app-root" fallback={<CrashScreen/>}><App/></ErrorBoundary>); }s
