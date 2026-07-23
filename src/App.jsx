@@ -11694,6 +11694,50 @@ function App() {
  );
 
  // Get my picks and opponent's picks from weekPicks — use schedule to find correct opponent
+ // Season over for this member: playoffs on, regular season done, finished outside the
+ // playoff field. Replace the (now dead) pick builder with a recap + a way forward.
+ const _sTotal = (realStandings&&realStandings.length) || leagueMembers.length || (activeLeague.target_size||activeLeague.max_members||8);
+ const _sPlayoffN = playoffFieldFor(activeLeague, _sTotal);
+ const _sRegWeeks = regularSeasonWeeksFor(activeLeague, _sTotal);
+ const _sCurWk = activeLeague.current_week||activeLeague.week||1;
+ const _sMe = (realStandings||[]).find(s=>s.isYou);
+ if(matchupView==="mine" && _sPlayoffN>=2 && _sCurWk>_sRegWeeks && _sMe && _sMe.rank>_sPlayoffN){
+   const _pw=_sMe.wins||0, _pl=_sMe.losses||0; const _hit=(_pw+_pl)>0?Math.round(_pw/(_pw+_pl)*100):null;
+   const _topScorer=[...(realStandings||[])].sort((a,b)=>b.points-a.points)[0];
+   const _leader=(realStandings||[])[0];
+   const _ord=(n)=>{ const _e=["th","st","nd","rd"],_v=n%100; return n+(_e[(_v-20)%10]||_e[_v]||_e[0]); };
+   const _tile={background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:13,padding:"13px 14px"};
+   const _tv={fontSize:22,fontWeight:900,letterSpacing:"-0.5px"};
+   const _tk={fontSize:10,fontWeight:800,letterSpacing:"0.05em",color:"rgba(255,255,255,0.38)",textTransform:"uppercase",marginTop:2};
+   return (
+     <div className="body" style={{padding:"18px 16px 26px"}}>
+       <div style={{textAlign:"center",padding:"10px 0 4px"}}>
+         <div style={{width:66,height:66,borderRadius:"50%",margin:"0 auto 12px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,fontWeight:900,background:"radial-gradient(circle at 50% 35%, #2a2a32, #17171d)",border:"1.5px solid rgba(255,255,255,0.1)",color:"rgba(255,255,255,0.6)"}}>{_sMe.rank}</div>
+         <div style={{fontSize:11,fontWeight:900,letterSpacing:"0.16em",color:"rgba(255,255,255,0.38)",textTransform:"uppercase"}}>Regular season · Final</div>
+         <div style={{fontSize:30,fontWeight:900,letterSpacing:"-1px",color:"#fff",marginTop:4}}>{_ord(_sMe.rank)} <span style={{fontSize:18,color:"rgba(255,255,255,0.38)"}}>of {_sTotal}</span></div>
+         <div style={{fontSize:13,color:IOS.label2,fontWeight:600,marginTop:4}}>{activeLeague.name}</div>
+         <div style={{display:"inline-block",marginTop:11,fontSize:10,fontWeight:800,letterSpacing:"0.05em",color:"#FF9F0A",background:"rgba(255,159,10,0.12)",border:"0.5px solid rgba(255,159,10,0.3)",borderRadius:6,padding:"4px 10px"}}>MISSED PLAYOFFS · TOP {_sPlayoffN} ADVANCED</div>
+       </div>
+       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9,marginTop:18}}>
+         <div style={_tile}><div style={_tv}>{_sMe.record}</div><div style={_tk}>Final Record</div></div>
+         <div style={_tile}><div style={{..._tv,color:IOS.blue}}>{_sMe.points}</div><div style={_tk}>Total Points</div></div>
+         {_hit!=null && (<div style={_tile}><div style={{..._tv,color:IOS.green}}>{_hit}%</div><div style={_tk}>Pick Hit Rate</div></div>)}
+         <div style={_tile}><div style={{..._tv,color:"#FF9F0A"}}>{_pw+_pl}</div><div style={_tk}>Picks Graded</div></div>
+       </div>
+       {(_leader||_topScorer) && (
+         <div style={{marginTop:9,background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:13,padding:"12px 14px",display:"flex",flexDirection:"column",gap:9}}>
+           {_leader && (<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:12.5}}><span style={{color:IOS.label2,fontWeight:600}}>Top seed</span><span style={{fontWeight:800}}>{_leader.isYou?"You":_leader.name} · {_leader.record}</span></div>)}
+           {_topScorer && (<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:12.5}}><span style={{color:IOS.label2,fontWeight:600}}>Most points</span><span style={{fontWeight:800,color:IOS.green}}>{_topScorer.isYou?"You":_topScorer.name} · {_topScorer.points}</span></div>)}
+         </div>
+       )}
+       <div style={{marginTop:20,display:"flex",flexDirection:"column",gap:10}}>
+         <div onClick={()=>setScreen("leagues")} style={{padding:15,borderRadius:14,fontSize:15,fontWeight:800,textAlign:"center",background:"linear-gradient(90deg,#0A84FF,#4aa3ff)",color:"#fff",cursor:"pointer"}}>+ Start a new league</div>
+         <div onClick={()=>setScreen("leagues")} style={{padding:15,borderRadius:14,fontSize:15,fontWeight:800,textAlign:"center",background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.14)",color:IOS.blue,cursor:"pointer"}}>Join a league with a code</div>
+       </div>
+       <div onClick={()=>{ setMatchupView("league"); setMWeek(mWeek||(activeLeague.current_week||1)); }} style={{marginTop:14,textAlign:"center",fontSize:12.5,color:IOS.label3,fontWeight:600,cursor:"pointer"}}>Playoffs are live. Tap to watch the bracket {"→"}</div>
+     </div>
+   );
+ }
  const myPicks = weekPicks.filter(p=>p.user_id===user?.id);
  const currentWeekNum = activeLeague.current_week||activeLeague.week||1;
  const currentOpp = liveSchedule.find(w=>w.week===currentWeekNum)?.opp || "Opponent";
