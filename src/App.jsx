@@ -1853,6 +1853,18 @@ function ChampCelebrate({ name, leagueName, isYou, members, record, points, runn
 }
 const BETSLIP_ENABLED = false; // flip on once affiliate + compliance (21+, geo, RG) are ready
 function betslipAllowedHere(){ return true; } // TODO: geo-gate to legal states + 21+ age check
+function CountUp({ value, decimals = 1, ms = 900 }) {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    const target = Number(value) || 0;
+    if (typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches) { setN(target); return; }
+    let raf; const t0 = performance.now();
+    const tick = (t) => { const p = Math.min(1, (t - t0) / ms); setN(target * (1 - Math.pow(1 - p, 3))); if (p < 1) raf = requestAnimationFrame(tick); };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value, ms]);
+  return <span style={{fontVariantNumeric:"tabular-nums"}}>{n.toFixed(decimals)}</span>;
+}
 function BetslipButton({ bet, IOS }){
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -3227,6 +3239,11 @@ const MLB_TEAM_COLOR = {
   WSH:"#AB0003", WSN:"#AB0003",
 };
 const teamAccent = (abbr) => MLB_TEAM_COLOR[String(abbr||"").toUpperCase()] || "#0A84FF";
+const MLB_NICK_AB = { "diamondbacks":"ARI","braves":"ATL","orioles":"BAL","red sox":"BOS","cubs":"CHC","white sox":"CWS",
+  "reds":"CIN","guardians":"CLE","rockies":"COL","tigers":"DET","astros":"HOU","royals":"KC","angels":"LAA","dodgers":"LAD",
+  "marlins":"MIA","brewers":"MIL","twins":"MIN","mets":"NYM","yankees":"NYY","athletics":"ATH","phillies":"PHI","pirates":"PIT",
+  "padres":"SD","giants":"SF","mariners":"SEA","cardinals":"STL","rays":"TB","rangers":"TEX","blue jays":"TOR","nationals":"WSH" };
+const nickAccent = (nick) => teamAccent(MLB_NICK_AB[String(nick||"").toLowerCase().trim()] || nick);
 
 function GamecastSheet({ game, pick, onClose }){
   // Top performers is the ONLY thing the gamecast needs that /api/livescores can't give
@@ -6881,8 +6898,20 @@ function App() {
  .wr-gap{font-size:11px;color:rgba(255,255,255,.55);margin-top:7px;}
  .wr-carousel{display:flex;gap:10px;overflow-x:auto;padding:2px 16px 6px;}
  .wr-carousel::-webkit-scrollbar{display:none;}
- .wr-gc{flex-shrink:0;width:246px;background:linear-gradient(165deg,#15151c,#0d0d11);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:11px;cursor:pointer;}
+ .wr-gc{flex-shrink:0;width:246px;position:relative;overflow:hidden;border:none;border-radius:15px;padding:11px 11px 11px 13px;cursor:pointer;
+   background:linear-gradient(115deg, color-mix(in srgb, var(--tc,#2a2a33) 26%, #101015) 0%, #0e0e13 62%);
+   box-shadow:0 10px 24px -16px rgba(0,0,0,.85), inset 0 1px 0 rgba(255,255,255,.04);transition:transform .13s ease;}
+ .wr-gc:active{transform:scale(0.97);}
+ .wr-gc::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--tc,#2a2a33);opacity:.9;}
  .wr-gc.picked{border-color:rgba(10,132,255,.45);}
+ .pl-press{transition:transform .13s ease;}
+ .pl-press:active{transform:scale(0.965);}
+ .pl-rise{opacity:0;transform:translateY(14px) scale(0.988);animation:plRise .5s cubic-bezier(0.34,1.4,0.4,1) forwards;}
+ .pl-d1{animation-delay:.04s}.pl-d2{animation-delay:.12s}.pl-d3{animation-delay:.2s}
+ @keyframes plRise{to{opacity:1;transform:none;}}
+ .pl-sheen{background-size:200% 100% !important;animation:plSheen 2.6s ease-in-out .7s 1;}
+ @keyframes plSheen{0%{background-position:0% 0}55%{background-position:100% 0}100%{background-position:0% 0}}
+ @media (prefers-reduced-motion: reduce){ .pl-rise{animation:none;opacity:1;transform:none;} .pl-sheen{animation:none;} .wr-dot{animation:none;} }
  .wr-gctop{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
  .wr-gtime{font-size:10px;font-weight:800;color:rgba(255,255,255,.5);}
  .wr-glive{font-size:9.5px;font-weight:900;color:#30D158;display:flex;align-items:center;gap:4px;}
@@ -8207,7 +8236,7 @@ function App() {
    const _val={fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:700,fontSize:25,lineHeight:1,marginTop:7};
    const _cta={marginLeft:"auto",display:"inline-flex",alignItems:"center",gap:7,background:"#0A84FF",color:"#fff",fontWeight:700,fontSize:14,padding:"10px 15px",borderRadius:10,border:"none",cursor:"pointer"};
    return (
-   <div style={{position:"relative",border:"1px solid rgba(255,255,255,0.14)",borderRadius:18,overflow:"hidden",background:"radial-gradient(120% 140% at 0% 0%, rgba(10,132,255,0.10), transparent 55%), #0B0B10",boxShadow:"inset 0 1px 0 rgba(255,255,255,0.06), 0 14px 40px rgba(0,0,0,0.4)",margin:"0 0 10px"}}>
+   <div className="pl-rise pl-d1" style={{position:"relative",border:"none",boxShadow:"0 14px 32px -18px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.05)",borderRadius:18,overflow:"hidden",background:"radial-gradient(120% 140% at 0% 0%, rgba(10,132,255,0.10), transparent 55%), #0B0B10",boxShadow:"inset 0 1px 0 rgba(255,255,255,0.06), 0 14px 40px rgba(0,0,0,0.4)",margin:"0 0 10px"}}>
    <div style={{position:"absolute",left:0,top:0,right:0,bottom:0,backgroundImage:"repeating-linear-gradient(0deg,rgba(255,255,255,0.025) 0px,rgba(255,255,255,0.025) 1px,transparent 1px,transparent 4px)",pointerEvents:"none",opacity:0.5}}/>
    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",position:"relative"}}>
      <div style={{padding:"13px 12px 12px"}}>
@@ -8220,7 +8249,7 @@ function App() {
      </div>
      <div style={{padding:"13px 12px 12px",borderLeft:"1px solid rgba(255,255,255,0.08)"}}>
        <div style={_lab}>Net pts</div>
-       <div style={{..._val,color:seasonPts>0?"#64D2FF":"rgba(255,255,255,0.3)"}}>{seasonPts>0?Number(seasonPts).toFixed(1):"—"}</div>
+       <div style={{..._val,color:seasonPts>0?"#64D2FF":"rgba(255,255,255,0.3)"}}>{seasonPts>0?<CountUp value={seasonPts}/>:"—"}</div>
      </div>
      <div style={{padding:"13px 12px 12px",borderLeft:"1px solid rgba(255,255,255,0.08)"}}>
        <div style={_lab}>Slip</div>
@@ -8229,7 +8258,7 @@ function App() {
    </div>
    {total===0?(
      <div style={{display:"flex",alignItems:"center",gap:10,borderTop:"1px solid rgba(255,255,255,0.08)",padding:"11px 12px",background:"rgba(255,255,255,0.015)"}}>
-       <button onClick={()=>setScreen("picks")} style={{..._cta,flex:1}}>{_buildLabel}</button>
+       <button onClick={()=>setScreen("picks")} className="pl-press pl-sheen" style={{..._cta,flex:1}}>{_buildLabel}</button>
      </div>
    ):(
      <div style={{borderTop:"1px solid rgba(255,255,255,0.08)",background:"rgba(255,255,255,0.015)"}}>
@@ -8390,7 +8419,7 @@ function App() {
  const hasPick=myPickGames.some(gm=>gm.includes(away.toLowerCase())&&gm.includes(home.toLowerCase()));
  const _pit=ml[0]||sp2[0]||ou[0]; const _ap=_pit&&_pit.awayPitcher; const _hp=_pit&&_pit.homePitcher; const _isMlb=activeLeague?.sport==="mlb";
  return (
- <div key={gi} className={"wr-gc"+(hasPick?" picked":"")} onClick={()=>openG(g,away,home,espn,gameTime,isLive)}>
+ <div key={gi} className={"wr-gc pl-rise pl-d"+((gi%3)+1)+(hasPick?" picked":"")} style={{"--tc":nickAccent(home)}} onClick={()=>openG(g,away,home,espn,gameTime,isLive)}>
  <div className="wr-gctop">{isLive?<span className="wr-glive"><span className="wr-dot"/>LIVE</span>:isDone?<span className="wr-gtime">Final</span>:<span className="wr-gtime">{gameTime}</span>}<span className="wr-gsport">{SPORTS[activeLeague?.sport]?.label||""}</span></div>
  {[{ab:away,logo:(teamLogo(activeLeague?.sport,g.away)||espn?.awayLogo),sc:espn?.awayScore,rec:espn?.awayRecord},{ab:home,logo:(teamLogo(activeLeague?.sport,g.home)||espn?.homeLogo),sc:espn?.homeScore,rec:espn?.homeRecord}].map((tm,ti)=>(
  <div key={ti} className="wr-grow">
@@ -8436,7 +8465,7 @@ function App() {
    const linePct = (leaderPts>0 && linePts!=null) ? Math.min(100, Math.round(linePts/leaderPts*100)) : null;
    return (
    <>
-   <div className="ios-section" style={{margin:"0 16px 6px"}}>
+   <div className="ios-section pl-rise pl-d3" style={{margin:"0 16px 6px"}}>
      <div className="ios-section-header" style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
        <span>Your season · Cumulative</span>
        <span onClick={()=>setScreen("matchup")} style={{color:sport.color,fontSize:13,textTransform:"none",fontWeight:500,letterSpacing:0,cursor:"pointer"}}>The Field</span>
