@@ -148,10 +148,27 @@ async function espnEvents(sp, lg, days) {
   return out;
 }
 // Fetch ~20 recent completed game box scores ONCE; reuse across all players.
-async function espnBoxCache(sport) {
+async function espnBoxCache(sport, teams) {
   const em = ESPN_MAP[sport]; if (!em) return [];
-  const events = await espnEvents(em.sp, em.lg, 16);
-  const ids = events.filter(e => e.status?.type?.completed).map(e => e.id).slice(0, 20);
+  // Scope the window to the two teams in this matchup. The old league-wide slice(0,20)
+  // covered barely a day of MLB, so a starting pitcher appeared at most once and the
+  // `series.length >= 5` model gate below was unreachable — every projection came back
+  // empty and reported itself as "not enough game-log history". Two teams over 32 days
+  // is ~26 games each: plenty for batters, ~6 starts for a pitcher.
+  const want = (teams || []).map(t => normName(t)).filter(Boolean);
+  const events = await espnEvents(em.sp, em.lg, want.length ? 32 : 16);
+  let done = events.filter(e => e.status?.type?.completed);
+  if (want.length) {
+    const involves = (e) => ((e && e.competitions && e.competitions[0] && e.competitions[0].competitors) || []).some(c => {
+      const t = (c && c.team) || {};
+      return [t.displayName, t.name, t.shortDisplayName, t.location, t.abbreviation]
+        .filter(Boolean).map(normName)
+        .some(n => n && want.some(w => n === w || (w.length >= 4 && n.length >= 4 && (n.includes(w) || w.includes(n)))));
+    });
+    const scoped = done.filter(involves);
+    if (scoped.length) done = scoped; // if team matching fails, fall back to league-wide
+  }
+  const ids = done.map(e => e.id).slice(0, want.length ? 40 : 20);
   const boxes = [];
   for (let i = 0; i < ids.length; i += 6) {
     const res = await Promise.all(ids.slice(i, i + 6).map(async (id) => {
@@ -305,7 +322,7 @@ async function analyzeProps(sport, eventId, opts = {}) {
   const usable = Object.values(groups).filter(g => g.over.fairs.length >= 3);
   if (!usable.length) return [];
 
-  const boxes = await espnBoxCache(sport); // one heavy ESPN pass, reused for all
+  const boxes = await espnBoxCache(sport, [ev.away_team, ev.home_team]); // one team-scoped ESPN pass, reused for all
   const out = [];
   for (const g of usable) {
     const labels = resolveStatLabels(g.conf.stat);
@@ -354,6 +371,8 @@ async function analyzeProps(sport, eventId, opts = {}) {
       return { player: base.player, short: base.short, mu: base.mu, line: base.line, market: base.market, pOver, lean, marketPct: sideCand.fairPct };
     }).filter((r) => r.pOver != null);
     rows.sort((a, b) => Math.abs(b.pOver - b.marketPct) - Math.abs(a.pOver - a.marketPct));
+    console.log("[projection]", JSON.stringify({ sport, boxes: boxes.length, groups: Object.keys(groups).length,
+      usable: usable.length, modeled: out.filter(c => c.basis === "model").length, rows: rows.length }));
     return rows.slice(0, 6);
   }
   return out.sort((a, b) => b.evPct - a.evPct).slice(0, 6);
@@ -556,10 +575,11 @@ export default async function handler(req, res) {
       return res.status(200).json({ ...out, cached: false });
     }
     if (model === "projection") {
-      let projRows = [];
-      try { projRows = await analyzeProps(ctx.sport, event.id, { projection: true }); } catch { projRows = []; }
+      let projRows = [], projErr = null;
+      try { projRows = await analyzeProps(ctx.sport, event.id, { projection: true }); }
+      catch (e) { projErr = (e && e.message) ? e.message : String(e); projRows = []; }
       if (!projRows.length) {
-        const out = { summary: "No model-grade projections for this game yet — these props don't have enough recent game-log history to project reliably. Props like points, rebounds, threes, total bases or strikeouts on established players model best. This is modeling, not betting advice.", keyStats: [], trends: [], matchup: null, model: "projection" };
+        const out = { summary: "No model-grade projections for this game yet — these props don't have enough recent game-log history to project reliably. Props like points, rebounds, threes, total bases or strikeouts on established players model best. This is modeling, not betting advice.", keyStats: [], trends: [], matchup, model: "projection", debug: { reason: projErr ? "threw" : "no_model_rows", error: projErr } };
         await storeCache(key, out);
         return res.status(200).json({ ...out, cached: false });
       }

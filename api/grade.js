@@ -741,9 +741,10 @@ function gameScoreFor(pick, games) {
 function gradePick(pick, games, playerIndex, info = {}) {
   const slot = pick.slot;
   let baseType = (slot||"").split("_")[0];
-  // Solo freeform picks are saved as slot "free_N" with no bet type in the slot,
-  // so recover the real type — otherwise they match no grading branch and never settle.
-  if (baseType === "free") {
+  // Solo freeform picks are saved as slot "free_N", and wildcard slots as "wildcard_N",
+  // neither of which carries a bet type — recover the real type from market_key, or they
+  // match no grading branch and never settle (wildcard picks used to need hand-grading).
+  if (baseType === "free" || baseType === "wildcard") {
     if (parseProp(pick.pick_name)) {
       baseType = "prop";
     } else {
@@ -913,6 +914,11 @@ function gradePick(pick, games, playerIndex, info = {}) {
     // Try ML grading — pick_name is usually "Team Name ML" or "Team Name +400"
     const cleanName = name.replace(/\s+(ML|[+-]\d+)$/i, "").trim().toLowerCase();
     const pickedWinner = winnerName.toLowerCase().split(" ").some(w => w.length > 3 && cleanName.includes(w));
+    // Only an L if the name actually references a team in this game. A prop-shaped name
+    // that slipped into a longshot slot must not default to L — that is exactly how
+    // "Brice Turang Over 0.5 Doubles" was graded a loss and needed a DB correction.
+    const pickedLoser = loserName.toLowerCase().split(" ").some(w => w.length > 3 && cleanName.includes(w));
+    if (!pickedWinner && !pickedLoser) { info.reason = "longshot_team_unrecognized"; return null; }
     return pickedWinner ? "W" : "L";
   }
 
@@ -1120,7 +1126,7 @@ export default async function handler(req, res) {
       // Build the player box-score index once per sport, only if props are pending.
       const needProps = picks.some(p =>
         (p.slot||"").split("_")[0] === "prop"
-        || (p.slot?.startsWith("longshot_") && !((p.game || "").includes("@")))
+        || (p.slot?.startsWith("longshot_") && (!((p.game || "").includes("@")) || !!parseProp(p.pick_name)))
         || ((p.slot||"").split("_")[0] === "free" && parseProp(p.pick_name))
       );
       let playerIndex = {};
