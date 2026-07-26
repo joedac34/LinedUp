@@ -763,20 +763,28 @@ function matchupVerdict(me, them, isFinal, opts) {
 //   live game  -> highest upside still in play (the sweat)
 //   settled    -> the biggest winner, or if none won, the pick that cost the most
 // Returns null for an empty slip.
-function bestPick(picks) {
+function bestPick(picks, revealAll) {
  const list = (picks||[]).filter(Boolean);
  if(!list.length) return null;
- const open = list.filter(p => p.result==="pending" || p.result==null || p.result==="");
+ // An opponent's pick stays hidden until it settles or its game starts. Without this the
+ // league matchup card leaked unstarted bets that My Matchup correctly showed as LOCKED.
+ const shown = revealAll ? list : list.filter(p =>
+   p.result==="W" || p.result==="L" || p.result==="P" ||
+   (p.game_date && new Date(p.game_date).getTime() <= Date.now()));
+ // Picks exist but none are revealed yet \u2014 say so rather than "No slip submitted",
+ // which would wrongly imply they never made picks.
+ if(!shown.length) return { state:"hidden", n:list.length };
+ const open = shown.filter(p => p.result==="pending" || p.result==null || p.result==="");
  if(open.length){
   const top = open.reduce((a,b)=> pickUpside(b) > pickUpside(a) ? b : a);
   return { pick:top, state:"live", worth:pickUpside(top) };
  }
- const wins = list.filter(p=>p.result==="W");
+ const wins = shown.filter(p=>p.result==="W");
  if(wins.length){
   const top = wins.reduce((a,b)=> Number(b.points_earned||0) > Number(a.points_earned||0) ? b : a);
   return { pick:top, state:"won", worth:parseFloat(Number(top.points_earned||0).toFixed(1)) };
  }
- const top = list.reduce((a,b)=> pickUpside(b) > pickUpside(a) ? b : a);
+ const top = shown.reduce((a,b)=> pickUpside(b) > pickUpside(a) ? b : a);
  return { pick:top, state:"lost", worth:pickUpside(top) };
 }
 
@@ -1922,7 +1930,7 @@ function AiInsightBubble({ item, IOS, onAddToSlip }) {
     {/* ── +EV HUNTER card (approved mockup 21 Jul 2026): server-computed numbers, LLM prose demoted to one quote ── */}
     {data.hunter && (()=>{ const h=data.hunter; const vc = h.verdict==="PLAY"||h.verdict==="LEAN PLAY" ? IOS.green : h.verdict==="THIN" ? IOS.orange : IOS.red; const compMax = Math.max(1, ...h.components.map(c=>Math.abs(c.value))); return (<div className="ai-rise">
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.04)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:13,padding:"13px 14px",marginBottom:8}}>
-        <div><div style={{fontSize:20,fontWeight:800,letterSpacing:"-0.4px",color:vc}}>{h.verdict}</div><div style={{fontSize:8.5,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)",marginTop:2}}>The Sharp\u2019s read</div></div>
+        <div><div style={{fontSize:20,fontWeight:800,letterSpacing:"-0.4px",color:vc}}>{h.verdict}</div><div style={{fontSize:8.5,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)",marginTop:2}}>The Sharp’s read</div></div>
         <div style={{textAlign:"right"}}><div style={{fontSize:24,fontWeight:800,letterSpacing:"-0.8px",color:vc,fontFamily:"'Barlow Semi Condensed',sans-serif"}}>{h.edgePts>0?"+":""}{h.edgePts}</div><div style={{fontSize:8.5,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)"}}>pts of edge</div></div>
       </div>
       <div style={{display:"flex",gap:7,marginBottom:8}}>
@@ -1946,7 +1954,7 @@ function AiInsightBubble({ item, IOS, onAddToSlip }) {
     {/* ── Trends & Form ten-cell strips (approved mockup 21 Jul 2026) ── */}
     {phase>=1 && data.strips && (()=>{ const st=data.strips; const Strip=({cells})=>(<div style={{flex:1,display:"flex",gap:3}}>{(cells||[]).map((c,ci)=>(<div key={ci} style={{flex:1,height:13,borderRadius:3,background:c==="o"||c==="c"?"rgba(48,209,88,0.55)":"rgba(255,255,255,0.10)"}}/>))}</div>); return (<div className="ai-rise" style={{marginBottom:11}}>
       {st.total && (<div style={{background:"rgba(255,255,255,0.04)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"11px 12px",marginBottom:7}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:9}}><span style={{fontSize:11.5,fontWeight:800}}>Tonight\u2019s total {st.total.line}, applied backwards</span><span style={{fontSize:8,fontWeight:700,letterSpacing:"0.08em",color:"rgba(255,255,255,0.3)"}}>LAST 10</span></div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:9}}><span style={{fontSize:11.5,fontWeight:800}}>Tonight’s total {st.total.line}, applied backwards</span><span style={{fontSize:8,fontWeight:700,letterSpacing:"0.08em",color:"rgba(255,255,255,0.3)"}}>LAST 10</span></div>
         {[st.total.away,st.total.home].filter(Boolean).map((t,ti)=>(<div key={ti} style={{display:"flex",alignItems:"center",gap:8,marginBottom:ti===0?7:0}}><span style={{width:32,fontSize:11,fontWeight:800,flexShrink:0}}>{t.ab}</span><Strip cells={t.cells}/><span style={{width:48,textAlign:"right",fontSize:10.5,fontWeight:800,color:t.o>=Math.ceil(t.n*0.7)?IOS.green:"#fff",flexShrink:0}}>{t.o} over</span></div>))}
       </div>)}
       {st.spread && (<div style={{background:"rgba(255,255,255,0.04)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"11px 12px"}}>
@@ -2049,7 +2057,7 @@ function AiInsightBubble({ item, IOS, onAddToSlip }) {
         <div style={{fontSize:12.5,lineHeight:1.45,color:"rgba(255,255,255,0.8)"}}>{data.bullCase}</div>
       </div>
     )}
-    {phase>=4 && data.bearCase && (
+    {phase>=4 && !data.hunter && data.bearCase && (
       <div className="ai-rise" style={{borderLeft:"3px solid "+IOS.red,paddingLeft:9}}>
         <div style={{fontSize:9,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:IOS.red,marginBottom:2}}>Bear case</div>
         <div style={{fontSize:12.5,lineHeight:1.45,color:"rgba(255,255,255,0.8)"}}>{data.bearCase}</div>
@@ -4142,7 +4150,7 @@ function App() {
    if(lid && realLeagues.some(l=>l.id===lid)) setActiveLeagueId(lid);
    if(n.type==="pick_win"||n.type==="pick_loss") setScreen("picks");
    else if(n.type==="week_recap") openRecapFromNotif(n);
-   else if(n.type==="plok_call"){ if(isPro){ setAiReturn(screen); setScreen("ai"); } else { setShowPaywall("ai"); } }
+   else if(n.type==="plok_call"){ if(isPro){ setAiReturn(prev => screen==="ai" ? prev : screen); setScreen("ai"); } else { setShowPaywall("ai"); } }
    else if(n.type==="league_recap_share"){ const _lg=(realLeagues||[]).find(l=>l.id===(n.data&&n.data.league_id)); if(_lg){ setActiveLeagueId(_lg.id); openLeagueRecap(_lg); } }
  };
  useEffect(()=>{
@@ -4279,7 +4287,14 @@ function App() {
   const plokLeagueFill = (l) => {
     const cfg = parseSlotConfig(l && l.slot_config); const tot = cfg ? cfg.length : 0;
     if(!tot) return { n:0, tot:0 };
-    if(l.id===activeLeagueId && !isSoloMode) return { n:(flexPicks||[]).filter(sl=>sl && sl.bet).length, tot };
+    if(l.id===activeLeagueId && !isSoloMode){
+      // Count the draft AND what is already saved for this week. Reading flexPicks alone
+      // reported "0 of 8" for a league whose picks were locked in a previous session.
+      const keys = new Set();
+      (flexPicks||[]).forEach((sl,i)=>{ if(sl && sl.bet) keys.add(`${sl.category}_${i}`); });
+      (weekPicks||[]).forEach(pp=>{ if(pp && pp.user_id===(user&&user.id) && pp.result!=="P" && pp.slot) keys.add(pp.slot); });
+      return { n: Math.min(keys.size, tot), tot };
+    }
     try{
       const wk = (l.current_week||l.week)||1;
       const d = localStorage.getItem(`linedup_draft_${l.id}_wk${wk}`);
@@ -4666,7 +4681,7 @@ function App() {
   };
   const askFromBet = (bet, category) => {
     if(!isPro){ setShowPaywall("ai"); return; }
-    setAiReturn(screen); setScreen("ai");
+    setAiReturn(prev => screen==="ai" ? prev : screen); setScreen("ai");
     // Period bets (F5 / YRFI / NRFI / 1H): the EV screener does not price these, but the
     // Trends lens already carries NRFI rates + first-5 starter form — route there for real data.
     const isPeriod = category==="period" || !!(bet && PERIOD_MARKETS[bet.category]);
@@ -4735,7 +4750,7 @@ function App() {
   const askFindBet = (g) => {
     if(!isPro){ setShowPaywall("ai"); return; }
     setFindBetOpen(false);
-    setAiReturn(screen); setScreen("ai");
+    setAiReturn(prev => screen==="ai" ? prev : screen); setScreen("ai");
     const _m = PLOK_MODELS.find(x=>x.id===plokModel) || PLOK_MODELS[0];
     const label = `${_m.name} · ${g.game}`;
     const item = { role:"ai", label, bet:null, category:null, loading:true };
@@ -4749,7 +4764,7 @@ function App() {
   const askPlok = (text) => {
     const q = (text||"").trim(); if(!q) return;
     if(!isPro){ setShowPaywall("ai"); return; }
-    setAiReturn(screen); setScreen("ai");
+    setAiReturn(prev => screen==="ai" ? prev : screen); setScreen("ai");
     const item = { role:"ai", label:"Plok", bet:null, category:null, loading:true };
     setAiThread(prev=>[...prev, { role:"user", text:q }, item]);
     setAiBusy(true);
@@ -7574,7 +7589,7 @@ function App() {
  {user && <div className="phone"><div className="app-glow"/><div className="app-grain"/><Confetti show={celebrate}/>
  {isOffline && <div style={{position:"fixed",top:0,left:0,right:0,zIndex:9500,background:"rgba(255,159,10,0.14)",backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",borderBottom:"0.5px solid rgba(255,159,10,0.35)",padding:"calc(var(--sa-top) + 8px) 16px 8px",display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
   <span style={{width:6,height:6,borderRadius:"50%",background:IOS.orange,flexShrink:0}}/>
-  <span style={{fontSize:11.5,fontWeight:700,color:IOS.orange}}>You\u2019re offline \u2014 showing what we\u2019ve got. We\u2019ll reconnect automatically.</span>
+  <span style={{fontSize:11.5,fontWeight:700,color:IOS.orange}}>You’re offline — showing what we’ve got. We’ll reconnect automatically.</span>
  </div>}
 
  {/* Status bar safe area cover — blends iPhone time/battery into app */}
@@ -7880,7 +7895,7 @@ function App() {
  </div>
  <div className="gh-center"></div>
  <div className="gh-right">
-            <div onClick={()=>{ if(!isPro){setShowPaywall("ai");return;} setAiReturn(screen); setScreen("ai"); }} aria-label="Plok" style={{display:"inline-flex",alignItems:"center",gap:5,height:34,padding:"0 11px",borderRadius:17,background:`${IOS.blue}1f`,border:`1px solid ${IOS.blue}3a`,cursor:"pointer"}}><svg width="15" height="15" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg><span style={{fontSize:13,fontWeight:800,color:IOS.blue,letterSpacing:"-0.2px"}}>Plok</span></div>
+            <div onClick={()=>{ if(!isPro){setShowPaywall("ai");return;} setAiReturn(prev => screen==="ai" ? prev : screen); setScreen("ai"); }} aria-label="Plok" style={{display:"inline-flex",alignItems:"center",gap:5,height:34,padding:"0 11px",borderRadius:17,background:`${IOS.blue}1f`,border:`1px solid ${IOS.blue}3a`,cursor:"pointer"}}><svg width="15" height="15" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg><span style={{fontSize:13,fontWeight:800,color:IOS.blue,letterSpacing:"-0.2px"}}>Plok</span></div>
  {!isSoloMode && <div className="gh-icon" onClick={()=>setScreen("chat")}>
  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
  {unreadByLeague[activeLeagueId]>0 && <span className="gh-badge">{unreadByLeague[activeLeagueId]>9?"9+":unreadByLeague[activeLeagueId]}</span>}
@@ -11585,7 +11600,7 @@ function App() {
              const _picksOf=(uid)=>(weekPicks||[]).filter(pp=>pp.user_id===uid);
              const _cA=ceilingOf(_picksOf(u1)), _cB=ceilingOf(_picksOf(u2));
              const _maxCeil=Math.max(_cA.ceiling,_cB.ceiling,p1,p2,1);
-             const _bpA=bestPick(_picksOf(u1)), _bpB=bestPick(_picksOf(u2));
+             const _bpA=bestPick(_picksOf(u1), u1===(user&&user.id)), _bpB=bestPick(_picksOf(u2), u2===(user&&user.id));
              const lead1=done?mu.winner_id===u1:(p1>p2);
              const lead2=done?mu.winner_id===u2:(p2>p1);
              const anyLead=lead1||lead2;
@@ -11619,6 +11634,7 @@ function App() {
                       const box=(inner)=>(<div style={{flex:1,minWidth:0,background:"rgba(255,255,255,0.03)",borderRadius:9,padding:"7px 9px",textAlign:align}}>{inner}</div>);
                       const head=(<div style={{fontSize:7.5,fontWeight:900,letterSpacing:0.5,color:"rgba(255,255,255,0.28)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</div>);
                       if(!bp) return box(<>{head}<div style={{fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.3)",marginTop:2}}>No slip submitted</div></>);
+              if(bp.state==="hidden") return box(<>{head}<div style={{fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.35)",marginTop:2}}>{bp.n+" pick"+(bp.n===1?"":"s")+" \u00b7 locked"}</div><div style={{fontSize:9.5,fontWeight:700,color:"rgba(255,255,255,0.22)",marginTop:1}}>Reveals at game time</div></>);
                       const c=bp.state==="won"?IOS.green:bp.state==="live"?IOS.blue:"rgba(255,255,255,0.3)";
                       const w=bp.state==="won"?("+"+bp.worth.toFixed(1)):bp.state==="live"?("to win "+bp.worth.toFixed(1)):"0.0";
                       return box(<>{head}<div style={{fontSize:11.5,fontWeight:800,marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{bp.pick.pick_name||"Pick"}</div><div style={{fontSize:10,fontWeight:800,marginTop:1,color:c,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{(bp.pick.multiplier?bp.pick.multiplier+"\u00d7 \u00b7 ":"")+w}</div></>);
@@ -12745,7 +12761,7 @@ function App() {
         const _picksOf=(uid)=>(weekPicks||[]).filter(pp=>pp.user_id===uid);
         const _cA=ceilingOf(_picksOf(u1)), _cB=ceilingOf(_picksOf(u2));
         const _maxCeil=Math.max(_cA.ceiling,_cB.ceiling,p1,p2,1);
-        const _bpA=bestPick(_picksOf(u1)), _bpB=bestPick(_picksOf(u2));
+        const _bpA=bestPick(_picksOf(u1), u1===(user&&user.id)), _bpB=bestPick(_picksOf(u2), u2===(user&&user.id));
        const lead1=done?mu.winner_id===u1:(p1>p2);
        const lead2=done?mu.winner_id===u2:(p2>p1);
        const anyLead=lead1||lead2;
@@ -12782,6 +12798,7 @@ function App() {
               const box=(inner)=>(<div style={{flex:1,minWidth:0,background:"rgba(255,255,255,0.03)",borderRadius:9,padding:"7px 9px",textAlign:align}}>{inner}</div>);
               const head=(<div style={{fontSize:7.5,fontWeight:900,letterSpacing:0.5,color:"rgba(255,255,255,0.28)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</div>);
               if(!bp) return box(<>{head}<div style={{fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.3)",marginTop:2}}>No slip submitted</div></>);
+              if(bp.state==="hidden") return box(<>{head}<div style={{fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.35)",marginTop:2}}>{bp.n+" pick"+(bp.n===1?"":"s")+" \u00b7 locked"}</div><div style={{fontSize:9.5,fontWeight:700,color:"rgba(255,255,255,0.22)",marginTop:1}}>Reveals at game time</div></>);
               const c=bp.state==="won"?IOS.green:bp.state==="live"?IOS.blue:"rgba(255,255,255,0.3)";
               const w=bp.state==="won"?("+"+bp.worth.toFixed(1)):bp.state==="live"?("to win "+bp.worth.toFixed(1)):"0.0";
               return box(<>{head}<div style={{fontSize:11.5,fontWeight:800,marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{bp.pick.pick_name||"Pick"}</div><div style={{fontSize:10,fontWeight:800,marginTop:1,color:c,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{(bp.pick.multiplier?bp.pick.multiplier+"\u00d7 \u00b7 ":"")+w}</div></>);
@@ -14332,6 +14349,9 @@ function App() {
                   <div style={{fontSize:10.5,color:"rgba(255,255,255,0.4)",marginTop:2}}>Screening, not advice</div>
                 </div>
               </div>
+              {aiThread.length>0 && (
+                <div onClick={()=>setAiThread([])} role="button" aria-label="New Plok session" style={{flexShrink:0,padding:"7px 12px",borderRadius:10,background:"rgba(255,255,255,0.06)",border:"0.5px solid rgba(255,255,255,0.12)",fontSize:12,fontWeight:800,color:IOS.blue,cursor:"pointer"}}>New</div>
+              )}
             </div>
             <div className="gbx-scroll" style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:10,padding:"14px 14px 16px"}}>
               {(()=>{
@@ -16229,7 +16249,7 @@ function CrashScreen(){ return (
    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#FF453A" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
   </div>
   <div style={{fontSize:19,fontWeight:800,color:"#fff",letterSpacing:"-0.3px"}}>Something broke on our end</div>
-  <div style={{fontSize:13,color:"rgba(255,255,255,0.46)",lineHeight:1.55,maxWidth:280}}>The error has already been reported. Your picks are safe on the server \u2014 reload to pick up where you left off.</div>
+  <div style={{fontSize:13,color:"rgba(255,255,255,0.46)",lineHeight:1.55,maxWidth:280}}>The error has already been reported. Your picks are safe on the server — reload to pick up where you left off.</div>
   <button onClick={()=>{ try{ window.location.reload(); }catch(e){} }} style={{marginTop:7,background:"#0A84FF",border:"none",color:"#fff",borderRadius:12,padding:"13px 32px",fontSize:15,fontWeight:800,fontFamily:"Barlow,sans-serif",cursor:"pointer"}}>Reload PickLock</button>
  </div>
 ); }
