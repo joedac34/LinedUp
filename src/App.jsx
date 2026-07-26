@@ -6786,7 +6786,7 @@ function App() {
  .nav-subtitle{font-size:13px;color:${IOS.label3};margin-top:2px;}
 
  /* Scrollable body */
- .body{flex:1;min-height:0;overflow-y:auto;position:relative;z-index:1;padding-top:0;overscroll-behavior:contain;}
+ .body{flex:1;min-height:0;overflow-y:auto;position:relative;z-index:1;padding-top:0;padding-bottom:calc(92px + var(--sa-bot));overscroll-behavior:contain;}
  .body-pad{padding-bottom:calc(100px + var(--sa-bot));}
  .app-header{flex-shrink:0;z-index:25;position:relative;display:flex;align-items:center;gap:8px;height:52px;padding:0 14px;background:linear-gradient(180deg,#10101a 0%,#0b0b0e 100%);border-bottom:0.5px solid rgba(255,255,255,0.08);box-shadow:0 6px 18px rgba(0,0,0,0.45);}
  .gh-left{display:flex;align-items:center;min-width:0;flex-shrink:0;}
@@ -7365,12 +7365,24 @@ function App() {
  @keyframes champGlow{0%,100%{box-shadow:0 4px 22px rgba(255,193,7,0.18);}50%{box-shadow:0 4px 30px rgba(255,193,7,0.34);}}
 
  /* iOS Tab Bar */
- .tab-bar{flex-shrink:0;background:rgba(28,28,30,0.92);backdrop-filter:blur(20px) saturate(180%);border-top:0.5px solid rgba(255,255,255,0.08);display:flex;padding:8px 0;padding-bottom:calc(8px + var(--sa-bot));position:sticky;bottom:0;z-index:20;}
- .tab-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:4px 0;transition:opacity .15s;}
- .tab-item:active{opacity:0.6;}
- .tab-icon{font-size:22px;line-height:1;}
- .tab-label{font-size:10px;font-weight:500;letter-spacing:-0.2px;color:${IOS.gray};}
- .tab-item.on .tab-label{color:${IOS.blue};}
+ /* Floating dock: fixed pill, frosted, content scrolls underneath (approved mockup 23 Jul 2026).
+    The old bar was a sticky flex child that reserved its own space; the dock is out of flow,
+    so .body carries the clearance instead. */
+ .tab-bar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(12px + var(--sa-bot));z-index:40;
+   display:flex;align-items:center;gap:2px;padding:7px;border-radius:26px;
+   background:rgba(18,18,24,0.72);-webkit-backdrop-filter:blur(22px) saturate(1.4);backdrop-filter:blur(22px) saturate(1.4);
+   border:0.5px solid rgba(255,255,255,0.12);
+   box-shadow:0 18px 40px -12px rgba(0,0,0,0.75), inset 0 1px 0 rgba(255,255,255,0.08);}
+ .tab-item{position:relative;flex:none;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;padding:8px 13px 6px;border-radius:19px;transition:transform .13s ease;}
+ .tab-item:active{transform:scale(0.9);}
+ .tab-item::before{content:"";position:absolute;inset:0;border-radius:19px;background:linear-gradient(160deg,rgba(10,132,255,0.32),rgba(10,132,255,0.14));opacity:0;transition:opacity .2s ease;}
+ .tab-item.on::before{opacity:1;}
+ .tab-icon{position:relative;font-size:21px;line-height:1;transition:transform .22s cubic-bezier(0.34,1.6,0.4,1);}
+ .tab-item.on .tab-icon{transform:translateY(-1px);}
+ .tab-label{position:relative;font-size:9px;font-weight:700;letter-spacing:-0.1px;color:${IOS.gray};}
+ .tab-item.on .tab-label{color:#fff;}
+ .tab-lamp{position:absolute;top:4px;right:9px;width:5px;height:5px;border-radius:50%;background:#30D158;box-shadow:0 0 6px rgba(48,209,88,0.8);}
+ @media (prefers-reduced-motion: reduce){ .tab-item, .tab-icon{transition:none;} }
 
  /* Auth screen */
  @keyframes authRise{0%{transform:translateY(0);opacity:0;}12%{opacity:0.55;}80%{opacity:0.5;}100%{transform:translateY(-130px);opacity:0;}}
@@ -16245,7 +16257,8 @@ function App() {
  {icon:"profile",label:"Profile",id:"profile"},
  ]).map(t=>{
  const isOn=screen===t.id;
- const col=isOn?IOS.blue:"rgba(255,255,255,0.3)";
+ const col=isOn?"#fff":"rgba(255,255,255,0.35)";
+ const _lamp = t.id==="matchup" && !isSoloMode && (weekPicks||[]).some(pp=>pp && pp.user_id===(user&&user.id) && !isSettled(pp) && pp.game_date && new Date(pp.game_date).getTime()<=Date.now());
  const svgs={
  home:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
  picks:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>,
@@ -16259,8 +16272,9 @@ function App() {
  };
  return (
  <div key={t.id} className={"tab-item "+(isOn?"on":"")} onClick={()=>{ setScreen(t.id); }}>
+ {_lamp && <span className="tab-lamp"/>}
  <div className="tab-icon" style={{display:"flex",alignItems:"center",justifyContent:"center"}}>{svgs[t.icon]}</div>
- <div className="tab-label" style={isOn?{color:IOS.blue}:{}}>{t.label}</div>
+ <div className="tab-label">{t.label}</div>
  </div>
  );})}
  </div>
