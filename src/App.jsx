@@ -4101,7 +4101,18 @@ function App() {
 
  const SPORT_KEYS = { nfl:"americanfootball_nfl", nba:"basketball_nba", mlb:"baseball_mlb", ncaaf:"americanfootball_ncaaf" };
 
+ const _oddsInFlight = useRef({});
+ // In-flight guard. Three separate effects can ask for the same sport within a few
+ // frames of each other; without this the second one bills a second call before the
+ // first has returned. Keyed off a ref so it survives re-renders.
  const fetchLiveOdds = async (sportId) => {
+   if(!sportId) return;
+   if(_oddsInFlight.current[sportId]) return;
+   _oddsInFlight.current[sportId] = true;
+   try{ return await _fetchLiveOddsInner(sportId); }
+   finally{ _oddsInFlight.current[sportId] = false; }
+ };
+ const _fetchLiveOddsInner = async (sportId) => {
  // Cache for 10 minutes
 
 
@@ -6912,8 +6923,10 @@ function App() {
  fetchLeagueTrophies(activeLeagueId);
  const lg2 = realLeagues.find(l=>l.id===activeLeagueId);
  // Always fetch odds even if lg2 not loaded yet — fetch all sports
- const leagueSportsToFetch = lg2?.sports || (lg2?.sport ? [lg2.sport] : [activeLeague?.sport || "nfl"]);
- leagueSportsToFetch.forEach(sp => fetchLiveOdds(sp));
+ // Never guess the sport. Until the league row has loaded there is nothing safe to
+ // fetch, and guessing bills the Odds API for a sport nobody is playing.
+ const leagueSportsToFetch = lg2?.sports || (lg2?.sport ? [lg2.sport] : (activeLeague?.sport ? [activeLeague.sport] : null));
+ if(leagueSportsToFetch) leagueSportsToFetch.forEach(sp => fetchLiveOdds(sp));
  if(lg2) {
  const week = lg2.current_week||lg2.week||1;
  fetchMyPicks(activeLeagueId, week, user.id, lg2); // load locked picks on entry; slip view prefers an active draft so this never clobbers one
@@ -6938,8 +6951,8 @@ function App() {
   useEffect(()=>{
     if(isSoloMode || !activeLeagueId || !user) return;
     const lg2 = realLeagues.find(l=>l.id===activeLeagueId);
-    const sports = lg2?.sports || (lg2?.sport ? [lg2.sport] : (activeLeague?.sport ? [activeLeague.sport] : ["mlb"]));
-    sports.forEach(sp => fetchLiveOdds(sp));
+    const sports = lg2?.sports || (lg2?.sport ? [lg2.sport] : (activeLeague?.sport ? [activeLeague.sport] : null));
+    if(sports) sports.forEach(sp => fetchLiveOdds(sp));
   }, [activeLeagueId, user, isSoloMode, realLeagues.length, screen==="browser"]);
 
   // Odds are safe to (re)fetch whenever you enter a league OR open the bet browser — they
@@ -6950,8 +6963,8 @@ function App() {
     if(isSoloMode || !activeLeagueId || !user) return;
     if(screen!=="browser" && screen!=="picks") return;
     const lg2 = realLeagues.find(l=>l.id===activeLeagueId);
-    const sports = lg2?.sports || (lg2?.sport ? [lg2.sport] : [activeLeague?.sport || "nfl"]);
-    sports.forEach(sp => { const have = liveOdds[sp]; if(!have || !have.ml || !have.ml.length) fetchLiveOdds(sp); });
+    const sports = lg2?.sports || (lg2?.sport ? [lg2.sport] : (activeLeague?.sport ? [activeLeague.sport] : null));
+    if(sports) sports.forEach(sp => { const have = liveOdds[sp]; if(!have || !have.ml || !have.ml.length) fetchLiveOdds(sp); });
   }, [activeLeagueId, isSoloMode, user, screen]);
 
  useEffect(()=>{ setBuildingSlip(false); }, [activeLeagueId, isSoloMode]);
