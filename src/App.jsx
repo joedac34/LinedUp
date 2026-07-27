@@ -744,6 +744,23 @@ try{ if(typeof document!=="undefined" && typeof window!=="undefined" && !window.
 // Capacitor, and importing @capacitor/haptics there would break it. This way the same
 // bundle works in both, and if the plugin is added later it lights up with no code
 // change. If it is missing, this degrades to silence — never to an error.
+// Errors crossing the Capacitor console bridge serialise to {} — message, status and
+// URL all vanish, which is why native logs read "Odds API error: {}" and tell you
+// nothing. Flatten to a string before logging.
+const errText = (e) => {
+  try{
+    if(e == null) return "(no error object)";
+    if(typeof e === "string") return e;
+    const bits = [];
+    if(e.name) bits.push(e.name);
+    if(e.message) bits.push(e.message);
+    if(e.status) bits.push("status=" + e.status);
+    if(e.url) bits.push("url=" + e.url);
+    if(!bits.length){ try{ return JSON.stringify(e) || String(e); }catch(_){ return String(e); } }
+    return bits.join(" | ");
+  }catch(_){ return "(unprintable error)"; }
+};
+
 const _HAPTIC_FB = { select:12, light:18, medium:25, heavy:35,
   success:[0,30,40,30,60], warning:[0,30,50,30], error:[0,45,60,45] };
 const haptic = (kind) => {
@@ -2207,7 +2224,7 @@ class ErrorBoundary extends Component {
  // Was console.warn only — every Plok render crash since launch went into a console
  // nobody was reading. Report it like everything else.
  componentDidCatch(err, info){
-  try{ console.error("[picklock] render error ("+(this.props.kind||"plok-bubble")+"):", err); }catch(e){}
+  try{ console.error("[picklock] render error ("+(this.props.kind||"plok-bubble")+"):", errText(err)); }catch(e){}
   try{ posthog.captureException
     ? posthog.captureException(err, { kind:(this.props.kind||"plok-bubble"), componentStack: info && info.componentStack })
     : posthog.capture("$exception", { $exception_message:String(err && err.message || err), $exception_type:(err && err.name)||"Error", $exception_stack_trace_raw:(err && err.stack)||null, kind:(this.props.kind||"plok-bubble") });
@@ -4098,7 +4115,7 @@ function App() {
  const res = await fetch(API_BASE+`/api/odds?sport=${sportKey}`);
  if(!res.ok) throw new Error(`API error ${res.status}`);
  const payload = await res.json();
- console.log(`[odds] ${sportId} payload keys:`, Object.keys(payload), "games:", (payload.games||payload)?.length);
+ console.log(`[odds] ${sportId} games:`, (payload.games||payload)?.length, "| quota used:", payload.used, "remaining:", payload.remaining);
  const games = payload.games || payload; // handle both formats
 
  const ml = [], spread = [], ou = [], longshot = [];
@@ -4213,7 +4230,7 @@ function App() {
  }));
 
  } catch(e) {
- console.error("Odds API error:", e);
+ console.error("Odds API error [" + sportId + "]:", errText(e));
  setOddsError(true);
  } finally {
  setOddsLoading(false);
@@ -5737,7 +5754,7 @@ function App() {
        }
      } catch(e3) {}
    }
- } catch(e) { console.error(e); }
+ } catch(e) { console.error(errText(e)); }
  setSoloLoading(false);
  };
 
