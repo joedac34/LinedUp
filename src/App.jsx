@@ -3974,6 +3974,9 @@ function App() {
  const [gridPropSub, setGridPropSub] = useState("all"); // prop sub-category filter
  const [gridPeriodSub, setGridPeriodSub] = useState(""); // period sub-type (solo browser)
  const [gridTargetSlot, setGridTargetSlot] = useState(null); // which flex slot a tapped card fills
+ const [slipBarOpen, setSlipBarOpen] = useState(false); // DK-style slip sheet in the browser
+ const [slipPoolIdx, setSlipPoolIdx] = useState(-1);    // which slip row shows its multiplier pool
+ const [slipToast, setSlipToast] = useState("");
  const [gridSearch, setGridSearch] = useState("");
  const [gridOpenGames, setGridOpenGames] = useState({}); // bet-browser game accordion: {gameName:true}
  const [sheetExpanded, setSheetExpanded] = useState(null); // line-sheet expanded game key
@@ -4898,6 +4901,27 @@ function App() {
    setSecondSwap(null);
  };
  const [activatedPUs,setActivatedPUs]= useState({}); // slotId -> pu applied on picks screen
+ // ── Slip helpers, hoisted to component scope so the Picks screen AND the browser's
+ // slip bar share ONE save path (a duplicated row-builder is how slot-name formats
+ // drift apart — the root of the old phantom-slot bugs). buildSlotRows computes week
+ // and the custom-slip flag itself instead of closing over picks-screen locals.
+ const slotGameTime = (slot)=>{
+   if(!slot) return 0;
+   if(slot.isParlay){ const ts=(slot.parlayLegs||[]).map(l=>l.gameTime?new Date(l.gameTime).getTime():0).filter(t=>t>0); return ts.length?Math.min(...ts):0; }
+   return slot.bet&&slot.bet.gameTime?new Date(slot.bet.gameTime).getTime():0;
+ };
+ const slotStarted = (slot)=>{ const gt=slotGameTime(slot); return !!gt && gt<=Date.now(); };
+ const slotGraded = (slot)=>{ const r=slot&&(slot.result||(slot.bet&&slot.bet.result)); return r==="W"||r==="L"||r==="P"; };
+ const slotLocked = (slot)=> slotStarted(slot) || slotGraded(slot);
+ const buildSlotRows = (slot, slotIdx, picksArr)=>{
+   const _weekNum = (activeLeague&&(activeLeague.current_week||activeLeague.week))||1;
+   const isCustomSlip = !!parseSlotConfig(activeLeague&&activeLeague.slot_config) || (picksArr||[]).some(p=>p.locked);
+   const _pu = activatedPUs[slotIdx] || null; const _puId=_pu?_pu.id:null; const _puTier=(_pu&&_pu.tier!=null)?_pu.tier:null;
+   if(slot.isParlay){
+     return (slot.parlayLegs||[]).map((b,legIdx)=>({ league_id:activeLeague.id, user_id:user.id, week:_weekNum, slot: isCustomSlip?`longshot_${slotIdx}_${legIdx}`:`longshot_${legIdx}`, multiplier:slot.mult, power_up_id:_puId, pu_tier:_puTier, pick_name:b.pick, game:b.game||"", odds:b.odds, implied_odds:b.impliedOdds, game_date:b.gameTime||null, result:"pending", points_earned:0 }));
+   }
+   return [{ league_id:activeLeague.id, user_id:user.id, week:_weekNum, slot: isCustomSlip?`${slot.category||"ml"}_${slotIdx}`:(slot.category||"ml"), multiplier:slot.mult, power_up_id:_puId, pu_tier:_puTier, pick_name:slot.bet.pick, game:slot.bet.game||"", odds:slot.bet.odds, implied_odds:slot.bet.impliedOdds, game_date:slot.bet.gameTime||null, event_id:slot.bet.eventId||null, market_key:slot.bet.marketKey||null, outcome:slot.bet.outcome||null, outcome_point:(slot.bet.point!=null?slot.bet.point:null), sel_key:slot.bet.selKey||null, result:"pending", points_earned:0 }];
+ };
  const [matchupPUs, setMatchupPUs] = useState({}); // pickIdx -> pu applied on live matchup
  const [profTab, setProfTab] = useState("stats");
  const [analyticsTab, setAnalyticsTab] = useState("Overview");
@@ -7382,6 +7406,22 @@ function App() {
  .tab-label{position:relative;font-size:9px;font-weight:700;letter-spacing:-0.1px;color:${IOS.gray};}
  .tab-item.on .tab-label{color:#fff;}
  .tab-lamp{position:absolute;top:4px;right:9px;width:5px;height:5px;border-radius:50%;background:#30D158;box-shadow:0 0 6px rgba(48,209,88,0.8);}
+ .psb-bar{position:fixed;left:50%;transform:translateX(-50%) translateY(150%);bottom:calc(14px + var(--sa-bot));width:min(92%,440px);z-index:60;border-radius:22px;background:#fff;color:#0e0e12;box-shadow:0 20px 44px -12px rgba(0,0,0,0.85);display:flex;align-items:center;gap:11px;padding:13px 15px;cursor:pointer;transition:transform .38s cubic-bezier(0.34,1.3,0.4,1);}
+ .psb-bar.up{transform:translateX(-50%);}
+ .psb-cnt{width:27px;height:27px;border-radius:50%;background:#30D158;color:#04220d;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;flex-shrink:0;}
+ .psb-veil{position:fixed;inset:0;background:rgba(2,3,8,0.55);opacity:0;pointer-events:none;transition:opacity .25s ease;z-index:70;}
+ .psb-veil.on{opacity:1;pointer-events:auto;}
+ .psb-sheet{position:fixed;left:50%;transform:translateX(-50%) translateY(105%);bottom:0;width:min(100%,480px);z-index:80;background:#fff;color:#0e0e12;border-radius:22px 22px 0 0;box-shadow:0 -18px 50px -10px rgba(0,0,0,0.8);max-height:86%;display:flex;flex-direction:column;transition:transform .4s cubic-bezier(0.32,1.15,0.35,1);}
+ .psb-sheet.up{transform:translateX(-50%);}
+ .psb-chip{font-size:9px;font-weight:900;letter-spacing:0.04em;color:#0A84FF;background:rgba(10,132,255,0.12);border:1px solid rgba(10,132,255,0.35);border-radius:5px;padding:2px 6px;cursor:pointer;display:inline-flex;align-items:center;gap:3px;}
+ .psb-mpool{max-height:0;overflow:hidden;transition:max-height .26s ease;}
+ .psb-mpool.open{max-height:110px;}
+ .psb-mchip{padding:7px 13px;border-radius:9px;border:1px solid rgba(14,14,18,0.14);background:#f2f2f5;font-size:13px;font-weight:900;color:#0e0e12;cursor:pointer;}
+ .psb-mchip.mine{background:rgba(10,132,255,0.14);border-color:rgba(10,132,255,0.55);color:#0A84FF;}
+ .psb-mchip.used{opacity:0.3;text-decoration:line-through;pointer-events:none;}
+ .psb-toast{position:fixed;left:50%;transform:translateX(-50%) translateY(20px);bottom:calc(110px + var(--sa-bot));background:#0f2418;color:#7ef0a4;border:1px solid rgba(48,209,88,0.4);border-radius:12px;padding:10px 16px;font-size:12.5px;font-weight:800;opacity:0;transition:all .3s ease;z-index:95;pointer-events:none;}
+ .psb-toast.on{opacity:1;transform:translateX(-50%) translateY(0);}
+ @media (prefers-reduced-motion: reduce){ .psb-bar,.psb-sheet,.psb-mpool,.psb-toast{transition:none;} }
  @media (prefers-reduced-motion: reduce){ .tab-item, .tab-icon{transition:none;} }
 
  /* Auth screen */
@@ -8992,21 +9032,6 @@ function App() {
  }
  // ── Per-pick locking ─────────────────────────────────────────────
  const _weekNum = activeLeague.current_week||activeLeague.week||1;
- const slotGameTime = (slot)=>{
- if(!slot) return 0;
- if(slot.isParlay){ const ts=(slot.parlayLegs||[]).map(l=>l.gameTime?new Date(l.gameTime).getTime():0).filter(t=>t>0); return ts.length?Math.min(...ts):0; }
- return slot.bet&&slot.bet.gameTime?new Date(slot.bet.gameTime).getTime():0;
- };
- const slotStarted = (slot)=>{ const gt=slotGameTime(slot); return !!gt && gt<=Date.now(); };
- const slotGraded = (slot)=>{ const r=slot&&(slot.result||(slot.bet&&slot.bet.result)); return r==="W"||r==="L"||r==="P"; };
- const slotLocked = (slot)=> slotStarted(slot) || slotGraded(slot);
- const buildSlotRows = (slot, slotIdx)=>{
- const _pu = activatedPUs[slotIdx] || null; const _puId=_pu?_pu.id:null; const _puTier=(_pu&&_pu.tier!=null)?_pu.tier:null;
- if(slot.isParlay){
- return (slot.parlayLegs||[]).map((b,legIdx)=>({ league_id:activeLeague.id, user_id:user.id, week:_weekNum, slot: isCustomSlip?`longshot_${slotIdx}_${legIdx}`:`longshot_${legIdx}`, multiplier:slot.mult, power_up_id:_puId, pu_tier:_puTier, pick_name:b.pick, game:b.game||"", odds:b.odds, implied_odds:b.impliedOdds, game_date:b.gameTime||null, result:"pending", points_earned:0 }));
- }
- return [{ league_id:activeLeague.id, user_id:user.id, week:_weekNum, slot: isCustomSlip?`${slot.category||"ml"}_${slotIdx}`:(slot.category||"ml"), multiplier:slot.mult, power_up_id:_puId, pu_tier:_puTier, pick_name:slot.bet.pick, game:slot.bet.game||"", odds:slot.bet.odds, implied_odds:slot.bet.impliedOdds, game_date:slot.bet.gameTime||null, event_id:slot.bet.eventId||null, market_key:slot.bet.marketKey||null, outcome:slot.bet.outcome||null, outcome_point:(slot.bet.point!=null?slot.bet.point:null), sel_key:slot.bet.selKey||null, result:"pending", points_earned:0 }];
- };
  const lockSlot = async (idx)=>{
  const slot = activePicks[idx];
  if(!slot||!slot.mult||slot.committed) return;
@@ -9014,7 +9039,7 @@ function App() {
  if(slot.isParlay ? (slot.parlayLegs||[]).length<2 : !slot.bet) return;
  if(slotStarted(slot)){ alert("That game has already started — this pick can no longer be locked."); return; }
  if(!user){ alert("Sign in to lock picks."); return; }
- const rows = buildSlotRows(slot, idx);
+ const rows = buildSlotRows(slot, idx, activePicks);
  const { data, error } = await supabase.from("picks").insert(rows).select("id");
  if(error){ alert("Couldn’t lock that pick: "+error.message); return; }
  try{ posthog.capture('pick_locked', { league_id: activeLeague.id, category: slot.category||null, multiplier: slot.mult||null }); }catch(e){}
@@ -11512,6 +11537,109 @@ function App() {
  </div>
  </div>
  )}
+ {/* ══ DK-style pick slip bar (approved mockup 23 Jul 2026) ══ */}
+ {(()=>{
+   const staged = activePicks.map((sl,i)=>({sl,i})).filter(x=> x.sl && !x.sl.committed && (x.sl.isParlay ? (x.sl.parlayLegs||[]).length>=2 : !!x.sl.bet));
+   if(!staged.length && !slipToast) return null;
+   const payoutOf=(o)=>{ const a=parseInt(String(o==null?"":o).replace(/[^0-9+\-]/g,""),10); if(isNaN(a)||a===0) return 0; return a>0?a/100:100/Math.abs(a); };
+   const oddsOf=(x)=> x.sl.isParlay ? parlayAmericanOdds(calcParlayOddsDecimal(x.sl.parlayLegs)) : (x.sl.bet ? x.sl.bet.odds : null);
+   const ptsOf=(x)=> (x.sl.mult||0) * payoutOf(oddsOf(x)) * 10;
+   const tot = staged.reduce((a,x)=>a+ptsOf(x),0);
+   const allM = staged.every(x=>x.sl.mult!=null);
+   const pool = gridCfg ? gridCfg.map(c=>c.mult).filter(m=>m!=null) : [1,2,3,4,5];
+   const poolCounts = pool.reduce((a,v)=>{a[v]=(a[v]||0)+1;return a;},{});
+   const usedBy=(v)=> activePicks.filter(pp=>pp && pp.mult===v).length;
+   const canTake=(v, own)=> (poolCounts[v]||0) - (usedBy(v) - (own===v?1:0)) > 0;
+   const swapTo=(i, v)=>{ setActivePicks(prev=>{ const next=prev.map(pp=>({...pp})); const mine=next[i].mult;
+     if(!( (poolCounts[v]||0) - next.filter((pp,k)=>k!==i && pp.mult===v).length > 0 )){
+       const j=next.findIndex((pp,k)=>k!==i && pp.mult===v && !pp.committed); if(j===-1) return prev; next[j].mult=mine; }
+     next[i].mult=v; return next; }); };
+   const removeStaged=(i)=>{ setSlipPoolIdx(-1); setActivePicks(prev=>prev.map((pp,k)=> k===i ? {...pp, bet:null, parlayLegs:pp.isParlay?[]:pp.parlayLegs} : pp)); };
+   const fmtOdds=(o)=>{ const a=parseInt(String(o==null?"":o).replace(/[^0-9+\-]/g,""),10); if(isNaN(a)) return ""; return a>0?"+"+a:String(a); };
+   const nameOf=(x)=> x.sl.isParlay ? ((x.sl.parlayLegs||[]).length+"-leg parlay") : ((x.sl.bet&&x.sl.bet.pick)||"Pick");
+   const lockAll = async ()=>{
+     if(!user){ alert("Sign in to lock picks."); return; }
+     const _tsz=activeLeague.target_size||activeLeague.max_members||8;
+     if(!isSoloMode && leagueMembers.length>0 && leagueMembers.length<_tsz){ alert("Your league hasn't started yet \u2014 picks open once all "+_tsz+" seats are filled."); return; }
+     const eligible = staged.filter(x=> x.sl.mult!=null && !slotStarted(x.sl));
+     if(!eligible.length){ alert(allM ? "Those games have already started." : "Give every pick a multiplier first \u2014 tap its P-chip."); return; }
+     const rowsPer = eligible.map(x=> buildSlotRows(x.sl, x.i, activePicks));
+     const flat = rowsPer.flat();
+     const { data, error } = await supabase.from("picks").insert(flat).select("id");
+     if(error){ alert("Couldn\u2019t lock: "+error.message); return; }
+     const ids=(data||[]).map(r=>r.id); let cur=0;
+     const idsBySlot = rowsPer.map(rs=>{ const chunk=ids.slice(cur,cur+rs.length); cur+=rs.length; return chunk; });
+     setActivePicks(prev=>prev.map((pp,k)=>{ const ei=eligible.findIndex(x=>x.i===k); return ei>=0?{...pp,committed:true,commitIds:idsBySlot[ei]}:pp; }));
+     eligible.forEach(x=>{ try{ posthog.capture('pick_locked',{ league_id:activeLeague.id, category:x.sl.category||null, multiplier:x.sl.mult||null }); }catch(e){} });
+     try{ posthog.capture('slip_locked',{ league_id:activeLeague.id, n:eligible.length }); }catch(e){}
+     try{ fetchWeekPicks(activeLeague.id, (activeLeague.current_week||activeLeague.week)||1); }catch(e){}
+     try{ if(navigator.vibrate) navigator.vibrate(20); }catch(e){}
+     setSlipBarOpen(false); setSlipPoolIdx(-1);
+     setSlipToast("Locked "+eligible.length+" pick"+(eligible.length===1?"":"s")+" \u2713");
+     setTimeout(()=>setSlipToast(""),1800);
+   };
+   return (<>
+     {staged.length>0 && <div className={"psb-bar"+((staged.length&&!slipBarOpen)?" up":"")} onClick={()=>{ setSlipBarOpen(true); }}>
+       <div className="psb-cnt">{staged.length}</div>
+       <div style={{fontSize:16.5,fontWeight:900,letterSpacing:"-0.3px"}}>Pick Slip</div>
+       <div style={{marginLeft:"auto",textAlign:"right"}}>
+         <div style={{fontSize:12,fontWeight:800,maxWidth:170,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{staged.length===1?nameOf(staged[0]):(staged.length+" picks ready")}</div>
+         <div style={{fontSize:11,fontWeight:700,color:"rgba(14,14,18,0.38)",marginTop:1}}>{allM?<>to win <b style={{color:"#0a7d33"}}>{tot.toFixed(1)} pts</b> \u00b7 tap to review</>:"tap to set multipliers"}</div>
+       </div>
+     </div>}
+     <div className={"psb-veil"+(slipBarOpen&&staged.length?" on":"")} onClick={()=>{ setSlipBarOpen(false); setSlipPoolIdx(-1); }}/>
+     {staged.length>0 && <div className={"psb-sheet"+(slipBarOpen?" up":"")}>
+       <div style={{width:36,height:4,borderRadius:2,background:"rgba(14,14,18,0.18)",margin:"9px auto 2px",flexShrink:0}}/>
+       <div style={{display:"flex",alignItems:"center",gap:11,padding:"8px 16px 10px",flexShrink:0}}>
+         <div className="psb-cnt">{staged.length}</div>
+         <div style={{fontSize:19,fontWeight:900,letterSpacing:"-0.3px"}}>Pick Slip</div>
+         <div onClick={()=>{ setSlipBarOpen(false); setSlipPoolIdx(-1); }} style={{marginLeft:"auto",fontSize:13.5,fontWeight:800,color:"#0a7d33",cursor:"pointer"}}>+ Add More</div>
+       </div>
+       <div style={{flex:1,minHeight:0,overflowY:"auto",padding:"0 14px"}}>
+         {staged.map((x)=>{ const pts=ptsOf(x).toFixed(1); const poolOpen=slipPoolIdx===x.i; const seen={};
+           return (
+           <div key={x.i} style={{display:"flex",flexDirection:"column",padding:"13px 3px",borderBottom:"1px solid rgba(14,14,18,0.09)"}}>
+             <div style={{display:"flex",gap:11,width:"100%"}}>
+               <div onClick={()=>removeStaged(x.i)} style={{width:24,height:24,borderRadius:"50%",border:"1.5px solid rgba(220,60,60,0.55)",color:"#d43c3c",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,flexShrink:0,cursor:"pointer",marginTop:2}}>{"\u2212"}</div>
+               <div style={{flex:1,minWidth:0}}>
+                 <div style={{fontSize:15.5,fontWeight:900,letterSpacing:"-0.2px",display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
+                   <span style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:190}}>{nameOf(x)}</span>
+                   <span className="psb-chip" onClick={()=>setSlipPoolIdx(poolOpen?-1:x.i)}>P{x.i+1} {"\u00b7"} {x.sl.mult!=null?x.sl.mult+"\u00d7":"set \u00d7"}
+                     <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" style={{transform:poolOpen?"rotate(180deg)":"none",transition:"transform .18s"}}><path d="M6 9l6 6 6-6"/></svg>
+                   </span>
+                 </div>
+                 <div style={{fontSize:11.5,color:"rgba(14,14,18,0.55)",fontWeight:600,marginTop:3,lineHeight:1.45}}>{x.sl.isParlay?(x.sl.parlayLegs||[]).map(l=>l.pick).join(" + "):((x.sl.bet&&x.sl.bet.game)||"")}</div>
+               </div>
+               <div style={{textAlign:"right",flexShrink:0}}>
+                 <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:16,fontWeight:900}}>{fmtOdds(oddsOf(x))}</div>
+                 <div style={{fontSize:11,fontWeight:800,color:"#0a7d33",marginTop:2,whiteSpace:"nowrap"}}>{x.sl.mult!=null?("to win "+pts+" pts"):"no multiplier"}</div>
+               </div>
+             </div>
+             <div className={"psb-mpool"+(poolOpen?" open":"")}>
+               <div style={{display:"flex",flexWrap:"wrap",gap:6,padding:"10px 2px 4px 35px"}}>
+                 {pool.map((m,mi)=>{ seen[m]=(seen[m]||0)+1;
+                   const isMine=x.sl.mult===m;
+                   const gone=!isMine && !canTake(m, x.sl.mult) && !activePicks.some((pp,k)=>k!==x.i && pp.mult===m && !pp.committed);
+                   return <div key={mi} className={"psb-mchip"+(isMine?" mine":(gone?" used":""))} onClick={()=>swapTo(x.i,m)}>{m}{"\u00d7"}</div>;
+                 })}
+               </div>
+             </div>
+           </div>);
+         })}
+         <div style={{margin:"12px 0 4px",background:"#f2f2f5",borderRadius:11,padding:"11px 13px",fontSize:12,fontWeight:700,color:"rgba(14,14,18,0.55)"}}>
+           {Math.max(0, activePicks.length - activePicks.filter(pp=>pp.committed || pp.bet || (pp.isParlay&&(pp.parlayLegs||[]).length>=2)).length)} of {activePicks.length} slots still open {"\u2014"} tap any P-chip to move your big multipliers onto your best bets.
+         </div>
+       </div>
+       <div style={{flexShrink:0,padding:"12px 14px calc(20px + var(--sa-bot))"}}>
+         <button onClick={lockAll} style={{border:"none",width:"100%",borderRadius:15,padding:16,fontSize:16,fontWeight:900,color:"#fff",cursor:"pointer",fontFamily:"'Barlow',sans-serif",letterSpacing:"-0.2px",background:allM?"linear-gradient(100deg,#0A84FF 0%,#3f9dff 55%,#0A84FF 100%)":"rgba(14,14,18,0.25)",boxShadow:allM?"0 10px 24px -8px rgba(10,132,255,0.55)":"none"}}>
+           Lock {staged.length} pick{staged.length===1?"":"s"}
+           <span style={{display:"block",fontSize:11.5,fontWeight:700,opacity:0.85,marginTop:2}}>{allM?("to win "+tot.toFixed(1)+" pts if they all hit"):"assign a multiplier to every pick first"}</span>
+         </button>
+       </div>
+     </div>}
+     <div className={"psb-toast"+(slipToast?" on":"")}>{slipToast}</div>
+   </>);
+ })()}
  </div>
  );
  })()
