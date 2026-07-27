@@ -676,7 +676,7 @@ try{ if(typeof document!=="undefined" && !document.getElementById("pk-shim-kf"))
 try{ if(typeof document!=="undefined" && typeof window!=="undefined" && !window.__pkSwipe){
   window.__pkSwipe = 1;
   const EDGE = 26, TRIGGER = 0.33;
-  let el=null, sx=0, sy=0, dx=0, live=false;
+  let el=null, sx=0, sy=0, dx=0, live=false, allowed=false;
   const style = (t, sh)=>{ if(!el) return; el.style.transform = t; el.style.boxShadow = sh; };
   const unbind = ()=>{
     try{ document.removeEventListener("touchmove", onMove); }catch(e){}
@@ -695,12 +695,17 @@ try{ if(typeof document!=="undefined" && typeof window!=="undefined" && !window.
     const ddx = t.clientX - sx, ddy = t.clientY - sy;
     // A mostly-vertical drag is a scroll, not a back gesture. Hand it back.
     if(Math.abs(ddy) > Math.abs(ddx) && Math.abs(ddy) > 12){ reset(true); return; }
+    // Always swallow the horizontal drag. This is what stops iOS running its own
+    // back/forward swipe, which slides the entire app — header chrome included — and
+    // reads as the screen coming loose from its frame.
     if(e.cancelable) e.preventDefault();
+    if(!allowed) return;
     dx = Math.max(0, ddx);
     style("translateX("+dx+"px)", "-18px 0 40px rgba(0,0,0,0.5)");
   }
   function onEnd(){
-    if(!live || !el){ reset(false); return; }
+    if(!live){ reset(false); return; }
+    if(!allowed || !el){ reset(true); return; }
     const w = window.innerWidth || 390;
     if(dx > w * TRIGGER){
       el.style.transition = "transform .2s cubic-bezier(0.32,0.72,0,1)";
@@ -713,11 +718,16 @@ try{ if(typeof document!=="undefined" && typeof window!=="undefined" && !window.
   }
   document.addEventListener("touchstart", function(e){
     if(live) return;
-    if(document.documentElement.getAttribute("data-pk-back") !== "1") return;
-    const t = e.touches && e.touches[0]; if(!t || t.clientX > EDGE) return;
-    el = document.querySelector(".body, .lsx-scroll"); if(!el) return;
+    const t = e.touches && e.touches[0]; if(!t) return;
+    const w = window.innerWidth || 390;
+    // Engage on EITHER edge, and engage even when there is nowhere to go back to.
+    // Claiming the gesture is the only way to stop iOS from taking it.
+    const nearLeft = t.clientX <= EDGE, nearRight = t.clientX >= w - EDGE;
+    if(!nearLeft && !nearRight) return;
+    allowed = nearLeft && document.documentElement.getAttribute("data-pk-back") === "1";
+    el = document.querySelector(".body, .lsx-scroll");
     sx = t.clientX; sy = t.clientY; dx = 0; live = true;
-    el.style.transition = "none";
+    if(el) el.style.transition = "none";
     document.addEventListener("touchmove", onMove, {passive:false});
     document.addEventListener("touchend", onEnd);
     document.addEventListener("touchcancel", onCancel);
@@ -765,16 +775,20 @@ try{ if(typeof document!=="undefined" && typeof window!=="undefined" && !window.
     const el = _pkPend; if(!el) return;
     const y = el.scrollTop || 0;
 
-    // ─ condensing header (runs first: it must update even near the top) ─
+    // ─ condensing header ─
+    // The header is in normal flow, so it already scrolls away by itself. Transforming
+    // and fading it as well produced a half-scaled, half-faded ghost on the way back up,
+    // and collapsing the subtitle changed the header height mid-scroll — which shifts
+    // scrollTop, which changes the next frame's input, which can oscillate. So the header
+    // is left alone now and only the compact bar cross-fades.
+    // Separate on/off thresholds (64 / 44) so a fingertip resting on the boundary cannot
+    // flicker the bar.
     try{
-      const hdr = el.querySelector(".pk-hdr");
-      if(hdr){
-        const p = Math.min(1, y/62);
-        hdr.style.transform = "scale("+(1-0.30*p)+")";
-        hdr.style.opacity = String(1-p);
-        const cb = el.querySelector(".pk-cbar");
-        if(cb) cb.classList.toggle("on", p>0.75);
-        el.querySelectorAll(".pk-hdr-sub").forEach(function(sub){ sub.classList.toggle("gone", p>0.45); });
+      const cb = el.querySelector(".pk-cbar");
+      if(cb){
+        const on = cb.classList.contains("on");
+        if(!on && y > 64) cb.classList.add("on");
+        else if(on && y < 44) cb.classList.remove("on");
       }
     }catch(e){}
 
@@ -7151,7 +7165,7 @@ function App() {
  .nav-subtitle{font-size:13px;color:${IOS.label3};margin-top:2px;}
 
  /* Scrollable body */
- .body{flex:1;min-height:0;overflow-y:auto;position:relative;z-index:1;padding-top:0;padding-bottom:calc(92px + var(--sa-bot));overscroll-behavior:contain;}
+ .body{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;position:relative;z-index:1;padding-top:0;padding-bottom:calc(92px + var(--sa-bot));overscroll-behavior:contain;overscroll-behavior-x:none;}
  .body-pad{padding-bottom:calc(100px + var(--sa-bot));}
  .app-header{flex-shrink:0;z-index:25;position:relative;display:flex;align-items:center;gap:8px;height:52px;padding:0 14px;background:linear-gradient(180deg,#10101a 0%,#0b0b0e 100%);border-bottom:0.5px solid rgba(255,255,255,0.08);box-shadow:0 6px 18px rgba(0,0,0,0.45);}
  .gh-left{display:flex;align-items:center;min-width:0;flex-shrink:0;}
@@ -7294,8 +7308,9 @@ function App() {
    transition:opacity .22s ease;}
  .pk-cbar.on{opacity:1;pointer-events:auto;}
  .pk-cbar-t{font-size:16px;font-weight:800;letter-spacing:-0.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
- .pk-hdr-sub{transition:opacity .18s ease,max-height .24s ease;overflow:hidden;max-height:70px;}
- .pk-hdr-sub.gone{opacity:0;max-height:0;}
+ /* Kept as a hook, but no longer collapsed on scroll: changing the header height
+    mid-scroll moves scrollTop, which feeds back into the next frame. */
+ .pk-hdr-sub{}
  @media (prefers-reduced-motion: reduce){ .pk-cbar,.pk-hdr,.pk-hdr-sub{transition:none;} }
  .pl-reveal{opacity:0;transform:translateY(14px) scale(0.988);}
  .pl-reveal.in{opacity:1;transform:none;transition:opacity .42s ease, transform .52s cubic-bezier(0.34,1.4,0.4,1);}
