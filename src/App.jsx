@@ -145,6 +145,19 @@ const IOS = {
  fill3: "rgba(255,255,255,0.12)",
 };
 
+// ── Surface scale ───────────────────────────────────────────
+// 23 corner radii and 7 hairline alphas collapsed to 5 + 3. Ties round UP — a
+// larger radius reads softer, which is the direction the UI work is heading.
+// Radii <=5 are deliberately NOT tokenised: 37 of them sit on elements 8px tall
+// or shorter (3px bar fills, 6px dots, a 2.5px rail) where the radius is a
+// function of height, not a design decision. Snapping those would make lozenges.
+// Accent-coloured borders are also left alone — those are intentional signal.
+const RAD  = { sm:8, md:12, lg:16, xl:20, pill:999 };
+const EDGE = {
+  hair:  "0.5px solid rgba(255,255,255,0.08)",   // default card edge
+  hair2: "0.5px solid rgba(255,255,255,0.12)",   // raised / selected
+  hair3: "0.5px solid rgba(255,255,255,0.16)",   // control outline
+};
 // ─── SPORT CONFIG ───────────────────────────────────────────────
 // ─── SEASON WINDOWS ────────────────────────────────────────────────────────────
 // Games available per week, by phase. Used to cap custom-league length so every
@@ -654,6 +667,176 @@ try{ if(typeof document!=="undefined" && !document.getElementById("pk-shim-kf"))
 // Batched read-then-write measure, rAF'd, re-run on resize via ResizeObserver.
 // If the measurement never lands, --gw defaults to 100% and each bar simply carries
 // its own wave — degraded, never broken.
+// ── Edge swipe back ────────────────────────────────────────
+// Drag from the left edge to go back. React owns the history and sets
+// data-pk-back="1" on <html> when a back target exists; this only drives the drag and
+// fires a pk:back event, so the gesture cannot navigate anywhere React has not allowed.
+// touchmove/touchend are bound only for the life of a gesture — a permanent
+// non-passive touchmove listener on document would tax every scroll in the app.
+try{ if(typeof document!=="undefined" && typeof window!=="undefined" && !window.__pkSwipe){
+  window.__pkSwipe = 1;
+  const EDGE = 26, TRIGGER = 0.33;
+  let el=null, sx=0, sy=0, dx=0, live=false;
+  const style = (t, sh)=>{ if(!el) return; el.style.transform = t; el.style.boxShadow = sh; };
+  const unbind = ()=>{
+    try{ document.removeEventListener("touchmove", onMove); }catch(e){}
+    try{ document.removeEventListener("touchend", onEnd); }catch(e){}
+    try{ document.removeEventListener("touchcancel", onCancel); }catch(e){}
+  };
+  const reset = (animate)=>{
+    if(el){ el.style.transition = animate ? "transform .2s cubic-bezier(0.32,0.72,0,1)" : "none";
+            style("", ""); if(animate) setTimeout(()=>{ if(el) el.style.transition=""; }, 220); }
+    el=null; live=false; dx=0; unbind();
+  };
+  function onCancel(){ reset(true); }
+  function onMove(e){
+    if(!live || !el) return;
+    const t = e.touches && e.touches[0]; if(!t) return;
+    const ddx = t.clientX - sx, ddy = t.clientY - sy;
+    // A mostly-vertical drag is a scroll, not a back gesture. Hand it back.
+    if(Math.abs(ddy) > Math.abs(ddx) && Math.abs(ddy) > 12){ reset(true); return; }
+    if(e.cancelable) e.preventDefault();
+    dx = Math.max(0, ddx);
+    style("translateX("+dx+"px)", "-18px 0 40px rgba(0,0,0,0.5)");
+  }
+  function onEnd(){
+    if(!live || !el){ reset(false); return; }
+    const w = window.innerWidth || 390;
+    if(dx > w * TRIGGER){
+      el.style.transition = "transform .2s cubic-bezier(0.32,0.72,0,1)";
+      style("translateX("+w+"px)", "-18px 0 40px rgba(0,0,0,0.5)");
+      const gone = el;
+      setTimeout(()=>{ try{ gone.style.transform=""; gone.style.boxShadow=""; gone.style.transition=""; }catch(e){}
+        try{ window.dispatchEvent(new CustomEvent("pk:back")); }catch(e){} }, 190);
+      el=null; live=false; dx=0; unbind();
+    } else { reset(true); }
+  }
+  document.addEventListener("touchstart", function(e){
+    if(live) return;
+    if(document.documentElement.getAttribute("data-pk-back") !== "1") return;
+    const t = e.touches && e.touches[0]; if(!t || t.clientX > EDGE) return;
+    el = document.querySelector(".body, .lsx-scroll"); if(!el) return;
+    sx = t.clientX; sy = t.clientY; dx = 0; live = true;
+    el.style.transition = "none";
+    document.addEventListener("touchmove", onMove, {passive:false});
+    document.addEventListener("touchend", onEnd);
+    document.addEventListener("touchcancel", onCancel);
+  }, {passive:true});
+} }catch(e){}
+
+// ── Haptics ─────────────────────────────────────────────────
+// navigator.vibrate has never been supported by Safari or WKWebView, so every haptic
+// in this file was a no-op on the platform we actually ship to. Route through the
+// Capacitor Haptics plugin when it is present and keep vibrate as the Android/web
+// fallback.
+//
+// Reached via the runtime global rather than an import on purpose: the web build has no
+// Capacitor, and importing @capacitor/haptics there would break it. This way the same
+// bundle works in both, and if the plugin is added later it lights up with no code
+// change. If it is missing, this degrades to silence — never to an error.
+const _HAPTIC_FB = { select:12, light:18, medium:25, heavy:35,
+  success:[0,30,40,30,60], warning:[0,30,50,30], error:[0,45,60,45] };
+const haptic = (kind) => {
+  const k = kind || "light";
+  try{
+    const H = (typeof window!=="undefined" && window.Capacitor && window.Capacitor.Plugins
+               && window.Capacitor.Plugins.Haptics) || null;
+    if(H){
+      if(k==="success" || k==="warning" || k==="error"){ H.notification({type:k.toUpperCase()}); return; }
+      if(k==="select"){ if(H.selectionChanged) H.selectionChanged(); else H.impact({style:"LIGHT"}); return; }
+      H.impact({style: k==="heavy" ? "HEAVY" : k==="medium" ? "MEDIUM" : "LIGHT"});
+      return;
+    }
+  }catch(e){}
+  try{ if(typeof navigator!=="undefined" && navigator.vibrate) navigator.vibrate(_HAPTIC_FB[k] || 18); }catch(e){}
+};
+
+// ── Collapsing dock ────────────────────────────────────────
+// Scroll down → every tab but the active one folds to zero width. Tap → opens.
+// Done in plain DOM rather than React state on purpose: this is chrome behaviour, it
+// only ever touches classList, and keeping it out of the render path means it cannot
+// cause a re-render loop or a hook-ordering fault. Scroll is captured on document
+// because scroll events do not bubble and there are 19 separate .body scrollers.
+try{ if(typeof document!=="undefined" && typeof window!=="undefined" && !window.__pkDock){
+  window.__pkDock = 1;
+  let _pkRaf = 0, _pkPend = null;
+  const _pkTick = ()=>{
+    _pkRaf = 0;
+    const el = _pkPend; if(!el) return;
+    const y = el.scrollTop || 0;
+
+    // ─ condensing header (runs first: it must update even near the top) ─
+    try{
+      const hdr = el.querySelector(".pk-hdr");
+      if(hdr){
+        const p = Math.min(1, y/62);
+        hdr.style.transform = "scale("+(1-0.30*p)+")";
+        hdr.style.opacity = String(1-p);
+        const cb = el.querySelector(".pk-cbar");
+        if(cb) cb.classList.toggle("on", p>0.75);
+        el.querySelectorAll(".pk-hdr-sub").forEach(function(sub){ sub.classList.toggle("gone", p>0.45); });
+      }
+    }catch(e){}
+
+    // ─ collapsing dock ─
+    const bar = document.querySelector(".tab-bar"); if(!bar) return;
+    if(el.__pkY === undefined){ el.__pkY = y; bar.classList.remove("small"); return; }
+    const prev = el.__pkY; el.__pkY = y;
+    if(y <= 90){ bar.classList.remove("small"); return; }
+    const d = y - prev; if(Math.abs(d) < 6) return;
+    if(d > 0) bar.classList.add("small"); else bar.classList.remove("small");
+  };
+  document.addEventListener("scroll", function(e){
+    const el = e.target; if(!el || el.scrollTop===undefined) return;
+    _pkPend = el;
+    if(!_pkRaf) _pkRaf = requestAnimationFrame(_pkTick);
+  }, true);
+  // Capture phase so the expand beats React's synthetic tab handler — tapping a folded
+  // dock must open it, never navigate.
+  document.addEventListener("click", function(e){
+    const bar = document.querySelector(".tab-bar");
+    if(bar && bar.classList.contains("small") && bar.contains(e.target)){
+      e.stopPropagation(); e.preventDefault(); bar.classList.remove("small"); haptic("light");
+    }
+  }, true);
+} }catch(e){}
+
+// ── Reveal on scroll ────────────────────────────────────────
+// Anything with .pl-reveal fades up as it enters its scroller. Plain DOM, like the dock:
+// several of these lists render inside IIFEs where a hook would be a rules-of-hooks
+// fault waiting to happen.
+// CRITICAL: root is the nearest .body / .lsx-scroll, never the viewport. html/body are
+// overflow:hidden;position:fixed, so a viewport-rooted observer reports every element as
+// intersecting at once and the whole effect silently does nothing — no error, just dead.
+try{ if(typeof document!=="undefined" && typeof window!=="undefined" && !window.__pkReveal
+     && typeof IntersectionObserver!=="undefined" && typeof MutationObserver!=="undefined"){
+  window.__pkReveal = 1;
+  const _revIO = new WeakMap();
+  const _obsFor = (root)=>{
+    const key = root || document;
+    let io = _revIO.get(key);
+    if(!io){
+      io = new IntersectionObserver((es)=>{ es.forEach(e=>{ if(e.isIntersecting){
+        e.target.classList.add("in"); try{ io.unobserve(e.target); }catch(_){} } }); },
+        {root: root||null, rootMargin:"0px 0px -6% 0px", threshold:0.04});
+      _revIO.set(key, io);
+    }
+    return io;
+  };
+  const _scan = ()=>{ try{
+    document.querySelectorAll(".pl-reveal:not(.in)").forEach((el)=>{
+      if(el.__pkObs) return; el.__pkObs = 1;
+      let root = null;
+      try{ root = el.closest(".body") || el.closest(".lsx-scroll") || null; }catch(e){}
+      _obsFor(root).observe(el);
+    });
+  }catch(e){} };
+  let _rraf = 0;
+  const _sched = ()=>{ if(_rraf) return; _rraf = requestAnimationFrame(()=>{ _rraf = 0; _scan(); }); };
+  new MutationObserver(_sched).observe(document.documentElement,{childList:true,subtree:true});
+  _sched();
+} }catch(e){}
+
 const SkelGroup = ({children,style,className}) => {
   const gRef = useRef(null);
   useEffect(()=>{
@@ -682,7 +865,7 @@ const Skel = ({w="100%",h=12,r=6,style,className}) => (<div className={"pk-sk"+(
 // Varied widths so a list of placeholders reads organic instead of ruled.
 const SK_W  = ["62%","48%","70%","55%","44%","66%"];
 const SK_W2 = ["34%","42%","28%","38%","30%","36%"];
-const SK_CARD = {background:"#131318",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:15};
+const SK_CARD = {background:"#131318",border:EDGE.hair,borderRadius:RAD.lg};
 
 // Row list — leaderboard, leagues, browse, past matchup, gamecast stats, lineup.
 const SkelRows = ({n=5,avatar=true,trail=true,sub=true,card=false,pad="0 16px"}) => (
@@ -706,7 +889,7 @@ const SkelRows = ({n=5,avatar=true,trail=true,sub=true,card=false,pad="0 16px"})
 const SkelCards = ({n=3,pad="0 16px",chips=3}) => (
   <SkelGroup style={{padding:pad}}>
     {Array.from({length:n}).map((_,i)=>(
-      <div key={i} style={{...SK_CARD,borderRadius:14,padding:"13px 14px",marginBottom:10}}>
+      <div key={i} style={{...SK_CARD,borderRadius:RAD.lg,padding:"13px 14px",marginBottom:10}}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
           <Skel w={28} h={28} r={14}/><Skel w={SK_W[i%SK_W.length]} h={13}/>
           <div style={{flex:1}}/><Skel w={38} h={13}/>
@@ -727,7 +910,7 @@ const SkelCards = ({n=3,pad="0 16px",chips=3}) => (
 const SkelBets = ({n=5,pad="6px 16px"}) => (
   <SkelGroup style={{padding:pad}}>
     {Array.from({length:n}).map((_,i)=>(
-      <div key={i} style={{...SK_CARD,borderRadius:13,padding:"12px 13px",marginBottom:8,display:"flex",alignItems:"center",gap:11}}>
+      <div key={i} style={{...SK_CARD,borderRadius:RAD.md,padding:"12px 13px",marginBottom:8,display:"flex",alignItems:"center",gap:11}}>
         <div style={{flex:1,minWidth:0}}>
           <Skel w={SK_W[i%SK_W.length]} h={14}/>
           <Skel w={SK_W2[i%SK_W2.length]} h={10} style={{marginTop:7}}/>
@@ -1385,7 +1568,7 @@ function LeagueWeekRecap({ data, IOS, onClose }){
   const GOLD=C.gold||"#FFD60A";
   const canPrev=idx>0, canNext=idx<weeks.length-1;
   const tw=(str,n)=>{ str=String(str||""); return str.length>n?str.slice(0,n-1)+"…":str; };
-  const navBtn=(on)=>({width:26,height:26,borderRadius:7,border:"none",background:on?"rgba(255,255,255,.12)":"rgba(255,255,255,.04)",color:on?"#fff":"rgba(255,255,255,.22)",cursor:on?"pointer":"default",fontSize:15,fontWeight:800,lineHeight:1,display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontFamily:"Barlow,sans-serif"});
+  const navBtn=(on)=>({width:26,height:26,borderRadius:RAD.sm,border:"none",background:on?"rgba(255,255,255,.12)":"rgba(255,255,255,.04)",color:on?"#fff":"rgba(255,255,255,.22)",cursor:on?"pointer":"default",fontSize:15,fontWeight:800,lineHeight:1,display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontFamily:"Barlow,sans-serif"});
   const shareCard=async()=>{
     try{
       if(document.fonts&&document.fonts.ready){ try{ await document.fonts.ready; }catch(e){} }
@@ -1418,7 +1601,7 @@ function LeagueWeekRecap({ data, IOS, onClose }){
   };
   return (
     <div style={{position:"fixed",inset:0,zIndex:9000,background:"radial-gradient(120% 80% at 50% 12%,rgba(10,132,255,.34),#04060c 68%)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 18px"}} onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:360,background:"linear-gradient(160deg,#16244d,#0a1024)",border:"1px solid rgba(122,168,255,.45)",borderRadius:24,padding:"22px 20px",position:"relative",overflow:"hidden",boxShadow:"0 30px 80px -20px rgba(0,0,0,.8)"}}>
+      <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:360,background:"linear-gradient(160deg,#16244d,#0a1024)",border:"1px solid rgba(122,168,255,.45)",borderRadius:RAD.xl,padding:"22px 20px",position:"relative",overflow:"hidden",boxShadow:"0 30px 80px -20px rgba(0,0,0,.8)"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{fontSize:15,fontWeight:800,color:"#fff"}}>PickLock<span style={{color:C.blue}}>.</span></div>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -1451,8 +1634,8 @@ function LeagueWeekRecap({ data, IOS, onClose }){
         <div style={{fontSize:12,fontWeight:600,color:"rgba(255,255,255,.55)"}}>League hit {cur.hitPct}% · {cur.totalPicks} picks this week</div>
       </div>
       <div style={{display:"flex",gap:10,marginTop:18,width:"100%",maxWidth:360}}>
-        <button onClick={shareCard} style={{flex:1,background:C.blue,color:"#fff",border:"none",borderRadius:12,padding:"13px",fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"Barlow,sans-serif",boxShadow:"0 8px 24px -8px rgba(10,132,255,.7)"}}>Share</button>
-        <button onClick={onClose} style={{flex:1,background:"rgba(255,255,255,.1)",color:"#fff",border:"none",borderRadius:12,padding:"13px",fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Done</button>
+        <button onClick={shareCard} style={{flex:1,background:C.blue,color:"#fff",border:"none",borderRadius:RAD.md,padding:"13px",fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"Barlow,sans-serif",boxShadow:"0 8px 24px -8px rgba(10,132,255,.7)"}}>Share</button>
+        <button onClick={onClose} style={{flex:1,background:"rgba(255,255,255,.1)",color:"#fff",border:"none",borderRadius:RAD.md,padding:"13px",fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Done</button>
       </div>
       {toast&&<div style={{marginTop:12,fontSize:12,color:"rgba(255,255,255,.7)"}}>{toast}</div>}
     </div>
@@ -1730,7 +1913,7 @@ function MatchBody({ d, IOS, liveGames=[], onOpenGamecast }){
     return (
     <div style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0"}}>
       <div style={{width:88,flexShrink:0,fontSize:12,fontWeight:800,color:tint,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{name}</div>
-      <div style={{flex:1,height:24,borderRadius:7,background:"rgba(0,0,0,0.35)",position:"relative",overflow:"hidden",
+      <div style={{flex:1,height:24,borderRadius:RAD.sm,background:"rgba(0,0,0,0.35)",position:"relative",overflow:"hidden",
         boxShadow:"inset 0 1px 2px rgba(0,0,0,0.5), inset 0 0 0 0.5px rgba(255,255,255,0.05)"}}>
         {/* banked — gradient fill + top sheen + a glow in the team colour */}
         <div style={{position:"absolute",left:0,top:0,bottom:0,borderRadius:lockedPct>=99?"7px":"7px 0 0 7px",width:`${lockedPct}%`,
@@ -1785,7 +1968,7 @@ function MatchBody({ d, IOS, liveGames=[], onOpenGamecast }){
               {_drawerOpen ? "⟲ REPLACED" : "⟲ REPLACED · view original"}
             </div>
             {_drawerOpen && (
-              <div style={{marginTop:6,padding:"6px 9px",background:"rgba(255,159,10,0.05)",borderLeft:right?"none":"2px solid rgba(255,159,10,0.45)",borderRight:right?"2px solid rgba(255,159,10,0.45)":"none",borderRadius:6}}>
+              <div style={{marginTop:6,padding:"6px 9px",background:"rgba(255,159,10,0.05)",borderLeft:right?"none":"2px solid rgba(255,159,10,0.45)",borderRight:right?"2px solid rgba(255,159,10,0.45)":"none",borderRadius:RAD.sm}}>
                 <div style={{fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.42)",textDecoration:"line-through",textDecorationColor:"rgba(255,69,58,0.7)"}}>{pk.replacedFrom.name}</div>
                 <div style={{fontSize:8.5,fontWeight:700,color:"#FF9F0A",marginTop:2,letterSpacing:"0.03em"}}>{"VOIDED"+(pk.replacedFrom.date?" · "+_vdate(pk.replacedFrom.date):"")}</div>
               </div>
@@ -1817,7 +2000,7 @@ function MatchBody({ d, IOS, liveGames=[], onOpenGamecast }){
           return (
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"2px 20px 4px"}}>
             <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
-              <div style={{width:44,height:44,borderRadius:22,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#000",background:aTint,boxShadow:aWin||!reallyFinal?"0 0 16px #64D2FF55":"none"}}>{d.a.you?"You":ini(d.a.name)}</div>
+              <div style={{width:44,height:44,borderRadius:RAD.xl,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#000",background:aTint,boxShadow:aWin||!reallyFinal?"0 0 16px #64D2FF55":"none"}}>{d.a.you?"You":ini(d.a.name)}</div>
               <div style={{fontSize:13,fontWeight:800,color:aWin?"#fff":"rgba(255,255,255,0.7)",maxWidth:110,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.a.name}</div>
               <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:38,fontWeight:900,lineHeight:1,color:aWin||!reallyFinal?"#fff":"rgba(255,255,255,0.35)"}}>{cA.locked.toFixed(1)}</div>
             </div>
@@ -1825,7 +2008,7 @@ function MatchBody({ d, IOS, liveGames=[], onOpenGamecast }){
               {openTotal>0 ? <div style={{fontSize:10,fontWeight:900,letterSpacing:"0.1em",color:"#30D158"}}>● LIVE</div> : <div style={{fontSize:10,fontWeight:900,letterSpacing:"0.1em",color:"rgba(255,255,255,0.3)"}}>{reallyFinal?"FINAL":"VS"}</div>}
             </div>
             <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
-              <div style={{width:44,height:44,borderRadius:22,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#000",background:bTint,boxShadow:bWin?"0 0 16px #0A84FF55":"none"}}>{d.b.you?"You":ini(d.b.name)}</div>
+              <div style={{width:44,height:44,borderRadius:RAD.xl,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#000",background:bTint,boxShadow:bWin?"0 0 16px #0A84FF55":"none"}}>{d.b.you?"You":ini(d.b.name)}</div>
               <div style={{fontSize:13,fontWeight:800,color:bWin?"#fff":"rgba(255,255,255,0.7)",maxWidth:110,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.b.name}</div>
               <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:38,fontWeight:900,lineHeight:1,color:bWin||!reallyFinal?"#fff":"rgba(255,255,255,0.35)"}}>{cB.locked.toFixed(1)}</div>
             </div>
@@ -1835,7 +2018,7 @@ function MatchBody({ d, IOS, liveGames=[], onOpenGamecast }){
 
         {/* ── Ceiling: locked vs still possible. Answers "am I actually safe", which the
             app could not answer at all before. ── */}
-        <div style={{margin:"4px 14px 0",background:"rgba(255,255,255,0.03)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:14,padding:"11px 13px"}}>
+        <div style={{margin:"4px 14px 0",background:"rgba(255,255,255,0.03)",border:EDGE.hair,borderRadius:RAD.lg,padding:"11px 13px"}}>
           <div style={{fontSize:9,fontWeight:900,letterSpacing:"0.1em",textTransform:"uppercase",color:"rgba(255,255,255,0.25)",marginBottom:3}}>Locked vs. still possible</div>
           {bar(cA, aWin||!d.winnerId ? "#64D2FF" : "rgba(255,255,255,0.3)", d.a.name)}
           {bar(cB, bWin||!d.winnerId ? IOS.blue : "rgba(255,255,255,0.3)", d.b.name)}
@@ -1849,7 +2032,7 @@ function MatchBody({ d, IOS, liveGames=[], onOpenGamecast }){
         </div>
 
         {/* ── The ledger ── */}
-        <div style={{margin:"12px 14px 0",background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:14,overflow:"hidden"}}>
+        <div style={{margin:"12px 14px 0",background:IOS.bg2,border:EDGE.hair,borderRadius:RAD.lg,overflow:"hidden"}}>
           <div style={{display:"flex",alignItems:"center",padding:"8px 11px",background:"rgba(255,255,255,0.03)",borderBottom:"0.5px solid rgba(255,255,255,0.07)"}}>
             <div style={{flex:1,fontSize:8.5,fontWeight:900,letterSpacing:"0.07em",color:"rgba(255,255,255,0.28)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{(d.a.name||"").toUpperCase()}</div>
             <div style={{width:52,textAlign:"center",fontSize:8.5,fontWeight:900,letterSpacing:"0.07em",color:"rgba(255,255,255,0.28)"}}>SLOT</div>
@@ -1951,7 +2134,7 @@ function ChampCelebrate({ name, leagueName, isYou, members, record, points, runn
       <div className="champ-name">{name||"Champion"}</div>
       <div className="champ-sub">{(leagueName||"Tournament")+(members?(" · "+members+" players"):"")}</div>
       {stats.length>0 && (
-        <div style={{display:"flex",marginTop:20,marginBottom:4,border:"1px solid rgba(255,255,255,0.12)",borderRadius:14,overflow:"hidden",maxWidth:340,width:"86%"}}>
+        <div style={{display:"flex",marginTop:20,marginBottom:4,border:"1px solid rgba(255,255,255,0.12)",borderRadius:RAD.lg,overflow:"hidden",maxWidth:340,width:"86%"}}>
           {stats.map((sx,i)=>(
             <div key={i} style={{flex:1,padding:"12px 10px",textAlign:"center",borderLeft:i?"1px solid rgba(255,255,255,0.10)":"none"}}>
               <div style={{fontSize:16,fontWeight:800,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{sx[1]}</div>
@@ -1996,7 +2179,7 @@ function BetslipButton({ bet, IOS }){
   const b = data.best;
   return (
     <div className="ai-rise" style={{marginTop:8}}>
-      <a href={b.link} target="_blank" rel="noopener noreferrer" style={{textDecoration:"none",width:"100%",padding:"10px",borderRadius:10,border:`1px solid ${IOS.blue}55`,background:`${IOS.blue}14`,color:IOS.blue,fontSize:13,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",gap:7,boxSizing:"border-box"}}>
+      <a href={b.link} target="_blank" rel="noopener noreferrer" style={{textDecoration:"none",width:"100%",padding:"10px",borderRadius:RAD.md,border:`1px solid ${IOS.blue}55`,background:`${IOS.blue}14`,color:IOS.blue,fontSize:13,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",gap:7,boxSizing:"border-box"}}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17L17 7"/><path d="M7 7h10v10"/></svg>
         Bet on {b.title}{b.price!=null?("  ("+(b.price>0?"+":"")+b.price+")"):""}
       </a>
@@ -2057,18 +2240,18 @@ function AiInsightBubble({ item, IOS, onAddToSlip }) {
     )}
     {/* ── +EV HUNTER card (approved mockup 21 Jul 2026): server-computed numbers, LLM prose demoted to one quote ── */}
     {data.hunter && (()=>{ const h=data.hunter; const vc = h.verdict==="PLAY"||h.verdict==="LEAN PLAY" ? IOS.green : h.verdict==="THIN" ? IOS.orange : IOS.red; const compMax = Math.max(1, ...h.components.map(c=>Math.abs(c.value))); return (<div className="ai-rise">
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.04)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:13,padding:"13px 14px",marginBottom:8}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.04)",border:EDGE.hair,borderRadius:RAD.md,padding:"13px 14px",marginBottom:8}}>
         <div><div style={{fontSize:20,fontWeight:800,letterSpacing:"-0.4px",color:vc}}>{h.verdict}</div><div style={{fontSize:8.5,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)",marginTop:2}}>The Sharp’s read</div></div>
         <div style={{textAlign:"right"}}><div style={{fontSize:24,fontWeight:800,letterSpacing:"-0.8px",color:vc,fontFamily:"'Barlow Semi Condensed',sans-serif"}}>{h.edgePts>0?"+":""}{h.edgePts}</div><div style={{fontSize:8.5,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)"}}>pts of edge</div></div>
       </div>
       <div style={{display:"flex",gap:7,marginBottom:8}}>
         {[{n:h.modelProb+"%",l:"Model win prob",c:"#fff"},{n:h.impliedProb+"%",l:"Implied by "+h.odds,c:"rgba(255,255,255,0.46)"},{n:String(h.odds),l:"Price",c:vc}].map((b,bi)=>(
-          <div key={bi} style={{flex:1,background:"rgba(255,255,255,0.04)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:11,padding:"10px 6px",textAlign:"center"}}>
+          <div key={bi} style={{flex:1,background:"rgba(255,255,255,0.04)",border:EDGE.hair,borderRadius:RAD.md,padding:"10px 6px",textAlign:"center"}}>
             <div style={{fontSize:16,fontWeight:800,letterSpacing:"-0.3px",color:b.c}}>{b.n}</div>
             <div style={{fontSize:7.5,fontWeight:700,letterSpacing:"0.07em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)",marginTop:3,whiteSpace:"nowrap"}}>{b.l}</div>
           </div>))}
       </div>
-      <div style={{background:"rgba(255,255,255,0.04)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"11px 13px",marginBottom:8}}>
+      <div style={{background:"rgba(255,255,255,0.04)",border:EDGE.hair,borderRadius:RAD.md,padding:"11px 13px",marginBottom:8}}>
         <div style={{fontSize:8.5,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)",marginBottom:8}}>Where the edge comes from</div>
         {h.components.map((c,ci)=>(<div key={ci} style={{display:"flex",alignItems:"center",gap:9,marginBottom:ci<h.components.length-1?7:0}}>
           <span style={{width:76,fontSize:10.5,fontWeight:600,color:"rgba(255,255,255,0.46)",flexShrink:0}}>{c.label}</span>
@@ -2076,22 +2259,22 @@ function AiInsightBubble({ item, IOS, onAddToSlip }) {
           <span style={{width:36,textAlign:"right",fontSize:10.5,fontWeight:800,color:c.value>=0?IOS.green:IOS.red,flexShrink:0}}>{c.value>=0?"+":""}{c.value}</span>
         </div>))}
       </div>
-      <div style={{background:"rgba(255,255,255,0.04)",border:"0.5px solid rgba(255,255,255,0.08)",borderLeft:`2px solid ${IOS.blue}`,borderRadius:11,padding:"10px 12px",marginBottom:8,fontSize:12.5,lineHeight:1.5,color:"rgba(255,255,255,0.8)"}}>{shownSummary}{typing && <span className="ai-caret"/>}</div>
-      {h.yourRecord && (<div style={{display:"flex",alignItems:"center",gap:8,padding:"9px 12px",background:"rgba(10,132,255,0.06)",border:"0.5px solid rgba(10,132,255,0.25)",borderRadius:10,marginBottom:8,fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.7)"}}><span style={{fontSize:8,fontWeight:800,letterSpacing:"0.07em",color:IOS.blue,flexShrink:0}}>YOUR RECORD</span>{h.yourRecord}</div>)}
+      <div style={{background:"rgba(255,255,255,0.04)",border:EDGE.hair,borderLeft:`2px solid ${IOS.blue}`,borderRadius:RAD.md,padding:"10px 12px",marginBottom:8,fontSize:12.5,lineHeight:1.5,color:"rgba(255,255,255,0.8)"}}>{shownSummary}{typing && <span className="ai-caret"/>}</div>
+      {h.yourRecord && (<div style={{display:"flex",alignItems:"center",gap:8,padding:"9px 12px",background:"rgba(10,132,255,0.06)",border:"0.5px solid rgba(10,132,255,0.25)",borderRadius:RAD.md,marginBottom:8,fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.7)"}}><span style={{fontSize:8,fontWeight:800,letterSpacing:"0.07em",color:IOS.blue,flexShrink:0}}>YOUR RECORD</span>{h.yourRecord}</div>)}
     </div>); })()}
     {/* ── Trends & Form ten-cell strips (approved mockup 21 Jul 2026) ── */}
     {phase>=1 && data.strips && (()=>{ const st=data.strips; const Strip=({cells})=>(<div style={{flex:1,display:"flex",gap:3}}>{(cells||[]).map((c,ci)=>(<div key={ci} style={{flex:1,height:13,borderRadius:3,background:c==="o"||c==="c"?"rgba(48,209,88,0.55)":"rgba(255,255,255,0.10)"}}/>))}</div>); return (<div className="ai-rise" style={{marginBottom:11}}>
-      {st.total && (<div style={{background:"rgba(255,255,255,0.04)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"11px 12px",marginBottom:7}}>
+      {st.total && (<div style={{background:"rgba(255,255,255,0.04)",border:EDGE.hair,borderRadius:RAD.md,padding:"11px 12px",marginBottom:7}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:9}}><span style={{fontSize:11.5,fontWeight:800}}>Tonight’s total {st.total.line}, applied backwards</span><span style={{fontSize:8,fontWeight:700,letterSpacing:"0.08em",color:"rgba(255,255,255,0.3)"}}>LAST 10</span></div>
         {[st.total.away,st.total.home].filter(Boolean).map((t,ti)=>(<div key={ti} style={{display:"flex",alignItems:"center",gap:8,marginBottom:ti===0?7:0}}><span style={{width:32,fontSize:11,fontWeight:800,flexShrink:0}}>{t.ab}</span><Strip cells={t.cells}/><span style={{width:48,textAlign:"right",fontSize:10.5,fontWeight:800,color:t.o>=Math.ceil(t.n*0.7)?IOS.green:"#fff",flexShrink:0}}>{t.o} over</span></div>))}
       </div>)}
-      {st.spread && (<div style={{background:"rgba(255,255,255,0.04)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"11px 12px"}}>
+      {st.spread && (<div style={{background:"rgba(255,255,255,0.04)",border:EDGE.hair,borderRadius:RAD.md,padding:"11px 12px"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:9}}><span style={{fontSize:11.5,fontWeight:800}}>Spread {st.spread.team} {st.spread.point>0?"+":""}{st.spread.point}, applied backwards</span><span style={{fontSize:8,fontWeight:700,letterSpacing:"0.08em",color:"rgba(255,255,255,0.3)"}}>LAST 10</span></div>
         <div style={{display:"flex",alignItems:"center",gap:8}}><span style={{width:32,fontSize:11,fontWeight:800,flexShrink:0}}>{st.spread.team}</span><Strip cells={st.spread.cells}/><span style={{width:52,textAlign:"right",fontSize:10.5,fontWeight:800,color:st.spread.c>=Math.ceil(st.spread.n*0.7)?IOS.green:"#fff",flexShrink:0}}>{st.spread.c} cover</span></div>
       </div>)}
     </div>); })()}
     {phase>=1 && data.matchup && data.matchup.away && data.matchup.home && data.model!=="trends" && !data.hunter && (
-      <div className="ai-rise" style={{marginBottom:11,borderRadius:11,overflow:"hidden",border:"0.5px solid rgba(255,255,255,0.09)"}}>
+      <div className="ai-rise" style={{marginBottom:11,borderRadius:RAD.md,overflow:"hidden",border:EDGE.hair}}>
         <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",alignItems:"center",padding:"8px 12px",background:"rgba(255,255,255,0.05)"}}>
           <div style={{fontSize:13,fontWeight:800,color:IOS.blue,textAlign:"left",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{data.matchup.away.abbr||data.matchup.away.name}</div>
           <div style={{fontSize:9,fontWeight:800,color:"rgba(255,255,255,0.3)",letterSpacing:"0.06em",padding:"0 8px"}}>VS</div>
@@ -2121,7 +2304,7 @@ function AiInsightBubble({ item, IOS, onAddToSlip }) {
       </div>
     )}
     {phase>=1 && data.yourAngle && !data.hunter && (
-      <div className="ai-rise" style={{display:"flex",alignItems:"flex-start",gap:8,background:`linear-gradient(135deg,${IOS.blue}1f,${IOS.indigo}12)`,border:`0.5px solid ${IOS.blue}3a`,borderRadius:11,padding:"10px 12px",marginBottom:11}}>
+      <div className="ai-rise" style={{display:"flex",alignItems:"flex-start",gap:8,background:`linear-gradient(135deg,${IOS.blue}1f,${IOS.indigo}12)`,border:`0.5px solid ${IOS.blue}3a`,borderRadius:RAD.md,padding:"10px 12px",marginBottom:11}}>
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginTop:1}}><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 12 0v1"/><path d="M17.5 7.5l1.5 1.5 3-3"/></svg>
         <div>
           <div style={{fontSize:9,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:IOS.blue,marginBottom:2}}>Your angle</div>
@@ -2136,10 +2319,10 @@ function AiInsightBubble({ item, IOS, onAddToSlip }) {
       const tc = v==="strong"?IOS.green : v==="lean"?IOS.blue : v==="fade"?IOS.red : IOS.label3;
       const vlabel = v==="strong"?"Strong lean" : v==="lean"?"Lean" : v==="fade"?"Fade" : "Pass";
       return (
-        <div className="ai-rise" style={{background:"rgba(255,255,255,0.04)",border:`0.5px solid ${tc}3a`,borderRadius:11,padding:"11px 12px",marginBottom:11}}>
+        <div className="ai-rise" style={{background:"rgba(255,255,255,0.04)",border:`0.5px solid ${tc}3a`,borderRadius:RAD.md,padding:"11px 12px",marginBottom:11}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <div style={{fontSize:9,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:"rgba(255,255,255,0.4)"}}>Plok read</div>
-            <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.04em",textTransform:"uppercase",color:tc,background:`${tc}1f`,borderRadius:6,padding:"3px 8px"}}>{vlabel}</div>
+            <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.04em",textTransform:"uppercase",color:tc,background:`${tc}1f`,borderRadius:RAD.sm,padding:"3px 8px"}}>{vlabel}</div>
           </div>
           {!isPass ? (
             <div style={{display:"flex",alignItems:"center",gap:9,marginTop:8}}>
@@ -2160,7 +2343,7 @@ function AiInsightBubble({ item, IOS, onAddToSlip }) {
     {phase>=1 && !data.hunter && !data.matchup && data.keyStats && data.keyStats.length>0 && (
       <div className="ai-rise" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7,marginBottom:11}}>
         {data.keyStats.slice(0,4).map((s,si)=>(
-          <div key={si} style={{background:"rgba(255,255,255,0.04)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:9,padding:"8px 10px"}}>
+          <div key={si} style={{background:"rgba(255,255,255,0.04)",border:EDGE.hair,borderRadius:RAD.sm,padding:"8px 10px"}}>
             <div style={{fontSize:16,fontWeight:800,color:"#fff",lineHeight:1.1}}>{s.value}</div>
             <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.04em",textTransform:"uppercase",color:"rgba(255,255,255,0.4)",marginTop:3}}>{s.label}</div>
           </div>
@@ -2193,7 +2376,7 @@ function AiInsightBubble({ item, IOS, onAddToSlip }) {
     )}
     {phase>=5 && item.bet && (
       <button className="ai-rise" onClick={onAddToSlip} disabled={item.added}
-        style={{marginTop:12,width:"100%",padding:"10px",borderRadius:10,border:"none",cursor:item.added?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:item.added?"rgba(48,209,88,0.18)":IOS.blue,color:item.added?IOS.green:"#fff",fontSize:13,fontWeight:800}}>
+        style={{marginTop:12,width:"100%",padding:"10px",borderRadius:RAD.md,border:"none",cursor:item.added?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:item.added?"rgba(48,209,88,0.18)":IOS.blue,color:item.added?IOS.green:"#fff",fontSize:13,fontWeight:800}}>
         {item.added && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
         {item.added ? "Added to slip" : "Add to slip"}
       </button>
@@ -2812,12 +2995,12 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
   return (
     <div style={{padding:"0 16px 40px"}}>
       {!heroCollapsed ? (
-      <div style={{position:"relative",borderRadius:22,padding:"20px 18px 18px",overflow:"hidden",marginBottom:12,background:"radial-gradient(130% 120% at 8% -10%, rgba(10,132,255,0.4), rgba(94,92,230,0.16) 42%, rgba(12,12,16,0) 72%),linear-gradient(160deg,#10204a 0%,#0a0a12 78%)",border:"1px solid rgba(10,132,255,0.32)",boxShadow:"0 22px 60px -26px rgba(10,132,255,0.7)"}}>
+      <div style={{position:"relative",borderRadius:RAD.xl,padding:"20px 18px 18px",overflow:"hidden",marginBottom:12,background:"radial-gradient(130% 120% at 8% -10%, rgba(10,132,255,0.4), rgba(94,92,230,0.16) 42%, rgba(12,12,16,0) 72%),linear-gradient(160deg,#10204a 0%,#0a0a12 78%)",border:"1px solid rgba(10,132,255,0.32)",boxShadow:"0 22px 60px -26px rgba(10,132,255,0.7)"}}>
         <div style={{position:"absolute",top:-50,right:-40,width:200,height:200,borderRadius:"50%",background:IOS.indigo,filter:"blur(70px)",opacity:0.34}}/>
         <div onClick={collapseHero} style={{position:"absolute",top:12,right:12,width:28,height:28,borderRadius:"50%",background:"rgba(255,255,255,0.1)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",zIndex:2}}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2.4" strokeLinecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
         </div>
-        <div style={{position:"relative",display:"inline-flex",alignItems:"center",gap:6,background:"rgba(255,255,255,0.1)",border:"0.5px solid rgba(255,255,255,0.16)",borderRadius:20,padding:"4px 11px",fontSize:10.5,fontWeight:800,letterSpacing:0.4,color:"#fff"}}>
+        <div style={{position:"relative",display:"inline-flex",alignItems:"center",gap:6,background:"rgba(255,255,255,0.1)",border:EDGE.hair3,borderRadius:RAD.pill,padding:"4px 11px",fontSize:10.5,fontWeight:800,letterSpacing:0.4,color:"#fff"}}>
           <span style={{width:6,height:6,borderRadius:"50%",background:IOS.green,boxShadow:`0 0 8px ${IOS.green}`}}/>{(tickerGames||[]).length>0?`${(tickerGames||[]).length} games on the board`:"Live odds, every game"}
         </div>
         {_hotWk ? (
@@ -2832,23 +3015,23 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
           ))}
           <span style={{marginLeft:8,fontSize:11.5,color:IOS.label2,fontWeight:600}}>matchups · playoffs · trophies</span>
         </div>
-        <button onClick={()=>{setScreen("leagues");setShowNewLeague(true);setNewLeagueStep(0);}} style={{position:"relative",marginTop:16,width:"100%",background:"linear-gradient(180deg,#0a84ff,#0066d6)",border:"none",borderRadius:13,padding:"15px",fontSize:15.5,fontWeight:800,color:"#fff",fontFamily:"Barlow,sans-serif",cursor:"pointer",boxShadow:"0 8px 24px -8px rgba(10,132,255,0.8)",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+        <button onClick={()=>{setScreen("leagues");setShowNewLeague(true);setNewLeagueStep(0);}} style={{position:"relative",marginTop:16,width:"100%",background:"linear-gradient(180deg,#0a84ff,#0066d6)",border:"none",borderRadius:RAD.md,padding:"15px",fontSize:15.5,fontWeight:800,color:"#fff",fontFamily:"Barlow,sans-serif",cursor:"pointer",boxShadow:"0 8px 24px -8px rgba(10,132,255,0.8)",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Create a league
         </button>
         <div style={{position:"relative",display:"flex",gap:9,marginTop:9}}>
-          <div onClick={()=>{setShowBrowse(true);fetchPublicLeagues();}} style={{flex:1,background:"rgba(255,255,255,0.07)",border:"0.5px solid rgba(255,255,255,0.14)",borderRadius:12,padding:"12px",fontSize:13.5,fontWeight:800,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
+          <div onClick={()=>{setShowBrowse(true);fetchPublicLeagues();}} style={{flex:1,background:"rgba(255,255,255,0.07)",border:EDGE.hair3,borderRadius:RAD.md,padding:"12px",fontSize:13.5,fontWeight:800,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>Browse public
           </div>
-          <div onClick={()=>{ const c=(window.prompt("Enter invite code")||"").trim(); if(c&&onJoinCode) onJoinCode(c); }} style={{flex:1,background:"rgba(255,255,255,0.07)",border:"0.5px solid rgba(255,255,255,0.14)",borderRadius:12,padding:"12px",fontSize:13.5,fontWeight:800,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
+          <div onClick={()=>{ const c=(window.prompt("Enter invite code")||"").trim(); if(c&&onJoinCode) onJoinCode(c); }} style={{flex:1,background:"rgba(255,255,255,0.07)",border:EDGE.hair3,borderRadius:RAD.md,padding:"12px",fontSize:13.5,fontWeight:800,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>Join code
           </div>
         </div>
       </div>
       ) : (
-      <div onClick={expandHero} style={{display:"flex",alignItems:"center",gap:10,background:"linear-gradient(180deg,#12203f,#0b0f1c)",border:"0.5px solid rgba(10,132,255,0.28)",borderRadius:12,padding:"11px 14px",marginBottom:12,cursor:"pointer"}}>
+      <div onClick={expandHero} style={{display:"flex",alignItems:"center",gap:10,background:"linear-gradient(180deg,#12203f,#0b0f1c)",border:"0.5px solid rgba(10,132,255,0.28)",borderRadius:RAD.md,padding:"11px 14px",marginBottom:12,cursor:"pointer"}}>
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2"><circle cx="9" cy="8" r="3.2"/><circle cx="17" cy="9" r="2.6"/><path d="M3 20c0-3 3-5 6-5s6 2 6 5"/></svg>
         <div style={{flex:1,minWidth:0,fontSize:13,fontWeight:800,color:"#fff"}}>PickLock's better with friends</div>
-        <div onClick={(e)=>{e.stopPropagation();setScreen("leagues");setShowNewLeague(true);setNewLeagueStep(0);}} style={{fontSize:12,fontWeight:800,color:IOS.blue,background:"rgba(10,132,255,0.14)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:8,padding:"6px 12px",cursor:"pointer"}}>Create</div>
+        <div onClick={(e)=>{e.stopPropagation();setScreen("leagues");setShowNewLeague(true);setNewLeagueStep(0);}} style={{fontSize:12,fontWeight:800,color:IOS.blue,background:"rgba(10,132,255,0.14)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:RAD.sm,padding:"6px 12px",cursor:"pointer"}}>Create</div>
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2.4" strokeLinecap="round"><polyline points="6 9 12 15 18 9"/></svg>
       </div>
       )}
@@ -2858,15 +3041,15 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
       </div>
       {/* Stats row */}
       <div style={{display:"flex",gap:8,marginBottom:12}}>
-        <div style={{flex:1,background:IOS.bg2,borderRadius:10,padding:"10px 12px",border:"0.5px solid rgba(255,255,255,0.07)"}}>
+        <div style={{flex:1,background:IOS.bg2,borderRadius:RAD.md,padding:"10px 12px",border:EDGE.hair}}>
           <div style={{fontSize:10,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:3}}>Record</div>
           <div style={{fontSize:18,fontWeight:800,color:IOS.blue}}>{totalWins}-{totalLosses}</div>
         </div>
-        <div style={{flex:1,background:IOS.bg2,borderRadius:10,padding:"10px 12px",border:"0.5px solid rgba(255,255,255,0.07)"}}>
+        <div style={{flex:1,background:IOS.bg2,borderRadius:RAD.md,padding:"10px 12px",border:EDGE.hair}}>
           <div style={{fontSize:10,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:3}}>Win %</div>
           <div style={{fontSize:18,fontWeight:800,color:winPct>=60?IOS.green:winPct>=40?IOS.yellow:IOS.red}}>{winPct}%</div>
         </div>
-        <div style={{flex:1,background:IOS.bg2,borderRadius:10,padding:"10px 12px",border:"0.5px solid rgba(255,255,255,0.07)"}}>
+        <div style={{flex:1,background:IOS.bg2,borderRadius:RAD.md,padding:"10px 12px",border:EDGE.hair}}>
           <div style={{fontSize:10,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:3}}>Total Pts</div>
           <div style={{fontSize:18,fontWeight:800,color:"#fff"}}>{totalPts.toFixed(1)}</div>
         </div>
@@ -2874,19 +3057,19 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
 
       {/* Plok's Play of the Day */}
       {featGame && ((dayPlay && dayPlay.data) ? (
-        <div style={{background:"linear-gradient(135deg,rgba(10,132,255,0.14),rgba(94,92,230,0.08))",border:"0.5px solid rgba(10,132,255,0.32)",borderRadius:12,padding:"12px 14px",marginBottom:12}}>
+        <div style={{background:"linear-gradient(135deg,rgba(10,132,255,0.14),rgba(94,92,230,0.08))",border:"0.5px solid rgba(10,132,255,0.32)",borderRadius:RAD.md,padding:"12px 14px",marginBottom:12}}>
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg>
             <span style={{fontSize:11,fontWeight:800,letterSpacing:1.2,textTransform:"uppercase",color:IOS.blue,flex:1}}>Plok's Play of the Day</span>
-            {dayPlay.data.verdict && dayPlay.data.verdict!=="none" && <span style={{fontSize:9,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:dayPlay.data.verdict==="strong"?IOS.green:dayPlay.data.verdict==="fade"?IOS.red:IOS.blue,background:"rgba(255,255,255,0.06)",borderRadius:6,padding:"3px 7px"}}>{dayPlay.data.verdict==="strong"?"Strong lean":dayPlay.data.verdict==="lean"?"Lean":dayPlay.data.verdict==="fade"?"Fade":"Pass"}</span>}
+            {dayPlay.data.verdict && dayPlay.data.verdict!=="none" && <span style={{fontSize:9,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:dayPlay.data.verdict==="strong"?IOS.green:dayPlay.data.verdict==="fade"?IOS.red:IOS.blue,background:"rgba(255,255,255,0.06)",borderRadius:RAD.sm,padding:"3px 7px"}}>{dayPlay.data.verdict==="strong"?"Strong lean":dayPlay.data.verdict==="lean"?"Lean":dayPlay.data.verdict==="fade"?"Fade":"Pass"}</span>}
           </div>
           <div style={{fontSize:11,fontWeight:700,color:IOS.label2,marginBottom:6}}>{(featGame.away||"").split(" ").pop()} @ {(featGame.home||"").split(" ").pop()}</div>
           <div style={{fontSize:13,lineHeight:1.5,color:"rgba(255,255,255,0.88)"}}>{dayPlay.data.summary}</div>
-          <div onClick={async()=>{ if(setIsSoloMode) setIsSoloMode(true); const lgId=await getOrCreateSoloLeague(); if(setActiveLeagueId) setActiveLeagueId(lgId||"solo"); setScreen("picks"); }} style={{marginTop:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6,fontSize:11,fontWeight:800,color:IOS.blue,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:8,padding:"7px",cursor:"pointer"}}>Build today's slate →</div>
+          <div onClick={async()=>{ if(setIsSoloMode) setIsSoloMode(true); const lgId=await getOrCreateSoloLeague(); if(setActiveLeagueId) setActiveLeagueId(lgId||"solo"); setScreen("picks"); }} style={{marginTop:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6,fontSize:11,fontWeight:800,color:IOS.blue,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:RAD.sm,padding:"7px",cursor:"pointer"}}>Build today's slate →</div>
         </div>
       ) : (
-        <div onClick={async()=>{ if(!isPro){ if(setShowPaywall) setShowPaywall("ai"); return; } if(dayPlay&&dayPlay.loading) return; setDayPlay({loading:true}); fetch(API_BASE+"/api/findbet",{method:"POST",headers: await authHeaders(),body:JSON.stringify({sport:soloSport, game:(featGame.away+" @ "+featGame.home)})}).then(async r=>{ const d=await r.json().catch(()=>null); setDayPlay((r.ok&&d&&d.summary)?{data:d}:{error:true}); }).catch(()=>setDayPlay({error:true})); }} style={{display:"flex",alignItems:"center",gap:12,background:"linear-gradient(135deg,rgba(10,132,255,0.16),rgba(94,92,230,0.10))",border:"0.5px solid rgba(10,132,255,0.35)",borderRadius:12,padding:"12px 14px",marginBottom:12,cursor:"pointer"}}>
-          <div style={{width:34,height:34,borderRadius:10,background:"rgba(10,132,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+        <div onClick={async()=>{ if(!isPro){ if(setShowPaywall) setShowPaywall("ai"); return; } if(dayPlay&&dayPlay.loading) return; setDayPlay({loading:true}); fetch(API_BASE+"/api/findbet",{method:"POST",headers: await authHeaders(),body:JSON.stringify({sport:soloSport, game:(featGame.away+" @ "+featGame.home)})}).then(async r=>{ const d=await r.json().catch(()=>null); setDayPlay((r.ok&&d&&d.summary)?{data:d}:{error:true}); }).catch(()=>setDayPlay({error:true})); }} style={{display:"flex",alignItems:"center",gap:12,background:"linear-gradient(135deg,rgba(10,132,255,0.16),rgba(94,92,230,0.10))",border:"0.5px solid rgba(10,132,255,0.35)",borderRadius:RAD.md,padding:"12px 14px",marginBottom:12,cursor:"pointer"}}>
+          <div style={{width:34,height:34,borderRadius:RAD.md,background:"rgba(10,132,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
             {dayPlay&&dayPlay.loading ? <div style={{display:"flex",gap:3}}><span className="ai-dot"/><span className="ai-dot" style={{animationDelay:"0.15s"}}/><span className="ai-dot" style={{animationDelay:"0.3s"}}/></div> : <svg width="18" height="18" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg>}
           </div>
           <div style={{flex:1,minWidth:0}}>
@@ -2898,7 +3081,7 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
       ))}
 
       {/* This Week — expansive live tracker */}
-      <div style={{background:IOS.bg2,border:`0.5px solid ${weekHasPicks?"rgba(48,209,88,0.25)":"rgba(255,255,255,0.07)"}`,borderRadius:12,padding:"14px",marginBottom:16}}>
+      <div style={{background:IOS.bg2,border:`0.5px solid ${weekHasPicks?"rgba(48,209,88,0.25)":"rgba(255,255,255,0.07)"}`,borderRadius:RAD.md,padding:"14px",marginBottom:16}}>
         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:weekHasPicks?10:8}}>
           <div style={{minWidth:0}}>
             <div style={{fontSize:11,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5}}>This Week · {soloWeekRange(currentWeekNum)}</div>
@@ -2941,7 +3124,7 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
                               {p.game && <div style={{fontSize:10,color:IOS.label3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.game}</div>}
                             </div>
                             <div style={{fontSize:11,fontWeight:800,color:String(p.odds||"").startsWith("+")?IOS.green:IOS.blue,flexShrink:0}}>{p.odds}</div>
-                            <div style={{minWidth:52,flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1}}><div style={{fontSize:8.5,fontWeight:800,letterSpacing:0.3,color:rc}}>{rl}{res==="W"&&p.points_earned?` +${parseFloat(p.points_earned).toFixed(1)}`:""}</div><ScoreChip pick={p} live={liveMatch(p, liveGames)} onOpen={()=>{ if(onOpenGamecast) onOpenGamecast(p); }}/></div>{res==="P" && p.replaced_by && (<span style={{flexShrink:0,fontSize:8.5,fontWeight:800,letterSpacing:0.3,color:IOS.label3}}>REPLACED</span>)}{res==="P" && !p.replaced_by && p.week===currentWeekNum && onReplace && (<div onClick={(e)=>{ e.stopPropagation(); onReplace(p); }} style={{flexShrink:0,fontSize:9.5,fontWeight:800,color:IOS.blue,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.35)",borderRadius:7,padding:"4px 9px",cursor:"pointer"}}>REPLACE</div>)}{res==="P" && !p.replaced_by && p.week<currentWeekNum && (<span style={{flexShrink:0,fontSize:8.5,fontWeight:800,letterSpacing:0.3,color:"#FF9F0A"}}>COOKED</span>)}
+                            <div style={{minWidth:52,flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1}}><div style={{fontSize:8.5,fontWeight:800,letterSpacing:0.3,color:rc}}>{rl}{res==="W"&&p.points_earned?` +${parseFloat(p.points_earned).toFixed(1)}`:""}</div><ScoreChip pick={p} live={liveMatch(p, liveGames)} onOpen={()=>{ if(onOpenGamecast) onOpenGamecast(p); }}/></div>{res==="P" && p.replaced_by && (<span style={{flexShrink:0,fontSize:8.5,fontWeight:800,letterSpacing:0.3,color:IOS.label3}}>REPLACED</span>)}{res==="P" && !p.replaced_by && p.week===currentWeekNum && onReplace && (<div onClick={(e)=>{ e.stopPropagation(); onReplace(p); }} style={{flexShrink:0,fontSize:9.5,fontWeight:800,color:IOS.blue,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.35)",borderRadius:RAD.sm,padding:"4px 9px",cursor:"pointer"}}>REPLACE</div>)}{res==="P" && !p.replaced_by && p.week<currentWeekNum && (<span style={{flexShrink:0,fontSize:8.5,fontWeight:800,letterSpacing:0.3,color:"#FF9F0A"}}>COOKED</span>)}
                           </div>
                         );
                       })}
@@ -2956,7 +3139,7 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
           const lgId = await getOrCreateSoloLeague();
           if(setActiveLeagueId) setActiveLeagueId(lgId||"solo");
           setScreen("picks");
-        }} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:7,background:weekHasPicks?"rgba(255,255,255,0.08)":IOS.blue,border:"none",borderRadius:8,padding:"12px",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
+        }} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:7,background:weekHasPicks?"rgba(255,255,255,0.08)":IOS.blue,border:"none",borderRadius:RAD.sm,padding:"12px",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
           {weekHasPicks && <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>}
           {weekHasPicks ? "Add picks" : "Build This Slate"}
         </button>
@@ -2976,7 +3159,7 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
        <div style={{fontSize:11,fontWeight:800,color:IOS.label3}}>{_up.length} locked ahead</div>
      </div>
      {_up.map((pp,ui)=>{ const _sc=(SPORTS[pp.sport]&&SPORTS[pp.sport].color)||IOS.blue; const _mx=pp.multiplier||1; return (
-       <div key={pp.id||ui} style={{display:"flex",alignItems:"center",gap:11,background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"11px 13px",marginBottom:6}}>
+       <div key={pp.id||ui} style={{display:"flex",alignItems:"center",gap:11,background:IOS.bg2,border:EDGE.hair,borderRadius:RAD.md,padding:"11px 13px",marginBottom:6}}>
          <div style={{width:3,alignSelf:"stretch",borderRadius:2,background:_sc,minHeight:30}}/>
          <div style={{flex:1,minWidth:0}}>
            <div style={{fontSize:13.5,fontWeight:700,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{pp.pick_name||"Pick"}</div>
@@ -3003,7 +3186,7 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
             const isBest=bestWeek && bestWeek.week===w.week && bestWeek.pts>0 && soloWeeks.length>1;
             const stamp=slateStamp(w);
             return (
-            <div key={w.week} style={{background:IOS.bg2,border:`0.5px solid ${isOpen?"rgba(255,255,255,0.16)":"rgba(255,255,255,0.07)"}`,borderRadius:10,marginBottom:6,overflow:"hidden"}}>
+            <div key={w.week} style={{background:IOS.bg2,border:`0.5px solid ${isOpen?"rgba(255,255,255,0.16)":"rgba(255,255,255,0.07)"}`,borderRadius:RAD.md,marginBottom:6,overflow:"hidden"}}>
               <div onClick={()=>setOpenSlate(isOpen?null:w.week)} style={{padding:"11px 14px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}}>
                 <div style={{minWidth:0}}>
                   <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:2,display:"flex",alignItems:"center",gap:7}}>{soloWeekRange(w.week)}{isBest&&<span style={{fontSize:8,fontWeight:800,color:"#08110a",background:IOS.gold,borderRadius:4,padding:"1px 5px",letterSpacing:.3}}>BEST</span>}</div>
@@ -3042,7 +3225,7 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
                               {p.game && <div style={{fontSize:10,color:IOS.label3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.game}</div>}
                             </div>
                             <div style={{fontSize:11,fontWeight:800,color:String(p.odds||"").startsWith("+")?IOS.green:IOS.blue,flexShrink:0}}>{p.odds}</div>
-                            <div style={{minWidth:52,flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1}}><div style={{fontSize:8.5,fontWeight:800,letterSpacing:0.3,color:rc}}>{rl}{res==="W"&&p.points_earned?` +${parseFloat(p.points_earned).toFixed(1)}`:""}</div><ScoreChip pick={p} live={liveMatch(p, liveGames)} onOpen={()=>{ if(onOpenGamecast) onOpenGamecast(p); }}/></div>{res==="P" && p.replaced_by && (<span style={{flexShrink:0,fontSize:8.5,fontWeight:800,letterSpacing:0.3,color:IOS.label3}}>REPLACED</span>)}{res==="P" && !p.replaced_by && p.week===currentWeekNum && onReplace && (<div onClick={(e)=>{ e.stopPropagation(); onReplace(p); }} style={{flexShrink:0,fontSize:9.5,fontWeight:800,color:IOS.blue,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.35)",borderRadius:7,padding:"4px 9px",cursor:"pointer"}}>REPLACE</div>)}{res==="P" && !p.replaced_by && p.week<currentWeekNum && (<span style={{flexShrink:0,fontSize:8.5,fontWeight:800,letterSpacing:0.3,color:"#FF9F0A"}}>COOKED</span>)}
+                            <div style={{minWidth:52,flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1}}><div style={{fontSize:8.5,fontWeight:800,letterSpacing:0.3,color:rc}}>{rl}{res==="W"&&p.points_earned?` +${parseFloat(p.points_earned).toFixed(1)}`:""}</div><ScoreChip pick={p} live={liveMatch(p, liveGames)} onOpen={()=>{ if(onOpenGamecast) onOpenGamecast(p); }}/></div>{res==="P" && p.replaced_by && (<span style={{flexShrink:0,fontSize:8.5,fontWeight:800,letterSpacing:0.3,color:IOS.label3}}>REPLACED</span>)}{res==="P" && !p.replaced_by && p.week===currentWeekNum && onReplace && (<div onClick={(e)=>{ e.stopPropagation(); onReplace(p); }} style={{flexShrink:0,fontSize:9.5,fontWeight:800,color:IOS.blue,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.35)",borderRadius:RAD.sm,padding:"4px 9px",cursor:"pointer"}}>REPLACE</div>)}{res==="P" && !p.replaced_by && p.week<currentWeekNum && (<span style={{flexShrink:0,fontSize:8.5,fontWeight:800,letterSpacing:0.3,color:"#FF9F0A"}}>COOKED</span>)}
                           </div>
                         );
                       })}
@@ -3050,11 +3233,11 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
                     );
                   })}
                   <div style={{display:"flex",gap:8,marginTop:11}}>
-                    <button onClick={()=>shareSlate(w)} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:"rgba(191,90,242,0.12)",border:"0.5px solid rgba(191,90,242,0.3)",borderRadius:8,padding:"9px",fontSize:12,fontWeight:700,color:"#BF5AF2",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
+                    <button onClick={()=>shareSlate(w)} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:"rgba(191,90,242,0.12)",border:"0.5px solid rgba(191,90,242,0.3)",borderRadius:RAD.sm,padding:"9px",fontSize:12,fontWeight:700,color:"#BF5AF2",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#BF5AF2" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg>
                       Share
                     </button>
-                    <button onClick={async()=>{ if(window.confirm("Delete week "+soloWeekRange(w.week)+"? This removes its picks and updates your record.")){ if(onDeleteSlate) await onDeleteSlate(w.week); setOpenSlate(null); } }} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:"rgba(255,69,58,0.1)",border:"0.5px solid rgba(255,69,58,0.3)",borderRadius:8,padding:"9px",fontSize:12,fontWeight:700,color:IOS.red,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
+                    <button onClick={async()=>{ if(window.confirm("Delete week "+soloWeekRange(w.week)+"? This removes its picks and updates your record.")){ if(onDeleteSlate) await onDeleteSlate(w.week); setOpenSlate(null); } }} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:"rgba(255,69,58,0.1)",border:"0.5px solid rgba(255,69,58,0.3)",borderRadius:RAD.sm,padding:"9px",fontSize:12,fontWeight:700,color:IOS.red,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FF453A" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                       Delete
                     </button>
@@ -3064,22 +3247,22 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
             </div>
             );
           })}
-          {shareToast && <div style={{position:"fixed",left:"50%",bottom:96,transform:"translateX(-50%)",background:"rgba(20,20,26,0.96)",border:"0.5px solid rgba(255,255,255,0.12)",borderRadius:10,padding:"10px 16px",fontSize:12,fontWeight:700,color:"#fff",zIndex:99999,boxShadow:"0 8px 30px rgba(0,0,0,0.5)"}}>{shareToast}</div>}
+          {shareToast && <div style={{position:"fixed",left:"50%",bottom:96,transform:"translateX(-50%)",background:"rgba(20,20,26,0.96)",border:EDGE.hair2,borderRadius:RAD.md,padding:"10px 16px",fontSize:12,fontWeight:700,color:"#fff",zIndex:99999,boxShadow:"0 8px 30px rgba(0,0,0,0.5)"}}>{shareToast}</div>}
         </div>
       )}
 
       {/* Convert to league CTA */}
       {!heroCollapsed && (
-        <div style={{marginTop:12,background:"rgba(10,132,255,0.08)",border:"0.5px solid rgba(10,132,255,0.2)",borderRadius:12,padding:"14px"}}>
+        <div style={{marginTop:12,background:"rgba(10,132,255,0.08)",border:"0.5px solid rgba(10,132,255,0.2)",borderRadius:RAD.md,padding:"14px"}}>
           <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:4}}>{(totalWins+totalLosses)>0 ? `You’re picking at ${winPct}%` : "Solo’s just practice"}</div>
           <div style={{fontSize:11,color:IOS.label3,marginBottom:12,lineHeight:1.5}}>{(totalWins+totalLosses)>0 ? "The real fun is beating people you know. Put that record on the line." : "Round up your group and make it count — weekly matchups and a playoff."}</div>
           <div style={{display:"flex",gap:8}}>
-            <button onClick={()=>{setScreen("leagues");setShowNewLeague(true);setNewLeagueStep(0);}} style={{flex:1,background:IOS.blue,border:"none",borderRadius:8,padding:"10px",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Create League</button>
-            <button onClick={()=>{setShowBrowse(true);fetchPublicLeagues();}} style={{flex:1,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:8,padding:"10px",fontSize:12,fontWeight:700,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Browse Leagues</button>
+            <button onClick={()=>{setScreen("leagues");setShowNewLeague(true);setNewLeagueStep(0);}} style={{flex:1,background:IOS.blue,border:"none",borderRadius:RAD.sm,padding:"10px",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Create League</button>
+            <button onClick={()=>{setShowBrowse(true);fetchPublicLeagues();}} style={{flex:1,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:RAD.sm,padding:"10px",fontSize:12,fontWeight:700,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Browse Leagues</button>
           </div>
           <div style={{display:"flex",gap:8,marginTop:8}}>
-            <input value={joinCode} onChange={e=>setJoinCode(e.target.value)} placeholder="Join with code" style={{flex:1,background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:8,padding:"10px",color:"#fff",fontFamily:"Barlow,sans-serif",fontSize:13,fontWeight:700,letterSpacing:1.5,textTransform:"uppercase",outline:"none"}}/>
-            <button onClick={async()=>{ const c=(joinCode||"").trim(); if(!c) return; if(onJoinCode) await onJoinCode(c); setJoinCode(""); }} style={{background:joinCode.trim()?IOS.blue:"rgba(255,255,255,0.08)",border:"none",borderRadius:8,padding:"0 18px",fontSize:13,fontWeight:800,color:joinCode.trim()?"#fff":"rgba(255,255,255,0.35)",cursor:joinCode.trim()?"pointer":"default",fontFamily:"Barlow,sans-serif"}}>Join</button>
+            <input value={joinCode} onChange={e=>setJoinCode(e.target.value)} placeholder="Join with code" style={{flex:1,background:"rgba(255,255,255,0.05)",border:EDGE.hair2,borderRadius:RAD.sm,padding:"10px",color:"#fff",fontFamily:"Barlow,sans-serif",fontSize:13,fontWeight:700,letterSpacing:1.5,textTransform:"uppercase",outline:"none"}}/>
+            <button onClick={async()=>{ const c=(joinCode||"").trim(); if(!c) return; if(onJoinCode) await onJoinCode(c); setJoinCode(""); }} style={{background:joinCode.trim()?IOS.blue:"rgba(255,255,255,0.08)",border:"none",borderRadius:RAD.sm,padding:"0 18px",fontSize:13,fontWeight:800,color:joinCode.trim()?"#fff":"rgba(255,255,255,0.35)",cursor:joinCode.trim()?"pointer":"default",fontFamily:"Barlow,sans-serif"}}>Join</button>
           </div>
         </div>
       )}
@@ -3157,7 +3340,7 @@ function LineupSection({ away, home, date, firstPitchLabel, IOS }) {
   const oppHand=data?(side==="away"?(data.home&&data.home.pitcherHand):(data.away&&data.away.pitcherHand)):"";
   const fav=(bat)=> bat==="S"||(!!oppHand&&!!bat&&bat!==oppHand);
   const nick=(t,fb)=>{ const st=String((t&&t.team)||fb||""); const p=st.trim().split(/\s+/); return p[p.length-1]||"Team"; };
-  const card={background:"linear-gradient(165deg,#212126,#161619)",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:16,overflow:"hidden"};
+  const card={background:"linear-gradient(165deg,#212126,#161619)",border:EDGE.hair,borderRadius:RAD.lg,overflow:"hidden"};
   const colH={display:"grid",gridTemplateColumns:"22px 1fr 42px 34px 34px 44px",gap:6};
   const Tab=(id,label,sub)=>(<div key={id} onClick={()=>setSide(id)} style={{flex:1,padding:10,textAlign:"center",cursor:"pointer",fontSize:14,fontWeight:800,color:side===id?"#fff":"rgba(255,255,255,0.45)",borderBottom:"2px solid "+(side===id?BLUE:"transparent")}}>{label}<span style={{display:"block",fontSize:9,fontWeight:700,letterSpacing:"0.05em",color:L3,marginTop:2}}>{sub}</span></div>);
   return (
@@ -3227,7 +3410,7 @@ function StatTiles({ tiles, sport, away, home, date, aColor, hColor, IOS, mt }) 
   return (
   <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7,marginTop:mt}}>
   {rows.map((t,ti)=>(
-  <div key={ti} style={{background:"linear-gradient(160deg,#202026,#161619)",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:14,padding:"9px 6px 10px",textAlign:"center"}}>
+  <div key={ti} style={{background:"linear-gradient(160deg,#202026,#161619)",border:EDGE.hair,borderRadius:RAD.lg,padding:"9px 6px 10px",textAlign:"center"}}>
   <div style={{fontSize:8,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:IOS.label3}}>{t.l}</div>
   <div style={{display:"flex",justifyContent:"center",gap:6,marginTop:6}}>
   <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:aColor}}>{t.a}</span>
@@ -3312,7 +3495,7 @@ function ScoreChip({ pick, live, onOpen }){
     const up=(g.half==="Top"||g.half==="Middle");
     const inn=g.inning!=null?((up?"\u25B2":"\u25BC")+g.inning):(g.period!=null?((g.clock&&g.clock!=="0:00"?(g.clock+" "):"")+"Q"+g.period):(g.detail||""));
     return (
-      <div onClick={onOpen} style={{marginTop:2,display:"inline-flex",alignItems:"center",gap:5,padding:"3px 7px",borderRadius:7,background:"rgba(48,209,88,0.13)",border:"0.5px solid rgba(48,209,88,0.35)",cursor:"pointer",whiteSpace:"nowrap"}}>
+      <div onClick={onOpen} style={{marginTop:2,display:"inline-flex",alignItems:"center",gap:5,padding:"3px 7px",borderRadius:RAD.sm,background:"rgba(48,209,88,0.13)",border:"0.5px solid rgba(48,209,88,0.35)",cursor:"pointer",whiteSpace:"nowrap"}}>
         <span style={{width:5,height:5,borderRadius:"50%",background:"#FF453A",flexShrink:0}}/>
         <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:11,fontWeight:800,color:"#fff"}}>{g.away.score}{"\u2013"}{g.home.score}</span>
         <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:10,fontWeight:700,color:L3}}>{inn}</span>
@@ -3328,7 +3511,7 @@ function ScoreChip({ pick, live, onOpen }){
     const aw=getAcronym((parts[0]||"").trim()), hm=getAcronym((parts[1]||"").trim());
     const awWon=Number(aFin)>Number(hFin);
     return (
-      <div onClick={onOpen} style={{marginTop:2,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5,padding:"3px 7px",borderRadius:7,background:"rgba(10,132,255,0.1)",border:"0.5px solid rgba(10,132,255,0.32)",whiteSpace:"nowrap",fontFamily:"'Barlow Semi Condensed',sans-serif"}}>
+      <div onClick={onOpen} style={{marginTop:2,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5,padding:"3px 7px",borderRadius:RAD.sm,background:"rgba(10,132,255,0.1)",border:"0.5px solid rgba(10,132,255,0.32)",whiteSpace:"nowrap",fontFamily:"'Barlow Semi Condensed',sans-serif"}}>
         <span style={{fontSize:9.5,fontWeight:awWon?800:700,color:awWon?"#fff":L3}}>{aw} {aFin}</span>
         <span style={{fontSize:9.5,color:L3}}>{" \u2013 "}</span>
         <span style={{fontSize:9.5,fontWeight:!awWon?800:700,color:!awWon?"#fff":L3}}>{hm} {hFin}</span>
@@ -3360,6 +3543,26 @@ const MLB_NICK_AB = { "diamondbacks":"ARI","braves":"ATL","orioles":"BAL","red s
   "marlins":"MIA","brewers":"MIL","twins":"MIN","mets":"NYM","yankees":"NYY","athletics":"ATH","phillies":"PHI","pirates":"PIT",
   "padres":"SD","giants":"SF","mariners":"SEA","cardinals":"STL","rays":"TB","rangers":"TEX","blue jays":"TOR","nationals":"WSH" };
 const nickAccent = (nick) => teamAccent(MLB_NICK_AB[String(nick||"").toLowerCase().trim()] || nick);
+
+// Team colours run from Yankees navy to Marlins blue; dropped straight into a wash,
+// the dark ones vanish. Lift anything below 0.62 perceived luminance toward white
+// first so every club lands in a comparable visible band. This lived inside a render
+// closure on the Games tab (the crests already used it) — hoisted so Picks can share it.
+const brightAccent = (hex) => { try{ let h=String(hex||"").replace("#",""); if(h.length===3) h=h.split("").map(c=>c+c).join(""); const r0=parseInt(h.slice(0,2),16),g0=parseInt(h.slice(2,4),16),b0=parseInt(h.slice(4,6),16); if([r0,g0,b0].some(v=>isNaN(v))) return hex||"#0A84FF"; const lum=(0.299*r0+0.587*g0+0.114*b0)/255; if(lum>=0.62) return "#"+h; const f=lum<0.32?0.64:0.46; return "rgb("+Math.round(r0+(255-r0)*f)+","+Math.round(g0+(255-g0)*f)+","+Math.round(b0+(255-b0)*f)+")"; }catch(e){ return hex||"#0A84FF"; } };
+
+// The wash names the ONE club a pick lives or dies with. Exactly one → wash. Zero (a
+// total, an over/under) or many (a parlay spanning clubs) → no wash, card stays neutral,
+// so a tint always means "this rides on one team".
+// Props return null for now: the bet carries {pick,game,odds} and nothing says which
+// side of "Phillies @ Braves" the player is on. Needs a roster map — on the to-do.
+const washAccent = (pickStr, isParlay) => {
+  if(isParlay) return null;
+  const p = String(pickStr||"").toLowerCase();
+  if(!p || /\b(over|under)\b/.test(p)) return null;
+  let found = null, n = 0;
+  for(const nick in MLB_NICK_AB){ if(p.indexOf(nick)!==-1){ found = MLB_NICK_AB[nick]; n++; if(n>1) return null; } }
+  return n===1 ? brightAccent(teamAccent(found)) : null;
+};
 
 function GamecastSheet({ game, pick, onClose }){
   // Top performers is the ONLY thing the gamecast needs that /api/livescores can't give
@@ -3412,7 +3615,7 @@ function GamecastSheet({ game, pick, onClose }){
           const hLogo = teamLogo(game.sport||"mlb", game.home.name);
           const aCol = teamAccent(aAb), hCol = teamAccent(hAb);
           const crest = (logo, ab) => (
-            <div style={{width:52,height:52,borderRadius:14,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",
+            <div style={{width:52,height:52,borderRadius:RAD.lg,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",
               boxShadow:"0 4px 14px rgba(0,0,0,0.4)",overflow:"hidden",flexShrink:0}}>
               {logo ? <img src={logo} alt={ab} style={{width:40,height:40,objectFit:"contain"}}
                 onError={(ev)=>{ ev.target.style.display="none"; ev.target.parentNode.innerHTML='<span style="font-size:14px;font-weight:900;color:#111">'+ab+'</span>'; }}/>
@@ -3550,21 +3753,21 @@ function GamecastSheet({ game, pick, onClose }){
         {baseball && !pre && (game.atBat || game.pitching || (game.decisions && game.decisions.winner)) && (
           <div style={{display:"flex",gap:8,margin:"10px 16px 0"}}>
             {live && game.atBat && (
-              <div style={{flex:1,minWidth:0,background:"#1C1C1E",border:"0.5px solid rgba(48,209,88,0.3)",borderRadius:11,padding:"9px 11px"}}>
+              <div style={{flex:1,minWidth:0,background:"#1C1C1E",border:"0.5px solid rgba(48,209,88,0.3)",borderRadius:RAD.md,padding:"9px 11px"}}>
                 <div style={{fontSize:9,fontWeight:900,letterSpacing:"0.1em",color:"#30D158"}}>AT BAT</div>
                 <div style={{fontSize:13,fontWeight:800,marginTop:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{game.atBat}</div>
                 {game.balls!=null && <div style={{fontSize:10.5,color:L3}}>{game.balls}-{game.strikes}{game.outs!=null?` · ${game.outs} out`:""}</div>}
               </div>
             )}
             {live && game.pitching && (
-              <div style={{flex:1,minWidth:0,background:"#1C1C1E",border:"0.5px solid rgba(48,209,88,0.3)",borderRadius:11,padding:"9px 11px"}}>
+              <div style={{flex:1,minWidth:0,background:"#1C1C1E",border:"0.5px solid rgba(48,209,88,0.3)",borderRadius:RAD.md,padding:"9px 11px"}}>
                 <div style={{fontSize:9,fontWeight:900,letterSpacing:"0.1em",color:"#30D158"}}>PITCHING</div>
                 <div style={{fontSize:13,fontWeight:800,marginTop:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{game.pitching}</div>
                 {game.onDeck && <div style={{fontSize:10.5,color:L3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>on deck: {game.onDeck}</div>}
               </div>
             )}
             {fin && game.decisions && game.decisions.winner && (
-              <div style={{flex:1,minWidth:0,background:"#1C1C1E",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:11,padding:"9px 11px"}}>
+              <div style={{flex:1,minWidth:0,background:"#1C1C1E",border:EDGE.hair,borderRadius:RAD.md,padding:"9px 11px"}}>
                 <div style={{fontSize:9,fontWeight:900,letterSpacing:"0.1em",color:L3}}>WIN</div>
                 <div style={{fontSize:13,fontWeight:800,marginTop:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{game.decisions.winner}</div>
                 {box&&box.pitcherLines&&box.pitcherLines[game.decisions.winner]&&<div style={{fontSize:10.5,fontWeight:700,color:L2,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{box.pitcherLines[game.decisions.winner]}</div>}
@@ -3572,7 +3775,7 @@ function GamecastSheet({ game, pick, onClose }){
               </div>
             )}
             {fin && game.decisions && game.decisions.loser && (
-              <div style={{flex:1,minWidth:0,background:"#1C1C1E",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:11,padding:"9px 11px"}}>
+              <div style={{flex:1,minWidth:0,background:"#1C1C1E",border:EDGE.hair,borderRadius:RAD.md,padding:"9px 11px"}}>
                 <div style={{fontSize:9,fontWeight:900,letterSpacing:"0.1em",color:L3}}>LOSS</div>
                 <div style={{fontSize:13,fontWeight:800,marginTop:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{game.decisions.loser}</div>
                 {box&&box.pitcherLines&&box.pitcherLines[game.decisions.loser]&&<div style={{fontSize:10.5,fontWeight:700,color:L2,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{box.pitcherLines[game.decisions.loser]}</div>}
@@ -3584,7 +3787,7 @@ function GamecastSheet({ game, pick, onClose }){
         {/* ── Top performers. The one thing that needs a box score. Renders only when it
             arrives — the sheet is fine without it. ── */}
         {box && ((box.hitters||[]).length>0 || (box.pitchers||[]).length>0) && (
-          <div style={{margin:"9px 16px 0",background:"#1C1C1E",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:13,padding:"10px 12px"}}>
+          <div style={{margin:"9px 16px 0",background:"#1C1C1E",border:EDGE.hair,borderRadius:RAD.md,padding:"10px 12px"}}>
             <div style={{fontSize:9,fontWeight:900,letterSpacing:"0.1em",color:L3,marginBottom:2}}>{fin?"TOP PERFORMERS":"TODAY'S LEADERS"}</div>
             {[...(box.hitters||[]), ...(box.pitchers||[])].map((x,i)=>(
               <div key={i} style={{display:"flex",alignItems:"center",gap:9,padding:"6px 0",borderTop:i>0?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
@@ -3615,7 +3818,7 @@ function GamecastSheet({ game, pick, onClose }){
             : isUnder ? `${tot} of ${lineNum} runs · needs ${Math.max(0,(lineNum-tot)).toFixed(1).replace(/\.0$/,"")} more to lose`
             : `${tot} of ${lineNum} runs · needs ${Math.max(0,(lineNum-tot)).toFixed(1).replace(/\.0$/,"")} more to win`;
           return (
-          <div style={{margin:"10px 16px 4px",borderRadius:14,padding:"12px 14px",
+          <div style={{margin:"10px 16px 4px",borderRadius:RAD.lg,padding:"12px 14px",
             background:`linear-gradient(135deg,${tint}26,rgba(255,255,255,0.02))`,border:`1px solid ${tint}59`}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
               <div style={{fontSize:9,fontWeight:900,letterSpacing:"0.09em",color:tint}}>{(pick._ownerIsYou===false && pick._ownerName ? (pick._ownerName.toUpperCase()+"\u2019S PICK") : "YOUR PICK")}{won?" \u00b7 WON":lost?" \u00b7 LOST":""}</div>
@@ -3679,6 +3882,28 @@ function App() {
  }, []);
 
  const [screen, setScreen] = useState("home");
+ // Nav history for the edge-swipe-back gesture. A stack rather than a hardcoded
+ // back-map: "where did I come from" is the correct answer for a back gesture, and the
+ // league screen alone has three different entry points.
+ const navHist = useRef(["home"]);
+ const PUSHED_SCREENS = ["league","chat","commissioner","leaderboard","analytics","browser","ai"];
+ useEffect(()=>{
+   const h = navHist.current;
+   if(h[h.length-1] !== screen){ h.push(screen); if(h.length>25) h.shift(); }
+   try{ document.documentElement.setAttribute("data-pk-back",
+     (PUSHED_SCREENS.indexOf(screen)!==-1 && h.length>1) ? "1" : "0"); }catch(e){}
+ }, [screen]);
+ useEffect(()=>{
+   const onBack = ()=>{
+     const h = navHist.current;
+     if(h.length < 2) return;
+     h.pop();
+     const prev = h.pop();
+     if(prev){ haptic("light"); setScreen(prev); }
+   };
+   try{ window.addEventListener("pk:back", onBack); }catch(e){}
+   return ()=>{ try{ window.removeEventListener("pk:back", onBack); }catch(e){} };
+ }, []);
  const [tutorialStep, setTutorialStep] = useState(-1); // -1 = hidden; only shown on fresh signup
  const dismissTutorial = () => {
  try { localStorage.setItem('picklock_tutorial_done','1'); } catch {}
@@ -3782,7 +4007,7 @@ function App() {
      }catch(e){}
    })();
  }, [isSoloMode, activeLeague&&activeLeague.id, activeLeague&&activeLeague.season_start, activeLeague&&activeLeague.start_mode, activeLeague&&activeLeague.isCommissioner, leagueFull, liveSchedule.length]);
- const notStartedBody = (<div className="body" style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center",padding:"70px 30px",gap:11}}><div style={{width:56,height:56,borderRadius:"50%",background:"rgba(255,159,10,0.12)",display:"flex",alignItems:"center",justifyContent:"center"}}><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke={IOS.orange} strokeWidth="2.2"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg></div><div style={{fontSize:18,fontWeight:800,color:"#fff"}}>{(activeLeague&&activeLeague.season_start&&new Date(activeLeague.season_start).getTime()>Date.now())?("Starts "+new Date(activeLeague.season_start).toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"})):"Season hasn’t started"}</div><div style={{fontSize:13.5,color:IOS.label2,lineHeight:1.5,maxWidth:250}}>{(activeLeague&&activeLeague.season_start&&new Date(activeLeague.season_start).getTime()>Date.now())?("Week 1 opens "+new Date(activeLeague.season_start).toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"})+" — everyone’s picks stay locked until then."):((activeLeague&&activeLeague.isCommissioner)?"Open Week 1 from the Home tab when you’re ready.":"Picks open once the commissioner starts the season.")}</div><button onClick={async()=>{ setHomeMode("solo"); setSoloModeWithRef(true); try{ const lid=await getOrCreateSoloLeague(); setActiveLeagueId(lid||"solo"); }catch(e){} try{fetchSoloWeeks();}catch(e){} setScreen("picks"); }} style={{marginTop:8,background:"rgba(191,90,242,0.12)",border:"0.5px solid "+(IOS.purple||"#BF5AF2")+"66",color:(IOS.purple||"#BF5AF2"),borderRadius:11,padding:"11px 22px",fontSize:13.5,fontWeight:800,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Make picks in Solo instead →</button></div>);
+ const notStartedBody = (<div className="body" style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center",padding:"70px 30px",gap:11}}><div style={{width:56,height:56,borderRadius:"50%",background:"rgba(255,159,10,0.12)",display:"flex",alignItems:"center",justifyContent:"center"}}><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke={IOS.orange} strokeWidth="2.2"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg></div><div style={{fontSize:18,fontWeight:800,color:"#fff"}}>{(activeLeague&&activeLeague.season_start&&new Date(activeLeague.season_start).getTime()>Date.now())?("Starts "+new Date(activeLeague.season_start).toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"})):"Season hasn’t started"}</div><div style={{fontSize:13.5,color:IOS.label2,lineHeight:1.5,maxWidth:250}}>{(activeLeague&&activeLeague.season_start&&new Date(activeLeague.season_start).getTime()>Date.now())?("Week 1 opens "+new Date(activeLeague.season_start).toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"})+" — everyone’s picks stay locked until then."):((activeLeague&&activeLeague.isCommissioner)?"Open Week 1 from the Home tab when you’re ready.":"Picks open once the commissioner starts the season.")}</div><button onClick={async()=>{ setHomeMode("solo"); setSoloModeWithRef(true); try{ const lid=await getOrCreateSoloLeague(); setActiveLeagueId(lid||"solo"); }catch(e){} try{fetchSoloWeeks();}catch(e){} setScreen("picks"); }} style={{marginTop:8,background:"rgba(191,90,242,0.12)",border:"0.5px solid "+(IOS.purple||"#BF5AF2")+"66",color:(IOS.purple||"#BF5AF2"),borderRadius:RAD.md,padding:"11px 22px",fontSize:13.5,fontWeight:800,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Make picks in Solo instead →</button></div>);
  const sport = SPORTS[activeLeague?.sport] || SPORTS["nfl"];
  const SLOTS = sport.slots;
 
@@ -4175,7 +4400,7 @@ function App() {
  useEffect(()=>{ if(lockRitual){ const _t=setTimeout(()=>setLockRitual(false),1700); return ()=>clearTimeout(_t); } },[lockRitual]);
  const [celebrate, setCelebrate] = useState(false);
  const notifSeen = useRef(null);
- const fireCelebration = ()=>{ setCelebrate(true); try{ if(navigator.vibrate) navigator.vibrate([0,40,30,40]); }catch(e){} setTimeout(()=>setCelebrate(false),2700); };
+ const fireCelebration = ()=>{ setCelebrate(true); haptic("success"); setTimeout(()=>setCelebrate(false),2700); };
  const fetchNotifs = async ()=>{
    if(!(user&&user.id)){ setNotifs([]); setNotifUnread(0); return; }
    try{
@@ -4953,7 +5178,7 @@ function App() {
         {item.data.keyStats && item.data.keyStats.length>0 && (
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7,marginBottom:11}}>
             {item.data.keyStats.slice(0,4).map((s,si)=>(
-              <div key={si} style={{background:"rgba(255,255,255,0.04)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:9,padding:"8px 10px"}}>
+              <div key={si} style={{background:"rgba(255,255,255,0.04)",border:EDGE.hair,borderRadius:RAD.sm,padding:"8px 10px"}}>
                 <div style={{fontSize:16,fontWeight:800,color:"#fff",lineHeight:1.1}}>{s.value}</div>
                 <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.04em",textTransform:"uppercase",color:"rgba(255,255,255,0.4)",marginTop:3}}>{s.label}</div>
               </div>
@@ -4982,7 +5207,7 @@ function App() {
         </div>
         {item.bet && (
           <button onClick={()=>{ if(aiAddToSlip(item.bet,item.category)){ setAiThread(prev=>prev.map(x=>x===item?{...x,added:true}:x)); } }} disabled={item.added}
-            style={{marginTop:12,width:"100%",padding:"10px",borderRadius:10,border:"none",cursor:item.added?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,
+            style={{marginTop:12,width:"100%",padding:"10px",borderRadius:RAD.md,border:"none",cursor:item.added?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,
             background:item.added?"rgba(48,209,88,0.18)":IOS.blue,color:item.added?IOS.green:"#fff",fontSize:13,fontWeight:800}}>
             {item.added && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
             {item.added?"Added to slip":"Add to slip"}
@@ -5535,7 +5760,7 @@ function App() {
  const _savedObj = {freePicks: mergedSnap, lockedAt, week};
  if(mergedSnap.length){ setSoloSavedPicks(_savedObj); setSoloSubmitted(true); try{ localStorage.setItem("picklock_solo_locked", JSON.stringify(_savedObj)); }catch(e){} }
  setSoloFreePicks([]);
- try{ if(navigator.vibrate) navigator.vibrate([0,30,40,30,60]); }catch(e){}
+ haptic("success");
  setLockRitual(true);
  try{ await fetchSoloWeeks(); }catch(e2){}
  } catch(e) { alert("Error: " + e.message); }
@@ -5573,7 +5798,7 @@ function App() {
      const newId = _ins && _ins[0] && _ins[0].id;
      if(newId){ try{ await supabase.from("picks").update({ replaced_by: String(newId) }).eq("id", ctx.voidId); }catch(e){} }
      setReplaceCtx(null); setScreen("home");
-     try{ if(navigator.vibrate) navigator.vibrate([0,20,30,20]); }catch(e){}
+     haptic("medium");
      try{ await fetchSoloWeeks(); }catch(e){}
    } else {
      const lgId = ctx.leagueId;
@@ -5593,7 +5818,7 @@ function App() {
      const newId = _ins && _ins[0] && _ins[0].id;
      if(newId){ try{ await supabase.from("picks").update({ replaced_by: String(newId) }).eq("id", ctx.voidId); }catch(e){} }
      setReplaceCtx(null); setBuildingSlip(false); setScreen(ctx.returnScreen || "leagues");
-     try{ if(navigator.vibrate) navigator.vibrate([0,20,30,20]); }catch(e){}
+     haptic("medium");
      try{ await fetchWeekPicks(lgId, ctx.week); }catch(e){}
      try{ await fetchMyPicks(lgId, ctx.week, user.id, realLeagues.find(l=>l.id===lgId)); }catch(e){}
    }
@@ -7047,11 +7272,38 @@ function App() {
  .pl-press{transition:transform .13s ease;}
  .pl-press:active{transform:scale(0.965);}
  .pl-rise{opacity:0;transform:translateY(14px) scale(0.988);animation:plRise .5s cubic-bezier(0.34,1.4,0.4,1) forwards;}
+ /* Condensing headers. Both ends are left-aligned on purpose: a centred big title
+    handing off to a left-aligned bar makes the text jump sideways mid-condense. */
+ /* Screen transition. Fires on mount: changing the screen unmounts one
+    conditional block and mounts another, so React builds a new .body node.
+    OPACITY ONLY, deliberately — a transform here would make .body a containing block
+    for position:fixed descendants, and 11 full-screen overlays live inside screen
+    containers. They would mis-position for the duration of the animation. The lift can
+    come back once those overlays are hoisted to the app root. */
+ @keyframes pkScreenIn{from{opacity:0}to{opacity:1}}
+ .body,.lsx-scroll{animation:pkScreenIn .26s cubic-bezier(0.32,0.72,0,1) both;}
+ @media (prefers-reduced-motion: reduce){ .body,.lsx-scroll{animation:none;} }
+ .pk-hdr{transform-origin:left top;}
+ @keyframes soGrow{from{height:0}to{height:var(--h);}}
+ .so-bar{height:var(--h);animation:soGrow .62s cubic-bezier(0.34,1.16,0.42,1) both;}
+ @media (prefers-reduced-motion: reduce){ .so-bar{animation:none;} }
+ .pk-cbar{position:sticky;top:0;z-index:34;display:flex;align-items:center;gap:9px;height:46px;
+   margin-bottom:-46px;padding:0 18px;opacity:0;pointer-events:none;
+   background:rgba(10,10,13,0.78);-webkit-backdrop-filter:blur(22px) saturate(1.4);
+   backdrop-filter:blur(22px) saturate(1.4);border-bottom:0.5px solid rgba(255,255,255,0.09);
+   transition:opacity .22s ease;}
+ .pk-cbar.on{opacity:1;pointer-events:auto;}
+ .pk-cbar-t{font-size:16px;font-weight:800;letter-spacing:-0.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+ .pk-hdr-sub{transition:opacity .18s ease,max-height .24s ease;overflow:hidden;max-height:70px;}
+ .pk-hdr-sub.gone{opacity:0;max-height:0;}
+ @media (prefers-reduced-motion: reduce){ .pk-cbar,.pk-hdr,.pk-hdr-sub{transition:none;} }
+ .pl-reveal{opacity:0;transform:translateY(14px) scale(0.988);}
+ .pl-reveal.in{opacity:1;transform:none;transition:opacity .42s ease, transform .52s cubic-bezier(0.34,1.4,0.4,1);}
  .pl-d1{animation-delay:.04s}.pl-d2{animation-delay:.12s}.pl-d3{animation-delay:.2s}
  @keyframes plRise{to{opacity:1;transform:none;}}
  .pl-sheen{background-size:200% 100% !important;animation:plSheen 2.6s ease-in-out .7s 1;}
  @keyframes plSheen{0%{background-position:0% 0}55%{background-position:100% 0}100%{background-position:0% 0}}
- @media (prefers-reduced-motion: reduce){ .pl-rise{animation:none;opacity:1;transform:none;} .pl-sheen{animation:none;} .wr-dot{animation:none;} }
+ @media (prefers-reduced-motion: reduce){ .pl-reveal{opacity:1;transform:none;} .pl-rise{animation:none;opacity:1;transform:none;} .pl-sheen{animation:none;} .wr-dot{animation:none;} }
  .wr-gctop{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
  .wr-gtime{font-size:10px;font-weight:800;color:rgba(255,255,255,.5);}
  .wr-glive{font-size:9.5px;font-weight:900;color:#30D158;display:flex;align-items:center;gap:4px;}
@@ -7508,12 +7760,34 @@ function App() {
  /* Floating dock: fixed pill, frosted, content scrolls underneath (approved mockup 23 Jul 2026).
     The old bar was a sticky flex child that reserved its own space; the dock is out of flow,
     so .body carries the clearance instead. */
+ /* Filter rails wear the dock's material (see .tab-bar directly below): one frosted
+    track, no per-chip outline, active state a gradient pill that fades in behind the
+    label. --on-a/--on-b let a rail keep its own accent (sport colour, longshot green)
+    instead of forcing everything to blue. */
+ .pk-rail{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;padding:5px;border-radius:26px;
+   background:rgba(18,18,24,0.72);-webkit-backdrop-filter:blur(22px) saturate(1.4);backdrop-filter:blur(22px) saturate(1.4);
+   border:0.5px solid rgba(255,255,255,0.12);
+   box-shadow:0 18px 40px -12px rgba(0,0,0,0.75), inset 0 1px 0 rgba(255,255,255,0.08);}
+ .pk-rail::-webkit-scrollbar{display:none;}
+ .pk-rail{scroll-snap-type:x proximity;}
+ .pk-chip{scroll-snap-align:center;}
+ .pk-chip{position:relative;flex-shrink:0;display:flex;align-items:center;gap:6px;border:none;
+   background:transparent;border-radius:19px;padding:8px 14px;font-size:12.5px;font-weight:700;
+   white-space:nowrap;cursor:pointer;font-family:inherit;color:${IOS.gray};
+   transition:transform .13s ease,color .2s ease;}
+ .pk-chip:active{transform:scale(0.9);}
+ .pk-chip::before{content:"";position:absolute;inset:0;border-radius:19px;opacity:0;transition:opacity .2s ease;
+   background:linear-gradient(160deg,var(--on-a,rgba(10,132,255,0.32)),var(--on-b,rgba(10,132,255,0.14)));}
+ .pk-chip.on::before{opacity:1;}
+ .pk-chip.on{color:#fff;}
+ .pk-chip > *{position:relative;}
+ @media (prefers-reduced-motion:reduce){ .pk-chip:active{transform:none;} }
  .tab-bar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(12px + var(--sa-bot));z-index:40;
    display:flex;align-items:center;gap:2px;padding:7px;border-radius:26px;
    background:rgba(18,18,24,0.72);-webkit-backdrop-filter:blur(22px) saturate(1.4);backdrop-filter:blur(22px) saturate(1.4);
    border:0.5px solid rgba(255,255,255,0.12);
    box-shadow:0 18px 40px -12px rgba(0,0,0,0.75), inset 0 1px 0 rgba(255,255,255,0.08);}
- .tab-item{position:relative;flex:none;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;padding:8px 13px 6px;border-radius:19px;transition:transform .13s ease;}
+ .tab-item{position:relative;flex:none;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;padding:8px 13px 6px;border-radius:19px;overflow:hidden;max-width:110px;transition:max-width .34s cubic-bezier(0.4,0,0.2,1), opacity .2s ease, padding .34s cubic-bezier(0.4,0,0.2,1), transform .13s ease;}
  .tab-item:active{transform:scale(0.9);}
  .tab-item::before{content:"";position:absolute;inset:0;border-radius:19px;background:linear-gradient(160deg,rgba(10,132,255,0.32),rgba(10,132,255,0.14));opacity:0;transition:opacity .2s ease;}
  .tab-item.on::before{opacity:1;}
@@ -7521,6 +7795,22 @@ function App() {
  .tab-item.on .tab-icon{transform:translateY(-1px);}
  .tab-label{position:relative;font-size:9px;font-weight:700;letter-spacing:-0.1px;color:${IOS.gray};}
  .tab-item.on .tab-label{color:#fff;}
+ /* Folded state: only the tab you are on survives, so the dock still answers
+    "where am I" at its smallest. Label is dropped (approved). */
+ .tab-bar{transition:padding .34s cubic-bezier(0.4,0,0.2,1);}
+ .tab-bar.small{cursor:pointer;}
+ .tab-bar.small .tab-item:not(.on){max-width:0;opacity:0;padding-left:0;padding-right:0;}
+ .tab-bar.small .tab-item.on{padding:11px 11px;}
+ .tab-label{max-height:14px;overflow:hidden;transition:max-height .3s ease,opacity .2s ease;}
+ .tab-bar.small .tab-label{max-height:0;opacity:0;}
+ .tab-grip{flex:none;display:flex;align-items:center;max-width:0;opacity:0;overflow:hidden;
+   transition:max-width .3s ease,opacity .2s ease;}
+ .tab-bar.small .tab-grip{max-width:14px;opacity:.55;}
+ /* Live lamp is promoted onto the folded button: when the dock is small the Matchup
+    tab is gone, so "a pick is live" would vanish with it. */
+ .tab-lamp-sm{display:none;}
+ .tab-bar.small .tab-lamp-sm{display:block;}
+ @media (prefers-reduced-motion: reduce){ .tab-bar,.tab-item,.tab-label,.tab-grip{transition:none;} }
  .tab-lamp{position:absolute;top:4px;right:9px;width:5px;height:5px;border-radius:50%;background:#30D158;box-shadow:0 0 6px rgba(48,209,88,0.8);}
  .psb-bar{position:fixed;left:50%;transform:translateX(-50%) translateY(150%);bottom:calc(14px + var(--sa-bot));width:min(92%,440px);z-index:60;border-radius:22px;background:#fff;color:#0e0e12;box-shadow:0 20px 44px -12px rgba(0,0,0,0.85);display:flex;align-items:center;gap:11px;padding:13px 15px;cursor:pointer;transition:transform .38s cubic-bezier(0.34,1.3,0.4,1);}
  .psb-bar.up{transform:translateX(-50%);}
@@ -7575,14 +7865,14 @@ function App() {
  () => (
  <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"space-between",padding:"0 28px 48px"}}>
    <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center"}}>
-     <div style={{width:80,height:80,borderRadius:24,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.3)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:28}}>
+     <div style={{width:80,height:80,borderRadius:RAD.xl,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.3)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:28}}>
        <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
      </div>
      <div style={{fontSize:32,fontWeight:800,color:"#fff",letterSpacing:-1,marginBottom:12,lineHeight:1.1}}>Welcome to{"\n"}PickLock</div>
      <div style={{fontSize:15,color:"rgba(255,255,255,0.5)",lineHeight:1.7,maxWidth:300}}>The pick-em league app built for friends. Lock in picks every week and see who&apos;s really got the best calls.</div>
    </div>
    <div style={{width:"100%"}}>
-     <button onClick={()=>setTutorialStep(1)} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:14,padding:"16px",fontSize:16,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif",marginBottom:10}}>Let&apos;s Go</button>
+     <button onClick={()=>setTutorialStep(1)} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:RAD.lg,padding:"16px",fontSize:16,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif",marginBottom:10}}>Let&apos;s Go</button>
      <button onClick={dismissOnboard} style={{width:"100%",background:"none",border:"none",padding:"10px",fontSize:14,fontWeight:600,color:"rgba(255,255,255,0.35)",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>I already have an account</button>
    </div>
  </div>
@@ -7600,7 +7890,7 @@ function App() {
        {mult:"3×",cat:"Over/Under",pick:"Over 44.5",odds:"-110",game:"BUF @ MIA",pts:"+27.3 pts if it hits",catColor:"#FF9F0A",highlight:false},
        {mult:"5×",cat:"Longshot",pick:"3-leg parlay",odds:"+583",game:"Go big or go home",pts:"+291.5 pts if it hits",catColor:"#FF375F",highlight:true},
      ].map((s,i)=>(
-       <div key={i} style={{background:s.highlight?"rgba(10,132,255,0.06)":"#0D1A2A",border:`0.5px solid ${s.highlight?"rgba(10,132,255,0.3)":"#1A3A5A"}`,borderRadius:12,padding:"12px 14px"}}>
+       <div key={i} style={{background:s.highlight?"rgba(10,132,255,0.06)":"#0D1A2A",border:`0.5px solid ${s.highlight?"rgba(10,132,255,0.3)":"#1A3A5A"}`,borderRadius:RAD.md,padding:"12px 14px"}}>
          <div style={{fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",color:s.catColor,marginBottom:4}}>{s.mult} · {s.cat}</div>
          <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:3}}>
            <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>{s.pick}</div>
@@ -7613,26 +7903,26 @@ function App() {
        </div>
      ))}
    </div>
-   <div style={{background:"rgba(10,132,255,0.06)",border:"0.5px solid rgba(10,132,255,0.22)",borderRadius:12,padding:"12px 14px",marginBottom:16}}>
+   <div style={{background:"rgba(10,132,255,0.06)",border:"0.5px solid rgba(10,132,255,0.22)",borderRadius:RAD.md,padding:"12px 14px",marginBottom:16}}>
      <div style={{fontSize:9,fontWeight:800,letterSpacing:0.5,textTransform:"uppercase",color:"#0A84FF",marginBottom:6}}>The math</div>
      <div style={{fontSize:13.5,fontWeight:700,color:"#fff"}}>points = multiplier × (decimal odds - 1) × 10</div>
      <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",marginTop:5,lineHeight:1.5}}>5× at +583 (6.83) -&gt; 5 × 5.83 × 10 = 291.5 · only winning picks score; a loss or push is 0.</div>
      <div style={{height:1,background:"rgba(255,255,255,0.08)",margin:"10px 0"}} />
      <div style={{fontSize:11.5,color:"rgba(255,255,255,0.55)",lineHeight:1.5}}>Standard leagues give one each of 1× through 5×. Pro leagues let the creator set the multiplier pool and which bet types each slot allows.</div>
    </div>
-   <button onClick={()=>setTutorialStep(2)} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:14,padding:"16px",fontSize:16,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Next</button>
+   <button onClick={()=>setTutorialStep(2)} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:RAD.lg,padding:"16px",fontSize:16,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Next</button>
  </div>
  ),
  // Screen 3 — Leagues
  () => (
  <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"space-between",padding:"0 28px 48px"}}>
    <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center"}}>
-     <div style={{width:80,height:80,borderRadius:24,background:"rgba(48,209,88,0.1)",border:"0.5px solid rgba(48,209,88,0.3)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:28}}>
+     <div style={{width:80,height:80,borderRadius:RAD.xl,background:"rgba(48,209,88,0.1)",border:"0.5px solid rgba(48,209,88,0.3)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:28}}>
        <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="#30D158" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
      </div>
      <div style={{fontSize:28,fontWeight:800,color:"#fff",letterSpacing:-.5,marginBottom:12,lineHeight:1.15}}>Compete with your crew</div>
      <div style={{fontSize:14,color:"rgba(255,255,255,0.45)",lineHeight:1.7,marginBottom:28}}>Spin up a private league, join a public one, or run it solo. Standings every week — and a title on the line at the end.</div>
-     <div style={{width:"100%",background:"#111",border:"0.5px solid #1E1E1E",borderRadius:12,padding:"14px 16px",textAlign:"left"}}>
+     <div style={{width:"100%",background:"#111",border:"0.5px solid #1E1E1E",borderRadius:RAD.md,padding:"14px 16px",textAlign:"left"}}>
        <div style={{fontSize:9,fontWeight:700,color:"rgba(255,255,255,0.3)",textTransform:"uppercase",letterSpacing:.5,marginBottom:12}}>Ways to play</div>
        <div style={{display:"flex",flexDirection:"column",gap:10}}>
          {[
@@ -7642,7 +7932,7 @@ function App() {
            {icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>, label:"Solo", desc:"Just you vs. the line — no crew needed"},
          ].map((f,i)=>(
            <div key={i} style={{display:"flex",alignItems:"center",gap:10}}>
-             <div style={{width:28,height:28,borderRadius:8,background:"rgba(10,132,255,0.1)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{f.icon}</div>
+             <div style={{width:28,height:28,borderRadius:RAD.sm,background:"rgba(10,132,255,0.1)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{f.icon}</div>
              <div style={{minWidth:0}}><div style={{fontSize:13,color:"#fff",fontWeight:700}}>{f.label}</div><div style={{fontSize:11,color:"rgba(255,255,255,0.4)",fontWeight:500,marginTop:1}}>{f.desc}</div></div>
            </div>
          ))}
@@ -7650,7 +7940,7 @@ function App() {
      </div>
    </div>
    <div style={{width:"100%",marginTop:24}}>
-     <button onClick={()=>setTutorialStep(3)} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:14,padding:"16px",fontSize:16,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Next</button>
+     <button onClick={()=>setTutorialStep(3)} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:RAD.lg,padding:"16px",fontSize:16,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Next</button>
    </div>
  </div>
  ),
@@ -7658,16 +7948,16 @@ function App() {
  () => (
  <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"space-between",padding:"0 28px 48px"}}>
    <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center"}}>
-     <div style={{width:80,height:80,borderRadius:24,background:"rgba(255,159,10,0.1)",border:"0.5px solid rgba(255,159,10,0.3)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:28}}>
+     <div style={{width:80,height:80,borderRadius:RAD.xl,background:"rgba(255,159,10,0.1)",border:"0.5px solid rgba(255,159,10,0.3)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:28}}>
        <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="#FF9F0A" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
      </div>
      <div style={{fontSize:28,fontWeight:800,color:"#fff",letterSpacing:-.5,marginBottom:12}}>Ready to lock in?</div>
      <div style={{fontSize:14,color:"rgba(255,255,255,0.45)",lineHeight:1.7,maxWidth:300}}>Create a league with friends, join one by invite code or from public leagues, or go solo and track your own picks first.</div>
    </div>
    <div style={{width:"100%",display:"flex",flexDirection:"column",gap:10}}>
-     <button onClick={()=>{dismissOnboard();setScreen("leagues");setShowNewLeague(true);setNewLeagueCreated(null);setNewLeagueSport(null);setNewLeagueName("");setNewLeagueSize(8);setNewLeagueStep(0);}} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:14,padding:"15px",fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Create a League</button>
-     <button onClick={()=>{dismissOnboard();setShowBrowse(true);fetchPublicLeagues();}} style={{width:"100%",background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:14,padding:"15px",fontSize:15,fontWeight:700,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Browse Public Leagues</button>
-     <button onClick={()=>{ const c=(window.prompt("Enter invite code")||"").trim(); if(c){ dismissOnboard(); handleJoinCode(c); } }} style={{width:"100%",background:"rgba(255,255,255,0.06)",border:"0.5px solid rgba(255,255,255,0.12)",borderRadius:14,padding:"15px",fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Join with a code</button>
+     <button onClick={()=>{dismissOnboard();setScreen("leagues");setShowNewLeague(true);setNewLeagueCreated(null);setNewLeagueSport(null);setNewLeagueName("");setNewLeagueSize(8);setNewLeagueStep(0);}} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:RAD.lg,padding:"15px",fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Create a League</button>
+     <button onClick={()=>{dismissOnboard();setShowBrowse(true);fetchPublicLeagues();}} style={{width:"100%",background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:RAD.lg,padding:"15px",fontSize:15,fontWeight:700,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Browse Public Leagues</button>
+     <button onClick={()=>{ const c=(window.prompt("Enter invite code")||"").trim(); if(c){ dismissOnboard(); handleJoinCode(c); } }} style={{width:"100%",background:"rgba(255,255,255,0.06)",border:EDGE.hair2,borderRadius:RAD.lg,padding:"15px",fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Join with a code</button>
      <button onClick={()=>{dismissOnboard();setHomeMode("solo");setSoloModeWithRef(true);try{fetchSoloWeeks();}catch(e){}setScreen("home");}} style={{width:"100%",background:"none",border:"none",padding:"12px",fontSize:14,fontWeight:600,color:"rgba(255,255,255,0.35)",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Go Solo for now</button>
    </div>
  </div>
@@ -7684,7 +7974,7 @@ function App() {
        ))}
      </div>
      {tutorialStep < 3 && (
-       <div onClick={dismissOnboard} style={{fontSize:13,fontWeight:600,color:"rgba(255,255,255,0.35)",cursor:"pointer",padding:"6px 12px",background:"rgba(255,255,255,0.06)",borderRadius:10}}>Skip</div>
+       <div onClick={dismissOnboard} style={{fontSize:13,fontWeight:600,color:"rgba(255,255,255,0.35)",cursor:"pointer",padding:"6px 12px",background:"rgba(255,255,255,0.06)",borderRadius:RAD.md}}>Skip</div>
      )}
    </div>
    {/* Back button for steps 1-2 */}
@@ -7736,10 +8026,10 @@ function App() {
  </div>
 
  {/* Glass form card */}
- <div style={{position:"relative",width:"100%",background:"linear-gradient(160deg,rgba(22,22,28,0.82),rgba(11,11,14,0.9))",backdropFilter:"blur(22px)",WebkitBackdropFilter:"blur(22px)",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:22,boxShadow:"0 18px 50px rgba(0,0,0,0.55)",padding:"22px 20px"}}>
- <div style={{display:"flex",background:"rgba(255,255,255,0.05)",borderRadius:12,padding:3,marginBottom:18}}>
+ <div style={{position:"relative",width:"100%",background:"linear-gradient(160deg,rgba(22,22,28,0.82),rgba(11,11,14,0.9))",backdropFilter:"blur(22px)",WebkitBackdropFilter:"blur(22px)",border:EDGE.hair2,borderRadius:RAD.xl,boxShadow:"0 18px 50px rgba(0,0,0,0.55)",padding:"22px 20px"}}>
+ <div style={{display:"flex",background:"rgba(255,255,255,0.05)",borderRadius:RAD.md,padding:3,marginBottom:18}}>
  {["login","signup"].map(t=>(
- <div key={t} onClick={()=>setAuthScreen(t)} style={{flex:1,textAlign:"center",padding:"10px",borderRadius:9,fontSize:14,fontWeight:800,cursor:"pointer",background:authScreen===t?"linear-gradient(135deg,rgba(10,132,255,0.95),rgba(94,92,230,0.85))":"transparent",color:authScreen===t?"#fff":"rgba(255,255,255,0.45)",boxShadow:authScreen===t?"0 4px 14px rgba(10,132,255,0.3)":"none",transition:"all .2s"}}>{t==="login"?"Sign In":"Sign Up"}</div>
+ <div key={t} onClick={()=>setAuthScreen(t)} style={{flex:1,textAlign:"center",padding:"10px",borderRadius:RAD.sm,fontSize:14,fontWeight:800,cursor:"pointer",background:authScreen===t?"linear-gradient(135deg,rgba(10,132,255,0.95),rgba(94,92,230,0.85))":"transparent",color:authScreen===t?"#fff":"rgba(255,255,255,0.45)",boxShadow:authScreen===t?"0 4px 14px rgba(10,132,255,0.3)":"none",transition:"all .2s"}}>{t==="login"?"Sign In":"Sign Up"}</div>
  ))}
  </div>
  <input id="auth-email" className="auth-input" type="email" placeholder="Email" style={{marginBottom:11}}/>
@@ -7827,7 +8117,7 @@ function App() {
  ))}</div>;
  })()}
  <div style={{padding:"14px 20px 0"}}>
- <button onClick={()=>setSecondSwap(null)} style={{width:"100%",background:IOS.bg3,border:"none",borderRadius:12,padding:"14px",fontFamily:"Barlow,sans-serif",fontSize:15,fontWeight:600,color:IOS.label2,cursor:"pointer"}}>Cancel</button>
+ <button onClick={()=>setSecondSwap(null)} style={{width:"100%",background:IOS.bg3,border:"none",borderRadius:RAD.md,padding:"14px",fontFamily:"Barlow,sans-serif",fontSize:15,fontWeight:600,color:IOS.label2,cursor:"pointer"}}>Cancel</button>
  </div>
  </div>
  </div>
@@ -7863,7 +8153,7 @@ function App() {
  ));
  })()}
  <div style={{padding:"14px 20px 0"}}>
- <button onClick={()=>setShowPUModal(null)} style={{width:"100%",background:IOS.bg3,border:"none",borderRadius:12,padding:"14px",fontFamily:"Barlow,sans-serif",fontSize:15,fontWeight:600,color:IOS.label2,cursor:"pointer"}}>Cancel</button>
+ <button onClick={()=>setShowPUModal(null)} style={{width:"100%",background:IOS.bg3,border:"none",borderRadius:RAD.md,padding:"14px",fontFamily:"Barlow,sans-serif",fontSize:15,fontWeight:600,color:IOS.label2,cursor:"pointer"}}>Cancel</button>
  </div>
  </div>
  </div>
@@ -7930,7 +8220,7 @@ function App() {
  {/* Week badge */}
  <div className="ts-line1" style={{
  background:"rgba(255,214,10,0.12)",border:"1px solid rgba(255,214,10,0.3)",
- borderRadius:20,padding:"5px 16px",marginBottom:16,
+ borderRadius:RAD.pill,padding:"5px 16px",marginBottom:16,
  fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:"#FFD60A",
  }}>Week 6 · Top Scorer</div>
 
@@ -7949,7 +8239,7 @@ function App() {
  {/* Score card */}
  <div className="ts-score" style={{
  background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",
- borderRadius:16,padding:"14px 28px",marginBottom:28,
+ borderRadius:RAD.lg,padding:"14px 28px",marginBottom:28,
  display:"flex",gap:32,alignItems:"center",
  }}>
  <div style={{textAlign:"center"}}>
@@ -8045,7 +8335,7 @@ function App() {
  {/* ══ USERNAME PROMPT MODAL ══ */}
  {showUsernamePrompt && (
  <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
- <div style={{background:IOS.bg2,borderRadius:24,padding:28,width:"100%",maxWidth:340,boxShadow:"0 20px 60px rgba(0,0,0,0.5)"}}>
+ <div style={{background:IOS.bg2,borderRadius:RAD.xl,padding:28,width:"100%",maxWidth:340,boxShadow:"0 20px 60px rgba(0,0,0,0.5)"}}>
  <div style={{fontSize:32,textAlign:"center",marginBottom:8}}></div>
  <div style={{fontSize:22,fontWeight:800,color:"#fff",textAlign:"center",marginBottom:6}}>Welcome to PickLock</div>
  <div style={{fontSize:14,color:IOS.label3,textAlign:"center",marginBottom:24,lineHeight:1.5}}>Set a username so your league mates can find you and see your picks.</div>
@@ -8054,7 +8344,7 @@ function App() {
  onChange={e=>{setUsernamePromptInput(e.target.value);setUsernamePromptError("");}}
  placeholder="Choose a username..."
  autoFocus
- style={{width:"100%",background:"#1C1C1E",border:`1.5px solid ${usernamePromptError?IOS.red:IOS.blue}`,borderRadius:12,padding:"12px 14px",color:"#fff",fontSize:16,fontFamily:"Barlow,sans-serif",outline:"none",marginBottom:8,boxSizing:"border-box"}}
+ style={{width:"100%",background:"#1C1C1E",border:`1.5px solid ${usernamePromptError?IOS.red:IOS.blue}`,borderRadius:RAD.md,padding:"12px 14px",color:"#fff",fontSize:16,fontFamily:"Barlow,sans-serif",outline:"none",marginBottom:8,boxSizing:"border-box"}}
  />
  {usernamePromptError && <div style={{fontSize:12,color:IOS.red,marginBottom:8}}>{usernamePromptError}</div>}
  <div style={{fontSize:11,color:IOS.label3,marginBottom:20}}>Letters, numbers, and underscores only. Min 3 characters.</div>
@@ -8070,7 +8360,7 @@ function App() {
  setUserProfile(prev=>({...prev,username:val}));
  setShowUsernamePrompt(false);
  setUsernamePromptSaving(false);
- }} style={{width:"100%",background:usernamePromptSaving?"rgba(255,255,255,0.1)":IOS.blue,border:"none",borderRadius:12,padding:"14px",fontSize:16,fontWeight:700,color:usernamePromptSaving?"rgba(255,255,255,0.3)":"#fff",cursor:usernamePromptSaving?"default":"pointer",fontFamily:"Barlow,sans-serif",marginBottom:10}}>
+ }} style={{width:"100%",background:usernamePromptSaving?"rgba(255,255,255,0.1)":IOS.blue,border:"none",borderRadius:RAD.md,padding:"14px",fontSize:16,fontWeight:700,color:usernamePromptSaving?"rgba(255,255,255,0.3)":"#fff",cursor:usernamePromptSaving?"default":"pointer",fontFamily:"Barlow,sans-serif",marginBottom:10}}>
  {usernamePromptSaving?"Saving...":"Set Username"}
  </button>
  <div onClick={()=>setShowUsernamePrompt(false)} style={{textAlign:"center",fontSize:13,color:IOS.label3,cursor:"pointer"}}>Skip for now</div>
@@ -8092,7 +8382,7 @@ function App() {
  </div>
  <div className="gh-center"></div>
  <div className="gh-right">
-            <div onClick={()=>{ if(!isPro){setShowPaywall("ai");return;} setAiReturn(prev => screen==="ai" ? prev : screen); setScreen("ai"); }} aria-label="Plok" style={{display:"inline-flex",alignItems:"center",gap:5,height:34,padding:"0 11px",borderRadius:17,background:`${IOS.blue}1f`,border:`1px solid ${IOS.blue}3a`,cursor:"pointer"}}><svg width="15" height="15" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg><span style={{fontSize:13,fontWeight:800,color:IOS.blue,letterSpacing:"-0.2px"}}>Plok</span></div>
+            <div onClick={()=>{ if(!isPro){setShowPaywall("ai");return;} setAiReturn(prev => screen==="ai" ? prev : screen); setScreen("ai"); }} aria-label="Plok" style={{display:"inline-flex",alignItems:"center",gap:5,height:34,padding:"0 11px",borderRadius:RAD.lg,background:`${IOS.blue}1f`,border:`1px solid ${IOS.blue}3a`,cursor:"pointer"}}><svg width="15" height="15" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg><span style={{fontSize:13,fontWeight:800,color:IOS.blue,letterSpacing:"-0.2px"}}>Plok</span></div>
  {!isSoloMode && <div className="gh-icon" onClick={()=>setScreen("chat")}>
  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
  {unreadByLeague[activeLeagueId]>0 && <span className="gh-badge">{unreadByLeague[activeLeagueId]>9?"9+":unreadByLeague[activeLeagueId]}</span>}
@@ -8210,8 +8500,8 @@ function App() {
              const _subbed = !!(userProfile && userProfile.push_enabled) && _perm === "granted";
              if (!userProfile || !_sup || _perm === "denied" || _subbed || pushNudgeOff) return null; // wait for profile to load — no pre-load flash
              return (
-             <div style={{display:"flex",alignItems:"center",gap:12,background:"linear-gradient(135deg,rgba(255,55,95,0.14),rgba(10,132,255,0.06))",border:"0.5px solid rgba(255,55,95,0.3)",borderRadius:15,padding:"12px 14px",marginBottom:12}}>
-               <div style={{width:36,height:36,borderRadius:11,background:"rgba(255,55,95,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+             <div style={{display:"flex",alignItems:"center",gap:12,background:"linear-gradient(135deg,rgba(255,55,95,0.14),rgba(10,132,255,0.06))",border:"0.5px solid rgba(255,55,95,0.3)",borderRadius:RAD.lg,padding:"12px 14px",marginBottom:12}}>
+               <div style={{width:36,height:36,borderRadius:RAD.md,background:"rgba(255,55,95,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#FF375F" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
                </div>
                <div style={{flex:1,minWidth:0}}>
@@ -8219,15 +8509,15 @@ function App() {
                  <div style={{fontSize:11.5,color:"rgba(255,255,255,0.5)",marginTop:1}}>Get pinged when picks grade, your week is final, and before your slip locks.</div>
                </div>
                <div style={{display:"flex",flexDirection:"column",gap:6,flexShrink:0}}>
-                 <div onClick={async()=>{ const ok=await subscribeToPush(); if(ok){ try{ localStorage.setItem("picklock_push_nudge","1"); }catch(e){} setPushNudgeOff(true); } }} style={{background:IOS.pink,color:"#fff",fontSize:12,fontWeight:800,borderRadius:9,padding:"7px 14px",cursor:"pointer",textAlign:"center"}}>Enable</div>
+                 <div onClick={async()=>{ const ok=await subscribeToPush(); if(ok){ try{ localStorage.setItem("picklock_push_nudge","1"); }catch(e){} setPushNudgeOff(true); } }} style={{background:IOS.pink,color:"#fff",fontSize:12,fontWeight:800,borderRadius:RAD.sm,padding:"7px 14px",cursor:"pointer",textAlign:"center"}}>Enable</div>
                  <div onClick={()=>{ try{ localStorage.setItem("picklock_push_nudge","1"); }catch(e){} setPushNudgeOff(true); }} style={{fontSize:10.5,fontWeight:700,color:"rgba(255,255,255,0.4)",textAlign:"center",cursor:"pointer"}}>Not now</div>
                </div>
              </div>
              );
            })()}
  {(()=>{ const rows=lbCache["all"]; let rk=null,total=0; if(rows&&rows.length){ const sx=[...rows].sort((a,b)=>(Number(b.points)||0)-(Number(a.points)||0)); total=sx.length; const i=sx.findIndex(r=>String(r.user_id)===String(user?.id)); if(i>=0) rk=i+1; } const pct=(rk&&total)?Math.max(1,Math.round(rk/total*100)):null; return (
-           <div onClick={()=>{ fetchLeaderboard("all"); setScreen("leaderboard"); }} style={{display:"flex",alignItems:"center",gap:12,background:"linear-gradient(135deg,rgba(10,132,255,0.12),rgba(94,92,230,0.05))",border:"0.5px solid rgba(10,132,255,0.28)",borderRadius:15,padding:"12px 14px",marginBottom:12,cursor:"pointer"}}>
-             <div style={{width:36,height:36,borderRadius:11,background:"rgba(10,132,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M8 21V10M16 21V3M4 21v-6"/></svg></div>
+           <div onClick={()=>{ fetchLeaderboard("all"); setScreen("leaderboard"); }} style={{display:"flex",alignItems:"center",gap:12,background:"linear-gradient(135deg,rgba(10,132,255,0.12),rgba(94,92,230,0.05))",border:"0.5px solid rgba(10,132,255,0.28)",borderRadius:RAD.lg,padding:"12px 14px",marginBottom:12,cursor:"pointer"}}>
+             <div style={{width:36,height:36,borderRadius:RAD.md,background:"rgba(10,132,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M8 21V10M16 21V3M4 21v-6"/></svg></div>
              <div style={{flex:1,minWidth:0}}><div style={{fontSize:9.5,fontWeight:800,letterSpacing:0.5,textTransform:"uppercase",color:"rgba(255,255,255,0.4)"}}>Global rank</div><div style={{fontSize:15,fontWeight:800,color:"#fff",marginTop:1}}>{rk?("#"+rk+(pct?(" · top "+pct+"%"):"")):"See where you rank"}</div></div>
              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
            </div>); })()}
@@ -8314,10 +8604,10 @@ function App() {
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
  <div className="nav-title-large">PICKLOCK</div>
  <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
- <div style={{display:"flex",background:"rgba(255,255,255,0.08)",borderRadius:9,padding:2}}>
+ <div style={{display:"flex",background:"rgba(255,255,255,0.08)",borderRadius:RAD.sm,padding:2}}>
  {[{id:"leagues",label:"Leagues"},{id:"solo",label:"Solo"}].map(m=>(
  <div key={m.id} onClick={()=>{setHomeMode(m.id);setScreen("home");if(m.id==="solo"){fetchSoloWeeks();}else{setIsSoloMode(false);}}}
- style={{padding:"5px 11px",borderRadius:7,fontSize:11.5,fontWeight:700,cursor:"pointer",transition:"all .15s",whiteSpace:"nowrap",
+ style={{padding:"5px 11px",borderRadius:RAD.sm,fontSize:11.5,fontWeight:700,cursor:"pointer",transition:"all .15s",whiteSpace:"nowrap",
  background:homeMode===m.id?"rgba(255,255,255,0.14)":"transparent",
  color:homeMode===m.id?"#fff":"rgba(255,255,255,0.4)"}}>{m.label}</div>
  ))}
@@ -8327,12 +8617,12 @@ function App() {
  </div>
  {/* Commish Pro soft banner */}
  {!isPro && realLeagues.some(lg=>lg.isCommissioner) && (
-   <div style={{margin:"10px 0 0",background:"rgba(10,132,255,0.08)",border:"0.5px solid rgba(10,132,255,0.2)",borderRadius:8,padding:"9px 12px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}} onClick={()=>setShowPaywall("settings")}>
+   <div style={{margin:"10px 0 0",background:"rgba(10,132,255,0.08)",border:"0.5px solid rgba(10,132,255,0.2)",borderRadius:RAD.sm,padding:"9px 12px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}} onClick={()=>setShowPaywall("settings")}>
      <div>
        <div style={{fontSize:12,fontWeight:600,color:IOS.blue}}>Unlock Commish Pro</div>
        <div style={{fontSize:11,color:"#555",marginTop:1}}>Custom picks, multi-sport, power-ups</div>
      </div>
-     <div style={{fontSize:11,fontWeight:700,color:IOS.blue,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.25)",borderRadius:6,padding:"4px 9px",whiteSpace:"nowrap"}}>$5/mo</div>
+     <div style={{fontSize:11,fontWeight:700,color:IOS.blue,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.25)",borderRadius:RAD.sm,padding:"4px 9px",whiteSpace:"nowrap"}}>$5/mo</div>
    </div>
  )}
 
@@ -8344,7 +8634,7 @@ function App() {
  const isActive=activeLeagueId===lg.id;
  return (
  <div key={lg.id} onClick={()=>{setActiveLeagueId(lg.id);setPicks({ml:null,prop:null,ou:null,spread:null});setLsBets([]);}}
- style={{flexShrink:0,display:"flex",alignItems:"center",gap:7,padding:"8px 14px",borderRadius:20,cursor:"pointer",transition:"all .18s",
+ style={{flexShrink:0,display:"flex",alignItems:"center",gap:7,padding:"8px 14px",borderRadius:RAD.pill,cursor:"pointer",transition:"all .18s",
  background:isActive?"rgba(10,132,255,0.15)":"rgba(255,255,255,0.06)",
  border:`1px solid ${isActive?"rgba(10,132,255,0.4)":"rgba(255,255,255,0.08)"}`,
  }}>
@@ -8402,9 +8692,9 @@ function App() {
    const _openLabel=openSlots+" slot"+(openSlots>1?"s":"")+" open";
    const _lab={fontSize:9.5,letterSpacing:"0.12em",color:"rgba(255,255,255,0.3)",fontWeight:700,textTransform:"uppercase"};
    const _val={fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:700,fontSize:25,lineHeight:1,marginTop:7};
-   const _cta={marginLeft:"auto",display:"inline-flex",alignItems:"center",gap:7,background:"#0A84FF",color:"#fff",fontWeight:700,fontSize:14,padding:"10px 15px",borderRadius:10,border:"none",cursor:"pointer"};
+   const _cta={marginLeft:"auto",display:"inline-flex",alignItems:"center",gap:7,background:"#0A84FF",color:"#fff",fontWeight:700,fontSize:14,padding:"10px 15px",borderRadius:RAD.md,border:"none",cursor:"pointer"};
    return (
-   <div className="pl-rise pl-d1" style={{position:"relative",border:"none",boxShadow:"0 14px 32px -18px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.05)",borderRadius:18,overflow:"hidden",background:"radial-gradient(120% 140% at 0% 0%, rgba(10,132,255,0.10), transparent 55%), #0B0B10",boxShadow:"inset 0 1px 0 rgba(255,255,255,0.06), 0 14px 40px rgba(0,0,0,0.4)",margin:"0 0 10px"}}>
+   <div className="pl-rise pl-d1" style={{position:"relative",border:"none",boxShadow:"0 14px 32px -18px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.05)",borderRadius:RAD.xl,overflow:"hidden",background:"radial-gradient(120% 140% at 0% 0%, rgba(10,132,255,0.10), transparent 55%), #0B0B10",boxShadow:"inset 0 1px 0 rgba(255,255,255,0.06), 0 14px 40px rgba(0,0,0,0.4)",margin:"0 0 10px"}}>
    <div style={{position:"absolute",left:0,top:0,right:0,bottom:0,backgroundImage:"repeating-linear-gradient(0deg,rgba(255,255,255,0.025) 0px,rgba(255,255,255,0.025) 1px,transparent 1px,transparent 4px)",pointerEvents:"none",opacity:0.5}}/>
    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",position:"relative"}}>
      <div style={{padding:"13px 12px 12px"}}>
@@ -8459,11 +8749,11 @@ function App() {
              <div style={{fontSize:11,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:IOS.label3}}>Games on the board</div>
              {games.length>4 && <div onClick={()=>setSoloGamesAll(v=>!v)} style={{fontSize:12,fontWeight:800,color:IOS.blue,cursor:"pointer"}}>{soloGamesAll?"Show less":("See all "+games.length+" \u203a")}</div>}
            </div>
-           <div style={{display:"flex",gap:7,overflowX:"auto",marginBottom:12,paddingBottom:2}}>
+           <div className="pk-rail" style={{marginBottom:12}}>
              {SP.map(k=>{ const sp=SPORTS[k]||{}; const on=soloSport===k; return (
-               <div key={k} onClick={()=>{ if(soloSport!==k){ setSoloSportPersist(k); setSoloGamesAll(false); } }} style={{flexShrink:0,display:"flex",alignItems:"center",gap:6,background:on?"rgba(10,132,255,0.14)":IOS.bg2,border:"1px solid "+(on?"rgba(10,132,255,0.4)":"rgba(255,255,255,0.07)"),borderRadius:999,padding:"7px 13px",cursor:"pointer"}}>
-                 <span style={{width:7,height:7,borderRadius:2,background:sp.color||IOS.blue}}/>
-                 <span style={{fontSize:12.5,fontWeight:800,color:on?IOS.blue:IOS.label2}}>{sp.label||String(k).toUpperCase()}</span>
+               <div key={k} onClick={()=>{ if(soloSport!==k){ haptic("select"); setSoloSportPersist(k); setSoloGamesAll(false); } }} className={"pk-chip"+(on?" on":"")} style={{"--on-a":(sp.color||IOS.blue)+"52","--on-b":(sp.color||IOS.blue)+"24"}}>
+                 <span style={{width:7,height:7,borderRadius:"50%",background:sp.color||IOS.blue,flexShrink:0}}/>
+                 <span>{sp.label||String(k).toUpperCase()}</span>
                </div>); })}
            </div>
            {(oddsLoading && games.length===0) ? <SkelCards n={4} pad="0"/> :
@@ -8478,7 +8768,7 @@ function App() {
               const spreadOdds=(so?.spread||[]).filter(o=>o.game?.includes(away)||o.game?.includes(home));
               const ouOdds=(so?.ou||[]).filter(o=>o.game?.includes(away)||o.game?.includes(home));
               return (
-              <div key={gi} onClick={async()=>{ const gameOdds={ml:mlOdds,spread:spreadOdds,ou:ouOdds}; setGameSheet({tickerGame:{...g,away,home,isLive,timeStr:gameTime},espnGame:espn,detail:null,odds:gameOdds}); setGameTeamTab("matchup"); if(espn?.id){ setGameLoading(true); try{ const r=await fetch(API_BASE+`/api/espn?sport=${SPORT_KEYS[soloSport]}&gameId=${espn.id}`); if(r.ok){const d=await r.json();setGameSheet(prev=>({...prev,detail:d}));} }catch(e){} finally{setGameLoading(false);} } }} style={{margin:"0 0 10px",background:IOS.bg2,borderRadius:14,overflow:"hidden",cursor:"pointer",border:"1px solid rgba(255,255,255,0.06)"}}>
+              <div key={gi} onClick={async()=>{ const gameOdds={ml:mlOdds,spread:spreadOdds,ou:ouOdds}; setGameSheet({tickerGame:{...g,away,home,isLive,timeStr:gameTime},espnGame:espn,detail:null,odds:gameOdds}); setGameTeamTab("matchup"); if(espn?.id){ setGameLoading(true); try{ const r=await fetch(API_BASE+`/api/espn?sport=${SPORT_KEYS[soloSport]}&gameId=${espn.id}`); if(r.ok){const d=await r.json();setGameSheet(prev=>({...prev,detail:d}));} }catch(e){} finally{setGameLoading(false);} } }} style={{margin:"0 0 10px",background:IOS.bg2,borderRadius:RAD.lg,overflow:"hidden",cursor:"pointer",border:"1px solid rgba(255,255,255,0.06)"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 14px",borderBottom:`0.5px solid ${IOS.sep}`}}>
                   <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,color:isLive?IOS.green:IOS.label3,textTransform:"uppercase"}}>{isLive?"\u25cf LIVE":gameTime}</div>
                   <div style={{fontSize:9,fontWeight:800,letterSpacing:0.5,color:IOS.label3,textTransform:"uppercase"}}>{(SPORTS[soloSport]&&SPORTS[soloSport].label)||""}</div>
@@ -8514,9 +8804,9 @@ function App() {
 
  {/* Games Ticker */}
  {/* Home / Games tab switcher */}
- <div style={{display:"flex",gap:0,margin:"8px 16px 0",background:"rgba(255,255,255,0.06)",borderRadius:10,padding:3}}>
+ <div style={{display:"flex",gap:0,margin:"8px 16px 0",background:"rgba(255,255,255,0.06)",borderRadius:RAD.md,padding:3}}>
  {[{id:"home",label:"Home"},{id:"games",label:"Games"}].map(t=>(
- <div key={t.id} onClick={()=>setHomeTab(t.id)} style={{flex:1,textAlign:"center",padding:"7px",borderRadius:8,fontSize:13,fontWeight:600,cursor:"pointer",transition:"all .15s",background:homeTab===t.id?"rgba(255,255,255,0.12)":"transparent",color:homeTab===t.id?"#fff":"rgba(255,255,255,0.4)"}}>
+ <div key={t.id} onClick={()=>setHomeTab(t.id)} style={{flex:1,textAlign:"center",padding:"7px",borderRadius:RAD.sm,fontSize:13,fontWeight:600,cursor:"pointer",transition:"all .15s",background:homeTab===t.id?"rgba(255,255,255,0.12)":"transparent",color:homeTab===t.id?"#fff":"rgba(255,255,255,0.4)"}}>
  {t.label}
  </div>
  ))}
@@ -8524,11 +8814,11 @@ function App() {
 
 
  {homeTab==='home' && !isSoloMode && leagueAwaitingStart && (activeLeague.isCommissioner ? (
-   <div style={{margin:"6px 16px 16px",background:"linear-gradient(160deg,#0c1f38,#0b0d12)",border:"0.5px solid rgba(10,132,255,0.25)",borderRadius:18,padding:"18px",textAlign:"center"}}>
-     <div style={{display:"inline-flex",alignItems:"center",gap:5,background:"rgba(48,209,88,0.14)",border:"0.5px solid rgba(48,209,88,0.3)",borderRadius:999,padding:"4px 11px",fontSize:11,fontWeight:800,color:IOS.green}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>Roster full · {(activeLeague.memberCount||0)}/{_lgTarget}</div>
+   <div style={{margin:"6px 16px 16px",background:"linear-gradient(160deg,#0c1f38,#0b0d12)",border:"0.5px solid rgba(10,132,255,0.25)",borderRadius:RAD.xl,padding:"18px",textAlign:"center"}}>
+     <div style={{display:"inline-flex",alignItems:"center",gap:5,background:"rgba(48,209,88,0.14)",border:"0.5px solid rgba(48,209,88,0.3)",borderRadius:RAD.pill,padding:"4px 11px",fontSize:11,fontWeight:800,color:IOS.green}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>Roster full · {(activeLeague.memberCount||0)}/{_lgTarget}</div>
      <div style={{fontSize:20,fontWeight:900,color:"#fff",marginTop:11,letterSpacing:-0.3}}>Roster’s full</div>
      <div style={{fontSize:13,color:IOS.label2,lineHeight:1.5,marginTop:7}}>You chose manual start, so the season hasn’t begun. Start it whenever everyone’s signed and the slate looks right.</div>
-     <button onClick={async()=>{ if(!window.confirm("Start the season now? Week 1 opens, the roster locks, and this week\u2019s games become everyone\u2019s first slate. This can\u2019t be undone.")) return; await supabase.from("leagues").update({season_start:new Date().toISOString(),current_week:1}).eq("id",activeLeague.id).is("season_start",null); try{ const {data:_mem}=await supabase.from("league_members").select("user_id").eq("league_id",activeLeague.id); const _ids=(_mem||[]).map(m=>m.user_id); fetch(API_BASE+"/api/notify",{method:"POST",headers:await authHeaders(),body:JSON.stringify({userIds:_ids,title:(activeLeague.name||"Your league")+" is live!",body:"Week 1 is open — make your picks before they lock.",url:"/",category:"notif_league"})}); }catch(e){} await fetchLeagues(user.id); }} style={{width:"100%",marginTop:16,background:IOS.blue,border:"none",color:"#fff",borderRadius:13,padding:"15px",fontSize:16,fontWeight:800,fontFamily:"Barlow,sans-serif",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><svg width="16" height="16" viewBox="0 0 24 24" fill="#fff" stroke="none"><polygon points="6 4 20 12 6 20 6 4"/></svg>Start League</button>
+     <button onClick={async()=>{ if(!window.confirm("Start the season now? Week 1 opens, the roster locks, and this week\u2019s games become everyone\u2019s first slate. This can\u2019t be undone.")) return; await supabase.from("leagues").update({season_start:new Date().toISOString(),current_week:1}).eq("id",activeLeague.id).is("season_start",null); try{ const {data:_mem}=await supabase.from("league_members").select("user_id").eq("league_id",activeLeague.id); const _ids=(_mem||[]).map(m=>m.user_id); fetch(API_BASE+"/api/notify",{method:"POST",headers:await authHeaders(),body:JSON.stringify({userIds:_ids,title:(activeLeague.name||"Your league")+" is live!",body:"Week 1 is open — make your picks before they lock.",url:"/",category:"notif_league"})}); }catch(e){} await fetchLeagues(user.id); }} style={{width:"100%",marginTop:16,background:IOS.blue,border:"none",color:"#fff",borderRadius:RAD.md,padding:"15px",fontSize:16,fontWeight:800,fontFamily:"Barlow,sans-serif",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><svg width="16" height="16" viewBox="0 0 24 24" fill="#fff" stroke="none"><polygon points="6 4 20 12 6 20 6 4"/></svg>Start League</button>
      <div style={{marginTop:14,textAlign:"left"}}>
        {["Week 1 opens and picks go live for everyone","This week\u2019s games become your Week 1 slate","The roster locks — no new joins after start"].map((t,i)=>(
          <div key={i} style={{display:"flex",gap:9,alignItems:"flex-start",padding:"7px 0",borderTop:i>0?"0.5px solid rgba(255,255,255,0.07)":"none"}}>
@@ -8539,11 +8829,11 @@ function App() {
      </div>
    </div>
    ) : (
-   <div style={{margin:"6px 16px 16px",background:"#141417",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:18,padding:"24px 18px",textAlign:"center"}}>
+   <div style={{margin:"6px 16px 16px",background:"#141417",border:EDGE.hair,borderRadius:RAD.xl,padding:"24px 18px",textAlign:"center"}}>
      <div style={{width:58,height:58,borderRadius:"50%",background:"rgba(255,159,10,0.12)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px"}}><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={IOS.orange} strokeWidth="2.2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
      <div style={{fontSize:20,fontWeight:900,color:"#fff",letterSpacing:-0.3}}>You’re in. League’s full.</div>
      <div style={{fontSize:13.5,color:IOS.label2,lineHeight:1.5,marginTop:8}}>Waiting for the commissioner to start the season. You’ll get a heads-up the moment Week 1 opens.</div>
-     <div style={{display:"flex",gap:9,alignItems:"flex-start",background:"#1c1c1e",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:13,padding:"13px",marginTop:18,textAlign:"left"}}>
+     <div style={{display:"flex",gap:9,alignItems:"flex-start",background:"#1c1c1e",border:EDGE.hair,borderRadius:RAD.md,padding:"13px",marginTop:18,textAlign:"left"}}>
        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64D2FF" strokeWidth="2" style={{flexShrink:0,marginTop:1}}><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg>
        <span style={{fontSize:12.5,color:IOS.label3,lineHeight:1.45}}>Picks stay locked until the season starts — so your first slate matches whatever week the league goes live.</span>
      </div>
@@ -8595,9 +8885,9 @@ function App() {
  {(isLive||isDone)&&tm.sc!=null&&<div className="wr-gsc">{tm.sc}</div>}
  </div>
  ))}
- {_isMlb && (_ap||_hp) && <div style={{display:"flex",alignItems:"center",gap:6,margin:"9px 0 0",padding:"6px 8px",background:"rgba(255,255,255,0.03)",borderRadius:8}}><span style={{fontSize:7.5,fontWeight:900,letterSpacing:"0.06em",color:"rgba(255,255,255,0.4)",flexShrink:0}}>P</span><div style={{flex:1,minWidth:0,fontSize:10,fontWeight:700,color:"rgba(255,255,255,0.82)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{_ap||"TBD"}</div><span style={{fontSize:8,fontWeight:800,color:"rgba(255,255,255,0.35)",flexShrink:0}}>vs</span><div style={{flex:1,minWidth:0,textAlign:"right",fontSize:10,fontWeight:700,color:"rgba(255,255,255,0.82)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{_hp||"TBD"}</div></div>}
+ {_isMlb && (_ap||_hp) && <div style={{display:"flex",alignItems:"center",gap:6,margin:"9px 0 0",padding:"6px 8px",background:"rgba(255,255,255,0.03)",borderRadius:RAD.sm}}><span style={{fontSize:7.5,fontWeight:900,letterSpacing:"0.06em",color:"rgba(255,255,255,0.4)",flexShrink:0}}>P</span><div style={{flex:1,minWidth:0,fontSize:10,fontWeight:700,color:"rgba(255,255,255,0.82)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{_ap||"TBD"}</div><span style={{fontSize:8,fontWeight:800,color:"rgba(255,255,255,0.35)",flexShrink:0}}>vs</span><div style={{flex:1,minWidth:0,textAlign:"right",fontSize:10,fontWeight:700,color:"rgba(255,255,255,0.82)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{_hp||"TBD"}</div></div>}
  {ml.length>0 ? <div style={{display:"flex",gap:6,marginTop:9}}>
- {[{k:"SP",it:sp2[0]},{k:"TOT",it:ou[0]},{k:"ML",it:ml[0]}].map((c,ci)=>c.it?(<div key={ci} style={{flex:1,textAlign:"center",background:"rgba(255,255,255,0.04)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:9,padding:"6px 4px",minWidth:0}}><div style={{fontSize:8,fontWeight:900,letterSpacing:"0.05em",color:"rgba(255,255,255,0.4)",textTransform:"uppercase"}}>{c.k}</div><div style={{fontSize:11,fontWeight:800,color:"#fff",marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.it.pick?.split(" ").slice(-1)[0]} <span style={{color:"rgba(255,255,255,0.55)",fontWeight:700,fontSize:9.5}}>{c.it.odds}</span></div></div>):<div key={ci} style={{flex:1}}/>)}
+ {[{k:"SP",it:sp2[0]},{k:"TOT",it:ou[0]},{k:"ML",it:ml[0]}].map((c,ci)=>c.it?(<div key={ci} style={{flex:1,textAlign:"center",background:"rgba(255,255,255,0.04)",border:EDGE.hair,borderRadius:RAD.sm,padding:"6px 4px",minWidth:0}}><div style={{fontSize:8,fontWeight:900,letterSpacing:"0.05em",color:"rgba(255,255,255,0.4)",textTransform:"uppercase"}}>{c.k}</div><div style={{fontSize:11,fontWeight:800,color:"#fff",marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.it.pick?.split(" ").slice(-1)[0]} <span style={{color:"rgba(255,255,255,0.55)",fontWeight:700,fontSize:9.5}}>{c.it.odds}</span></div></div>):<div key={ci} style={{flex:1}}/>)}
  </div> : <div style={{marginTop:9,fontSize:9.5,fontWeight:700,color:"rgba(255,255,255,0.38)",textAlign:"center"}}>Lines not posted yet</div>}
  {hasPick&&<div className="wr-pickbadge"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#30D158" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>On your slip</div>}
  </div>
@@ -8639,7 +8929,7 @@ function App() {
        <span onClick={()=>setScreen("matchup")} style={{color:sport.color,fontSize:13,textTransform:"none",fontWeight:500,letterSpacing:0,cursor:"pointer"}}>The Field</span>
      </div>
    </div>
-   <div onClick={()=>setScreen("league")} style={{margin:"0 16px 10px",borderRadius:16,padding:"16px",cursor:"pointer",position:"relative",overflow:"hidden",background:"linear-gradient(155deg,#10183a 0%,#0B0B0E 72%)",border:`1px solid ${IOS.indigo}38`,boxShadow:"0 4px 16px rgba(0,0,0,0.4)"}}>
+   <div onClick={()=>setScreen("league")} style={{margin:"0 16px 10px",borderRadius:RAD.lg,padding:"16px",cursor:"pointer",position:"relative",overflow:"hidden",background:"linear-gradient(155deg,#10183a 0%,#0B0B0E 72%)",border:`1px solid ${IOS.indigo}38`,boxShadow:"0 4px 16px rgba(0,0,0,0.4)"}}>
      <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${IOS.blue},${IOS.indigo})`}}/>
      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
        <div>
@@ -8672,7 +8962,7 @@ function App() {
      if(_cw<_sw) return null;
      const _in=(typeof myRank==="number")&&myRank<=playoffN;
      return (
-     <div onClick={()=>{setLeagueTab("playoff");setScreen("league");}} style={{margin:"0 16px 10px",borderRadius:14,padding:"12px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:11,background:_in?"linear-gradient(135deg,#1A1606,#0B0B0E 72%)":"#141417",border:`1px solid ${_in?"rgba(255,214,10,0.35)":IOS.sep}`}}>
+     <div onClick={()=>{setLeagueTab("playoff");setScreen("league");}} style={{margin:"0 16px 10px",borderRadius:RAD.lg,padding:"12px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:11,background:_in?"linear-gradient(135deg,#1A1606,#0B0B0E 72%)":"#141417",border:`1px solid ${_in?"rgba(255,214,10,0.35)":IOS.sep}`}}>
        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={_in?IOS.yellow:IOS.label3} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
        <div style={{flex:1,minWidth:0}}>
          <div style={{fontSize:13,fontWeight:800,color:_in?"#fff":IOS.label2}}>{_in?"You're in the playoff":"Just missed the playoff"}</div>
@@ -8708,7 +8998,7 @@ function App() {
  <span onClick={()=>setScreen("matchup")} style={{color:IOS.blue,fontSize:13,textTransform:"none",fontWeight:500,letterSpacing:0,cursor:"pointer"}}>View Details</span>
  </div>
  </div>
- <div onClick={()=>setScreen("matchup")} style={{margin:"0 16px 10px",background:"#131318",borderRadius:16,padding:"15px 16px",cursor:"pointer",position:"relative",overflow:"hidden",border:"0.5px solid rgba(255,255,255,0.07)"}}>
+ <div onClick={()=>setScreen("matchup")} style={{margin:"0 16px 10px",background:"#131318",borderRadius:RAD.lg,padding:"15px 16px",cursor:"pointer",position:"relative",overflow:"hidden",border:EDGE.hair}}>
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
  <div>
  <div style={{fontSize:18,fontWeight:800,letterSpacing:-0.5,color:IOS.blue}}>YOU</div>
@@ -8726,7 +9016,7 @@ function App() {
  <div style={{display:"flex",gap:6,marginTop:12,paddingTop:10,borderTop:`0.5px solid ${IOS.sep}`,alignItems:"center",justifyContent:"space-between"}}>
  <div style={{display:"flex",gap:5}}>
  {myPicks.map((p,i)=>(
- <div key={i} style={{width:28,height:28,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,background:p.result==="W"?"rgba(48,209,88,0.15)":p.result==="L"?"rgba(255,69,58,0.12)":"rgba(255,255,255,0.06)",color:p.result==="W"?IOS.green:p.result==="L"?IOS.red:IOS.label3}}>
+ <div key={i} style={{width:28,height:28,borderRadius:RAD.sm,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,background:p.result==="W"?"rgba(48,209,88,0.15)":p.result==="L"?"rgba(255,69,58,0.12)":"rgba(255,255,255,0.06)",color:p.result==="W"?IOS.green:p.result==="L"?IOS.red:IOS.label3}}>
  {p.result==="W"?"W":p.result==="L"?"L":"·"}
  </div>
  ))}
@@ -8781,7 +9071,7 @@ function App() {
  const locked=!!slot.committed;
  const c=catColors[cat]||IOS.blue;
  return (
- <div key={i} style={{display:"flex",alignItems:"center",gap:5,padding:"7px 10px",borderRadius:9,background:"rgba(255,255,255,0.05)",border:locked?"0.5px solid rgba(255,255,255,0.07)":"0.5px dashed rgba(255,255,255,0.2)",flexShrink:0,opacity:locked?1:0.85}}>
+ <div key={i} style={{display:"flex",alignItems:"center",gap:5,padding:"7px 10px",borderRadius:RAD.sm,background:"rgba(255,255,255,0.05)",border:locked?"0.5px solid rgba(255,255,255,0.07)":"0.5px dashed rgba(255,255,255,0.2)",flexShrink:0,opacity:locked?1:0.85}}>
  <span style={{width:4,height:4,borderRadius:"50%",background:c,display:"inline-block",flexShrink:0}}/>
  <span style={{fontSize:11,fontWeight:800,color:"rgba(255,255,255,0.8)"}}>{slot.mult}×</span>
  <span style={{fontSize:10.5,fontWeight:700,color:locked?"rgba(255,255,255,0.75)":"rgba(255,255,255,0.45)",letterSpacing:0.3}}>{catAbbr[cat]||"PICK"}{isParlay&&legs.length>0?` ${legs.length}`:""}</span>
@@ -8791,7 +9081,7 @@ function App() {
  );
  });
  card=(
- <div style={{margin:"0 16px 10px",background:"#131318",borderRadius:16,overflow:"hidden",border:"0.5px solid rgba(255,255,255,0.07)"}}>
+ <div style={{margin:"0 16px 10px",background:"#131318",borderRadius:RAD.lg,overflow:"hidden",border:EDGE.hair}}>
  <div style={{padding:"12px 16px 8px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:`0.5px solid ${IOS.sep}`}}>
  <div style={{display:"flex",alignItems:"center",gap:7}}>
  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -8803,7 +9093,7 @@ function App() {
  </div>
  </div>
  <div style={{display:"flex",gap:6,flexWrap:"wrap",padding:"12px 16px 4px"}}>{pills}</div>
- <div onClick={()=>setScreen("picks")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 14px",margin:"6px 12px 12px",borderRadius:10,background:"rgba(10,132,255,0.06)",border:"0.5px solid rgba(10,132,255,0.30)",cursor:"pointer"}}>
+ <div onClick={()=>setScreen("picks")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 14px",margin:"6px 12px 12px",borderRadius:RAD.md,background:"rgba(10,132,255,0.06)",border:"0.5px solid rgba(10,132,255,0.30)",cursor:"pointer"}}>
  <div style={{display:"flex",alignItems:"center",gap:8}}>
  <span style={{fontSize:13.5,fontWeight:700,color:"#fff"}}>{allLocked?"View your picks":(openN+" open · tap to lock")}</span>
  <span style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.46)"}}>+{totalPossible.toFixed(1)} pts possible</span>
@@ -8822,13 +9112,13 @@ function App() {
  })()}
 
 {realLeagues.length===0 && (
- <div style={{margin:"6px 16px 4px",borderRadius:18,padding:"18px",position:"relative",overflow:"hidden",background:"radial-gradient(130% 120% at 10% -10%, rgba(10,132,255,0.32), rgba(94,92,230,0.12) 45%, rgba(12,12,16,0) 75%),linear-gradient(160deg,#10204a 0%,#0c0c12 78%)",border:"1px solid rgba(10,132,255,0.3)",boxShadow:"0 18px 50px -26px rgba(10,132,255,0.6)"}}>
+ <div style={{margin:"6px 16px 4px",borderRadius:RAD.xl,padding:"18px",position:"relative",overflow:"hidden",background:"radial-gradient(130% 120% at 10% -10%, rgba(10,132,255,0.32), rgba(94,92,230,0.12) 45%, rgba(12,12,16,0) 75%),linear-gradient(160deg,#10204a 0%,#0c0c12 78%)",border:"1px solid rgba(10,132,255,0.3)",boxShadow:"0 18px 50px -26px rgba(10,132,255,0.6)"}}>
    <div style={{fontSize:20,fontWeight:900,letterSpacing:-0.4,color:"#fff"}}>Get in a league</div>
    <div style={{fontSize:13,color:"rgba(255,255,255,0.72)",lineHeight:1.5,marginTop:6}}>You’re browsing games solo. Create or join a league to put your picks up against friends — weekly matchups, playoffs, bragging rights.</div>
-   <button onClick={()=>{setScreen("leagues");setShowNewLeague(true);setNewLeagueStep(0);}} style={{marginTop:14,width:"100%",background:"linear-gradient(180deg,#0a84ff,#0066d6)",border:"none",borderRadius:12,padding:"14px",fontSize:15,fontWeight:800,color:"#fff",fontFamily:"Barlow,sans-serif",cursor:"pointer",boxShadow:"0 8px 24px -10px rgba(10,132,255,0.8)"}}>Create a league</button>
+   <button onClick={()=>{setScreen("leagues");setShowNewLeague(true);setNewLeagueStep(0);}} style={{marginTop:14,width:"100%",background:"linear-gradient(180deg,#0a84ff,#0066d6)",border:"none",borderRadius:RAD.md,padding:"14px",fontSize:15,fontWeight:800,color:"#fff",fontFamily:"Barlow,sans-serif",cursor:"pointer",boxShadow:"0 8px 24px -10px rgba(10,132,255,0.8)"}}>Create a league</button>
    <div style={{display:"flex",gap:9,marginTop:9}}>
-     <div onClick={()=>{setShowBrowse(true);fetchPublicLeagues();}} style={{flex:1,textAlign:"center",background:"rgba(255,255,255,0.07)",border:"0.5px solid rgba(255,255,255,0.14)",borderRadius:11,padding:"11px",fontSize:13.5,fontWeight:800,color:"#fff",cursor:"pointer"}}>Browse public</div>
-     <div onClick={()=>{const c=(window.prompt("Enter invite code")||"").trim(); if(c) handleJoinCode(c);}} style={{flex:1,textAlign:"center",background:"rgba(255,255,255,0.07)",border:"0.5px solid rgba(255,255,255,0.14)",borderRadius:11,padding:"11px",fontSize:13.5,fontWeight:800,color:"#fff",cursor:"pointer"}}>Join code</div>
+     <div onClick={()=>{setShowBrowse(true);fetchPublicLeagues();}} style={{flex:1,textAlign:"center",background:"rgba(255,255,255,0.07)",border:EDGE.hair3,borderRadius:RAD.md,padding:"11px",fontSize:13.5,fontWeight:800,color:"#fff",cursor:"pointer"}}>Browse public</div>
+     <div onClick={()=>{const c=(window.prompt("Enter invite code")||"").trim(); if(c) handleJoinCode(c);}} style={{flex:1,textAlign:"center",background:"rgba(255,255,255,0.07)",border:EDGE.hair3,borderRadius:RAD.md,padding:"11px",fontSize:13.5,fontWeight:800,color:"#fff",cursor:"pointer"}}>Join code</div>
    </div>
  </div>
  )}
@@ -8866,7 +9156,7 @@ function App() {
  </div>
  <div style={{margin:"0 16px"}}>
  {baseStandings.length===0 ? (<SkelGroup>{[0,1,2].map(i=>(
- <div key={"sk"+i} style={{display:"flex",alignItems:"center",gap:11,padding:"0 13px",height:56,marginBottom:8,borderRadius:14,background:"#131318",border:"0.5px solid rgba(255,255,255,0.07)"}}>
+ <div key={"sk"+i} style={{display:"flex",alignItems:"center",gap:11,padding:"0 13px",height:56,marginBottom:8,borderRadius:RAD.lg,background:"#131318",border:EDGE.hair}}>
  <Skel w={16} h={15}/><Skel w={32} h={32} r={16}/>
  <div style={{flex:1}}><Skel w="52%" h={13} style={{marginBottom:6}}/><Skel w="28%" h={9}/></div>
  <Skel w={46} h={16}/>
@@ -8884,7 +9174,7 @@ function App() {
  const big=i<3;
  const st=(r.streak&&r.streak.count>=1)?`${r.streak.type}${r.streak.count}`:"";
  return (
- <div key={r.rank} style={{display:"flex",alignItems:"center",gap:11,padding:"0 13px",height:big?60:52,marginBottom:8,borderRadius:14,
+ <div key={r.rank} style={{display:"flex",alignItems:"center",gap:11,padding:"0 13px",height:big?60:52,marginBottom:8,borderRadius:RAD.lg,
  background:"#131318",
  border:`0.5px solid ${isMe?"rgba(10,132,255,0.30)":"rgba(255,255,255,0.07)"}`}}>
  <div style={{fontSize:big?18:15,fontWeight:800,width:24,textAlign:"center",flexShrink:0,color:isMe?IOS.blue:top?"#fff":"rgba(255,255,255,0.46)"}}>{i+1}</div>
@@ -8917,7 +9207,7 @@ function App() {
  {(tickerGames||[]).filter(g=>{const _ls=activeLeague?.sports||(activeLeague?.sport?[activeLeague.sport]:[]);return !_ls.length||_ls.includes(g.sport);}).length === 0 ? (
  (!liveOdds[activeLeague?.sport] ? (
  <SkelGroup style={{padding:"0 16px"}}>{[0,1,2].map(i=>(
- <div key={i} style={{background:"#131318",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:15,padding:"12px 14px",marginBottom:10}}>
+ <div key={i} style={{background:"#131318",border:EDGE.hair,borderRadius:RAD.lg,padding:"12px 14px",marginBottom:10}}>
  <Skel w={110} h={12} style={{marginBottom:12}}/>
  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:9}}><Skel w={30} h={30} r={15}/><Skel w="55%" h={14}/><div style={{flex:1}}/><Skel w={44} h={13}/></div>
  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:11}}><Skel w={30} h={30} r={15}/><Skel w="50%" h={14}/><div style={{flex:1}}/><Skel w={44} h={13}/></div>
@@ -8991,7 +9281,7 @@ function App() {
  }catch(e){}
  finally{setGameLoading(false);}
  }
- }} style={{margin:"0 16px 10px",position:"relative",background:"#131318",borderRadius:15,overflow:"hidden",cursor:"pointer",border:hasPick?"0.5px solid rgba(10,132,255,0.35)":"0.5px solid rgba(255,255,255,0.07)"}}>
+ }} style={{margin:"0 16px 10px",position:"relative",background:"#131318",borderRadius:RAD.lg,overflow:"hidden",cursor:"pointer",border:hasPick?"0.5px solid rgba(10,132,255,0.35)":"0.5px solid rgba(255,255,255,0.07)"}}>
  <div style={{position:"absolute",inset:0,pointerEvents:"none",opacity:0.12,background:`linear-gradient(105deg,${_gAc} 0%,transparent 38%,transparent 62%,${_gHc} 100%)`}}/>
  <div style={{position:"relative",padding:"12px 14px 13px"}}>
  {/* header: time / live inning / final — MY PICK right */}
@@ -9027,12 +9317,12 @@ function App() {
  )}
  {!isLive&&!isDone&&(_spF||_ouO)&&(
  <div style={{display:"flex",gap:7,marginTop:9}}>
- {_spF&&<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:9,padding:"8px 6px"}}>
+ {_spF&&<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:"rgba(255,255,255,0.05)",border:EDGE.hair,borderRadius:RAD.sm,padding:"8px 6px"}}>
  <span style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.08em",color:"rgba(255,255,255,0.30)",textTransform:"uppercase"}}>Spread</span>
  <span style={{fontSize:12,fontWeight:800,color:"#fff"}}>{getAcronym(_spTeam)} {_spLine}</span>
  <span style={{fontSize:10.5,fontWeight:600,color:"rgba(255,255,255,0.46)"}}>{_spF.odds}</span>
  </div>}
- {_ouO&&<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:9,padding:"8px 6px"}}>
+ {_ouO&&<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:"rgba(255,255,255,0.05)",border:EDGE.hair,borderRadius:RAD.sm,padding:"8px 6px"}}>
  <span style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.08em",color:"rgba(255,255,255,0.30)",textTransform:"uppercase"}}>Total</span>
  <span style={{fontSize:12,fontWeight:800,color:"#fff"}}>{_ouNum}</span>
  <span style={{fontSize:10.5,fontWeight:600,color:"rgba(255,255,255,0.46)"}}>{_ouO.odds}</span>
@@ -9054,7 +9344,7 @@ function App() {
 
  {/* ══ PICKS ══ */}
  {screen==="picks"&&!isSoloMode&&(()=>{ if(seasonNotStarted){ return notStartedBody; }
- if(!buildingSlip && picksLoading && !(savedPicks&&savedPicks.flexPicks)) return (<SkelGroup style={{padding:"18px 16px"}}><Skel w={150} h={24} r={8}/><div style={{display:"flex",gap:9,margin:"16px 0 18px"}}>{[0,1,2].map(i=><Skel key={i} h={62} r={13} style={{flex:1,width:"auto"}}/>)}</div>{[0,1,2].map(i=>(<div key={i} style={{background:"#131318",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:15,padding:"14px 15px",marginBottom:10}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:11}}><Skel w={92} h={10}/><Skel w={46} h={14}/></div><Skel w="68%" h={16} style={{marginBottom:8}}/><Skel w="44%" h={11} style={{marginBottom:13}}/><div style={{display:"flex",gap:8}}><Skel w={31} h={24}/><Skel w={92} h={24}/></div></div>))}</SkelGroup>);
+ if(!buildingSlip && picksLoading && !(savedPicks&&savedPicks.flexPicks)) return (<SkelGroup style={{padding:"18px 16px"}}><Skel w={150} h={24} r={8}/><div style={{display:"flex",gap:9,margin:"16px 0 18px"}}>{[0,1,2].map(i=><Skel key={i} h={62} r={13} style={{flex:1,width:"auto"}}/>)}</div>{[0,1,2].map(i=>(<div key={i} style={{background:"#131318",border:EDGE.hair,borderRadius:RAD.lg,padding:"14px 15px",marginBottom:10}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:11}}><Skel w={92} h={10}/><Skel w={46} h={14}/></div><Skel w="68%" h={16} style={{marginBottom:8}}/><Skel w="44%" h={11} style={{marginBottom:13}}/><div style={{display:"flex",gap:8}}><Skel w={31} h={24}/><Skel w={92} h={24}/></div></div>))}</SkelGroup>);
  // Use separate state for solo mode vs league mode
  const activePicks = isSoloMode ? soloFlexPicks : flexPicks;
  const setActivePicks = isSoloMode ? setSoloFlexPicks : setFlexPicks;
@@ -9090,31 +9380,31 @@ function App() {
  const noRealLeague = !isSoloMode && (!activeLeague || !activeLeague.id || (realLeagues||[]).length===0);
    if(noRealLeague){
      return (
-       <div className="body" style={{padding:"16px 16px 90px"}}>
-         <div style={{background:"linear-gradient(160deg,#16181d,#0c0d10)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:16,padding:"24px 18px",textAlign:"center"}}>
-           <div style={{width:46,height:46,borderRadius:13,background:"rgba(10,132,255,0.14)",border:"0.5px solid rgba(10,132,255,0.3)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px"}}>
+       <div className="body" style={{paddingTop:16,paddingLeft:16,paddingRight:16}}>
+         <div style={{background:"linear-gradient(160deg,#16181d,#0c0d10)",border:EDGE.hair,borderRadius:RAD.lg,padding:"24px 18px",textAlign:"center"}}>
+           <div style={{width:46,height:46,borderRadius:RAD.md,background:"rgba(10,132,255,0.14)",border:"0.5px solid rgba(10,132,255,0.3)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px"}}>
              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
            </div>
            <div style={{fontSize:17,fontWeight:800,color:"#fff"}}>Make picks with a league</div>
            <div style={{fontSize:13,color:IOS.label3,marginTop:6,lineHeight:1.45}}>Create or join a league to put your slip up against friends — weekly matchups, playoffs, bragging rights.</div>
-           <button onClick={()=>{ try{setNewLeagueStep&&setNewLeagueStep(0);}catch(e){} setShowNewLeague&&setShowNewLeague(true); }} style={{marginTop:16,width:"100%",background:"linear-gradient(135deg,"+IOS.blue+","+IOS.indigo+")",color:"#fff",border:"none",borderRadius:11,padding:"13px",fontSize:14.5,fontWeight:800,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Create a league</button>
+           <button onClick={()=>{ try{setNewLeagueStep&&setNewLeagueStep(0);}catch(e){} setShowNewLeague&&setShowNewLeague(true); }} style={{marginTop:16,width:"100%",background:"linear-gradient(135deg,"+IOS.blue+","+IOS.indigo+")",color:"#fff",border:"none",borderRadius:RAD.md,padding:"13px",fontSize:14.5,fontWeight:800,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Create a league</button>
            <div style={{display:"flex",gap:8,marginTop:9}}>
-             <button onClick={()=>{ try{fetchPublicLeagues&&fetchPublicLeagues();}catch(e){} setShowBrowse&&setShowBrowse(true); }} style={{flex:1,background:"rgba(255,255,255,0.06)",border:"0.5px solid rgba(255,255,255,0.12)",color:"#fff",borderRadius:11,padding:"12px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Browse public</button>
-             <button onClick={()=>{ const c=(window.prompt("Enter invite code")||"").trim(); if(c) handleJoinCode(c); }} style={{flex:1,background:"rgba(255,255,255,0.06)",border:"0.5px solid rgba(255,255,255,0.12)",color:"#fff",borderRadius:11,padding:"12px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Join with code</button>
+             <button onClick={()=>{ try{fetchPublicLeagues&&fetchPublicLeagues();}catch(e){} setShowBrowse&&setShowBrowse(true); }} style={{flex:1,background:"rgba(255,255,255,0.06)",border:EDGE.hair2,color:"#fff",borderRadius:RAD.md,padding:"12px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Browse public</button>
+             <button onClick={()=>{ const c=(window.prompt("Enter invite code")||"").trim(); if(c) handleJoinCode(c); }} style={{flex:1,background:"rgba(255,255,255,0.06)",border:EDGE.hair2,color:"#fff",borderRadius:RAD.md,padding:"12px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Join with code</button>
            </div>
          </div>
          <div style={{display:"flex",alignItems:"center",gap:10,margin:"16px 4px"}}>
            <div style={{flex:1,height:"0.5px",background:"rgba(255,255,255,0.1)"}}/><div style={{fontSize:11,color:IOS.label3,fontWeight:700}}>or</div><div style={{flex:1,height:"0.5px",background:"rgba(255,255,255,0.1)"}}/>
          </div>
-         <button onClick={()=>{ setHomeMode("solo"); setSoloModeWithRef(true); try{fetchSoloWeeks();}catch(e){} setScreen("picks"); }} style={{width:"100%",background:"rgba(191,90,242,0.12)",border:"0.5px solid "+(IOS.purple||"#BF5AF2")+"66",color:(IOS.purple||"#BF5AF2"),borderRadius:11,padding:"13px",fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Track your own picks in Solo →</button>
+         <button onClick={()=>{ setHomeMode("solo"); setSoloModeWithRef(true); try{fetchSoloWeeks();}catch(e){} setScreen("picks"); }} style={{width:"100%",background:"rgba(191,90,242,0.12)",border:"0.5px solid "+(IOS.purple||"#BF5AF2")+"66",color:(IOS.purple||"#BF5AF2"),borderRadius:RAD.md,padding:"13px",fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Track your own picks in Solo →</button>
        </div>
      );
    }
    if(leagueNotStarted){
    return (
-     <div className="body" style={{padding:"16px 16px 90px"}}>
-       <div style={{background:"linear-gradient(160deg,#16181d,#0c0d10)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:16,padding:"22px 18px",textAlign:"center"}}>
-         <div style={{width:46,height:46,borderRadius:13,background:"rgba(255,159,10,0.14)",border:"0.5px solid rgba(255,159,10,0.3)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px"}}>
+     <div className="body" style={{paddingTop:16,paddingLeft:16,paddingRight:16}}>
+       <div style={{background:"linear-gradient(160deg,#16181d,#0c0d10)",border:EDGE.hair,borderRadius:RAD.lg,padding:"22px 18px",textAlign:"center"}}>
+         <div style={{width:46,height:46,borderRadius:RAD.md,background:"rgba(255,159,10,0.14)",border:"0.5px solid rgba(255,159,10,0.3)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px"}}>
            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={IOS.orange} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
          </div>
          <div style={{fontSize:17,fontWeight:800,color:"#fff"}}>{activeLeague.name} hasn't started yet</div>
@@ -9123,15 +9413,15 @@ function App() {
            <div style={{height:"100%",borderRadius:3,background:`linear-gradient(90deg,${IOS.orange},${IOS.yellow})`,width:`${Math.min(100,(leagueMembers.length/_ts)*100)}%`,transition:"width .4s"}}/>
          </div>
          <div style={{fontSize:11,color:IOS.label3}}>{leagueMembers.length}/{_ts} joined</div>
-         {(activeLeague.invite_code||activeLeague.inviteCode) && <button onClick={()=>shareInvite(activeLeague.invite_code||activeLeague.inviteCode, activeLeague.name)} style={{marginTop:14,width:"100%",background:"rgba(255,255,255,0.08)",border:"0.5px solid rgba(255,255,255,0.14)",color:"#fff",borderRadius:10,padding:"11px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Invite players</button>}
+         {(activeLeague.invite_code||activeLeague.inviteCode) && <button onClick={()=>shareInvite(activeLeague.invite_code||activeLeague.inviteCode, activeLeague.name)} style={{marginTop:14,width:"100%",background:"rgba(255,255,255,0.08)",border:EDGE.hair3,color:"#fff",borderRadius:RAD.md,padding:"11px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Invite players</button>}
        </div>
-       <div style={{background:"linear-gradient(160deg,#161019,#0c0a12)",border:`0.5px solid ${(IOS.purple||"#BF5AF2")}4d`,borderRadius:16,padding:"18px",marginTop:12}}>
+       <div style={{background:"linear-gradient(160deg,#161019,#0c0a12)",border:`0.5px solid ${(IOS.purple||"#BF5AF2")}4d`,borderRadius:RAD.lg,padding:"18px",marginTop:12}}>
          <div style={{fontSize:14,fontWeight:800,color:"#fff"}}>Want to pick right now?</div>
          <div style={{fontSize:12.5,color:IOS.label3,marginTop:4,lineHeight:1.45}}>No need to wait for a full league. Solo Mode lets you build a slate against today's live lines right now.</div>
-         <button onClick={async()=>{ setSoloModeWithRef(true); try{ const lid=await getOrCreateSoloLeague(); setActiveLeagueId(lid||"solo"); }catch(e){} setScreen("picks"); }} style={{marginTop:12,width:"100%",background:(IOS.purple||"#BF5AF2"),color:"#fff",border:"none",borderRadius:10,padding:"12px",fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Make picks in Solo Mode</button>
+         <button onClick={async()=>{ setSoloModeWithRef(true); try{ const lid=await getOrCreateSoloLeague(); setActiveLeagueId(lid||"solo"); }catch(e){} setScreen("picks"); }} style={{marginTop:12,width:"100%",background:(IOS.purple||"#BF5AF2"),color:"#fff",border:"none",borderRadius:RAD.md,padding:"12px",fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Make picks in Solo Mode</button>
        </div>
        {strayPicks.length>0 && (
-         <div style={{background:IOS.bg2,border:"0.5px solid rgba(255,69,58,0.25)",borderRadius:16,padding:"16px",marginTop:12}}>
+         <div style={{background:IOS.bg2,border:"0.5px solid rgba(255,69,58,0.25)",borderRadius:RAD.lg,padding:"16px",marginTop:12}}>
            <div style={{fontSize:13,fontWeight:800,color:"#fff"}}>Picks from before the league started</div>
            <div style={{fontSize:12,color:IOS.label3,marginTop:3,marginBottom:10,lineHeight:1.4}}>These were locked before {activeLeague.name} filled up, so they don't count toward anything. Clear them to tidy up.</div>
            {strayPicks.map((p,i)=>(
@@ -9140,7 +9430,7 @@ function App() {
                <div style={{fontSize:11,fontWeight:800,color:p.result==="W"?IOS.green:p.result==="L"?IOS.red:IOS.label3}}>{p.result==="W"?"WON":p.result==="L"?"LOST":p.result==="PUSH"?"PUSH":"PENDING"}</div>
              </div>
            ))}
-           <button onClick={clearStrayPicks} style={{marginTop:12,width:"100%",background:"rgba(255,69,58,0.12)",border:"0.5px solid rgba(255,69,58,0.3)",color:IOS.red,borderRadius:10,padding:"10px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Clear these picks</button>
+           <button onClick={clearStrayPicks} style={{marginTop:12,width:"100%",background:"rgba(255,69,58,0.12)",border:"0.5px solid rgba(255,69,58,0.3)",color:IOS.red,borderRadius:RAD.md,padding:"10px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Clear these picks</button>
          </div>
        )}
      </div>
@@ -9162,7 +9452,7 @@ function App() {
  const ids = (data||[]).map(r=>r.id);
  setActivePicks(prev=>prev.map((p,i)=> i===idx ? {...p, committed:true, commitIds:ids} : p));
  try{ fetchWeekPicks(activeLeague.id, _weekNum); }catch(e){}
- try{ if(navigator.vibrate) navigator.vibrate(20); }catch(e){}
+ haptic("medium");
  };
  const unlockSlot = async (idx)=>{
  const slot = activePicks[idx];
@@ -9234,9 +9524,9 @@ function App() {
  {!activePicks[activeFlexSlot]?.isParlay && !flexCategory && (
  <div style={{padding:"12px 16px"}}>
  <div onClick={()=>{ const t=activeFlexSlot; setActiveFlexSlot(null); setFlexCategory(null); setGridTargetSlot(t); setGridType("ml"); setGridPropSub("all"); setScreen("browser"); }}
-   style={{display:"flex",alignItems:"center",gap:14,padding:"12px 12px",marginBottom:6,borderRadius:12,cursor:"pointer",
+   style={{display:"flex",alignItems:"center",gap:14,padding:"12px 12px",marginBottom:6,borderRadius:RAD.md,cursor:"pointer",
      background:"linear-gradient(135deg,rgba(10,132,255,0.16),rgba(94,92,230,0.10))",border:"0.5px solid rgba(10,132,255,0.3)"}}>
-   <div style={{width:40,height:40,borderRadius:12,background:"rgba(10,132,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+   <div style={{width:40,height:40,borderRadius:RAD.md,background:"rgba(10,132,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
    </div>
    <div style={{flex:1}}>
@@ -9262,7 +9552,7 @@ function App() {
  return (
  <div key={cat.id} onClick={()=>{ if(!taken) setFlexCategory(cat.id); }}
  style={{display:"flex",alignItems:"center",gap:14,padding:"14px 4px",borderBottom:`0.5px solid ${IOS.sep}`,cursor:taken?"not-allowed":"pointer",opacity:taken?0.35:1}}>
- <div style={{width:40,height:40,borderRadius:12,background:`${cat.color}20`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{catSVG(cat.id,cat.color)}</div>
+ <div style={{width:40,height:40,borderRadius:RAD.md,background:`${cat.color}20`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{catSVG(cat.id,cat.color)}</div>
  <div style={{flex:1}}>
  <div style={{fontSize:16,fontWeight:600,color:taken?IOS.label3:"#fff"}}>{cat.label}</div>
  <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>{taken?"Already in your slip":cat.desc}</div>
@@ -9288,7 +9578,7 @@ function App() {
 
  {/* Sport filter bar — only for multi-sport leagues */}
  {leagueSports.length > 1 && flexCategory && (
-   <div style={{display:"flex",gap:6,padding:"6px 16px 2px",overflowX:"auto",scrollbarWidth:"none"}}>
+   <div className="pk-rail" style={{margin:"6px 16px 2px"}}>
      {["all", ...leagueSports].map(sp=>{
        const isAll = sp === "all";
        const label = isAll ? "All" : SPORTS[sp]?.label || sp.toUpperCase();
@@ -9296,11 +9586,7 @@ function App() {
        const isOn = betSportFilter === sp;
        return (
          <div key={sp} onClick={()=>{setBetSportFilter(sp);setPropTypeFilter("all");}}
-         style={{flexShrink:0,padding:"5px 12px",borderRadius:16,fontSize:12,fontWeight:700,cursor:"pointer",transition:"all .15s",
-           background:isOn?`${color}20`:"rgba(255,255,255,0.06)",
-           color:isOn?color:"rgba(255,255,255,0.45)",
-           border:`1px solid ${isOn?color+"50":"rgba(255,255,255,0.08)"}`,
-         }}>{label}</div>
+         className={"pk-chip"+(isOn?" on":"")} style={{"--on-a":color+"52","--on-b":color+"24"}}><span>{label}</span></div>
        );
      })}
    </div>
@@ -9335,14 +9621,10 @@ function App() {
  };
  const filters = propFilters[sportId] || propFilters.nfl;
  return (
- <div style={{display:"flex",gap:6,padding:"8px 16px 4px",overflowX:"auto",scrollbarWidth:"none"}}>
+ <div className="pk-rail" style={{margin:"8px 16px 4px"}}>
  {filters.map(f=>(
  <div key={f.id} onClick={()=>setPropTypeFilter(f.id)}
- style={{flexShrink:0,padding:"5px 12px",borderRadius:16,fontSize:12,fontWeight:600,cursor:"pointer",transition:"all .15s",
- background:propTypeFilter===f.id?"rgba(255,214,10,0.2)":"rgba(255,255,255,0.06)",
- color:propTypeFilter===f.id?IOS.yellow:"rgba(255,255,255,0.5)",
- border:`1px solid ${propTypeFilter===f.id?"rgba(255,214,10,0.5)":"rgba(255,255,255,0.08)"}`,
- }}>
+ className={"pk-chip"+(propTypeFilter===f.id?" on":"")} style={{"--on-a":IOS.yellow+"52","--on-b":IOS.yellow+"24"}}>
  {f.label}
  </div>
  ))}
@@ -9353,7 +9635,7 @@ function App() {
  {/* Search */}
  {/* Straight / Parlay toggle — longshot only */}
  {flexCategory==="longshot" && (
- <div style={{display:"flex",background:"rgba(255,255,255,0.06)",borderRadius:10,padding:2,margin:"8px 16px 4px",gap:2}}>
+ <div style={{display:"flex",background:"rgba(255,255,255,0.06)",borderRadius:RAD.md,padding:2,margin:"8px 16px 4px",gap:2}}>
  {["straight","parlay"].map(mode=>(
  <div key={mode} onClick={()=>{
  setLongshotMode(mode);
@@ -9363,7 +9645,7 @@ function App() {
  if(activeFlexSlot!==null) {
  setActivePicks(prev=>prev.map((p,i)=>i===activeFlexSlot?{...p,isParlay:mode==="parlay",bet:null,parlayLegs:[]}:p));
  }
- }} style={{flex:1,textAlign:"center",padding:"8px 4px",borderRadius:8,fontSize:13,fontWeight:700,cursor:"pointer",transition:"all .15s",
+ }} style={{flex:1,textAlign:"center",padding:"8px 4px",borderRadius:RAD.sm,fontSize:13,fontWeight:700,cursor:"pointer",transition:"all .15s",
  background:longshotMode===mode?(mode==="parlay"?IOS.pink:IOS.green):"transparent",
  color:longshotMode===mode?"#fff":"rgba(255,255,255,0.4)"}}>
  {mode==="straight"?" Straight Bet (+400 only)":" Parlay (build legs)"}
@@ -9374,7 +9656,7 @@ function App() {
 
  {/* Bet type filter pills — longshot only (both straight and parlay) */}
  {(flexCategory==="longshot") && (
- <div style={{display:"flex",gap:6,padding:"6px 16px 4px",overflowX:"auto",scrollbarWidth:"none"}}>
+ <div className="pk-rail" style={{margin:"6px 16px 4px"}}>
  {[
  {id:"all",label:"All"},
  {id:"ml",label:"Moneyline"},
@@ -9385,11 +9667,7 @@ function App() {
  const activeColor = longshotMode==="parlay" ? IOS.pink : IOS.green;
  return (
  <div key={f.id} onClick={()=>setBetTypeFilter(f.id)}
- style={{flexShrink:0,padding:"5px 12px",borderRadius:16,fontSize:12,fontWeight:600,cursor:"pointer",transition:"all .15s",
- background:betTypeFilter===f.id?`${activeColor}20`:"rgba(255,255,255,0.06)",
- color:betTypeFilter===f.id?activeColor:"rgba(255,255,255,0.5)",
- border:`1px solid ${betTypeFilter===f.id?activeColor+"60":"rgba(255,255,255,0.08)"}`,
- }}>
+ className={"pk-chip"+(betTypeFilter===f.id?" on":"")} style={{"--on-a":activeColor+"52","--on-b":activeColor+"24"}}>
  {f.label}
  </div>
  );
@@ -9504,7 +9782,7 @@ function App() {
  {bet._sport && leagueSports.length > 1 && (
    <div style={{display:"inline-block",fontSize:8,fontWeight:800,letterSpacing:.4,color:SPORTS[bet._sport]?.color||IOS.blue,background:`${SPORTS[bet._sport]?.color||IOS.blue}18`,borderRadius:4,padding:"1px 5px",marginTop:3,textTransform:"uppercase"}}>{bet._sport.toUpperCase()}</div>
  )}
- {slot?.mult&&<div style={{marginTop:5,display:"inline-flex",alignItems:"center",gap:4,background:"rgba(48,209,88,0.1)",border:"1px solid rgba(48,209,88,0.2)",borderRadius:6,padding:"2px 8px"}}>
+ {slot?.mult&&<div style={{marginTop:5,display:"inline-flex",alignItems:"center",gap:4,background:"rgba(48,209,88,0.1)",border:"1px solid rgba(48,209,88,0.2)",borderRadius:RAD.sm,padding:"2px 8px"}}>
  <span style={{fontSize:10,fontWeight:700,color:IOS.green}}>+{pts} pts if win</span>
  </div>}
  </div>
@@ -9522,9 +9800,9 @@ function App() {
 
  {/* Commish Pro: locked extra slot for non-pro users */}
  {!isPro && !activeSubmitted && (
-   <div onClick={()=>setShowPaywall("picks")} style={{margin:"0 16px 8px",background:"#0A0A0A",border:"0.5px dashed #333",borderRadius:14,padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",opacity:0.8}}>
+   <div onClick={()=>setShowPaywall("picks")} style={{margin:"0 16px 8px",background:"#0A0A0A",border:"0.5px dashed #333",borderRadius:RAD.lg,padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",opacity:0.8}}>
      <div style={{fontSize:13,color:"#555"}}>Add more picks</div>
-     <div style={{display:"flex",alignItems:"center",gap:6,background:"rgba(10,132,255,0.1)",border:"0.5px solid rgba(10,132,255,0.25)",borderRadius:6,padding:"3px 8px"}}>
+     <div style={{display:"flex",alignItems:"center",gap:6,background:"rgba(10,132,255,0.1)",border:"0.5px solid rgba(10,132,255,0.25)",borderRadius:RAD.sm,padding:"3px 8px"}}>
        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
        <span style={{fontSize:10,fontWeight:700,color:IOS.blue}}>Commish Pro</span>
      </div>
@@ -9535,6 +9813,11 @@ function App() {
  {(activeSubmitted || activeSavedPicks?.flexPicks)&&!buildingSlip&&(()=>{
  const allSlots=[...(activeSavedPicks?.flexPicks||activePicks)];
  const slots=[...allSlots].filter(x=>x.mult||x.committed||x.bet||(x.isParlay&&x.parlayLegs&&x.parlayLegs.length)).sort((a,b)=>(a.mult||0)-(b.mult||0));
+ // Weight tier is RELATIVE to the biggest multiplier this league actually deals, not an
+ // absolute cut — a pool that tops out at 3 still gets a visible top tier.
+ const _mMax = Math.max(1, ...slots.map(x=>Number(x.mult)||1));
+ const _wt = (m) => { const r=(Number(m)||1)/_mMax; return r>=0.75?3:r>=0.4?2:1; };
+ const _wash = (x) => washAccent(x&&x.isParlay?null:(x&&x.bet?x.bet.pick:null), !!(x&&x.isParlay));
  const emptyLeft=allSlots.filter(x=>!x.committed && !x.mult && !x.bet && !(x.isParlay&&x.parlayLegs&&x.parlayLegs.length)).length;
  const canEdit=slots.some(x=>!slotLocked(x)) || emptyLeft>0;
  const wk=activeLeague.current_week||activeLeague.week||1;
@@ -9569,7 +9852,7 @@ function App() {
    else { const a=document.createElement("a"); a.href=canvas.toDataURL("image/png"); a.download="picklock-slip.png"; a.click(); try{ await navigator.clipboard.writeText(text); }catch(e){} }
  }catch(e){}};
  const Tile=({val,lbl,color})=>(
- <div style={{flex:1,background:"#131318",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:13,padding:"11px 8px",textAlign:"center"}}>
+ <div style={{flex:1,background:"#131318",border:EDGE.hair,borderRadius:RAD.md,padding:"11px 8px",textAlign:"center"}}>
  <div style={{fontSize:19,fontWeight:800,letterSpacing:"-0.5px",color}}>{val}</div>
  <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"rgba(255,255,255,0.32)",marginTop:3}}>{lbl}</div>
  </div>
@@ -9581,7 +9864,31 @@ function App() {
  @keyframes lsxPulse{0%,100%{opacity:1}50%{opacity:.3}}
  @keyframes lsxShim{0%{background-position:-160px 0}100%{background-position:160px 0}}
  .lsx-card{transition:transform .12s ease}.lsx-card:active{transform:scale(.985)}
- .lsx-pending{background:linear-gradient(90deg,rgba(255,255,255,.03),rgba(255,255,255,.14),rgba(255,255,255,.03));background-size:240px 100%;animation:lsxShim 1.5s linear infinite}
+ /* Slot card: elevation instead of an outline, wash instead of a flat fill, and a
+    weight tier driven by the multiplier so a 7x slot physically outranks a 1x. */
+ .pk-slot{border:none;transition:transform .13s ease;
+   background:linear-gradient(115deg, color-mix(in srgb, var(--tc,#2a2a33) 26%, #101015) 0%, #0e0e13 62%);}
+ .pk-slot:active{transform:scale(.985)}
+ .pk-slot[data-w="1"]{box-shadow:inset 0 1px 0 rgba(255,255,255,.04), 0 2px 8px rgba(0,0,0,.28)}
+ .pk-slot[data-w="2"]{box-shadow:inset 0 1px 0 rgba(255,255,255,.055),0 5px 16px rgba(0,0,0,.36)}
+ .pk-slot[data-w="3"]{box-shadow:inset 0 1px 0 rgba(255,255,255,.075),0 10px 28px rgba(0,0,0,.46)}
+ .pk-val{flex-shrink:0;width:64px;display:flex;flex-direction:column;align-items:center;
+   justify-content:center;padding:9px 4px;border-left:0.5px solid rgba(255,255,255,.07);
+   background:linear-gradient(180deg,transparent,rgba(255,255,255,.022))}
+ .pk-mv{font-family:'Barlow Semi Condensed',sans-serif;font-weight:800;line-height:.88;letter-spacing:-.02em}
+ .pk-val[data-w="1"] .pk-mv{font-size:23px;color:rgba(255,255,255,.5)}
+ .pk-val[data-w="2"] .pk-mv{font-size:28px;color:rgba(255,255,255,.8)}
+ .pk-val[data-w="3"] .pk-mv{font-size:33px;color:#fff}
+ .pk-rule{width:26px;height:.5px;background:rgba(255,255,255,.12);margin:7px 0 6px}
+ .pk-pv{font-family:'Barlow Semi Condensed',sans-serif;font-weight:800;font-size:27px;line-height:.88;letter-spacing:-.02em;color:rgba(255,255,255,.95)}
+ .pk-lb{font-size:7.5px;font-weight:800;letter-spacing:.13em;color:rgba(255,255,255,.26);text-transform:uppercase;margin-top:3px;text-align:center}
+ .pk-tot{border-radius:16px;margin:14px 12px 0;padding:15px 17px;display:flex;align-items:flex-end;justify-content:space-between;
+   background:linear-gradient(150deg,rgba(48,209,88,0.10),transparent 62%),linear-gradient(180deg,#16161c,#111116);
+   box-shadow:inset 0 1px 0 rgba(255,255,255,.06), 0 8px 24px rgba(0,0,0,.4)}
+ .pk-tot-v{font-family:'Barlow Semi Condensed',sans-serif;font-size:38px;font-weight:800;line-height:.85;letter-spacing:-.02em}
+ @media (prefers-reduced-motion:reduce){ .pk-slot{animation:none !important} }
+ .lsx-pending{background:rgba(255,255,255,0.055);position:relative;overflow:hidden}
+ .lsx-pending::after{content:"";position:absolute;top:0;bottom:0;left:0;width:100%;background:linear-gradient(100deg,transparent 34%,rgba(255,255,255,0.10) 50%,transparent 66%);transform:translateX(-100%);animation:pkWave 2s linear infinite}
  .lsx-scroll::-webkit-scrollbar{display:none}
  `}</style>
 
@@ -9592,7 +9899,7 @@ function App() {
  <div style={{fontSize:10.5,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(255,255,255,0.38)"}}>{activeLeague.name} · Week {wk}</div>
  <div style={{fontSize:27,fontWeight:800,letterSpacing:"-0.7px",color:"#fff",marginTop:3,lineHeight:1}}>Your Slip</div>
  </div>
- <div style={{display:"flex",alignItems:"center",gap:6,background:emptyLeft>0?"rgba(255,159,10,0.12)":"rgba(48,209,88,0.12)",border:"0.5px solid "+(emptyLeft>0?"rgba(255,159,10,0.35)":"rgba(48,209,88,0.35)"),borderRadius:20,padding:"6px 11px",flexShrink:0}}>
+ <div style={{display:"flex",alignItems:"center",gap:6,background:emptyLeft>0?"rgba(255,159,10,0.12)":"rgba(48,209,88,0.12)",border:"0.5px solid "+(emptyLeft>0?"rgba(255,159,10,0.35)":"rgba(48,209,88,0.35)"),borderRadius:RAD.pill,padding:"6px 11px",flexShrink:0}}>
  <span style={{width:6,height:6,borderRadius:"50%",background:emptyLeft>0?IOS.orange:IOS.green,display:"inline-block",boxShadow:`0 0 7px ${emptyLeft>0?IOS.orange:IOS.green}`,animation:"lsxPulse 2s ease-in-out infinite"}}/>
  <span style={{fontSize:10,fontWeight:800,letterSpacing:"0.06em",color:emptyLeft>0?IOS.orange:IOS.green}}>{emptyLeft>0?"IN PROGRESS":"LOCKED"}</span>
  </div>
@@ -9617,45 +9924,50 @@ function App() {
  const name=slot.isParlay?slot.parlayLegs.map(b=>b.pick).join("  ·  "):(slot.bet?.pick||"");
  const game=slot.isParlay?(slot.parlayLegs[0]?.game||""):(slot.bet?.game||"");
  return (
- <div key={i} className="lsx-card" style={{position:"relative",overflow:"hidden",borderRadius:15,
- background:"#131318",border:"0.5px solid rgba(255,255,255,0.07)",
- animation:`lsxRise .34s ease ${Math.min(i,6)*0.04}s both`}}>
+ <div key={i} className="lsx-card pk-slot pl-reveal" data-w={_wt(slot.mult)} style={{position:"relative",overflow:"hidden",borderRadius:RAD.lg,
+ ...(_wash(slot)?{"--tc":_wash(slot)}:{}),
+ }}>
  {/* Result rail: color exists ONLY for outcomes (approved mockup 19 Jul 2026) */}
- <div style={{position:"absolute",top:0,left:0,bottom:0,width:3,borderRadius:"3px 0 0 3px",background:res==="W"?IOS.green:res==="L"?IOS.red:res==="P"?"rgba(255,255,255,0.16)":"transparent"}}/>
- <div style={{padding:"12px 14px 12px 17px"}}>
- <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:10,marginBottom:3}}>
- <div style={{display:"flex",alignItems:"center",gap:5,fontSize:9.5,fontWeight:700,letterSpacing:"0.09em",textTransform:"uppercase",color:"rgba(255,255,255,0.30)"}}>
+ <div style={{position:"absolute",top:0,left:0,bottom:0,width:3,background:res==="W"?IOS.green:res==="L"?IOS.red:res==="P"?"rgba(255,255,255,0.16)":"transparent"}}/>
+ <div style={{display:"flex",alignItems:"stretch",gap:12,paddingLeft:16}}>
+ <div style={{flex:1,minWidth:0,padding:"12px 0 12px 0"}}>
+ <div style={{display:"flex",alignItems:"center",gap:5,fontSize:9.5,fontWeight:800,letterSpacing:"0.10em",textTransform:"uppercase",color:"rgba(255,255,255,0.32)",marginBottom:4}}>
  <span style={{width:4,height:4,borderRadius:"50%",background:c,display:"inline-block",flexShrink:0}}/>
- {catLabels[cat]}{slot.isParlay?` · ${slot.parlayLegs.length}-leg parlay`:""}
+ {catLabels[cat]}{slot.isParlay?` · ${slot.parlayLegs.length}-leg`:""}
  </div>
- <div style={{fontSize:15,fontWeight:800,letterSpacing:"-0.3px",color:"#fff",flexShrink:0,opacity:res==="P"?0.45:1}}>{odds}</div>
- </div>
- <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:10}}>
- <div style={{minWidth:0,flex:1,opacity:res==="P"?0.45:1}}>
+ <div style={{minWidth:0,opacity:res==="P"?0.45:1}}>
  {slot.isParlay ? (
  <div style={{display:"flex",flexDirection:"column",gap:3}}>
  {slot.parlayLegs.map((b,li)=>(
  <div key={li} style={{minWidth:0}}>
  <div style={{fontSize:14,fontWeight:800,letterSpacing:"-0.2px",color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{b.pick}{b.odds?<span style={{color:"rgba(255,255,255,0.46)",fontWeight:600,marginLeft:6,fontSize:12}}>{b.odds}</span>:null}</div>
- {b.game&&<div style={{fontSize:10.5,color:"rgba(255,255,255,0.46)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{b.game}</div>}
+ {b.game&&<div style={{fontSize:10.5,color:"rgba(255,255,255,0.44)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{b.game}</div>}
  </div>
  ))}
  </div>
  ) : (<>
- <div style={{fontSize:15.5,fontWeight:800,letterSpacing:"-0.2px",lineHeight:1.25,color:"#fff"}}>{name}</div>
- {game&&<div style={{fontSize:11,color:"rgba(255,255,255,0.46)",marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{game}</div>}
+ <div style={{fontSize:16,fontWeight:800,letterSpacing:"-0.3px",lineHeight:1.22,color:"#fff"}}>{name}</div>
+ {game&&<div style={{fontSize:11,color:"rgba(255,255,255,0.42)",marginTop:3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{game}</div>}
  </>)}
  </div>
- <div style={{fontSize:11,fontWeight:700,flexShrink:0,marginTop:2,whiteSpace:"nowrap",color:res==="W"?IOS.green:res==="L"?IOS.red:"rgba(255,255,255,0.46)"}}>{res==="P"?"voided":`+${res==="L"?0:pts} pts${res?"":" if win"}`}</div>
- </div>
- <div style={{display:"flex",alignItems:"center",gap:8,marginTop:10}}>
- <div style={{width:31,height:24,borderRadius:7,background:"rgba(255,255,255,0.07)",border:"0.5px solid rgba(255,255,255,0.07)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.8)",flexShrink:0}}>{slot.mult}×</div>
+ <div style={{display:"flex",alignItems:"center",gap:9,marginTop:9,minWidth:0}}>
+ <span style={{fontSize:13,fontWeight:800,letterSpacing:"-0.2px",color:"rgba(255,255,255,0.92)",flexShrink:0,opacity:res==="P"?0.45:1}}>{odds}</span>
  {slot.bet&&(()=>{ const _db=(weekPicks||[]).find(x=>x.user_id===user?.id&&x.game===game&&x.pick_name===name); const _scp=_db?{game:_db.game,game_date:_db.game_date||slot.bet.gameTime||null,result:_db.result,home_score:_db.home_score,away_score:_db.away_score,pick_name:name,odds:odds}:{game:game,game_date:slot.bet.gameTime||null,result:res,pick_name:name,odds:odds}; return <ScoreChip pick={_scp} live={liveMatch(_scp, liveGames)} onOpen={()=>openGamecast(_scp)}/>; })()}
  <div style={{flex:1}}/>
- {res==="W"&&<span style={{fontSize:9,fontWeight:800,letterSpacing:"0.07em",color:IOS.green,background:"rgba(48,209,88,0.10)",border:"0.5px solid rgba(48,209,88,0.25)",borderRadius:6,padding:"3px 7px"}}>WON</span>}
- {res==="L"&&<span style={{fontSize:9,fontWeight:800,letterSpacing:"0.07em",color:IOS.red,background:"rgba(255,69,58,0.10)",border:"0.5px solid rgba(255,69,58,0.25)",borderRadius:6,padding:"3px 7px"}}>LOST</span>}
- {res==="P"&&<span style={{fontSize:9,fontWeight:800,letterSpacing:"0.07em",color:"rgba(255,255,255,0.46)",background:"rgba(255,255,255,0.07)",border:"0.5px solid rgba(255,255,255,0.12)",borderRadius:6,padding:"3px 7px"}}>VOID</span>}
- {(()=>{ const _rd=(weekPicks||[]).find(x=>x.user_id===user?.id&&x.game===game&&x.pick_name===name); if(!_rd || _rd.result!=="P" || _rd.replaced_by) return null; return (<div onClick={(e)=>{ e.stopPropagation(); startReplace(_rd,{leagueId:activeLeague.id, returnScreen:"leagues"}); }} style={{fontSize:10,fontWeight:800,color:IOS.blue,background:"rgba(10,132,255,0.10)",border:"0.5px solid rgba(10,132,255,0.30)",borderRadius:7,padding:"5px 11px",cursor:"pointer"}}>REPLACE</div>); })()}
+ {res==="W"&&<span style={{fontSize:9,fontWeight:800,letterSpacing:"0.07em",color:IOS.green,background:"rgba(48,209,88,0.12)",borderRadius:RAD.sm,padding:"3px 7px",flexShrink:0}}>WON</span>}
+ {res==="L"&&<span style={{fontSize:9,fontWeight:800,letterSpacing:"0.07em",color:IOS.red,background:"rgba(255,69,58,0.12)",borderRadius:RAD.sm,padding:"3px 7px",flexShrink:0}}>LOST</span>}
+ {res==="P"&&<span style={{fontSize:9,fontWeight:800,letterSpacing:"0.07em",color:"rgba(255,255,255,0.46)",background:"rgba(255,255,255,0.07)",borderRadius:RAD.sm,padding:"3px 7px",flexShrink:0}}>VOID</span>}
+ {(()=>{ const _rd=(weekPicks||[]).find(x=>x.user_id===user?.id&&x.game===game&&x.pick_name===name); if(!_rd || _rd.result!=="P" || _rd.replaced_by) return null; return (<div onClick={(e)=>{ e.stopPropagation(); startReplace(_rd,{leagueId:activeLeague.id, returnScreen:"leagues"}); }} style={{fontSize:10,fontWeight:800,color:IOS.blue,background:"rgba(10,132,255,0.10)",border:"0.5px solid rgba(10,132,255,0.30)",borderRadius:RAD.sm,padding:"5px 11px",cursor:"pointer"}}>REPLACE</div>); })()}
+ </div>
+ </div>
+ {/* Value column: the multiplier you spent over the points it buys. Pending points
+     stay white — green is reserved for a settled win. */}
+ <div className="pk-val" data-w={_wt(slot.mult)}>
+ <div className="pk-mv">{slot.mult}</div>
+ <div className="pk-lb">mult</div>
+ <div className="pk-rule"/>
+ <div className="pk-pv" style={{color:res==="W"?IOS.green:res==="L"?"rgba(255,255,255,0.30)":res==="P"?"rgba(255,255,255,0.30)":"rgba(255,255,255,0.95)"}}>{res==="P"?"—":(res==="L"?0:pts)}</div>
+ <div className="pk-lb">{res==="P"?"void":res==="W"?"pts won":res==="L"?"pts":"pts if win"}</div>
  </div>
  </div>
  </div>
@@ -9664,19 +9976,19 @@ function App() {
  </div>
 
  {/* Total */}
- <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 18px 4px"}}>
- <div style={{fontSize:10.5,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:"rgba(255,255,255,0.32)"}}>{graded?"Total pts earned":"Projected if all hit"}</div>
- <div style={{fontSize:22,fontWeight:800,letterSpacing:"-0.6px",color:IOS.green}}>+{(graded?wonTotal:projTotal).toFixed(1)}</div>
+ <div className="pk-tot">
+ <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.10em",textTransform:"uppercase",color:"rgba(255,255,255,0.34)"}}>{graded?"Total pts earned":"Projected if all hit"}</div>
+ <div className="pk-tot-v" style={{color:IOS.green}}>+<CountUp value={graded?wonTotal:projTotal}/></div>
  </div>
 
  {/* Share CTA */}
- <div onClick={onShare} style={{margin:"12px 12px 0",borderRadius:14,padding:"13px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",
+ <div onClick={onShare} style={{margin:"12px 12px 0",borderRadius:RAD.lg,padding:"13px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",
  background:"linear-gradient(135deg,rgba(10,132,255,0.16),rgba(94,92,230,0.10))",border:"0.5px solid rgba(10,132,255,0.3)"}}>
  <div>
  <div style={{fontSize:13.5,fontWeight:700,color:"#fff"}}>Share your slip</div>
  <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:2}}>Let your league know you locked in</div>
  </div>
- <div style={{display:"flex",alignItems:"center",gap:7,background:IOS.blue,borderRadius:9,padding:"8px 14px"}}>
+ <div style={{display:"flex",alignItems:"center",gap:7,background:IOS.blue,borderRadius:RAD.sm,padding:"8px 14px"}}>
  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg>
  <span style={{fontSize:12,fontWeight:800,color:"#fff"}}>Share</span>
  </div>
@@ -9700,13 +10012,13 @@ function App() {
  }
  setBuildingSlip(false);
  setScreen("home");
- }} style={{background:IOS.fill2,border:"none",borderRadius:10,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:17,flexShrink:0}}>‹</button>
+ }} style={{background:IOS.fill2,border:"none",borderRadius:RAD.md,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:17,flexShrink:0}}>‹</button>
  <div style={{fontSize:17,fontWeight:600,letterSpacing:-0.3}}>{savedPicks?"My Slip":"Build Your Slip"}</div>
- {oddsLoading && <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:5,background:"rgba(10,132,255,0.1)",borderRadius:8,padding:"3px 8px"}}>
+ {oddsLoading && <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:5,background:"rgba(10,132,255,0.1)",borderRadius:RAD.sm,padding:"3px 8px"}}>
  <div style={{width:6,height:6,borderRadius:"50%",background:IOS.blue,animation:"pulse 1s infinite"}}/>
  <span style={{fontSize:11,fontWeight:600,color:IOS.blue}}>Loading odds</span>
  </div>}
- {!oddsLoading && isLiveOdds && <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:5,background:"rgba(48,209,88,0.1)",borderRadius:8,padding:"3px 8px",border:"1px solid rgba(48,209,88,0.2)"}}>
+ {!oddsLoading && isLiveOdds && <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:5,background:"rgba(48,209,88,0.1)",borderRadius:RAD.sm,padding:"3px 8px",border:"1px solid rgba(48,209,88,0.2)"}}>
  <div style={{width:6,height:6,borderRadius:"50%",background:IOS.green}}/>
  <span style={{fontSize:11,fontWeight:700,color:IOS.green,letterSpacing:0.5}}>Live odds</span>
  </div>}
@@ -9752,7 +10064,7 @@ function App() {
  if(slot.isParlay || (slot.parlayLegs && slot.parlayLegs.length > 0)) {
  const ls = calcLS(slot.parlayLegs);
  return (
- <div key={i} style={{margin:"0 16px 6px",background:IOS.bg2,borderRadius:12,padding:"11px 14px",border:"0.5px solid rgba(255,255,255,0.07)"}}>
+ <div key={i} style={{margin:"0 16px 6px",background:IOS.bg2,borderRadius:RAD.md,padding:"11px 14px",border:EDGE.hair}}>
  <div style={{fontSize:10,fontWeight:800,letterSpacing:0.5,textTransform:"uppercase",color:IOS.blue,marginBottom:5}}>{slot.mult}× · LONGSHOT · {slot.parlayLegs.length} LEGS</div>
  <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:8,marginBottom:6}}>
    <div style={{fontSize:13,fontWeight:600,color:"rgba(255,255,255,0.55)"}}>Parlay</div>
@@ -9776,7 +10088,7 @@ function App() {
  const pts = calcPickPoints(slot.mult, slot.bet.impliedOdds, "W");
  const catLabel = slot.category ? {ml:"MONEYLINE",prop:"PROP",ou:"OVER/UNDER",spread:"SPREAD",longshot:"LONGSHOT"}[slot.category]||slot.category.toUpperCase() : "PICK";
  return (
- <div key={i} style={{margin:"0 16px 6px",background:IOS.bg2,borderRadius:12,padding:"11px 14px",border:`0.5px solid rgba(255,255,255,0.07)`}}>
+ <div key={i} style={{margin:"0 16px 6px",background:IOS.bg2,borderRadius:RAD.md,padding:"11px 14px",border:`0.5px solid rgba(255,255,255,0.07)`}}>
  <div style={{fontSize:10,fontWeight:800,letterSpacing:0.5,textTransform:"uppercase",color:IOS.blue,marginBottom:5}}>{slot.mult}× · {catLabel}</div>
  <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:8,marginBottom:4}}>
    <div style={{fontSize:15,fontWeight:700,color:"#fff",minWidth:0}}>{slot.bet.pick}</div>
@@ -9800,7 +10112,7 @@ function App() {
 
  {/* League filling banner */}
  {leagueMembers.length < (activeLeague.target_size||activeLeague.max_members||8) && (
- <div style={{margin:"0 16px 10px",background:"rgba(255,159,10,0.08)",borderRadius:10,padding:"9px 13px",border:"0.5px solid rgba(255,159,10,0.25)"}}>
+ <div style={{margin:"0 16px 10px",background:"rgba(255,159,10,0.08)",borderRadius:RAD.md,padding:"9px 13px",border:"0.5px solid rgba(255,159,10,0.25)"}}>
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:7}}>
  <div style={{fontSize:12,fontWeight:700,color:IOS.orange,whiteSpace:"nowrap"}}>League still filling up</div>
  <div style={{fontSize:11,color:IOS.label3,whiteSpace:"nowrap"}}>{leagueMembers.length}/{activeLeague.target_size||activeLeague.max_members||8} joined</div>
@@ -9812,7 +10124,7 @@ function App() {
  )}
 
  {/* Status bar */}
- <div style={{margin:"0 16px 10px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:14,padding:"12px 14px"}}>
+ <div style={{margin:"0 16px 10px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.lg,padding:"12px 14px"}}>
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
  <div style={{fontSize:12,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"rgba(255,255,255,0.4)"}}>Your Slip</div>
  <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -9848,13 +10160,13 @@ function App() {
 
  {/* Multiplier pool — draft model */}
  {isCustomSlip && multPool.length>0 && !activeSubmitted && (
- <div style={{margin:"0 16px 12px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:14,padding:"11px 14px"}}>
+ <div style={{margin:"0 16px 12px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.lg,padding:"11px 14px"}}>
  <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",marginBottom:9}}>
  <div style={{fontSize:12,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"rgba(255,255,255,0.4)"}}>Your multipliers</div>
  <div style={{fontSize:11,fontWeight:700,color:IOS.label3}}><span style={{color:usedMults.length===multPool.length?IOS.green:"#64D2FF"}}>{usedMults.length}</span> / {multPool.length} assigned</div>
  </div>
  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
- {(()=>{ const order=[...multPool].map((v,i)=>({v,i})).sort((a,b)=>a.v-b.v||a.i-b.i); const usedLeft={...poolUsedCounts}; return order.map((c,ci)=>{ let used=false; if((usedLeft[c.v]||0)>0){ used=true; usedLeft[c.v]--; } return (<div key={ci} style={{minWidth:40,height:34,borderRadius:9,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,background:used?"#2a2a2c":"#64D2FF",color:used?"#5a5a5e":"#06304a",opacity:used?0.5:1,transition:"all .15s"}}>{c.v}×</div>); }); })()}
+ {(()=>{ const order=[...multPool].map((v,i)=>({v,i})).sort((a,b)=>a.v-b.v||a.i-b.i); const usedLeft={...poolUsedCounts}; return order.map((c,ci)=>{ let used=false; if((usedLeft[c.v]||0)>0){ used=true; usedLeft[c.v]--; } return (<div key={ci} style={{minWidth:40,height:34,borderRadius:RAD.sm,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,background:used?"#2a2a2c":"#64D2FF",color:used?"#5a5a5e":"#06304a",opacity:used?0.5:1,transition:"all .15s"}}>{c.v}×</div>); }); })()}
  </div>
  <div style={{fontSize:10.5,color:IOS.label3,marginTop:8,lineHeight:1.4}}>Assign one to each pick below — each multiplier is used once. Tap a multiplier on a pick to set it.</div>
  </div>
@@ -9866,10 +10178,10 @@ function App() {
    const target = firstEmpty===-1 ? 0 : firstEmpty;
    return (
    <div onClick={()=>{ setBuildingSlip(true); setGridTargetSlot(target); setGridType("ml"); setGridPropSub("all"); setScreen("browser"); }}
-     style={{margin:"0 16px 12px",borderRadius:14,padding:"13px 16px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",
+     style={{margin:"0 16px 12px",borderRadius:RAD.lg,padding:"13px 16px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",
        background:"linear-gradient(135deg,rgba(10,132,255,0.16),rgba(94,92,230,0.10))",border:"0.5px solid rgba(10,132,255,0.35)"}}>
      <div style={{display:"flex",alignItems:"center",gap:11}}>
-       <div style={{width:34,height:34,borderRadius:10,background:"rgba(10,132,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+       <div style={{width:34,height:34,borderRadius:RAD.md,background:"rgba(10,132,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
        </div>
        <div>
@@ -9904,7 +10216,7 @@ function App() {
  const legRows = slot.isParlay ? slot.parlayLegs : slot.bet ? [slot.bet] : [];
 
  return (
- <div key={idx} style={{margin:"0 12px 8px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:14,overflow:"hidden"}}>
+ <div key={idx} style={{margin:"0 12px 8px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.lg,overflow:"hidden"}}>
 
  {/* Main content row */}
  <div style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 13px 8px"}}>
@@ -10010,10 +10322,10 @@ function App() {
  {slot.isParlay&&parlayOdds?parlayOdds.american:slot.bet?.odds||""}
  </div>
  <div style={{display:"flex",gap:5}}>
- {!slot.committed && <div onClick={()=>openSlot(idx)} style={{background:"#2a2a2a",borderRadius:7,color:"#bbb",fontSize:11,fontWeight:600,padding:"4px 10px",cursor:"pointer"}}>
+ {!slot.committed && <div onClick={()=>openSlot(idx)} style={{background:"#2a2a2a",borderRadius:RAD.sm,color:"#bbb",fontSize:11,fontWeight:600,padding:"4px 10px",cursor:"pointer"}}>
  {filled?"Edit":"+ Pick"}
  </div>}
- {filled&&!slot.committed&&<button onClick={e=>{e.stopPropagation();setActivePicks(prev=>prev.map((p,i)=>i===idx?(p.locked?{id:i,bet:null,mult:p.mult,category:(p.slotType||p.category),slotType:(p.slotType||p.category),market:p.market,isParlay:false,parlayLegs:[],locked:true}:{...EMPTY_FLEX[0],id:i}):p));}} style={{background:"#2a2a2a",border:"none",borderRadius:7,color:"#555",fontSize:14,width:26,height:26,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>}
+ {filled&&!slot.committed&&<button onClick={e=>{e.stopPropagation();setActivePicks(prev=>prev.map((p,i)=>i===idx?(p.locked?{id:i,bet:null,mult:p.mult,category:(p.slotType||p.category),slotType:(p.slotType||p.category),market:p.market,isParlay:false,parlayLegs:[],locked:true}:{...EMPTY_FLEX[0],id:i}):p));}} style={{background:"#2a2a2a",border:"none",borderRadius:RAD.sm,color:"#555",fontSize:14,width:26,height:26,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>}
  </div>
  </div>
  </div>
@@ -10027,8 +10339,8 @@ function App() {
  <div style={{fontSize:10,color:"#444",marginTop:1}}>Pick 2+ legs instead of one straight bet</div>
  </div>
  <div onClick={()=>setActivePicks(prev=>prev.map((p,i)=>i===idx?{...p,isParlay:!p.isParlay,bet:null,parlayLegs:[]}:p))}
- style={{width:40,height:24,borderRadius:12,background:slot.isParlay?IOS.pink:"rgba(255,255,255,0.1)",position:"relative",cursor:"pointer",transition:"background .2s",flexShrink:0}}>
- <div style={{position:"absolute",top:2,left:slot.isParlay?18:2,width:20,height:20,borderRadius:50,background:"#fff",transition:"left .2s"}}/>
+ style={{width:40,height:24,borderRadius:RAD.md,background:slot.isParlay?IOS.pink:"rgba(255,255,255,0.1)",position:"relative",cursor:"pointer",transition:"background .2s",flexShrink:0}}>
+ <div style={{position:"absolute",top:2,left:slot.isParlay?18:2,width:20,height:20,borderRadius:RAD.pill,background:"#fff",transition:"left .2s"}}/>
  </div>
  </div>
  {slot.isParlay && slot.parlayLegs.length>=2 && parlayAmerican < 400 && (
@@ -10047,12 +10359,12 @@ function App() {
  {/* Bottom bar: multipliers + pts if win */}
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(0,0,0,0.25)",borderTop:"0.5px solid rgba(255,255,255,0.06)",padding:"6px 13px",gap:8}}>
  <div style={{display:"flex",gap:5}}>
- {slot.committed ? [(<div key="lk" style={{width:34,height:26,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",background:(multColors[slot.mult]||"#2a2a2a"),color:"#fff",fontSize:11,fontWeight:700}}>{slot.mult}×</div>)] : poolDistinct.map(m=>{
+ {slot.committed ? [(<div key="lk" style={{width:34,height:26,borderRadius:RAD.sm,display:"flex",alignItems:"center",justifyContent:"center",background:(multColors[slot.mult]||"#2a2a2a"),color:"#fff",fontSize:11,fontWeight:700}}>{slot.mult}×</div>)] : poolDistinct.map(m=>{
  const taken = multRemaining(m, slot.mult)<=0 && slot.mult!==m;
  const active = slot.mult===m;
  return (
  <div key={m} onClick={()=>{if(taken)return;setActivePicks(prev=>prev.map((p,i)=>i===idx?{...p,mult:active?null:m}:p));}}
- style={{position:"relative",width:34,height:26,borderRadius:7,border:"none",display:"flex",alignItems:"center",justifyContent:"center",
+ style={{position:"relative",width:34,height:26,borderRadius:RAD.sm,border:"none",display:"flex",alignItems:"center",justifyContent:"center",
  background:active?multColors[m]:taken?"#1a1a1c":"#2a2a2a",
  color:active?"#fff":taken?"rgba(255,255,255,0.28)":"#8a8a8e",
  textDecoration:taken?"line-through":"none",textDecorationThickness:"1.5px",
@@ -10076,24 +10388,24 @@ function App() {
    if(slot.result==="P"){
      const _rd=(weekPicks||[]).find(x=>x.user_id===user?.id&&slot.commitIds&&slot.commitIds.includes(x.id)&&x.result==="P"&&!x.replaced_by);
      return (<div style={{display:"flex",alignItems:"center",gap:7}}>
-       <span style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:10,fontWeight:800,color:"rgba(255,255,255,0.55)",background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.16)",borderRadius:7,padding:"4px 8px"}}>VOID</span>
-       {_rd && <span onClick={(e)=>{e.stopPropagation();startReplace(_rd,{leagueId:activeLeague.id,returnScreen:"picks"});}} style={{fontSize:10,fontWeight:800,color:IOS.blue,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.35)",borderRadius:7,padding:"4px 9px",cursor:"pointer"}}>REPLACE</span>}
+       <span style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:10,fontWeight:800,color:"rgba(255,255,255,0.55)",background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.16)",borderRadius:RAD.sm,padding:"4px 8px"}}>VOID</span>
+       {_rd && <span onClick={(e)=>{e.stopPropagation();startReplace(_rd,{leagueId:activeLeague.id,returnScreen:"picks"});}} style={{fontSize:10,fontWeight:800,color:IOS.blue,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.35)",borderRadius:RAD.sm,padding:"4px 9px",cursor:"pointer"}}>REPLACE</span>}
      </div>);
    }
    return (<div style={{display:"flex",alignItems:"center",gap:7}}>
- <span style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:10,fontWeight:800,color:IOS.green,background:"rgba(48,209,88,0.12)",border:"1px solid rgba(48,209,88,0.3)",borderRadius:7,padding:"4px 8px"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>LOCKED</span>
+ <span style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:10,fontWeight:800,color:IOS.green,background:"rgba(48,209,88,0.12)",border:"1px solid rgba(48,209,88,0.3)",borderRadius:RAD.sm,padding:"4px 8px"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>LOCKED</span>
  {!slotLocked(slot) && <span onClick={(e)=>{e.stopPropagation();unlockSlot(idx);}} style={{fontSize:10.5,fontWeight:700,color:IOS.blue,cursor:"pointer"}}>Unlock</span>}
  </div>);
  }
  if(started) return (<span style={{fontSize:10,fontWeight:700,color:IOS.label3}}>Game started</span>);
- return (<button onClick={(e)=>{e.stopPropagation();lockSlot(idx);}} style={{fontFamily:"Barlow",display:"inline-flex",alignItems:"center",gap:5,fontSize:11,fontWeight:800,color:"#08080B",background:IOS.green,border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#08080B" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Lock</button>);
+ return (<button onClick={(e)=>{e.stopPropagation();lockSlot(idx);}} style={{fontFamily:"Barlow",display:"inline-flex",alignItems:"center",gap:5,fontSize:11,fontWeight:800,color:"#08080B",background:IOS.green,border:"none",borderRadius:RAD.sm,padding:"6px 12px",cursor:"pointer"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#08080B" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Lock</button>);
  })()}
  {slot.mult&&filled&&slot.result!=="P"&&<div style={{fontSize:12,fontWeight:700,color:IOS.green,flexShrink:0}}>
  {isDouble?`+${pts} pts (2⃣ doubled!)`:isEnhance&&slot.bet?`+${pts} pts `:`+${pts} pts if win`}
  </div>}
  {puEnabled&&(myPUs.filter(p=>p.type==="offensive").length>0||appliedPU)&&slot.mult&&filled&&(
  appliedPU ? (
- <div style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:7,background:`${appliedPU.color}15`,border:`1px solid ${appliedPU.color}30`,cursor:"pointer"}}
+ <div style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:RAD.sm,background:`${appliedPU.color}15`,border:`1px solid ${appliedPU.color}30`,cursor:"pointer"}}
  onClick={e=>{e.stopPropagation();const r=appliedPU;if(r?.dbId)supabase.from("league_power_ups").update({used:false}).eq("id",r.dbId);setMyPUs(p=>[...p,r]);setActivatedPUs(p=>{const n={...p};delete n[idx];return n;});}}>
  <span style={{fontSize:10}}>{appliedPU.icon}</span>
  <span style={{fontSize:10,fontWeight:700,color:appliedPU.color}}>{appliedPU.name}</span>
@@ -10101,7 +10413,7 @@ function App() {
  </div>
  ) : (
  <div onClick={e=>{e.stopPropagation();setShowPUModal({context:"picks",slotId:idx,slotLabel:slot.isParlay?"Parlay":slot.bet?.pick||"Pick",category:slot.category||"ml",isParlay:!!slot.isParlay});}}
- style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:7,background:"rgba(255,255,255,0.05)",border:"1px dashed rgba(255,255,255,0.12)",cursor:"pointer"}}>
+ style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:RAD.sm,background:"rgba(255,255,255,0.05)",border:"1px dashed rgba(255,255,255,0.12)",cursor:"pointer"}}>
  <span style={{fontSize:10}}></span>
  <span style={{fontSize:10,fontWeight:600,color:IOS.label3}}>Power-Up</span>
  </div>
@@ -10118,7 +10430,7 @@ function App() {
  const targetSize = activeLeague.target_size||activeLeague.max_members||8;
  const leagueIsFull = activeLeagueId==="solo" || leagueMembers.length >= targetSize;
  if(!leagueIsFull) return (
- <div style={{margin:"0 16px",background:"rgba(255,159,10,0.06)",borderRadius:12,padding:"11px 14px",border:"0.5px solid rgba(255,159,10,0.2)",display:"flex",alignItems:"center",gap:11}}>
+ <div style={{margin:"0 16px",background:"rgba(255,159,10,0.06)",borderRadius:RAD.md,padding:"11px 14px",border:"0.5px solid rgba(255,159,10,0.2)",display:"flex",alignItems:"center",gap:11}}>
  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={IOS.orange} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
  <div style={{flex:1,minWidth:0}}>
  <div style={{fontSize:12.5,fontWeight:700,color:IOS.orange}}>Submit picks when the league fills</div>
@@ -10163,7 +10475,7 @@ function App() {
  if(isSoloMode) { setSoloSavedPicks(locked); setSoloSubmitted(true); try{ localStorage.setItem("picklock_solo_locked", JSON.stringify({flexPicks:activePicks, lockedAt:locked.lockedAt, week:weekNum})); }catch(e){} }
  else { setActiveSavedPicks(locked); setActiveSubmitted(true); setBuildingSlip(false); } try{ localStorage.removeItem(`linedup_draft_${activeLeague.id}_wk${weekNum}`); }catch(e){}
  try{ posthog.capture('slip_locked', { league_id: activeLeague.id, week: weekNum, num_picks: activePicks.filter(p=>p.mult!=null&&(p.isParlay?(p.parlayLegs||[]).length>0:!!p.bet)).length, solo: isSoloMode }); }catch(e){}
- try{ if(navigator.vibrate) navigator.vibrate([0,30,40,30,60]); }catch(e){}
+ haptic("success");
  setLockRitual(true);
  }}> Lock Your Slip </button>
  : <button className="ios-btn disabled" disabled>
@@ -10189,13 +10501,16 @@ function App() {
  const CAP = 12;
  const atCap = soloFreePicks.length>=CAP;
  return (
- <div className="body" style={{padding:"0 16px 40px"}}>
-   <div style={{padding:"18px 0 12px",textAlign:"center"}}>
+ <div className="body" style={{paddingLeft:16,paddingRight:16}}>
+   <div className="pk-cbar" style={{marginLeft:-16,marginRight:-16,paddingLeft:16,paddingRight:16}}><div className="pk-cbar-t">{locked?"This Week":"Build This Week"}</div></div>
+   <div className="pk-hdr" style={{padding:"18px 0 12px"}}>
      <div>
        <div style={{fontSize:23,fontWeight:800,color:"#fff",letterSpacing:-0.5}}>{locked?"This Week":"Build This Week"}</div>
-       <div style={{fontSize:12.5,color:IOS.label3,marginTop:2}}>{locked?"Locked — pending results":"Pick as many as you want. Each scores on its own odds."}</div>
-       <div style={{fontSize:12,fontWeight:800,color:IOS.blue,marginTop:6,textTransform:"uppercase",letterSpacing:0.5}}>{soloWeekRange(soloWeekNum())}</div>
-       {!locked && <div onClick={()=>setShowSoloSportPicker(true)} style={{display:"inline-flex",alignItems:"center",gap:6,marginTop:10,background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:9,padding:"5px 10px",cursor:"pointer"}}><span style={{width:7,height:7,borderRadius:2,background:(SPORTS[soloSport]&&SPORTS[soloSport].color)||IOS.blue}}/><span style={{fontSize:12,fontWeight:800,color:"#fff"}}>{(SPORTS[soloSport]&&SPORTS[soloSport].label)||String(soloSport).toUpperCase()}</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={IOS.label3} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>}
+       <div className="pk-hdr-sub" style={{fontSize:12.5,color:IOS.label3,marginTop:2}}>{locked?"Locked — pending results":"Pick as many as you want. Each scores on its own odds."}</div>
+       <div className="pk-hdr-sub" style={{fontSize:12,fontWeight:800,color:IOS.blue,marginTop:6,textTransform:"uppercase",letterSpacing:0.5}}>{soloWeekRange(soloWeekNum())}</div>
+        {/* Sport chip removed: solo home already switches sport inline via .pk-rail, and
+            this opened the first-run entry sheet, whose handler ends in setScreen("picks")
+            — a no-op from the picks screen. */}
      </div>
    </div>
 
@@ -10218,7 +10533,7 @@ function App() {
          const _db=_soloDb.find(x=>x.game===b.game && x.pick_name===b.pick);
          const _scp=_db?{game:_db.game,game_date:_db.game_date||b.gameTime||null,result:_db.result,home_score:_db.home_score,away_score:_db.away_score,pick_name:b.pick,odds:b.odds}:{game:b.game,game_date:b.gameTime||null,result:b.result||"pending",pick_name:b.pick,odds:b.odds};
          return (
-         <div key={b.slot||i} style={{position:"relative",background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:14,padding:"12px 13px"}}>
+         <div key={b.slot||i} style={{position:"relative",background:IOS.bg2,border:EDGE.hair,borderRadius:RAD.lg,padding:"12px 13px"}}>
            {!ro && <div onClick={()=>removeSoloPick(b.slot)} style={{position:"absolute",top:10,right:11,width:22,height:22,borderRadius:"50%",background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",color:"rgba(255,255,255,0.45)",fontSize:14,cursor:"pointer"}}>×</div>}
            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:7,paddingRight:24}}>
              <div style={{fontSize:8.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:col,background:`${col}1c`,borderRadius:5,padding:"3px 6px",flexShrink:0}}>{b.categoryLabel||b.category}</div>
@@ -10242,7 +10557,7 @@ function App() {
                <div style={{display:"flex",alignItems:"center",gap:5,flex:1}}>
                  <span style={{fontSize:8.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:IOS.label3,marginRight:1,flexShrink:0}}>Units</span>
                  {[1,2,3,4,5].map(m=>{ const on=(b.mult||1)===m; return (
-                   <div key={m} onClick={()=>editSoloPickMult(b.slot,m)} style={{flex:1,textAlign:"center",padding:"4px 0",borderRadius:6,fontSize:11,fontWeight:800,cursor:"pointer",background:on?"rgba(10,132,255,0.18)":"rgba(255,255,255,0.04)",border:`1px solid ${on?IOS.blue:"rgba(255,255,255,0.08)"}`,color:on?IOS.blue:"rgba(255,255,255,0.4)"}}>{m}×</div>
+                   <div key={m} onClick={()=>editSoloPickMult(b.slot,m)} style={{flex:1,textAlign:"center",padding:"4px 0",borderRadius:RAD.sm,fontSize:11,fontWeight:800,cursor:"pointer",background:on?"rgba(10,132,255,0.18)":"rgba(255,255,255,0.04)",border:`1px solid ${on?IOS.blue:"rgba(255,255,255,0.08)"}`,color:on?IOS.blue:"rgba(255,255,255,0.4)"}}>{m}×</div>
                  );})}
                </div>
              )}
@@ -10259,25 +10574,25 @@ function App() {
      {drafts.length>0 && (
        <div style={{marginBottom:12}}>
          <div style={{fontSize:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",color:IOS.orange,margin:"2px 2px 8px"}}>Not locked yet · {drafts.length}</div>
-         <div style={{background:IOS.bg2,border:`0.5px solid ${IOS.orange}33`,borderRadius:12,padding:"4px 12px"}}>
+         <div style={{background:IOS.bg2,border:`0.5px solid ${IOS.orange}33`,borderRadius:RAD.md,padding:"4px 12px"}}>
            {drafts.map((b,i)=>{ const col=b.categoryColor||IOS.blue; return (
              <div key={b.id||i} style={{padding:"9px 0",borderBottom:i<drafts.length-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
                <div style={{display:"flex",alignItems:"center",gap:9}}>
                  <div style={{fontSize:8.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:col,background:`${col}1c`,borderRadius:5,padding:"3px 6px",flexShrink:0}}>{b.categoryLabel||b.category}</div>
                  <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.pick}</div><div style={{fontSize:10.5,color:IOS.label3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.game}</div></div>
                  <div style={{textAlign:"right",flexShrink:0}}><div style={{fontSize:12.5,fontWeight:800,color:(b.odds||"").startsWith("+")?IOS.green:IOS.blue}}>{b.odds}</div><div style={{fontSize:9.5,color:IOS.label3}}>+{((b.mult||1)*ptsFor(b.impliedOdds)).toFixed(1)} pts</div></div>
-                 <div onClick={()=>setSoloFreePicks(soloFreePicks.filter(x=>x.id!==b.id))} style={{width:24,height:24,borderRadius:7,background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",color:"rgba(255,255,255,0.5)",fontSize:15,cursor:"pointer",flexShrink:0}}>×</div>
+                 <div onClick={()=>setSoloFreePicks(soloFreePicks.filter(x=>x.id!==b.id))} style={{width:24,height:24,borderRadius:RAD.sm,background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",color:"rgba(255,255,255,0.5)",fontSize:15,cursor:"pointer",flexShrink:0}}>×</div>
                </div>
                <div style={{display:"flex",alignItems:"center",gap:5,marginTop:8}}>
                  <span style={{fontSize:8.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:IOS.label3,marginRight:1,flexShrink:0}}>Units</span>
                  {[1,2,3,4,5].map(m=>{ const on=(b.mult||1)===m; return (
-                   <div key={m} onClick={()=>setSoloFreePicks(prev=>prev.map(x=>x.id===b.id?{...x,mult:m}:x))} style={{flex:1,textAlign:"center",padding:"4px 0",borderRadius:6,fontSize:11,fontWeight:800,cursor:"pointer",background:on?"rgba(10,132,255,0.18)":"rgba(255,255,255,0.04)",border:`1px solid ${on?IOS.blue:"rgba(255,255,255,0.08)"}`,color:on?IOS.blue:"rgba(255,255,255,0.4)"}}>{m}×</div>
+                   <div key={m} onClick={()=>setSoloFreePicks(prev=>prev.map(x=>x.id===b.id?{...x,mult:m}:x))} style={{flex:1,textAlign:"center",padding:"4px 0",borderRadius:RAD.sm,fontSize:11,fontWeight:800,cursor:"pointer",background:on?"rgba(10,132,255,0.18)":"rgba(255,255,255,0.04)",border:`1px solid ${on?IOS.blue:"rgba(255,255,255,0.08)"}`,color:on?IOS.blue:"rgba(255,255,255,0.4)"}}>{m}×</div>
                  );})}
                </div>
              </div>
            );})}
          </div>
-         <button onClick={lockSoloFreeSlate} style={{width:"100%",marginTop:9,background:IOS.green,border:"none",borderRadius:11,padding:"12px",fontSize:14,fontWeight:800,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Lock {drafts.length} new pick{drafts.length>1?"s":""}</button>
+         <button onClick={lockSoloFreeSlate} style={{width:"100%",marginTop:9,background:IOS.green,border:"none",borderRadius:RAD.md,padding:"12px",fontSize:14,fontWeight:800,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Lock {drafts.length} new pick{drafts.length>1?"s":""}</button>
        </div>
      )}
 
@@ -10294,14 +10609,14 @@ function App() {
        };
        return (
        <div style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.6)",display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>{ setSoloParlay(null); setSoloParlayMode(false); }}>
-         <div style={{background:"#0d0d12",borderTopLeftRadius:20,borderTopRightRadius:20,border:"0.5px solid rgba(255,255,255,0.1)",padding:"18px 16px calc(var(--sa-bot) + 88px)",maxHeight:"82vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
+         <div style={{background:"#0d0d12",borderTopLeftRadius:20,borderTopRightRadius:20,border:EDGE.hair2,padding:"18px 16px calc(var(--sa-bot) + 88px)",maxHeight:"82vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
            <div style={{width:36,height:4,borderRadius:2,background:"rgba(255,255,255,0.2)",margin:"0 auto 14px"}}/>
            <div style={{textAlign:"center",marginBottom:4}}><span style={{fontSize:20,fontWeight:800,color:IOS.pink}}>New Parlay</span></div>
            <div style={{textAlign:"center",fontSize:12.5,color:IOS.label3,marginBottom:14}}>Add 2 to 6 legs. All must hit to score.</div>
            {legs.length===0 ? (
              <div style={{textAlign:"center",color:IOS.label3,fontSize:13,padding:"24px 0"}}>No legs yet. Tap Add legs to pick from the board.</div>
            ) : (
-             <div style={{background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"4px 12px",marginBottom:12}}>
+             <div style={{background:IOS.bg2,border:EDGE.hair,borderRadius:RAD.md,padding:"4px 12px",marginBottom:12}}>
                {legs.map((l,i)=>(
                  <div key={l.id||i} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 0",borderBottom:i<legs.length-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
                    <span style={{fontSize:10,fontWeight:800,color:IOS.pink,width:15,flexShrink:0}}>{(i+1)+"."}</span>
@@ -10312,22 +10627,22 @@ function App() {
                ))}
              </div>
            )}
-           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,55,95,0.08)",border:"0.5px solid rgba(255,55,95,0.3)",borderRadius:10,padding:"9px 12px",marginBottom:12}}>
+           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,55,95,0.08)",border:"0.5px solid rgba(255,55,95,0.3)",borderRadius:RAD.md,padding:"9px 12px",marginBottom:12}}>
              <div><div style={{fontSize:8.5,fontWeight:800,textTransform:"uppercase",color:IOS.label3}}>Combined odds</div><div style={{fontSize:19,fontWeight:800,color:IOS.pink,fontFamily:"'Barlow Semi Condensed',sans-serif"}}>{_ls?_ls.american:"—"}</div></div>
              <div style={{textAlign:"right"}}><div style={{fontSize:8.5,fontWeight:800,textTransform:"uppercase",color:IOS.label3}}>{"At "+(soloParlay.mult||2)+"x · Possible"}</div><div style={{fontSize:19,fontWeight:800,color:"#fff",fontFamily:"'Barlow Semi Condensed',sans-serif"}}>{_poss ? (_poss+" pts") : "—"}</div></div>
            </div>
            <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:14}}>
              <span style={{fontSize:8.5,fontWeight:800,textTransform:"uppercase",color:IOS.label3,flexShrink:0}}>Units</span>
-             {[1,2,3,4,5].map(m=>{ const on=(soloParlay.mult||2)===m; return (<div key={m} onClick={()=>setSoloParlay(pv=>({...pv,mult:m}))} style={{flex:1,textAlign:"center",padding:"5px 0",borderRadius:6,fontSize:11,fontWeight:800,cursor:"pointer",background:on?"rgba(255,55,95,0.18)":"rgba(255,255,255,0.04)",border:"1px solid "+(on?IOS.pink:"rgba(255,255,255,0.08)"),color:on?IOS.pink:"rgba(255,255,255,0.4)"}}>{m+"x"}</div>); })}
+             {[1,2,3,4,5].map(m=>{ const on=(soloParlay.mult||2)===m; return (<div key={m} onClick={()=>setSoloParlay(pv=>({...pv,mult:m}))} style={{flex:1,textAlign:"center",padding:"5px 0",borderRadius:RAD.sm,fontSize:11,fontWeight:800,cursor:"pointer",background:on?"rgba(255,55,95,0.18)":"rgba(255,255,255,0.04)",border:"1px solid "+(on?IOS.pink:"rgba(255,255,255,0.08)"),color:on?IOS.pink:"rgba(255,255,255,0.4)"}}>{m+"x"}</div>); })}
            </div>
-           <button onClick={()=>{ setSoloParlayMode(true); setBuildingSlip(true); setGridTargetSlot(null); setGridPropSub("all"); setGridType("ml"); setScreen("browser"); }} style={{width:"100%",background:"rgba(255,255,255,0.06)",border:"0.5px solid rgba(255,255,255,0.14)",borderRadius:12,padding:"12px",fontSize:14,fontWeight:800,color:"#fff",cursor:"pointer",marginBottom:8,fontFamily:"Barlow,sans-serif"}}>{legs.length?("Add more legs ("+legs.length+"/6)"):"Add legs"}</button>
-           <button onClick={addToSlip} disabled={legs.length<2} style={{width:"100%",background:legs.length<2?IOS.bg3:IOS.pink,border:"none",borderRadius:12,padding:"13px",fontSize:15,fontWeight:800,color:legs.length<2?IOS.label3:"#fff",cursor:legs.length<2?"default":"pointer",fontFamily:"Barlow,sans-serif"}}>{legs.length<2?"Add at least 2 legs":"Add parlay to slip"}</button>
+           <button onClick={()=>{ setSoloParlayMode(true); setBuildingSlip(true); setGridTargetSlot(null); setGridPropSub("all"); setGridType("ml"); setScreen("browser"); }} style={{width:"100%",background:"rgba(255,255,255,0.06)",border:EDGE.hair3,borderRadius:RAD.md,padding:"12px",fontSize:14,fontWeight:800,color:"#fff",cursor:"pointer",marginBottom:8,fontFamily:"Barlow,sans-serif"}}>{legs.length?("Add more legs ("+legs.length+"/6)"):"Add legs"}</button>
+           <button onClick={addToSlip} disabled={legs.length<2} style={{width:"100%",background:legs.length<2?IOS.bg3:IOS.pink,border:"none",borderRadius:RAD.md,padding:"13px",fontSize:15,fontWeight:800,color:legs.length<2?IOS.label3:"#fff",cursor:legs.length<2?"default":"pointer",fontFamily:"Barlow,sans-serif"}}>{legs.length<2?"Add at least 2 legs":"Add parlay to slip"}</button>
            <button onClick={()=>{ setSoloParlay(null); setSoloParlayMode(false); }} style={{width:"100%",background:"transparent",border:"none",color:IOS.label3,fontSize:13,fontWeight:700,cursor:"pointer",marginTop:10,fontFamily:"Barlow,sans-serif"}}>Cancel</button>
          </div>
        </div>
        );
      })()}
-     <div onClick={()=>{ setBuildingSlip(true); setGridTargetSlot(null); setGridType("ml"); setGridPropSub("all"); setScreen("browser"); }} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,border:"1.5px dashed rgba(255,255,255,0.16)",background:"rgba(255,255,255,0.02)",borderRadius:13,padding:"14px",fontSize:14,fontWeight:800,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif",marginBottom:14}}>
+     <div onClick={()=>{ setBuildingSlip(true); setGridTargetSlot(null); setGridType("ml"); setGridPropSub("all"); setScreen("browser"); }} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,border:"1.5px dashed rgba(255,255,255,0.16)",background:"rgba(255,255,255,0.02)",borderRadius:RAD.md,padding:"14px",fontSize:14,fontWeight:800,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif",marginBottom:14}}>
        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
        Add another pick
      </div>
@@ -10338,22 +10653,22 @@ function App() {
      </div>
 
      <div style={{display:"flex",gap:9,marginBottom:16}}>
-       <button onClick={()=>setScreen("home")} style={{flex:1,background:IOS.blue,border:"none",borderRadius:11,padding:"13px",fontSize:14,fontWeight:800,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Back to Home</button>
-       <button onClick={clearSoloSlate} style={{background:"rgba(255,69,58,0.12)",border:`0.5px solid ${IOS.red}40`,borderRadius:11,padding:"13px 16px",fontSize:14,fontWeight:800,color:IOS.red,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Clear</button>
+       <button onClick={()=>setScreen("home")} style={{flex:1,background:IOS.blue,border:"none",borderRadius:RAD.md,padding:"13px",fontSize:14,fontWeight:800,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Back to Home</button>
+       <button onClick={clearSoloSlate} style={{background:"rgba(255,69,58,0.12)",border:`0.5px solid ${IOS.red}40`,borderRadius:RAD.md,padding:"13px 16px",fontSize:14,fontWeight:800,color:IOS.red,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Clear</button>
      </div>
    </>
    );
    })() : (
      <>
        {plokSlateBusy ? (
-         <div style={{display:"flex",alignItems:"center",gap:9,background:"rgba(255,255,255,0.04)",border:`0.5px solid ${IOS.blue}33`,borderRadius:12,padding:"13px 14px",marginBottom:12}}>
+         <div style={{display:"flex",alignItems:"center",gap:9,background:"rgba(255,255,255,0.04)",border:`0.5px solid ${IOS.blue}33`,borderRadius:RAD.md,padding:"13px 14px",marginBottom:12}}>
            <span className="ai-dot"/><span className="ai-dot" style={{animationDelay:".15s"}}/><span className="ai-dot" style={{animationDelay:".3s"}}/>
            <span style={{fontSize:12.5,fontWeight:700,color:"rgba(255,255,255,0.7)"}}>Plok is building your picks…</span>
          </div>
        ) : plokSlate && plokSlate.error ? (
-         <div style={{background:"rgba(255,69,58,0.08)",border:`0.5px solid ${IOS.red}33`,borderRadius:12,padding:"11px 14px",marginBottom:12,fontSize:12.5,color:"rgba(255,255,255,0.75)"}}>{plokSlate.error}</div>
+         <div style={{background:"rgba(255,69,58,0.08)",border:`0.5px solid ${IOS.red}33`,borderRadius:RAD.md,padding:"11px 14px",marginBottom:12,fontSize:12.5,color:"rgba(255,255,255,0.75)"}}>{plokSlate.error}</div>
        ) : plokSlate && plokSlate.picks ? (
-         <div style={{background:`linear-gradient(135deg,${IOS.blue}1a,rgba(255,255,255,0.03))`,border:`0.5px solid ${IOS.blue}33`,borderRadius:14,padding:"13px 14px",marginBottom:12}}>
+         <div style={{background:`linear-gradient(135deg,${IOS.blue}1a,rgba(255,255,255,0.03))`,border:`0.5px solid ${IOS.blue}33`,borderRadius:RAD.lg,padding:"13px 14px",marginBottom:12}}>
            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
              <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:IOS.blue}}>Plok built your picks</div>
              <div onClick={()=>setPlokSlate(null)} style={{cursor:"pointer",color:"rgba(255,255,255,0.4)",fontSize:17,lineHeight:1}}>×</div>
@@ -10376,22 +10691,22 @@ function App() {
                );
              })}
            </div>
-           <button onClick={applyPlokSlate} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:11,padding:"11px",fontSize:13,fontWeight:800,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Add to my picks</button>
+           <button onClick={applyPlokSlate} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:RAD.md,padding:"11px",fontSize:13,fontWeight:800,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Add to my picks</button>
          </div>
        ) : (
-         <button onClick={buildPlokSlate} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"rgba(255,255,255,0.05)",border:`1px solid ${IOS.blue}40`,borderRadius:12,padding:"12px",fontSize:13.5,fontWeight:800,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif",marginBottom:12}}>
+         <button onClick={buildPlokSlate} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"rgba(255,255,255,0.05)",border:`1px solid ${IOS.blue}40`,borderRadius:RAD.md,padding:"12px",fontSize:13.5,fontWeight:800,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif",marginBottom:12}}>
            <svg width="16" height="16" viewBox="0 0 24 24" fill={IOS.blue} stroke="none"><path d="M12 2l1.7 5.4L19 9l-5.3 1.6L12 16l-1.7-5.4L5 9l5.3-1.6z"/></svg>
            Let Plok build my picks
          </button>
        )}
        <div style={{marginBottom:12}}>
          {soloFreePicks.length===0 ? (
-           <div style={{background:IOS.bg2,border:"0.5px dashed rgba(255,255,255,0.14)",borderRadius:12,padding:"20px 16px",textAlign:"center"}}>
+           <div style={{background:IOS.bg2,border:"0.5px dashed rgba(255,255,255,0.14)",borderRadius:RAD.md,padding:"20px 16px",textAlign:"center"}}>
              <div style={{fontSize:13,fontWeight:700,color:"rgba(255,255,255,0.8)"}}>No picks yet</div>
              <div style={{fontSize:11.5,color:IOS.label3,marginTop:3}}>Tap “Browse all games” to add picks to your slate.</div>
            </div>
          ) : (
-           <div style={{background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"4px 12px"}}>
+           <div style={{background:IOS.bg2,border:EDGE.hair,borderRadius:RAD.md,padding:"4px 12px"}}>
              {soloFreePicks.map((b,i)=>{
                const col=b.categoryColor||IOS.blue;
                return (
@@ -10406,12 +10721,12 @@ function App() {
                      <div style={{fontSize:12.5,fontWeight:800,color:(b.odds||"").startsWith("+")?IOS.green:IOS.blue}}>{b.odds}</div>
                      <div style={{fontSize:9.5,color:IOS.label3}}>+{((b.mult||1)*ptsFor(b.impliedOdds)).toFixed(1)} pts</div>
                    </div>
-                   <div onClick={()=>setSoloFreePicks(soloFreePicks.filter(x=>x.id!==b.id))} style={{width:24,height:24,borderRadius:7,background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",color:"rgba(255,255,255,0.5)",fontSize:15,cursor:"pointer",flexShrink:0}}>×</div>
+                   <div onClick={()=>setSoloFreePicks(soloFreePicks.filter(x=>x.id!==b.id))} style={{width:24,height:24,borderRadius:RAD.sm,background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",color:"rgba(255,255,255,0.5)",fontSize:15,cursor:"pointer",flexShrink:0}}>×</div>
                  </div>
                  <div style={{display:"flex",alignItems:"center",gap:5,marginTop:8}}>
                    <span style={{fontSize:8.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:IOS.label3,marginRight:1,flexShrink:0}}>Units</span>
                    {[1,2,3,4,5].map(m=>{ const on=(b.mult||1)===m; return (
-                     <div key={m} onClick={()=>setSoloFreePicks(prev=>prev.map(x=>x.id===b.id?{...x,mult:m}:x))} style={{flex:1,textAlign:"center",padding:"4px 0",borderRadius:6,fontSize:11,fontWeight:800,cursor:"pointer", background:on?"rgba(10,132,255,0.18)":"rgba(255,255,255,0.04)", border:`1px solid ${on?IOS.blue:"rgba(255,255,255,0.08)"}`, color:on?IOS.blue:"rgba(255,255,255,0.4)"}}>{m}×</div>
+                     <div key={m} onClick={()=>setSoloFreePicks(prev=>prev.map(x=>x.id===b.id?{...x,mult:m}:x))} style={{flex:1,textAlign:"center",padding:"4px 0",borderRadius:RAD.sm,fontSize:11,fontWeight:800,cursor:"pointer", background:on?"rgba(10,132,255,0.18)":"rgba(255,255,255,0.04)", border:`1px solid ${on?IOS.blue:"rgba(255,255,255,0.08)"}`, color:on?IOS.blue:"rgba(255,255,255,0.4)"}}>{m}×</div>
                    );})}
                  </div>
                </div>
@@ -10421,16 +10736,16 @@ function App() {
          )}
        </div>
 
-       <div onClick={()=>{ setBuildingSlip(true); setGridTargetSlot(null); setGridType("ml"); setGridPropSub("all"); setScreen("browser"); }} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"rgba(10,132,255,0.1)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:12,padding:"13px",fontSize:14,fontWeight:800,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif",marginBottom:12}}>
+       <div onClick={()=>{ setBuildingSlip(true); setGridTargetSlot(null); setGridType("ml"); setGridPropSub("all"); setScreen("browser"); }} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"rgba(10,132,255,0.1)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:RAD.md,padding:"13px",fontSize:14,fontWeight:800,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif",marginBottom:12}}>
          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
          Browse all games
        </div>
           {/* Build a Parlay entry */}
-     <div onClick={()=>setSoloParlay({legs:[],mult:2})} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,border:"1.5px dashed rgba(255,55,95,0.5)",background:"rgba(255,55,95,0.05)",borderRadius:13,padding:"14px",fontSize:14,fontWeight:800,color:IOS.pink,cursor:"pointer",fontFamily:"Barlow,sans-serif",marginBottom:10}}>
+     <div onClick={()=>setSoloParlay({legs:[],mult:2})} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,border:"1.5px dashed rgba(255,55,95,0.5)",background:"rgba(255,55,95,0.05)",borderRadius:RAD.md,padding:"14px",fontSize:14,fontWeight:800,color:IOS.pink,cursor:"pointer",fontFamily:"Barlow,sans-serif",marginBottom:10}}>
        <svg width="16" height="16" viewBox="0 0 24 24" fill={IOS.pink} stroke="none"><path d="M13 2L3 14h7v8l10-12h-7z"/></svg>
        Build a Parlay
      </div>
-       <button onClick={lockSoloFreeSlate} disabled={soloFreePicks.length===0} style={{width:"100%",background:soloFreePicks.length?IOS.green:"rgba(255,255,255,0.08)",border:"none",borderRadius:12,padding:"14px",fontSize:15,fontWeight:800,color:soloFreePicks.length?"#fff":"rgba(255,255,255,0.35)",cursor:soloFreePicks.length?"pointer":"default",fontFamily:"Barlow,sans-serif",marginBottom:16}}>
+       <button onClick={lockSoloFreeSlate} disabled={soloFreePicks.length===0} style={{width:"100%",background:soloFreePicks.length?IOS.green:"rgba(255,255,255,0.08)",border:"none",borderRadius:RAD.md,padding:"14px",fontSize:15,fontWeight:800,color:soloFreePicks.length?"#fff":"rgba(255,255,255,0.35)",cursor:soloFreePicks.length?"pointer":"default",fontFamily:"Barlow,sans-serif",marginBottom:16}}>
          {soloFreePicks.length ? `Lock Picks · ${soloFreePicks.length} pick${soloFreePicks.length>1?"s":""} · up to ${projTotal.toFixed(1)} pts` : "Add at least 1 pick"}
        </button>
 
@@ -10460,22 +10775,22 @@ function App() {
    return (
    <div className="body">
      <div style={{display:"flex",alignItems:"center",gap:12,padding:"6px 2px 14px"}}>
-       <div onClick={()=>setScreen("home")} style={{cursor:"pointer",width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:10,background:"rgba(255,255,255,0.06)"}}>
+       <div onClick={()=>setScreen("home")} style={{cursor:"pointer",width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:RAD.md,background:"rgba(255,255,255,0.06)"}}>
          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
        </div>
        <div><div style={{fontSize:24,fontWeight:800,letterSpacing:-0.5}}>Leaderboard</div><div style={{fontSize:12,color:IOS.label3,fontWeight:600}}>{(lbTab==="hit"?"Qualified players":"Top players")+" · "+rows.length+" ranked"}</div></div>
      </div>
-     <div style={{display:"flex",gap:3,background:"#161619",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:11,padding:4,marginBottom:11}}>
+     <div style={{display:"flex",gap:3,background:"#161619",border:EDGE.hair,borderRadius:RAD.md,padding:4,marginBottom:11}}>
        {[["points","Points"],["hit","Hit Rate"],["ls","Longshots"]].map(([k,lab])=>(
-         <div key={k} onClick={()=>setLbTab(k)} style={{flex:1,textAlign:"center",padding:"9px 4px",borderRadius:8,fontSize:12.5,fontWeight:800,cursor:"pointer",background:lbTab===k?IOS.blue:"transparent",color:lbTab===k?"#fff":"rgba(255,255,255,0.38)"}}>{lab}</div>
+         <div key={k} onClick={()=>setLbTab(k)} style={{flex:1,textAlign:"center",padding:"9px 4px",borderRadius:RAD.sm,fontSize:12.5,fontWeight:800,cursor:"pointer",background:lbTab===k?IOS.blue:"transparent",color:lbTab===k?"#fff":"rgba(255,255,255,0.38)"}}>{lab}</div>
        ))}
      </div>
      <div style={{display:"flex",gap:7,marginBottom:12}}>
        {[["all","All-time"],["month","Month"],["week","Week"]].map(([k,lab])=>(
-         <div key={k} onClick={()=>{ setLbTf(k); fetchLeaderboard(k); }} style={{fontSize:11.5,fontWeight:700,padding:"6px 13px",borderRadius:8,cursor:"pointer",background:lbTf===k?"rgba(10,132,255,0.16)":"#1a1a1f",border:"1px solid "+(lbTf===k?"rgba(10,132,255,0.4)":"rgba(255,255,255,0.07)"),color:lbTf===k?IOS.blue:"rgba(255,255,255,0.55)"}}>{lab}</div>
+         <div key={k} onClick={()=>{ setLbTf(k); fetchLeaderboard(k); }} style={{fontSize:11.5,fontWeight:700,padding:"6px 13px",borderRadius:RAD.sm,cursor:"pointer",background:lbTf===k?"rgba(10,132,255,0.16)":"#1a1a1f",border:"1px solid "+(lbTf===k?"rgba(10,132,255,0.4)":"rgba(255,255,255,0.07)"),color:lbTf===k?IOS.blue:"rgba(255,255,255,0.55)"}}>{lab}</div>
        ))}
      </div>
-     <div style={{marginBottom:14,background:"linear-gradient(135deg,rgba(10,132,255,0.16),#161619)",border:"0.5px solid rgba(10,132,255,0.4)",borderRadius:14,padding:"11px 13px",display:"flex",alignItems:"center",gap:11}}>
+     <div style={{marginBottom:14,background:"linear-gradient(135deg,rgba(10,132,255,0.16),#161619)",border:"0.5px solid rgba(10,132,255,0.4)",borderRadius:RAD.lg,padding:"11px 13px",display:"flex",alignItems:"center",gap:11}}>
        <div style={{width:30,textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:16,color:IOS.blue}}>{me?("#"+(myIdx+1)):"—"}</div>
        <div style={{width:38,height:38,borderRadius:"50%",background:"linear-gradient(135deg,#0A84FF,#5e5ce6)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:14,color:"#fff"}}>{ini(userProfile?.username||"You")}</div>
        <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:800,display:"flex",alignItems:"center",gap:5}}>You{userProfile?.is_founder && <svg width="11" height="11" viewBox="0 0 24 24" fill="#FFD60A" stroke="none" style={{flexShrink:0}}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>}</div>
@@ -10483,12 +10798,12 @@ function App() {
        </div>
        <div style={{textAlign:"right",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:19}}>{me?valFor(me):"—"}</div>
      </div>
-     {lbTab==="hit" && <div style={{display:"flex",alignItems:"center",gap:8,background:"rgba(255,159,10,0.09)",border:"0.5px solid rgba(255,159,10,0.22)",borderRadius:11,padding:"9px 13px",marginBottom:12,fontSize:11.5,color:IOS.label2,fontWeight:600}}>Hit Rate ranks anyone with {THRESH[lbTf]}+ graded picks {TFLABEL[lbTf]}.</div>}
+     {lbTab==="hit" && <div style={{display:"flex",alignItems:"center",gap:8,background:"rgba(255,159,10,0.09)",border:"0.5px solid rgba(255,159,10,0.22)",borderRadius:RAD.md,padding:"9px 13px",marginBottom:12,fontSize:11.5,color:IOS.label2,fontWeight:600}}>Hit Rate ranks anyone with {THRESH[lbTf]}+ graded picks {TFLABEL[lbTf]}.</div>}
      {(lbLoading && top.length===0) ? <SkelRows n={8} pad="6px 0"/> :
       top.length===0 ? <div style={{textAlign:"center",padding:30,color:IOS.label3,fontSize:13,lineHeight:1.6}}>No ranked players yet — graded picks show up here.</div> :
       top.map((r,i)=>{ const rk=i+1; const mc=medalC(rk); const isMe=String(r.user_id)===String(user?.id); const c=PAL[i%PAL.length];
         return (
-        <div key={r.user_id} style={{display:"flex",alignItems:"center",gap:11,padding:"9px 11px",borderRadius:13,marginBottom:6,background:isMe?"linear-gradient(135deg,rgba(10,132,255,0.13),#161619)":"linear-gradient(165deg,#1a1a1f,#141417)",border:"1px solid "+(isMe?"rgba(10,132,255,0.4)":"rgba(255,255,255,0.07)")}}>
+        <div key={r.user_id} style={{display:"flex",alignItems:"center",gap:11,padding:"9px 11px",borderRadius:RAD.md,marginBottom:6,background:isMe?"linear-gradient(135deg,rgba(10,132,255,0.13),#161619)":"linear-gradient(165deg,#1a1a1f,#141417)",border:"1px solid "+(isMe?"rgba(10,132,255,0.4)":"rgba(255,255,255,0.07)")}}>
           {mc ? <div style={{width:26,height:26,borderRadius:"50%",background:mc,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:14,color:"#000",flexShrink:0}}>{rk}</div>
               : <div style={{width:26,textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:16,color:IOS.label3,flexShrink:0}}>{rk}</div>}
           <div style={{width:38,height:38,borderRadius:"50%",background:"linear-gradient(135deg,"+c+","+c+"99)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:14,color:"#fff",border:"1px solid rgba(255,255,255,0.12)",flexShrink:0}}>{ini(r.username)}</div>
@@ -10736,7 +11051,7 @@ function App() {
  const addCard = (bet, catOverride) => {
    if(replaceCtx){ doReplaceSave(bet); return; }
    if(isSoloMode && soloParlayMode){ const _pc = parlayConflict({...bet, category:(bet.category||gridType)}, (soloParlay&&soloParlay.legs)||[]); if(_pc){ setPickConflict(_pc); setTimeout(()=>setPickConflict(""),2800); setGridJustAdded(null); return; }
-   setSoloParlay(pv=>{ if(!pv) return pv; const legs=pv.legs||[]; if(legs.length>=6 || legs.some(l=>l.id===bet.id)) return pv; return {...pv, legs:[...legs, {id:bet.id, pick:bet.pick, game:bet.game||"", odds:bet.odds, impliedOdds:bet.impliedOdds, gameTime:bet.gameTime||null, category:bet.category||gridType, categoryLabel:bet.categoryLabel||null, eventId:bet.eventId||null, marketKey:bet.marketKey||null, outcome:bet.outcome||null, point:(bet.point!=null?bet.point:null), selKey:bet.selKey||null}]}; }); try{ if(navigator.vibrate) navigator.vibrate(12); }catch(e){} return; }
+   setSoloParlay(pv=>{ if(!pv) return pv; const legs=pv.legs||[]; if(legs.length>=6 || legs.some(l=>l.id===bet.id)) return pv; return {...pv, legs:[...legs, {id:bet.id, pick:bet.pick, game:bet.game||"", odds:bet.odds, impliedOdds:bet.impliedOdds, gameTime:bet.gameTime||null, category:bet.category||gridType, categoryLabel:bet.categoryLabel||null, eventId:bet.eventId||null, marketKey:bet.marketKey||null, outcome:bet.outcome||null, point:(bet.point!=null?bet.point:null), selKey:bet.selKey||null}]}; }); haptic("select"); return; }
  // A bet carries its OWN category (yrfi/nrfi/ml/spread/ou/prop) from the odds feed. Trust
  // that over gridType: yrfi/nrfi are browsed under the innings group where gridType can be
  // "ou"/"spread", so relying on gridType filed a YRFI into the OU slot and a NRFI into the
@@ -10907,7 +11222,7 @@ function App() {
 
  return (
  <div key={bet.id} className="gbx-card" onClick={()=>addCard(bet)} style={{
- position:"relative", overflow:"hidden", cursor:"pointer", borderRadius:16, padding:"13px 13px 12px",
+ position:"relative", overflow:"hidden", cursor:"pointer", borderRadius:RAD.lg, padding:"13px 13px 12px",
  background:"linear-gradient(160deg,#17171B 0%,#0D0D10 100%)",
  border:`1px solid ${selected||added?acc:"rgba(255,255,255,0.07)"}`,
  boxShadow:selected||added?`0 0 0 1px ${acc}, 0 8px 24px ${acc}22`:"0 4px 14px rgba(0,0,0,0.4)",
@@ -10945,13 +11260,13 @@ function App() {
  <StatLabel>Multiplier · units</StatLabel>
  <div onClick={(e)=>e.stopPropagation()} style={{display:"flex",gap:5,marginBottom:10,marginTop:1}}>
  {[1,2,3,4,5].map(m=>{ const on=_myMult===m; return (
- <div key={m} onClick={(e)=>{ e.stopPropagation(); setSoloFreePicks(prev=>prev.map(p=>String(p.id)===String(bet.id)?{...p,mult:m}:p)); }} style={{flex:1,textAlign:"center",padding:"5px 0",borderRadius:7,fontSize:11,fontWeight:800,cursor:"pointer", background:on?`${acc}28`:"rgba(255,255,255,0.04)", border:`1px solid ${on?acc:"rgba(255,255,255,0.08)"}`, color:on?acc:"rgba(255,255,255,0.4)"}}>{m}×</div>
+ <div key={m} onClick={(e)=>{ e.stopPropagation(); setSoloFreePicks(prev=>prev.map(p=>String(p.id)===String(bet.id)?{...p,mult:m}:p)); }} style={{flex:1,textAlign:"center",padding:"5px 0",borderRadius:RAD.sm,fontSize:11,fontWeight:800,cursor:"pointer", background:on?`${acc}28`:"rgba(255,255,255,0.04)", border:`1px solid ${on?acc:"rgba(255,255,255,0.08)"}`, color:on?acc:"rgba(255,255,255,0.4)"}}>{m}×</div>
  );})}
  </div>
  </>)}
  {/* Bottom row: recent form + reward */}
  <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:6}}>
- <button onClick={(e)=>{e.stopPropagation(); askFromBet(bet, gridType==="longshot"?"longshot":gridType);}} aria-label="Ask AI" style={{display:"inline-flex",alignItems:"center",gap:4,padding:"4px 8px",borderRadius:8,background:`${acc}1a`,border:`1px solid ${acc}33`,color:acc,fontSize:9.5,fontWeight:800,cursor:"pointer",flexShrink:0,alignSelf:"flex-end"}}><svg width="11" height="11" viewBox="0 0 24 24" fill={acc}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg>AI</button>
+ <button onClick={(e)=>{e.stopPropagation(); askFromBet(bet, gridType==="longshot"?"longshot":gridType);}} aria-label="Ask AI" style={{display:"inline-flex",alignItems:"center",gap:4,padding:"4px 8px",borderRadius:RAD.sm,background:`${acc}1a`,border:`1px solid ${acc}33`,color:acc,fontSize:9.5,fontWeight:800,cursor:"pointer",flexShrink:0,alignSelf:"flex-end"}}><svg width="11" height="11" viewBox="0 0 24 24" fill={acc}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg>AI</button>
  <div>
  
  {(()=>{ const _rec=recordFor(formSeed, bet.game); return _rec ? (<><StatLabel>Record</StatLabel><div style={{fontSize:12.5,fontWeight:800,color:"#fff",lineHeight:1}}>{_rec}</div></>) : null; })()}
@@ -10964,8 +11279,8 @@ function App() {
 
  {/* added flash */}
  {added && (
- <div style={{position:"absolute",inset:0,background:`${acc}1a`,backdropFilter:"blur(1px)",display:"flex",alignItems:"center",justifyContent:"center",borderRadius:16}}>
- <div style={{display:"flex",alignItems:"center",gap:6,background:acc,color:"#fff",borderRadius:20,padding:"6px 14px",fontSize:12,fontWeight:800,boxShadow:`0 4px 16px ${acc}66`}}>
+ <div style={{position:"absolute",inset:0,background:`${acc}1a`,backdropFilter:"blur(1px)",display:"flex",alignItems:"center",justifyContent:"center",borderRadius:RAD.lg}}>
+ <div style={{display:"flex",alignItems:"center",gap:6,background:acc,color:"#fff",borderRadius:RAD.pill,padding:"6px 14px",fontSize:12,fontWeight:800,boxShadow:`0 4px 16px ${acc}66`}}>
  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
  Added
  </div>
@@ -11042,7 +11357,7 @@ function App() {
    const chipBn=sideChip==="HOME"||sideChip==="OVER"||sideChip==="YES";
    return (
    <div key={bet.id} onClick={()=>addCard(bet)} style={{position:"relative",display:"flex",alignItems:"center",gap:11,padding:"11px 13px",borderTop:isFirst?"none":"1px solid rgba(255,255,255,0.07)",cursor:"pointer",background:(selected||added)?(acc+"14"):"transparent",transition:"background .13s"}}>
-   <button onClick={(e)=>{ e.stopPropagation(); askFromBet(bet, gridType==="longshot"?"longshot":gridType); }} aria-label="Ask AI" style={{flexShrink:0,width:27,height:27,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",background:acc+"1a",border:"1px solid "+acc+"33",color:acc,cursor:"pointer"}}><svg width="12" height="12" viewBox="0 0 24 24" fill={acc}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg></button>
+   <button onClick={(e)=>{ e.stopPropagation(); askFromBet(bet, gridType==="longshot"?"longshot":gridType); }} aria-label="Ask AI" style={{flexShrink:0,width:27,height:27,borderRadius:RAD.sm,display:"flex",alignItems:"center",justifyContent:"center",background:acc+"1a",border:"1px solid "+acc+"33",color:acc,cursor:"pointer"}}><svg width="12" height="12" viewBox="0 0 24 24" fill={acc}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg></button>
    <div style={{flex:1,minWidth:0}}>
    <div style={{display:"flex",alignItems:"center",gap:7}}>
    <span style={{fontSize:13.5,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",letterSpacing:"-0.2px"}}>{primary}</span>
@@ -11057,17 +11372,17 @@ function App() {
    {isSoloMode && selected && (
    <div onClick={(e)=>e.stopPropagation()} style={{display:"flex",gap:5,marginTop:8}}>
    {[1,2,3,4,5].map(m=>{ const on=_myMult===m; return (
-   <div key={m} onClick={(e)=>{ e.stopPropagation(); setSoloFreePicks(prev=>prev.map(pp=>String(pp.id)===String(bet.id)?{...pp,mult:m}:pp)); }} style={{flex:1,textAlign:"center",padding:"5px 0",borderRadius:7,fontSize:11,fontWeight:800,cursor:"pointer",background:on?(acc+"28"):"rgba(255,255,255,0.04)",border:"1px solid "+(on?acc:"rgba(255,255,255,0.08)"),color:on?acc:"rgba(255,255,255,0.4)"}}>{m}×</div>
+   <div key={m} onClick={(e)=>{ e.stopPropagation(); setSoloFreePicks(prev=>prev.map(pp=>String(pp.id)===String(bet.id)?{...pp,mult:m}:pp)); }} style={{flex:1,textAlign:"center",padding:"5px 0",borderRadius:RAD.sm,fontSize:11,fontWeight:800,cursor:"pointer",background:on?(acc+"28"):"rgba(255,255,255,0.04)",border:"1px solid "+(on?acc:"rgba(255,255,255,0.08)"),color:on?acc:"rgba(255,255,255,0.4)"}}>{m}×</div>
    );})}
    </div>
    )}
    </div>
-   <div style={{flexShrink:0,width:74,borderRadius:10,border:"1px solid "+(selected?acc:"rgba(255,255,255,0.12)"),background:selected?(acc+"1f"):"rgba(255,255,255,0.04)",textAlign:"center",padding:"7px 3px"}}>
+   <div style={{flexShrink:0,width:74,borderRadius:RAD.md,border:"1px solid "+(selected?acc:"rgba(255,255,255,0.12)"),background:selected?(acc+"1f"):"rgba(255,255,255,0.04)",textAlign:"center",padding:"7px 3px"}}>
    <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:17,color:pos?IOS.green:"#fff",lineHeight:1.05}}>{bet.odds}</div>
    <div style={{fontSize:10,fontWeight:800,color:IOS.green,lineHeight:1.1,marginTop:1}}>{gridType==="longshot"?(ret.toFixed(1)+"×"):("+"+pts+" pts")}</div>
    </div>
-   {canAlt(bet.marketKey) && <div onClick={(e)=>{e.stopPropagation(); openAltLines(bet);}} style={{flexShrink:0,marginLeft:6,display:"flex",alignItems:"center",justifyContent:"center",border:"1px solid #64D2FF",color:"#64D2FF",background:"rgba(100,210,255,0.1)",borderRadius:9,padding:"9px 10px",fontSize:10.5,fontWeight:800,cursor:"pointer"}}>Alt</div>}
-   {added && <div style={{position:"absolute",top:0,right:0,bottom:0,left:0,background:acc+"1a",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{display:"flex",alignItems:"center",gap:5,background:acc,color:"#fff",borderRadius:20,padding:"5px 12px",fontSize:11,fontWeight:800}}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Added</div></div>}
+   {canAlt(bet.marketKey) && <div onClick={(e)=>{e.stopPropagation(); openAltLines(bet);}} style={{flexShrink:0,marginLeft:6,display:"flex",alignItems:"center",justifyContent:"center",border:"1px solid #64D2FF",color:"#64D2FF",background:"rgba(100,210,255,0.1)",borderRadius:RAD.sm,padding:"9px 10px",fontSize:10.5,fontWeight:800,cursor:"pointer"}}>Alt</div>}
+   {added && <div style={{position:"absolute",top:0,right:0,bottom:0,left:0,background:acc+"1a",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{display:"flex",alignItems:"center",gap:5,background:acc,color:"#fff",borderRadius:RAD.pill,padding:"5px 12px",fontSize:11,fontWeight:800}}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Added</div></div>}
    </div>
    );
    };
@@ -11088,13 +11403,13 @@ function App() {
    const leanPct = Math.max(oPct||0, uPct||0); const leanRead = readFor(leanPct);
    const sel = (b)=> b && (isSoloMode ? soloFreePicks.some(p=>String(p.id)===String(b.id)) : (activePicks.some(p=>p.bet&&p.bet.id===b.id)||isLeg(b)));
    const sideBtn = (b, label, fav) => {
-   if(!b) return (<div style={{width:66,borderRadius:10,border:"1px solid rgba(255,255,255,0.06)",background:"rgba(255,255,255,0.02)",textAlign:"center",padding:"6px 3px 5px",opacity:0.45}}><div style={{fontSize:8,fontWeight:800,letterSpacing:"0.06em",color:"rgba(255,255,255,0.3)"}}>{label}</div><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:16,color:"rgba(255,255,255,0.3)",lineHeight:1.1,marginTop:1}}>—</div><div style={{fontSize:9,fontWeight:700,color:"rgba(255,255,255,0.25)",marginTop:1}}>n/a</div></div>);
+   if(!b) return (<div style={{width:66,borderRadius:RAD.md,border:"1px solid rgba(255,255,255,0.06)",background:"rgba(255,255,255,0.02)",textAlign:"center",padding:"6px 3px 5px",opacity:0.45}}><div style={{fontSize:8,fontWeight:800,letterSpacing:"0.06em",color:"rgba(255,255,255,0.3)"}}>{label}</div><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:16,color:"rgba(255,255,255,0.3)",lineHeight:1.1,marginTop:1}}>—</div><div style={{fontSize:9,fontWeight:700,color:"rgba(255,255,255,0.25)",marginTop:1}}>n/a</div></div>);
    const on=sel(b); const pos=String(b.odds||"").charAt(0)==="+"; const pts=calcPickPoints(targetMult||1,b.impliedOdds,"W");
-   return (<div onClick={(e)=>{e.stopPropagation(); addCard(b);}} style={{width:66,borderRadius:10,cursor:"pointer",border:"1px solid "+(on?acc:fav?acc:"rgba(255,255,255,0.12)"),background:on?(acc+"2e"):fav?(acc+"14"):"rgba(255,255,255,0.04)",textAlign:"center",padding:"6px 3px 5px"}}><div style={{fontSize:8,fontWeight:800,letterSpacing:"0.06em",color:(fav||on)?acc:"rgba(255,255,255,0.4)"}}>{fav?"▲ ":""}{label}</div><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:16,color:pos?IOS.green:"#fff",lineHeight:1.1,marginTop:1}}>{b.odds}</div><div style={{fontSize:9,fontWeight:800,color:IOS.green,marginTop:1}}>+{pts} pts</div></div>);
+   return (<div onClick={(e)=>{e.stopPropagation(); addCard(b);}} style={{width:66,borderRadius:RAD.md,cursor:"pointer",border:"1px solid "+(on?acc:fav?acc:"rgba(255,255,255,0.12)"),background:on?(acc+"2e"):fav?(acc+"14"):"rgba(255,255,255,0.04)",textAlign:"center",padding:"6px 3px 5px"}}><div style={{fontSize:8,fontWeight:800,letterSpacing:"0.06em",color:(fav||on)?acc:"rgba(255,255,255,0.4)"}}>{fav?"▲ ":""}{label}</div><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:16,color:pos?IOS.green:"#fff",lineHeight:1.1,marginTop:1}}>{b.odds}</div><div style={{fontSize:9,fontWeight:800,color:IOS.green,marginTop:1}}>+{pts} pts</div></div>);
    };
    return (
    <div key={pr.baseKey} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 13px",borderTop:isFirst?"none":"1px solid rgba(255,255,255,0.07)"}}>
-   <button onClick={(e)=>{e.stopPropagation(); askFromBet(over||under,"prop");}} aria-label="Ask AI" style={{flexShrink:0,width:27,height:27,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",background:acc+"1a",border:"1px solid "+acc+"33",color:acc,cursor:"pointer"}}><svg width="12" height="12" viewBox="0 0 24 24" fill={acc}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg></button>
+   <button onClick={(e)=>{e.stopPropagation(); askFromBet(over||under,"prop");}} aria-label="Ask AI" style={{flexShrink:0,width:27,height:27,borderRadius:RAD.sm,display:"flex",alignItems:"center",justifyContent:"center",background:acc+"1a",border:"1px solid "+acc+"33",color:acc,cursor:"pointer"}}><svg width="12" height="12" viewBox="0 0 24 24" fill={acc}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg></button>
    <div style={{flex:1,minWidth:0}}>
    <div style={{fontSize:14,fontWeight:800,letterSpacing:"-0.2px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{player}</div>
    <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.42)",marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{rest}</div>
@@ -11103,7 +11418,7 @@ function App() {
    <span style={{fontSize:10.5,fontWeight:700,color:leanRead.c,whiteSpace:"nowrap"}}>{leanPct}% {leanRead.t}</span>
    </div>
    </div>
-   <div style={{display:"flex",alignItems:"stretch",gap:6,flexShrink:0}}>{sideBtn(over,"OVER",favOver)}{sideBtn(under,"UNDER",!favOver)}{canAlt((over||under||{}).market) && <div onClick={(e)=>{e.stopPropagation(); const _b=over||under; openAltLines(_b,{player:player, label:String(rest||"").replace(/^[0-9.]+\s*/,""), side:(over?"Over":"Under")}); }} style={{display:"flex",alignItems:"center",justifyContent:"center",border:"1px solid #64D2FF",color:"#64D2FF",background:"rgba(100,210,255,0.1)",borderRadius:10,padding:"0 8px",fontSize:10,fontWeight:800,cursor:"pointer"}}>Alt</div>}</div>
+   <div style={{display:"flex",alignItems:"stretch",gap:6,flexShrink:0}}>{sideBtn(over,"OVER",favOver)}{sideBtn(under,"UNDER",!favOver)}{canAlt((over||under||{}).market) && <div onClick={(e)=>{e.stopPropagation(); const _b=over||under; openAltLines(_b,{player:player, label:String(rest||"").replace(/^[0-9.]+\s*/,""), side:(over?"Over":"Under")}); }} style={{display:"flex",alignItems:"center",justifyContent:"center",border:"1px solid #64D2FF",color:"#64D2FF",background:"rgba(100,210,255,0.1)",borderRadius:RAD.md,padding:"0 8px",fontSize:10,fontWeight:800,cursor:"pointer"}}>Alt</div>}</div>
    </div>
    );
    };
@@ -11124,7 +11439,7 @@ function App() {
    {keys.map((gk)=>{
    const bets=groups[gk]; const t=bets[0].gameTime;
    return (
-   <div key={gk} style={{border:"1px solid rgba(255,255,255,0.09)",borderRadius:16,background:"linear-gradient(165deg,#15151A,#0B0B0E 80%)",overflow:"hidden",margin:"10px 0",boxShadow:"0 6px 18px rgba(0,0,0,0.35)"}}>
+   <div key={gk} style={{border:"1px solid rgba(255,255,255,0.09)",borderRadius:RAD.lg,background:"linear-gradient(165deg,#15151A,#0B0B0E 80%)",overflow:"hidden",margin:"10px 0",boxShadow:"0 6px 18px rgba(0,0,0,0.35)"}}>
    <div onClick={()=>setGridOpenGames(o=>({...o,[gk]:!o[gk]}))} style={{cursor:"pointer"}}>
    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 13px 5px"}}>
    <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.07em",textTransform:"uppercase",color:acc}}>{tag}</div>
@@ -11185,12 +11500,12 @@ function App() {
  const countdown=(t)=>{ if(!t) return ""; const ms=new Date(t).getTime()-_now; if(ms<=0) return "Live / started"; const m=Math.floor(ms/60000); const h=Math.floor(m/60); const mm=m%60; return h>0?("starts in "+h+"h "+mm+"m"):("starts in "+mm+"m"); };
  const lineAllowed = (cat)=> !gridCfg ? true : allowedTypes.includes(cat);
  const Chip = ({b, cat, line, value, mv}) => {
- if(!b) return <div style={{borderRadius:10,border:"1px dashed rgba(255,255,255,0.08)",minHeight:52}}/>;
+ if(!b) return <div style={{borderRadius:RAD.md,border:"1px dashed rgba(255,255,255,0.08)",minHeight:52}}/>;
  const enabled = lineAllowed(cat);
  const sel = isSoloMode ? soloFreePicks.some(p=>String(p.id)===String(b.id)) : ((activePicks.some(p=>p.bet&&p.bet.id===b.id)) || isLeg(b));
  const pts = ptsOf(b);
  return (
- <div onClick={()=>{ if(!enabled) return; if(sel){ if(isSoloMode){ setSoloFreePicks(prev=>prev.filter(p=>String(p.id)!==String(b.id))); } else { setActivePicks(prev=>prev.map(pp=> (pp.bet&&String(pp.bet.id)===String(b.id)) ? {...pp, bet:null} : pp)); } } else { addCard(b,cat); } }} style={{position:"relative",borderRadius:10,cursor:enabled?"pointer":"default",textAlign:"center",padding:"8px 3px",opacity:enabled?1:0.4,
+ <div onClick={()=>{ if(!enabled) return; if(sel){ if(isSoloMode){ setSoloFreePicks(prev=>prev.filter(p=>String(p.id)!==String(b.id))); } else { setActivePicks(prev=>prev.map(pp=> (pp.bet&&String(pp.bet.id)===String(b.id)) ? {...pp, bet:null} : pp)); } } else { addCard(b,cat); } }} style={{position:"relative",borderRadius:RAD.md,cursor:enabled?"pointer":"default",textAlign:"center",padding:"8px 3px",opacity:enabled?1:0.4,
  border:"1px solid "+(sel?IOS.blue+"a6":value?"rgba(48,209,88,0.55)":"rgba(255,255,255,0.1)"),
  background:sel?"linear-gradient(160deg,rgba(10,132,255,0.24),rgba(10,132,255,0.05))":value?"linear-gradient(160deg,rgba(48,209,88,0.2),rgba(48,209,88,0.04))":"rgba(255,255,255,0.04)",transition:"all .13s"}}>
  {(cat==="spread"||cat==="ou") && canAlt(b.marketKey) && <div onClick={(e)=>{e.stopPropagation(); openAltLines(b);}} style={{position:"absolute",top:2,right:2,fontSize:7.5,fontWeight:900,color:"#64D2FF",background:"rgba(100,210,255,0.14)",border:"1px solid rgba(100,210,255,0.45)",borderRadius:4,padding:"1px 4px",cursor:"pointer",zIndex:3,lineHeight:1.25}}>ALT</div>}
@@ -11232,7 +11547,7 @@ function App() {
  <span style={{fontSize:10,color:"rgba(255,255,255,0.32)",fontWeight:700,marginLeft:"auto"}}>{blockCount} game{blockCount>1?"s":""}</span>
  </div>
  )}
- <div style={{border:"1px solid "+(isPlok?"rgba(255,214,10,0.4)":"rgba(255,255,255,0.09)"),borderRadius:16,background:"linear-gradient(165deg,#15151A,#0B0B0E 80%)",overflow:"hidden",margin:"10px 0",boxShadow:isPlok?"0 0 0 1px rgba(255,214,10,0.15),0 10px 28px rgba(0,0,0,0.4)":"0 6px 18px rgba(0,0,0,0.35)"}}>
+ <div style={{border:"1px solid "+(isPlok?"rgba(255,214,10,0.4)":"rgba(255,255,255,0.09)"),borderRadius:RAD.lg,background:"linear-gradient(165deg,#15151A,#0B0B0E 80%)",overflow:"hidden",margin:"10px 0",boxShadow:isPlok?"0 0 0 1px rgba(255,214,10,0.15),0 10px 28px rgba(0,0,0,0.4)":"0 6px 18px rgba(0,0,0,0.35)"}}>
  {isPlok && (
  <div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 13px",background:"rgba(255,214,10,0.1)",borderBottom:"1px solid rgba(255,214,10,0.2)",fontSize:10,fontWeight:800,color:IOS.yellow}}>
  <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg>PLOK'S BEST · sharpest price on the board
@@ -11249,7 +11564,7 @@ function App() {
  <div style={{padding:"8px 13px",display:"flex",flexDirection:"column",justifyContent:"center",gap:9}}>
  {[{nm:g.away,badge:"away",rec:awayRec,pit:g.awayPitcher},{nm:g.home,badge:"home",rec:homeRec,pit:g.homePitcher}].map((tm,ti)=>(
  <div key={ti} style={{display:"flex",alignItems:"center",gap:8}}>
- <div style={{width:28,height:28,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,background:tm.badge==="home"?"rgba(10,132,255,0.16)":"rgba(255,255,255,0.08)",color:tm.badge==="home"?IOS.teal:"rgba(255,255,255,0.6)"}}>{getAcronym(tm.nm,false)}</div>
+ <div style={{width:28,height:28,borderRadius:RAD.sm,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,background:tm.badge==="home"?"rgba(10,132,255,0.16)":"rgba(255,255,255,0.08)",color:tm.badge==="home"?IOS.teal:"rgba(255,255,255,0.6)"}}>{getAcronym(tm.nm,false)}</div>
  <div style={{minWidth:0}}>
  <div style={{fontSize:13.5,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{nick(tm.nm)} <span style={{fontSize:8,fontWeight:800,letterSpacing:"0.05em",padding:"1px 5px",borderRadius:4,background:tm.badge==="home"?"rgba(10,132,255,0.18)":"rgba(255,255,255,0.08)",color:tm.badge==="home"?IOS.teal:"rgba(255,255,255,0.5)"}}>{tm.badge==="home"?"HOME":"AWAY"}</span></div>
  {tm.rec ? <div style={{fontSize:9.5,color:"rgba(255,255,255,0.34)",fontWeight:600,marginTop:1}}>{tm.rec}</div> : null}
@@ -11292,7 +11607,7 @@ function App() {
  );
  };
 
- const pillBase = {padding:"7px 13px",borderRadius:20,fontSize:12,fontWeight:700,whiteSpace:"nowrap",cursor:"pointer",border:"1px solid",transition:"all .15s",flexShrink:0};
+ const pillBase = {padding:"7px 13px",borderRadius:RAD.pill,fontSize:12,fontWeight:700,whiteSpace:"nowrap",cursor:"pointer",border:"1px solid",transition:"all .15s",flexShrink:0};
 
  return (
  <div className="body" style={{background:"#08080A",zIndex:"auto"}}>
@@ -11306,7 +11621,7 @@ function App() {
  {/* Header */}
  <div style={{position:"sticky",top:0,zIndex:10,background:"#08080A",paddingBottom:6,boxShadow:"0 8px 16px -8px rgba(0,0,0,0.7)"}}>
  <div style={{display:"flex",alignItems:"center",gap:11,padding:"10px 16px 8px"}}>
- <div onClick={()=>setScreen("picks")} style={{width:34,height:34,borderRadius:10,background:"rgba(255,255,255,0.06)",border:"0.5px solid rgba(255,255,255,0.1)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:acc,fontSize:18,flexShrink:0}}>‹</div>
+ <div onClick={()=>setScreen("picks")} style={{width:34,height:34,borderRadius:RAD.md,background:"rgba(255,255,255,0.06)",border:EDGE.hair2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:acc,fontSize:18,flexShrink:0}}>‹</div>
  <div style={{flex:1,minWidth:0}}>
  <div style={{fontSize:21,fontWeight:800,letterSpacing:"-0.6px",color:"#fff",lineHeight:1}}>Bet Browser</div>
  <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:3,display:"flex",alignItems:"center",gap:5}}>
@@ -11320,7 +11635,7 @@ function App() {
  const tCol = ACC[tgt.category] || acc;
  return (
  <div style={{position:"relative",flexShrink:0}}>
- <div onClick={()=>setShowMultPick(v=>!v)} style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1,background:"rgba(255,255,255,0.05)",border:"1px solid "+(showMultPick?tCol+"80":"rgba(255,255,255,0.1)"),borderRadius:10,padding:"5px 10px",cursor:"pointer",minWidth:60}}>
+ <div onClick={()=>setShowMultPick(v=>!v)} style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1,background:"rgba(255,255,255,0.05)",border:"1px solid "+(showMultPick?tCol+"80":"rgba(255,255,255,0.1)"),borderRadius:RAD.md,padding:"5px 10px",cursor:"pointer",minWidth:60}}>
  <div style={{fontSize:7.5,fontWeight:800,letterSpacing:"0.1em",color:"rgba(255,255,255,0.4)"}}>MULTIPLIER</div>
  <div style={{display:"flex",alignItems:"center",gap:5}}>
  <span style={{fontSize:15,fontWeight:900,color:tCol,letterSpacing:"-0.3px"}}>{tgt.mult?(tgt.mult+"×"):("P"+(target+1))}</span>
@@ -11329,7 +11644,7 @@ function App() {
  </div>
  {showMultPick && (<>
  <div onClick={()=>setShowMultPick(false)} style={{position:"fixed",inset:0,zIndex:40}}/>
- <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,zIndex:41,width:212,background:"#15151c",border:"1px solid rgba(255,255,255,0.12)",borderRadius:14,padding:6,boxShadow:"0 16px 40px rgba(0,0,0,0.6)"}}>
+ <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,zIndex:41,width:212,background:"#15151c",border:"1px solid rgba(255,255,255,0.12)",borderRadius:RAD.lg,padding:6,boxShadow:"0 16px 40px rgba(0,0,0,0.6)"}}>
  <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.08em",color:"rgba(255,255,255,0.35)",padding:"5px 8px 6px"}}>PICK A SLOT TO FILL</div>
  {slots.map(sl=>{
  const sc = ACC[sl.category] || acc;
@@ -11337,7 +11652,7 @@ function App() {
  const filled = sl.isParlay ? (sl.parlayLegs&&sl.parlayLegs.length>=2) : !!sl.bet;
  const nm = sl.isParlay ? ((sl.parlayLegs||[]).length+"-leg parlay") : (sl.bet ? sl.bet.pick : "Empty");
  return (
- <div key={sl.i} onClick={()=>{ setGridTargetSlot(sl.i); if(sl.category) setGridType(sl.category); setShowMultPick(false); }} style={{display:"flex",alignItems:"center",gap:9,padding:"8px",borderRadius:10,cursor:"pointer",background:isT?(sc+"1f"):"transparent",border:"1px solid "+(isT?sc+"66":"transparent"),marginBottom:2}}>
+ <div key={sl.i} onClick={()=>{ setGridTargetSlot(sl.i); if(sl.category) setGridType(sl.category); setShowMultPick(false); }} style={{display:"flex",alignItems:"center",gap:9,padding:"8px",borderRadius:RAD.md,cursor:"pointer",background:isT?(sc+"1f"):"transparent",border:"1px solid "+(isT?sc+"66":"transparent"),marginBottom:2}}>
  <span style={{minWidth:30,textAlign:"center",fontSize:13,fontWeight:900,color:sc}}>{sl.mult?(sl.mult+"×"):("P"+(sl.i+1))}</span>
  <div style={{flex:1,minWidth:0}}>
  <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.03em",color:sc,textTransform:"uppercase"}}>{sl.category?TYPE_LABELS[sl.category]:"Any type"}</div>
@@ -11358,7 +11673,7 @@ function App() {
  const curCol = MC[cur] || acc;
  return (
  <div style={{position:"relative",flexShrink:0}}>
- <div onClick={()=>setShowMultPick(v=>!v)} style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1,background:"rgba(255,255,255,0.05)",border:"1px solid "+(showMultPick?curCol+"80":"rgba(255,255,255,0.1)"),borderRadius:10,padding:"5px 10px",cursor:"pointer",minWidth:60}}>
+ <div onClick={()=>setShowMultPick(v=>!v)} style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1,background:"rgba(255,255,255,0.05)",border:"1px solid "+(showMultPick?curCol+"80":"rgba(255,255,255,0.1)"),borderRadius:RAD.md,padding:"5px 10px",cursor:"pointer",minWidth:60}}>
  <div style={{fontSize:7.5,fontWeight:800,letterSpacing:"0.1em",color:"rgba(255,255,255,0.4)"}}>MULTIPLIER</div>
  <div style={{display:"flex",alignItems:"center",gap:5}}>
  <span style={{fontSize:15,fontWeight:900,color:curCol,letterSpacing:"-0.3px"}}>{cur+"×"}</span>
@@ -11367,7 +11682,7 @@ function App() {
  </div>
  {showMultPick && (<>
  <div onClick={()=>setShowMultPick(false)} style={{position:"fixed",inset:0,zIndex:40}}/>
- <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,zIndex:41,width:212,background:"#15151c",border:"1px solid rgba(255,255,255,0.12)",borderRadius:14,padding:6,boxShadow:"0 16px 40px rgba(0,0,0,0.6)"}}>
+ <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,zIndex:41,width:212,background:"#15151c",border:"1px solid rgba(255,255,255,0.12)",borderRadius:RAD.lg,padding:6,boxShadow:"0 16px 40px rgba(0,0,0,0.6)"}}>
  <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.08em",color:"rgba(255,255,255,0.35)",padding:"5px 8px 6px"}}>CHOOSE A MULTIPLIER</div>
  {[1,2,3,4,5].map(M=>{
  const sc = MC[M];
@@ -11377,7 +11692,7 @@ function App() {
  const lsd = legs.length>=2 ? calcLS(legs) : null;
  const am = lsd ? (lsd.decimal>=2?("+"+Math.round((lsd.decimal-1)*100)):(""+Math.round(-100/(lsd.decimal-1)))) : "";
  return (
- <div key={M} style={{background:IOS.pink+"14",border:"1px solid "+IOS.pink+"55",borderRadius:11,padding:"8px",marginBottom:3}}>
+ <div key={M} style={{background:IOS.pink+"14",border:"1px solid "+IOS.pink+"55",borderRadius:RAD.md,padding:"8px",marginBottom:3}}>
  <div onClick={()=>enterBuild()} style={{display:"flex",alignItems:"center",gap:9,cursor:"pointer"}}>
  <span style={{minWidth:30,textAlign:"center",fontSize:13,fontWeight:900,color:IOS.pink}}>{M+"×"}</span>
  <div style={{flex:1,minWidth:0}}>
@@ -11388,10 +11703,10 @@ function App() {
  </div>
  {legs.length>0 && (
  <div style={{display:"flex",flexWrap:"wrap",gap:5,paddingTop:7,marginTop:6,borderTop:"1px dashed "+IOS.pink+"33"}}>
- {legs.map((l,i)=>(<span key={i} style={{fontSize:10,fontWeight:700,padding:"4px 8px",borderRadius:7,background:IOS.pink+"22",color:"#ff8aa6"}}>{l.pick}</span>))}
+ {legs.map((l,i)=>(<span key={i} style={{fontSize:10,fontWeight:700,padding:"4px 8px",borderRadius:RAD.sm,background:IOS.pink+"22",color:"#ff8aa6"}}>{l.pick}</span>))}
  </div>
  )}
- <div onClick={()=>enterBuild()} style={{marginTop:7,display:"flex",alignItems:"center",justifyContent:"center",gap:6,fontSize:11,fontWeight:800,color:IOS.pink,background:IOS.pink+"1a",border:"1px dashed "+IOS.pink+"80",borderRadius:9,padding:"7px",cursor:"pointer"}}>+ {legs.length?"Add legs":"Build parlay"}</div>
+ <div onClick={()=>enterBuild()} style={{marginTop:7,display:"flex",alignItems:"center",justifyContent:"center",gap:6,fontSize:11,fontWeight:800,color:IOS.pink,background:IOS.pink+"1a",border:"1px dashed "+IOS.pink+"80",borderRadius:RAD.sm,padding:"7px",cursor:"pointer"}}>+ {legs.length?"Add legs":"Build parlay"}</div>
  </div>
  );
  }
@@ -11400,14 +11715,14 @@ function App() {
  const nm = slot&&slot.bet ? slot.bet.pick : "Open";
  const isT = (gridFlexMult||1)===M && !gridBuildMode;
  return (
- <div key={M} onClick={()=>{ setGridFlexMult(M); setGridBuildMode(false); const mi=activePicks.findIndex(p=>!p.isParlay&&p.mult===M); const ei=activePicks.findIndex(p=>!p.isParlay&&p.bet===null); setGridTargetSlot(mi!==-1?mi:(ei!==-1?ei:0)); setShowMultPick(false); }} style={{display:"flex",alignItems:"center",gap:9,padding:"8px",borderRadius:10,cursor:"pointer",background:isT?(sc+"1f"):"transparent",border:"1px solid "+(isT?sc+"66":"transparent"),marginBottom:3}}>
+ <div key={M} onClick={()=>{ setGridFlexMult(M); setGridBuildMode(false); const mi=activePicks.findIndex(p=>!p.isParlay&&p.mult===M); const ei=activePicks.findIndex(p=>!p.isParlay&&p.bet===null); setGridTargetSlot(mi!==-1?mi:(ei!==-1?ei:0)); setShowMultPick(false); }} style={{display:"flex",alignItems:"center",gap:9,padding:"8px",borderRadius:RAD.md,cursor:"pointer",background:isT?(sc+"1f"):"transparent",border:"1px solid "+(isT?sc+"66":"transparent"),marginBottom:3}}>
  <span style={{minWidth:30,textAlign:"center",fontSize:13,fontWeight:900,color:sc}}>{M+"×"}</span>
  <div style={{flex:1,minWidth:0}}>
  <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.03em",color:sc,textTransform:"uppercase"}}>{slot&&slot.category?TYPE_LABELS[slot.category]:"Any type"}</div>
  <div style={{fontSize:11,fontWeight:600,color:filled?"rgba(255,255,255,0.7)":"rgba(255,255,255,0.3)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{nm}</div>
  </div>
  {filled && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
- <div onClick={(e)=>{ e.stopPropagation(); flagParlay(M); }} title="Make this the parlay" style={{flexShrink:0,width:24,height:24,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.12)"}}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 0 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg></div>
+ <div onClick={(e)=>{ e.stopPropagation(); flagParlay(M); }} title="Make this the parlay" style={{flexShrink:0,width:24,height:24,borderRadius:RAD.sm,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(255,255,255,0.05)",border:EDGE.hair2}}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 0 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg></div>
  </div>
  );
  })}
@@ -11448,27 +11763,27 @@ function App() {
  </div>
  )}
 
- {replaceCtx && (<div style={{margin:"0 16px 9px",padding:"9px 12px",borderRadius:10,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.35)",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}><div style={{fontSize:11.5,fontWeight:700,color:"#fff",minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{replaceCooked ? ("No open "+String(gSport).toUpperCase()+" games left this week — switch sport or cancel") : ("Replacing voided "+String(replaceCtx.type).toUpperCase()+" · "+replaceCtx.mult+"× — same week only")}</div><div onClick={()=>{ setReplaceCtx(null); setScreen("home"); }} style={{fontSize:11,fontWeight:800,color:IOS.blue,cursor:"pointer",flexShrink:0}}>Cancel</div></div>)}
+ {replaceCtx && (<div style={{margin:"0 16px 9px",padding:"9px 12px",borderRadius:RAD.md,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.35)",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}><div style={{fontSize:11.5,fontWeight:700,color:"#fff",minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{replaceCooked ? ("No open "+String(gSport).toUpperCase()+" games left this week — switch sport or cancel") : ("Replacing voided "+String(replaceCtx.type).toUpperCase()+" · "+replaceCtx.mult+"× — same week only")}</div><div onClick={()=>{ setReplaceCtx(null); setScreen("home"); }} style={{fontSize:11,fontWeight:800,color:IOS.blue,cursor:"pointer",flexShrink:0}}>Cancel</div></div>)}
  {soloParlayMode && (()=>{
        const _sl = (soloParlay && soloParlay.legs) || [];
        const _lsd = _sl.length>=2 ? calcLS(_sl) : null;
        const _am = _lsd ? (_lsd.decimal>=2?("+"+Math.round((_lsd.decimal-1)*100)):(""+Math.round(-100/(_lsd.decimal-1)))) : "";
        const _ready = _sl.length>=2;
        return (
-       <div style={{margin:"2px 16px 10px",background:"linear-gradient(135deg,rgba(255,55,95,0.18),rgba(255,55,95,0.06))",border:"1px solid rgba(255,55,95,0.45)",borderRadius:14,padding:"10px 12px"}}>
+       <div style={{margin:"2px 16px 10px",background:"linear-gradient(135deg,rgba(255,55,95,0.18),rgba(255,55,95,0.06))",border:"1px solid rgba(255,55,95,0.45)",borderRadius:RAD.lg,padding:"10px 12px"}}>
          <div style={{display:"flex",alignItems:"center",gap:10}}>
-           <div style={{width:32,height:32,borderRadius:10,background:"rgba(255,55,95,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+           <div style={{width:32,height:32,borderRadius:RAD.md,background:"rgba(255,55,95,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={IOS.pink} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 0 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
            </div>
            <div style={{flex:1,minWidth:0}}>
              <div style={{fontSize:8.5,fontWeight:900,letterSpacing:"0.08em",color:IOS.pink}}>{"PARLAY · "+_sl.length+" "+(_sl.length===1?"LEG":"LEGS")+(_ready?(" · "+_am):"")}</div>
              <div style={{fontSize:10.5,fontWeight:600,color:"rgba(255,255,255,0.5)",marginTop:1}}>{_ready?"Tap more to add, or a leg below to remove":"Tap bets below to add legs — need 2+"}</div>
            </div>
-           <div onClick={()=>{ setSoloParlayMode(false); setScreen("picks"); }} style={{fontFamily:"Barlow",fontSize:12,fontWeight:800,color:_ready?"#08080B":"rgba(255,255,255,0.4)",background:_ready?IOS.pink:"rgba(255,255,255,0.08)",borderRadius:9,padding:"8px 14px",cursor:"pointer",flexShrink:0}}>Done</div>
+           <div onClick={()=>{ setSoloParlayMode(false); setScreen("picks"); }} style={{fontFamily:"Barlow",fontSize:12,fontWeight:800,color:_ready?"#08080B":"rgba(255,255,255,0.4)",background:_ready?IOS.pink:"rgba(255,255,255,0.08)",borderRadius:RAD.sm,padding:"8px 14px",cursor:"pointer",flexShrink:0}}>Done</div>
          </div>
          {_sl.length>0 && (
            <div className="gbx-scroll" style={{display:"flex",gap:6,marginTop:9,overflowX:"auto"}}>
-             {_sl.map((l,i)=>(<div key={i} onClick={()=>setSoloParlay(pv=>({...pv, legs:(pv.legs||[]).filter(x=>String(x.id)!==String(l.id))}))} style={{flexShrink:0,fontSize:10.5,fontWeight:700,padding:"5px 9px",borderRadius:8,background:"rgba(255,55,95,0.14)",color:"#ff8aa6",display:"flex",alignItems:"center",gap:6,cursor:"pointer",whiteSpace:"nowrap"}}>{l.pick} <span style={{opacity:0.7,fontWeight:900}}>{"×"}</span></div>))}
+             {_sl.map((l,i)=>(<div key={i} onClick={()=>setSoloParlay(pv=>({...pv, legs:(pv.legs||[]).filter(x=>String(x.id)!==String(l.id))}))} style={{flexShrink:0,fontSize:10.5,fontWeight:700,padding:"5px 9px",borderRadius:RAD.sm,background:"rgba(255,55,95,0.14)",color:"#ff8aa6",display:"flex",alignItems:"center",gap:6,cursor:"pointer",whiteSpace:"nowrap"}}>{l.pick} <span style={{opacity:0.7,fontWeight:900}}>{"×"}</span></div>))}
            </div>
          )}
        </div>
@@ -11490,7 +11805,7 @@ function App() {
  </div>
 
  <div style={{padding:"0 16px 9px"}}>
- <div style={{display:"flex",alignItems:"center",gap:8,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"9px 12px"}}>
+ <div style={{display:"flex",alignItems:"center",gap:8,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:RAD.md,padding:"9px 12px"}}>
  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
  <input value={gridSearch} onChange={e=>setGridSearch(e.target.value)} placeholder="Search teams, players, bets" style={{flex:1,background:"none",border:"none",outline:"none",color:"#fff",fontSize:13,fontFamily:"Barlow,sans-serif"}}/>
  {gridSearch&&<div onClick={()=>setGridSearch("")} style={{color:"rgba(255,255,255,0.4)",fontSize:16,cursor:"pointer",lineHeight:1}}>×</div>}
@@ -11502,14 +11817,14 @@ function App() {
  const _lockMkt=(_tslot&&_tslot.locked&&_tslot.category==="prop"&&_tslot.market)?_tslot.market:null;
  if(_lockMkt){ const _ml=(propSubs.find(x=>x.id===_lockMkt)||{l:_lockMkt}).l; return (
  <div style={{display:"flex",alignItems:"center",gap:8,padding:"0 16px 10px"}}>
- <div style={{padding:"5px 11px",borderRadius:16,fontSize:11,fontWeight:800,whiteSpace:"nowrap",border:"1px solid",background:`${acc}1f`,borderColor:`${acc}66`,color:acc}}>{_ml}</div>
+ <div style={{padding:"5px 11px",borderRadius:RAD.lg,fontSize:11,fontWeight:800,whiteSpace:"nowrap",border:"1px solid",background:`${acc}1f`,borderColor:`${acc}66`,color:acc}}>{_ml}</div>
  <span style={{fontSize:10.5,color:"rgba(255,255,255,0.4)",fontWeight:600}}>locked by this slot</span>
  </div>
  ); }
  return (
  <div className="gbx-scroll" style={{display:"flex",gap:6,padding:"0 16px 10px",overflowX:"auto"}}>
  {propSubs.map(s=>{ const on = s.id===gridPropSub; return (
- <div key={s.id} onClick={()=>setGridPropSub(s.id)} style={{padding:"5px 11px",borderRadius:16,fontSize:11,fontWeight:700,whiteSpace:"nowrap",cursor:"pointer",border:"1px solid",flexShrink:0, background:on?`${acc}1f`:"rgba(255,255,255,0.04)", borderColor:on?`${acc}66`:"rgba(255,255,255,0.08)", color:on?acc:"rgba(255,255,255,0.35)"}}>{s.l}</div>
+ <div key={s.id} onClick={()=>setGridPropSub(s.id)} style={{padding:"5px 11px",borderRadius:RAD.lg,fontSize:11,fontWeight:700,whiteSpace:"nowrap",cursor:"pointer",border:"1px solid",flexShrink:0, background:on?`${acc}1f`:"rgba(255,255,255,0.04)", borderColor:on?`${acc}66`:"rgba(255,255,255,0.08)", color:on?acc:"rgba(255,255,255,0.35)"}}>{s.l}</div>
  );})}
  </div>
  );
@@ -11522,7 +11837,7 @@ function App() {
  return (
  <div className="gbx-scroll" style={{display:"flex",gap:6,padding:"0 16px 10px",overflowX:"auto"}}>
  {_subs.map(s=>{ const on = s.id===_cur; return (
- <div key={s.id} onClick={()=>setGridPeriodSub(s.id)} style={{padding:"5px 11px",borderRadius:16,fontSize:11,fontWeight:700,whiteSpace:"nowrap",cursor:"pointer",border:"1px solid",flexShrink:0, background:on?`${acc}1f`:"rgba(255,255,255,0.04)", borderColor:on?`${acc}66`:"rgba(255,255,255,0.08)", color:on?acc:"rgba(255,255,255,0.35)"}}>{s.l}</div>
+ <div key={s.id} onClick={()=>setGridPeriodSub(s.id)} style={{padding:"5px 11px",borderRadius:RAD.lg,fontSize:11,fontWeight:700,whiteSpace:"nowrap",cursor:"pointer",border:"1px solid",flexShrink:0, background:on?`${acc}1f`:"rgba(255,255,255,0.04)", borderColor:on?`${acc}66`:"rgba(255,255,255,0.08)", color:on?acc:"rgba(255,255,255,0.35)"}}>{s.l}</div>
  );})}
  </div>
  );
@@ -11532,20 +11847,20 @@ function App() {
  const am = lsd ? (lsd.decimal>=2?("+"+Math.round((lsd.decimal-1)*100)):(""+Math.round(-100/(lsd.decimal-1)))) : "";
  const ready = parlayLegs.length>=2;
  return (
- <div style={{margin:"2px 16px 10px",background:"linear-gradient(135deg,rgba(255,55,95,0.18),rgba(255,55,95,0.06))",border:"1px solid rgba(255,55,95,0.45)",borderRadius:14,padding:"10px 12px"}}>
+ <div style={{margin:"2px 16px 10px",background:"linear-gradient(135deg,rgba(255,55,95,0.18),rgba(255,55,95,0.06))",border:"1px solid rgba(255,55,95,0.45)",borderRadius:RAD.lg,padding:"10px 12px"}}>
  <div style={{display:"flex",alignItems:"center",gap:10}}>
- <div style={{width:32,height:32,borderRadius:10,background:"rgba(255,55,95,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+ <div style={{width:32,height:32,borderRadius:RAD.md,background:"rgba(255,55,95,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={IOS.pink} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 0 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
  </div>
  <div style={{flex:1,minWidth:0}}>
  <div style={{fontSize:8.5,fontWeight:900,letterSpacing:"0.08em",color:IOS.pink}}>PARLAY · {parlayLegs.length} {parlayLegs.length===1?"LEG":"LEGS"}{ready?(" · "+am):""}</div>
  <div style={{fontSize:10.5,fontWeight:600,color:"rgba(255,255,255,0.5)",marginTop:1}}>{ready?"Tap more to add, or a leg below to remove":"Tap bets below to add legs — need 2+"}</div>
  </div>
- <div onClick={()=>setGridBuildMode(false)} style={{fontFamily:"Barlow",fontSize:12,fontWeight:800,color:ready?"#08080B":"rgba(255,255,255,0.4)",background:ready?IOS.pink:"rgba(255,255,255,0.08)",borderRadius:9,padding:"8px 14px",cursor:"pointer",flexShrink:0}}>Done</div>
+ <div onClick={()=>setGridBuildMode(false)} style={{fontFamily:"Barlow",fontSize:12,fontWeight:800,color:ready?"#08080B":"rgba(255,255,255,0.4)",background:ready?IOS.pink:"rgba(255,255,255,0.08)",borderRadius:RAD.sm,padding:"8px 14px",cursor:"pointer",flexShrink:0}}>Done</div>
  </div>
  {parlayLegs.length>0 && (
  <div className="gbx-scroll" style={{display:"flex",gap:6,marginTop:9,overflowX:"auto"}}>
- {parlayLegs.map((l,i)=>(<div key={i} onClick={()=>toggleLeg(l)} style={{flexShrink:0,fontSize:10.5,fontWeight:700,padding:"5px 9px",borderRadius:8,background:"rgba(255,55,95,0.14)",color:"#ff8aa6",display:"flex",alignItems:"center",gap:6,cursor:"pointer",whiteSpace:"nowrap"}}>{l.pick} <span style={{opacity:0.7,fontWeight:900}}>×</span></div>))}
+ {parlayLegs.map((l,i)=>(<div key={i} onClick={()=>toggleLeg(l)} style={{flexShrink:0,fontSize:10.5,fontWeight:700,padding:"5px 9px",borderRadius:RAD.sm,background:"rgba(255,55,95,0.14)",color:"#ff8aa6",display:"flex",alignItems:"center",gap:6,cursor:"pointer",whiteSpace:"nowrap"}}>{l.pick} <span style={{opacity:0.7,fontWeight:900}}>×</span></div>))}
  </div>
  )}
  </div>
@@ -11556,16 +11871,16 @@ function App() {
 
  {/* Slot-full banner */}
  {slotsLeft===0 && (
- <div style={{margin:"10px 16px 0",background:"rgba(255,159,10,0.1)",border:"0.5px solid rgba(255,159,10,0.3)",borderRadius:12,padding:"10px 14px",fontSize:11.5,color:IOS.orange,lineHeight:1.5}}>
+ <div style={{margin:"10px 16px 0",background:"rgba(255,159,10,0.1)",border:"0.5px solid rgba(255,159,10,0.3)",borderRadius:RAD.md,padding:"10px 14px",fontSize:11.5,color:IOS.orange,lineHeight:1.5}}>
  All slots filled — tapping a card replaces Pick {target+1}. Manage picks from your slip.
  </div>
  )}
 
  {gridType==="longshot" && !isSoloMode && (
- <div style={{display:"flex",background:"rgba(255,255,255,0.06)",borderRadius:10,padding:2,margin:"4px 16px 0",gap:2}}>
+ <div style={{display:"flex",background:"rgba(255,255,255,0.06)",borderRadius:RAD.md,padding:2,margin:"4px 16px 0",gap:2}}>
  {[{m:"straight",l:"Straight (+400)"},{m:"parlay",l:"Parlay · build legs"}].map(o=>{
  const on=(o.m==="parlay")===gridBuildMode;
- return (<div key={o.m} onClick={()=>{ if(o.m==="parlay") enterBuild(); else { setGridBuildMode(false); if(gridCfg) setActivePicks(prev=>prev.map(p=> (p.category==="longshot"&&p.isParlay) ? {...p, isParlay:false, parlayLegs:[]} : p)); } }} style={{flex:1,textAlign:"center",padding:"8px 4px",borderRadius:8,fontSize:12.5,fontWeight:800,cursor:"pointer",transition:"all .15s",background:on?(o.m==="parlay"?IOS.pink:IOS.green):"transparent",color:on?"#fff":"rgba(255,255,255,0.45)"}}>{o.l}</div>);
+ return (<div key={o.m} onClick={()=>{ if(o.m==="parlay") enterBuild(); else { setGridBuildMode(false); if(gridCfg) setActivePicks(prev=>prev.map(p=> (p.category==="longshot"&&p.isParlay) ? {...p, isParlay:false, parlayLegs:[]} : p)); } }} style={{flex:1,textAlign:"center",padding:"8px 4px",borderRadius:RAD.sm,fontSize:12.5,fontWeight:800,cursor:"pointer",transition:"all .15s",background:on?(o.m==="parlay"?IOS.pink:IOS.green):"transparent",color:on?"#fff":"rgba(255,255,255,0.45)"}}>{o.l}</div>);
  })}
  </div>
  )}
@@ -11573,7 +11888,7 @@ function App() {
  {gridType==="longshot" && !isSoloMode && (
  <div style={{margin:"10px 16px 0"}}>
  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
- <div style={{display:"inline-flex",alignItems:"center",gap:6,background:"#1c1c1e",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:9,padding:"7px 10px"}}>
+ <div style={{display:"inline-flex",alignItems:"center",gap:6,background:"#1c1c1e",border:EDGE.hair2,borderRadius:RAD.sm,padding:"7px 10px"}}>
  <span style={{fontSize:10,color:IOS.label3,fontWeight:700}}>Sort</span>
  <select value={gridSort} onChange={e=>setGridSort(e.target.value)} style={{background:"transparent",border:"none",color:"#fff",fontFamily:"Barlow,sans-serif",fontSize:12,fontWeight:700,outline:"none"}}>
  <option value="long" style={{color:"#000"}}>Longest odds</option>
@@ -11585,7 +11900,7 @@ function App() {
  </div>
  <div style={{display:"flex",gap:6,overflowX:"auto",scrollbarWidth:"none",paddingBottom:2}}>
  {[{key:"all",label:"All"},...lsChips].map(c=>(
- <div key={c.key} onClick={()=>setGridLsMarket(c.key)} style={{flexShrink:0,fontSize:11.5,fontWeight:700,padding:"6px 11px",borderRadius:20,cursor:"pointer",whiteSpace:"nowrap",border:"0.5px solid "+(gridLsMarket===c.key?"#fff":"rgba(255,255,255,0.12)"),background:gridLsMarket===c.key?"#fff":"rgba(255,255,255,0.04)",color:gridLsMarket===c.key?"#0b0b0e":IOS.label2}}>{c.label}</div>
+ <div key={c.key} onClick={()=>setGridLsMarket(c.key)} style={{flexShrink:0,fontSize:11.5,fontWeight:700,padding:"6px 11px",borderRadius:RAD.pill,cursor:"pointer",whiteSpace:"nowrap",border:"0.5px solid "+(gridLsMarket===c.key?"#fff":"rgba(255,255,255,0.12)"),background:gridLsMarket===c.key?"#fff":"rgba(255,255,255,0.04)",color:gridLsMarket===c.key?"#0b0b0e":IOS.label2}}>{c.label}</div>
  ))}
  </div>
  </div>
@@ -11626,20 +11941,20 @@ function App() {
  return (<>
  {!altSheet.isSpread && sideNames.length>1 && (
  <div style={{display:"flex",gap:7,padding:"12px 16px 6px"}}>
- {sideNames.map(sn=>{ const on=sn===activeSide; return (<div key={sn} onClick={()=>setAltSheet(x=>({...x,side:sn,sel:null}))} style={{flex:1,textAlign:"center",border:"1px solid "+(on?IOS.yellow:"#2c2c30"),background:on?"rgba(255,214,10,0.12)":"#17171b",color:on?IOS.yellow:"rgba(255,255,255,0.55)",fontWeight:800,fontSize:13,padding:9,borderRadius:10,cursor:"pointer"}}>{sn}</div>);})}
+ {sideNames.map(sn=>{ const on=sn===activeSide; return (<div key={sn} onClick={()=>setAltSheet(x=>({...x,side:sn,sel:null}))} style={{flex:1,textAlign:"center",border:"1px solid "+(on?IOS.yellow:"#2c2c30"),background:on?"rgba(255,214,10,0.12)":"#17171b",color:on?IOS.yellow:"rgba(255,255,255,0.55)",fontWeight:800,fontSize:13,padding:9,borderRadius:RAD.md,cursor:"pointer"}}>{sn}</div>);})}
  </div>
  )}
  <div style={{display:"flex",justifyContent:"space-between",padding:"8px 18px 2px",fontSize:10,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"rgba(255,255,255,0.32)"}}><span>Line</span><span>Odds</span><span>If it hits</span></div>
  <div style={{padding:"2px 14px 8px",overflowY:"auto",flex:1,minHeight:0,WebkitOverflowScrolling:"touch"}}>
  {lines.map((l,i)=>{ const pos=String(l.odds).charAt(0)==="+"; const on=(altSheet.sel===i)||(altSheet.sel==null && i===Math.floor(lines.length/2)); const _pts=calcPickPoints(1,l.impliedOdds,"W"); const ptStr=(l.point>=0?("+"+l.point):(""+l.point));
- return (<div key={i} onClick={()=>setAltSheet(x=>({...x,sel:i}))} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 13px",borderRadius:12,border:"1px solid "+(on?IOS.blue:"transparent"),background:on?"rgba(10,132,255,0.1)":"#131317",cursor:"pointer",marginBottom:6}}>
+ return (<div key={i} onClick={()=>setAltSheet(x=>({...x,sel:i}))} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 13px",borderRadius:RAD.md,border:"1px solid "+(on?IOS.blue:"transparent"),background:on?"rgba(10,132,255,0.1)":"#131317",cursor:"pointer",marginBottom:6}}>
  <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:19,width:74}}>{altSheet.isSpread?ptStr:l.point}</div>
  <div style={{flex:1}}><span style={{fontWeight:800,fontSize:15,color:pos?IOS.green:"#fff"}}>{l.odds}</span><div style={{fontSize:9.5,fontWeight:800,color:"rgba(255,255,255,0.35)",marginTop:1}}>{altSheet.isSpread?((altSheet.bet.outcome||"")+" "+ptStr):(activeSide+" "+l.point)}</div></div>
  <div style={{textAlign:"right"}}><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:20,color:IOS.green}}>+{_pts}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.4)",fontWeight:700}}>pts</div></div>
  </div>);
  })}
  </div>
- <div onClick={addAltPick} style={{margin:"6px 16px 0",marginBottom:"calc(18px + var(--sa-bot))",padding:15,borderRadius:13,background:IOS.blue,color:"#fff",fontSize:15.5,fontWeight:800,textAlign:"center",cursor:"pointer",flexShrink:0}}>Add to slip</div>
+ <div onClick={addAltPick} style={{margin:"6px 16px 0",marginBottom:"calc(18px + var(--sa-bot))",padding:15,borderRadius:RAD.md,background:IOS.blue,color:"#fff",fontSize:15.5,fontWeight:800,textAlign:"center",cursor:"pointer",flexShrink:0}}>Add to slip</div>
  </>);
  })() : (
  <div style={{textAlign:"center",color:"rgba(255,255,255,0.4)",fontSize:13,padding:"40px 20px 46px"}}>No alternate lines available for this bet right now.</div>
@@ -11683,7 +11998,7 @@ function App() {
      eligible.forEach(x=>{ try{ posthog.capture('pick_locked',{ league_id:activeLeague.id, category:x.sl.category||null, multiplier:x.sl.mult||null }); }catch(e){} });
      try{ posthog.capture('slip_locked',{ league_id:activeLeague.id, n:eligible.length }); }catch(e){}
      try{ fetchWeekPicks(activeLeague.id, (activeLeague.current_week||activeLeague.week)||1); }catch(e){}
-     try{ if(navigator.vibrate) navigator.vibrate(20); }catch(e){}
+     haptic("medium");
      setSlipBarOpen(false); setSlipPoolIdx(-1);
      setSlipToast("Locked "+eligible.length+" pick"+(eligible.length===1?"":"s")+" \u2713");
      setTimeout(()=>setSlipToast(""),1800);
@@ -11736,12 +12051,12 @@ function App() {
              </div>
            </div>);
          })}
-         <div style={{margin:"12px 0 4px",background:"#f2f2f5",borderRadius:11,padding:"11px 13px",fontSize:12,fontWeight:700,color:"rgba(14,14,18,0.55)"}}>
+         <div style={{margin:"12px 0 4px",background:"#f2f2f5",borderRadius:RAD.md,padding:"11px 13px",fontSize:12,fontWeight:700,color:"rgba(14,14,18,0.55)"}}>
            {Math.max(0, activePicks.length - activePicks.filter(pp=>pp.committed || pp.bet || (pp.isParlay&&(pp.parlayLegs||[]).length>=2)).length)} of {activePicks.length} slots still open {"\u2014"} tap any P-chip to move your big multipliers onto your best bets.
          </div>
        </div>
        <div style={{flexShrink:0,padding:"12px 14px calc(20px + var(--sa-bot))"}}>
-         <button onClick={lockAll} style={{border:"none",width:"100%",borderRadius:15,padding:16,fontSize:16,fontWeight:900,color:"#fff",cursor:"pointer",fontFamily:"'Barlow',sans-serif",letterSpacing:"-0.2px",background:allM?"linear-gradient(100deg,#0A84FF 0%,#3f9dff 55%,#0A84FF 100%)":"rgba(14,14,18,0.25)",boxShadow:allM?"0 10px 24px -8px rgba(10,132,255,0.55)":"none"}}>
+         <button onClick={lockAll} style={{border:"none",width:"100%",borderRadius:RAD.lg,padding:16,fontSize:16,fontWeight:900,color:"#fff",cursor:"pointer",fontFamily:"'Barlow',sans-serif",letterSpacing:"-0.2px",background:allM?"linear-gradient(100deg,#0A84FF 0%,#3f9dff 55%,#0A84FF 100%)":"rgba(14,14,18,0.25)",boxShadow:allM?"0 10px 24px -8px rgba(10,132,255,0.55)":"none"}}>
            Lock {staged.length} pick{staged.length===1?"":"s"}
            <span style={{display:"block",fontSize:11.5,fontWeight:700,opacity:0.85,marginTop:2}}>{allM?("to win "+tot.toFixed(1)+" pts if they all hit"):"assign a multiplier to every pick first"}</span>
          </button>
@@ -11771,7 +12086,7 @@ function App() {
      <div style={{fontSize:30,fontWeight:800,letterSpacing:"-0.7px",color:"#fff",lineHeight:1.05,marginTop:2}}>The Field</div>
      <div style={{fontSize:12.5,color:IOS.label3,marginTop:3,fontWeight:500}}>{ms.length} players · tap a tile to see their picks</div>
    </div>
-   {ms.length===0 ? (<div style={{margin:"0 16px",background:IOS.bg2,borderRadius:16,padding:"36px 24px",textAlign:"center",color:IOS.label3,fontSize:14,lineHeight:1.6}}>The field fills in once players join and lock picks.</div>) : (
+   {ms.length===0 ? (<div style={{margin:"0 16px",background:IOS.bg2,borderRadius:RAD.lg,padding:"36px 24px",textAlign:"center",color:IOS.label3,fontSize:14,lineHeight:1.6}}>The field fills in once players join and lock picks.</div>) : (
    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:11,padding:"4px 16px 0"}}>
      {ms.map((sp,i)=>{
        const wkPicks=(weekPicks||[]).filter(p=>p.user_id===sp.userId && p.week===cw);
@@ -11780,11 +12095,11 @@ function App() {
        const initials=sp.isYou?"You":(sp.name||"?").slice(0,2).toUpperCase();
        const playoff=playoffN>0 && i<playoffN;
        return (
-       <div key={sp.userId||i} onClick={()=>setFieldPlayer({...sp, rank:i+1, wkPicks, wkPts})} style={{position:"relative",borderRadius:18,padding:13,cursor:"pointer",overflow:"hidden",background:"linear-gradient(160deg,rgba(255,255,255,0.05),rgba(255,255,255,0.015))",border:`0.5px solid ${sp.isYou?IOS.blue+"80":IOS.sep}`,boxShadow:sp.isYou?`0 10px 30px -12px ${IOS.blue}66`:"none"}}>
+       <div key={sp.userId||i} onClick={()=>setFieldPlayer({...sp, rank:i+1, wkPicks, wkPts})} style={{position:"relative",borderRadius:RAD.xl,padding:13,cursor:"pointer",overflow:"hidden",background:"linear-gradient(160deg,rgba(255,255,255,0.05),rgba(255,255,255,0.015))",border:`0.5px solid ${sp.isYou?IOS.blue+"80":IOS.sep}`,boxShadow:sp.isYou?`0 10px 30px -12px ${IOS.blue}66`:"none"}}>
          <div style={{position:"absolute",top:"-40%",left:"-10%",width:"70%",height:"80%",borderRadius:"50%",filter:"blur(30px)",opacity:.32,background:col}}/>
          {playoff && <div style={{position:"absolute",top:9,right:9,fontSize:7.5,fontWeight:900,letterSpacing:.5,color:"#0c0c0e",background:IOS.yellow,borderRadius:4,padding:"2px 5px"}}>PLAYOFF</div>}
          <div style={{display:"flex",alignItems:"center",gap:9,position:"relative"}}>
-           <div style={{width:38,height:38,borderRadius:11,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:"#0c0c0e",background:`linear-gradient(150deg,${col},${col}bb)`,flexShrink:0}}>{initials}</div>
+           <div style={{width:38,height:38,borderRadius:RAD.md,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:"#0c0c0e",background:`linear-gradient(150deg,${col},${col}bb)`,flexShrink:0}}>{initials}</div>
            <div style={{minWidth:0}}>
              <div style={{fontSize:14,fontWeight:800,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:sp.isYou?IOS.blue:"#fff"}}>{sp.isYou?"You":sp.name}</div>
              <div style={{fontSize:10,color:IOS.label3,fontWeight:700}}>#{i+1} · {wkPicks.length} picks</div>
@@ -11807,7 +12122,7 @@ function App() {
      <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:440,margin:"0 auto",background:"#161618",borderRadius:"22px 22px 0 0",borderTop:`0.5px solid ${IOS.sep}`,padding:"8px 16px 30px",maxHeight:"80%",overflow:"auto"}}>
        <div style={{width:40,height:4,borderRadius:3,background:"rgba(255,255,255,0.18)",margin:"6px auto 14px"}}/>
        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}>
-         <div style={{width:46,height:46,borderRadius:13,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:18,color:"#0c0c0e",background:`linear-gradient(150deg,${fieldPlayer.isYou?IOS.blue:IOS.indigo},${fieldPlayer.isYou?IOS.blue:IOS.indigo}bb)`}}>{fieldPlayer.isYou?"You":(fieldPlayer.name||"?").slice(0,2).toUpperCase()}</div>
+         <div style={{width:46,height:46,borderRadius:RAD.md,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:18,color:"#0c0c0e",background:`linear-gradient(150deg,${fieldPlayer.isYou?IOS.blue:IOS.indigo},${fieldPlayer.isYou?IOS.blue:IOS.indigo}bb)`}}>{fieldPlayer.isYou?"You":(fieldPlayer.name||"?").slice(0,2).toUpperCase()}</div>
          <div style={{flex:1,minWidth:0}}>
            <div style={{fontSize:19,fontWeight:900,color:fieldPlayer.isYou?IOS.blue:"#fff"}}>{fieldPlayer.isYou?"You":fieldPlayer.name}</div>
            <div style={{fontSize:12,color:IOS.label2,fontWeight:600,marginTop:1}}>#{fieldPlayer.rank} · {fieldPlayer.record||"0-0"} picks · {fieldPlayer.points!=null?fieldPlayer.points:0} szn pts</div>
@@ -11851,9 +12166,9 @@ function App() {
    const weekMs = (allMatchups||[]).filter(m=>m.week===wkSel);
    const nameOf = (id)=>{ const m=leagueMembers.find(x=>x.userId===id); return id===(user&&user.id)?"You":(m?m.name:"Player"); };
    return (<>
-     <div style={{display:"flex",background:IOS.bg2,borderRadius:12,padding:3,margin:"0 16px 8px"}}>
-       <div onClick={()=>setMatchupView("mine")} style={{flex:1,textAlign:"center",padding:"9px 0",borderRadius:9,fontSize:14,fontWeight:800,cursor:"pointer",background:matchupView==="mine"?"#2d2d31":"transparent",color:matchupView==="mine"?"#fff":IOS.label2}}>My Matchup</div>
-       <div onClick={()=>{ setMatchupView("league"); setMWeek(mWeek||(activeLeague.current_week||1)); }} style={{flex:1,textAlign:"center",padding:"9px 0",borderRadius:9,fontSize:14,fontWeight:800,cursor:"pointer",background:matchupView==="league"?"#2d2d31":"transparent",color:matchupView==="league"?"#fff":IOS.label2}}>League</div>
+     <div style={{display:"flex",background:IOS.bg2,borderRadius:RAD.md,padding:3,margin:"0 16px 8px"}}>
+       <div onClick={()=>setMatchupView("mine")} style={{flex:1,textAlign:"center",padding:"9px 0",borderRadius:RAD.sm,fontSize:14,fontWeight:800,cursor:"pointer",background:matchupView==="mine"?"#2d2d31":"transparent",color:matchupView==="mine"?"#fff":IOS.label2}}>My Matchup</div>
+       <div onClick={()=>{ setMatchupView("league"); setMWeek(mWeek||(activeLeague.current_week||1)); }} style={{flex:1,textAlign:"center",padding:"9px 0",borderRadius:RAD.sm,fontSize:14,fontWeight:800,cursor:"pointer",background:matchupView==="league"?"#2d2d31":"transparent",color:matchupView==="league"?"#fff":IOS.label2}}>League</div>
      </div>
      {matchupView==="league" && (
        <div style={{position:"fixed",left:0,right:0,top:0,bottom:0,background:"#000",zIndex:160,display:"flex",flexDirection:"column"}}>
@@ -11863,9 +12178,9 @@ function App() {
            <div style={{width:120}}/>
          </div>
          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 18px 8px"}}>
-           <div onClick={()=>setMWeek(Math.max(minWk, wkSel-1))} style={{width:34,height:34,borderRadius:10,background:IOS.bg2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",opacity:wkSel<=minWk?0.3:1}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4"><path d="M15 18l-6-6 6-6"/></svg></div>
+           <div onClick={()=>setMWeek(Math.max(minWk, wkSel-1))} style={{width:34,height:34,borderRadius:RAD.md,background:IOS.bg2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",opacity:wkSel<=minWk?0.3:1}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4"><path d="M15 18l-6-6 6-6"/></svg></div>
            <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:800}}>Week {wkSel}</div><div style={{fontSize:11,color:IOS.label3,fontWeight:600,marginTop:1}}>{weekMs.length} matchup{weekMs.length===1?"":"s"}</div></div>
-           <div onClick={()=>setMWeek(Math.min(maxWk, wkSel+1))} style={{width:34,height:34,borderRadius:10,background:IOS.bg2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",opacity:wkSel>=maxWk?0.3:1}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4"><path d="M9 18l6-6-6-6"/></svg></div>
+           <div onClick={()=>setMWeek(Math.min(maxWk, wkSel+1))} style={{width:34,height:34,borderRadius:RAD.md,background:IOS.bg2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",opacity:wkSel>=maxWk?0.3:1}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4"><path d="M9 18l6-6-6-6"/></svg></div>
          </div>
          <div style={{flex:1,overflow:"auto",padding:"4px 16px 100px"}}>
            {weekMs.length===0 ? (<div style={{textAlign:"center",color:IOS.label3,fontSize:14,padding:"40px 0"}}>No matchups scheduled for Week {wkSel}.</div>) : weekMs.map((mu,mi)=>{
@@ -11889,7 +12204,7 @@ function App() {
                const lp=(cl.locked/_maxCeil)*100, mp=(cl.live/_maxCeil)*100;
                return (
                 <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 13px",opacity:lead?1:(anyLead?0.7:1)}}>
-                  <div style={{width:28,height:28,borderRadius:8,flexShrink:0,background:(you?IOS.blue:IOS.indigo)+"33",color:you?IOS.blue:IOS.indigo,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900}}>{(nameOf(id)||"?").slice(0,2).toUpperCase()}</div>
+                  <div style={{width:28,height:28,borderRadius:RAD.sm,flexShrink:0,background:(you?IOS.blue:IOS.indigo)+"33",color:you?IOS.blue:IOS.indigo,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900}}>{(nameOf(id)||"?").slice(0,2).toUpperCase()}</div>
                   <div style={{width:96,flexShrink:0,fontSize:13.5,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",color:you?IOS.blue:"#fff"}}>{nameOf(id)}</div>
                   <div style={{flex:1,height:8,borderRadius:4,background:"rgba(0,0,0,0.4)",position:"relative",overflow:"hidden",boxShadow:"inset 0 1px 2px rgba(0,0,0,0.55)"}}>
                     <div style={{position:"absolute",left:0,top:0,bottom:0,borderRadius:4,width:lp+"%",background:`linear-gradient(180deg,${tint},${tint}cc)`,boxShadow:`0 0 8px ${tint}55`}}/>
@@ -11900,17 +12215,17 @@ function App() {
                );
              };
              return (
-               <div key={mi} onClick={()=>openMatchupPager(weekMs, mi, "Week "+wkSel, wkSel)} style={{background:IOS.bg2,border:mine?("1px solid "+IOS.blue+"88"):`1px solid ${IOS.sep}`,borderRadius:14,marginBottom:11,overflow:"hidden",cursor:"pointer"}}>
+               <div key={mi} onClick={()=>openMatchupPager(weekMs, mi, "Week "+wkSel, wkSel)} style={{background:IOS.bg2,border:mine?("1px solid "+IOS.blue+"88"):`1px solid ${IOS.sep}`,borderRadius:RAD.lg,marginBottom:11,overflow:"hidden",cursor:"pointer"}}>
                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 13px 2px"}}>
                    <div style={{fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",color:mine?IOS.blue:IOS.label3}}>{mine?"Your matchup":"Matchup"}</div>
-                   <div style={{fontSize:10,fontWeight:800,padding:"3px 8px",borderRadius:6,background:done?"rgba(255,255,255,0.08)":"rgba(48,209,88,0.14)",color:done?IOS.label2:IOS.green}}>{done?"FINAL":"LIVE"}</div>
+                   <div style={{fontSize:10,fontWeight:800,padding:"3px 8px",borderRadius:RAD.sm,background:done?"rgba(255,255,255,0.08)":"rgba(48,209,88,0.14)",color:done?IOS.label2:IOS.green}}>{done?"FINAL":"LIVE"}</div>
                  </div>
                  {row(u1,p1,lead1,_cA)}
                  <div style={{height:0.5,background:IOS.sep,margin:"0 13px"}}/>
                  {row(u2,p2,lead2,_cB)}
                   {(() => {
                     const chip=(bp,label,align)=>{
-                      const box=(inner)=>(<div style={{flex:1,minWidth:0,background:"rgba(255,255,255,0.03)",borderRadius:9,padding:"7px 9px",textAlign:align}}>{inner}</div>);
+                      const box=(inner)=>(<div style={{flex:1,minWidth:0,background:"rgba(255,255,255,0.03)",borderRadius:RAD.sm,padding:"7px 9px",textAlign:align}}>{inner}</div>);
                       const head=(<div style={{fontSize:7.5,fontWeight:900,letterSpacing:0.5,color:"rgba(255,255,255,0.28)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</div>);
                       if(!bp) return box(<>{head}<div style={{fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.3)",marginTop:2}}>No slip submitted</div></>);
               if(bp.state==="hidden") return box(<>{head}<div style={{fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.35)",marginTop:2}}>{bp.n+" pick"+(bp.n===1?"":"s")+" \u00b7 locked"}</div><div style={{fontSize:9.5,fontWeight:700,color:"rgba(255,255,255,0.22)",marginTop:1}}>Reveals at game time</div></>);
@@ -11959,22 +12274,22 @@ function App() {
  <div style={{fontSize:13,fontWeight:600,color:IOS.label3}}>Members joined</div>
  <div style={{fontSize:13,fontWeight:700,color:IOS.blue}}>{_mc} / {targetSize}</div>
  </div>
- <div style={{background:"rgba(255,255,255,0.08)",borderRadius:8,height:8,overflow:"hidden"}}>
- <div style={{height:"100%",borderRadius:8,background:`linear-gradient(90deg,${IOS.blue},${IOS.teal})`,width:`${(_mc/targetSize)*100}%`,transition:"width .4s"}}/>
+ <div style={{background:"rgba(255,255,255,0.08)",borderRadius:RAD.sm,height:8,overflow:"hidden"}}>
+ <div style={{height:"100%",borderRadius:RAD.sm,background:`linear-gradient(90deg,${IOS.blue},${IOS.teal})`,width:`${(_mc/targetSize)*100}%`,transition:"width .4s"}}/>
  </div>
  <div style={{fontSize:12,color:IOS.label3,marginTop:8,textAlign:"center"}}>{targetSize-_mc} more player{targetSize-_mc!==1?"s":""} needed</div>
  </div>
  {activeLeague.isCommissioner && (
- <div style={{marginTop:8,background:"rgba(10,132,255,0.1)",borderRadius:14,padding:"14px 20px",border:`1px solid ${IOS.blue}30`,width:"100%",maxWidth:280}}>
+ <div style={{marginTop:8,background:"rgba(10,132,255,0.1)",borderRadius:RAD.lg,padding:"14px 20px",border:`1px solid ${IOS.blue}30`,width:"100%",maxWidth:280}}>
  <div style={{fontSize:11,fontWeight:700,letterSpacing:1.5,textTransform:"uppercase",color:IOS.blue,marginBottom:6}}>Invite Code</div>
  <div style={{fontSize:28,fontWeight:800,letterSpacing:5,color:"#fff",marginBottom:12}}>{activeLeague.invite_code||activeLeague.inviteCode}</div>
  <div style={{display:"flex",gap:8}}>
  <button onClick={()=>shareInvite(activeLeague.invite_code||activeLeague.inviteCode, activeLeague.name)}
- style={{flex:1,background:IOS.blue,border:"none",borderRadius:10,padding:"10px",fontFamily:"Barlow,sans-serif",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>
+ style={{flex:1,background:IOS.blue,border:"none",borderRadius:RAD.md,padding:"10px",fontFamily:"Barlow,sans-serif",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>
  Share
  </button>
  <button onClick={async()=>{const c=activeLeague.invite_code||activeLeague.inviteCode;try{await navigator.clipboard.writeText(c);alert("Copied! ");}catch(e){alert(c);}}}
- style={{flex:1,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:10,padding:"10px",fontFamily:"Barlow,sans-serif",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>
+ style={{flex:1,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:RAD.md,padding:"10px",fontFamily:"Barlow,sans-serif",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>
  Copy
  </button>
  </div>
@@ -11989,7 +12304,7 @@ function App() {
  <div style={{fontSize:56}}></div>
  <div style={{fontSize:22,fontWeight:700,letterSpacing:-0.5,color:"#fff"}}>No Matchup Yet</div>
  <div style={{fontSize:15,color:IOS.label3,lineHeight:1.6}}>You need at least one other member in {activeLeague.name} to have a matchup.</div>
- <div onClick={()=>setScreen("commissioner")} style={{marginTop:8,background:IOS.blue,borderRadius:12,padding:"12px 24px",fontSize:15,fontWeight:600,color:"#fff",cursor:"pointer"}}>
+ <div onClick={()=>setScreen("commissioner")} style={{marginTop:8,background:IOS.blue,borderRadius:RAD.md,padding:"12px 24px",fontSize:15,fontWeight:600,color:"#fff",cursor:"pointer"}}>
  Invite Members →
  </div>
  </div>
@@ -12013,38 +12328,82 @@ function App() {
    const _pw=_sMe.wins||0, _pl=_sMe.losses||0; const _hit=(_pw+_pl)>0?Math.round(_pw/(_pw+_pl)*100):null;
    const _topScorer=[...(realStandings||[])].sort((a,b)=>b.points-a.points)[0];
    const _leader=(realStandings||[])[0];
-   const _ord=(n)=>{ const _e=["th","st","nd","rd"],_v=n%100; return n+(_e[(_v-20)%10]||_e[_v]||_e[0]); };
-   const _tile={background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:13,padding:"13px 14px"};
-   const _tv={fontSize:22,fontWeight:900,letterSpacing:"-0.5px"};
-   const _tk={fontSize:10,fontWeight:800,letterSpacing:"0.05em",color:"rgba(255,255,255,0.38)",textTransform:"uppercase",marginTop:2};
-   return (
-     <div className="body" style={{padding:"18px 16px 26px"}}>
-       <div style={{textAlign:"center",padding:"10px 0 4px"}}>
-         <div style={{width:66,height:66,borderRadius:"50%",margin:"0 auto 12px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,fontWeight:900,background:"radial-gradient(circle at 50% 35%, #2a2a32, #17171d)",border:"1.5px solid rgba(255,255,255,0.1)",color:"rgba(255,255,255,0.6)"}}>{_sMe.rank}</div>
-         <div style={{fontSize:11,fontWeight:900,letterSpacing:"0.16em",color:"rgba(255,255,255,0.38)",textTransform:"uppercase"}}>Regular season · Final</div>
-         <div style={{fontSize:30,fontWeight:900,letterSpacing:"-1px",color:"#fff",marginTop:4}}>{_ord(_sMe.rank)} <span style={{fontSize:18,color:"rgba(255,255,255,0.38)"}}>of {_sTotal}</span></div>
-         <div style={{fontSize:13,color:IOS.label2,fontWeight:600,marginTop:4}}>{activeLeague.name}</div>
-         <div style={{display:"inline-block",marginTop:11,fontSize:10,fontWeight:800,letterSpacing:"0.05em",color:"#FF9F0A",background:"rgba(255,159,10,0.12)",border:"0.5px solid rgba(255,159,10,0.3)",borderRadius:6,padding:"4px 10px"}}>{_sMe.rank<=_sPlayoffN ? "NOT IN THE BRACKET" : "MISSED PLAYOFFS \u00b7 TOP "+_sPlayoffN+" ADVANCED"}</div>
+ const _ord=(n)=>{ const _e=["th","st","nd","rd"],_v=n%100; return n+(_e[(_v-20)%10]||_e[_v]||_e[0]); };
+ const _ordS=(n)=>{ const _e=["th","st","nd","rd"],_v=n%100; return (_e[(_v-20)%10]||_e[_v]||_e[0]); };
+ // Season arc: points per regular-season week, coloured by result. liveSchedule already
+ // carries {week,myPts,oppPts,result} for this user, so no extra query. Graded weeks only
+ // — an unplayed or live week has no bar to draw.
+ const _arc = (liveSchedule||[]).filter(w=>w && w.week<=_sRegWeeks && (w.result==="W"||w.result==="L"))
+   .sort((a,b)=>a.week-b.week);
+ const _arcMax = Math.max(1, ..._arc.map(w=>Number(w.myPts)||0));
+ const _bestWk = _arc.reduce((b,w)=>(!b || (Number(w.myPts)||0)>(Number(b.myPts)||0)) ? w : b, null);
+ const _stat={flex:1,borderRadius:RAD.lg,padding:"11px 8px",textAlign:"center",
+   background:"linear-gradient(180deg,rgba(255,255,255,0.038),rgba(255,255,255,0.015))",
+   boxShadow:"inset 0 0 0 0.5px rgba(255,255,255,0.06)"};
+ const _statV={fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:23,fontWeight:800,lineHeight:0.9};
+ const _statK={fontSize:8,fontWeight:800,letterSpacing:"0.11em",color:"rgba(255,255,255,0.3)",textTransform:"uppercase",marginTop:5};
+ const _row={display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 14px",fontSize:13};
+ return (
+   <div className="body" style={{paddingTop:18,paddingLeft:16,paddingRight:16}}>
+
+     <div className="pl-reveal" style={{position:"relative",overflow:"hidden",borderRadius:RAD.xl,padding:"16px 16px 12px",
+       background:"linear-gradient(160deg,rgba(255,159,10,0.10),transparent 58%),linear-gradient(180deg,#16161c,#0f0f14)",
+       boxShadow:"inset 0 1px 0 rgba(255,255,255,0.06), 0 10px 30px rgba(0,0,0,0.45)"}}>
+       <div style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.14em",color:"rgba(255,255,255,0.34)",textTransform:"uppercase"}}>{activeLeague.name}{" \u00b7 Regular season final"}</div>
+       <div style={{display:"flex",alignItems:"baseline",gap:9,marginTop:5}}>
+         <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:52,fontWeight:800,lineHeight:0.82,letterSpacing:"-0.02em",color:"#fff"}}>{_sMe.rank}<sup style={{fontSize:22,fontWeight:800}}>{_ordS(_sMe.rank)}</sup></div>
+         <div style={{fontSize:13,color:"rgba(255,255,255,0.36)",fontWeight:700}}>of {_sTotal}</div>
        </div>
-       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9,marginTop:18}}>
-         <div style={_tile}><div style={_tv}>{_sMe.record}</div><div style={_tk}>Final Record</div></div>
-         <div style={_tile}><div style={{..._tv,color:IOS.blue}}>{_sMe.points}</div><div style={_tk}>Total Points</div></div>
-         {_hit!=null && (<div style={_tile}><div style={{..._tv,color:IOS.green}}>{_hit}%</div><div style={_tk}>Pick Hit Rate</div></div>)}
-         <div style={_tile}><div style={{..._tv,color:"#FF9F0A"}}>{_pw+_pl}</div><div style={_tk}>Picks Graded</div></div>
-       </div>
-       {(_leader||_topScorer) && (
-         <div style={{marginTop:9,background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:13,padding:"12px 14px",display:"flex",flexDirection:"column",gap:9}}>
-           {_leader && (<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:12.5}}><span style={{color:IOS.label2,fontWeight:600}}>Top seed</span><span style={{fontWeight:800}}>{_leader.isYou?"You":_leader.name} · {_leader.record}</span></div>)}
-           {_topScorer && (<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:12.5}}><span style={{color:IOS.label2,fontWeight:600}}>Most points</span><span style={{fontWeight:800,color:IOS.green}}>{_topScorer.isYou?"You":_topScorer.name} · {_topScorer.points}</span></div>)}
+
+       {_arc.length>0 && (
+       <div style={{marginTop:14}}>
+         <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",marginBottom:8}}>
+           <span style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.14em",color:"rgba(255,255,255,0.34)",textTransform:"uppercase"}}>Your season, week by week</span>
+           {_bestWk && <span style={{fontSize:11,color:"rgba(255,255,255,0.42)",fontWeight:700}}>Best {Number(_bestWk.myPts).toFixed(1)}</span>}
          </div>
-       )}
-       <div style={{marginTop:20,display:"flex",flexDirection:"column",gap:10}}>
-         <div onClick={()=>setScreen("leagues")} style={{padding:15,borderRadius:14,fontSize:15,fontWeight:800,textAlign:"center",background:"linear-gradient(90deg,#0A84FF,#4aa3ff)",color:"#fff",cursor:"pointer"}}>+ Start a new league</div>
-         <div onClick={()=>setScreen("leagues")} style={{padding:15,borderRadius:14,fontSize:15,fontWeight:800,textAlign:"center",background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.14)",color:IOS.blue,cursor:"pointer"}}>Join a league with a code</div>
+         <div style={{display:"flex",alignItems:"flex-end",gap:5,height:72}}>
+           {_arc.map((w,wi)=>(
+             <div key={w.week} style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",alignItems:"center",gap:5}}>
+               <div className="so-bar" style={{width:"100%",borderRadius:"5px 5px 2px 2px",
+                 "--h":Math.max(8,Math.round((Number(w.myPts)||0)/_arcMax*64))+"px",
+                 animationDelay:(wi*0.055)+"s",
+                 background:w.result==="W" ? "linear-gradient(180deg,#30D158,rgba(48,209,88,0.35))"
+                                           : "linear-gradient(180deg,rgba(255,69,58,0.85),rgba(255,69,58,0.25))"}}/>
+             </div>
+           ))}
+         </div>
+         <div style={{display:"flex",gap:5,marginTop:6}}>
+           {_arc.map(w=>(<div key={w.week} style={{flex:1,minWidth:0,textAlign:"center",fontSize:8.5,fontWeight:800,letterSpacing:"0.06em",color:"rgba(255,255,255,0.28)",textTransform:"uppercase"}}>{_arc.length>8 ? (w.week%2?w.week:"") : ("Wk "+w.week)}</div>))}
+         </div>
        </div>
-       <div onClick={()=>{ setMatchupView("league"); setMWeek(mWeek||(activeLeague.current_week||1)); }} style={{marginTop:14,textAlign:"center",fontSize:12.5,color:IOS.label3,fontWeight:600,cursor:"pointer"}}>Playoffs are live. Tap to watch the bracket {"→"}</div>
+       )}
      </div>
-   );
+
+     <div className="pl-reveal" style={{display:"flex",gap:7,marginTop:14}}>
+       <div style={_stat}><div style={_statV}>{_sMe.record}</div><div style={_statK}>Record</div></div>
+       <div style={_stat}><div style={{..._statV,color:"#64D2FF"}}>{_sMe.points}</div><div style={_statK}>Total pts</div></div>
+       {_hit!=null && (<div style={_stat}><div style={{..._statV,color:IOS.green}}>{_hit}%</div><div style={_statK}>Hit rate</div></div>)}
+       <div style={_stat}><div style={_statV}>{_pw+_pl}</div><div style={_statK}>Graded</div></div>
+     </div>
+
+     {(_leader||_topScorer||_bestWk) && (<>
+       <div className="pl-reveal" style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.14em",color:"rgba(255,255,255,0.3)",textTransform:"uppercase",margin:"20px 0 8px 3px"}}>How the league finished</div>
+       <div className="pl-reveal" style={{borderRadius:RAD.lg,overflow:"hidden",background:"linear-gradient(180deg,#16161c,#111116)",boxShadow:"inset 0 1px 0 rgba(255,255,255,0.05), 0 5px 16px rgba(0,0,0,0.34)"}}>
+         {_leader && (<div style={_row}><span style={{color:"rgba(255,255,255,0.5)",fontWeight:600}}>Top seed</span><span style={{fontWeight:800}}>{_leader.isYou?"You":_leader.name}{" \u00b7 "}{_leader.record}</span></div>)}
+         {_topScorer && (<div style={{..._row,borderTop:"0.5px solid rgba(255,255,255,0.055)"}}><span style={{color:"rgba(255,255,255,0.5)",fontWeight:600}}>Most points</span><span style={{fontWeight:800,color:IOS.green}}>{_topScorer.isYou?"You":_topScorer.name}{" \u00b7 "}{_topScorer.points}</span></div>)}
+         {_bestWk && (<div style={{..._row,borderTop:"0.5px solid rgba(255,255,255,0.055)"}}><span style={{color:"rgba(255,255,255,0.5)",fontWeight:600}}>Your best week</span><span style={{fontWeight:800}}>{"Week "+_bestWk.week+" \u00b7 "+Number(_bestWk.myPts).toFixed(1)}</span></div>)}
+       </div>
+     </>)}
+
+     {/* Primary action keeps you inside the league you are still a member of. Starting or
+         joining another one is secondary — the exit should not be the loudest button. */}
+     <div className="pl-reveal" onClick={()=>{ setMatchupView("league"); setMWeek(mWeek||(activeLeague.current_week||1)); }}
+       style={{marginTop:18,borderRadius:RAD.lg,padding:15,textAlign:"center",fontSize:15.5,fontWeight:800,cursor:"pointer",
+       background:"linear-gradient(120deg,#0A84FF,#5E5CE6)",boxShadow:"0 10px 26px -10px rgba(10,132,255,0.8)"}}>{"Watch the bracket \u2192"}</div>
+     <div className="pl-reveal" onClick={()=>setScreen("leagues")} style={{marginTop:9,borderRadius:RAD.lg,padding:13,textAlign:"center",fontSize:14,fontWeight:800,cursor:"pointer",color:"rgba(255,255,255,0.72)",background:"rgba(255,255,255,0.05)",boxShadow:"inset 0 0 0 0.5px rgba(255,255,255,0.1)"}}>Start a new league</div>
+     <div className="pl-reveal" onClick={()=>setScreen("leagues")} style={{marginTop:9,borderRadius:RAD.lg,padding:13,textAlign:"center",fontSize:14,fontWeight:800,cursor:"pointer",color:"rgba(255,255,255,0.72)",background:"rgba(255,255,255,0.05)",boxShadow:"inset 0 0 0 0.5px rgba(255,255,255,0.1)"}}>Join with a code</div>
+   </div>
+ );
  }
  const myPicks = weekPicks.filter(p=>p.user_id===user?.id);
  const currentWeekNum = activeLeague.current_week||activeLeague.week||1;
@@ -12088,7 +12447,7 @@ function App() {
  const statusTxt = isTied?"You're Tied":isWinning?"You're Winning":"You're Trailing";
  return (
  <div style={{position:"sticky",top:0,zIndex:10,background:"#000",padding:"6px 0 8px"}}>
- <div style={{margin:"0 16px",borderRadius:16,padding:"14px 16px",position:"relative",overflow:"hidden",background:"#131318",border:"0.5px solid rgba(255,255,255,0.07)"}}>
+ <div style={{margin:"0 16px",borderRadius:RAD.lg,padding:"14px 16px",position:"relative",overflow:"hidden",background:"#131318",border:EDGE.hair}}>
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
  <div style={{minWidth:0,flex:1}}>
  <div style={{fontSize:11,fontWeight:800,letterSpacing:"0.04em",textTransform:"uppercase",color:IOS.blue}}>You</div>
@@ -12106,7 +12465,7 @@ function App() {
  <div style={{display:"flex",gap:6,marginTop:11,paddingTop:9,borderTop:`0.5px solid ${IOS.sep}`,alignItems:"center",justifyContent:"space-between"}}>
  <div style={{display:"flex",gap:5}}>
  {myPicks.slice(0,6).map((pp,ii)=>(
- <div key={ii} style={{width:24,height:24,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,background:pp.result==="W"?"rgba(48,209,88,0.15)":pp.result==="L"?"rgba(255,69,58,0.12)":"rgba(255,255,255,0.06)",color:pp.result==="W"?IOS.green:pp.result==="L"?IOS.red:IOS.label3}}>{pp.result==="W"?"W":pp.result==="L"?"L":"·"}</div>
+ <div key={ii} style={{width:24,height:24,borderRadius:RAD.sm,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,background:pp.result==="W"?"rgba(48,209,88,0.15)":pp.result==="L"?"rgba(255,69,58,0.12)":"rgba(255,255,255,0.06)",color:pp.result==="W"?IOS.green:pp.result==="L"?IOS.red:IOS.label3}}>{pp.result==="W"?"W":pp.result==="L"?"L":"·"}</div>
  ))}
  </div>
  {myPending>0&&<div style={{fontSize:11,color:"rgba(255,255,255,0.46)",fontWeight:600}}>{myPending} pending</div>}
@@ -12143,7 +12502,7 @@ function App() {
  const _lab = slotType ? (slotLabels[slotType]||slotType) : "";
  const _tap = !!(isMe && onAdd);
  return (
- <div onClick={_tap?onAdd:undefined} style={{flex:1,borderRadius:12,minHeight:68,background:_tap?"#0B111C":"#09090B",border:_tap?("1px dashed "+IOS.blue+"55"):"1px dashed #24242C",display:"flex",flexDirection:"column",alignItems:isMe?"flex-start":"flex-end",justifyContent:"center",gap:4,padding:"0 12px",cursor:_tap?"pointer":"default"}}>
+ <div onClick={_tap?onAdd:undefined} style={{flex:1,borderRadius:RAD.md,minHeight:68,background:_tap?"#0B111C":"#09090B",border:_tap?("1px dashed "+IOS.blue+"55"):"1px dashed #24242C",display:"flex",flexDirection:"column",alignItems:isMe?"flex-start":"flex-end",justifyContent:"center",gap:4,padding:"0 12px",cursor:_tap?"pointer":"default"}}>
  {_lab&&<span style={{fontSize:8,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:_tap?IOS.blue:"#4a4a52"}}>{_lab}</span>}
  <span style={{fontSize:isMe?11:10,fontWeight:isMe?800:700,color:isMe?IOS.blue:"#3a3a40"}}>{isMe?(slotType?"+ Add "+_lab:"+ Add pick"):"Not locked yet"}</span>
  </div>
@@ -12157,7 +12516,7 @@ function App() {
  const _graded=picks.some(p=>p.result&&p.result!=="pending");
  const _started=_graded || _earliest===0 || _earliest<=_now; // unknown start time -> reveal (never hide forever)
  if(!_started) return (
- <div style={{flex:1,borderRadius:12,minHeight:68,background:"#131318",border:"0.5px solid rgba(255,255,255,0.07)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4}}>
+ <div style={{flex:1,borderRadius:RAD.md,minHeight:68,background:"#131318",border:EDGE.hair,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4}}>
  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
  <span style={{fontSize:9.5,fontWeight:800,color:"rgba(255,255,255,0.55)",letterSpacing:0.4}}>LOCKED</span>
  <span style={{fontSize:8,fontWeight:600,color:"#666"}}>Reveals at game time</span>
@@ -12198,12 +12557,12 @@ function App() {
  const ptsLabel = voided?"voided":won?`+${pts} pts`:lost?"+0 pts":`+${potPts} pts if win`;
 
  return (
- <div style={{flex:1,position:"relative",overflow:"hidden",borderRadius:12,padding:"9px 10px 8px 12px",minHeight:68,background:"#131318",border:"0.5px solid rgba(255,255,255,0.07)",display:"flex",flexDirection:"column",justifyContent:"space-between",cursor:isParlay?"pointer":undefined}}
+ <div style={{flex:1,position:"relative",overflow:"hidden",borderRadius:RAD.md,padding:"9px 10px 8px 12px",minHeight:68,background:"#131318",border:EDGE.hair,display:"flex",flexDirection:"column",justifyContent:"space-between",cursor:isParlay?"pointer":undefined}}
  onClick={isParlay?()=>{const el=document.getElementById(expandId);if(el)el.style.display=el.style.display==="block"?"none":"block";}:undefined}>
  <div style={{position:"absolute",top:0,left:0,bottom:0,width:3,borderRadius:"3px 0 0 3px",background:strip}}/>
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
  <div style={{display:"flex",alignItems:"center",gap:4,minWidth:0}}><span style={{width:3.5,height:3.5,borderRadius:"50%",background:c,display:"inline-block",flexShrink:0}}/><span style={{fontSize:8,fontWeight:700,color:"rgba(255,255,255,0.30)",letterSpacing:.5,textTransform:"uppercase",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{typeLabel}</span>{picks[0]?.power_up_id&&<PUBadge puId={picks[0].power_up_id} size={13} />}</div>
- <div style={{display:"flex",alignItems:"center",gap:4,flexShrink:0,marginLeft:4}}>{showMult&&<span style={{fontSize:8.5,fontWeight:700,padding:"2px 5px",borderRadius:5,background:"rgba(255,255,255,0.07)",border:"0.5px solid rgba(255,255,255,0.07)",color:"rgba(255,255,255,0.8)"}}>{picks[0]?.multiplier}×</span>}{(won||lost)&&<span style={{fontSize:8,fontWeight:800,padding:"2px 5px",borderRadius:4,background:badgeBg,border:`0.5px solid ${won?"rgba(48,209,88,0.25)":"rgba(255,69,58,0.25)"}`,color:badgeColor}}>{won?"W":"L"}</span>}</div>
+ <div style={{display:"flex",alignItems:"center",gap:4,flexShrink:0,marginLeft:4}}>{showMult&&<span style={{fontSize:8.5,fontWeight:700,padding:"2px 5px",borderRadius:5,background:"rgba(255,255,255,0.07)",border:EDGE.hair,color:"rgba(255,255,255,0.8)"}}>{picks[0]?.multiplier}×</span>}{(won||lost)&&<span style={{fontSize:8,fontWeight:800,padding:"2px 5px",borderRadius:4,background:badgeBg,border:`0.5px solid ${won?"rgba(48,209,88,0.25)":"rgba(255,69,58,0.25)"}`,color:badgeColor}}>{won?"W":"L"}</span>}</div>
  </div>
  <div style={{fontSize:11,fontWeight:700,color:"#fff",lineHeight:1.25,marginTop:3,textAlign:"left",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{pickName}</div>
  {gameCtx&&<div style={{fontSize:9,color:"#666",marginTop:1,textAlign:"left",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{gameCtx}</div>}
@@ -12213,7 +12572,7 @@ function App() {
  </div>
  {!isParlay && picks[0] && (liveMatch(picks[0], liveGames) || (picks[0].away_score!=null && picks[0].home_score!=null)) && <div style={{marginTop:4}} onClick={(e)=>e.stopPropagation()}><ScoreChip pick={picks[0]} live={liveMatch(picks[0], liveGames)} onOpen={()=>openGamecast(picks[0])}/></div>}
  {isMe && !isParlay && result==="pending" && myPUs.some(p=>p.id==="second") && (
- <button onClick={(e)=>{e.stopPropagation(); setSecondSwap({pick:picks[0], category:(picks[0].slot||"ml").split("_")[0]});}} style={{marginTop:5,width:"100%",padding:"4px",borderRadius:6,border:`1px solid ${IOS.orange}55`,background:`${IOS.orange}1a`,color:IOS.orange,fontSize:8.5,fontWeight:800,letterSpacing:0.3,cursor:"pointer"}}>SECOND CHANCE</button>
+ <button onClick={(e)=>{e.stopPropagation(); setSecondSwap({pick:picks[0], category:(picks[0].slot||"ml").split("_")[0]});}} style={{marginTop:5,width:"100%",padding:"4px",borderRadius:RAD.sm,border:`1px solid ${IOS.orange}55`,background:`${IOS.orange}1a`,color:IOS.orange,fontSize:8.5,fontWeight:800,letterSpacing:0.3,cursor:"pointer"}}>SECOND CHANCE</button>
  )}
  {isParlay&&<div style={{fontSize:8,color:"rgba(255,255,255,0.40)",marginTop:3}}>▾ tap to see legs</div>}
  {isParlay&&(
@@ -12245,7 +12604,7 @@ function App() {
  {renderCard(row.mine, true, "mexp-my-"+row.key, _t, row.mode==="slot", (()=>{ const sp=savedPicks?.flexPicks; if(sp) setFlexPicks(sp); setSavedPicks(null); setSubmitted(false); setBuildingSlip(true); if(row.mode==="slot"){ setGridTargetSlot(row.idx); setGridType(_t||"ml"); setGridPropSub("all"); setScreen("browser"); } else { setScreen("picks"); } }))}
  <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",paddingTop:20,gap:3}}>
  {row.mode==="slot"
- ? <div style={{width:26,height:26,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:800,background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.07)",color:"rgba(255,255,255,0.30)"}}>{_sh||"?"}</div>
+ ? <div style={{width:26,height:26,borderRadius:RAD.sm,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:800,background:"rgba(255,255,255,0.05)",border:EDGE.hair,color:"rgba(255,255,255,0.30)"}}>{_sh||"?"}</div>
  : <span style={{fontSize:11,fontWeight:900,color:"#333"}}>{row.mult}×</span>}
  </div>
  {renderCard(row.theirs, false, "mexp-opp-"+row.key, _t, row.mode==="slot")}
@@ -12284,16 +12643,16 @@ function App() {
  <div style={{fontSize:48,marginBottom:12}}></div>
  <div style={{fontSize:22,fontWeight:800,letterSpacing:-0.5,color:"#fff",marginBottom:6}}>{newLeagueCreated.name}</div>
  <div style={{fontSize:14,color:IOS.label3,marginBottom:28}}>Your league is live. Share the invite code.</div>
- <div style={{background:IOS.bg3,borderRadius:16,padding:"20px 24px",marginBottom:20,border:`1px solid ${IOS.blue}30`}}>
+ <div style={{background:IOS.bg3,borderRadius:RAD.lg,padding:"20px 24px",marginBottom:20,border:`1px solid ${IOS.blue}30`}}>
  <div style={{fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:IOS.blue,marginBottom:8}}>Invite Code</div>
  <div style={{fontSize:40,fontWeight:800,letterSpacing:6,color:"#fff"}}>{newLeagueCreated.invite_code}</div>
  <div style={{display:"flex",gap:10,marginTop:16}}>
  <button onClick={()=>shareInvite(newLeagueCreated.invite_code, newLeagueCreated.name)}
- style={{flex:1,background:IOS.blue,border:"none",borderRadius:12,padding:"12px",fontFamily:"Barlow,sans-serif",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer"}}>
+ style={{flex:1,background:IOS.blue,border:"none",borderRadius:RAD.md,padding:"12px",fontFamily:"Barlow,sans-serif",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer"}}>
  Share Invite
  </button>
  <button onClick={async()=>{try{await navigator.clipboard.writeText(newLeagueCreated.invite_code);alert("Copied! ");}catch(e){alert(newLeagueCreated.invite_code);}}}
- style={{flex:1,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:12,padding:"12px",fontFamily:"Barlow,sans-serif",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer"}}>
+ style={{flex:1,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:RAD.md,padding:"12px",fontFamily:"Barlow,sans-serif",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer"}}>
  Copy Code
  </button>
  </div>
@@ -12311,7 +12670,7 @@ function App() {
  setNewLeagueType(null);
  setNewLeagueStep(0);
  setNewLeagueWeeks(18);
- }} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:14,padding:"16px",fontFamily:"Barlow,sans-serif",fontSize:17,fontWeight:600,color:"#fff",cursor:"pointer"}}>
+ }} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:RAD.lg,padding:"16px",fontFamily:"Barlow,sans-serif",fontSize:17,fontWeight:600,color:"#fff",cursor:"pointer"}}>
  Go to My League →
  </button>
  </div>
@@ -12338,12 +12697,12 @@ function App() {
        if(t.id==='bracket'&&![4,8,16,32].includes(newLeagueSize)) setNewLeagueSize(8);
      }} style={{
        display:"flex",flexDirection:"column",alignItems:"center",textAlign:"center",
-       borderRadius:10,padding:"16px 14px",
+       borderRadius:RAD.md,padding:"16px 14px",
        marginBottom:8,cursor:"pointer",transition:"all .15s",
        background:newLeagueType===t.id?"rgba(10,132,255,0.08)":"#111",
        border:`0.5px solid ${newLeagueType===t.id?"rgba(10,132,255,0.35)":"#1E1E1E"}`,
      }}>
-       <div style={{width:40,height:40,borderRadius:10,background:newLeagueType===t.id?"rgba(10,132,255,0.15)":"#1A1A1A",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:10,transition:"background .15s"}}>
+       <div style={{width:40,height:40,borderRadius:RAD.md,background:newLeagueType===t.id?"rgba(10,132,255,0.15)":"#1A1A1A",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:10,transition:"background .15s"}}>
          {t.id==="h2h"&&<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={newLeagueType===t.id?IOS.blue:"#555"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>}
          {t.id==="points"&&<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={newLeagueType===t.id?IOS.blue:"#555"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>}
          {t.id==="bracket"&&<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={newLeagueType===t.id?IOS.blue:"#555"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>}
@@ -12360,7 +12719,7 @@ function App() {
    <button
      disabled={!newLeagueType}
      onClick={()=>{if(newLeagueType) setNewLeagueStep(1);}}
-     style={{width:"100%",background:newLeagueType?IOS.blue:"rgba(255,255,255,0.08)",border:"none",borderRadius:10,padding:"13px",fontFamily:"Barlow,sans-serif",fontSize:15,fontWeight:700,color:newLeagueType?"#fff":"rgba(255,255,255,0.25)",cursor:newLeagueType?"pointer":"default",marginTop:8,marginBottom:4,transition:"all .2s"}}
+     style={{width:"100%",background:newLeagueType?IOS.blue:"rgba(255,255,255,0.08)",border:"none",borderRadius:RAD.md,padding:"13px",fontFamily:"Barlow,sans-serif",fontSize:15,fontWeight:700,color:newLeagueType?"#fff":"rgba(255,255,255,0.25)",cursor:newLeagueType?"pointer":"default",marginTop:8,marginBottom:4,transition:"all .2s"}}
    >
      Continue
    </button>
@@ -12376,47 +12735,47 @@ function App() {
  <div style={{fontSize:18,fontWeight:800,color:"#fff",marginBottom:4}}>Design the slip</div>
  <div style={{fontSize:13,color:"#555",marginBottom:16}}>Set each player's weekly picks — how many, what type, and the points multiplier.</div>
 
- <div onClick={()=>setPresetSheet(true)} style={{display:"flex",alignItems:"center",gap:11,background:"linear-gradient(135deg,rgba(10,132,255,0.14),rgba(100,210,255,0.08))",border:"0.5px solid rgba(10,132,255,0.32)",borderRadius:13,padding:"12px 14px",marginBottom:14,cursor:"pointer"}}>
- <div style={{width:32,height:32,borderRadius:9,background:"rgba(10,132,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
+ <div onClick={()=>setPresetSheet(true)} style={{display:"flex",alignItems:"center",gap:11,background:"linear-gradient(135deg,rgba(10,132,255,0.14),rgba(100,210,255,0.08))",border:"0.5px solid rgba(10,132,255,0.32)",borderRadius:RAD.md,padding:"12px 14px",marginBottom:14,cursor:"pointer"}}>
+ <div style={{width:32,height:32,borderRadius:RAD.sm,background:"rgba(10,132,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
  <div style={{flex:1}}><div style={{fontSize:13,fontWeight:800,color:"#fff"}}>Start from a layout</div><div style={{fontSize:11,color:"rgba(255,255,255,0.55)",marginTop:1}}>Pick a preset, then tweak</div></div>
  <div style={{color:"#555",fontSize:18}}>›</div>
  </div>
 
- <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"linear-gradient(160deg,#15151A,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.09)",borderRadius:14,padding:"13px 15px",marginBottom:14}}>
+ <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"linear-gradient(160deg,#15151A,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.lg,padding:"13px 15px",marginBottom:14}}>
  <div style={{fontSize:13,fontWeight:700,color:"#fff"}}>Picks per week<div style={{fontSize:11,color:"#555",fontWeight:600,marginTop:2}}>How many slots in the slip</div></div>
  <div style={{display:"flex",alignItems:"center",gap:12}}>
- <div onClick={()=>{setNewLeagueSlots(s=>s.length>1?s.slice(0,-1):s);setNewLeaguePool(p=>p.length>1?p.slice(0,-1):p);}} style={{width:32,height:32,borderRadius:9,background:newLeagueSlots.length>1?"rgba(255,255,255,0.08)":"rgba(255,255,255,0.03)",display:"flex",alignItems:"center",justifyContent:"center",cursor:newLeagueSlots.length>1?"pointer":"default",fontSize:19,fontWeight:700,color:newLeagueSlots.length>1?"#fff":"#444"}}>−</div>
+ <div onClick={()=>{setNewLeagueSlots(s=>s.length>1?s.slice(0,-1):s);setNewLeaguePool(p=>p.length>1?p.slice(0,-1):p);}} style={{width:32,height:32,borderRadius:RAD.sm,background:newLeagueSlots.length>1?"rgba(255,255,255,0.08)":"rgba(255,255,255,0.03)",display:"flex",alignItems:"center",justifyContent:"center",cursor:newLeagueSlots.length>1?"pointer":"default",fontSize:19,fontWeight:700,color:newLeagueSlots.length>1?"#fff":"#444"}}>−</div>
  <div style={{fontSize:20,fontWeight:800,color:"#fff",minWidth:20,textAlign:"center"}}>{newLeagueSlots.length}</div>
- <div onClick={()=>{setNewLeagueSlots(s=>s.length<10?[...s,{type:null,mult:1}]:s);setNewLeaguePool(p=>p.length<10?[...p,p.length+1]:p);}} style={{width:32,height:32,borderRadius:9,background:newLeagueSlots.length<10?"rgba(255,255,255,0.08)":"rgba(255,255,255,0.03)",display:"flex",alignItems:"center",justifyContent:"center",cursor:newLeagueSlots.length<10?"pointer":"default",fontSize:19,fontWeight:700,color:newLeagueSlots.length<10?"#fff":"#444"}}>+</div>
+ <div onClick={()=>{setNewLeagueSlots(s=>s.length<10?[...s,{type:null,mult:1}]:s);setNewLeaguePool(p=>p.length<10?[...p,p.length+1]:p);}} style={{width:32,height:32,borderRadius:RAD.sm,background:newLeagueSlots.length<10?"rgba(255,255,255,0.08)":"rgba(255,255,255,0.03)",display:"flex",alignItems:"center",justifyContent:"center",cursor:newLeagueSlots.length<10?"pointer":"default",fontSize:19,fontWeight:700,color:newLeagueSlots.length<10?"#fff":"#444"}}>+</div>
  </div>
  </div>
 
- <div onClick={()=>setSlotSheetIdx(-1)} style={{display:"flex",alignItems:"center",gap:11,background:"linear-gradient(135deg,rgba(255,55,95,0.14),rgba(191,90,242,0.08))",border:"0.5px solid rgba(255,55,95,0.32)",borderRadius:13,padding:"12px 14px",marginBottom:14,cursor:"pointer"}}>
- <div style={{width:32,height:32,borderRadius:9,background:"rgba(255,55,95,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#FF375F" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
+ <div onClick={()=>setSlotSheetIdx(-1)} style={{display:"flex",alignItems:"center",gap:11,background:"linear-gradient(135deg,rgba(255,55,95,0.14),rgba(191,90,242,0.08))",border:"0.5px solid rgba(255,55,95,0.32)",borderRadius:RAD.md,padding:"12px 14px",marginBottom:14,cursor:"pointer"}}>
+ <div style={{width:32,height:32,borderRadius:RAD.sm,background:"rgba(255,55,95,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#FF375F" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
  <div style={{flex:1}}><div style={{fontSize:13,fontWeight:800,color:"#fff"}}>Single-type league</div><div style={{fontSize:11,color:"rgba(255,255,255,0.55)",marginTop:1}}>Make every slot the same type</div></div>
  <div style={{color:"#555",fontSize:18}}>›</div>
  </div>
 
  {newLeagueSlots.map((s,i)=>{const tt=SLOT_TYPES.find(x=>x.id===s.type);return (
- <div key={i} onClick={()=>setSlotSheetIdx(i)} style={{display:"flex",alignItems:"center",gap:11,background:"linear-gradient(160deg,#15151A,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.09)",borderRadius:13,padding:"12px 12px",marginBottom:9,cursor:"pointer"}}>
- <div style={{width:26,height:26,borderRadius:8,background:"rgba(255,255,255,0.07)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:"rgba(255,255,255,0.55)",flexShrink:0}}>{i+1}</div>
+ <div key={i} onClick={()=>setSlotSheetIdx(i)} style={{display:"flex",alignItems:"center",gap:11,background:"linear-gradient(160deg,#15151A,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.md,padding:"12px 12px",marginBottom:9,cursor:"pointer"}}>
+ <div style={{width:26,height:26,borderRadius:RAD.sm,background:"rgba(255,255,255,0.07)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:"rgba(255,255,255,0.55)",flexShrink:0}}>{i+1}</div>
  <div style={{flex:1,minWidth:0}}>
  <div style={{fontSize:15,fontWeight:800,color:tt?"#fff":"#666",display:"flex",alignItems:"center",gap:8}}>{tt&&<span style={{width:9,height:9,borderRadius:3,background:tt.color}}/>}{tt?tt.l:"Tap to choose type"}</div>
  <div style={{fontSize:11,color:"#555",fontWeight:600,marginTop:2}}>{tt?tt.scope:"any bet type"}</div>
- {s.type==="prop" && (()=>{ let _lbl="Any prop"; if(s.market){ for(const sp of newLeagueSports){ const f=(PROP_SUBS_BY_SPORT[sp]||[]).find(x=>x.id===s.market); if(f){ _lbl=f.l; break; } } } return (<div onClick={(e)=>{e.stopPropagation(); setMarketSheet(i);}} style={{display:"inline-flex",alignItems:"center",gap:4,marginTop:6,background:"rgba(255,214,10,0.12)",border:"0.5px solid rgba(255,214,10,0.3)",borderRadius:7,padding:"3px 8px",cursor:"pointer"}}><span style={{fontSize:10.5,fontWeight:700,color:"#FFD60A"}}>{_lbl}</span><span style={{fontSize:9,color:"#FFD60A"}}>▾</span></div>); })()}
+ {s.type==="prop" && (()=>{ let _lbl="Any prop"; if(s.market){ for(const sp of newLeagueSports){ const f=(PROP_SUBS_BY_SPORT[sp]||[]).find(x=>x.id===s.market); if(f){ _lbl=f.l; break; } } } return (<div onClick={(e)=>{e.stopPropagation(); setMarketSheet(i);}} style={{display:"inline-flex",alignItems:"center",gap:4,marginTop:6,background:"rgba(255,214,10,0.12)",border:"0.5px solid rgba(255,214,10,0.3)",borderRadius:RAD.sm,padding:"3px 8px",cursor:"pointer"}}><span style={{fontSize:10.5,fontWeight:700,color:"#FFD60A"}}>{_lbl}</span><span style={{fontSize:9,color:"#FFD60A"}}>▾</span></div>); })()}
  </div>
  <div style={{color:"#555",fontSize:18,flexShrink:0}}>›</div>
  </div>
  );})}
 
- <div style={{background:"#111114",border:"0.5px solid rgba(255,255,255,0.12)",borderRadius:14,padding:"13px 14px",marginBottom:12}}>
+ <div style={{background:"#111114",border:EDGE.hair2,borderRadius:RAD.lg,padding:"13px 14px",marginBottom:12}}>
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:11}}>
  <div style={{fontSize:11,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:"rgba(255,255,255,0.5)"}}>Multiplier pool</div>
  <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.35)"}}>one used per pick</div>
  </div>
  <div style={{display:"flex",flexWrap:"wrap",gap:9}}>
  {newLeaguePool.map((v,i)=>(
- <div key={i} style={{width:58,borderRadius:12,border:"0.5px solid rgba(255,255,255,0.12)",background:"#17171b",textAlign:"center",padding:"7px 0 5px"}}>
+ <div key={i} style={{width:58,borderRadius:RAD.md,border:EDGE.hair2,background:"#17171b",textAlign:"center",padding:"7px 0 5px"}}>
  <div style={{fontSize:21,fontWeight:900,color:"#64D2FF",letterSpacing:"-0.5px"}}>{v}<span style={{fontSize:11,opacity:0.7}}>×</span></div>
  <div style={{display:"flex",borderTop:"0.5px solid rgba(255,255,255,0.1)",marginTop:5}}>
  <div onClick={()=>setNewLeaguePool(p=>p.map((x,j)=>j===i?Math.max(1,x-1):x))} style={{flex:1,borderRight:"0.5px solid rgba(255,255,255,0.1)",color:"rgba(255,255,255,0.5)",fontSize:14,fontWeight:800,padding:"3px 0",cursor:"pointer"}}>−</div>
@@ -12434,13 +12793,13 @@ function App() {
 
  {(()=>{const ready=newLeagueSlots.every(s=>s.type)&&!creatingLeague;const tot=newLeaguePool.reduce((a,b)=>a+b,0);const uniq=new Set(newLeagueSlots.map(s=>s.type)).size;return (<>
  <div style={{textAlign:"center",fontSize:11,color:"#555",fontWeight:600,margin:"6px 0 9px"}}>{newLeagueSlots.length} picks · {tot} max multiplier{uniq===1&&newLeagueSlots.length>1?" · single-type league":""}</div>
- <button disabled={!ready} onClick={()=>{if(ready)createLeague(newLeagueName.trim(), newLeagueSports[0]);}} style={{width:"100%",background:ready?IOS.blue:"rgba(255,255,255,0.08)",border:"none",borderRadius:12,padding:"15px",fontFamily:"Barlow,sans-serif",fontSize:16,fontWeight:800,color:ready?"#fff":"rgba(255,255,255,0.25)",cursor:ready?"pointer":"default",marginBottom:4}}>{creatingLeague?"Creating...":"Create League"}</button>
+ <button disabled={!ready} onClick={()=>{if(ready)createLeague(newLeagueName.trim(), newLeagueSports[0]);}} style={{width:"100%",background:ready?IOS.blue:"rgba(255,255,255,0.08)",border:"none",borderRadius:RAD.md,padding:"15px",fontFamily:"Barlow,sans-serif",fontSize:16,fontWeight:800,color:ready?"#fff":"rgba(255,255,255,0.25)",cursor:ready?"pointer":"default",marginBottom:4}}>{creatingLeague?"Creating...":"Create League"}</button>
  </>);})()}
 
  {presetSheet&&(
  <div style={{position:"fixed",inset:0,zIndex:200,display:"flex",flexDirection:"column",justifyContent:"flex-end"}}>
  <div onClick={()=>setPresetSheet(false)} style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.6)"}}/>
- <div style={{position:"relative",background:"#0C0C10",borderTopLeftRadius:22,borderTopRightRadius:22,border:"0.5px solid rgba(255,255,255,0.09)",maxHeight:"80vh",display:"flex",flexDirection:"column"}}>
+ <div style={{position:"relative",background:"#0C0C10",borderTopLeftRadius:22,borderTopRightRadius:22,border:EDGE.hair,maxHeight:"80vh",display:"flex",flexDirection:"column"}}>
  <div style={{width:38,height:4,borderRadius:2,background:"rgba(255,255,255,0.2)",margin:"10px auto 4px"}}/>
  <div style={{padding:"6px 18px 12px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
  <div style={{fontSize:17,fontWeight:800,color:"#fff"}}>Slip layouts</div>
@@ -12448,7 +12807,7 @@ function App() {
  </div>
  <div style={{overflowY:"auto",padding:"0 16px 26px"}}>
  {LAYOUT_PRESETS.filter(p=>!p.sports||p.sports.some(sp=>newLeagueSports.includes(sp))).map(p=>{const tot=p.slots.reduce((a,b)=>a+b.mult,0);return (
- <div key={p.id} onClick={()=>{ setNewLeagueSlots(p.slots.map(x=>({...x}))); setPresetSheet(false); }} style={{background:"linear-gradient(160deg,#15151A,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.09)",borderRadius:13,padding:"13px 14px",marginBottom:9,cursor:"pointer"}}>
+ <div key={p.id} onClick={()=>{ setNewLeagueSlots(p.slots.map(x=>({...x}))); setPresetSheet(false); }} style={{background:"linear-gradient(160deg,#15151A,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.md,padding:"13px 14px",marginBottom:9,cursor:"pointer"}}>
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
  <div style={{fontSize:15,fontWeight:800,color:"#fff"}}>{p.name}</div>
  <div style={{fontSize:11,fontWeight:700,color:"#555"}}>{p.slots.length} picks · {tot}× max</div>
@@ -12456,7 +12815,7 @@ function App() {
  <div style={{fontSize:12,color:"rgba(255,255,255,0.55)",marginTop:3,lineHeight:1.4}}>{p.desc}</div>
  <div style={{display:"flex",flexWrap:"wrap",gap:5,marginTop:9}}>
  {p.slots.map((sl,i)=>{const tt=SLOT_TYPES.find(x=>x.id===sl.type);return (
- <div key={i} style={{display:"flex",alignItems:"center",gap:5,background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:7,padding:"3px 7px"}}>
+ <div key={i} style={{display:"flex",alignItems:"center",gap:5,background:"rgba(255,255,255,0.05)",border:EDGE.hair,borderRadius:RAD.sm,padding:"3px 7px"}}>
  <span style={{width:7,height:7,borderRadius:2,background:tt?tt.color:"#555"}}/>
  <span style={{fontSize:10.5,fontWeight:700,color:"#ccc"}}>{tt?tt.l:sl.type}</span>
  <span style={{fontSize:10.5,fontWeight:800,color:"#FFD60A"}}>{sl.mult}×</span>
@@ -12473,7 +12832,7 @@ function App() {
  {marketSheet!==null&&(()=>{ const _opts=[{id:null,l:"Any prop"}, ...[...new Map(newLeagueSports.flatMap(sp=>(PROP_SUBS_BY_SPORT[sp]||[]).filter(x=>x.id!=="all").map(x=>[x.id,x]))).values()]]; return (
  <div style={{position:"fixed",inset:0,zIndex:210,display:"flex",flexDirection:"column",justifyContent:"flex-end"}}>
  <div onClick={()=>setMarketSheet(null)} style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.6)"}}/>
- <div style={{position:"relative",background:"#0C0C10",borderTopLeftRadius:22,borderTopRightRadius:22,border:"0.5px solid rgba(255,255,255,0.09)",maxHeight:"80vh",display:"flex",flexDirection:"column"}}>
+ <div style={{position:"relative",background:"#0C0C10",borderTopLeftRadius:22,borderTopRightRadius:22,border:EDGE.hair,maxHeight:"80vh",display:"flex",flexDirection:"column"}}>
  <div style={{width:38,height:4,borderRadius:2,background:"rgba(255,255,255,0.2)",margin:"10px auto 4px"}}/>
  <div style={{padding:"6px 18px 12px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
  <div style={{fontSize:17,fontWeight:800,color:"#fff"}}>Prop market</div>
@@ -12482,7 +12841,7 @@ function App() {
  <div style={{fontSize:12,color:"rgba(255,255,255,0.5)",padding:"0 18px 12px",lineHeight:1.4}}>Lock this slot to a specific prop. Players only see that market when filling it.</div>
  <div style={{overflowY:"auto",padding:"0 16px 26px"}}>
  {_opts.map(o=>{ const sel=(newLeagueSlots[marketSheet]&&(newLeagueSlots[marketSheet].market||null))===o.id; return (
- <div key={o.id||"any"} onClick={()=>{ setNewLeagueSlots(arr=>arr.map((p,j)=>j===marketSheet?{...p,market:o.id}:p)); setMarketSheet(null); }} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:sel?"rgba(10,132,255,0.1)":"linear-gradient(160deg,#15151A,#0B0B0E 80%)",border:"0.5px solid "+(sel?"rgba(10,132,255,0.6)":"rgba(255,255,255,0.09)"),borderRadius:12,padding:"13px 14px",marginBottom:8,cursor:"pointer"}}>
+ <div key={o.id||"any"} onClick={()=>{ setNewLeagueSlots(arr=>arr.map((p,j)=>j===marketSheet?{...p,market:o.id}:p)); setMarketSheet(null); }} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:sel?"rgba(10,132,255,0.1)":"linear-gradient(160deg,#15151A,#0B0B0E 80%)",border:"0.5px solid "+(sel?"rgba(10,132,255,0.6)":"rgba(255,255,255,0.09)"),borderRadius:RAD.md,padding:"13px 14px",marginBottom:8,cursor:"pointer"}}>
  <span style={{fontSize:15,fontWeight:700,color:"#fff"}}>{o.l}</span>
  {sel&&<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
  </div>
@@ -12495,7 +12854,7 @@ function App() {
  {slotSheetIdx!==null&&(
  <div style={{position:"fixed",inset:0,zIndex:200,display:"flex",flexDirection:"column",justifyContent:"flex-end"}}>
  <div onClick={()=>setSlotSheetIdx(null)} style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.6)"}}/>
- <div style={{position:"relative",background:"#0C0C10",borderTopLeftRadius:22,borderTopRightRadius:22,border:"0.5px solid rgba(255,255,255,0.09)",maxHeight:"80vh",display:"flex",flexDirection:"column"}}>
+ <div style={{position:"relative",background:"#0C0C10",borderTopLeftRadius:22,borderTopRightRadius:22,border:EDGE.hair,maxHeight:"80vh",display:"flex",flexDirection:"column"}}>
  <div style={{width:38,height:4,borderRadius:2,background:"rgba(255,255,255,0.2)",margin:"10px auto 4px"}}/>
  <div style={{padding:"6px 18px 12px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
  <div style={{fontSize:17,fontWeight:800,color:"#fff"}}>{slotSheetIdx===-1?"Single-type league":"Slot "+(slotSheetIdx+1)+" · pick type"}</div>
@@ -12503,7 +12862,7 @@ function App() {
  </div>
  <div style={{overflowY:"auto",padding:"0 16px 26px"}}>
  {slotSheetIdx===-1&&<div style={{fontSize:12,color:"rgba(255,255,255,0.5)",marginBottom:12,lineHeight:1.4}}>Pick one type and every slot becomes that type.</div>}
- <div style={{display:"flex",alignItems:"center",gap:8,background:"#16161a",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:11,padding:"9px 12px",marginBottom:10}}>
+ <div style={{display:"flex",alignItems:"center",gap:8,background:"#16161a",border:EDGE.hair2,borderRadius:RAD.md,padding:"9px 12px",marginBottom:10}}>
  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
  <input value={slotSearch} onChange={e=>setSlotSearch(e.target.value)} placeholder="Search bet types" style={{flex:1,background:"transparent",border:0,outline:0,color:"#fff",fontFamily:"Barlow,sans-serif",fontSize:14}}/>
  </div>
@@ -12520,7 +12879,7 @@ function App() {
  return (<div key={g.cat}>
  <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(255,255,255,0.32)",margin:"12px 2px 6px"}}>{g.cat}</div>
  {items.map(tp=>{ const sel=slotSheetIdx>=0&&newLeagueSlots[slotSheetIdx]&&newLeagueSlots[slotSheetIdx].type===tp.id; return (
- <div key={tp.id} onClick={()=>pickType(tp.id)} style={{display:"flex",alignItems:"center",gap:11,background:sel?"rgba(10,132,255,0.1)":"transparent",border:"0.5px solid "+(sel?"rgba(10,132,255,0.4)":"transparent"),borderRadius:11,padding:"10px 11px",cursor:"pointer"}}>
+ <div key={tp.id} onClick={()=>pickType(tp.id)} style={{display:"flex",alignItems:"center",gap:11,background:sel?"rgba(10,132,255,0.1)":"transparent",border:"0.5px solid "+(sel?"rgba(10,132,255,0.4)":"transparent"),borderRadius:RAD.md,padding:"10px 11px",cursor:"pointer"}}>
  <span style={{width:9,height:9,borderRadius:"50%",background:tp.color,flexShrink:0}}/>
  <div style={{flex:1,fontSize:14.5,fontWeight:700,color:"#fff"}}>{tp.l}</div>
  <div style={{fontSize:11,color:"rgba(255,255,255,0.35)"}}>{tp.scope}</div>
@@ -12555,7 +12914,7 @@ function App() {
      const isSelected = newLeagueSports.includes(sp.id);
      return (
      <div key={sp.id} onClick={()=>toggleNewLeagueSport(sp.id)}
-     style={{padding:"7px 14px",borderRadius:6,fontSize:12,fontWeight:600,cursor:"pointer",transition:"all .15s",
+     style={{padding:"7px 14px",borderRadius:RAD.sm,fontSize:12,fontWeight:600,cursor:"pointer",transition:"all .15s",
        background:isSelected?"rgba(10,132,255,0.12)":"#111",
        border:`0.5px solid ${isSelected?"rgba(10,132,255,0.4)":"#222"}`,
        color:isSelected?IOS.blue:"rgba(255,255,255,0.55)",
@@ -12567,7 +12926,7 @@ function App() {
    );})}
    </div>
    {!isPro && (
-     <div onClick={()=>setShowPaywall("sport")} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:"rgba(191,90,242,0.06)",border:"0.5px solid rgba(191,90,242,0.2)",borderRadius:8,marginBottom:16,cursor:"pointer"}}>
+     <div onClick={()=>setShowPaywall("sport")} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:"rgba(191,90,242,0.06)",border:"0.5px solid rgba(191,90,242,0.2)",borderRadius:RAD.sm,marginBottom:16,cursor:"pointer"}}>
        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#BF5AF2" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
        <div style={{fontSize:11,color:"rgba(255,255,255,0.4)"}}>Mix NFL, NBA, MLB & NHL picks in one league</div>
        <div style={{marginLeft:"auto",fontSize:9,fontWeight:700,color:"#BF5AF2",background:"rgba(191,90,242,0.12)",border:"0.5px solid rgba(191,90,242,0.3)",borderRadius:4,padding:"2px 6px",flexShrink:0}}>Pro</div>
@@ -12583,7 +12942,7 @@ function App() {
      value={newLeagueName}
      onChange={e=>setNewLeagueName(e.target.value)}
      placeholder="e.g. The Boys League"
-     style={{width:"100%",background:"#111",border:"0.5px solid #222",borderRadius:8,padding:"11px 13px",color:"#fff",fontSize:14,fontFamily:"Barlow,sans-serif",outline:"none",marginBottom:16,boxSizing:"border-box"}}
+     style={{width:"100%",background:"#111",border:"0.5px solid #222",borderRadius:RAD.sm,padding:"11px 13px",color:"#fff",fontSize:14,fontFamily:"Barlow,sans-serif",outline:"none",marginBottom:16,boxSizing:"border-box"}}
    />
 
    {/* Size */}
@@ -12592,16 +12951,16 @@ function App() {
    </div>
    {newLeagueType==="points"?(
      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
-       <div onClick={()=>setNewLeagueSize(s=>Math.max(2,s-1))} style={{width:28,height:28,borderRadius:6,background:"#1A1A1A",border:"0.5px solid #2A2A2A",color:"#ccc",fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>−</div>
+       <div onClick={()=>setNewLeagueSize(s=>Math.max(2,s-1))} style={{width:28,height:28,borderRadius:RAD.sm,background:"#1A1A1A",border:"0.5px solid #2A2A2A",color:"#ccc",fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>−</div>
        <div style={{fontSize:16,fontWeight:700,color:"#fff",minWidth:28,textAlign:"center"}}>{newLeagueSize}</div>
-       <div onClick={()=>setNewLeagueSize(s=>Math.min(32,s+1))} style={{width:28,height:28,borderRadius:6,background:"#1A1A1A",border:"0.5px solid #2A2A2A",color:"#ccc",fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>+</div>
+       <div onClick={()=>setNewLeagueSize(s=>Math.min(32,s+1))} style={{width:28,height:28,borderRadius:RAD.sm,background:"#1A1A1A",border:"0.5px solid #2A2A2A",color:"#ccc",fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>+</div>
        <div style={{fontSize:12,color:"rgba(255,255,255,0.6)",marginLeft:4}}>players (2–32)</div>
      </div>
    ):(
      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:4}}>
      {(newLeagueType==="bracket"?[4,8,16,32]:[6,8,10,12]).map(sz=>(
        <div key={sz} onClick={()=>setNewLeagueSize(sz)} style={{
-         flex:1,minWidth:52,borderRadius:8,padding:"10px 4px",textAlign:"center",cursor:"pointer",transition:"all .15s",
+         flex:1,minWidth:52,borderRadius:RAD.sm,padding:"10px 4px",textAlign:"center",cursor:"pointer",transition:"all .15s",
          background:newLeagueSize===sz?"rgba(10,132,255,0.12)":"#111",
          border:`0.5px solid ${newLeagueSize===sz?"rgba(10,132,255,0.4)":"#222"}`,
        }}>
@@ -12612,7 +12971,7 @@ function App() {
      </div>
    )}
    {newLeagueType==="bracket"&&(
-     <div style={{background:"rgba(255,159,10,0.07)",border:"0.5px solid rgba(255,159,10,0.2)",borderRadius:8,padding:"9px 12px",marginBottom:12,marginTop:8}}>
+     <div style={{background:"rgba(255,159,10,0.07)",border:"0.5px solid rgba(255,159,10,0.2)",borderRadius:RAD.sm,padding:"9px 12px",marginBottom:12,marginTop:8}}>
        <div style={{display:"flex",justifyContent:"space-between",fontSize:11,padding:"2px 0"}}><span style={{color:"rgba(255,159,10,0.7)"}}>Duration</span><span style={{fontWeight:700,color:"#FF9F0A"}}>{({4:2,8:3,16:4,32:5})[newLeagueSize]||3} weeks</span></div>
        <div style={{display:"flex",justifyContent:"space-between",fontSize:11,padding:"2px 0"}}><span style={{color:"rgba(255,159,10,0.7)"}}>Format</span><span style={{fontWeight:700,color:"#FF9F0A"}}>Single elimination</span></div>
        <div style={{display:"flex",justifyContent:"space-between",fontSize:11,padding:"2px 0"}}><span style={{color:"rgba(255,159,10,0.7)"}}>Byes</span><span style={{fontWeight:700,color:"#FF9F0A"}}>None</span></div>
@@ -12626,7 +12985,7 @@ function App() {
      <>
      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4,marginTop:12}}>
        <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"rgba(255,255,255,0.6)"}}>Power-Ups</div>
-       <div onClick={()=>setNewLeaguePowerUps(v=>!v)} style={{width:44,height:26,borderRadius:13,background:newLeaguePowerUps?IOS.blue:"#2A2A2A",border:`1px solid ${newLeaguePowerUps?IOS.blue:"#3A3A3A"}`,position:"relative",cursor:"pointer",flexShrink:0}}>
+       <div onClick={()=>setNewLeaguePowerUps(v=>!v)} style={{width:44,height:26,borderRadius:RAD.md,background:newLeaguePowerUps?IOS.blue:"#2A2A2A",border:`1px solid ${newLeaguePowerUps?IOS.blue:"#3A3A3A"}`,position:"relative",cursor:"pointer",flexShrink:0}}>
          <div style={{position:"absolute",top:2,left:newLeaguePowerUps?18:2,width:22,height:22,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
        </div>
      </div>
@@ -12635,13 +12994,13 @@ function App() {
      )}
      <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"rgba(255,255,255,0.6)",marginBottom:8,marginTop:12}}>Season length</div>
      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
-       <div onClick={()=>setNewLeagueWeeks(w=>Math.max(1,w-1))} style={{width:28,height:28,borderRadius:6,background:"#1A1A1A",border:"0.5px solid #2A2A2A",color:"#ccc",fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>−</div>
+       <div onClick={()=>setNewLeagueWeeks(w=>Math.max(1,w-1))} style={{width:28,height:28,borderRadius:RAD.sm,background:"#1A1A1A",border:"0.5px solid #2A2A2A",color:"#ccc",fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>−</div>
        <div style={{fontSize:16,fontWeight:700,color:"#fff",minWidth:28,textAlign:"center"}}>{newLeagueWeeks}</div>
-       <div onClick={()=>setNewLeagueWeeks(w=>Math.min(weekCap.max>0?weekCap.max:30,w+1))} style={{width:28,height:28,borderRadius:6,background:"#1A1A1A",border:"0.5px solid #2A2A2A",color:(weekCap.max>0&&newLeagueWeeks>=weekCap.max)?"#444":"#ccc",fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",cursor:(weekCap.max>0&&newLeagueWeeks>=weekCap.max)?"default":"pointer"}}>+</div>
+       <div onClick={()=>setNewLeagueWeeks(w=>Math.min(weekCap.max>0?weekCap.max:30,w+1))} style={{width:28,height:28,borderRadius:RAD.sm,background:"#1A1A1A",border:"0.5px solid #2A2A2A",color:(weekCap.max>0&&newLeagueWeeks>=weekCap.max)?"#444":"#ccc",fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",cursor:(weekCap.max>0&&newLeagueWeeks>=weekCap.max)?"default":"pointer"}}>+</div>
        <div style={{fontSize:12,color:"rgba(255,255,255,0.6)",marginLeft:4}}>weeks</div>
      </div>
      <div style={{fontSize:11,color:"rgba(255,255,255,0.45)",marginBottom:16}}>{newLeagueType==="points"?"Ranked by total points at the end":"NFL regular season is 18 weeks"}</div>
-     {weekCap.reason&&(<div style={{display:"flex",gap:7,alignItems:"flex-start",background:"rgba(255,159,10,0.10)",border:"0.5px solid rgba(255,159,10,0.3)",borderRadius:10,padding:"9px 11px",marginTop:-10,marginBottom:14}}>
+     {weekCap.reason&&(<div style={{display:"flex",gap:7,alignItems:"flex-start",background:"rgba(255,159,10,0.10)",border:"0.5px solid rgba(255,159,10,0.3)",borderRadius:RAD.md,padding:"9px 11px",marginTop:-10,marginBottom:14}}>
        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FF9F0A" strokeWidth="2.2" strokeLinecap="round" style={{flexShrink:0,marginTop:1}}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
        <div style={{fontSize:10.5,color:"rgba(255,255,255,0.62)",lineHeight:1.45}}><b style={{color:"#FF9F0A"}}>Max {weekCap.max} {weekCap.max===1?"week":"weeks"}.</b> {weekCap.reason} Add another sport or change that slot to go longer.</div>
      </div>)}
@@ -12657,7 +13016,7 @@ function App() {
      <>
      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8,marginTop:12}}>
        <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"rgba(255,255,255,0.6)"}}>Playoffs</div>
-       <div onClick={()=>setNewLeaguePlayoffs(v=>!v)} style={{width:44,height:26,borderRadius:13,background:newLeaguePlayoffs?IOS.blue:"#2A2A2A",border:`1px solid ${newLeaguePlayoffs?IOS.blue:"#3A3A3A"}`,position:"relative",cursor:"pointer",transition:"background .2s"}}>
+       <div onClick={()=>setNewLeaguePlayoffs(v=>!v)} style={{width:44,height:26,borderRadius:RAD.md,background:newLeaguePlayoffs?IOS.blue:"#2A2A2A",border:`1px solid ${newLeaguePlayoffs?IOS.blue:"#3A3A3A"}`,position:"relative",cursor:"pointer",transition:"background .2s"}}>
          <div style={{position:"absolute",top:2,left:newLeaguePlayoffs?18:2,width:22,height:22,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
        </div>
      </div>
@@ -12665,7 +13024,7 @@ function App() {
        <>
        <div style={{display:"flex",gap:6,marginBottom:6}}>
        {[2,4,6,8].map(v=>{ const dis=v>newLeagueSize; const on=eff===v; return (
-         <div key={v} onClick={()=>{ if(!dis) setNewLeaguePlayoffSize(v); }} style={{flex:1,borderRadius:8,padding:"10px 4px",textAlign:"center",cursor:dis?"default":"pointer",opacity:dis?0.42:1,transition:"all .15s",background:on?"rgba(10,132,255,0.12)":"#111",border:`0.5px solid ${on?"rgba(10,132,255,0.4)":"#222"}`}}>
+         <div key={v} onClick={()=>{ if(!dis) setNewLeaguePlayoffSize(v); }} style={{flex:1,borderRadius:RAD.sm,padding:"10px 4px",textAlign:"center",cursor:dis?"default":"pointer",opacity:dis?0.42:1,transition:"all .15s",background:on?"rgba(10,132,255,0.12)":"#111",border:`0.5px solid ${on?"rgba(10,132,255,0.4)":"#222"}`}}>
            <div style={{fontSize:18,fontWeight:800,color:on?IOS.blue:"rgba(255,255,255,0.55)"}}>{v}</div>
            <div style={{fontSize:9,color:"rgba(255,255,255,0.6)",marginTop:2}}>teams</div>
          </div>
@@ -12684,15 +13043,15 @@ function App() {
    <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"rgba(255,255,255,0.6)",marginBottom:8}}>When does it start?</div>
    <div style={{display:"flex",gap:6,marginBottom:16}}>
    {[{id:"auto",l:"Auto-start",d:"Goes live when it fills"},{id:"manual",l:"Manual",d:"You start it when ready"},{id:"scheduled",l:"Scheduled",d:"Set an exact time"}].map(v=>{ const on=(newLeagueStartMode||"auto")===v.id; return (
-     <div key={v.id} onClick={()=>setNewLeagueStartMode(v.id)} style={{flex:1,borderRadius:8,padding:"11px 10px",border:"0.5px solid "+(on?"rgba(10,132,255,0.4)":"#222"),background:on?"rgba(10,132,255,0.08)":"transparent",cursor:"pointer"}}>
+     <div key={v.id} onClick={()=>setNewLeagueStartMode(v.id)} style={{flex:1,borderRadius:RAD.sm,padding:"11px 10px",border:"0.5px solid "+(on?"rgba(10,132,255,0.4)":"#222"),background:on?"rgba(10,132,255,0.08)":"transparent",cursor:"pointer"}}>
        <div style={{fontSize:12,fontWeight:700,color:on?IOS.blue:"rgba(255,255,255,0.6)"}}>{v.l}</div>
        <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginTop:3}}>{v.d}</div>
      </div>
    );})}
    </div>
-   {(newLeagueStartMode==="scheduled")&&<div style={{marginBottom:16,background:"#111114",border:"0.5px solid rgba(191,90,242,0.3)",borderRadius:10,padding:"12px 13px"}}>
+   {(newLeagueStartMode==="scheduled")&&<div style={{marginBottom:16,background:"#111114",border:"0.5px solid rgba(191,90,242,0.3)",borderRadius:RAD.md,padding:"12px 13px"}}>
    <div style={{fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",color:"rgba(255,255,255,0.45)",marginBottom:8}}>Week 1 opens</div>
-   <input type="datetime-local" value={newLeagueStartAt} onChange={e=>setNewLeagueStartAt(e.target.value)} style={{width:"100%",background:"#17171b",border:"0.5px solid #2c2c30",borderRadius:9,padding:"11px 12px",color:"#fff",fontFamily:"Barlow,sans-serif",fontSize:14,colorScheme:"dark"}}/>
+   <input type="datetime-local" value={newLeagueStartAt} onChange={e=>setNewLeagueStartAt(e.target.value)} style={{width:"100%",background:"#17171b",border:"0.5px solid #2c2c30",borderRadius:RAD.sm,padding:"11px 12px",color:"#fff",fontFamily:"Barlow,sans-serif",fontSize:14,colorScheme:"dark"}}/>
    {newLeagueStartAt&&<div style={{fontSize:11.5,color:IOS.green,marginTop:9,fontWeight:600}}>Everyone’s picks stay locked until then.</div>}
    </div>}
    {/* Visibility */}
@@ -12700,7 +13059,7 @@ function App() {
    <div style={{display:"flex",gap:6,marginBottom:16}}>
    {[{id:"private",l:"Private",d:"Invite code only"},{id:"public",l:"Public",d:"Anyone can find & join"}].map(v=>(
      <div key={v.id} onClick={()=>setNewLeaguePrivacy(v.id)}
-     style={{flex:1,borderRadius:8,padding:"11px 10px",border:`0.5px solid ${newLeaguePrivacy===v.id?"rgba(10,132,255,0.4)":"#222"}`,background:newLeaguePrivacy===v.id?"rgba(10,132,255,0.1)":"#111",cursor:"pointer",textAlign:"center",transition:"all .15s"}}>
+     style={{flex:1,borderRadius:RAD.sm,padding:"11px 10px",border:`0.5px solid ${newLeaguePrivacy===v.id?"rgba(10,132,255,0.4)":"#222"}`,background:newLeaguePrivacy===v.id?"rgba(10,132,255,0.1)":"#111",cursor:"pointer",textAlign:"center",transition:"all .15s"}}>
        {v.id==="private"
          ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={newLeaguePrivacy===v.id?IOS.blue:"rgba(255,255,255,0.6)"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{display:"block",marginBottom:4}}><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
          : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={newLeaguePrivacy===v.id?IOS.blue:"rgba(255,255,255,0.6)"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{display:"block",marginBottom:4}}><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
@@ -12712,12 +13071,12 @@ function App() {
    </div>
 
    {/* Commish Pro toggle */}
-   <div style={{background:"#111",borderRadius:10,padding:"11px 13px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",border:"0.5px solid #1E1E1E"}}>
+   <div style={{background:"#111",borderRadius:RAD.md,padding:"11px 13px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",border:"0.5px solid #1E1E1E"}}>
      <div>
        <div style={{fontSize:13,fontWeight:600,color:"#fff"}}>Commish Pro</div>
        <div style={{fontSize:11,color:"rgba(255,255,255,0.6)",marginTop:2}}>Custom picks, multi-sport, power-ups</div>
      </div>
-     <div onClick={()=>isPro?setProStatus(false):setShowPaywall("settings")} style={{width:44,height:26,borderRadius:13,background:isPro?IOS.blue:"#2A2A2A",border:`1px solid ${isPro?IOS.blue:"#3A3A3A"}`,position:"relative",cursor:"pointer",transition:"background .2s"}}>
+     <div onClick={()=>isPro?setProStatus(false):setShowPaywall("settings")} style={{width:44,height:26,borderRadius:RAD.md,background:isPro?IOS.blue:"#2A2A2A",border:`1px solid ${isPro?IOS.blue:"#3A3A3A"}`,position:"relative",cursor:"pointer",transition:"background .2s"}}>
        <div style={{position:"absolute",top:2,left:isPro?18:2,width:22,height:22,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
      </div>
    </div>
@@ -12726,7 +13085,7 @@ function App() {
    <button
      disabled={!newLeagueSports.length||!newLeagueName.trim()||creatingLeague}
      onClick={()=>{ if(!newLeagueSports.length||!newLeagueName.trim()) return; if(isPro){ setNewLeagueStep(2); } else { createLeague(newLeagueName.trim(), newLeagueSports[0]); } }}
-     style={{width:"100%",background:newLeagueSports.length&&newLeagueName.trim()?IOS.blue:"rgba(255,255,255,0.08)",border:"none",borderRadius:10,padding:"13px",fontFamily:"Barlow,sans-serif",fontSize:15,fontWeight:700,color:newLeagueSports.length&&newLeagueName.trim()?"#fff":"rgba(255,255,255,0.25)",cursor:newLeagueSports.length&&newLeagueName.trim()?"pointer":"default",transition:"all .2s",marginBottom:4}}
+     style={{width:"100%",background:newLeagueSports.length&&newLeagueName.trim()?IOS.blue:"rgba(255,255,255,0.08)",border:"none",borderRadius:RAD.md,padding:"13px",fontFamily:"Barlow,sans-serif",fontSize:15,fontWeight:700,color:newLeagueSports.length&&newLeagueName.trim()?"#fff":"rgba(255,255,255,0.25)",cursor:newLeagueSports.length&&newLeagueName.trim()?"pointer":"default",transition:"all .2s",marginBottom:4}}
    >
      {isPro?"Continue →":(creatingLeague?"Creating...":"Create League")}
    </button>
@@ -12744,7 +13103,7 @@ function App() {
  <div style={{fontSize:14,fontWeight:500,color:IOS.label3,marginTop:3}}>{realLeagues.length} active league{realLeagues.length!==1?"s":""}</div>
  </div>
  <div onClick={()=>{setShowNewLeague(true);setNewLeagueCreated(null);setNewLeagueSport(null);setNewLeagueName("");}}
- style={{background:`linear-gradient(135deg,${IOS.blue},${IOS.indigo})`,borderRadius:10,padding:"9px 15px",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer",boxShadow:`0 4px 14px ${IOS.blue}44`}}>+ New</div>
+ style={{background:`linear-gradient(135deg,${IOS.blue},${IOS.indigo})`,borderRadius:RAD.md,padding:"9px 15px",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer",boxShadow:`0 4px 14px ${IOS.blue}44`}}>+ New</div>
  </div>
 
  {/* League cards */}
@@ -12756,11 +13115,11 @@ function App() {
  <div style={{fontSize:22,fontWeight:800,letterSpacing:-0.5,color:"#fff"}}>No Leagues Yet</div>
  <div style={{fontSize:14,color:IOS.label3,lineHeight:1.6,maxWidth:260}}>Create your first league and invite your friends to get started.</div>
  <button onClick={()=>{setShowNewLeague(true);setNewLeagueCreated(null);setNewLeagueSport(null);setNewLeagueName("");setNewLeagueSize(8);}}
- style={{marginTop:8,background:IOS.blue,border:"none",borderRadius:14,padding:"14px 32px",fontFamily:"Barlow,sans-serif",fontSize:16,fontWeight:700,color:"#fff",cursor:"pointer"}}>
+ style={{marginTop:8,background:IOS.blue,border:"none",borderRadius:RAD.lg,padding:"14px 32px",fontFamily:"Barlow,sans-serif",fontSize:16,fontWeight:700,color:"#fff",cursor:"pointer"}}>
  + Create a League
  </button>
  <button onClick={()=>{setShowBrowse(true);fetchPublicLeagues();}}
- style={{background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:14,padding:"13px 32px",fontFamily:"Barlow,sans-serif",fontSize:15,fontWeight:700,color:IOS.blue,cursor:"pointer"}}>
+ style={{background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:RAD.lg,padding:"13px 32px",fontFamily:"Barlow,sans-serif",fontSize:15,fontWeight:700,color:IOS.blue,cursor:"pointer"}}>
  Browse Public Leagues
  </button>
  <div style={{fontSize:13,color:IOS.label3}}>or</div>
@@ -12809,10 +13168,10 @@ function App() {
    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
      <div style={{fontSize:11,fontWeight:700,color:IOS.label3,letterSpacing:.5,textTransform:"uppercase"}}>Switch League</div>
      <div style={{display:"flex",gap:6}}>
-       <div onClick={()=>{setShowBrowse(true);fetchPublicLeagues();}} style={{width:28,height:28,borderRadius:8,background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
+       <div onClick={()=>{setShowBrowse(true);fetchPublicLeagues();}} style={{width:28,height:28,borderRadius:RAD.sm,background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
        </div>
-       <div onClick={()=>setShowNewLeague(true)} style={{width:28,height:28,borderRadius:8,background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
+       <div onClick={()=>setShowNewLeague(true)} style={{width:28,height:28,borderRadius:RAD.sm,background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
        </div>
      </div>
@@ -12820,14 +13179,14 @@ function App() {
    {/* Dropdown */}
    {lg ? (
    <>
-   <div onClick={()=>setLeagueSubTab(leagueSubTab==="dropdown"?"overview":"dropdown")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"linear-gradient(160deg,#16161A,#0C0C0F)",border:`0.5px solid ${leagueSubTab==="dropdown"?"rgba(10,132,255,0.4)":"rgba(255,255,255,0.1)"}`,borderRadius:12,padding:"12px 14px",cursor:"pointer",marginBottom:0,boxShadow:"0 4px 14px rgba(0,0,0,0.35)"}}>
+   <div onClick={()=>setLeagueSubTab(leagueSubTab==="dropdown"?"overview":"dropdown")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"linear-gradient(160deg,#16161A,#0C0C0F)",border:`0.5px solid ${leagueSubTab==="dropdown"?"rgba(10,132,255,0.4)":"rgba(255,255,255,0.1)"}`,borderRadius:RAD.md,padding:"12px 14px",cursor:"pointer",marginBottom:0,boxShadow:"0 4px 14px rgba(0,0,0,0.35)"}}>
      <div>
        <div style={{fontSize:15,fontWeight:800,color:"#fff"}}>{lg.name}</div>
        <div style={{fontSize:10,color:IOS.label3,marginTop:2,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
          <span>{(lg.sports||[lg.sport]).map(s=>SPORTS[s]?.label||s.toUpperCase()).join(" · ")} · {(lg.league_type||"h2h")==="h2h"?"H2H":(lg.league_type||"h2h")==="bracket"?"Tournament":"Points"} · #{myRank} of {lg.target_size||lg.max_members||"?"}</span>
          {lg.privacy==="public"
            ? <span style={{fontSize:8,fontWeight:700,color:"#30D158",background:"rgba(48,209,88,0.1)",border:"0.5px solid rgba(48,209,88,0.25)",borderRadius:4,padding:"1px 5px",letterSpacing:.3}}>PUBLIC</span>
-           : <span style={{fontSize:8,fontWeight:700,color:"rgba(255,255,255,0.3)",background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:4,padding:"1px 5px",letterSpacing:.3}}>PRIVATE</span>
+           : <span style={{fontSize:8,fontWeight:700,color:"rgba(255,255,255,0.3)",background:"rgba(255,255,255,0.05)",border:EDGE.hair2,borderRadius:4,padding:"1px 5px",letterSpacing:.3}}>PRIVATE</span>
          }
        </div>
      </div>
@@ -12841,7 +13200,7 @@ function App() {
    </div>
    {/* Dropdown list */}
    {leagueSubTab==="dropdown"&&(
-   <div style={{background:IOS.bg2,border:`0.5px solid rgba(10,132,255,0.3)`,borderRadius:10,overflow:"hidden",marginTop:4}}>
+   <div style={{background:IOS.bg2,border:`0.5px solid rgba(10,132,255,0.3)`,borderRadius:RAD.md,overflow:"hidden",marginTop:4}}>
      {realLeagues.map((l,i)=>{
        const lsp=SPORTS[l.sport];
        const isSelected=l.id===activeLeagueId;
@@ -12849,9 +13208,9 @@ function App() {
        <div key={l.id} onClick={()=>{ if(l.paid===false && user && l.commissioner_id===user.id){ startLeagueCheckout(l.id); return; } setActiveLeagueId(l.id);setLeagueSubTab("overview");setLmWeek(null);}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 14px",borderBottom:i<realLeagues.length-1?`0.5px solid ${IOS.sep}`:"none",background:isSelected?"rgba(10,132,255,0.08)":"transparent",cursor:"pointer"}}>
          <div>
            <div style={{display:"flex",alignItems:"center",gap:6}}>
-             <div style={{fontSize:13,fontWeight:700,color:isSelected?IOS.blue:"#fff"}}>{l.name}</div>{unreadByLeague[l.id]>0&&<span style={{minWidth:16,height:16,borderRadius:8,background:IOS.pink,color:"#fff",fontSize:10,fontWeight:800,display:"inline-flex",alignItems:"center",justifyContent:"center",padding:"0 4px"}}>{unreadByLeague[l.id]>9?"9+":unreadByLeague[l.id]}</span>}
+             <div style={{fontSize:13,fontWeight:700,color:isSelected?IOS.blue:"#fff"}}>{l.name}</div>{unreadByLeague[l.id]>0&&<span style={{minWidth:16,height:16,borderRadius:RAD.sm,background:IOS.pink,color:"#fff",fontSize:10,fontWeight:800,display:"inline-flex",alignItems:"center",justifyContent:"center",padding:"0 4px"}}>{unreadByLeague[l.id]>9?"9+":unreadByLeague[l.id]}</span>}
              {l.privacy==="public"&&<div style={{fontSize:8,fontWeight:700,color:"#30D158",background:"rgba(48,209,88,0.1)",border:"0.5px solid rgba(48,209,88,0.25)",borderRadius:4,padding:"1px 5px",letterSpacing:.3}}>PUBLIC</div>}
-             {l.privacy!=="public"&&<div style={{fontSize:8,fontWeight:700,color:"rgba(255,255,255,0.3)",background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:4,padding:"1px 5px",letterSpacing:.3}}>PRIVATE</div>}{l.paid===false&&<div style={{fontSize:8,fontWeight:800,color:"#FF9F0A",background:"rgba(255,159,10,0.14)",border:"0.5px solid rgba(255,159,10,0.35)",borderRadius:4,padding:"1px 5px",letterSpacing:.3}}>UNLOCK ${leaguePrice(l.season_weeks,(parseSlotConfig(l.slot_config)||[]).length)}</div>}
+             {l.privacy!=="public"&&<div style={{fontSize:8,fontWeight:700,color:"rgba(255,255,255,0.3)",background:"rgba(255,255,255,0.05)",border:EDGE.hair2,borderRadius:4,padding:"1px 5px",letterSpacing:.3}}>PRIVATE</div>}{l.paid===false&&<div style={{fontSize:8,fontWeight:800,color:"#FF9F0A",background:"rgba(255,159,10,0.14)",border:"0.5px solid rgba(255,159,10,0.35)",borderRadius:4,padding:"1px 5px",letterSpacing:.3}}>UNLOCK ${leaguePrice(l.season_weeks,(parseSlotConfig(l.slot_config)||[]).length)}</div>}
            </div>
            <div style={{fontSize:10,color:IOS.label3,marginTop:1}}>{lsp.label} · Wk {l.current_week||1}</div>
          </div>
@@ -12863,7 +13222,7 @@ function App() {
    )}
    </>
    ) : (
-   <div style={{background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:10,padding:"10px 14px",marginBottom:0,color:IOS.label3,fontSize:13}}>No leagues yet</div>
+   <div style={{background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:RAD.md,padding:"10px 14px",marginBottom:0,color:IOS.label3,fontSize:13}}>No leagues yet</div>
    )}
  </div>
 
@@ -12884,11 +13243,11 @@ function App() {
  {lg && leagueSubTab==="overview" && (
  <div style={{padding:"12px 16px 20px"}}>
    {/* My rank card */}
-   <div style={{background:`linear-gradient(135deg,rgba(10,132,255,0.1),rgba(94,92,230,0.07))`,border:`0.5px solid rgba(10,132,255,0.25)`,borderRadius:12,padding:"12px 14px",marginBottom:10}}>
+   <div style={{background:`linear-gradient(135deg,rgba(10,132,255,0.1),rgba(94,92,230,0.07))`,border:`0.5px solid rgba(10,132,255,0.25)`,borderRadius:RAD.md,padding:"12px 14px",marginBottom:10}}>
      <div style={{fontSize:10,fontWeight:700,color:IOS.blue,letterSpacing:.5,textTransform:"uppercase",marginBottom:8}}>Your Rank — #{myRank} of {lg.target_size||lg.max_members||"?"}</div>
      <div style={{display:"flex",gap:8,marginBottom:0}}>
        {[{l:"Record",v:myRecord,c:IOS.blue},{l:"Win %",v:myWinPct+"%",c:IOS.green},{l:"Points",v:myPts.toFixed?myPts.toFixed(1):myPts,c:"#fff"}].map((s,i)=>(
-         <div key={i} style={{flex:1,background:"rgba(0,0,0,0.3)",borderRadius:7,padding:"7px 6px",textAlign:"center"}}>
+         <div key={i} style={{flex:1,background:"rgba(0,0,0,0.3)",borderRadius:RAD.sm,padding:"7px 6px",textAlign:"center"}}>
            <div style={{fontSize:14,fontWeight:800,color:s.c}}>{s.v}</div>
            <div style={{fontSize:8,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4,marginTop:1}}>{s.l}</div>
          </div>
@@ -12905,7 +13264,7 @@ function App() {
      const oppWkPts = currentMatchup?.oppPts||0;
      const pendingCount = myPicksThisWeek.filter(p=>p.result==="pending").length;
      return (
-     <div style={{position:"relative",overflow:"hidden",background:myWkPts>oppWkPts?"linear-gradient(155deg,#0A1606,#0B0B0E 72%)":myWkPts<oppWkPts?"linear-gradient(155deg,#160808,#0B0B0E 72%)":"linear-gradient(155deg,#0A1628,#0B0B0E 72%)",border:`0.5px solid ${myWkPts>oppWkPts?"rgba(48,209,88,0.35)":myWkPts<oppWkPts?"rgba(255,69,58,0.3)":"rgba(10,132,255,0.3)"}`,borderRadius:12,padding:"12px 14px",marginBottom:10,boxShadow:"0 4px 14px rgba(0,0,0,0.35)"}}>
+     <div style={{position:"relative",overflow:"hidden",background:myWkPts>oppWkPts?"linear-gradient(155deg,#0A1606,#0B0B0E 72%)":myWkPts<oppWkPts?"linear-gradient(155deg,#160808,#0B0B0E 72%)":"linear-gradient(155deg,#0A1628,#0B0B0E 72%)",border:`0.5px solid ${myWkPts>oppWkPts?"rgba(48,209,88,0.35)":myWkPts<oppWkPts?"rgba(255,69,58,0.3)":"rgba(10,132,255,0.3)"}`,borderRadius:RAD.md,padding:"12px 14px",marginBottom:10,boxShadow:"0 4px 14px rgba(0,0,0,0.35)"}}>
        <div style={{fontSize:9,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Wk {currentWeekNum} Matchup</div>
        {!oppName ? (
          <div style={{textAlign:"center",padding:"8px 0",fontSize:12,color:IOS.label3}}>Fill up league to get a schedule!</div>
@@ -12926,12 +13285,12 @@ function App() {
    {/* This week picks preview */}
    <div style={{fontSize:9,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>This week</div>
    {myPicksThisWeek.length===0 ? (
-     <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",borderRadius:12,padding:"12px 14px",marginBottom:10,border:"0.5px solid rgba(255,255,255,0.08)"}}>
+     <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",borderRadius:RAD.md,padding:"12px 14px",marginBottom:10,border:EDGE.hair}}>
        <div style={{fontSize:12,color:IOS.label3,textAlign:"center"}}>No picks locked yet</div>
-       <button onClick={()=>setScreen("picks")} style={{width:"100%",background:`linear-gradient(135deg,${IOS.blue},${IOS.indigo})`,border:"none",borderRadius:9,padding:"10px",fontFamily:"Barlow,sans-serif",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",marginTop:10,boxShadow:`0 4px 14px ${IOS.blue}33`}}>Build My Slip</button>
+       <button onClick={()=>setScreen("picks")} style={{width:"100%",background:`linear-gradient(135deg,${IOS.blue},${IOS.indigo})`,border:"none",borderRadius:RAD.sm,padding:"10px",fontFamily:"Barlow,sans-serif",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",marginTop:10,boxShadow:`0 4px 14px ${IOS.blue}33`}}>Build My Slip</button>
      </div>
    ) : (
-   <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:12,overflow:"hidden",marginBottom:10}}>
+   <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.md,overflow:"hidden",marginBottom:10}}>
      {myPicksThisWeek.slice(0,5).map((p,i)=>{
        const won=p.result==="W", lost=p.result==="L";
        return (
@@ -12948,9 +13307,9 @@ function App() {
    {/* Standings mini */}
    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
      <div style={{fontSize:9,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5}}>Standings</div>
-     {realStandings.length>0 && <button onClick={()=>openLeagueRecap()} disabled={leagueRecapLoading} style={{display:"flex",alignItems:"center",gap:5,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.3)",color:IOS.blue,fontSize:10,fontWeight:700,padding:"4px 9px",borderRadius:7,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg>{leagueRecapLoading?"…":"Week recap"}</button>}
+     {realStandings.length>0 && <button onClick={()=>openLeagueRecap()} disabled={leagueRecapLoading} style={{display:"flex",alignItems:"center",gap:5,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.3)",color:IOS.blue,fontSize:10,fontWeight:700,padding:"4px 9px",borderRadius:RAD.sm,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg>{leagueRecapLoading?"…":"Week recap"}</button>}
    </div>
-   <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:12,overflow:"hidden",marginBottom:10}}>
+   <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.md,overflow:"hidden",marginBottom:10}}>
      <div style={{display:"flex",padding:"5px 12px",borderBottom:`0.5px solid ${IOS.sep}`}}>
        <div style={{width:22}}/>
        <div style={{flex:1,fontSize:8,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4}}/>
@@ -12977,8 +13336,8 @@ function App() {
 
    {/* Quick actions */}
    <div style={{display:"flex",gap:8}}>
-     <button onClick={()=>setScreen("picks")} style={{flex:1,background:`linear-gradient(135deg,${IOS.blue},${IOS.indigo})`,border:"none",borderRadius:10,padding:"11px",fontFamily:"Barlow,sans-serif",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",boxShadow:`0 4px 14px ${IOS.blue}33`}}>My Picks</button>
-     <button onClick={e=>{e.stopPropagation();setActiveLeagueId(lg.id);setScreen(lg.isCommissioner?"commissioner":"league");}} style={{flex:1,background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:8,padding:"10px",fontFamily:"Barlow,sans-serif",fontSize:12,fontWeight:700,color:IOS.blue,cursor:"pointer"}}>{lg.isCommissioner?"Commish Panel":"League Detail"}</button>
+     <button onClick={()=>setScreen("picks")} style={{flex:1,background:`linear-gradient(135deg,${IOS.blue},${IOS.indigo})`,border:"none",borderRadius:RAD.md,padding:"11px",fontFamily:"Barlow,sans-serif",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",boxShadow:`0 4px 14px ${IOS.blue}33`}}>My Picks</button>
+     <button onClick={e=>{e.stopPropagation();setActiveLeagueId(lg.id);setScreen(lg.isCommissioner?"commissioner":"league");}} style={{flex:1,background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:RAD.sm,padding:"10px",fontFamily:"Barlow,sans-serif",fontSize:12,fontWeight:700,color:IOS.blue,cursor:"pointer"}}>{lg.isCommissioner?"Commish Panel":"League Detail"}</button>
    </div>
  </div>
  )}
@@ -12987,7 +13346,7 @@ function App() {
  {lg && leagueSubTab==="standings" && (
  <div style={{padding:"12px 16px 20px"}}>
    <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:10}}>Season Standings</div>
-   <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:12,overflow:"hidden"}}>
+   <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.md,overflow:"hidden"}}>
      <div style={{display:"flex",padding:"6px 12px",borderBottom:`0.5px solid ${IOS.sep}`}}>
        <div style={{width:24}}/>
        <div style={{flex:1,fontSize:8,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4}}>Player</div>
@@ -13022,9 +13381,9 @@ function App() {
    return (
    <div style={{padding:"12px 16px 24px"}}>
      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-       <div onClick={()=>setLmWeek(Math.max(minWk, wk-1))} style={{width:34,height:34,borderRadius:10,background:IOS.bg2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",opacity:wk<=minWk?0.3:1}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4"><path d="M15 18l-6-6 6-6"/></svg></div>
+       <div onClick={()=>setLmWeek(Math.max(minWk, wk-1))} style={{width:34,height:34,borderRadius:RAD.md,background:IOS.bg2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",opacity:wk<=minWk?0.3:1}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4"><path d="M15 18l-6-6 6-6"/></svg></div>
        <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:800}}>Week {wk}</div><div style={{fontSize:11,color:IOS.label3,fontWeight:600,marginTop:1}}>{weekMs.length} matchup{weekMs.length===1?"":"s"}</div></div>
-       <div onClick={()=>setLmWeek(Math.min(maxWk, wk+1))} style={{width:34,height:34,borderRadius:10,background:IOS.bg2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",opacity:wk>=maxWk?0.3:1}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4"><path d="M9 18l6-6-6-6"/></svg></div>
+       <div onClick={()=>setLmWeek(Math.min(maxWk, wk+1))} style={{width:34,height:34,borderRadius:RAD.md,background:IOS.bg2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",opacity:wk>=maxWk?0.3:1}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4"><path d="M9 18l6-6-6-6"/></svg></div>
      </div>
      {weekMs.length===0 ? (
        <div style={{textAlign:"center",color:IOS.label3,fontSize:14,padding:"40px 0"}}>No matchups scheduled for Week {wk}.</div>
@@ -13050,7 +13409,7 @@ function App() {
           const lp=(cl.locked/_maxCeil)*100, mp=(cl.live/_maxCeil)*100;
           return (
            <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 13px",opacity:lead?1:(anyLead?0.7:1)}}>
-             <div style={{width:28,height:28,borderRadius:8,flexShrink:0,background:(you?IOS.blue:IOS.indigo)+"33",color:you?IOS.blue:IOS.indigo,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900}}>{(nm(id)||"?").slice(0,2).toUpperCase()}</div>
+             <div style={{width:28,height:28,borderRadius:RAD.sm,flexShrink:0,background:(you?IOS.blue:IOS.indigo)+"33",color:you?IOS.blue:IOS.indigo,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900}}>{(nm(id)||"?").slice(0,2).toUpperCase()}</div>
              <div style={{width:96,flexShrink:0,fontSize:13.5,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",color:you?IOS.blue:"#fff"}}>{nm(id)}</div>
              <div style={{flex:1,height:8,borderRadius:4,background:"rgba(0,0,0,0.4)",position:"relative",overflow:"hidden",boxShadow:"inset 0 1px 2px rgba(0,0,0,0.55)"}}>
                <div style={{position:"absolute",left:0,top:0,bottom:0,borderRadius:4,width:lp+"%",background:`linear-gradient(180deg,${tint},${tint}cc)`,boxShadow:`0 0 8px ${tint}55`}}/>
@@ -13061,17 +13420,17 @@ function App() {
           );
         };
        return (
-         <div key={mi} onClick={()=>openMatchupPager(weekMs, mi, "Week "+wk, wk)} style={{background:IOS.bg2,border:mine?("1px solid "+IOS.blue+"88"):("1px solid "+IOS.sep),borderRadius:14,marginBottom:11,overflow:"hidden",cursor:"pointer"}}>
+         <div key={mi} onClick={()=>openMatchupPager(weekMs, mi, "Week "+wk, wk)} style={{background:IOS.bg2,border:mine?("1px solid "+IOS.blue+"88"):("1px solid "+IOS.sep),borderRadius:RAD.lg,marginBottom:11,overflow:"hidden",cursor:"pointer"}}>
            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 13px 2px"}}>
              <div style={{fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",color:mine?IOS.blue:IOS.label3}}>{mine?"Your matchup":"Matchup"}</div>
-             {badge && <div style={{fontSize:10,fontWeight:800,padding:"3px 8px",borderRadius:6,background:badgeBg,color:badgeCol}}>{badge}</div>}
+             {badge && <div style={{fontSize:10,fontWeight:800,padding:"3px 8px",borderRadius:RAD.sm,background:badgeBg,color:badgeCol}}>{badge}</div>}
            </div>
            {row(u1,p1,lead1,_cA)}
            <div style={{height:0.5,background:IOS.sep,margin:"0 13px"}}/>
            {row(u2,p2,lead2,_cB)}
           {(() => {
             const chip=(bp,label,align)=>{
-              const box=(inner)=>(<div style={{flex:1,minWidth:0,background:"rgba(255,255,255,0.03)",borderRadius:9,padding:"7px 9px",textAlign:align}}>{inner}</div>);
+              const box=(inner)=>(<div style={{flex:1,minWidth:0,background:"rgba(255,255,255,0.03)",borderRadius:RAD.sm,padding:"7px 9px",textAlign:align}}>{inner}</div>);
               const head=(<div style={{fontSize:7.5,fontWeight:900,letterSpacing:0.5,color:"rgba(255,255,255,0.28)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</div>);
               if(!bp) return box(<>{head}<div style={{fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.3)",marginTop:2}}>No slip submitted</div></>);
               if(bp.state==="hidden") return box(<>{head}<div style={{fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.35)",marginTop:2}}>{bp.n+" pick"+(bp.n===1?"":"s")+" \u00b7 locked"}</div><div style={{fontSize:9.5,fontWeight:700,color:"rgba(255,255,255,0.22)",marginTop:1}}>Reveals at game time</div></>);
@@ -13094,7 +13453,7 @@ function App() {
  <div style={{padding:"12px 16px 20px"}}>
    <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:10}}>Season Schedule</div>
    {liveSchedule.length===0 ? (
-     <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"20px",textAlign:"center"}}>
+     <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.md,padding:"20px",textAlign:"center"}}>
        <div style={{fontSize:13,color:"#fff",fontWeight:700,marginBottom:4}}>No schedule yet</div>
        {(()=>{ const _cm=!!(activeLeague&&activeLeague.isCommissioner)&&((activeLeague&&activeLeague.league_type)||"h2h")==="h2h"&&leagueMembers.length>=2; return (
        <>
@@ -13108,13 +13467,13 @@ function App() {
          await fetchSchedule(activeLeague.id, user.id);
          await fetchStandings(activeLeague.id);
          alert("Schedule generated!");
-       }} style={{width:"100%",background:IOS.green,border:"none",borderRadius:10,padding:"12px",fontFamily:"Barlow,sans-serif",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer"}}>Generate schedule now</button>
+       }} style={{width:"100%",background:IOS.green,border:"none",borderRadius:RAD.md,padding:"12px",fontFamily:"Barlow,sans-serif",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer"}}>Generate schedule now</button>
        )}
        </>
        ); })()}
      </div>
    ) : (
-   <div style={{background:IOS.bg2,borderRadius:12,overflow:"hidden"}}>
+   <div style={{background:IOS.bg2,borderRadius:RAD.md,overflow:"hidden"}}>
      {(()=>{ const _sw=Number(lg.season_weeks)||18; const _N=playoffFieldFor(lg, leagueMembers.length||0); const _start=_N>=2?Math.max(1,_sw-playoffWeeksFor(_N)+1):(_sw+1); return Array.from({length:_sw},(_,_i)=>_i+1).map(_wknum=>{ const wk=liveSchedule.find(w=>w.week===_wknum); const _isPO=_wknum>=_start; if(!wk){ return (<div key={"ph"+_wknum} className="sch-item" style={{opacity:0.7}}><div className="sch-wk">W{_wknum}</div><div className="sch-opp up" style={_isPO?{color:(IOS.purple||"#BF5AF2"),fontWeight:700}:{}}>{_isPO?"Playoffs":"Bye week"}</div><div className="sch-score" style={{width:70,fontSize:12}}>—</div><div style={{display:"flex",alignItems:"center",gap:6}}><div className="sch-badge up">{_isPO?"TBD":"BYE"}</div></div></div>); }
        const live=wk.result==="live"; const done=wk.result==="W"||wk.result==="L";
        const myPts=wk.myPts>0?wk.myPts:null; const oppPts=wk.oppPts>0?wk.oppPts:null;
@@ -13150,7 +13509,7 @@ function App() {
    const startWeek = Math.max(1, sw - pWeeks + 1);
    const playoffMs = (bracketMatchups||[]).filter(m=>String(m.bracket_match_id||"").startsWith("P"));
    const seeded = ms.slice(0,N);
-   if(N<2) return (<div style={{padding:"12px 16px 20px"}}><div style={{background:IOS.bg2,borderRadius:12,padding:"28px 20px",textAlign:"center"}}><div style={{fontSize:15,fontWeight:700,color:"#fff",marginBottom:6}}>No playoff in this league</div><div style={{fontSize:13,color:IOS.label3,lineHeight:1.6}}>Playoffs need at least 4 players. The top of the standings takes the title.</div></div></div>);
+   if(N<2) return (<div style={{padding:"12px 16px 20px"}}><div style={{background:IOS.bg2,borderRadius:RAD.md,padding:"28px 20px",textAlign:"center"}}><div style={{fontSize:15,fontWeight:700,color:"#fff",marginBottom:6}}>No playoff in this league</div><div style={{fontSize:13,color:IOS.label3,lineHeight:1.6}}>Playoffs need at least 4 players. The top of the standings takes the title.</div></div></div>);
    if(playoffMs.length) return (
      <div style={{padding:"12px 16px 20px"}}>
        <div style={{margin:"0 0 12px",fontSize:11,fontWeight:800,letterSpacing:".5px",textTransform:"uppercase",color:IOS.yellow}}>Top {N} seeds · single-elim · Wk {startWeek}–{sw}</div>
@@ -13161,12 +13520,12 @@ function App() {
    );
    return (
      <div style={{padding:"12px 16px 20px"}}>
-       <div style={{borderRadius:14,padding:"16px",background:"linear-gradient(160deg,#19191e,#141417)",border:`0.5px solid ${IOS.sep}`,marginBottom:12}}>
+       <div style={{borderRadius:RAD.lg,padding:"16px",background:"linear-gradient(160deg,#19191e,#141417)",border:`0.5px solid ${IOS.sep}`,marginBottom:12}}>
          <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:6}}>Playoff bracket</div>
          <div style={{fontSize:13,color:IOS.label2,lineHeight:1.55}}>Top {N} seeds make a {pWeeks}-week single-elimination playoff (Wk {startWeek}–{sw}). The bracket appears here once the regular season ends.</div>
        </div>
        <div style={{fontSize:11,fontWeight:800,letterSpacing:".5px",textTransform:"uppercase",color:IOS.label3,margin:"0 4px 8px"}}>Projected seeds</div>
-       <div style={{background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:14,overflow:"hidden"}}>
+       <div style={{background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:RAD.lg,overflow:"hidden"}}>
         {seeded.length===0 ? (<div style={{padding:"22px 16px",textAlign:"center",color:IOS.label3,fontSize:14}}>No graded picks yet</div>) : (()=>{
           // Show the bubble too — the list used to stop at the cut, so if you missed you
           // simply weren't on the screen and had no idea by how much.
@@ -13187,7 +13546,7 @@ function App() {
                 </div>
               )}
               <div style={{display:"flex",alignItems:"center",gap:11,padding:"12px 14px",background:r.isYou?"rgba(10,132,255,0.10)":"transparent",borderBottom:i<shown.length-1?`0.5px solid ${IOS.sep}`:"none",opacity:inField?1:0.72}}>
-                <div style={{width:24,height:24,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:12,fontWeight:900,flexShrink:0,
+                <div style={{width:24,height:24,borderRadius:RAD.sm,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:12,fontWeight:900,flexShrink:0,
                   background: r.isYou ? IOS.blue : inField ? IOS.yellow : "rgba(255,255,255,0.08)",
                   color: r.isYou ? "#fff" : inField ? "#000" : IOS.label3}}>{i+1}</div>
                 <div style={{flex:1,minWidth:0}}>
@@ -13251,7 +13610,7 @@ function App() {
  <div className="body">
  {/* Header */}
  <div style={{padding:"10px 20px 16px",display:"flex",alignItems:"center",gap:12,marginBottom:14,background:"radial-gradient(120% 90% at 90% -10%, rgba(255,214,10,0.12), transparent 55%), linear-gradient(180deg,#15130B 0%,#000 82%)"}}>
- <button onClick={()=>setScreen("leagues")} style={{background:IOS.fill2,border:"none",borderRadius:10,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:17,flexShrink:0}}>‹</button>
+ <button onClick={()=>setScreen("leagues")} style={{background:IOS.fill2,border:"none",borderRadius:RAD.md,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:17,flexShrink:0}}>‹</button>
  <div>
  <div style={{fontSize:17,fontWeight:700,letterSpacing:-0.3,color:"#fff"}}>{activeLeague.name}</div>
  <div style={{fontSize:12,color:IOS.yellow}}> Commissioner Panel</div>
@@ -13259,9 +13618,9 @@ function App() {
  </div>
 
  {/* Commish tabs */}
- <div style={{display:"flex",background:IOS.bg3,borderRadius:12,padding:2,margin:"0 16px 16px",gap:2}}>
+ <div style={{display:"flex",background:IOS.bg3,borderRadius:RAD.md,padding:2,margin:"0 16px 16px",gap:2}}>
  {[{id:"grade",l:"Grade Slips"},{id:"members",l:"Members"},{id:"settings",l:"Settings"}].map(t=>(
- <div key={t.id} onClick={()=>setCommishTab(t.id)} style={{flex:1,textAlign:"center",padding:"8px 4px",borderRadius:10,fontSize:12,fontWeight:700,cursor:"pointer",transition:"all .15s",background:commishTab===t.id?IOS.bg2:"transparent",color:commishTab===t.id?"#fff":IOS.label3,boxShadow:commishTab===t.id?"0 1px 3px rgba(0,0,0,0.4)":"none"}}>{t.l}</div>
+ <div key={t.id} onClick={()=>setCommishTab(t.id)} style={{flex:1,textAlign:"center",padding:"8px 4px",borderRadius:RAD.md,fontSize:12,fontWeight:700,cursor:"pointer",transition:"all .15s",background:commishTab===t.id?IOS.bg2:"transparent",color:commishTab===t.id?"#fff":IOS.label3,boxShadow:commishTab===t.id?"0 1px 3px rgba(0,0,0,0.4)":"none"}}>{t.l}</div>
  ))}
  </div>
 
@@ -13274,7 +13633,7 @@ function App() {
  </div>
 
  {weekPicks.length===0&&(
- <div style={{margin:"0 16px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:14,padding:"24px 16px",textAlign:"center",color:IOS.label3,fontSize:15}}>
+ <div style={{margin:"0 16px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.lg,padding:"24px 16px",textAlign:"center",color:IOS.label3,fontSize:15}}>
  No picks submitted yet this week
  </div>
  )}
@@ -13301,12 +13660,12 @@ function App() {
  const isActive = uid===activeMemberId;
  return (
  <div key={uid} onClick={()=>setSelectedGradeMember(uid)}
- style={{flexShrink:0,display:"flex",alignItems:"center",gap:6,padding:"7px 12px",borderRadius:20,cursor:"pointer",transition:"all .15s",
+ style={{flexShrink:0,display:"flex",alignItems:"center",gap:6,padding:"7px 12px",borderRadius:RAD.pill,cursor:"pointer",transition:"all .15s",
  background:isActive?"rgba(10,132,255,0.15)":"rgba(255,255,255,0.06)",
  border:`1px solid ${isActive?IOS.blue+"60":allGraded?"rgba(48,209,88,0.3)":"rgba(255,255,255,0.08)"}`,
  }}>
  <span style={{fontSize:12,fontWeight:700,color:isActive?IOS.blue:allGraded?IOS.green:"rgba(255,255,255,0.6)"}}>{md.name}</span>
- {!allGraded&&<span style={{fontSize:10,fontWeight:700,color:IOS.orange,background:"rgba(255,159,10,0.15)",borderRadius:10,padding:"1px 6px"}}>{pending}</span>}
+ {!allGraded&&<span style={{fontSize:10,fontWeight:700,color:IOS.orange,background:"rgba(255,159,10,0.15)",borderRadius:RAD.md,padding:"1px 6px"}}>{pending}</span>}
  {allGraded&&<span style={{fontSize:10}}></span>}
  </div>
  );
@@ -13325,7 +13684,7 @@ function App() {
  const uid = activeMemberId;
  const memberData = activeMemberData;
  return (
- <div style={{margin:"0 16px 12px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",borderRadius:14,overflow:"hidden",border:"0.5px solid rgba(255,255,255,0.08)",boxShadow:"0 4px 14px rgba(0,0,0,0.35)"}}>
+ <div style={{margin:"0 16px 12px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",borderRadius:RAD.lg,overflow:"hidden",border:EDGE.hair,boxShadow:"0 4px 14px rgba(0,0,0,0.35)"}}>
  <div style={{padding:"12px 14px",borderBottom:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.02)"}}>
  <div>
  <div style={{fontSize:15,fontWeight:700,color:isYou?IOS.blue:"#fff"}}>{memberData.name}{isYou?" (You)":""}</div>
@@ -13376,7 +13735,7 @@ function App() {
  setWeekPicks(prev=>prev.map(p=>p.id===pick.id?{...p,result:"W",points_earned:pts}:p));
  }
  fetchStandings(activeLeagueId);
- }} style={{padding:"7px 14px",borderRadius:8,border:"none",background:pick.result==="W"?IOS.green:"rgba(48,209,88,0.12)",color:pick.result==="W"?"#000":IOS.green,fontSize:12,fontWeight:700,cursor:"pointer"}}> Win</button>
+ }} style={{padding:"7px 14px",borderRadius:RAD.sm,border:"none",background:pick.result==="W"?IOS.green:"rgba(48,209,88,0.12)",color:pick.result==="W"?"#000":IOS.green,fontSize:12,fontWeight:700,cursor:"pointer"}}> Win</button>
  <button onClick={async()=>{
  if(pick.slot?.startsWith("longshot_")) {
  // Parlay — mark ALL legs as loss
@@ -13392,13 +13751,13 @@ function App() {
  setWeekPicks(prev=>prev.map(p=>p.id===pick.id?{...p,result:"L",points_earned:0}:p));
  }
  fetchStandings(activeLeagueId);
- }} style={{padding:"7px 14px",borderRadius:8,border:"none",background:pick.result==="L"?IOS.red:"rgba(255,69,58,0.12)",color:pick.result==="L"?"#fff":IOS.red,fontSize:12,fontWeight:700,cursor:"pointer"}}> Loss</button>
+ }} style={{padding:"7px 14px",borderRadius:RAD.sm,border:"none",background:pick.result==="L"?IOS.red:"rgba(255,69,58,0.12)",color:pick.result==="L"?"#fff":IOS.red,fontSize:12,fontWeight:700,cursor:"pointer"}}> Loss</button>
  {pick.result!=="pending"&&(
  <button onClick={async()=>{
  await supabase.from("picks").update({result:"pending",points_earned:0}).eq("id",pick.id);
  setWeekPicks(prev=>prev.map(p=>p.id===pick.id?{...p,result:"pending",points_earned:0}:p));
  fetchStandings(activeLeagueId);
- }} style={{padding:"7px 10px",borderRadius:8,border:"1px solid rgba(255,255,255,0.1)",background:"transparent",color:IOS.label3,fontSize:12,fontWeight:700,cursor:"pointer"}}>↩</button>
+ }} style={{padding:"7px 10px",borderRadius:RAD.sm,border:"1px solid rgba(255,255,255,0.1)",background:"transparent",color:IOS.label3,fontSize:12,fontWeight:700,cursor:"pointer"}}>↩</button>
  )}
  </div>
  </div>
@@ -13422,7 +13781,7 @@ function App() {
  }
  }
  fetchStandings(activeLeagueId);
- }} style={{flex:1,background:"rgba(255,69,58,0.1)",border:"1px solid rgba(255,69,58,0.2)",borderRadius:8,padding:"8px",fontFamily:"Barlow,sans-serif",fontSize:12,fontWeight:700,color:IOS.red,cursor:"pointer"}}>
+ }} style={{flex:1,background:"rgba(255,69,58,0.1)",border:"1px solid rgba(255,69,58,0.2)",borderRadius:RAD.sm,padding:"8px",fontFamily:"Barlow,sans-serif",fontSize:12,fontWeight:700,color:IOS.red,cursor:"pointer"}}>
  Mark {pendingCount} pending as Loss
  </button>
  </div>
@@ -13489,7 +13848,7 @@ function App() {
  await fetchLeagues(user.id);
  await fetchSchedule(activeLeague.id, user.id);
  alert(memberData.name+"'s picks submitted!");
- }} style={{width:"100%",background:"linear-gradient(135deg,"+IOS.blue+","+IOS.indigo+")",border:"none",borderRadius:10,padding:"12px",fontFamily:"Barlow,sans-serif",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer",letterSpacing:-0.2}}>
+ }} style={{width:"100%",background:"linear-gradient(135deg,"+IOS.blue+","+IOS.indigo+")",border:"none",borderRadius:RAD.md,padding:"12px",fontFamily:"Barlow,sans-serif",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer",letterSpacing:-0.2}}>
  Submit Picks for {memberData.name}
  </button>
  </div>
@@ -13509,10 +13868,10 @@ function App() {
  <div style={{fontSize:13,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3}}>{leagueMembers.length} / {activeLeague.max_members||activeLeague.settings?.maxMembers||8} members</div>
  
  </div>
- <div style={{margin:"0 16px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:14,overflow:"hidden"}}>
+ <div style={{margin:"0 16px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.lg,overflow:"hidden"}}>
  {(leagueMembers.length ? leagueMembers : activeLeague.members||[]).map((m,i,arr)=>(
  <div key={i} style={{display:"flex",alignItems:"center",padding:"13px 16px",borderBottom:i<arr.length-1?`0.5px solid ${IOS.sep}`:"none"}}>
- <div style={{width:36,height:36,borderRadius:50,background:m.isYou?`linear-gradient(135deg,${IOS.blue},${IOS.indigo})`:`linear-gradient(135deg,${IOS.bg3},${IOS.gray3})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#fff",marginRight:12,flexShrink:0}}>{(m.name||"?")[0]}</div>
+ <div style={{width:36,height:36,borderRadius:RAD.pill,background:m.isYou?`linear-gradient(135deg,${IOS.blue},${IOS.indigo})`:`linear-gradient(135deg,${IOS.bg3},${IOS.gray3})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#fff",marginRight:12,flexShrink:0}}>{(m.name||"?")[0]}</div>
  <div style={{flex:1}}>
  <div style={{display:"flex",alignItems:"center",gap:6}}>
  <div style={{fontSize:15,fontWeight:600,color:m.isYou?IOS.blue:"#fff"}}>{m.name||m.email||"Unknown"}{m.isYou?" (You)":""}</div>
@@ -13531,17 +13890,17 @@ function App() {
  ))}
  </div>
  {/* Invite code */}
- <div style={{margin:"12px 16px",background:"rgba(10,132,255,0.08)",borderRadius:14,padding:"14px 16px",border:`1px solid ${IOS.blue}30`}}>
+ <div style={{margin:"12px 16px",background:"rgba(10,132,255,0.08)",borderRadius:RAD.lg,padding:"14px 16px",border:`1px solid ${IOS.blue}30`}}>
  <div style={{fontSize:11,fontWeight:600,letterSpacing:1,textTransform:"uppercase",color:IOS.blue,marginBottom:6}}>Invite Code</div>
  <div style={{fontSize:28,fontWeight:800,letterSpacing:4,color:"#fff",marginBottom:6}}>{activeLeague.inviteCode||activeLeague.invite_code}</div>
  <div style={{fontSize:12,color:IOS.label3,marginBottom:12}}>Share this code with friends to join</div>
  <div style={{display:"flex",gap:8}}>
  <button onClick={()=>shareInvite(activeLeague.invite_code||activeLeague.inviteCode, activeLeague.name)}
- style={{flex:1,background:IOS.blue,border:"none",borderRadius:10,padding:"10px",fontFamily:"Barlow,sans-serif",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>
+ style={{flex:1,background:IOS.blue,border:"none",borderRadius:RAD.md,padding:"10px",fontFamily:"Barlow,sans-serif",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>
  Share
  </button>
  <button onClick={async()=>{const c=activeLeague.invite_code||activeLeague.inviteCode;try{await navigator.clipboard.writeText(c);alert("Copied! ");}catch(e){alert(c);}}}
- style={{flex:1,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:10,padding:"10px",fontFamily:"Barlow,sans-serif",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>
+ style={{flex:1,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:RAD.md,padding:"10px",fontFamily:"Barlow,sans-serif",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>
  Copy
  </button>
  </div>
@@ -13564,18 +13923,18 @@ function App() {
    const _privacy=activeLeague.privacy||"private";
    const _code=activeLeague.invite_code||activeLeague.inviteCode||"";
    const _sportLbl=(SPORTS[activeLeague.sport]&&SPORTS[activeLeague.sport].label)||(activeLeague.sport?(""+activeLeague.sport).toUpperCase():"—");
-   const _panel={background:"#0B0B10",border:"1px solid rgba(255,255,255,0.08)",borderRadius:16,overflow:"hidden",margin:"0 16px 12px"};
+   const _panel={background:"#0B0B10",border:"1px solid rgba(255,255,255,0.08)",borderRadius:RAD.lg,overflow:"hidden",margin:"0 16px 12px"};
    const _eye={fontSize:10,letterSpacing:"0.13em",color:"rgba(255,255,255,0.3)",fontWeight:700,textTransform:"uppercase",margin:"2px 18px 6px"};
    const _crow={padding:14,display:"flex",alignItems:"center",gap:12};
-   const _ic={width:30,height:30,borderRadius:9,border:"1px solid rgba(255,255,255,0.14)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"rgba(255,255,255,0.6)"};
+   const _ic={width:30,height:30,borderRadius:RAD.sm,border:"1px solid rgba(255,255,255,0.14)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"rgba(255,255,255,0.6)"};
    const _tt={fontSize:14,fontWeight:700,color:"#fff"};
    const _dd={fontSize:11.5,color:"rgba(255,255,255,0.3)",marginTop:2,lineHeight:1.4};
    const _hair="1px solid rgba(255,255,255,0.08)";
-   const _stepBtn={width:30,height:30,borderRadius:8,background:"rgba(255,255,255,0.07)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,color:"#fff",fontWeight:700,cursor:"pointer"};
+   const _stepBtn={width:30,height:30,borderRadius:RAD.sm,background:"rgba(255,255,255,0.07)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,color:"#fff",fontWeight:700,cursor:"pointer"};
    const _lbl9={fontSize:9,letterSpacing:"0.12em",color:"rgba(255,255,255,0.3)",fontWeight:700,textTransform:"uppercase"};
    return (
    <>
-   <div style={{position:"relative",border:"1px solid rgba(255,255,255,0.14)",borderRadius:16,overflow:"hidden",margin:"0 16px 14px",background:"radial-gradient(120% 140% at 0% 0%, rgba(10,132,255,0.10), transparent 55%), #0B0B10"}}>
+   <div style={{position:"relative",border:"1px solid rgba(255,255,255,0.14)",borderRadius:RAD.lg,overflow:"hidden",margin:"0 16px 14px",background:"radial-gradient(120% 140% at 0% 0%, rgba(10,132,255,0.10), transparent 55%), #0B0B10"}}>
      <div style={{position:"absolute",left:0,top:0,right:0,bottom:0,backgroundImage:"repeating-linear-gradient(0deg,rgba(255,255,255,0.025) 0px,rgba(255,255,255,0.025) 1px,transparent 1px,transparent 4px)",pointerEvents:"none",opacity:0.5}}/>
      <div style={{position:"relative",display:"grid",gridTemplateColumns:"repeat(4,1fr)"}}>
        <div style={{padding:"13px 10px"}}><div style={_lbl9}>Week</div><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:700,fontSize:21,lineHeight:1,marginTop:6}}>{activeLeague.current_week||1}<span style={{color:"rgba(255,255,255,0.3)",fontSize:13}}> /{activeLeague.season_weeks||18}</span></div></div>
@@ -13591,7 +13950,7 @@ function App() {
    </div>
 
    {(activeLeague.league_type||"h2h")==="h2h" && leagueMembers.length >= (activeLeague.target_size||activeLeague.max_members||8) && liveSchedule.length === 0 && (
-   <div style={{margin:"0 16px 12px",background:"rgba(48,209,88,0.08)",borderRadius:16,padding:"14px 16px",border:"0.5px solid rgba(48,209,88,0.25)"}}>
+   <div style={{margin:"0 16px 12px",background:"rgba(48,209,88,0.08)",borderRadius:RAD.lg,padding:"14px 16px",border:"0.5px solid rgba(48,209,88,0.25)"}}>
      <div style={{fontSize:14,fontWeight:700,color:"#fff",marginBottom:4}}>League is full — no schedule yet</div>
      <div style={{fontSize:12,color:IOS.label3,marginBottom:12}}>Generate the regular-season matchups — playoff weeks are reserved automatically.</div>
      <button onClick={async()=>{
@@ -13601,7 +13960,7 @@ function App() {
        await fetchSchedule(activeLeague.id, user.id);
        await fetchStandings(activeLeague.id);
        alert("Schedule generated!");
-     }} style={{width:"100%",background:IOS.green,border:"none",borderRadius:10,padding:"12px",fontFamily:"Barlow,sans-serif",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer"}}>
+     }} style={{width:"100%",background:IOS.green,border:"none",borderRadius:RAD.md,padding:"12px",fontFamily:"Barlow,sans-serif",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer"}}>
        Generate Schedule Now
      </button>
    </div>
@@ -13623,14 +13982,14 @@ function App() {
        <div style={_crow}>
          <div style={_ic}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16v5a8 8 0 0 1-16 0z"/><path d="M12 17v3M8 21h8"/></svg></div>
          <div style={{flex:1,minWidth:0}}><div style={_tt}>Playoffs</div><div style={_dd}>Bracket finale for the top seeds</div></div>
-         <div onClick={async()=>{ if(_isBracket) return; const newOn=!_poOn; if(!window.confirm((newOn?"Turn playoffs ON":"Turn playoffs OFF")+"? This wipes the current schedule and regenerates it when the league fills.")) return; const _sz=newOn?(_poSize>0?_poSize:([2,4,6,8].filter(v=>v<=_target).pop()||2)):0; await supabase.from("leagues").update({playoffs_enabled:newOn,playoff_size:_sz}).eq("id",activeLeague.id); await supabase.from("matchups").delete().eq("league_id",activeLeague.id); await fetchLeagues(user.id); }} style={{width:48,height:29,borderRadius:15,background:_poOn?IOS.blue:"#2A2A2E",border:"1px solid "+(_poOn?IOS.blue:"#3A3A3E"),position:"relative",cursor:"pointer",flexShrink:0,transition:"background .2s"}}>
+         <div onClick={async()=>{ if(_isBracket) return; const newOn=!_poOn; if(!window.confirm((newOn?"Turn playoffs ON":"Turn playoffs OFF")+"? This wipes the current schedule and regenerates it when the league fills.")) return; const _sz=newOn?(_poSize>0?_poSize:([2,4,6,8].filter(v=>v<=_target).pop()||2)):0; await supabase.from("leagues").update({playoffs_enabled:newOn,playoff_size:_sz}).eq("id",activeLeague.id); await supabase.from("matchups").delete().eq("league_id",activeLeague.id); await fetchLeagues(user.id); }} style={{width:48,height:29,borderRadius:RAD.lg,background:_poOn?IOS.blue:"#2A2A2E",border:"1px solid "+(_poOn?IOS.blue:"#3A3A3E"),position:"relative",cursor:"pointer",flexShrink:0,transition:"background .2s"}}>
            <div style={{position:"absolute",top:3,left:_poOn?22:3,width:23,height:23,borderRadius:"50%",background:"#fff",transition:"left .2s",boxShadow:"0 1px 3px rgba(0,0,0,0.4)"}}/>
          </div>
        </div>
        {_poOn&&(
        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,padding:"0 14px 14px"}}>
          {[2,4,6,8].map(sz=>{ const on=sz===_field; const dis=sz>_target; return (
-           <div key={sz} onClick={async()=>{ if(dis||sz===_field) return; if(!window.confirm("Set playoffs to top "+sz+"? This wipes the current schedule and regenerates it when the league fills.")) return; await supabase.from("leagues").update({playoff_size:sz,playoffs_enabled:true}).eq("id",activeLeague.id); await supabase.from("matchups").delete().eq("league_id",activeLeague.id); await fetchLeagues(user.id); }} style={{border:"1.5px solid "+(on?IOS.blue:"rgba(255,255,255,0.08)"),background:on?"rgba(10,132,255,0.12)":"rgba(255,255,255,0.04)",borderRadius:10,padding:"10px 4px",textAlign:"center",cursor:dis?"default":"pointer",opacity:dis?0.3:1}}>
+           <div key={sz} onClick={async()=>{ if(dis||sz===_field) return; if(!window.confirm("Set playoffs to top "+sz+"? This wipes the current schedule and regenerates it when the league fills.")) return; await supabase.from("leagues").update({playoff_size:sz,playoffs_enabled:true}).eq("id",activeLeague.id); await supabase.from("matchups").delete().eq("league_id",activeLeague.id); await fetchLeagues(user.id); }} style={{border:"1.5px solid "+(on?IOS.blue:"rgba(255,255,255,0.08)"),background:on?"rgba(10,132,255,0.12)":"rgba(255,255,255,0.04)",borderRadius:RAD.md,padding:"10px 4px",textAlign:"center",cursor:dis?"default":"pointer",opacity:dis?0.3:1}}>
              <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:18,color:on?IOS.blue:"rgba(255,255,255,0.4)"}}>{sz}</div>
              <div style={{fontSize:9.5,color:on?IOS.blue:"rgba(255,255,255,0.3)",marginTop:2,fontWeight:600}}>teams</div>
            </div>
@@ -13655,7 +14014,7 @@ function App() {
      </div>
      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,padding:"0 14px 14px"}}>
        {[6,8,10,12].map(sz=>{ const on=sz===_target; return (
-         <div key={sz} onClick={async()=>{ if(sz===_target) return; if(!window.confirm("Change league size to "+sz+"? This will wipe the current schedule and regenerate it when the league fills.")) return; await supabase.from("leagues").update({target_size:sz,max_members:sz}).eq("id",activeLeague.id); await supabase.from("matchups").delete().eq("league_id",activeLeague.id); await fetchLeagues(user.id); }} style={{border:"1.5px solid "+(on?IOS.blue:"rgba(255,255,255,0.08)"),background:on?"rgba(10,132,255,0.12)":"rgba(255,255,255,0.04)",borderRadius:10,padding:"10px 4px",textAlign:"center",cursor:on?"default":"pointer"}}>
+         <div key={sz} onClick={async()=>{ if(sz===_target) return; if(!window.confirm("Change league size to "+sz+"? This will wipe the current schedule and regenerate it when the league fills.")) return; await supabase.from("leagues").update({target_size:sz,max_members:sz}).eq("id",activeLeague.id); await supabase.from("matchups").delete().eq("league_id",activeLeague.id); await fetchLeagues(user.id); }} style={{border:"1.5px solid "+(on?IOS.blue:"rgba(255,255,255,0.08)"),background:on?"rgba(10,132,255,0.12)":"rgba(255,255,255,0.04)",borderRadius:RAD.md,padding:"10px 4px",textAlign:"center",cursor:on?"default":"pointer"}}>
            <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:18,color:on?IOS.blue:"rgba(255,255,255,0.4)"}}>{sz}</div>
            <div style={{fontSize:9.5,color:on?IOS.blue:"rgba(255,255,255,0.3)",marginTop:2,fontWeight:600}}>players</div>
          </div>
@@ -13667,13 +14026,13 @@ function App() {
      </div>
      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6,padding:"0 14px 14px"}}>
        {[{v:"invite",l:"Invite"},{v:"private",l:"Private"},{v:"public",l:"Public"}].map(o=>{ const on=o.v===_privacy; return (
-         <div key={o.v} onClick={async()=>{ if(o.v===_privacy) return; await supabase.from("leagues").update({privacy:o.v}).eq("id",activeLeague.id); await fetchLeagues(user.id); }} style={{border:"1.5px solid "+(on?IOS.blue:"rgba(255,255,255,0.08)"),background:on?"rgba(10,132,255,0.12)":"rgba(255,255,255,0.04)",borderRadius:10,padding:"10px 4px",textAlign:"center",cursor:"pointer",fontSize:12,fontWeight:700,color:on?"#fff":"rgba(255,255,255,0.4)"}}>{o.l}</div>
+         <div key={o.v} onClick={async()=>{ if(o.v===_privacy) return; await supabase.from("leagues").update({privacy:o.v}).eq("id",activeLeague.id); await fetchLeagues(user.id); }} style={{border:"1.5px solid "+(on?IOS.blue:"rgba(255,255,255,0.08)"),background:on?"rgba(10,132,255,0.12)":"rgba(255,255,255,0.04)",borderRadius:RAD.md,padding:"10px 4px",textAlign:"center",cursor:"pointer",fontSize:12,fontWeight:700,color:on?"#fff":"rgba(255,255,255,0.4)"}}>{o.l}</div>
        );})}
      </div>
      {_code&&(
      <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderTop:_hair}}>
        <div><div style={{fontSize:9,letterSpacing:"0.12em",color:"rgba(255,255,255,0.3)",fontWeight:700,textTransform:"uppercase",marginBottom:3}}>Invite code</div><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:20,letterSpacing:"0.18em",color:"#fff"}}>{_code}</div></div>
-       <button onClick={()=>shareInvite(_code,activeLeague.name)} style={{marginLeft:"auto",display:"inline-flex",alignItems:"center",gap:6,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.14)",color:"#fff",fontWeight:700,fontSize:12.5,padding:"9px 13px",borderRadius:9,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M16 6l-4-4-4 4M12 2v13"/></svg>Invite players</button>
+       <button onClick={()=>shareInvite(_code,activeLeague.name)} style={{marginLeft:"auto",display:"inline-flex",alignItems:"center",gap:6,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.14)",color:"#fff",fontWeight:700,fontSize:12.5,padding:"9px 13px",borderRadius:RAD.sm,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M16 6l-4-4-4 4M12 2v13"/></svg>Invite players</button>
      </div>
      )}
    </div>
@@ -13686,7 +14045,7 @@ function App() {
      </div>
      {_sc&&(
      <div style={{display:"flex",flexWrap:"wrap",gap:6,padding:"0 14px 14px"}}>
-       {_sc.map((c,i)=>(<span key={i} style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.6)",background:"rgba(255,255,255,0.05)",border:_hair,borderRadius:7,padding:"5px 9px"}}><span style={{color:"#fff",fontWeight:700}}>{c.mult}{"×"}</span> {_tLabel(c.type)}</span>))}
+       {_sc.map((c,i)=>(<span key={i} style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.6)",background:"rgba(255,255,255,0.05)",border:_hair,borderRadius:RAD.sm,padding:"5px 9px"}}><span style={{color:"#fff",fontWeight:700}}>{c.mult}{"×"}</span> {_tLabel(c.type)}</span>))}
      </div>
      )}
    </div>
@@ -13718,7 +14077,7 @@ function App() {
  alert("Grade error: " + (d.error||"Unknown"));
  }
  } catch(e) { alert("Failed to reach grade API: " + e.message); }
- }} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"rgba(10,132,255,0.12)",border:"1px solid rgba(10,132,255,0.3)",borderRadius:11,padding:12,fontFamily:"Barlow,sans-serif",fontSize:14,fontWeight:700,color:IOS.blue,cursor:"pointer",marginBottom:12}}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>Run grading now</button>
+ }} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"rgba(10,132,255,0.12)",border:"1px solid rgba(10,132,255,0.3)",borderRadius:RAD.md,padding:12,fontFamily:"Barlow,sans-serif",fontSize:14,fontWeight:700,color:IOS.blue,cursor:"pointer",marginBottom:12}}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>Run grading now</button>
        <div style={{display:"flex",alignItems:"flex-start",gap:9,fontSize:12,color:"rgba(255,255,255,0.3)",lineHeight:1.45,marginBottom:11}}>
          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64D2FF" strokeWidth="2" style={{flexShrink:0,marginTop:1}}><path d="M5 4l8 8-8 8M14 4l6 8-6 8"/></svg>
          <span><span style={{color:"rgba(255,255,255,0.6)",fontWeight:600}}>Weeks roll over on their own</span> after each one ends. Force the next week early if everyone's done.</span>
@@ -13829,12 +14188,12 @@ function App() {
  try { localStorage.removeItem(`linedup_picks_${activeLeague.id}_wk${currentWeek}`); } catch(e) {}
  try { localStorage.removeItem(`linedup_draft_${activeLeague.id}_wk${currentWeek}`); } catch(e) {}
  setAdvancingWeek(false);
- }} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:advancingWeek?"rgba(255,255,255,0.08)":IOS.green,border:"none",borderRadius:11,padding:13,fontFamily:"Barlow,sans-serif",fontSize:14,fontWeight:700,color:advancingWeek?"rgba(255,255,255,0.3)":"#04210f",cursor:advancingWeek?"default":"pointer"}}>{advancingWeek?"Advancing...":(<span style={{display:"inline-flex",alignItems:"center",gap:8}}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M5 4l8 8-8 8M14 4l6 8-6 8"/></svg>End Week {activeLeague.current_week||1} {"·"} Start Week {(activeLeague.current_week||1)+1}</span>)}</button>
+ }} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:advancingWeek?"rgba(255,255,255,0.08)":IOS.green,border:"none",borderRadius:RAD.md,padding:13,fontFamily:"Barlow,sans-serif",fontSize:14,fontWeight:700,color:advancingWeek?"rgba(255,255,255,0.3)":"#04210f",cursor:advancingWeek?"default":"pointer"}}>{advancingWeek?"Advancing...":(<span style={{display:"inline-flex",alignItems:"center",gap:8}}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M5 4l8 8-8 8M14 4l6 8-6 8"/></svg>End Week {activeLeague.current_week||1} {"·"} Start Week {(activeLeague.current_week||1)+1}</span>)}</button>
      </div>
    </div>
 
    <div style={{...(_eye),color:IOS.red}}>Danger Zone</div>
-   <div style={{background:"#0B0B10",border:"1px solid rgba(255,69,58,0.25)",borderRadius:16,overflow:"hidden",margin:"0 16px 24px"}}>
+   <div style={{background:"#0B0B10",border:"1px solid rgba(255,69,58,0.25)",borderRadius:RAD.lg,overflow:"hidden",margin:"0 16px 24px"}}>
      <div onClick={async()=>{
  if(!window.confirm(`Delete "${activeLeague.name}" permanently? This cannot be undone. All picks, matchups and members will be removed.`)) return;
  // Delete all related data first
@@ -13851,7 +14210,7 @@ function App() {
  setScreen("home");
  alert(`"${activeLeague.name}" has been deleted.`);
  }} style={{padding:14,display:"flex",alignItems:"center",gap:12,cursor:"pointer"}}>
-       <div style={{width:30,height:30,borderRadius:9,border:"1px solid rgba(255,69,58,0.3)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:IOS.red}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></div>
+       <div style={{width:30,height:30,borderRadius:RAD.sm,border:"1px solid rgba(255,69,58,0.3)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:IOS.red}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></div>
        <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:700,color:IOS.red}}>Delete league</div><div style={_dd}>Removes all picks, matchups and members. Permanent.</div></div>
        <div style={{color:"rgba(255,255,255,0.3)",fontSize:18}}>{"\u203a"}</div>
      </div>
@@ -13867,9 +14226,10 @@ function App() {
  {screen==="league"&&(
  <>
  <div className="body">
- <div style={{padding:"0 20px 12px"}}>
+ <div className="pk-cbar" style={{paddingLeft:20,paddingRight:20}}><div className="pk-cbar-t">{activeLeague.name||"My League"}</div></div>
+ <div className="pk-hdr" style={{padding:"0 20px 12px"}}>
  <div className="nav-title-large">{activeLeague.name||"My League"}</div>
- <div className="nav-subtitle">{(SPORTS[activeLeague.sport]?.label||sport.label)+" · "+(isSoloMode?("Solo · "+soloWeekRange(soloWeekNum())):((leagueMembers.length||"?")+" members · Week "+(activeLeague.current_week||activeLeague.week||1)))}</div>
+ <div className="nav-subtitle pk-hdr-sub">{(SPORTS[activeLeague.sport]?.label||sport.label)+" · "+(isSoloMode?("Solo · "+soloWeekRange(soloWeekNum())):((leagueMembers.length||"?")+" members · Week "+(activeLeague.current_week||activeLeague.week||1)))}</div>
  </div>
 
  {/* Season Complete banner */}
@@ -13896,10 +14256,10 @@ function App() {
  champName=champ.isYou?"You":(champ.name||champ.username||"Champion");
  }
  return (
- <div style={{margin:"0 16px 14px",borderRadius:16,overflow:"hidden",position:"relative",background:"linear-gradient(135deg,#1A1606 0%,#0B0B0E 70%)",border:"0.5px solid rgba(255,193,7,0.35)",animation:"champGlow 3.2s ease-in-out infinite"}}>
+ <div style={{margin:"0 16px 14px",borderRadius:RAD.lg,overflow:"hidden",position:"relative",background:"linear-gradient(135deg,#1A1606 0%,#0B0B0E 70%)",border:"0.5px solid rgba(255,193,7,0.35)",animation:"champGlow 3.2s ease-in-out infinite"}}>
  <div style={{position:"absolute",top:0,bottom:0,width:"45%",background:"linear-gradient(100deg,transparent,rgba(255,214,10,0.16),transparent)",animation:"champSweep 3.8s ease-in-out infinite",pointerEvents:"none"}}/>
  <div style={{position:"relative",display:"flex",alignItems:"center",gap:13,padding:"14px 16px"}}>
- <div style={{width:42,height:42,borderRadius:12,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",background:"radial-gradient(circle at 50% 35%,rgba(255,214,10,0.28),rgba(255,159,10,0.1))",border:"0.5px solid rgba(255,214,10,0.4)"}}>
+ <div style={{width:42,height:42,borderRadius:RAD.md,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",background:"radial-gradient(circle at 50% 35%,rgba(255,214,10,0.28),rgba(255,159,10,0.1))",border:"0.5px solid rgba(255,214,10,0.4)"}}>
  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FFD60A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
  </div>
  <div style={{flex:1,minWidth:0}}>
@@ -13907,7 +14267,7 @@ function App() {
  <div style={{fontSize:15,fontWeight:800,color:"#fff",lineHeight:1.15}}>{youWon?"You took the crown":(champName?champName+" wins the league":"Final standings are in")}</div>
  <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.45)",marginTop:2}}>{champ?champ.record+" · "+parseFloat(champ.points||0).toFixed(1)+" pts":"Tap Standings for the final board"}</div>
  </div>
- {youWon&&<div style={{fontSize:9,fontWeight:800,letterSpacing:"0.08em",color:"#0B0B0E",background:"linear-gradient(135deg,#FFD60A,#FF9F0A)",borderRadius:7,padding:"4px 8px",flexShrink:0}}>CHAMPION</div>}
+ {youWon&&<div style={{fontSize:9,fontWeight:800,letterSpacing:"0.08em",color:"#0B0B0E",background:"linear-gradient(135deg,#FFD60A,#FF9F0A)",borderRadius:RAD.sm,padding:"4px 8px",flexShrink:0}}>CHAMPION</div>}
  </div>
  </div>
  );
@@ -13923,9 +14283,9 @@ function App() {
    const pw=playoffWeeksFor(N);
    const startWk=N>=2?Math.max(1,sw-pw+1):sw;
    const cw=activeLeague.current_week||1;
-   const DEVBTN={flex:"1 1 auto",minWidth:62,textAlign:"center",padding:"8px 6px",borderRadius:8,fontSize:12,fontWeight:800,color:IOS.orange,background:"rgba(255,159,10,0.1)",border:"1px solid rgba(255,159,10,0.3)",cursor:"pointer"};
+   const DEVBTN={flex:"1 1 auto",minWidth:62,textAlign:"center",padding:"8px 6px",borderRadius:RAD.sm,fontSize:12,fontWeight:800,color:IOS.orange,background:"rgba(255,159,10,0.1)",border:"1px solid rgba(255,159,10,0.3)",cursor:"pointer"};
    return (
-   <div style={{margin:"0 16px 14px",borderRadius:12,padding:"12px 14px",background:"rgba(255,159,10,0.06)",border:"1px dashed rgba(255,159,10,0.4)"}}>
+   <div style={{margin:"0 16px 14px",borderRadius:RAD.md,padding:"12px 14px",background:"rgba(255,159,10,0.06)",border:"1px dashed rgba(255,159,10,0.4)"}}>
      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:9}}>
        <div style={{fontSize:10,fontWeight:800,letterSpacing:".12em",color:IOS.orange}}>DEV · WK {cw}/{sw}</div>
        <div style={{fontSize:10,color:IOS.label3}}>{N>=2?(N+"-team · seeds Wk "+startWk):"no playoff"}</div>
@@ -13951,18 +14311,18 @@ function App() {
  const targetSize = activeLeague.target_size||activeLeague.max_members||8;
  const isFull = leagueMembers.length >= targetSize;
  if(!isFull) return (
- <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:16,padding:"36px 24px",textAlign:"center"}}>
+ <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:RAD.lg,padding:"36px 24px",textAlign:"center"}}>
  <div style={{fontSize:18,fontWeight:700,color:"#fff",marginBottom:8}}>Bracket Locks When Full</div>
  <div style={{fontSize:14,color:IOS.label3,lineHeight:1.6,marginBottom:20}}>The tournament bracket generates once you reach {targetSize} players.</div>
- <div style={{background:"rgba(255,255,255,0.08)",borderRadius:8,height:8,overflow:"hidden",marginBottom:10}}>
- <div style={{height:"100%",borderRadius:8,background:`linear-gradient(90deg,${IOS.blue},${IOS.purple})`,width:`${(leagueMembers.length/targetSize)*100}%`,transition:"width .4s"}}/>
+ <div style={{background:"rgba(255,255,255,0.08)",borderRadius:RAD.sm,height:8,overflow:"hidden",marginBottom:10}}>
+ <div style={{height:"100%",borderRadius:RAD.sm,background:`linear-gradient(90deg,${IOS.blue},${IOS.purple})`,width:`${(leagueMembers.length/targetSize)*100}%`,transition:"width .4s"}}/>
  </div>
  <div style={{fontSize:13,fontWeight:700,color:IOS.blue}}>{leagueMembers.length} / {targetSize} players</div>
  {activeLeague.isCommissioner && <div style={{marginTop:14,fontSize:12,color:IOS.label3}}>Invite code: <span style={{fontWeight:700,color:"#fff",letterSpacing:2}}>{activeLeague.invite_code||activeLeague.inviteCode}</span></div>}
  </div>
  );
  return (<>
- {bracketMatchups.some(mm=>mm.week===bracketLive.week && !mm.winner_id) && <div style={{margin:"0 16px 10px",display:"flex",alignItems:"center",justifyContent:"center",gap:7,background:"rgba(48,209,88,.1)",border:"1px solid rgba(48,209,88,.3)",borderRadius:12,padding:"9px 14px"}}><span className="brk-livedot"/><span style={{fontSize:11,fontWeight:900,letterSpacing:".12em",color:IOS.green}}>WIN OR GO HOME · LIVE ROUND</span></div>}
+ {bracketMatchups.some(mm=>mm.week===bracketLive.week && !mm.winner_id) && <div style={{margin:"0 16px 10px",display:"flex",alignItems:"center",justifyContent:"center",gap:7,background:"rgba(48,209,88,.1)",border:"1px solid rgba(48,209,88,.3)",borderRadius:RAD.md,padding:"9px 14px"}}><span className="brk-livedot"/><span style={{fontSize:11,fontWeight:900,letterSpacing:".12em",color:IOS.green}}>WIN OR GO HOME · LIVE ROUND</span></div>}
  <BracketView matchups={bracketMatchups} members={leagueMembers} uid={user&&user.id} IOS={IOS} onOpenMatch={openBracketMatch} live={bracketLive} onChampion={(id,nm)=>setChampCelebrate(champPayload(id,nm))}/>
  </>);
  })()}
@@ -13985,14 +14345,14 @@ function App() {
    const seededIds = seeded.map(z=>z.userId);
    const doSeed = async ()=>{ if(seededIds.length!==N) return; const res = await generatePlayoffBracket(activeLeague.id, seededIds, startWeek); if(res&&res.ok){ await fetchBracket(activeLeague.id); } else { alert("Couldn't seed the bracket: "+((res&&res.error&&(res.error.message||res.error.hint))||"the matchups insert was rejected — run the SQL fix (add bracket_match_id column + make user1_id/user2_id nullable).")); } };
    if(N===0) return (
-     <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:16,padding:"36px 24px",textAlign:"center"}}>
+     <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:RAD.lg,padding:"36px 24px",textAlign:"center"}}>
        <div style={{fontSize:18,fontWeight:700,color:"#fff",marginBottom:8}}>No playoff in this league</div>
        <div style={{fontSize:14,color:IOS.label3,lineHeight:1.6}}>Playoffs need at least 4 players. With a smaller group, the top of the standings takes the title.</div>
      </div>
    );
    if(playoffMs.length) return (
      <>
-       {playoffMs.some(mm=>mm.week===bracketLive.week && !mm.winner_id) && <div style={{margin:"0 16px 10px",display:"flex",alignItems:"center",justifyContent:"center",gap:7,background:"rgba(48,209,88,.1)",border:"1px solid rgba(48,209,88,.3)",borderRadius:12,padding:"9px 14px"}}><span className="brk-livedot"/><span style={{fontSize:11,fontWeight:900,letterSpacing:".12em",color:IOS.green}}>PLAYOFFS · LIVE ROUND</span></div>}
+       {playoffMs.some(mm=>mm.week===bracketLive.week && !mm.winner_id) && <div style={{margin:"0 16px 10px",display:"flex",alignItems:"center",justifyContent:"center",gap:7,background:"rgba(48,209,88,.1)",border:"1px solid rgba(48,209,88,.3)",borderRadius:RAD.md,padding:"9px 14px"}}><span className="brk-livedot"/><span style={{fontSize:11,fontWeight:900,letterSpacing:".12em",color:IOS.green}}>PLAYOFFS · LIVE ROUND</span></div>}
        <div style={{margin:"0 16px 12px",fontSize:11,fontWeight:800,letterSpacing:".5px",textTransform:"uppercase",color:IOS.yellow}}>Top {N} seeds · single-elim · Wk {startWeek}–{sw}</div>
        <BracketView matchups={playoffMs} members={leagueMembers} uid={user&&user.id} IOS={IOS} onOpenMatch={openBracketMatch} live={bracketLive} onChampion={(id,nm)=>setChampCelebrate(champPayload(id,nm))}/>
        {bracketDetail && <BracketMatchSheet d={bracketDetail} IOS={IOS} onClose={()=>setBracketDetail(null)} liveGames={liveGames} onOpenGamecast={openGamecast}/>}
@@ -14015,7 +14375,7 @@ function App() {
        const ord = (n)=> n===1?"st":n===2?"nd":n===3?"rd":"th";
        const accent = inField ? IOS.yellow : IOS.red;
        return (
-        <div style={{position:"relative",borderRadius:16,padding:"16px 15px 14px",overflow:"hidden",marginBottom:14,
+        <div style={{position:"relative",borderRadius:RAD.lg,padding:"16px 15px 14px",overflow:"hidden",marginBottom:14,
          background: inField ? "linear-gradient(160deg,rgba(255,214,10,0.13),rgba(255,159,10,0.05) 60%,rgba(255,255,255,0.02))"
                              : "linear-gradient(160deg,rgba(255,69,58,0.13),rgba(255,159,10,0.05) 60%,rgba(255,255,255,0.02))",
          border:`1px solid ${accent}47`}}>
@@ -14038,7 +14398,7 @@ function App() {
            </div>
           </div>
          </div>
-         <div style={{display:"flex",background:"rgba(255,255,255,0.04)",borderRadius:11,marginTop:13,overflow:"hidden"}}>
+         <div style={{display:"flex",background:"rgba(255,255,255,0.04)",borderRadius:RAD.md,marginTop:13,overflow:"hidden"}}>
           <div style={{flex:1,textAlign:"center",padding:"9px 4px",borderRight:"0.5px solid rgba(255,255,255,0.07)"}}>
            <div style={{fontSize:19,fontWeight:900,fontFamily:"'Barlow Semi Condensed',sans-serif",color:"#fff"}}>{weeksLeft}</div>
            <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:IOS.label3,marginTop:2}}>{weeksLeft===1?"Week left":"Weeks left"}</div>
@@ -14059,15 +14419,15 @@ function App() {
         </div>
        );
       })()}
-       <div style={{borderRadius:16,padding:"16px",background:"linear-gradient(160deg,#19191e,#141417)",border:`0.5px solid ${IOS.sep}`,marginBottom:12}}>
+       <div style={{borderRadius:RAD.lg,padding:"16px",background:"linear-gradient(160deg,#19191e,#141417)",border:`0.5px solid ${IOS.sep}`,marginBottom:12}}>
          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
            <div style={{fontSize:17,fontWeight:800,color:"#fff"}}>Playoff bracket</div>
-           <div style={{fontSize:10.5,fontWeight:800,letterSpacing:".4px",textTransform:"uppercase",color:regDone?IOS.green:IOS.label3,background:regDone?"rgba(48,209,88,.12)":"rgba(255,255,255,.05)",border:`0.5px solid ${regDone?"rgba(48,209,88,.35)":IOS.sep}`,borderRadius:20,padding:"4px 10px"}}>{regDone?"Ready to seed":`Locks after Wk ${startWeek-1}`}</div>
+           <div style={{fontSize:10.5,fontWeight:800,letterSpacing:".4px",textTransform:"uppercase",color:regDone?IOS.green:IOS.label3,background:regDone?"rgba(48,209,88,.12)":"rgba(255,255,255,.05)",border:`0.5px solid ${regDone?"rgba(48,209,88,.35)":IOS.sep}`,borderRadius:RAD.pill,padding:"4px 10px"}}>{regDone?"Ready to seed":`Locks after Wk ${startWeek-1}`}</div>
          </div>
          <div style={{fontSize:13,color:IOS.label2,lineHeight:1.55}}>Top {N} seeds make a {pWeeks}-week single-elimination playoff (Wk {startWeek}–{sw}). Seeds lock from the final standings, 1 vs {N}.</div>
        </div>
        <div style={{fontSize:11,fontWeight:800,letterSpacing:".5px",textTransform:"uppercase",color:IOS.label3,margin:"0 4px 8px"}}>{regDone?"Seeds":"Projected seeds"}</div>
-       <div style={{background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:16,overflow:"hidden"}}>
+       <div style={{background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:RAD.lg,overflow:"hidden"}}>
         {seeded.length===0 ? (<div style={{padding:"22px 16px",textAlign:"center",color:IOS.label3,fontSize:14}}>No graded picks yet</div>) : (()=>{
           // Show the bubble under the line. The list used to stop at the cut, so a player
           // who missed simply wasn't on screen and couldn't see by how much.
@@ -14087,7 +14447,7 @@ function App() {
                 </div>
               )}
               <div style={{display:"flex",alignItems:"center",gap:11,padding:"12px 14px",background:r.isYou?"rgba(10,132,255,0.10)":"transparent",borderBottom:i<shown.length-1?`0.5px solid ${IOS.sep}`:"none",opacity:inField?1:0.72}}>
-                <div style={{width:24,height:24,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:12,fontWeight:900,flexShrink:0,
+                <div style={{width:24,height:24,borderRadius:RAD.sm,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:12,fontWeight:900,flexShrink:0,
                   background: r.isYou ? IOS.blue : inField ? IOS.yellow : "rgba(255,255,255,0.08)",
                   color: r.isYou ? "#fff" : inField ? "#000" : IOS.label3}}>{i+1}</div>
                 <div style={{flex:1,minWidth:0}}>
@@ -14104,7 +14464,7 @@ function App() {
         })()}
        </div>
        {regDone && activeLeague.isCommissioner && seededIds.length===N && (
-         <div onClick={doSeed} style={{marginTop:14,background:IOS.blue,borderRadius:12,padding:"14px",textAlign:"center",fontSize:15,fontWeight:800,color:"#fff",cursor:"pointer"}}>Seed the playoff bracket</div>
+         <div onClick={doSeed} style={{marginTop:14,background:IOS.blue,borderRadius:RAD.md,padding:"14px",textAlign:"center",fontSize:15,fontWeight:800,color:"#fff",cursor:"pointer"}}>Seed the playoff bracket</div>
        )}
        {regDone && !activeLeague.isCommissioner && (
          <div style={{marginTop:14,textAlign:"center",fontSize:12.5,color:IOS.label3}}>Waiting for the commissioner to seed the playoff.</div>
@@ -14131,7 +14491,7 @@ function App() {
  const inPlayoff = playoffN>0 && typeof myRank==="number" && myRank<=playoffN;
  const gap = (linePts!=null && me.points!=null) ? Math.round((me.points - linePts)*10)/10 : null;
  return (<>
- <div style={{margin:"14px 16px 0",background:"linear-gradient(180deg,#19191e,#141417)",border:`0.5px solid ${IOS.sep}`,borderRadius:16,padding:"14px 15px"}}>
+ <div style={{margin:"14px 16px 0",background:"linear-gradient(180deg,#19191e,#141417)",border:`0.5px solid ${IOS.sep}`,borderRadius:RAD.lg,padding:"14px 15px"}}>
    <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:9}}>
      <div style={{fontSize:13,fontWeight:800}}>Regular season</div>
      <div style={{fontSize:11,color:IOS.label3,fontWeight:700}}>{playoffN>0?`Top ${playoffN} make the playoff`:"Most points wins"}</div>
@@ -14144,7 +14504,7 @@ function App() {
      <span>Wk {cw} of {sw}</span>{playoffN>0 && <span style={{color:IOS.yellow,fontWeight:800}}>Playoff after Wk {sw}</span>}
    </div>
  </div>
- <div style={{position:"relative",margin:"14px 16px 0",borderRadius:20,padding:18,overflow:"hidden",background:`radial-gradient(120% 120% at 50% -10%, ${IOS.indigo}3d, ${IOS.blue}10 45%, rgba(20,20,22,0) 72%),linear-gradient(180deg,#1a1a1f,#141416)`,border:`1px solid ${IOS.indigo}4d`,boxShadow:`0 18px 50px -22px ${IOS.indigo}99`}}>
+ <div style={{position:"relative",margin:"14px 16px 0",borderRadius:RAD.xl,padding:18,overflow:"hidden",background:`radial-gradient(120% 120% at 50% -10%, ${IOS.indigo}3d, ${IOS.blue}10 45%, rgba(20,20,22,0) 72%),linear-gradient(180deg,#1a1a1f,#141416)`,border:`1px solid ${IOS.indigo}4d`,boxShadow:`0 18px 50px -22px ${IOS.indigo}99`}}>
    <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${IOS.blue},${IOS.indigo},#64D2FF)`}}/>
    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,letterSpacing:.7,textTransform:"uppercase",fontSize:12,color:"#64D2FF"}}>Your total</div>
    <div style={{display:"flex",alignItems:"flex-end",gap:13,marginTop:4}}>
@@ -14154,7 +14514,7 @@ function App() {
        <div style={{fontSize:12,color:inPlayoff?IOS.green:IOS.label2,fontWeight:700,marginTop:5}}>{playoffN<=0?"Most points wins":inPlayoff?(gap!=null?`In the hunt · +${gap} above the line`:"In playoff position"):(gap!=null?`${Math.abs(gap)} pts back of the line`:"Chasing the playoff")}</div>
      </div>
    </div>
-   <div style={{display:"flex",marginTop:16,background:"rgba(255,255,255,0.03)",border:`0.5px solid ${IOS.sep}`,borderRadius:13,overflow:"hidden"}}>
+   <div style={{display:"flex",marginTop:16,background:"rgba(255,255,255,0.03)",border:`0.5px solid ${IOS.sep}`,borderRadius:RAD.md,overflow:"hidden"}}>
      {[[me.record||"0-0","Picks W-L","#fff"],[me.wpct||"0%","Hit %",IOS.green],[String(me.points!=null?me.points:0),"Points",IOS.blue],[playoffN>0?("#"+myRank):"—","Seed",IOS.yellow]].map((c,ci)=>(
        <div key={ci} style={{flex:1,textAlign:"center",padding:"10px 4px",borderLeft:ci>0?`1px solid ${IOS.sep}`:"none"}}>
          <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:19,color:c[2]}}>{c[0]}</div>
@@ -14164,7 +14524,7 @@ function App() {
    </div>
  </div>
  <div style={{fontSize:17,fontWeight:800,color:"#fff",margin:"22px 20px 12px"}}>Season Standings</div>
- <div style={{margin:"0 16px 16px",background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:16,overflow:"hidden"}}>
+ <div style={{margin:"0 16px 16px",background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:RAD.lg,overflow:"hidden"}}>
    {_ms.length===0 ? (<div style={{padding:"22px 16px",textAlign:"center",color:IOS.label3,fontSize:14}}>No graded picks yet</div>) : _ms.map((r,i)=>{
      const initials=(r.name==="You"||r.isYou)?"You":(r.name||"?").slice(0,2).toUpperCase();
      const col=i===0?IOS.yellow:i===1?"#C7CBD1":i===2?"#E0915A":IOS.blue;
@@ -14196,7 +14556,7 @@ function App() {
  })() : (<>
  {/* Hero — your stats */}
       {/* Hero rank card */}
-      <div style={{position:"relative",margin:"0 16px 4px",borderRadius:20,padding:"20px 18px 16px",overflow:"hidden",background:`radial-gradient(120% 120% at 50% -10%, ${IOS.indigo}38, ${IOS.blue}10 45%, rgba(20,20,22,0) 70%), linear-gradient(180deg,#1a1a1f,#141416)`,border:`1px solid ${IOS.indigo}47`,boxShadow:`0 18px 50px -20px ${IOS.indigo}80`}}>
+      <div style={{position:"relative",margin:"0 16px 4px",borderRadius:RAD.xl,padding:"20px 18px 16px",overflow:"hidden",background:`radial-gradient(120% 120% at 50% -10%, ${IOS.indigo}38, ${IOS.blue}10 45%, rgba(20,20,22,0) 70%), linear-gradient(180deg,#1a1a1f,#141416)`,border:`1px solid ${IOS.indigo}47`,boxShadow:`0 18px 50px -20px ${IOS.indigo}80`}}>
         <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${IOS.blue},${IOS.indigo},#64D2FF)`}}/>
         <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,letterSpacing:1,textTransform:"uppercase",fontSize:12,color:"#64D2FF"}}>Your rank</div>
         <div style={{display:"flex",alignItems:"flex-end",gap:13,marginTop:4}}>
@@ -14206,7 +14566,7 @@ function App() {
             <div style={{fontSize:12.5,color:IOS.label2,fontWeight:600,marginTop:4}}>{realStandings.find(s=>s.isYou)?.rank===1?"Leading the league":`of ${activeLeague.target_size||activeLeague.max_members||8} players`}</div>
           </div>
         </div>
-        <div style={{display:"flex",marginTop:18,background:"rgba(255,255,255,0.03)",border:`0.5px solid ${IOS.sep}`,borderRadius:14,overflow:"hidden"}}>
+        <div style={{display:"flex",marginTop:18,background:"rgba(255,255,255,0.03)",border:`0.5px solid ${IOS.sep}`,borderRadius:RAD.lg,overflow:"hidden"}}>
           {[[realStandings.find(s=>s.isYou)?.record||"0-0","Record","#fff"],[realStandings.find(s=>s.isYou)?.wpct||"0%","Win %",IOS.green],[String(realStandings.find(s=>s.isYou)?.points||0),"Points",IOS.blue],["Wk "+(activeLeague.current_week||activeLeague.week||1),"Current",IOS.label2]].map((c,ci)=>(
             <div key={ci} style={{flex:1,textAlign:"center",padding:"11px 4px",borderLeft:ci>0?`1px solid ${IOS.sep}`:"none"}}>
               <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:20,color:c[2]}}>{c[0]}</div>
@@ -14235,7 +14595,7 @@ function App() {
         </div>
       ) : sorted.length>0 ? (
         <div style={{padding:"16px 16px 0"}}>
-          <div style={{borderRadius:16,padding:"15px",background:`linear-gradient(135deg,${IOS.yellow}1a,rgba(255,255,255,0.02))`,border:`0.5px solid ${IOS.yellow}33`,display:"flex",alignItems:"center",gap:13}}>
+          <div style={{borderRadius:RAD.lg,padding:"15px",background:`linear-gradient(135deg,${IOS.yellow}1a,rgba(255,255,255,0.02))`,border:`0.5px solid ${IOS.yellow}33`,display:"flex",alignItems:"center",gap:13}}>
             <div style={{width:48,height:48,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:18,color:"#0c0c0e",background:`linear-gradient(150deg,${IOS.yellow},#FFB300)`,boxShadow:`0 0 20px ${IOS.yellow}55`,flexShrink:0}}>{(sorted[0].name==="You"?"You":(sorted[0].name||"?").slice(0,2)).toUpperCase()}</div>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",color:IOS.yellow}}>League leader</div>
@@ -14252,7 +14612,7 @@ function App() {
  <div style={{fontSize:18}}></div>
  <div style={{fontSize:17,fontWeight:700,letterSpacing:-0.3,color:"#fff"}}>This Week</div>
  </div>
- <div style={{fontSize:12,fontWeight:600,color:IOS.orange,background:"rgba(255,159,10,0.12)",padding:"3px 10px",borderRadius:20}}>
+ <div style={{fontSize:12,fontWeight:600,color:IOS.orange,background:"rgba(255,159,10,0.12)",padding:"3px 10px",borderRadius:RAD.pill}}>
  Wk {activeLeague.current_week||activeLeague.week||1} · Live
  </div>
  </div>
@@ -14277,7 +14637,7 @@ function App() {
  });
  const sorted = [...allMembers].sort((a,b)=>b.points-a.points);
  return (
- <div style={{background:IOS.bg2,borderRadius:16,margin:"0 16px 16px",overflow:"hidden"}}>
+ <div style={{background:IOS.bg2,borderRadius:RAD.lg,margin:"0 16px 16px",overflow:"hidden"}}>
  {sorted.length===0 ? (
  <div style={{padding:"20px 16px",textAlign:"center",color:IOS.label3,fontSize:14}}>No graded picks yet this week</div>
  ) : sorted.map((row,i)=>{
@@ -14362,12 +14722,12 @@ function App() {
   {leagueTab==="trophies"&&(
    <div style={{paddingBottom:24}}>
     {leagueMembers.filter(m=>!m.isYou).length===0 ? (
-     <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:16,padding:"40px 24px",textAlign:"center"}}>
+     <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:RAD.lg,padding:"40px 24px",textAlign:"center"}}>
       <div style={{fontSize:18,fontWeight:700,color:"#fff",marginBottom:8}}>No trophies yet</div>
       <div style={{fontSize:14,color:IOS.label3,lineHeight:1.6}}>Trophies are awarded once members start competing. Invite friends to get started.</div>
      </div>
     ) : leagueTrophies.length===0 ? (
-     <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:16,padding:"40px 24px",textAlign:"center"}}>
+     <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:RAD.lg,padding:"40px 24px",textAlign:"center"}}>
       <div style={{fontSize:18,fontWeight:700,color:"#fff",marginBottom:8}}>No graded picks yet</div>
       <div style={{fontSize:14,color:IOS.label3,lineHeight:1.6}}>Trophies appear once picks are graded this week.</div>
      </div>
@@ -14389,7 +14749,7 @@ function App() {
        .sort((x,y)=>y.share-x.share)[0];
      return (
       <>
-       <div style={{position:"relative",margin:"0 16px 14px",borderRadius:16,padding:"16px 15px 14px",overflow:"hidden",background:"linear-gradient(160deg,rgba(255,214,10,0.12),rgba(255,159,10,0.04) 60%,rgba(255,255,255,0.02))",border:"1px solid rgba(255,214,10,0.26)"}}>
+       <div style={{position:"relative",margin:"0 16px 14px",borderRadius:RAD.lg,padding:"16px 15px 14px",overflow:"hidden",background:"linear-gradient(160deg,rgba(255,214,10,0.12),rgba(255,159,10,0.04) 60%,rgba(255,255,255,0.02))",border:"1px solid rgba(255,214,10,0.26)"}}>
         <div style={{position:"absolute",top:0,left:0,right:0,height:2.5,background:`linear-gradient(90deg,${IOS.yellow},${IOS.orange})`}}/>
         <div style={{textAlign:"center",fontSize:11,fontWeight:800,letterSpacing:"0.14em",textTransform:"uppercase",color:IOS.yellow,marginBottom:10}}>Trophy case</div>
         <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
@@ -14402,7 +14762,7 @@ function App() {
          </div>
         </div>
         {board.length>1 && (
-         <div style={{display:"flex",background:"rgba(255,255,255,0.04)",borderRadius:11,marginTop:13,overflow:"hidden"}}>
+         <div style={{display:"flex",background:"rgba(255,255,255,0.04)",borderRadius:RAD.md,marginTop:13,overflow:"hidden"}}>
           {board.map((b,bi)=>(
            <div key={bi} style={{flex:1,textAlign:"center",padding:"9px 4px",borderRight:bi<board.length-1?"0.5px solid rgba(255,255,255,0.07)":"none"}}>
             <div style={{fontSize:19,fontWeight:900,fontFamily:"'Barlow Semi Condensed',sans-serif",color:b.name==="You"?IOS.blue:"#fff"}}>{b.n}</div>
@@ -14414,8 +14774,8 @@ function App() {
        </div>
 
        {steal && (
-        <div style={{display:"flex",alignItems:"center",gap:10,margin:"0 16px 14px",padding:"10px 12px",borderRadius:12,background:`linear-gradient(135deg,${steal.t.color}1f,rgba(255,255,255,0.02))`,border:`1px solid ${steal.t.color}4d`}}>
-         <div style={{width:30,height:30,borderRadius:9,background:`${steal.t.color}2e`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{trophySVG(steal.t.id,steal.t.color)}</div>
+        <div style={{display:"flex",alignItems:"center",gap:10,margin:"0 16px 14px",padding:"10px 12px",borderRadius:RAD.md,background:`linear-gradient(135deg,${steal.t.color}1f,rgba(255,255,255,0.02))`,border:`1px solid ${steal.t.color}4d`}}>
+         <div style={{width:30,height:30,borderRadius:RAD.sm,background:`${steal.t.color}2e`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{trophySVG(steal.t.id,steal.t.color)}</div>
          <div style={{minWidth:0}}>
           <div style={{fontSize:8.5,fontWeight:900,letterSpacing:"0.1em",textTransform:"uppercase",color:steal.t.color}}>Closest steal</div>
           <div style={{fontSize:13.5,fontWeight:800,color:"#fff",marginTop:1}}>{steal.t.name}</div>
@@ -14429,10 +14789,10 @@ function App() {
        {leagueTrophies.map(t=>{
         const pct = t.lead>0 ? Math.max(0,Math.min(1, t.mine/t.lead)) : 0;
         return (
-         <div key={t.id} style={{position:"relative",margin:"0 16px 8px",borderRadius:13,padding:"11px 12px",overflow:"hidden",background:t.isYou?`linear-gradient(135deg,${IOS.yellow}17,rgba(255,255,255,0.015))`:IOS.bg2,border:t.isYou?`0.5px solid ${IOS.yellow}73`:`0.5px solid ${IOS.sep}`}}>
+         <div key={t.id} style={{position:"relative",margin:"0 16px 8px",borderRadius:RAD.md,padding:"11px 12px",overflow:"hidden",background:t.isYou?`linear-gradient(135deg,${IOS.yellow}17,rgba(255,255,255,0.015))`:IOS.bg2,border:t.isYou?`0.5px solid ${IOS.yellow}73`:`0.5px solid ${IOS.sep}`}}>
           {t.isYou && <div style={{position:"absolute",top:10,right:11,fontSize:8,fontWeight:900,letterSpacing:"0.08em",background:IOS.yellow,color:"#000",padding:"2px 5px",borderRadius:4}}>YOURS</div>}
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-           <div style={{width:36,height:36,borderRadius:11,background:`${t.color}29`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{trophySVG(t.id,t.color)}</div>
+           <div style={{width:36,height:36,borderRadius:RAD.md,background:`${t.color}29`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{trophySVG(t.id,t.color)}</div>
            <div style={{flex:1,minWidth:0}}>
             <div style={{fontSize:14.5,fontWeight:900,color:"#fff",letterSpacing:-0.2}}>{t.name}</div>
             <div style={{fontSize:10.5,color:IOS.label3,marginTop:1}}>{t.desc}</div>
@@ -14465,15 +14825,15 @@ function App() {
  const currentSize = leagueMembers.length;
  const isFull = currentSize >= targetSize;
  if(!isFull) return (
- <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:16,padding:"36px 24px",textAlign:"center"}}>
+ <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:RAD.lg,padding:"36px 24px",textAlign:"center"}}>
  <div style={{fontSize:44,marginBottom:12}}></div>
  <div style={{fontSize:18,fontWeight:700,color:"#fff",marginBottom:8}}>Fill the League to See Your Schedule!</div>
  <div style={{fontSize:14,color:IOS.label3,lineHeight:1.6,marginBottom:20}}>
  Schedule auto-generates when you reach {targetSize} members.
  </div>
  {/* Progress bar */}
- <div style={{background:"rgba(255,255,255,0.08)",borderRadius:8,height:8,overflow:"hidden",marginBottom:10}}>
- <div style={{height:"100%",borderRadius:8,background:`linear-gradient(90deg,${IOS.blue},${IOS.teal})`,width:`${(currentSize/targetSize)*100}%`,transition:"width .4s"}}/>
+ <div style={{background:"rgba(255,255,255,0.08)",borderRadius:RAD.sm,height:8,overflow:"hidden",marginBottom:10}}>
+ <div style={{height:"100%",borderRadius:RAD.sm,background:`linear-gradient(90deg,${IOS.blue},${IOS.teal})`,width:`${(currentSize/targetSize)*100}%`,transition:"width .4s"}}/>
  </div>
  <div style={{fontSize:13,fontWeight:700,color:IOS.blue}}>{currentSize} / {targetSize} members</div>
  {activeLeague.isCommissioner && (
@@ -14499,7 +14859,7 @@ function App() {
        const toPO = _N>=2 ? Math.max(0, Math.max(1,_sw-playoffWeeksFor(_N)+1) - cw) : null;
        const f1 = (n)=>(Math.round(n*10)/10).toFixed(1);
        return (
-        <div style={{position:"relative",margin:"0 16px 14px",borderRadius:16,padding:"16px 15px 14px",overflow:"hidden",background:"linear-gradient(160deg,rgba(10,132,255,0.14),rgba(191,90,242,0.06) 60%,rgba(255,255,255,0.02))",border:"1px solid rgba(10,132,255,0.28)"}}>
+        <div style={{position:"relative",margin:"0 16px 14px",borderRadius:RAD.lg,padding:"16px 15px 14px",overflow:"hidden",background:"linear-gradient(160deg,rgba(10,132,255,0.14),rgba(191,90,242,0.06) 60%,rgba(255,255,255,0.02))",border:"1px solid rgba(10,132,255,0.28)"}}>
          <div style={{position:"absolute",top:0,left:0,right:0,height:2.5,background:`linear-gradient(90deg,${IOS.blue},${IOS.purple})`}}/>
          <div style={{textAlign:"center",fontSize:11,fontWeight:800,letterSpacing:"0.14em",textTransform:"uppercase",color:"#64D2FF",marginBottom:10}}>Your season</div>
          <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
@@ -14511,7 +14871,7 @@ function App() {
            <div style={{fontSize:12.5,color:IOS.label3,marginTop:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:170}}>{nowWk?("vs "+nowWk.opp):"No matchup"}</div>
           </div>
          </div>
-         <div style={{display:"flex",background:"rgba(255,255,255,0.04)",borderRadius:11,marginTop:13,overflow:"hidden"}}>
+         <div style={{display:"flex",background:"rgba(255,255,255,0.04)",borderRadius:RAD.md,marginTop:13,overflow:"hidden"}}>
           <div style={{flex:1,textAlign:"center",padding:"9px 4px",borderRight:"0.5px solid rgba(255,255,255,0.07)"}}>
            <div style={{fontSize:19,fontWeight:900,fontFamily:"'Barlow Semi Condensed',sans-serif",color:IOS.green}}>{best?f1(best):"—"}</div>
            <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:IOS.label3,marginTop:2}}>Best week</div>
@@ -14535,7 +14895,7 @@ function App() {
        );
       })()}
  {/* Matchup detail overlay */}
- <div style={{background:IOS.bg2,borderRadius:16,margin:"0 16px",overflow:"hidden"}}>
+ <div style={{background:IOS.bg2,borderRadius:RAD.lg,margin:"0 16px",overflow:"hidden"}}>
  {liveSchedule.length === 0 ? (
  <div style={{padding:"32px 24px",textAlign:"center",color:IOS.label3}}>
  <div style={{fontSize:32,marginBottom:10}}></div>
@@ -14559,7 +14919,7 @@ function App() {
 
  return (
  <div key={wk.week}
-  style={{position:"relative",display:"flex",alignItems:"center",gap:11,padding:"11px 12px",margin:"0 0 7px",borderRadius:13,overflow:"hidden",
+  style={{position:"relative",display:"flex",alignItems:"center",gap:11,padding:"11px 12px",margin:"0 0 7px",borderRadius:RAD.md,overflow:"hidden",
    background: showLive&&!done ? `linear-gradient(135deg,${IOS.blue}1a,rgba(255,255,255,0.015))` : IOS.bg3,
    border: showLive&&!done ? `0.5px solid ${IOS.blue}80` : `0.5px solid ${IOS.sep}`,
    cursor: done?"pointer":"default"}}
@@ -14567,7 +14927,7 @@ function App() {
  >
   {done && <div style={{position:"absolute",left:0,top:0,bottom:0,width:3,background:wk.result==="W"?IOS.green:IOS.red}}/>}
   <div style={{fontSize:10,fontWeight:900,color:showLive&&!done?IOS.blue:"rgba(255,255,255,0.25)",width:20,flexShrink:0}}>W{wk.week}</div>
-  <div style={{width:30,height:30,borderRadius:15,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,color:"#000",
+  <div style={{width:30,height:30,borderRadius:RAD.lg,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,color:"#000",
    background: showLive&&!done ? "#64D2FF" : done ? (wk.result==="W"?"#C7CBD1":"#E0915A") : "rgba(255,255,255,0.14)"}}>
    {String(wk.opp||"?").slice(0,2).toUpperCase()}
   </div>
@@ -14594,7 +14954,7 @@ function App() {
     );
    })()}
   </div>
-  <div style={{fontSize:11,fontWeight:900,padding:"5px 9px",borderRadius:7,flexShrink:0,
+  <div style={{fontSize:11,fontWeight:900,padding:"5px 9px",borderRadius:RAD.sm,flexShrink:0,
    background: showLive&&!done ? IOS.blue : wk.result==="W" ? `${IOS.green}29` : wk.result==="L" ? `${IOS.red}24` : "rgba(255,255,255,0.06)",
    color: showLive&&!done ? "#fff" : wk.result==="W" ? IOS.green : wk.result==="L" ? IOS.red : "rgba(255,255,255,0.25)"}}>
    {showLive&&!done?"LIVE":wk.result==="upcoming"?"—":wk.result}
@@ -14617,7 +14977,7 @@ function App() {
           <div className="body" style={{display:"flex",flexDirection:"column",height:"100%",background:"#08080A",overflow:"hidden",position:"relative"}}>
             <style>{`@keyframes aiRise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}} .ai-rise{animation:aiRise .28s ease both;} @keyframes aiBlink{0%,100%{opacity:1}50%{opacity:0}} .ai-caret{display:inline-block;width:2px;height:0.95em;background:#0A84FF;margin-left:2px;vertical-align:-1px;border-radius:1px;animation:aiBlink .8s steps(1) infinite;} @keyframes aiPulse{0%,100%{opacity:0.25;transform:translateY(0)}50%{opacity:1;transform:translateY(-2px)}} .ai-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.6);display:inline-block;animation:aiPulse .9s ease-in-out infinite;}`}</style>
             <div style={{flexShrink:0,display:"flex",alignItems:"center",gap:11,padding:"12px 16px 10px",borderBottom:"0.5px solid rgba(255,255,255,0.08)"}}>
-              <div onClick={()=>setScreen(aiReturn||"home")} style={{width:34,height:34,borderRadius:10,background:"rgba(255,255,255,0.06)",border:"0.5px solid rgba(255,255,255,0.1)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:18,flexShrink:0}}>‹</div>
+              <div onClick={()=>setScreen(aiReturn||"home")} style={{width:34,height:34,borderRadius:RAD.md,background:"rgba(255,255,255,0.06)",border:EDGE.hair2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:18,flexShrink:0}}>‹</div>
               <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:0}}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg>
                 <div>
@@ -14626,7 +14986,7 @@ function App() {
                 </div>
               </div>
               {aiThread.length>0 && (
-                <div onClick={()=>setAiThread([])} role="button" aria-label="New Plok session" style={{flexShrink:0,padding:"7px 12px",borderRadius:10,background:"rgba(255,255,255,0.06)",border:"0.5px solid rgba(255,255,255,0.12)",fontSize:12,fontWeight:800,color:IOS.blue,cursor:"pointer"}}>New</div>
+                <div onClick={()=>setAiThread([])} role="button" aria-label="New Plok session" style={{flexShrink:0,padding:"7px 12px",borderRadius:RAD.md,background:"rgba(255,255,255,0.06)",border:EDGE.hair2,fontSize:12,fontWeight:800,color:IOS.blue,cursor:"pointer"}}>New</div>
               )}
             </div>
             <div className="gbx-scroll" style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:10,padding:"14px 14px 16px"}}>
@@ -14636,8 +14996,8 @@ function App() {
                 return (
                   <div style={{flexShrink:0}}>
                     <div style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.07em",textTransform:"uppercase",color:"rgba(255,255,255,0.4)",margin:"0 2px 8px"}}>Reading through</div>
-                    <div onClick={()=>{ if(!isPro){setShowPaywall("ai");return;} setModelPicker(true); }} style={{display:"flex",alignItems:"center",gap:10,background:`linear-gradient(135deg,${IOS.blue}21,${IOS.blue}08)`,border:`1px solid ${IOS.blue}59`,borderRadius:13,padding:"11px 13px",cursor:"pointer"}}>
-                      <div style={{width:32,height:32,borderRadius:9,background:_lm.color+"29",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{_lm.icon}</div>
+                    <div onClick={()=>{ if(!isPro){setShowPaywall("ai");return;} setModelPicker(true); }} style={{display:"flex",alignItems:"center",gap:10,background:`linear-gradient(135deg,${IOS.blue}21,${IOS.blue}08)`,border:`1px solid ${IOS.blue}59`,borderRadius:RAD.md,padding:"11px 13px",cursor:"pointer"}}>
+                      <div style={{width:32,height:32,borderRadius:RAD.sm,background:_lm.color+"29",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{_lm.icon}</div>
                       <div style={{flex:1,minWidth:0}}>
                         <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(255,255,255,0.4)"}}>Model</div>
                         <div style={{fontSize:14.5,fontWeight:800,color:"#fff",marginTop:1}}>{_lm.name}</div>
@@ -14649,16 +15009,16 @@ function App() {
                 );
               })()}
               {plokBuilding && (
-                <div className="ai-rise" style={{display:"flex",alignItems:"center",gap:9,background:"rgba(255,255,255,0.04)",border:`0.5px solid ${IOS.blue}33`,borderRadius:12,padding:"14px"}}>
+                <div className="ai-rise" style={{display:"flex",alignItems:"center",gap:9,background:"rgba(255,255,255,0.04)",border:`0.5px solid ${IOS.blue}33`,borderRadius:RAD.md,padding:"14px"}}>
                   <span className="ai-dot"/><span className="ai-dot" style={{animationDelay:".15s"}}/><span className="ai-dot" style={{animationDelay:".3s"}}/>
                   <span style={{fontSize:12.5,fontWeight:700,color:"rgba(255,255,255,0.7)"}}>Plok is building your slip…</span>
                 </div>
               )}
               {plokBuild && plokBuild.error && (
-                <div className="ai-rise" style={{background:"rgba(255,69,58,0.08)",border:`0.5px solid ${IOS.red}33`,borderRadius:12,padding:"12px 14px",fontSize:12.5,color:"rgba(255,255,255,0.75)"}}>{plokBuild.error}</div>
+                <div className="ai-rise" style={{background:"rgba(255,69,58,0.08)",border:`0.5px solid ${IOS.red}33`,borderRadius:RAD.md,padding:"12px 14px",fontSize:12.5,color:"rgba(255,255,255,0.75)"}}>{plokBuild.error}</div>
               )}
               {plokBuild && plokBuild.items && (
-                <div className="ai-rise" style={{background:`linear-gradient(135deg,${IOS.blue}1a,rgba(255,255,255,0.03))`,border:`0.5px solid ${IOS.blue}33`,borderRadius:14,padding:"13px 14px"}}>
+                <div className="ai-rise" style={{background:`linear-gradient(135deg,${IOS.blue}1a,rgba(255,255,255,0.03))`,border:`0.5px solid ${IOS.blue}33`,borderRadius:RAD.lg,padding:"13px 14px"}}>
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
                     <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:IOS.blue}}>Plok built your slip</div>
                     <div onClick={()=>setPlokBuild(null)} style={{cursor:"pointer",color:"rgba(255,255,255,0.4)",fontSize:17,lineHeight:1}}>×</div>
@@ -14668,10 +15028,10 @@ function App() {
                   <div style={{display:"flex",flexDirection:"column",gap:9}}>
                     {plokBuild.items.map((it,ii)=>(
                       <div key={ii} style={{display:"flex",alignItems:"flex-start",gap:9,opacity:plokChosen.has(it.idx)?1:0.4,transition:"opacity .12s"}}>
-                        <div onClick={()=>setPlokChosen(prev=>{ const n=new Set(prev); if(n.has(it.idx)) n.delete(it.idx); else n.add(it.idx); return n; })} style={{width:22,height:22,flexShrink:0,borderRadius:6,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",background:plokChosen.has(it.idx)?IOS.blue:"rgba(255,255,255,0.06)",border:plokChosen.has(it.idx)?`1px solid ${IOS.blue}`:"1px solid rgba(255,255,255,0.18)"}}>
+                        <div onClick={()=>setPlokChosen(prev=>{ const n=new Set(prev); if(n.has(it.idx)) n.delete(it.idx); else n.add(it.idx); return n; })} style={{width:22,height:22,flexShrink:0,borderRadius:RAD.sm,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",background:plokChosen.has(it.idx)?IOS.blue:"rgba(255,255,255,0.06)",border:plokChosen.has(it.idx)?`1px solid ${IOS.blue}`:"1px solid rgba(255,255,255,0.18)"}}>
                           {plokChosen.has(it.idx) && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
                         </div>
-                        <div style={{width:30,height:30,flexShrink:0,borderRadius:8,background:`${it.meta.color}1f`,border:`0.5px solid ${it.meta.color}40`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:it.meta.color}}>{it.mult}×</div>
+                        <div style={{width:30,height:30,flexShrink:0,borderRadius:RAD.sm,background:`${it.meta.color}1f`,border:`0.5px solid ${it.meta.color}40`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:it.meta.color}}>{it.mult}×</div>
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{display:"flex",alignItems:"baseline",gap:6}}>
                             <span style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.04em",textTransform:"uppercase",color:it.meta.color,flexShrink:0}}>{it.meta.label}</span>
@@ -14684,8 +15044,8 @@ function App() {
                     ))}
                   </div>
                   <div style={{display:"flex",gap:8,marginTop:13}}>
-                    <button onClick={applyPlokSlip} disabled={plokChosen.size===0} style={{flex:1,background:plokChosen.size?IOS.blue:"rgba(255,255,255,0.08)",border:"none",borderRadius:11,padding:"11px",fontSize:13,fontWeight:800,color:plokChosen.size?"#fff":"rgba(255,255,255,0.3)",cursor:plokChosen.size?"pointer":"default",fontFamily:"inherit"}}>{plokChosen.size===0 ? "Pick at least one" : `Add ${plokChosen.size} ${plokChosen.size===1?"pick":"picks"} to slip`}</button>
-                    <button onClick={buildPlokSlip} style={{background:"rgba(255,255,255,0.08)",border:"none",borderRadius:11,padding:"11px 14px",fontSize:13,fontWeight:800,color:"rgba(255,255,255,0.8)",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Rebuild</button>
+                    <button onClick={applyPlokSlip} disabled={plokChosen.size===0} style={{flex:1,background:plokChosen.size?IOS.blue:"rgba(255,255,255,0.08)",border:"none",borderRadius:RAD.md,padding:"11px",fontSize:13,fontWeight:800,color:plokChosen.size?"#fff":"rgba(255,255,255,0.3)",cursor:plokChosen.size?"pointer":"default",fontFamily:"inherit"}}>{plokChosen.size===0 ? "Pick at least one" : `Add ${plokChosen.size} ${plokChosen.size===1?"pick":"picks"} to slip`}</button>
+                    <button onClick={buildPlokSlip} style={{background:"rgba(255,255,255,0.08)",border:"none",borderRadius:RAD.md,padding:"11px 14px",fontSize:13,fontWeight:800,color:"rgba(255,255,255,0.8)",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Rebuild</button>
                   </div>
                 </div>
               )}
@@ -14706,7 +15066,7 @@ function App() {
                           const _C = 2*Math.PI*9;
                           const _pct = _f.tot ? _f.n/_f.tot : 0;
                           return (
-                            <div key={l.id} onClick={()=>{ setIsSoloMode(false); setActiveLeagueId(l.id); }} style={{flexShrink:0,display:"flex",alignItems:"center",gap:7,padding:"7px 11px 7px 8px",borderRadius:11,cursor:"pointer",whiteSpace:"nowrap",background:_on?`${IOS.blue}21`:"#141419",border:_on?`0.5px solid ${IOS.blue}80`:"0.5px solid rgba(255,255,255,0.09)"}}>
+                            <div key={l.id} onClick={()=>{ setIsSoloMode(false); setActiveLeagueId(l.id); }} style={{flexShrink:0,display:"flex",alignItems:"center",gap:7,padding:"7px 11px 7px 8px",borderRadius:RAD.md,cursor:"pointer",whiteSpace:"nowrap",background:_on?`${IOS.blue}21`:"#141419",border:_on?`0.5px solid ${IOS.blue}80`:"0.5px solid rgba(255,255,255,0.09)"}}>
                               <svg width="22" height="22" style={{flexShrink:0,transform:"rotate(-90deg)"}}>
                                 <circle cx="11" cy="11" r="9" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="2.5"/>
                                 <circle cx="11" cy="11" r="9" fill="none" stroke={_done?IOS.green:IOS.blue} strokeWidth="2.5" strokeLinecap="round" strokeDasharray={_C} strokeDashoffset={_C*(1-_pct)}/>
@@ -14718,7 +15078,7 @@ function App() {
                             </div>
                           );
                         })}
-                        <div onClick={()=>setIsSoloMode(true)} style={{flexShrink:0,display:"flex",alignItems:"center",gap:7,padding:"7px 11px 7px 8px",borderRadius:11,cursor:"pointer",whiteSpace:"nowrap",background:isSoloMode?`${IOS.blue}21`:"#141419",border:isSoloMode?`0.5px solid ${IOS.blue}80`:"0.5px solid rgba(255,255,255,0.09)"}}>
+                        <div onClick={()=>setIsSoloMode(true)} style={{flexShrink:0,display:"flex",alignItems:"center",gap:7,padding:"7px 11px 7px 8px",borderRadius:RAD.md,cursor:"pointer",whiteSpace:"nowrap",background:isSoloMode?`${IOS.blue}21`:"#141419",border:isSoloMode?`0.5px solid ${IOS.blue}80`:"0.5px solid rgba(255,255,255,0.09)"}}>
                           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.45)" strokeWidth="2" strokeLinecap="round" style={{flexShrink:0}}><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6"/></svg>
                           <div>
                             <div style={{fontSize:12.5,fontWeight:800,lineHeight:1.1,color:isSoloMode?"#fff":"rgba(255,255,255,0.62)"}}>Solo</div>
@@ -14747,9 +15107,9 @@ function App() {
                         const _sel = plokRail[_key] || "all";
                         const _list = plokSortBets(_t, _sel==="all" ? _elig : _elig.filter(b=>b.game===_sel));
                         return (
-                          <div key={si} style={{background:_done?`linear-gradient(135deg,${IOS.green}10,rgba(255,255,255,0.015))`:"#141419",border:_done?`0.5px solid ${IOS.green}4d`:(_open?`0.5px solid ${IOS.blue}73`:"0.5px solid rgba(255,255,255,0.07)"),borderRadius:13,marginBottom:8,overflow:"hidden"}}>
+                          <div key={si} style={{background:_done?`linear-gradient(135deg,${IOS.green}10,rgba(255,255,255,0.015))`:"#141419",border:_done?`0.5px solid ${IOS.green}4d`:(_open?`0.5px solid ${IOS.blue}73`:"0.5px solid rgba(255,255,255,0.07)"),borderRadius:RAD.md,marginBottom:8,overflow:"hidden"}}>
                             <div onClick={()=>{ if(_done) return; setPlokSlot(plokOpenSlot===si ? -1 : si); }} style={{display:"flex",alignItems:"center",gap:9,padding:"10px 11px",cursor:_done?"default":"pointer"}}>
-                              <div style={{width:23,height:23,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10.5,fontWeight:900,flexShrink:0,background:_done?`${IOS.green}2e`:"#1e1e25",color:_done?IOS.green:"rgba(255,255,255,0.4)"}}>
+                              <div style={{width:23,height:23,borderRadius:RAD.sm,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10.5,fontWeight:900,flexShrink:0,background:_done?`${IOS.green}2e`:"#1e1e25",color:_done?IOS.green:"rgba(255,255,255,0.4)"}}>
                                 {_done ? <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> : si+1}
                               </div>
                               <div style={{flex:1,minWidth:0}}>
@@ -14763,16 +15123,16 @@ function App() {
                               <div style={{borderTop:"0.5px solid rgba(255,255,255,0.07)",padding:"9px 0 10px"}}>
                                 {_games.length>1 && (
                                   <div style={{display:"flex",gap:5,overflowX:"auto",padding:"0 10px 8px"}}>
-                                    <div onClick={()=>setPlokRail(prev=>({...prev,[_key]:"all"}))} style={{flexShrink:0,fontSize:10.5,fontWeight:800,padding:"5px 9px",borderRadius:15,cursor:"pointer",whiteSpace:"nowrap",background:_sel==="all"?"rgba(255,255,255,0.12)":"#1e1e25",color:_sel==="all"?"#fff":"rgba(255,255,255,0.4)",border:_sel==="all"?"0.5px solid rgba(255,255,255,0.2)":"0.5px solid rgba(255,255,255,0.08)"}}>All<span style={{color:"rgba(255,255,255,0.25)",marginLeft:3,fontSize:9}}>{_elig.length}</span></div>
+                                    <div onClick={()=>setPlokRail(prev=>({...prev,[_key]:"all"}))} style={{flexShrink:0,fontSize:10.5,fontWeight:800,padding:"5px 9px",borderRadius:RAD.lg,cursor:"pointer",whiteSpace:"nowrap",background:_sel==="all"?"rgba(255,255,255,0.12)":"#1e1e25",color:_sel==="all"?"#fff":"rgba(255,255,255,0.4)",border:_sel==="all"?"0.5px solid rgba(255,255,255,0.2)":"0.5px solid rgba(255,255,255,0.08)"}}>All<span style={{color:"rgba(255,255,255,0.25)",marginLeft:3,fontSize:9}}>{_elig.length}</span></div>
                                     {_games.map(g=>(
-                                      <div key={g} onClick={()=>setPlokRail(prev=>({...prev,[_key]:g}))} style={{flexShrink:0,fontSize:10.5,fontWeight:800,padding:"5px 9px",borderRadius:15,cursor:"pointer",whiteSpace:"nowrap",background:_sel===g?"rgba(255,255,255,0.12)":"#1e1e25",color:_sel===g?"#fff":"rgba(255,255,255,0.4)",border:_sel===g?"0.5px solid rgba(255,255,255,0.2)":"0.5px solid rgba(255,255,255,0.08)"}}>{g}<span style={{color:"rgba(255,255,255,0.25)",marginLeft:3,fontSize:9}}>{_elig.filter(b=>b.game===g).length}</span></div>
+                                      <div key={g} onClick={()=>setPlokRail(prev=>({...prev,[_key]:g}))} style={{flexShrink:0,fontSize:10.5,fontWeight:800,padding:"5px 9px",borderRadius:RAD.lg,cursor:"pointer",whiteSpace:"nowrap",background:_sel===g?"rgba(255,255,255,0.12)":"#1e1e25",color:_sel===g?"#fff":"rgba(255,255,255,0.4)",border:_sel===g?"0.5px solid rgba(255,255,255,0.2)":"0.5px solid rgba(255,255,255,0.08)"}}>{g}<span style={{color:"rgba(255,255,255,0.25)",marginLeft:3,fontSize:9}}>{_elig.filter(b=>b.game===g).length}</span></div>
                                     ))}
                                   </div>
                                 )}
                                 {_list.length>0 ? (
                                   <div style={{padding:"0 10px",display:"flex",flexDirection:"column",gap:5,maxHeight:196,overflowY:"auto"}}>
                                     {_list.map((b,bi)=>(
-                                      <div key={bi} onClick={()=>askFromBet(b, PERIOD_MARKETS[_t] ? "period" : b.category)} style={{display:"flex",alignItems:"center",gap:9,background:"#1e1e25",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:10,padding:"8px 10px",cursor:"pointer"}}>
+                                      <div key={bi} onClick={()=>askFromBet(b, PERIOD_MARKETS[_t] ? "period" : b.category)} style={{display:"flex",alignItems:"center",gap:9,background:"#1e1e25",border:EDGE.hair,borderRadius:RAD.md,padding:"8px 10px",cursor:"pointer"}}>
                                         <div style={{width:2.5,alignSelf:"stretch",borderRadius:2,flexShrink:0,background:_col}}/>
                                         <div style={{flex:1,minWidth:0}}>
                                           <div style={{fontSize:12.5,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.pick || plokTypeLabel(_t)}</div>
@@ -14788,11 +15148,11 @@ function App() {
                                 )}
                                 {plokSlotErr && plokSlotErr.idx===si && <div style={{padding:"0 10px 6px",fontSize:10.5,color:IOS.orange,lineHeight:1.4}}>{plokSlotErr.msg}</div>}
                                 <div style={{display:"flex",gap:6,padding:"8px 10px 0"}}>
-                                  <button onClick={()=>buildPlokSlot(si)} disabled={plokSlotBusy!=null} style={{flex:1,border:`0.5px solid ${IOS.blue}66`,borderRadius:9,padding:8,fontFamily:"inherit",fontSize:11,fontWeight:800,cursor:plokSlotBusy!=null?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:5,background:`${IOS.blue}1f`,color:IOS.blue,opacity:plokSlotBusy!=null&&plokSlotBusy!==si?0.5:1}}>
+                                  <button onClick={()=>buildPlokSlot(si)} disabled={plokSlotBusy!=null} style={{flex:1,border:`0.5px solid ${IOS.blue}66`,borderRadius:RAD.sm,padding:8,fontFamily:"inherit",fontSize:11,fontWeight:800,cursor:plokSlotBusy!=null?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:5,background:`${IOS.blue}1f`,color:IOS.blue,opacity:plokSlotBusy!=null&&plokSlotBusy!==si?0.5:1}}>
                                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg>
                                     {plokSlotBusy===si ? "Picking…" : "Plok picks this slot"}
                                   </button>
-                                  <button onClick={()=>{ setScreen("picks"); }} style={{flex:1,border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:9,padding:8,fontFamily:"inherit",fontSize:11,fontWeight:800,cursor:"pointer",background:"#1e1e25",color:"rgba(255,255,255,0.62)"}}>Open in slip</button>
+                                  <button onClick={()=>{ setScreen("picks"); }} style={{flex:1,border:EDGE.hair2,borderRadius:RAD.sm,padding:8,fontFamily:"inherit",fontSize:11,fontWeight:800,cursor:"pointer",background:"#1e1e25",color:"rgba(255,255,255,0.62)"}}>Open in slip</button>
                                 </div>
                               </div>
                             )}
@@ -14812,7 +15172,7 @@ function App() {
                           if(!_n) return null;
                           const _on = plokFlatType===t;
                           return (
-                            <div key={t} onClick={()=>setPlokFlatType(t)} style={{flexShrink:0,display:"flex",alignItems:"center",gap:5,fontSize:12,fontWeight:800,padding:"7px 12px",borderRadius:19,cursor:"pointer",whiteSpace:"nowrap",background:_on?`${IOS.blue}24`:"#141419",border:_on?`0.5px solid ${IOS.blue}80`:"0.5px solid rgba(255,255,255,0.1)",color:_on?"#fff":"rgba(255,255,255,0.62)"}}>
+                            <div key={t} onClick={()=>setPlokFlatType(t)} style={{flexShrink:0,display:"flex",alignItems:"center",gap:5,fontSize:12,fontWeight:800,padding:"7px 12px",borderRadius:RAD.xl,cursor:"pointer",whiteSpace:"nowrap",background:_on?`${IOS.blue}24`:"#141419",border:_on?`0.5px solid ${IOS.blue}80`:"0.5px solid rgba(255,255,255,0.1)",color:_on?"#fff":"rgba(255,255,255,0.62)"}}>
                               {t!=="all" && <span style={{width:6,height:6,borderRadius:3,flexShrink:0,background:plokTypeColor(t)}}/>}
                               {t==="all" ? "All" : plokTypeLabel(t)}
                               <span style={{fontSize:9.5,fontWeight:700,color:"rgba(255,255,255,0.25)"}}>{_n}</span>
@@ -14822,7 +15182,7 @@ function App() {
                       </div>
                       <div style={{display:"flex",flexDirection:"column",gap:5}}>
                         {plokSortBets(plokFlatType, plokFlatType==="all" ? (ALL_BETS||[]) : (ALL_BETS||[]).filter(b=>b.category===plokFlatType)).map((b,bi)=>(
-                          <div key={bi} onClick={()=>askFromBet(b,b.category)} style={{display:"flex",alignItems:"center",gap:9,background:"#141419",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:11,padding:"10px 11px",cursor:"pointer"}}>
+                          <div key={bi} onClick={()=>askFromBet(b,b.category)} style={{display:"flex",alignItems:"center",gap:9,background:"#141419",border:EDGE.hair,borderRadius:RAD.md,padding:"10px 11px",cursor:"pointer"}}>
                             <div style={{width:2.5,alignSelf:"stretch",borderRadius:2,flexShrink:0,background:plokTypeColor(b.category)}}/>
                             <div style={{flex:1,minWidth:0}}>
                               <div style={{fontSize:13,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.pick}</div>
@@ -14838,11 +15198,11 @@ function App() {
 
                   {/* Whole-slip + game screener stay reachable. */}
                   <div style={{marginTop:14,paddingTop:14,borderTop:"0.5px solid rgba(255,255,255,0.07)",display:"flex",gap:7}}>
-                    <button onClick={()=>{ if(!isPro){setShowPaywall("ai");return;} setFindBetOpen(true); }} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,padding:"11px",borderRadius:11,background:"rgba(255,255,255,0.06)",border:"0.5px solid rgba(255,255,255,0.12)",fontFamily:"inherit",fontSize:12,fontWeight:800,color:"rgba(255,255,255,0.62)",cursor:"pointer"}}>
+                    <button onClick={()=>{ if(!isPro){setShowPaywall("ai");return;} setFindBetOpen(true); }} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,padding:"11px",borderRadius:RAD.md,background:"rgba(255,255,255,0.06)",border:EDGE.hair2,fontFamily:"inherit",fontSize:12,fontWeight:800,color:"rgba(255,255,255,0.62)",cursor:"pointer"}}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.62)" strokeWidth="2.6" strokeLinecap="round"><circle cx="11" cy="11" r="7"/><line x1="20" y1="20" x2="16.7" y2="16.7"/></svg>
                       Find a +EV bet
                     </button>
-                    <button onClick={buildPlokSlip} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,padding:"11px",borderRadius:11,background:`${IOS.blue}1f`,border:`0.5px solid ${IOS.blue}66`,fontFamily:"inherit",fontSize:12,fontWeight:800,color:IOS.blue,cursor:"pointer"}}>
+                    <button onClick={buildPlokSlip} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,padding:"11px",borderRadius:RAD.md,background:`${IOS.blue}1f`,border:`0.5px solid ${IOS.blue}66`,fontFamily:"inherit",fontSize:12,fontWeight:800,color:IOS.blue,cursor:"pointer"}}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg>
                       Build my whole slip
                     </button>
@@ -14855,7 +15215,7 @@ function App() {
                 if(_n<MIN_CALLS){
                   const _bar = Math.min(100, Math.round(_n/MIN_CALLS*100));
                   return (
-                    <div className="ai-rise" style={{background:"linear-gradient(160deg,#141419,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:14,padding:"13px 14px"}}>
+                    <div className="ai-rise" style={{background:"linear-gradient(160deg,#141419,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.lg,padding:"13px 14px"}}>
                       <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",marginBottom:9}}>
                         <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:"rgba(255,255,255,0.5)"}}>Building track record</div>
                         <div style={{fontSize:9.5,fontWeight:700,color:"rgba(255,255,255,0.28)"}}>{_n} of {MIN_CALLS} calls</div>
@@ -14870,7 +15230,7 @@ function App() {
                 const _pct = Math.round(_w/_n*100); const _up = _u>=0;
                 const _stat = (val,lab,col)=>(<div><div style={{fontSize:23,fontWeight:900,color:col||"#fff",letterSpacing:-0.5,lineHeight:1}}>{val}</div><div style={{fontSize:9,fontWeight:700,color:"rgba(255,255,255,0.4)",marginTop:3,textTransform:"uppercase",letterSpacing:"0.04em"}}>{lab}</div></div>);
                 return (
-                  <div className="ai-rise" style={{background:`linear-gradient(135deg,${IOS.blue}1a,rgba(255,255,255,0.03))`,border:`0.5px solid ${IOS.blue}33`,borderRadius:14,padding:"13px 14px"}}>
+                  <div className="ai-rise" style={{background:`linear-gradient(135deg,${IOS.blue}1a,rgba(255,255,255,0.03))`,border:`0.5px solid ${IOS.blue}33`,borderRadius:RAD.lg,padding:"13px 14px"}}>
                     <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",marginBottom:10}}>
                       <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:"rgba(255,255,255,0.5)"}}>Last {_n} graded calls</div>
                       {plokRecord.since ? <div style={{fontSize:9.5,fontWeight:700,color:"rgba(255,255,255,0.3)"}}>since {plokRecord.since}</div> : null}
@@ -14908,8 +15268,8 @@ function App() {
                   </div>
                   <div style={{overflowY:"auto",padding:"10px 12px 16px"}}>
                     {PLOK_MODELS.map(m=>(
-                      <div key={m.id} onClick={()=>{ if(!m.ready) return; setPlokModel(m.id); setModelPicker(false); setFindBetOpen(true); }} style={{display:"flex",alignItems:"center",gap:12,background:m.ready?"linear-gradient(160deg,#15151A,#0B0B0E 80%)":"rgba(255,255,255,0.02)",border:"0.5px solid "+(m.ready?"rgba(255,255,255,0.09)":"rgba(255,255,255,0.05)"),borderRadius:13,padding:"13px 14px",marginBottom:9,cursor:m.ready?"pointer":"default",opacity:m.ready?1:0.6}}>
-                        <div style={{width:38,height:38,borderRadius:11,background:m.color+"1f",border:"0.5px solid "+m.color+"55",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{m.icon}</div>
+                      <div key={m.id} onClick={()=>{ if(!m.ready) return; setPlokModel(m.id); setModelPicker(false); setFindBetOpen(true); }} style={{display:"flex",alignItems:"center",gap:12,background:m.ready?"linear-gradient(160deg,#15151A,#0B0B0E 80%)":"rgba(255,255,255,0.02)",border:"0.5px solid "+(m.ready?"rgba(255,255,255,0.09)":"rgba(255,255,255,0.05)"),borderRadius:RAD.md,padding:"13px 14px",marginBottom:9,cursor:m.ready?"pointer":"default",opacity:m.ready?1:0.6}}>
+                        <div style={{width:38,height:38,borderRadius:RAD.md,background:m.color+"1f",border:"0.5px solid "+m.color+"55",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{m.icon}</div>
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{display:"flex",alignItems:"center",gap:7}}><span style={{fontSize:15,fontWeight:800,color:"#fff"}}>{m.name}</span>{!m.ready && <span style={{fontSize:9,fontWeight:800,letterSpacing:"0.06em",color:m.color,background:m.color+"22",borderRadius:5,padding:"2px 6px"}}>SOON</span>}</div>
                           <div style={{fontSize:11.5,color:"rgba(255,255,255,0.5)",marginTop:2,lineHeight:1.35}}>{m.desc}</div>
@@ -14958,7 +15318,7 @@ function App() {
             )}
             <div style={{flexShrink:0,position:"relative",borderTop:"0.5px solid rgba(255,255,255,0.08)",background:"#0B0B0E",padding:"10px 12px"}}>
               {aiSuggestions.length>0 && (
-                <div style={{position:"absolute",left:12,right:12,bottom:"100%",marginBottom:8,background:"#15151A",border:"0.5px solid rgba(255,255,255,0.12)",borderRadius:12,overflow:"hidden",boxShadow:"0 -8px 24px rgba(0,0,0,0.5)"}}>
+                <div style={{position:"absolute",left:12,right:12,bottom:"100%",marginBottom:8,background:"#15151A",border:EDGE.hair2,borderRadius:RAD.md,overflow:"hidden",boxShadow:"0 -8px 24px rgba(0,0,0,0.5)"}}>
                   {aiSuggestions.map((b,bi)=>(
                     <div key={bi} onClick={()=>{ setAiInput(""); askFromBet(b,b.category); }} style={{padding:"10px 13px",borderBottom:bi<aiSuggestions.length-1?"0.5px solid rgba(255,255,255,0.06)":"none",cursor:"pointer"}}>
                       <div style={{fontSize:13,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.pick}</div>
@@ -14970,9 +15330,9 @@ function App() {
               <div style={{display:"flex",alignItems:"center",gap:8}}>
                 <input value={aiInput} onChange={(e)=>setAiInput(e.target.value)} placeholder="Ask Plok anything, or search a bet…"
                   onKeyDown={(e)=>{ if(e.key==="Enter"){ sendAi(); } }}
-                  style={{flex:1,background:"rgba(255,255,255,0.06)",border:"0.5px solid rgba(255,255,255,0.12)",borderRadius:11,padding:"11px 13px",color:"#fff",fontSize:13.5,outline:"none",fontFamily:"inherit"}}/>
+                  style={{flex:1,background:"rgba(255,255,255,0.06)",border:EDGE.hair2,borderRadius:RAD.md,padding:"11px 13px",color:"#fff",fontSize:13.5,outline:"none",fontFamily:"inherit"}}/>
                 <button onClick={sendAi} disabled={aiBusy||!aiInput.trim()}
-                  style={{width:42,height:42,flexShrink:0,borderRadius:11,border:"none",background:(aiInput.trim()&&!aiBusy)?IOS.blue:"rgba(255,255,255,0.08)",color:"#fff",cursor:(aiInput.trim()&&!aiBusy)?"pointer":"default",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  style={{width:42,height:42,flexShrink:0,borderRadius:RAD.md,border:"none",background:(aiInput.trim()&&!aiBusy)?IOS.blue:"rgba(255,255,255,0.08)",color:"#fff",cursor:(aiInput.trim()&&!aiBusy)?"pointer":"default",display:"flex",alignItems:"center",justifyContent:"center"}}>
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
                 </button>
               </div>
@@ -14982,7 +15342,7 @@ function App() {
         {screen==="chat"&&(
  <div className="body" style={{display:"flex",flexDirection:"column",minHeight:0,overflow:"hidden"}}>
  <div style={{padding:"10px 20px 14px",display:"flex",alignItems:"center",gap:12,background:"radial-gradient(120% 90% at 90% -10%, rgba(10,132,255,0.18), transparent 55%), linear-gradient(180deg,#0B1A2E 0%,#000 82%)"}}>
- <button onClick={()=>setScreen("home")} style={{background:"rgba(255,255,255,0.08)",border:"none",borderRadius:10,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:17,flexShrink:0}}>‹</button>
+ <button onClick={()=>setScreen("home")} style={{background:"rgba(255,255,255,0.08)",border:"none",borderRadius:RAD.md,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:17,flexShrink:0}}>‹</button>
  <div>
  <div className="nav-title-large" style={{fontSize:22,marginBottom:0}}>{activeLeague.name}</div>
  <div className="nav-subtitle" style={{marginTop:0}}>{leagueMembers.length} members · League Chat</div>
@@ -15012,8 +15372,8 @@ function App() {
  <div className="msg-col" style={{position:"relative"}}>
  {!isMe&&<div className="msg-sender">{msg.username||"Unknown"}</div>}
  {reactFor===msg.id&&(
- <div className="pk-react-picker" style={{position:"absolute",top:-44,[isMe?"right":"left"]:0,zIndex:80,background:"#1B1B21",border:"0.5px solid rgba(255,255,255,0.14)",borderRadius:22,padding:"6px 8px",display:"flex",gap:2,boxShadow:"0 12px 34px rgba(0,0,0,0.6)"}}>
- {REACTION_SET.map(em=>(<span key={em} onPointerUp={(e)=>{e.preventDefault();e.stopPropagation();toggleReaction(msg.id,em);}} onClick={(e)=>e.stopPropagation()} style={{fontSize:20,padding:"3px 5px",borderRadius:12,cursor:"pointer",userSelect:"none",WebkitUserSelect:"none",touchAction:"manipulation"}}>{em}</span>))}
+ <div className="pk-react-picker" style={{position:"absolute",top:-44,[isMe?"right":"left"]:0,zIndex:80,background:"#1B1B21",border:EDGE.hair3,borderRadius:RAD.xl,padding:"6px 8px",display:"flex",gap:2,boxShadow:"0 12px 34px rgba(0,0,0,0.6)"}}>
+ {REACTION_SET.map(em=>(<span key={em} onPointerUp={(e)=>{e.preventDefault();e.stopPropagation();toggleReaction(msg.id,em);}} onClick={(e)=>e.stopPropagation()} style={{fontSize:20,padding:"3px 5px",borderRadius:RAD.md,cursor:"pointer",userSelect:"none",WebkitUserSelect:"none",touchAction:"manipulation"}}>{em}</span>))}
  </div>
  )}
  <div className={`bubble ${isMe?"me":"them"}`}
@@ -15021,12 +15381,12 @@ function App() {
    onContextMenu={(e)=>{ e.preventDefault(); if(!String(msg.id).startsWith("temp_")) setReactFor(reactFor===msg.id?null:msg.id); }}
    style={msg.gif_url?{padding:4,overflow:"hidden"}:undefined}>
  {msg.gif_url
-   ? <img src={msg.gif_url} alt="GIF" style={{display:"block",maxWidth:210,maxHeight:180,borderRadius:11}} onError={(e)=>{e.currentTarget.outerHTML="[GIF]";}}/>
+   ? <img src={msg.gif_url} alt="GIF" style={{display:"block",maxWidth:210,maxHeight:180,borderRadius:RAD.md}} onError={(e)=>{e.currentTarget.outerHTML="[GIF]";}}/>
    : msg.message}
  </div>
  {rxAgg.length>0&&(
  <div style={{display:"flex",gap:4,marginTop:3,flexWrap:"wrap",justifyContent:isMe?"flex-end":"flex-start"}}>
- {rxAgg.map(r=>(<div key={r.emoji} onClick={()=>toggleReaction(msg.id,r.emoji)} style={{display:"flex",alignItems:"center",gap:4,background:r.mine?"rgba(10,132,255,0.14)":"rgba(255,255,255,0.06)",border:r.mine?"0.5px solid rgba(10,132,255,0.35)":"0.5px solid rgba(255,255,255,0.09)",borderRadius:11,padding:"2px 8px",fontSize:12,cursor:"pointer"}}>{r.emoji}<span style={{fontSize:10,fontWeight:800,color:r.mine?IOS.blue:"rgba(255,255,255,0.5)"}}>{r.n}</span></div>))}
+ {rxAgg.map(r=>(<div key={r.emoji} onClick={()=>toggleReaction(msg.id,r.emoji)} style={{display:"flex",alignItems:"center",gap:4,background:r.mine?"rgba(10,132,255,0.14)":"rgba(255,255,255,0.06)",border:r.mine?"0.5px solid rgba(10,132,255,0.35)":"0.5px solid rgba(255,255,255,0.09)",borderRadius:RAD.md,padding:"2px 8px",fontSize:12,cursor:"pointer"}}>{r.emoji}<span style={{fontSize:10,fontWeight:800,color:r.mine?IOS.blue:"rgba(255,255,255,0.5)"}}>{r.n}</span></div>))}
  </div>
  )}
  <div className="msg-time">{timeStr}</div>
@@ -15039,13 +15399,13 @@ function App() {
  <div onClick={()=>setGifOpen(false)} style={{position:"fixed",inset:0,zIndex:40,background:"rgba(0,0,0,0.45)"}}>
  <div onClick={(e)=>e.stopPropagation()} style={{position:"absolute",left:0,right:0,bottom:0,background:"#131318",borderRadius:"20px 20px 0 0",borderTop:"0.5px solid rgba(255,255,255,0.12)",padding:"10px 14px calc(var(--sa-bot) + 16px)",maxHeight:"62vh",display:"flex",flexDirection:"column",boxShadow:"0 -14px 40px rgba(0,0,0,0.55)"}}>
  <div style={{width:38,height:4,borderRadius:2,background:"rgba(255,255,255,0.22)",margin:"0 auto 12px"}}/>
- <input autoFocus value={gifQ} onChange={e=>onGifQ(e.target.value)} placeholder="Search KLIPY" style={{height:38,borderRadius:12,background:"rgba(255,255,255,0.06)",border:"0.5px solid rgba(255,255,255,0.09)",padding:"0 14px",fontSize:13.5,color:"#fff",outline:"none",fontFamily:"Barlow,sans-serif",marginBottom:12}}/>
+ <input autoFocus value={gifQ} onChange={e=>onGifQ(e.target.value)} placeholder="Search KLIPY" style={{height:38,borderRadius:RAD.md,background:"rgba(255,255,255,0.06)",border:EDGE.hair,padding:"0 14px",fontSize:13.5,color:"#fff",outline:"none",fontFamily:"Barlow,sans-serif",marginBottom:12}}/>
  <div style={{flex:1,overflowY:"auto"}}>
  {gifLoading&&<SkelGroup style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7}}>{[0,1,2,3,4,5,6,7,8].map(i=><Skel key={i} h={104} r={11} style={{width:"auto"}}/>)}</SkelGroup>}
  {!gifLoading&&gifResults.length===0&&<div style={{textAlign:"center",color:"rgba(255,255,255,0.4)",fontSize:12.5,padding:"28px 0"}}>No GIFs found{gifQ?" for that search":""}.</div>}
  {!gifLoading&&gifResults.length>0&&(
  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7}}>
- {gifResults.map(g=>(<div key={g.id} onClick={()=>sendGif(g)} style={{borderRadius:11,overflow:"hidden",cursor:"pointer",background:"rgba(255,255,255,0.04)",aspectRatio:"1"}}><img src={g.preview} alt="" loading="lazy" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/></div>))}
+ {gifResults.map(g=>(<div key={g.id} onClick={()=>sendGif(g)} style={{borderRadius:RAD.md,overflow:"hidden",cursor:"pointer",background:"rgba(255,255,255,0.04)",aspectRatio:"1"}}><img src={g.preview} alt="" loading="lazy" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/></div>))}
  </div>
  )}
  </div>
@@ -15054,7 +15414,7 @@ function App() {
  </div>
  )}
  <div className="chat-input-bar">
- <button onClick={openGifSheet} style={{flexShrink:0,height:36,padding:"0 11px",borderRadius:10,background:"rgba(255,255,255,0.07)",border:"0.5px solid rgba(255,255,255,0.09)",fontSize:10,fontWeight:800,letterSpacing:"0.06em",color:"rgba(255,255,255,0.75)",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>GIF</button>
+ <button onClick={openGifSheet} style={{flexShrink:0,height:36,padding:"0 11px",borderRadius:RAD.md,background:"rgba(255,255,255,0.07)",border:EDGE.hair,fontSize:10,fontWeight:800,letterSpacing:"0.06em",color:"rgba(255,255,255,0.75)",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>GIF</button>
  <input className="chat-field" placeholder="Message..." value={chatMsg} onChange={e=>setChatMsg(e.target.value)} onKeyDown={e=>e.key==="Enter"&&sendMsg()}/>
  <button className="chat-send" disabled={!chatMsg.trim()} onClick={sendMsg}>
  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -15099,7 +15459,7 @@ function App() {
  <div>
  <div style={{display:"flex",flexDirection:"column",gap:6}}>
  <input value={usernameInput} onChange={e=>{setUsernameInput(e.target.value);setUsernameError("");}} placeholder="Enter username" autoFocus
- style={{background:"#2C2C2E",border:`1px solid ${usernameError?IOS.red:IOS.blue}`,borderRadius:10,padding:"8px 12px",color:"#fff",fontSize:15,fontFamily:"'Barlow',sans-serif",outline:"none",width:180}}/>
+ style={{background:"#2C2C2E",border:`1px solid ${usernameError?IOS.red:IOS.blue}`,borderRadius:RAD.md,padding:"8px 12px",color:"#fff",fontSize:15,fontFamily:"'Barlow',sans-serif",outline:"none",width:180}}/>
  {usernameError&&<div style={{fontSize:11,color:IOS.red}}>{usernameError}</div>}
  <div style={{display:"flex",gap:10}}>
  <div onClick={async()=>{
@@ -15125,7 +15485,7 @@ function App() {
  return (
  <div style={{padding:"8px 0 4px"}}>
  <PlayerCard data={cardData} IOS={IOS}/>
-          {userProfile?.is_founder && <div style={{display:"flex",justifyContent:"center",marginTop:12}}><div style={{display:"inline-flex",alignItems:"center",gap:7,background:"linear-gradient(135deg,rgba(255,214,10,0.16),rgba(255,159,10,0.07))",border:"0.5px solid rgba(255,214,10,0.4)",borderRadius:999,padding:"6px 14px"}}><svg width="13" height="13" viewBox="0 0 24 24" fill="#FFD60A" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg><span style={{fontSize:11.5,fontWeight:800,letterSpacing:0.5,color:"#FFD60A",textTransform:"uppercase"}}>Founding Member{userProfile?.founder_number?(" · #"+userProfile.founder_number):""}</span></div></div>}
+          {userProfile?.is_founder && <div style={{display:"flex",justifyContent:"center",marginTop:12}}><div style={{display:"inline-flex",alignItems:"center",gap:7,background:"linear-gradient(135deg,rgba(255,214,10,0.16),rgba(255,159,10,0.07))",border:"0.5px solid rgba(255,214,10,0.4)",borderRadius:RAD.pill,padding:"6px 14px"}}><svg width="13" height="13" viewBox="0 0 24 24" fill="#FFD60A" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg><span style={{fontSize:11.5,fontWeight:800,letterSpacing:0.5,color:"#FFD60A",textTransform:"uppercase"}}>Founding Member{userProfile?.founder_number?(" · #"+userProfile.founder_number):""}</span></div></div>}
  <div style={{textAlign:"center",marginTop:12}}>
  <span onClick={()=>{setUsernameInput(userProfile?.username||"");setEditingUsername(true);}} style={{fontSize:12.5,fontWeight:700,color:IOS.blue,cursor:"pointer"}}>{userProfile?.username?"Edit name":"Set username"}</span>
  <span style={{fontSize:12.5,color:IOS.label3,marginLeft:12}}>{realLeagues.length} league{realLeagues.length!==1?"s":""}</span>
@@ -15139,7 +15499,7 @@ function App() {
    const code=(userProfile&&userProfile.referral_code)||"";
    const link="https://picklockapp.com/?ref="+code;
    return (
-   <div style={{margin:"2px 0 16px",background:"linear-gradient(135deg,rgba(10,132,255,0.13),rgba(94,92,230,0.05))",border:"0.5px solid rgba(10,132,255,0.28)",borderRadius:16,padding:"15px 16px"}}>
+   <div style={{margin:"2px 0 16px",background:"linear-gradient(135deg,rgba(10,132,255,0.13),rgba(94,92,230,0.05))",border:"0.5px solid rgba(10,132,255,0.28)",borderRadius:RAD.lg,padding:"15px 16px"}}>
      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
        <div style={{fontSize:15,fontWeight:800,color:"#fff"}}>Invite friends</div>
@@ -15147,17 +15507,17 @@ function App() {
      <div style={{fontSize:12,color:IOS.label2,lineHeight:1.5,marginBottom:13}}>Share your code. Everyone who signs up with it counts toward you.</div>
      {code ? (
        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:13}}>
-         <div style={{flex:1,background:"rgba(0,0,0,0.32)",border:"0.5px solid rgba(255,255,255,0.12)",borderRadius:10,padding:"11px 14px",fontSize:18,fontWeight:800,letterSpacing:3,color:"#fff",fontFamily:"'Barlow Semi Condensed',sans-serif"}}>{code}</div>
-         <button onClick={async()=>{ try{ await navigator.clipboard.writeText(code); alert("Code copied!"); }catch(e){ alert(code); } }} style={{background:IOS.blue,border:"none",borderRadius:10,padding:"11px 15px",fontSize:13,fontWeight:800,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Copy</button>
-         <button onClick={async()=>{ const msg="Join me on PickLock — use my code "+code+" when you sign up: "+link; try{ if(navigator.share){ await navigator.share({title:"PickLock",text:msg,url:link}); } else { await navigator.clipboard.writeText(msg); alert("Invite copied!"); } }catch(e){} }} style={{background:"rgba(255,255,255,0.08)",border:"0.5px solid rgba(255,255,255,0.14)",borderRadius:10,padding:"11px 15px",fontSize:13,fontWeight:800,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Share</button>
+         <div style={{flex:1,background:"rgba(0,0,0,0.32)",border:EDGE.hair2,borderRadius:RAD.md,padding:"11px 14px",fontSize:18,fontWeight:800,letterSpacing:3,color:"#fff",fontFamily:"'Barlow Semi Condensed',sans-serif"}}>{code}</div>
+         <button onClick={async()=>{ try{ await navigator.clipboard.writeText(code); alert("Code copied!"); }catch(e){ alert(code); } }} style={{background:IOS.blue,border:"none",borderRadius:RAD.md,padding:"11px 15px",fontSize:13,fontWeight:800,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Copy</button>
+         <button onClick={async()=>{ const msg="Join me on PickLock — use my code "+code+" when you sign up: "+link; try{ if(navigator.share){ await navigator.share({title:"PickLock",text:msg,url:link}); } else { await navigator.clipboard.writeText(msg); alert("Invite copied!"); } }catch(e){} }} style={{background:"rgba(255,255,255,0.08)",border:EDGE.hair3,borderRadius:RAD.md,padding:"11px 15px",fontSize:13,fontWeight:800,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Share</button>
        </div>
      ) : <div style={{fontSize:12,color:IOS.label3,marginBottom:13}}>Your code appears here once your profile loads.</div>}
      <div style={{display:"flex",gap:9}}>
-       <div style={{flex:1,background:"rgba(255,255,255,0.04)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:11,padding:"11px 13px"}}>
+       <div style={{flex:1,background:"rgba(255,255,255,0.04)",border:EDGE.hair,borderRadius:RAD.md,padding:"11px 13px"}}>
          <div style={{fontSize:22,fontWeight:800,color:"#fff",fontFamily:"'Barlow Semi Condensed',sans-serif",lineHeight:1}}>{refStats.signups}</div>
          <div style={{fontSize:10,color:IOS.label3,fontWeight:700,textTransform:"uppercase",letterSpacing:.4,marginTop:3}}>Signups</div>
        </div>
-       <div style={{flex:1,background:"rgba(255,255,255,0.04)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:11,padding:"11px 13px"}}>
+       <div style={{flex:1,background:"rgba(255,255,255,0.04)",border:EDGE.hair,borderRadius:RAD.md,padding:"11px 13px"}}>
          <div style={{fontSize:22,fontWeight:800,color:IOS.green,fontFamily:"'Barlow Semi Condensed',sans-serif",lineHeight:1}}>{refStats.paying}</div>
          <div style={{fontSize:10,color:IOS.label3,fontWeight:700,textTransform:"uppercase",letterSpacing:.4,marginTop:3}}>Paying</div>
        </div>
@@ -15178,14 +15538,14 @@ function App() {
    const bestType = types.length ? [...types].sort((a,b)=>(b.pct-a.pct)||(b.wins-a.wins))[0] : null;
    const ls = (s.byType||{}).longshot;
    const streak = s.currentStreak||{count:0,type:"W"};
-   const SURF = {background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:14};
+   const SURF = {background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.lg};
    return (
    <div style={{padding:"4px 16px 0"}}>
      <div style={{...SURF,padding:"14px",marginBottom:10,boxShadow:"0 4px 14px rgba(0,0,0,0.35)"}}>
        <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:"rgba(255,255,255,0.4)",marginBottom:10}}>Career</div>
        <div style={{display:"flex",gap:8}}>
          {[{l:"Record",v:`${s.wins||0}-${s.losses||0}`,c:IOS.blue},{l:"Win %",v:s.winRate||"0%",c:IOS.green,tick:parseInt(s.winRate)||0,suffix:"%"},{l:"Total Pts",v:(s.points||0),c:"#fff",tick:(s.points||0),dec:1}].map((tile,i)=>(
-           <div key={i} style={{flex:1,background:"rgba(0,0,0,0.3)",borderRadius:9,padding:"10px 6px",textAlign:"center"}}>
+           <div key={i} style={{flex:1,background:"rgba(0,0,0,0.3)",borderRadius:RAD.sm,padding:"10px 6px",textAlign:"center"}}>
              <div style={{fontSize:18,fontWeight:800,color:tile.c,letterSpacing:"-0.5px"}}>{tile.tick!==undefined?<Ticker value={tile.tick} decimals={tile.dec||0} suffix={tile.suffix||""}/>:tile.v}</div>
              <div style={{fontSize:8.5,color:IOS.label3,textTransform:"uppercase",letterSpacing:".4px",marginTop:2}}>{tile.l}</div>
            </div>
@@ -15219,7 +15579,7 @@ function App() {
    </div>
    );
  })()}
- <div onClick={()=>setScreen("analytics")} style={{margin:"0 16px",background:isPro?"rgba(10,132,255,0.1)":"rgba(191,90,242,0.08)",border:`0.5px solid ${isPro?"rgba(10,132,255,0.3)":"rgba(191,90,242,0.3)"}`,borderRadius:14,padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}}>
+ <div onClick={()=>setScreen("analytics")} style={{margin:"0 16px",background:isPro?"rgba(10,132,255,0.1)":"rgba(191,90,242,0.08)",border:`0.5px solid ${isPro?"rgba(10,132,255,0.3)":"rgba(191,90,242,0.3)"}`,borderRadius:RAD.lg,padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}}>
    <div>
      <div style={{fontSize:14,fontWeight:700,color:"#fff",marginBottom:2}}>Full Analytics</div>
      <div style={{fontSize:11,color:IOS.label3}}>{isPro?"Bet types, sports, longshot, season recap":"5 analytics tabs — unlock with Pro"}</div>
@@ -15256,13 +15616,13 @@ function App() {
  {profTab==="power-ups"&&(
  <div style={{paddingBottom:24}}>
  {!isPro && (
-   <div style={{margin:"16px 16px 0",background:"#0A0A0A",border:"0.5px solid #1E1E1E",borderRadius:14,padding:"24px 20px",textAlign:"center"}}>
-     <div style={{width:48,height:48,borderRadius:12,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.25)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 12px"}}>
+   <div style={{margin:"16px 16px 0",background:"#0A0A0A",border:"0.5px solid #1E1E1E",borderRadius:RAD.lg,padding:"24px 20px",textAlign:"center"}}>
+     <div style={{width:48,height:48,borderRadius:RAD.md,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.25)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 12px"}}>
        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
      </div>
      <div style={{fontSize:16,fontWeight:700,color:"#fff",marginBottom:6}}>Power-ups are a Pro feature</div>
      <div style={{fontSize:13,color:"#666",marginBottom:16,lineHeight:1.5}}>Upgrade to Commish Pro to unlock Double Down, Spread Enhancer, Insurance, and more.</div>
-     <button onClick={()=>setShowPaywall("powerups")} style={{background:IOS.blue,color:"#fff",border:"none",borderRadius:8,padding:"12px 24px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
+     <button onClick={()=>setShowPaywall("powerups")} style={{background:IOS.blue,color:"#fff",border:"none",borderRadius:RAD.sm,padding:"12px 24px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
        Unlock Power-ups
      </button>
    </div>
@@ -15279,7 +15639,7 @@ function App() {
  <div key={lg.id} onClick={()=>{
  setPuLeagueId(lg.id);
  if(user) fetchPuLeagueData(lg.id, user.id);
- }} style={{flexShrink:0,display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:20,cursor:"pointer",transition:"all .15s",
+ }} style={{flexShrink:0,display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:RAD.pill,cursor:"pointer",transition:"all .15s",
  background:isSelected?`${sp.color}20`:"rgba(255,255,255,0.06)",
  border:`1px solid ${isSelected?sp.color+"60":"rgba(255,255,255,0.08)"}`,
  }}>
@@ -15300,18 +15660,18 @@ function App() {
  <div style={{padding:"14px 20px 10px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
  <div style={{fontSize:15,color:IOS.label3}}>{displayPUs.length} power-up{displayPUs.length!==1?"s":""} in inventory</div>
  {displaySpins > 0 && isActiveLeague && puEnabled
- ? <button onClick={()=>setShowWheel(true)} style={{background:`linear-gradient(135deg,${IOS.indigo},${IOS.purple})`,border:"none",borderRadius:10,padding:"8px 16px",fontFamily:"Barlow,sans-serif",fontSize:13,fontWeight:600,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
+ ? <button onClick={()=>setShowWheel(true)} style={{background:`linear-gradient(135deg,${IOS.indigo},${IOS.purple})`,border:"none",borderRadius:RAD.md,padding:"8px 16px",fontFamily:"Barlow,sans-serif",fontSize:13,fontWeight:600,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
  Spin Wheel
- <span style={{background:"rgba(255,255,255,0.25)",borderRadius:20,padding:"1px 8px",fontSize:12,fontWeight:800}}>{displaySpins}</span>
+ <span style={{background:"rgba(255,255,255,0.25)",borderRadius:RAD.pill,padding:"1px 8px",fontSize:12,fontWeight:800}}>{displaySpins}</span>
  </button>
- : <button disabled style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 16px",fontFamily:"Barlow,sans-serif",fontSize:13,fontWeight:600,color:"rgba(255,255,255,0.25)",cursor:"not-allowed",display:"flex",alignItems:"center",gap:8}}>
+ : <button disabled style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:RAD.md,padding:"8px 16px",fontFamily:"Barlow,sans-serif",fontSize:13,fontWeight:600,color:"rgba(255,255,255,0.25)",cursor:"not-allowed",display:"flex",alignItems:"center",gap:8}}>
  Spin Wheel
- <span style={{background:"rgba(255,255,255,0.08)",borderRadius:20,padding:"1px 8px",fontSize:12,fontWeight:800,color:"rgba(255,255,255,0.25)"}}>{displaySpins}</span>
+ <span style={{background:"rgba(255,255,255,0.08)",borderRadius:RAD.pill,padding:"1px 8px",fontSize:12,fontWeight:800,color:"rgba(255,255,255,0.25)"}}>{displaySpins}</span>
  </button>
  }
  </div>
  {displayPUs.length===0
- ? <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:14,padding:24,textAlign:"center",color:IOS.label3,fontSize:15}}>No power-ups yet. Win a week to spin.</div>
+ ? <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:RAD.lg,padding:24,textAlign:"center",color:IOS.label3,fontSize:15}}>No power-ups yet. Win a week to spin.</div>
  : displayPUs.map((pu,i)=>(
  <div key={i} className="pu-card" style={{borderWidth:1,borderStyle:"solid",borderColor:`${pu.color}30`}}>
  <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:pu.color}}/>
@@ -15330,10 +15690,10 @@ function App() {
  })()}
  <div style={{padding:"14px 20px 8px"}}><div style={{fontSize:13,fontWeight:600,color:IOS.label3,textTransform:"uppercase",letterSpacing:0.5}}>All Power-Ups</div></div>
  {POWER_UPS.map(pu=>(
- <div key={pu.id} style={{display:"flex",alignItems:"center",padding:"12px 16px",margin:"0 16px 6px",background:IOS.bg2,borderRadius:12,gap:12}}>
- <div style={{width:38,height:38,borderRadius:10,background:`${pu.color}15`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{puSVG(pu.id,pu.color)}</div>
+ <div key={pu.id} style={{display:"flex",alignItems:"center",padding:"12px 16px",margin:"0 16px 6px",background:IOS.bg2,borderRadius:RAD.md,gap:12}}>
+ <div style={{width:38,height:38,borderRadius:RAD.md,background:`${pu.color}15`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{puSVG(pu.id,pu.color)}</div>
  <div style={{flex:1}}><div style={{fontSize:14,fontWeight:600,color:"#fff",marginBottom:2}}>{pu.name}</div><div style={{fontSize:12,color:IOS.label3}}>{pu.desc}</div></div>
- <div style={{fontSize:10,fontWeight:700,color:rarityColor(pu.rarity),background:`${rarityColor(pu.rarity)}15`,border:`1px solid ${rarityColor(pu.rarity)}30`,padding:"3px 8px",borderRadius:6,whiteSpace:"nowrap"}}>{pu.rarity}</div>
+ <div style={{fontSize:10,fontWeight:700,color:rarityColor(pu.rarity),background:`${rarityColor(pu.rarity)}15`,border:`1px solid ${rarityColor(pu.rarity)}30`,padding:"3px 8px",borderRadius:RAD.sm,whiteSpace:"nowrap"}}>{pu.rarity}</div>
  </div>
  ))}
  </>
@@ -15344,7 +15704,7 @@ function App() {
  {/* Notification Preferences */}
  <div style={{margin:"0 16px 12px"}}>
  <div style={{fontSize:11,fontWeight:700,color:IOS.label3,letterSpacing:1,textTransform:"uppercase",marginBottom:8,paddingLeft:4}}>Notifications</div>
- <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",borderRadius:14,overflow:"hidden",border:"0.5px solid rgba(255,255,255,0.08)"}}>
+ <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",borderRadius:RAD.lg,overflow:"hidden",border:EDGE.hair}}>
  {[
  {key:"notif_results", label:"Weekly Results", sub:"When your week is graded", emblem:'<path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/>'},
  {key:"notif_grades", label:"Picks Graded", sub:"When a pick result comes in", emblem:'<polyline points="20 6 9 17 4 12"/>'},
@@ -15354,7 +15714,7 @@ function App() {
  const val = userProfile?.[pref.key] !== false; // default true
  return (
  <div key={pref.key} style={{display:"flex",alignItems:"center",padding:"13px 16px",borderBottom:i<arr.length-1?`0.5px solid ${IOS.sep}`:"none"}}>
- <div style={{width:36,height:36,borderRadius:10,background:"rgba(10,132,255,0.14)",display:"flex",alignItems:"center",justifyContent:"center",marginRight:12,flexShrink:0}}>
+ <div style={{width:36,height:36,borderRadius:RAD.md,background:"rgba(10,132,255,0.14)",display:"flex",alignItems:"center",justifyContent:"center",marginRight:12,flexShrink:0}}>
  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{__html:pref.emblem}}/>
  </div>
  <div style={{flex:1}}>
@@ -15364,7 +15724,7 @@ function App() {
  <div className={"nt-tg"+(val?" on":"")} onClick={async()=>{
  const newVal = !val;
  setUserProfile(prev=>({...prev,[pref.key]:newVal}));
- try{ if(navigator.vibrate) navigator.vibrate(newVal?12:8); }catch(e){}
+ haptic("select");
  await supabase.from("users").update({[pref.key]:newVal}).eq("id",user.id);
  }}>
  <div className="nt-fill"/>
@@ -15378,14 +15738,14 @@ function App() {
  })}
  {/* Master push toggle */}
  <div style={{display:"flex",alignItems:"center",padding:"13px 16px",borderTop:`1px solid ${IOS.sep}`,background:"rgba(255,255,255,0.03)"}}>
- <div style={{width:36,height:36,borderRadius:10,background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",marginRight:12,flexShrink:0}}>
+ <div style={{width:36,height:36,borderRadius:RAD.md,background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",marginRight:12,flexShrink:0}}>
  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
  </div>
  <div style={{flex:1}}>
  <div style={{fontSize:14.5,fontWeight:800,color:"#fff"}}>Push Notifications</div>
  <div style={{fontSize:11.5,color:IOS.label3,marginTop:1}}>{(userProfile&&userProfile.push_enabled)?"On — alerts even when the app is closed":"Off — tap to turn on alerts"}</div>
  </div>
- <div className={"nt-tg"+((userProfile&&userProfile.push_enabled)?" on":"")} onClick={async()=>{ const _on=!!(userProfile&&userProfile.push_enabled); try{ if(navigator.vibrate) navigator.vibrate(_on?8:12); }catch(e){} if(_on){ await disablePush(); } else { await subscribeToPush(); } }}>
+ <div className={"nt-tg"+((userProfile&&userProfile.push_enabled)?" on":"")} onClick={async()=>{ const _on=!!(userProfile&&userProfile.push_enabled); haptic("select"); if(_on){ await disablePush(); } else { await subscribeToPush(); } }}>
  <div className="nt-fill"/>
  <div className="nt-knob">
  <svg className="lk-off" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8a8a90" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7-1.5"/></svg>
@@ -15397,15 +15757,15 @@ function App() {
 
  {/* How to Play */}
  <div style={{padding:"0 16px 4px"}}>
- <button onClick={()=>setTutorialStep(0)} style={{width:"100%",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"14px",fontSize:15,fontWeight:600,color:"rgba(255,255,255,0.7)",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
+ <button onClick={()=>setTutorialStep(0)} style={{width:"100%",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:RAD.md,padding:"14px",fontSize:15,fontWeight:600,color:"rgba(255,255,255,0.7)",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
  How to Play
  </button>
  </div>
 
  {/* Sign Out + Delete Account */}
  <div style={{padding:"8px 16px 32px",display:"flex",flexDirection:"column",gap:10}}>
- <button onClick={async()=>{ if(userProfile&&userProfile.push_enabled){ await disablePush(); } else { await subscribeToPush(); } }} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.14)",borderRadius:12,padding:"14px",fontSize:15,fontWeight:600,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}><span>Push notifications</span><span style={{fontSize:13,fontWeight:700,color:(userProfile&&userProfile.push_enabled)?IOS.green:IOS.label3}}>{(userProfile&&userProfile.push_enabled)?"On":"Off"}</span></button>
- {(isPro&&!IS_NATIVE)?(<button onClick={openBillingPortal} style={{width:"100%",background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.14)",borderRadius:12,padding:"14px",fontSize:15,fontWeight:600,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Manage subscription</button>):null}
+ <button onClick={async()=>{ if(userProfile&&userProfile.push_enabled){ await disablePush(); } else { await subscribeToPush(); } }} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.05)",border:EDGE.hair3,borderRadius:RAD.md,padding:"14px",fontSize:15,fontWeight:600,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}><span>Push notifications</span><span style={{fontSize:13,fontWeight:700,color:(userProfile&&userProfile.push_enabled)?IOS.green:IOS.label3}}>{(userProfile&&userProfile.push_enabled)?"On":"Off"}</span></button>
+ {(isPro&&!IS_NATIVE)?(<button onClick={openBillingPortal} style={{width:"100%",background:"rgba(255,255,255,0.05)",border:EDGE.hair3,borderRadius:RAD.md,padding:"14px",fontSize:15,fontWeight:600,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Manage subscription</button>):null}
  <button onClick={async()=>{
  await supabase.auth.signOut();
  setUser(null);
@@ -15415,7 +15775,7 @@ function App() {
  setSavedPicks(null);
  setFlexPicks(freshSlots());
  setScreen("home");
- }} style={{width:"100%",background:"rgba(255,59,48,0.1)",border:"1px solid rgba(255,59,48,0.2)",borderRadius:12,padding:"14px",fontSize:15,fontWeight:600,color:IOS.red,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
+ }} style={{width:"100%",background:"rgba(255,59,48,0.1)",border:"1px solid rgba(255,59,48,0.2)",borderRadius:RAD.md,padding:"14px",fontSize:15,fontWeight:600,color:IOS.red,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
  Sign Out
  </button>
  <button onClick={async()=>{
@@ -15437,7 +15797,7 @@ function App() {
  setFlexPicks(freshSlots());
  setScreen("home");
  alert("Your account has been deleted.");
- }} style={{width:"100%",background:"transparent",border:"none",borderRadius:12,padding:"10px",fontSize:13,fontWeight:600,color:"rgba(255,59,48,0.5)",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
+ }} style={{width:"100%",background:"transparent",border:"none",borderRadius:RAD.md,padding:"10px",fontSize:13,fontWeight:600,color:"rgba(255,59,48,0.5)",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
  Delete Account
  </button>
  </div>
@@ -15456,7 +15816,7 @@ function App() {
  <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.6)",backdropFilter:"blur(4px)"}}/>
  <div onClick={e=>e.stopPropagation()} style={{position:"relative",background:"#1C1C1E",borderRadius:"24px 24px 0 0",maxHeight:"85vh",overflowY:"auto",paddingBottom:40}}>
  {/* Close — always visible, clears the notch */}
- <div onClick={()=>setGameSheet(null)} style={{position:"absolute",top:12,right:14,zIndex:20,width:32,height:32,borderRadius:"50%",background:"rgba(255,255,255,0.14)",border:"0.5px solid rgba(255,255,255,0.16)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
+ <div onClick={()=>setGameSheet(null)} style={{position:"absolute",top:12,right:14,zIndex:20,width:32,height:32,borderRadius:"50%",background:"rgba(255,255,255,0.14)",border:EDGE.hair3,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
  </div>
  {/* Handle */}
@@ -15498,7 +15858,7 @@ function App() {
  const injTag=(st)=>{ const x=(st||"").toLowerCase(); const out=x.includes("out")||x.includes("ir")||x.includes("reserve"); const q=x.includes("quest")||x.includes("doubt"); return {bg:out?"rgba(255,69,58,0.16)":q?"rgba(255,159,10,0.16)":"rgba(48,209,88,0.14)",col:out?IOS.red:q?IOS.orange:IOS.green}; };
  const Logo=({src,abbr,color})=> src
  ? <img src={src} style={{width:58,height:58,objectFit:"contain",margin:"0 auto 9px",display:"block",filter:"drop-shadow(0 8px 18px rgba(0,0,0,0.6))"}} onError={e=>{e.target.style.display="none";}}/>
- : <div style={{width:58,height:58,borderRadius:16,margin:"0 auto 9px",background:tint(color,0.9),display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:22,color:"#fff"}}>{abbr}</div>;
+ : <div style={{width:58,height:58,borderRadius:RAD.lg,margin:"0 auto 9px",background:tint(color,0.9),display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:22,color:"#fff"}}>{abbr}</div>;
  const InjCol=({list,color,abbr})=> (
  <div style={{flex:1,minWidth:0}}>
  <div style={{fontSize:10,fontWeight:800,letterSpacing:0.6,textTransform:"uppercase",color:color,marginBottom:7,textAlign:"center"}}>{abbr}</div>
@@ -15507,7 +15867,7 @@ function App() {
  <div key={pi} style={{padding:"8px 6px",borderTop:pi>0?"0.5px solid rgba(255,255,255,0.05)":"none",textAlign:"center"}}>
  <div style={{fontSize:12.5,fontWeight:700,color:"#fff",lineHeight:1.15,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.name}</div>
  {p.detail && <div style={{fontSize:10,color:IOS.label3,marginTop:1}}>{p.detail}</div>}
- <div style={{display:"inline-block",marginTop:5,fontSize:9,fontWeight:800,letterSpacing:0.3,textTransform:"uppercase",padding:"3px 7px",borderRadius:6,background:tg2.bg,color:tg2.col}}>{p.status}</div>
+ <div style={{display:"inline-block",marginTop:5,fontSize:9,fontWeight:800,letterSpacing:0.3,textTransform:"uppercase",padding:"3px 7px",borderRadius:RAD.sm,background:tg2.bg,color:tg2.col}}>{p.status}</div>
  </div>
  ); })}
  </div>
@@ -15535,7 +15895,7 @@ function App() {
    const leadA=_leadFor(awayAbbr), leadH=_leadFor(homeAbbr);
    const hasLeaders=(leadA.length>0||leadH.length>0);
    const hasWP=(probAway!=null&&probHome!=null);
-   const _card={background:"linear-gradient(165deg,#212126,#161619)",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:16,overflow:"hidden"};
+   const _card={background:"linear-gradient(165deg,#212126,#161619)",border:EDGE.hair,borderRadius:RAD.lg,overflow:"hidden"};
    const _nick={fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:25,lineHeight:0.92,textTransform:"uppercase",letterSpacing:0.3,color:"#fff"};
    const Sec=({t})=>(<div style={{display:"flex",alignItems:"center",gap:11,margin:"22px 4px 11px"}}><span style={{fontSize:10.5,fontWeight:800,letterSpacing:"0.16em",textTransform:"uppercase",color:IOS.label3}}>{t}</span><span style={{flex:1,height:1,background:"rgba(255,255,255,0.07)"}}/></div>);
    // White disc + team-colour ring: navy/black logos (NYY et al) vanished on a team-colour disc.
@@ -15585,7 +15945,7 @@ function App() {
    <div style={{padding:"0 16px 4px"}}>
    {hasMound?(<>
    <Sec t="On the Mound"/>
-   <div style={{background:_card.background,border:_card.border,borderRadius:16,overflow:"hidden",display:"flex",alignItems:"stretch",padding:"14px 10px"}}>
+   <div style={{background:_card.background,border:_card.border,borderRadius:RAD.lg,overflow:"hidden",display:"flex",alignItems:"stretch",padding:"14px 10px"}}>
    <PitCol m={mA} color={awayColor} abbr={awayAbbr}/>
    <div style={{alignSelf:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:13,color:IOS.label3,letterSpacing:1,padding:"0 4px"}}>VS</div>
    <PitCol m={mH} color={homeColor} abbr={homeAbbr}/>
@@ -15600,9 +15960,9 @@ function App() {
 
    <div style={{marginTop:16}}/>
    {(read && (read.loading || (read.data && read.data.summary))) ? (
- <div onClick={()=>{ if(read.loading) return; setGameSheet(null); askFindBet({sport:(activeLeague&&activeLeague.sport)||"nfl", game:away+" @ "+home}); }} style={{background:"linear-gradient(135deg,rgba(10,132,255,0.16),rgba(94,92,230,0.08))",border:"0.5px solid rgba(10,132,255,0.34)",borderRadius:16,padding:"13px 15px",marginBottom:2,cursor:"pointer"}}>
+ <div onClick={()=>{ if(read.loading) return; setGameSheet(null); askFindBet({sport:(activeLeague&&activeLeague.sport)||"nfl", game:away+" @ "+home}); }} style={{background:"linear-gradient(135deg,rgba(10,132,255,0.16),rgba(94,92,230,0.08))",border:"0.5px solid rgba(10,132,255,0.34)",borderRadius:RAD.lg,padding:"13px 15px",marginBottom:2,cursor:"pointer"}}>
  <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:read.loading?6:8}}>
- <div style={{width:28,height:28,borderRadius:9,background:"rgba(10,132,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="16" height="16" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg></div>
+ <div style={{width:28,height:28,borderRadius:RAD.sm,background:"rgba(10,132,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="16" height="16" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg></div>
  <span style={{fontSize:11,fontWeight:800,letterSpacing:1.4,textTransform:"uppercase",color:IOS.blue}}>Plok Read</span>
  </div>
  {read.loading
@@ -15610,8 +15970,8 @@ function App() {
  : <div><div style={{fontSize:13.5,lineHeight:1.5,color:"rgba(255,255,255,0.88)"}}>{read.data.summary}</div><div style={{fontSize:11,fontWeight:700,color:IOS.blue,marginTop:9}}>See full breakdown ›</div></div>}
  </div>
  ) : (
- <div onClick={async()=>{ if(!isPro){ setShowPaywall("ai"); return; } if(read&&read.loading) return; const sp=(activeLeague&&activeLeague.sport)||"nfl"; setGameRead(prev=>({...prev,[gid]:{loading:true}})); fetch(API_BASE+"/api/findbet",{method:"POST",headers: await authHeaders(),body:JSON.stringify({sport:sp,game:away+" @ "+home,userId:user&&user.id})}).then(async r=>{ const d=await r.json().catch(()=>null); setGameRead(prev=>({...prev,[gid]: (r.ok&&d)?{data:d}:{error:true}})); }).catch(()=> setGameRead(prev=>({...prev,[gid]:{error:true}}))); }} style={{display:"flex",alignItems:"center",gap:12,background:"linear-gradient(135deg,rgba(10,132,255,0.16),rgba(94,92,230,0.10))",border:"0.5px solid rgba(10,132,255,0.35)",borderRadius:16,padding:"13px 15px",marginBottom:2,cursor:"pointer"}}>
- <div style={{width:36,height:36,borderRadius:11,background:"rgba(10,132,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="19" height="19" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg></div>
+ <div onClick={async()=>{ if(!isPro){ setShowPaywall("ai"); return; } if(read&&read.loading) return; const sp=(activeLeague&&activeLeague.sport)||"nfl"; setGameRead(prev=>({...prev,[gid]:{loading:true}})); fetch(API_BASE+"/api/findbet",{method:"POST",headers: await authHeaders(),body:JSON.stringify({sport:sp,game:away+" @ "+home,userId:user&&user.id})}).then(async r=>{ const d=await r.json().catch(()=>null); setGameRead(prev=>({...prev,[gid]: (r.ok&&d)?{data:d}:{error:true}})); }).catch(()=> setGameRead(prev=>({...prev,[gid]:{error:true}}))); }} style={{display:"flex",alignItems:"center",gap:12,background:"linear-gradient(135deg,rgba(10,132,255,0.16),rgba(94,92,230,0.10))",border:"0.5px solid rgba(10,132,255,0.35)",borderRadius:RAD.lg,padding:"13px 15px",marginBottom:2,cursor:"pointer"}}>
+ <div style={{width:36,height:36,borderRadius:RAD.md,background:"rgba(10,132,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="19" height="19" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg></div>
  <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:800,color:"#fff"}}>{read&&read.error?"Read unavailable — tap to retry":"Get Plok's read on this matchup"}</div><div style={{fontSize:11.5,color:IOS.label2,marginTop:1}}>Data-backed matchup read{isPro?"":" · Pro"}</div></div>
  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={IOS.label3} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6"/></svg>
  </div>
@@ -15639,7 +15999,7 @@ function App() {
 
    {hasLeaders?(<>
    <Sec t="Leaders"/>
-   <div style={{background:_card.background,border:_card.border,borderRadius:16,overflow:"hidden",display:"flex"}}>
+   <div style={{background:_card.background,border:_card.border,borderRadius:RAD.lg,overflow:"hidden",display:"flex"}}>
    {[{abbr:awayAbbr,color:awayColor,list:leadA},{abbr:homeAbbr,color:homeColor,list:leadH}].map((col,ci)=>(
    <div key={ci} style={{flex:1,padding:"12px 13px",borderLeft:ci>0?"0.5px solid rgba(255,255,255,0.06)":"none"}}>
    <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:9,color:_brite(col.color)}}>{col.abbr}</div>
@@ -15661,7 +16021,7 @@ function App() {
    <div key={ti} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px",borderTop:ti>0?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
    <div style={{width:40,fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:14,fontWeight:900,color:_brite(t.color),flexShrink:0}}>{t.abbr}</div>
    <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-   {t.f.length===0?<span style={{fontSize:11,color:IOS.label3}}>No recent games</span>:t.f.map((g,gi)=>{ const rr=String(g.r||"").toUpperCase(); const win=rr==="W",loss=rr==="L"; return <div key={gi} style={{width:24,height:24,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,background:win?"rgba(48,209,88,0.16)":loss?"rgba(255,69,58,0.16)":"rgba(255,255,255,0.08)",color:win?IOS.green:loss?IOS.red:IOS.label3}}>{rr||"·"}</div>; })}
+   {t.f.length===0?<span style={{fontSize:11,color:IOS.label3}}>No recent games</span>:t.f.map((g,gi)=>{ const rr=String(g.r||"").toUpperCase(); const win=rr==="W",loss=rr==="L"; return <div key={gi} style={{width:24,height:24,borderRadius:RAD.sm,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,background:win?"rgba(48,209,88,0.16)":loss?"rgba(255,69,58,0.16)":"rgba(255,255,255,0.08)",color:win?IOS.green:loss?IOS.red:IOS.label3}}>{rr||"·"}</div>; })}
    </div>
    </div>
    ))}
@@ -15687,7 +16047,7 @@ function App() {
 
    {((odds.ml&&odds.ml.length>0)||(odds.spread&&odds.spread.length>0)||(odds.ou&&odds.ou.length>0))?(<>
    <Sec t="DraftKings Odds"/>
-   <div style={{background:_card.background,border:_card.border,borderRadius:16,overflow:"hidden",display:"flex"}}>
+   <div style={{background:_card.background,border:_card.border,borderRadius:RAD.lg,overflow:"hidden",display:"flex"}}>
    {[{label:"Moneyline",items:(odds.ml||[]).slice(0,2)},{label:"Spread",items:(odds.spread||[]).slice(0,2)},{label:"Total",items:(odds.ou||[]).slice(0,2)}].map((col,ci)=>(
    <div key={ci} style={{flex:1,padding:"9px 4px 11px",borderLeft:ci>0?"0.5px solid rgba(255,255,255,0.06)":"none"}}>
    <div style={{fontSize:9,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:IOS.label3,textAlign:"center",marginBottom:7}}>{col.label}</div>
@@ -15704,7 +16064,7 @@ function App() {
 
    {injuries.length>0?(<>
    <Sec t="Injury Report"/>
-   <div style={{background:_card.background,border:_card.border,borderRadius:16,overflow:"hidden",display:"flex",padding:"12px 6px",marginBottom:8}}>
+   <div style={{background:_card.background,border:_card.border,borderRadius:RAD.lg,overflow:"hidden",display:"flex",padding:"12px 6px",marginBottom:8}}>
    <InjCol list={injAway} color={awayColor} abbr={awayAbbr}/>
    <div style={{width:"0.5px",background:"rgba(255,255,255,0.08)",alignSelf:"stretch"}}/>
    <InjCol list={injHome} color={homeColor} abbr={homeAbbr}/>
@@ -15717,7 +16077,7 @@ function App() {
 
    {/* Footer CTA */}
    <div style={{padding:"16px 16px calc(20px + var(--sa-bot))"}}>
-   <div onClick={()=>{ setGameSheet(null); setScreen("picks"); }} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"linear-gradient(135deg,"+IOS.blue+",#5e5ce6)",borderRadius:14,padding:14,fontWeight:800,fontSize:15,color:"#fff",cursor:"pointer",boxShadow:"0 10px 26px -8px rgba(10,132,255,0.6)"}}>
+   <div onClick={()=>{ setGameSheet(null); setScreen("picks"); }} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"linear-gradient(135deg,"+IOS.blue+",#5e5ce6)",borderRadius:RAD.lg,padding:14,fontWeight:800,fontSize:15,color:"#fff",cursor:"pointer",boxShadow:"0 10px 26px -8px rgba(10,132,255,0.6)"}}>
    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg> Add a pick from this game
    </div>
    </div>
@@ -15756,8 +16116,8 @@ function App() {
            // Fetch odds for selected sport
            fetchLiveOdds(s.id);
            setScreen("picks");
-         }} style={{display:"flex",alignItems:"center",gap:14,padding:"16px",marginBottom:10,background:"#1A1A1A",borderRadius:14,cursor:"pointer",border:`1px solid ${soloSport===s.id?s.color+"60":"rgba(255,255,255,0.06)"}`}}>
-           <div style={{width:44,height:44,borderRadius:12,background:`${s.color}18`,display:"flex",alignItems:"center",justifyContent:"center",color:s.color,flexShrink:0}}>{s.icon}</div>
+         }} style={{display:"flex",alignItems:"center",gap:14,padding:"16px",marginBottom:10,background:"#1A1A1A",borderRadius:RAD.lg,cursor:"pointer",border:`1px solid ${soloSport===s.id?s.color+"60":"rgba(255,255,255,0.06)"}`}}>
+           <div style={{width:44,height:44,borderRadius:RAD.md,background:`${s.color}18`,display:"flex",alignItems:"center",justifyContent:"center",color:s.color,flexShrink:0}}>{s.icon}</div>
            <div style={{flex:1}}>
              <div style={{fontSize:17,fontWeight:700,color:"#fff"}}>{s.label}</div>
              <div style={{fontSize:12,color:"rgba(255,255,255,0.4)",marginTop:1}}>{s.sub}</div>
@@ -15768,15 +16128,15 @@ function App() {
          </div>
        ))}
        {/* Pro upsell */}
-       <div onClick={()=>{setShowSoloSportPicker(false);setShowPaywall("solo_sport");}} style={{display:"flex",alignItems:"center",gap:12,padding:"13px 16px",background:"rgba(191,90,242,0.08)",border:"1px solid rgba(191,90,242,0.25)",borderRadius:14,cursor:"pointer",marginTop:4}}>
-         <div style={{width:44,height:44,borderRadius:12,background:"rgba(191,90,242,0.15)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+       <div onClick={()=>{setShowSoloSportPicker(false);setShowPaywall("solo_sport");}} style={{display:"flex",alignItems:"center",gap:12,padding:"13px 16px",background:"rgba(191,90,242,0.08)",border:"1px solid rgba(191,90,242,0.25)",borderRadius:RAD.lg,cursor:"pointer",marginTop:4}}>
+         <div style={{width:44,height:44,borderRadius:RAD.md,background:"rgba(191,90,242,0.15)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2l3 6h6l-5 4 2 6-6-4-6 4 2-6L3 8h6l3-6z" stroke="#BF5AF2" strokeWidth="1.8" strokeLinejoin="round"/></svg>
          </div>
          <div style={{flex:1}}>
            <div style={{fontSize:14,fontWeight:700,color:"#BF5AF2"}}>Multi-Sport Slips</div>
            <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:1}}>Mix NFL, NBA & MLB picks in one slip</div>
          </div>
-         <div style={{fontSize:11,fontWeight:700,color:"#BF5AF2",background:"rgba(191,90,242,0.15)",borderRadius:6,padding:"3px 8px",flexShrink:0}}>Pro</div>
+         <div style={{fontSize:11,fontWeight:700,color:"#BF5AF2",background:"rgba(191,90,242,0.15)",borderRadius:RAD.sm,padding:"3px 8px",flexShrink:0}}>Pro</div>
        </div>
      </div>
    </div>
@@ -15802,11 +16162,11 @@ function App() {
  {/* Header */}
  <div style={{padding:"52px 20px 16px",borderBottom:`0.5px solid ${IOS.sep}`}}>
  <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
- <button onClick={()=>setSelectedMatchup(null)} style={{background:IOS.fill2,border:"none",borderRadius:10,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:17,flexShrink:0}}>‹</button>
+ <button onClick={()=>setSelectedMatchup(null)} style={{background:IOS.fill2,border:"none",borderRadius:RAD.md,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:17,flexShrink:0}}>‹</button>
  <div style={{fontSize:17,fontWeight:600,letterSpacing:-0.3}}>Week {mDisplay.week} · {mDisplay.opp}</div>
  </div>
  {/* Score card with POINTS */}
- <div style={{background:IOS.bg2,borderRadius:16,padding:"16px 20px",position:"relative",overflow:"hidden"}}>
+ <div style={{background:IOS.bg2,borderRadius:RAD.lg,padding:"16px 20px",position:"relative",overflow:"hidden"}}>
  <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:mDisplay.result==="W"?`linear-gradient(90deg,${IOS.green},${IOS.teal})`:`linear-gradient(90deg,${IOS.red},${IOS.orange})`}}/>
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
  <div>
@@ -15824,7 +16184,7 @@ function App() {
  </div>
  </div>
  {/* Scoring formula note */}
- <div style={{background:"rgba(255,255,255,0.04)",borderRadius:8,padding:"8px 10px",fontSize:11,color:IOS.label3}}>
+ <div style={{background:"rgba(255,255,255,0.04)",borderRadius:RAD.sm,padding:"8px 10px",fontSize:11,color:IOS.label3}}>
  Points = Slot Multiplier × Odds Decimal · 0 for losses
  </div>
  </div>
@@ -15852,7 +16212,7 @@ function App() {
  const slotLabel = {ml:"Moneyline",prop:"Prop",ou:"Over/Under",spread:"Spread"}[myP.slot] || myP.slot || "Pick";
  const col = {ml:IOS.blue,prop:IOS.yellow,ou:IOS.orange,spread:IOS.green}[myP.slot] || IOS.blue;
  return (
- <div key={i} style={{margin:"0 16px 10px",background:IOS.bg2,borderRadius:14,overflow:"hidden",border:`1px solid rgba(255,255,255,0.06)`}}>
+ <div key={i} style={{margin:"0 16px 10px",background:IOS.bg2,borderRadius:RAD.lg,overflow:"hidden",border:`1px solid rgba(255,255,255,0.06)`}}>
  <div style={{padding:"10px 14px",borderBottom:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",gap:8}}>
  <div style={{fontSize:11,fontWeight:700,color:col,letterSpacing:0.5,textTransform:"uppercase"}}>{myP.multiplier}× · {slotLabel}</div>
  </div>
@@ -15908,7 +16268,7 @@ function App() {
          {/* Sport filter */}
          {[{id:"all",l:"All Sports"},{id:"nfl",l:"NFL"},{id:"nba",l:"NBA"},{id:"mlb",l:"MLB"},{id:"nhl",l:"NHL"}].map(f=>(
            <div key={f.id} onClick={()=>setBrowseFilter(prev=>({...prev,sport:f.id}))}
-           style={{padding:"5px 12px",borderRadius:6,fontSize:11,fontWeight:700,whiteSpace:"nowrap",cursor:"pointer",flexShrink:0,
+           style={{padding:"5px 12px",borderRadius:RAD.sm,fontSize:11,fontWeight:700,whiteSpace:"nowrap",cursor:"pointer",flexShrink:0,
              background:browseFilter.sport===f.id?"rgba(10,132,255,0.15)":"#1A1A1A",
              border:`0.5px solid ${browseFilter.sport===f.id?"rgba(10,132,255,0.4)":"#2A2A2A"}`,
              color:browseFilter.sport===f.id?IOS.blue:"#666"}}>{f.l}</div>
@@ -15918,7 +16278,7 @@ function App() {
          {/* League type filter */}
          {[{id:"all",l:"Any Type"},{id:"h2h",l:"Head-to-head"},{id:"bracket",l:"Tournament"},{id:"points",l:"Total Points"}].map(f=>(
            <div key={f.id} onClick={()=>setBrowseFilter(prev=>({...prev,type:f.id}))}
-           style={{padding:"5px 12px",borderRadius:6,fontSize:11,fontWeight:700,whiteSpace:"nowrap",cursor:"pointer",flexShrink:0,
+           style={{padding:"5px 12px",borderRadius:RAD.sm,fontSize:11,fontWeight:700,whiteSpace:"nowrap",cursor:"pointer",flexShrink:0,
              background:browseFilter.type===f.id?"rgba(10,132,255,0.15)":"#1A1A1A",
              border:`0.5px solid ${browseFilter.type===f.id?"rgba(10,132,255,0.4)":"#2A2A2A"}`,
              color:browseFilter.type===f.id?IOS.blue:"#666"}}>{f.l}</div>
@@ -15928,7 +16288,7 @@ function App() {
          {/* League size filter */}
          {[{id:"all",l:"Any Size"},{id:"small",l:"Small (4-8)"},{id:"medium",l:"Medium (10-12)"},{id:"large",l:"Large (16+)"}].map(f=>(
            <div key={f.id} onClick={()=>setBrowseFilter(prev=>({...prev,size:f.id}))}
-           style={{padding:"5px 12px",borderRadius:6,fontSize:11,fontWeight:700,whiteSpace:"nowrap",cursor:"pointer",flexShrink:0,
+           style={{padding:"5px 12px",borderRadius:RAD.sm,fontSize:11,fontWeight:700,whiteSpace:"nowrap",cursor:"pointer",flexShrink:0,
              background:browseFilter.size===f.id?"rgba(10,132,255,0.15)":"#1A1A1A",
              border:`0.5px solid ${browseFilter.size===f.id?"rgba(10,132,255,0.4)":"#2A2A2A"}`,
              color:browseFilter.size===f.id?IOS.blue:"#666"}}>{f.l}</div>
@@ -15969,15 +16329,15 @@ function App() {
            const sport = SPORTS[lg.sport]||{label:lg.sport?.toUpperCase()||"?",color:IOS.blue};
            const isJoining = joiningLeagueId===lg.id;
            return (
-             <div key={lg.id} style={{position:"relative",margin:"0 16px 10px",background:IOS.bg2,borderRadius:16,padding:"14px",border:"0.5px solid rgba(255,255,255,0.07)",overflow:"hidden"}}>
+             <div key={lg.id} style={{position:"relative",margin:"0 16px 10px",background:IOS.bg2,borderRadius:RAD.lg,padding:"14px",border:EDGE.hair,overflow:"hidden"}}>
                <div style={{position:"absolute",left:0,top:0,bottom:0,width:3,background:sport.color}}/>
                <div style={{display:"flex",alignItems:"flex-start",gap:11}}>
-                 <div style={{width:40,height:40,borderRadius:11,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:14,flexShrink:0,background:`${sport.color}22`,color:sport.color,border:`0.5px solid ${sport.color}55`}}>{sport.label}</div>
+                 <div style={{width:40,height:40,borderRadius:RAD.md,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:14,flexShrink:0,background:`${sport.color}22`,color:sport.color,border:`0.5px solid ${sport.color}55`}}>{sport.label}</div>
                  <div style={{flex:1,minWidth:0}}>
                    <div style={{fontSize:15.5,fontWeight:800,color:"#fff"}}>{lg.name}</div>
                    <div style={{fontSize:11,color:IOS.label3,marginTop:2}}>{typeLabels[lg.league_type||"h2h"]||"H2H"} · {maxSize}-player · {sport.label}</div>
                  </div>
-                 <button onClick={()=>joinPublicLeague(lg)} disabled={isJoining} style={{alignSelf:"center",background:isJoining?"#1A1A1A":IOS.blue,border:"none",borderRadius:10,padding:"10px 17px",fontSize:13.5,fontWeight:800,color:isJoining?"#555":"#fff",cursor:isJoining?"default":"pointer",fontFamily:"Barlow,sans-serif",flexShrink:0,whiteSpace:"nowrap"}}>{isJoining?"Joining…":"Join"}</button>
+                 <button onClick={()=>joinPublicLeague(lg)} disabled={isJoining} style={{alignSelf:"center",background:isJoining?"#1A1A1A":IOS.blue,border:"none",borderRadius:RAD.md,padding:"10px 17px",fontSize:13.5,fontWeight:800,color:isJoining?"#555":"#fff",cursor:isJoining?"default":"pointer",fontFamily:"Barlow,sans-serif",flexShrink:0,whiteSpace:"nowrap"}}>{isJoining?"Joining…":"Join"}</button>
                </div>
                <div style={{marginTop:12}}>
                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
@@ -16015,7 +16375,7 @@ function App() {
        <div style={{background:"#111",borderRadius:"20px 20px 0 0",padding:"0 0 40px",border:"0.5px solid #1E1E1E"}} onClick={e=>e.stopPropagation()}>
          <div style={{width:36,height:4,background:"#2A2A2A",borderRadius:2,margin:"12px auto 20px"}}/>
          <div style={{padding:"0 20px"}}>
-           <div style={{width:44,height:44,borderRadius:10,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.25)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:12}}>
+           <div style={{width:44,height:44,borderRadius:RAD.md,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.25)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:12}}>
              {cfg.icon==="bolt"&&<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>}
              {cfg.icon==="settings"&&<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>}
              {cfg.icon==="world"&&<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>}
@@ -16029,14 +16389,14 @@ function App() {
                <div style={{fontSize:13,color:"#ccc"}}>{f}</div>
              </div>
            ))}
-          <button disabled={checkoutLoading!==null} onClick={()=>startCheckout("annual")} style={{display:"block",width:"100%",background:IOS.blue,color:"#fff",border:"none",borderRadius:10,padding:14,fontSize:14,fontWeight:800,textAlign:"center",marginTop:16,cursor:checkoutLoading?"default":"pointer",fontFamily:"Barlow,sans-serif",opacity:checkoutLoading?0.6:1}}>
+          <button disabled={checkoutLoading!==null} onClick={()=>startCheckout("annual")} style={{display:"block",width:"100%",background:IOS.blue,color:"#fff",border:"none",borderRadius:RAD.md,padding:14,fontSize:14,fontWeight:800,textAlign:"center",marginTop:16,cursor:checkoutLoading?"default":"pointer",fontFamily:"Barlow,sans-serif",opacity:checkoutLoading?0.6:1}}>
              {checkoutLoading==="annual" ? "Redirecting..." : "Go Pro — $60/yr (save 50%)"}
            </button>
-          <button disabled={checkoutLoading!==null} onClick={()=>startCheckout("monthly")} style={{display:"block",width:"100%",background:"rgba(255,255,255,0.06)",color:"#fff",border:"0.5px solid rgba(255,255,255,0.14)",borderRadius:10,padding:13,fontSize:13.5,fontWeight:700,textAlign:"center",marginTop:8,cursor:checkoutLoading?"default":"pointer",fontFamily:"Barlow,sans-serif",opacity:checkoutLoading?0.6:1}}>
+          <button disabled={checkoutLoading!==null} onClick={()=>startCheckout("monthly")} style={{display:"block",width:"100%",background:"rgba(255,255,255,0.06)",color:"#fff",border:EDGE.hair3,borderRadius:RAD.md,padding:13,fontSize:13.5,fontWeight:700,textAlign:"center",marginTop:8,cursor:checkoutLoading?"default":"pointer",fontFamily:"Barlow,sans-serif",opacity:checkoutLoading?0.6:1}}>
              {checkoutLoading==="monthly" ? "Redirecting..." : "Or $10/mo"}
            </button>
           {_isDev && (
-             <button onClick={()=>{setProStatus(true);setShowPaywall(null);}} style={{display:"block",width:"100%",background:"none",border:"0.5px dashed rgba(48,209,88,0.4)",color:"#30D158",borderRadius:8,padding:9,fontSize:11,fontWeight:700,textAlign:"center",marginTop:10,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
+             <button onClick={()=>{setProStatus(true);setShowPaywall(null);}} style={{display:"block",width:"100%",background:"none",border:"0.5px dashed rgba(48,209,88,0.4)",color:"#30D158",borderRadius:RAD.sm,padding:9,fontSize:11,fontWeight:700,textAlign:"center",marginTop:10,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
                Dev: instant unlock
              </button>
            )}
@@ -16056,13 +16416,13 @@ function App() {
        <div style={{width:36,height:4,background:"#2A2A2A",borderRadius:2,margin:"12px auto 16px"}}/>
        <div style={{fontSize:21,fontWeight:800,textAlign:"center",letterSpacing:-0.4,color:"#fff"}}>Unlock your league</div>
        <div style={{fontSize:12.5,color:IOS.label3,textAlign:"center",margin:"3px 0 16px"}}>Your custom league is ready. Choose how to unlock it:</div>
-       <div onClick={()=>startLeagueCheckout(showLeaguePaywall.leagueId)} style={{borderRadius:15,padding:15,marginBottom:11,cursor:"pointer",background:"linear-gradient(135deg,rgba(255,55,95,0.12),rgba(191,90,242,0.06))",border:"1.5px solid rgba(255,55,95,0.4)"}}>
-         <div style={{fontSize:8.5,fontWeight:800,textTransform:"uppercase",letterSpacing:0.4,padding:"2px 7px",borderRadius:6,display:"inline-block",marginBottom:6,background:"rgba(255,55,95,0.9)",color:"#fff"}}>This league</div>
+       <div onClick={()=>startLeagueCheckout(showLeaguePaywall.leagueId)} style={{borderRadius:RAD.lg,padding:15,marginBottom:11,cursor:"pointer",background:"linear-gradient(135deg,rgba(255,55,95,0.12),rgba(191,90,242,0.06))",border:"1.5px solid rgba(255,55,95,0.4)"}}>
+         <div style={{fontSize:8.5,fontWeight:800,textTransform:"uppercase",letterSpacing:0.4,padding:"2px 7px",borderRadius:RAD.sm,display:"inline-block",marginBottom:6,background:"rgba(255,55,95,0.9)",color:"#fff"}}>This league</div>
          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}><div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Unlock this league</div><div style={{fontSize:19,fontWeight:800,color:"#fff"}}>${showLeaguePaywall.price}</div></div>
          <div style={{fontSize:11.5,color:"rgba(255,255,255,0.55)",marginTop:4,lineHeight:1.45}}>One-time. Runs this full season for everyone in the league.</div>
        </div>
-       <div onClick={()=>startCheckout("monthly")} style={{borderRadius:15,padding:15,marginBottom:8,cursor:"pointer",background:"linear-gradient(135deg,rgba(10,132,255,0.14),rgba(94,92,230,0.06))",border:"1.5px solid rgba(10,132,255,0.45)"}}>
-         <div style={{fontSize:8.5,fontWeight:800,textTransform:"uppercase",letterSpacing:0.4,padding:"2px 7px",borderRadius:6,display:"inline-block",marginBottom:6,background:IOS.blue,color:"#fff"}}>Best value</div>
+       <div onClick={()=>startCheckout("monthly")} style={{borderRadius:RAD.lg,padding:15,marginBottom:8,cursor:"pointer",background:"linear-gradient(135deg,rgba(10,132,255,0.14),rgba(94,92,230,0.06))",border:"1.5px solid rgba(10,132,255,0.45)"}}>
+         <div style={{fontSize:8.5,fontWeight:800,textTransform:"uppercase",letterSpacing:0.4,padding:"2px 7px",borderRadius:RAD.sm,display:"inline-block",marginBottom:6,background:IOS.blue,color:"#fff"}}>Best value</div>
          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}><div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Go Pro</div><div style={{fontSize:19,fontWeight:800,color:"#fff"}}>$10<span style={{fontSize:12,fontWeight:700,color:IOS.label3}}>/mo</span></div></div>
          <div style={{fontSize:11.5,color:"rgba(255,255,255,0.55)",marginTop:4,lineHeight:1.45}}>Unlimited custom leagues, multi-sport, Plok AI &amp; full analytics. Or $60/yr.</div>
        </div>
@@ -16075,12 +16435,12 @@ function App() {
      <div style={{background:"#111",borderRadius:"20px 20px 0 0",padding:"0 0 40px",border:"0.5px solid #1E1E1E"}} onClick={e=>e.stopPropagation()}>
        <div style={{width:36,height:4,background:"#2A2A2A",borderRadius:2,margin:"12px auto 20px"}}/>
        <div style={{padding:"0 20px"}}>
-         <div style={{width:44,height:44,borderRadius:10,background:"rgba(48,209,88,0.12)",border:"0.5px solid rgba(48,209,88,0.25)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:12}}>
+         <div style={{width:44,height:44,borderRadius:RAD.md,background:"rgba(48,209,88,0.12)",border:"0.5px solid rgba(48,209,88,0.25)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:12}}>
            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#30D158" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
          </div>
          <div style={{fontSize:18,fontWeight:700,color:"#fff",marginBottom:4}}>Your league is live</div>
          <div style={{fontSize:13,color:"#666",marginBottom:16,lineHeight:1.5}}>Want more control over how your league works?</div>
-         <div style={{background:"#0A0A0A",border:"0.5px solid #1E1E1E",borderRadius:8,padding:"12px",marginBottom:16}}>
+         <div style={{background:"#0A0A0A",border:"0.5px solid #1E1E1E",borderRadius:RAD.sm,padding:"12px",marginBottom:16}}>
            <div style={{fontSize:10,fontWeight:700,color:IOS.blue,letterSpacing:.5,textTransform:"uppercase",marginBottom:10}}>Commish Pro unlocks</div>
            {["Set custom pick counts per week","Add NBA, MLB, or NHL picks","Unlock power-ups for your league"].map((f,i)=>(
              <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:i<2?"0.5px solid #1A1A1A":"none"}}>
@@ -16089,7 +16449,7 @@ function App() {
              </div>
            ))}
          </div>
-         <button onClick={()=>{setShowPostLeagueUpsell(false);setShowPaywall("ai");}} style={{display:"block",width:"100%",background:IOS.blue,color:"#fff",border:"none",borderRadius:8,padding:13,fontSize:14,fontWeight:700,textAlign:"center",marginBottom:10,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
+         <button onClick={()=>{setShowPostLeagueUpsell(false);setShowPaywall("ai");}} style={{display:"block",width:"100%",background:IOS.blue,color:"#fff",border:"none",borderRadius:RAD.sm,padding:13,fontSize:14,fontWeight:700,textAlign:"center",marginBottom:10,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
            Upgrade to Commish Pro
          </button>
          <button onClick={()=>setShowPostLeagueUpsell(false)} style={{display:"block",width:"100%",background:"none",border:"none",color:"#555",fontSize:12,textAlign:"center",cursor:"pointer",fontFamily:"Barlow,sans-serif",padding:4}}>
@@ -16103,16 +16463,16 @@ function App() {
  {/* ══ TAB BAR ══ */}
  {/* ══ SOLO HISTORY ══ */}
  {screen==="solohistory"&&(
- <div className="body" style={{padding:"0 16px 40px"}}>
+ <div className="body" style={{paddingLeft:16,paddingRight:16}}>
  <div style={{padding:"20px 0 14px"}}>
  <div style={{fontSize:24,fontWeight:800,color:"#fff",letterSpacing:-0.5}}>History</div>
  <div style={{fontSize:13,color:IOS.label3,marginTop:2}}>Your solo slate record</div>
  </div>
  {soloWeeks.length===0 ? (
- <div style={{textAlign:"center",padding:"40px 20px",background:IOS.bg2,borderRadius:12,border:"0.5px solid rgba(255,255,255,0.07)"}}>
+ <div style={{textAlign:"center",padding:"40px 20px",background:IOS.bg2,borderRadius:RAD.md,border:EDGE.hair}}>
    <div style={{fontSize:14,fontWeight:700,color:"#fff",marginBottom:6}}>No history yet</div>
    <div style={{fontSize:12,color:IOS.label3}}>Lock in your first solo slip to start building your record.</div>
-   <button onClick={()=>setScreen("picks")} style={{marginTop:14,background:IOS.blue,border:"none",borderRadius:8,padding:"10px 24px",fontFamily:"Barlow,sans-serif",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>Build First Slip</button>
+   <button onClick={()=>setScreen("picks")} style={{marginTop:14,background:IOS.blue,border:"none",borderRadius:RAD.sm,padding:"10px 24px",fontFamily:"Barlow,sans-serif",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>Build First Slip</button>
  </div>
  ) : (
  <>
@@ -16123,7 +16483,7 @@ function App() {
      {l:"Win %",v:Math.round((soloWeeks.reduce((s,w)=>s+w.wins,0)/(soloWeeks.reduce((s,w)=>s+w.wins+w.losses,0)||1))*100)+"%",c:IOS.green},
      {l:"Total Pts",v:soloWeeks.reduce((s,w)=>s+w.pts,0).toFixed(1),c:"#fff"},
    ].map((s,i)=>(
-   <div key={i} style={{flex:1,background:IOS.bg2,borderRadius:10,padding:"10px 8px",textAlign:"center",border:"0.5px solid rgba(255,255,255,0.07)"}}>
+   <div key={i} style={{flex:1,background:IOS.bg2,borderRadius:RAD.md,padding:"10px 8px",textAlign:"center",border:EDGE.hair}}>
      <div style={{fontSize:18,fontWeight:800,color:s.c}}>{s.v}</div>
      <div style={{fontSize:9,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4,marginTop:2}}>{s.l}</div>
    </div>
@@ -16135,7 +16495,7 @@ function App() {
    const isBest = soloWeeks.length>1 && w.pts===Math.max(...soloWeeks.map(x=>x.pts));
    const wOpen = (w.week in histOpenWeeks) ? histOpenWeeks[w.week] : (i===0);
    return (
-   <div key={w.week} style={{background:IOS.bg2,border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"12px 14px",marginBottom:8}}>
+   <div key={w.week} style={{background:IOS.bg2,border:EDGE.hair,borderRadius:RAD.md,padding:"12px 14px",marginBottom:8}}>
      <div onClick={()=>setHistOpenWeeks(o=>({...o,[w.week]:!((w.week in o)?o[w.week]:(i===0))}))} style={{display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}}>
        <div style={{minWidth:0}}>
          <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>{soloWeekRange(w.week)}</div>
@@ -16191,8 +16551,8 @@ function App() {
  {/* ══ SOLO STATS ══ */}
  {screen==="solostats"&&(()=>{ const rows=lbCache["all"]; let rk=null,total=0; if(rows&&rows.length){ const sx=[...rows].sort((a,b)=>(Number(b.points)||0)-(Number(a.points)||0)); total=sx.length; const i=sx.findIndex(r=>String(r.user_id)===String(user?.id)); if(i>=0) rk=i+1; } return (
    <div style={{padding:"8px 16px 0"}}>
-     <div onClick={()=>{ fetchLeaderboard("all"); setScreen("leaderboard"); }} style={{display:"flex",alignItems:"center",gap:12,background:"linear-gradient(135deg,rgba(10,132,255,0.12),rgba(94,92,230,0.05))",border:"0.5px solid rgba(10,132,255,0.28)",borderRadius:15,padding:"12px 14px",cursor:"pointer"}}>
-       <div style={{width:36,height:36,borderRadius:11,background:"rgba(10,132,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M8 21V10M16 21V3M4 21v-6"/></svg></div>
+     <div onClick={()=>{ fetchLeaderboard("all"); setScreen("leaderboard"); }} style={{display:"flex",alignItems:"center",gap:12,background:"linear-gradient(135deg,rgba(10,132,255,0.12),rgba(94,92,230,0.05))",border:"0.5px solid rgba(10,132,255,0.28)",borderRadius:RAD.lg,padding:"12px 14px",cursor:"pointer"}}>
+       <div style={{width:36,height:36,borderRadius:RAD.md,background:"rgba(10,132,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M8 21V10M16 21V3M4 21v-6"/></svg></div>
        <div style={{flex:1,minWidth:0}}><div style={{fontSize:9.5,fontWeight:800,letterSpacing:0.5,textTransform:"uppercase",color:"rgba(255,255,255,0.4)"}}>Global leaderboard</div><div style={{fontSize:15,fontWeight:800,color:"#fff",marginTop:1}}>{rk?("You\u2019re #"+rk+" of "+total):"See where you rank"}</div></div>
        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
      </div>
@@ -16200,7 +16560,7 @@ function App() {
  {(screen==="solostats"||screen==="analytics")&&(()=>{
  const s = allMyStats||{};
  const CC={blue:"#0A84FF",green:"#30D158",red:"#FF453A",orange:"#FF9F0A",yellow:"#FFD60A",pink:"#FF375F",purple:"#BF5AF2",teal:"#64D2FF",indigo:"#5E5CE6",l3:"rgba(255,255,255,0.34)",l2:"rgba(255,255,255,0.55)"};
- const SURF={background:"linear-gradient(160deg,#15151A,#0B0B0E 78%)",border:"0.5px solid rgba(255,255,255,0.09)",borderRadius:18,boxShadow:"0 6px 22px rgba(0,0,0,0.5)"};
+ const SURF={background:"linear-gradient(160deg,#15151A,#0B0B0E 78%)",border:EDGE.hair,borderRadius:RAD.xl,boxShadow:"0 6px 22px rgba(0,0,0,0.5)"};
  const byTypeArr=Object.values(s.byType||{}).filter(t=>t.wins+t.losses>0).sort((a,b)=>b.pts-a.pts);
  const bySportArr=Object.values(s.bySport||{}).filter(t=>t.wins+t.losses>0).sort((a,b)=>b.pts-a.pts);
  const byWeek=s.byWeek||[];
@@ -16217,11 +16577,11 @@ function App() {
  const sweet=byMult.length?byMult.reduce((a,b)=>b.pts>a.pts?b:a):null;
 
  const ProBlur=({children,label="Unlock with Pro"})=>(
-  <div style={{position:"relative",overflow:"hidden",borderRadius:18,marginBottom:12}}>
+  <div style={{position:"relative",overflow:"hidden",borderRadius:RAD.xl,marginBottom:12}}>
    {children}
    {!isPro&&(
-    <div onClick={()=>setShowPaywall("analytics")} style={{position:"absolute",inset:0,backdropFilter:"blur(6px)",WebkitBackdropFilter:"blur(6px)",background:"rgba(0,0,0,0.55)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",cursor:"pointer",borderRadius:18,zIndex:10}}>
-     <div style={{width:38,height:38,borderRadius:11,background:"rgba(10,132,255,0.2)",border:"1px solid rgba(10,132,255,0.4)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:8}}>
+    <div onClick={()=>setShowPaywall("analytics")} style={{position:"absolute",inset:0,backdropFilter:"blur(6px)",WebkitBackdropFilter:"blur(6px)",background:"rgba(0,0,0,0.55)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",cursor:"pointer",borderRadius:RAD.xl,zIndex:10}}>
+     <div style={{width:38,height:38,borderRadius:RAD.md,background:"rgba(10,132,255,0.2)",border:"1px solid rgba(10,132,255,0.4)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:8}}>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={CC.blue} strokeWidth="2" strokeLinecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
      </div>
      <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:2}}>{label}</div>
@@ -16303,7 +16663,7 @@ function App() {
  };
 
  const Tile=({lbl,val,meta,glow,vcolor})=>(
-  <div style={{...SURF,borderRadius:16,padding:"14px 15px",position:"relative",overflow:"hidden"}}>
+  <div style={{...SURF,borderRadius:RAD.lg,padding:"14px 15px",position:"relative",overflow:"hidden"}}>
    <div style={{position:"absolute",top:-30,right:-30,width:90,height:90,borderRadius:"50%",filter:"blur(26px)",opacity:0.5,background:glow}}/>
    <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",color:CC.l3,marginBottom:7}}>{lbl}</div>
    <div style={{fontSize:28,fontWeight:800,lineHeight:1,color:vcolor||"#fff",fontVariantNumeric:"tabular-nums"}}>{val}</div>
@@ -16329,10 +16689,10 @@ function App() {
   {/* Gradient hero */}
   <div style={{padding:"46px 20px 16px",background:"radial-gradient(120% 90% at 88% -10%, rgba(10,132,255,0.22), transparent 55%),linear-gradient(180deg,#0A1A2E 0%,#000 92%)"}}>
    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-    <div onClick={()=>setScreen(homeMode==="solo"?"home":"profile")} style={{width:32,height:32,borderRadius:10,background:"rgba(255,255,255,0.08)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:CC.blue,fontSize:18}}>‹</div>
+    <div onClick={()=>setScreen(homeMode==="solo"?"home":"profile")} style={{width:32,height:32,borderRadius:RAD.md,background:"rgba(255,255,255,0.08)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:CC.blue,fontSize:18}}>‹</div>
     {isPro
-     ? <div style={{background:"rgba(10,132,255,0.14)",border:"0.5px solid rgba(10,132,255,0.35)",borderRadius:7,padding:"4px 11px",fontSize:10,fontWeight:800,letterSpacing:"0.06em",color:CC.blue}}>PRO</div>
-     : <div onClick={()=>setShowPaywall("analytics")} style={{background:"rgba(191,90,242,0.16)",border:"0.5px solid rgba(191,90,242,0.4)",borderRadius:7,padding:"4px 11px",fontSize:10,fontWeight:800,letterSpacing:"0.06em",color:CC.purple,cursor:"pointer"}}>UPGRADE</div>}
+     ? <div style={{background:"rgba(10,132,255,0.14)",border:"0.5px solid rgba(10,132,255,0.35)",borderRadius:RAD.sm,padding:"4px 11px",fontSize:10,fontWeight:800,letterSpacing:"0.06em",color:CC.blue}}>PRO</div>
+     : <div onClick={()=>setShowPaywall("analytics")} style={{background:"rgba(191,90,242,0.16)",border:"0.5px solid rgba(191,90,242,0.4)",borderRadius:RAD.sm,padding:"4px 11px",fontSize:10,fontWeight:800,letterSpacing:"0.06em",color:CC.purple,cursor:"pointer"}}>UPGRADE</div>}
    </div>
    <div style={{display:"flex",alignItems:"center",gap:7,marginTop:14,marginBottom:8}}><span style={{width:6,height:6,borderRadius:"50%",background:CC.blue,boxShadow:"0 0 10px "+CC.blue}}/><span style={{fontSize:10,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:CC.blue}}>Pro Analytics</span></div>
    <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between"}}>
@@ -16347,7 +16707,7 @@ function App() {
   {/* Sticky category pills */}
   <div style={{position:"sticky",top:0,zIndex:20,display:"flex",gap:7,overflowX:"auto",scrollbarWidth:"none",padding:"12px 16px",background:"rgba(5,5,7,0.82)",backdropFilter:"blur(14px)",WebkitBackdropFilter:"blur(14px)",borderBottom:"0.5px solid rgba(255,255,255,0.09)"}}>
    {ATABS.map(t=>{const on=analyticsTab===t;return (
-    <div key={t} onClick={()=>setAnalyticsTab(t)} style={{flex:"0 0 auto",display:"flex",alignItems:"center",gap:6,fontSize:13,fontWeight:800,whiteSpace:"nowrap",cursor:"pointer",color:on?"#fff":CC.l2,background:on?"linear-gradient(135deg,rgba(10,132,255,0.28),rgba(94,92,230,0.18))":"rgba(255,255,255,0.05)",border:on?"0.5px solid rgba(10,132,255,0.55)":"0.5px solid rgba(255,255,255,0.09)",borderRadius:20,padding:"8px 14px",boxShadow:on?"0 3px 12px rgba(10,132,255,0.25)":"none",transition:"all .18s"}}>
+    <div key={t} onClick={()=>setAnalyticsTab(t)} style={{flex:"0 0 auto",display:"flex",alignItems:"center",gap:6,fontSize:13,fontWeight:800,whiteSpace:"nowrap",cursor:"pointer",color:on?"#fff":CC.l2,background:on?"linear-gradient(135deg,rgba(10,132,255,0.28),rgba(94,92,230,0.18))":"rgba(255,255,255,0.05)",border:on?"0.5px solid rgba(10,132,255,0.55)":"0.5px solid rgba(255,255,255,0.09)",borderRadius:RAD.pill,padding:"8px 14px",boxShadow:on?"0 3px 12px rgba(10,132,255,0.25)":"none",transition:"all .18s"}}>
      <span style={{width:6,height:6,borderRadius:"50%",background:TDOT[t]}}/>{t}{!isPro&&t!=="Overview"&&<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={CC.purple} strokeWidth="2.5" strokeLinecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>}
     </div>);})}
   </div>
@@ -16363,7 +16723,7 @@ function App() {
     {/* OVERVIEW */}
     {analyticsTab==="Overview"&&(<>
      {streak.type==="W" && streak.count>=2 && (
-      <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:12,marginBottom:14,padding:"12px 14px",borderRadius:16,background:"linear-gradient(135deg,rgba(255,106,0,0.15),rgba(255,55,95,0.05))",border:"0.5px solid rgba(255,106,0,0.32)"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:12,marginBottom:14,padding:"12px 14px",borderRadius:RAD.lg,background:"linear-gradient(135deg,rgba(255,106,0,0.15),rgba(255,55,95,0.05))",border:"0.5px solid rgba(255,106,0,0.32)"}}>
        <StreakFlame count={streak.count} size={26}/>
        <div>
         <div style={{fontSize:17,fontWeight:800,color:"#FF6A00",lineHeight:1.1}}>{streak.count} pick win streak</div>
@@ -16460,10 +16820,10 @@ function App() {
         <OddsChart bands={oddsBands}/>
        </div>
        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:12}}>
-        <div style={{...SURF,borderRadius:14,padding:"13px 14px"}}><div style={{fontSize:20,fontWeight:800,color:CC.pink,fontVariantNumeric:"tabular-nums"}}>{ls?(ls.pts>=0?"+":"")+ls.pts:"—"}</div><div style={{fontSize:10,color:CC.l3,textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:700,marginTop:4}}>Longshot Pts</div></div>
-        <div style={{...SURF,borderRadius:14,padding:"13px 14px"}}><div style={{fontSize:20,fontWeight:800,color:CC.yellow}}>{ls?ls.pct+"%":"—"}</div><div style={{fontSize:10,color:CC.l3,textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:700,marginTop:4}}>Longshot Hit Rate</div></div>
-        <div style={{...SURF,borderRadius:14,padding:"13px 14px"}}><div style={{fontSize:20,fontWeight:800,color:CC.green,fontVariantNumeric:"tabular-nums"}}>{s.bestBet?"+"+parseFloat(s.bestBet.points_earned||0).toFixed(1):"—"}</div><div style={{fontSize:10,color:CC.l3,textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:700,marginTop:4}}>Biggest Single Hit</div></div>
-        <div style={{...SURF,borderRadius:14,padding:"13px 14px"}}><div style={{fontSize:20,fontWeight:800,color:CC.teal}}>{s.bestBet&&s.bestBet.odds?s.bestBet.odds:fmtOdds(s.avgOdds)}</div><div style={{fontSize:10,color:CC.l3,textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:700,marginTop:4}}>Best Pick Odds</div></div>
+        <div style={{...SURF,borderRadius:RAD.lg,padding:"13px 14px"}}><div style={{fontSize:20,fontWeight:800,color:CC.pink,fontVariantNumeric:"tabular-nums"}}>{ls?(ls.pts>=0?"+":"")+ls.pts:"—"}</div><div style={{fontSize:10,color:CC.l3,textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:700,marginTop:4}}>Longshot Pts</div></div>
+        <div style={{...SURF,borderRadius:RAD.lg,padding:"13px 14px"}}><div style={{fontSize:20,fontWeight:800,color:CC.yellow}}>{ls?ls.pct+"%":"—"}</div><div style={{fontSize:10,color:CC.l3,textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:700,marginTop:4}}>Longshot Hit Rate</div></div>
+        <div style={{...SURF,borderRadius:RAD.lg,padding:"13px 14px"}}><div style={{fontSize:20,fontWeight:800,color:CC.green,fontVariantNumeric:"tabular-nums"}}>{s.bestBet?"+"+parseFloat(s.bestBet.points_earned||0).toFixed(1):"—"}</div><div style={{fontSize:10,color:CC.l3,textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:700,marginTop:4}}>Biggest Single Hit</div></div>
+        <div style={{...SURF,borderRadius:RAD.lg,padding:"13px 14px"}}><div style={{fontSize:20,fontWeight:800,color:CC.teal}}>{s.bestBet&&s.bestBet.odds?s.bestBet.odds:fmtOdds(s.avgOdds)}</div><div style={{fontSize:10,color:CC.l3,textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:700,marginTop:4}}>Best Pick Odds</div></div>
        </div>
       </div>
      </ProBlur>
@@ -16476,7 +16836,7 @@ function App() {
 
 
  {gamecastSel && <GamecastSheet game={gamecastSel.game} pick={gamecastSel.pick} onClose={()=>setGamecastSel(null)}/>}
-      {pickConflict && <div style={{position:"fixed",left:"50%",bottom:96,transform:"translateX(-50%)",maxWidth:"86%",background:"rgba(28,16,16,0.97)",border:"0.5px solid rgba(255,69,58,0.45)",borderRadius:11,padding:"11px 16px",fontSize:12.5,fontWeight:700,color:"#fff",zIndex:99999,boxShadow:"0 8px 30px rgba(0,0,0,0.5)",textAlign:"center",lineHeight:1.4}}>{pickConflict}</div>}
+      {pickConflict && <div style={{position:"fixed",left:"50%",bottom:96,transform:"translateX(-50%)",maxWidth:"86%",background:"rgba(28,16,16,0.97)",border:"0.5px solid rgba(255,69,58,0.45)",borderRadius:RAD.md,padding:"11px 16px",fontSize:12.5,fontWeight:700,color:"#fff",zIndex:99999,boxShadow:"0 8px 30px rgba(0,0,0,0.5)",textAlign:"center",lineHeight:1.4}}>{pickConflict}</div>}
  <div className="tab-bar">
  {(homeMode==="solo" ? [
  {icon:"home",label:"Home",id:"home"},
@@ -16493,7 +16853,8 @@ function App() {
  ]).map(t=>{
  const isOn=screen===t.id;
  const col=isOn?"#fff":"rgba(255,255,255,0.35)";
- const _lamp = t.id==="matchup" && !isSoloMode && (weekPicks||[]).some(pp=>pp && pp.user_id===(user&&user.id) && !isSettled(pp) && pp.game_date && new Date(pp.game_date).getTime()<=Date.now());
+ const _anyLive = !isSoloMode && (weekPicks||[]).some(pp=>pp && pp.user_id===(user&&user.id) && !isSettled(pp) && pp.game_date && new Date(pp.game_date).getTime()<=Date.now());
+ const _lamp = t.id==="matchup" && _anyLive;
  const svgs={
  home:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
  picks:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>,
@@ -16506,12 +16867,14 @@ function App() {
  profile:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
  };
  return (
- <div key={t.id} className={"tab-item "+(isOn?"on":"")} onClick={()=>{ setScreen(t.id); }}>
+ <div key={t.id} className={"tab-item "+(isOn?"on":"")} onClick={()=>{ if(!isOn) haptic("select"); setScreen(t.id); }}>
  {_lamp && <span className="tab-lamp"/>}
+ {_anyLive && isOn && <span className="tab-lamp tab-lamp-sm"/>}
  <div className="tab-icon" style={{display:"flex",alignItems:"center",justifyContent:"center"}}>{svgs[t.icon]}</div>
  <div className="tab-label">{t.label}</div>
  </div>
  );})}
+ <div className="tab-grip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M8 5l7 7-7 7"/></svg></div>
  </div>
  </div>}
  </div>
@@ -16528,7 +16891,7 @@ function CrashScreen(){ return (
   </div>
   <div style={{fontSize:19,fontWeight:800,color:"#fff",letterSpacing:"-0.3px"}}>Something broke on our end</div>
   <div style={{fontSize:13,color:"rgba(255,255,255,0.46)",lineHeight:1.55,maxWidth:280}}>The error has already been reported. Your picks are safe on the server — reload to pick up where you left off.</div>
-  <button onClick={()=>{ try{ window.location.reload(); }catch(e){} }} style={{marginTop:7,background:"#0A84FF",border:"none",color:"#fff",borderRadius:12,padding:"13px 32px",fontSize:15,fontWeight:800,fontFamily:"Barlow,sans-serif",cursor:"pointer"}}>Reload PickLock</button>
+  <button onClick={()=>{ try{ window.location.reload(); }catch(e){} }} style={{marginTop:7,background:"#0A84FF",border:"none",color:"#fff",borderRadius:RAD.md,padding:"13px 32px",fontSize:15,fontWeight:800,fontFamily:"Barlow,sans-serif",cursor:"pointer"}}>Reload PickLock</button>
  </div>
 ); }
 export default function AppRoot(){ return (<ErrorBoundary kind="app-root" fallback={<CrashScreen/>}><App/></ErrorBoundary>); }
