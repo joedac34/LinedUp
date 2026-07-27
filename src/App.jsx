@@ -630,10 +630,126 @@ const _UNUSED_MH = [
  },
 ];
 
-// ── Skeleton shimmer for loading placeholders (replaces the May-era mock-data
-// constants that used to live here — STANDINGS/CHAT/etc, all dead since Supabase). ──
-try{ if(typeof document!=="undefined" && !document.getElementById("pk-shim-kf")){ const _st=document.createElement("style"); _st.id="pk-shim-kf"; _st.textContent="@keyframes pkShim{0%{background-position:-240px 0}100%{background-position:240px 0}}"; document.head.appendChild(_st); } }catch(e){}
-const Skel = ({w="100%",h=12,r=7,style}) => (<div style={{width:w,height:h,borderRadius:r,background:"linear-gradient(90deg,rgba(255,255,255,0.05),rgba(255,255,255,0.11),rgba(255,255,255,0.05))",backgroundSize:"240px 100%",animation:"pkShim 1.4s linear infinite",flexShrink:0,...style}}/>);
+// ── Skeleton system ────────────────────────────────────────
+// One shimmer wave crosses an entire group, left to right, 2s, steady. Each bar's
+// sweep is sized to its GROUP and offset by that bar's own x position, so every bar
+// shares one coordinate space => all bars stay perfectly in phase, and each bar's
+// own overflow:hidden clips the band. No blend modes, so nothing lights up in the
+// gaps between bars. Animates transform only (compositor); the old pkShim animated
+// background-position, which repainted every frame on every bar, and tiled its
+// gradient because it never set background-repeat.
+// Approved 2026-07-27: group wave / linear / 2.0s.
+try{ if(typeof document!=="undefined" && !document.getElementById("pk-shim-kf")){
+  const _st=document.createElement("style"); _st.id="pk-shim-kf"; _st.textContent=
+    "@keyframes pkWave{from{transform:translateX(-100%)}to{transform:translateX(100%)}}"
+  + "@keyframes pkBreathe{0%,100%{opacity:.5}50%{opacity:1}}"
+  + "@keyframes pkFade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}"
+  + ".pk-skg{position:relative;}"
+  + ".pk-sk{position:relative;overflow:hidden;flex-shrink:0;background:rgba(255,255,255,0.055);}"
+  + ".pk-sk::after{content:'';position:absolute;top:0;bottom:0;left:calc(-1 * var(--bx,0px));width:var(--gw,100%);background:linear-gradient(100deg,transparent 34%,rgba(255,255,255,0.10) 50%,transparent 66%);transform:translateX(-100%);animation:pkWave 2s linear infinite;}"
+  + ".pk-fade{animation:pkFade .26s ease both;}"
+  + "@media (prefers-reduced-motion:reduce){.pk-sk::after{animation:none;opacity:0;}.pk-sk{animation:pkBreathe 3.4s ease-in-out infinite;}}";
+  document.head.appendChild(_st); } }catch(e){}
+
+// Batched read-then-write measure, rAF'd, re-run on resize via ResizeObserver.
+// If the measurement never lands, --gw defaults to 100% and each bar simply carries
+// its own wave — degraded, never broken.
+const SkelGroup = ({children,style,className}) => {
+  const gRef = useRef(null);
+  useEffect(()=>{
+    const host = gRef.current; if(!host) return;
+    let raf = 0;
+    const measure = ()=>{
+      const el = gRef.current; if(!el) return;
+      const g = el.getBoundingClientRect(); if(!g.width) return;
+      const bars = el.querySelectorAll(".pk-sk");
+      const off = [];
+      for(let i=0;i<bars.length;i++) off.push(bars[i].getBoundingClientRect().left - g.left);
+      for(let i=0;i<bars.length;i++){ bars[i].style.setProperty("--gw", g.width+"px"); bars[i].style.setProperty("--bx", off[i]+"px"); }
+    };
+    const schedule = ()=>{ try{cancelAnimationFrame(raf);}catch(e){} raf = requestAnimationFrame(measure); };
+    schedule();
+    let ro = null;
+    try{ if(typeof ResizeObserver!=="undefined"){ ro = new ResizeObserver(schedule); ro.observe(host); } }catch(e){}
+    try{ window.addEventListener("resize", schedule); }catch(e){}
+    return ()=>{ try{cancelAnimationFrame(raf);}catch(e){} if(ro){ try{ro.disconnect();}catch(e){} } try{ window.removeEventListener("resize", schedule); }catch(e){} };
+  });
+  return (<div ref={gRef} className={"pk-skg"+(className?" "+className:"")} style={style}>{children}</div>);
+};
+
+const Skel = ({w="100%",h=12,r=6,style,className}) => (<div className={"pk-sk"+(className?" "+className:"")} style={{width:w,height:h,borderRadius:r,...style}}/>);
+
+// Varied widths so a list of placeholders reads organic instead of ruled.
+const SK_W  = ["62%","48%","70%","55%","44%","66%"];
+const SK_W2 = ["34%","42%","28%","38%","30%","36%"];
+const SK_CARD = {background:"#131318",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:15};
+
+// Row list — leaderboard, leagues, browse, past matchup, gamecast stats, lineup.
+const SkelRows = ({n=5,avatar=true,trail=true,sub=true,card=false,pad="0 16px"}) => (
+  <SkelGroup style={{padding:pad}}>
+    {Array.from({length:n}).map((_,i)=>(
+      <div key={i} style={card
+        ? {...SK_CARD,padding:"13px 14px",marginBottom:9,display:"flex",alignItems:"center",gap:11}
+        : {display:"flex",alignItems:"center",gap:11,marginBottom:14}}>
+        {avatar?<Skel w={34} h={34} r={17}/>:null}
+        <div style={{flex:1,minWidth:0}}>
+          <Skel w={SK_W[i%SK_W.length]} h={14}/>
+          {sub?<Skel w={SK_W2[i%SK_W2.length]} h={10} style={{marginTop:7}}/>:null}
+        </div>
+        {trail?<Skel w={44} h={16}/>:null}
+      </div>
+    ))}
+  </SkelGroup>
+);
+
+// Game / league cards — two team rows plus a strip of odds chips.
+const SkelCards = ({n=3,pad="0 16px",chips=3}) => (
+  <SkelGroup style={{padding:pad}}>
+    {Array.from({length:n}).map((_,i)=>(
+      <div key={i} style={{...SK_CARD,borderRadius:14,padding:"13px 14px",marginBottom:10}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+          <Skel w={28} h={28} r={14}/><Skel w={SK_W[i%SK_W.length]} h={13}/>
+          <div style={{flex:1}}/><Skel w={38} h={13}/>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+          <Skel w={28} h={28} r={14}/><Skel w={SK_W2[(i+2)%SK_W2.length]} h={13}/>
+          <div style={{flex:1}}/><Skel w={38} h={13}/>
+        </div>
+        <div style={{display:"flex",gap:7}}>
+          {Array.from({length:chips}).map((__,c)=><Skel key={c} h={30} r={9} style={{flex:1,width:"auto"}}/>)}
+        </div>
+      </div>
+    ))}
+  </SkelGroup>
+);
+
+// Bet-browser rows — description stack on the left, odds button on the right.
+const SkelBets = ({n=5,pad="6px 16px"}) => (
+  <SkelGroup style={{padding:pad}}>
+    {Array.from({length:n}).map((_,i)=>(
+      <div key={i} style={{...SK_CARD,borderRadius:13,padding:"12px 13px",marginBottom:8,display:"flex",alignItems:"center",gap:11}}>
+        <div style={{flex:1,minWidth:0}}>
+          <Skel w={SK_W[i%SK_W.length]} h={14}/>
+          <Skel w={SK_W2[i%SK_W2.length]} h={10} style={{marginTop:7}}/>
+        </div>
+        <Skel w={54} h={30} r={9}/>
+      </div>
+    ))}
+  </SkelGroup>
+);
+
+const SK_CH_W = ["58%","44%","70%","38%","62%","50%"];
+const SK_CH_H = [34,30,48,30,34,42];
+const SkelChat = ({n=6,pad="6px 2px"}) => (
+  <SkelGroup style={{padding:pad}}>
+    {Array.from({length:n}).map((_,i)=>{ const mine = (i%3)===1;
+      return (<div key={i} style={{display:"flex",alignItems:"flex-end",gap:8,marginBottom:11,justifyContent:mine?"flex-end":"flex-start"}}>
+        {mine?null:<Skel w={26} h={26} r={13}/>}
+        <Skel w={SK_CH_W[i%SK_CH_W.length]} h={SK_CH_H[i%SK_CH_H.length]} r={14} style={{maxWidth:"72%"}}/>
+      </div>);
+    })}
+  </SkelGroup>
+);
 
 const WHEEL_ITEMS = ["double","enhance15","insurance","second","enhance3","enhance45"].map(_id=>POWER_UPS.find(p=>p.id===_id)).filter(Boolean);
 
@@ -2878,7 +2994,7 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
 
  {/* Past weeks */}
       {soloLoading ? (
-        <div style={{textAlign:"center",padding:"24px",color:IOS.label3,fontSize:13}}>Loading...</div>
+        <SkelRows n={3} avatar={false} card={true} pad="0"/>
       ) : pastWeeks.length === 0 ? null : (
         <div>
           <div style={{fontSize:11,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Recent Weeks</div>
@@ -3052,7 +3168,7 @@ function LineupSection({ away, home, date, firstPitchLabel, IOS }) {
     {Tab("away",nick(data&&data.away,away),"AWAY")}
     {Tab("home",nick(data&&data.home,home),"HOME")}
     </div>
-    {loading?(<div style={{padding:32,textAlign:"center",color:"rgba(255,255,255,0.4)",fontSize:13}}>Loading lineup...</div>):null}
+    {loading?(<SkelRows n={9} avatar={false} trail={true} sub={false} pad="18px 18px 8px"/>):null}
     {(!loading&&(!cur||!cur.posted))?(
     <div style={{padding:"40px 24px",textAlign:"center"}}>
     <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.6" style={{opacity:0.3,marginBottom:12}}><path d="M4 20l4-9 3 3 4-8 5 14"/><circle cx="8" cy="6" r="2"/></svg>
@@ -8350,7 +8466,7 @@ function App() {
                  <span style={{fontSize:12.5,fontWeight:800,color:on?IOS.blue:IOS.label2}}>{sp.label||String(k).toUpperCase()}</span>
                </div>); })}
            </div>
-           {(oddsLoading && games.length===0) ? <div style={{textAlign:"center",padding:"28px",color:IOS.label3,fontSize:13}}>Loading games…</div> :
+           {(oddsLoading && games.length===0) ? <SkelCards n={4} pad="0"/> :
             games.length===0 ? <div style={{textAlign:"center",padding:"28px 16px",color:IOS.label3,fontSize:13,lineHeight:1.6}}>No {(SPORTS[soloSport]&&SPORTS[soloSport].label)||""} games on the board right now.</div> :
             shown.map((g,gi)=>{
               const away=g.away.split(" ").pop(); const home=g.home.split(" ").pop();
@@ -8749,13 +8865,13 @@ function App() {
  </div>
  </div>
  <div style={{margin:"0 16px"}}>
- {baseStandings.length===0 ? [0,1,2].map(i=>(
+ {baseStandings.length===0 ? (<SkelGroup>{[0,1,2].map(i=>(
  <div key={"sk"+i} style={{display:"flex",alignItems:"center",gap:11,padding:"0 13px",height:56,marginBottom:8,borderRadius:14,background:"#131318",border:"0.5px solid rgba(255,255,255,0.07)"}}>
  <Skel w={16} h={15}/><Skel w={32} h={32} r={16}/>
  <div style={{flex:1}}><Skel w="52%" h={13} style={{marginBottom:6}}/><Skel w="28%" h={9}/></div>
  <Skel w={46} h={16}/>
  </div>
- )) : [...baseStandings].sort((a,b)=>{
+ ))}</SkelGroup>) : [...baseStandings].sort((a,b)=>{
  const aw=parseInt((a.record||"0-0").split("-")[0])||0;
  const bw=parseInt((b.record||"0-0").split("-")[0])||0;
  if(bw!==aw) return bw-aw;
@@ -8800,14 +8916,14 @@ function App() {
 
  {(tickerGames||[]).filter(g=>{const _ls=activeLeague?.sports||(activeLeague?.sport?[activeLeague.sport]:[]);return !_ls.length||_ls.includes(g.sport);}).length === 0 ? (
  (!liveOdds[activeLeague?.sport] ? (
- <div style={{padding:"0 16px"}}>{[0,1,2].map(i=>(
+ <SkelGroup style={{padding:"0 16px"}}>{[0,1,2].map(i=>(
  <div key={i} style={{background:"#131318",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:15,padding:"12px 14px",marginBottom:10}}>
  <Skel w={110} h={12} style={{marginBottom:12}}/>
  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:9}}><Skel w={30} h={30} r={15}/><Skel w="55%" h={14}/><div style={{flex:1}}/><Skel w={44} h={13}/></div>
  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:11}}><Skel w={30} h={30} r={15}/><Skel w="50%" h={14}/><div style={{flex:1}}/><Skel w={44} h={13}/></div>
  <div style={{display:"flex",gap:7}}><Skel h={32} r={9} style={{flex:1,width:"auto"}}/><Skel h={32} r={9} style={{flex:1,width:"auto"}}/></div>
  </div>
- ))}</div>
+ ))}</SkelGroup>
  ) : (
  <div style={{textAlign:"center",padding:"40px 24px",color:IOS.label3,fontSize:14}}>
  No games found. Check back closer to game day.
@@ -8938,7 +9054,7 @@ function App() {
 
  {/* ══ PICKS ══ */}
  {screen==="picks"&&!isSoloMode&&(()=>{ if(seasonNotStarted){ return notStartedBody; }
- if(!buildingSlip && picksLoading && !(savedPicks&&savedPicks.flexPicks)) return (<div style={{padding:"18px 16px"}}><Skel w={150} h={24} r={8}/><div style={{display:"flex",gap:9,margin:"16px 0 18px"}}>{[0,1,2].map(i=><Skel key={i} h={62} r={13} style={{flex:1,width:"auto"}}/>)}</div>{[0,1,2].map(i=>(<div key={i} style={{background:"#131318",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:15,padding:"14px 15px",marginBottom:10}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:11}}><Skel w={92} h={10}/><Skel w={46} h={14}/></div><Skel w="68%" h={16} style={{marginBottom:8}}/><Skel w="44%" h={11} style={{marginBottom:13}}/><div style={{display:"flex",gap:8}}><Skel w={31} h={24}/><Skel w={92} h={24}/></div></div>))}</div>);
+ if(!buildingSlip && picksLoading && !(savedPicks&&savedPicks.flexPicks)) return (<SkelGroup style={{padding:"18px 16px"}}><Skel w={150} h={24} r={8}/><div style={{display:"flex",gap:9,margin:"16px 0 18px"}}>{[0,1,2].map(i=><Skel key={i} h={62} r={13} style={{flex:1,width:"auto"}}/>)}</div>{[0,1,2].map(i=>(<div key={i} style={{background:"#131318",border:"0.5px solid rgba(255,255,255,0.07)",borderRadius:15,padding:"14px 15px",marginBottom:10}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:11}}><Skel w={92} h={10}/><Skel w={46} h={14}/></div><Skel w="68%" h={16} style={{marginBottom:8}}/><Skel w="44%" h={11} style={{marginBottom:13}}/><div style={{display:"flex",gap:8}}><Skel w={31} h={24}/><Skel w={92} h={24}/></div></div>))}</SkelGroup>);
  // Use separate state for solo mode vs league mode
  const activePicks = isSoloMode ? soloFlexPicks : flexPicks;
  const setActivePicks = isSoloMode ? setSoloFlexPicks : setFlexPicks;
@@ -9300,10 +9416,7 @@ function App() {
 
  {/* Loading state when odds not yet loaded */}
  {oddsLoading && flexCategory && (
- <div style={{padding:"32px 16px",textAlign:"center",color:IOS.label3}}>
- <div style={{width:24,height:24,borderRadius:"50%",border:`2px solid ${IOS.blue}`,borderTopColor:"transparent",animation:"spin 0.8s linear infinite",margin:"0 auto 10px"}}/>
- <div style={{fontSize:13}}>Loading live odds...</div>
- </div>
+ <SkelBets n={6} pad="8px 0"/>
  )}
 
  {/* Bet list */}
@@ -10371,7 +10484,7 @@ function App() {
        <div style={{textAlign:"right",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:19}}>{me?valFor(me):"—"}</div>
      </div>
      {lbTab==="hit" && <div style={{display:"flex",alignItems:"center",gap:8,background:"rgba(255,159,10,0.09)",border:"0.5px solid rgba(255,159,10,0.22)",borderRadius:11,padding:"9px 13px",marginBottom:12,fontSize:11.5,color:IOS.label2,fontWeight:600}}>Hit Rate ranks anyone with {THRESH[lbTf]}+ graded picks {TFLABEL[lbTf]}.</div>}
-     {(lbLoading && top.length===0) ? <div style={{textAlign:"center",padding:30,color:IOS.label3,fontSize:13}}>Loading…</div> :
+     {(lbLoading && top.length===0) ? <SkelRows n={8} pad="6px 0"/> :
       top.length===0 ? <div style={{textAlign:"center",padding:30,color:IOS.label3,fontSize:13,lineHeight:1.6}}>No ranked players yet — graded picks show up here.</div> :
       top.map((r,i)=>{ const rk=i+1; const mc=medalC(rk); const isMe=String(r.user_id)===String(user?.id); const c=PAL[i%PAL.length];
         return (
@@ -11480,10 +11593,7 @@ function App() {
 
  {/* Card grid */}
  {oddsLoading ? (
- <div style={{padding:"60px 20px",textAlign:"center"}}>
- <div style={{width:26,height:26,border:`2.5px solid ${acc}33`,borderTopColor:acc,borderRadius:"50%",margin:"0 auto 14px",animation:"spin .7s linear infinite"}}/>
- <div style={{fontSize:13,color:"rgba(255,255,255,0.4)"}}>Loading live odds…</div>
- </div>
+ <SkelBets n={6} pad="10px 16px"/>
  ) : isGameLine ? renderLineSheet() : list.length===0 ? (
  <div style={{padding:"50px 28px",textAlign:"center"}}>
  <div style={{fontSize:14,fontWeight:700,color:"rgba(255,255,255,0.45)",marginBottom:6}}>
@@ -12639,10 +12749,7 @@ function App() {
 
  {/* League cards */}
  {leaguesLoading ? (
- <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"60px 24px",textAlign:"center",gap:10}}>
- <div style={{width:32,height:32,borderRadius:"50%",border:`3px solid ${IOS.blue}`,borderTopColor:"transparent",animation:"spin 0.8s linear infinite"}}/>
- <div style={{fontSize:14,color:IOS.label3}}>Loading your leagues...</div>
- </div>
+ <SkelRows n={4} card={true} pad="0"/>
  ) : realLeagues.length === 0 ? (
  <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"48px 32px",textAlign:"center",gap:12}}>
  <div style={{fontSize:56,marginBottom:4}}></div>
@@ -14883,7 +14990,7 @@ function App() {
  </div>
  <div className="chat-bg">
  <div className="chat-msgs" ref={chatRef} style={{paddingBottom:12}}>
- {chatLoading && <div style={{textAlign:"center",color:IOS.label3,fontSize:13,padding:20}}>Loading messages...</div>}
+ {chatLoading && <SkelChat n={7}/>}
  {!chatLoading && messages.length===0 && (
  <div style={{textAlign:"center",color:IOS.label3,fontSize:13,padding:40}}>
  <div style={{display:"flex",justifyContent:"center",marginBottom:10}}><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
@@ -14934,7 +15041,7 @@ function App() {
  <div style={{width:38,height:4,borderRadius:2,background:"rgba(255,255,255,0.22)",margin:"0 auto 12px"}}/>
  <input autoFocus value={gifQ} onChange={e=>onGifQ(e.target.value)} placeholder="Search KLIPY" style={{height:38,borderRadius:12,background:"rgba(255,255,255,0.06)",border:"0.5px solid rgba(255,255,255,0.09)",padding:"0 14px",fontSize:13.5,color:"#fff",outline:"none",fontFamily:"Barlow,sans-serif",marginBottom:12}}/>
  <div style={{flex:1,overflowY:"auto"}}>
- {gifLoading&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7}}>{[0,1,2,3,4,5].map(i=><Skel key={i} h={104} r={11} style={{width:"auto"}}/>)}</div>}
+ {gifLoading&&<SkelGroup style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7}}>{[0,1,2,3,4,5,6,7,8].map(i=><Skel key={i} h={104} r={11} style={{width:"auto"}}/>)}</SkelGroup>}
  {!gifLoading&&gifResults.length===0&&<div style={{textAlign:"center",color:"rgba(255,255,255,0.4)",fontSize:12.5,padding:"28px 0"}}>No GIFs found{gifQ?" for that search":""}.</div>}
  {!gifLoading&&gifResults.length>0&&(
  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7}}>
@@ -15604,7 +15711,7 @@ function App() {
    </div>
    </>):null}
 
-   {gameLoading?<div style={{textAlign:"center",padding:"24px",color:IOS.label3,fontSize:13}}>Loading stats…</div>:null}
+   {gameLoading?<SkelRows n={6} avatar={false} sub={false} pad="14px 4px 6px"/>:null}
    {(!gameLoading&&!det.teams&&!eg)?<div style={{textAlign:"center",padding:"16px 8px 8px",color:IOS.label3,fontSize:13,lineHeight:1.6}}>Detailed stats not available yet — check back closer to game time.</div>:null}
    </div>
 
@@ -15733,7 +15840,7 @@ function App() {
  </div>
 
  {pastMatchupLoading && (
- <div style={{textAlign:"center",padding:24,color:IOS.label3,fontSize:13}}>Loading picks...</div>
+ <SkelRows n={5} avatar={false} card={true} pad="4px 0"/>
  )}
 
  {!pastMatchupLoading && pastMatchupPicks.my.length === 0 && (
@@ -15832,7 +15939,7 @@ function App() {
      {/* League list */}
      <div style={{overflowY:"auto",flex:1,padding:"8px 0 40px"}}>
        {browseLoading ? (
-         <div style={{padding:"40px 20px",textAlign:"center",color:"#555",fontSize:14}}>Loading leagues...</div>
+         <SkelRows n={5} card={true} pad="4px 16px"/>
        ) : publicLeagues.length===0 ? (
          <div style={{padding:"40px 20px",textAlign:"center"}}>
            <div style={{fontSize:14,color:"#555",marginBottom:8}}>No public leagues available</div>
