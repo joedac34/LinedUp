@@ -667,6 +667,108 @@ try{ if(typeof document!=="undefined" && !document.getElementById("pk-shim-kf"))
 // Batched read-then-write measure, rAF'd, re-run on resize via ResizeObserver.
 // If the measurement never lands, --gw defaults to 100% and each bar simply carries
 // its own wave — degraded, never broken.
+// ── Pull to refresh ───────────────────────────────────────
+// Threshold 72px (approved). Fires pk:refresh; React does the work and answers with
+// pk:refresh-done. A 10s cooldown protects Odds API quota — each pull costs 3 units per
+// sport — and a 6s ceiling stops the spinner hanging if a fetch never settles.
+//
+// window.__pkGesture arbitrates with the edge-swipe driver: whichever claims the touch
+// first owns it, so a diagonal drag near the top-left corner cannot run both.
+try{ if(typeof document!=="undefined" && typeof window!=="undefined" && !window.__pkPull){
+  window.__pkPull = 1;
+  const THRESH = 72, MAXPULL = 128, DAMP = 0.55, COOLDOWN = 10000, SPIN_MAX = 6000;
+  let el=null, sy=0, sx=0, dy=0, live=false, busy=false, decided=false, lastRun=0, spinT=0;
+  let wrap=null, label=null;
+
+  const build = ()=>{
+    if(wrap) return;
+    wrap = document.createElement("div"); wrap.className = "pk-ptr";
+    const pill = document.createElement("div"); pill.className = "pk-ptr-pill";
+    pill.innerHTML = '<svg class="pk-ptr-ring" viewBox="0 0 16 16">'
+      + '<circle class="trk" cx="8" cy="8" r="6"></circle>'
+      + '<circle class="arc" cx="8" cy="8" r="6"></circle></svg>'
+      + '<span class="pk-ptr-t"></span>';
+    wrap.appendChild(pill); document.body.appendChild(wrap);
+    label = pill.querySelector(".pk-ptr-t");
+  };
+  const setArc = (p)=>{ try{ wrap.querySelector(".arc").style.strokeDashoffset = String(38 - 38*Math.min(1,Math.max(0,p))); }catch(e){} };
+  const say = (t)=>{ if(label) label.textContent = t; };
+  const slide = (px, animate)=>{
+    if(!el) return;
+    el.style.transition = animate ? "transform .3s cubic-bezier(0.32,0.72,0,1)" : "none";
+    el.style.transform = px ? ("translateY("+px+"px)") : "";
+  };
+  const finish = ()=>{
+    busy = false; if(spinT){ clearTimeout(spinT); spinT = 0; }
+    if(wrap) wrap.classList.remove("busy","armed");
+    slide(0, true); setArc(0); say("Pull to refresh");
+    setTimeout(()=>{ if(el){ el.style.transition=""; el.style.transform=""; } el=null; }, 320);
+  };
+  try{ window.addEventListener("pk:refresh-done", finish); }catch(e){}
+
+  const unbind = ()=>{
+    try{ document.removeEventListener("touchmove", onMove); }catch(e){}
+    try{ document.removeEventListener("touchend", onEnd); }catch(e){}
+    try{ document.removeEventListener("touchcancel", onEnd); }catch(e){}
+  };
+  function onMove(e){
+    if(!live) return;
+    const t = e.touches && e.touches[0]; if(!t) return;
+    const ddy = t.clientY - sy, ddx = t.clientX - sx;
+    if(!decided){
+      if(Math.abs(ddy) < 12 && Math.abs(ddx) < 12) return;
+      // A mostly-horizontal drag belongs to the swipe-back driver. Stand down.
+      if(Math.abs(ddx) > Math.abs(ddy)){ live=false; window.__pkGesture=null; unbind(); return; }
+      decided = true;
+    }
+    if(ddy <= 0){ dy = 0; slide(0,false); if(wrap) wrap.classList.remove("armed"); setArc(0); return; }
+    if(e.cancelable) e.preventDefault();
+    dy = Math.min(MAXPULL, ddy * DAMP);
+    slide(dy, false);
+    build();
+    if(wrap) wrap.classList.toggle("armed", dy > 6);
+    setArc(dy / THRESH);
+    say(dy >= THRESH ? "Release to refresh" : "Pull to refresh");
+  }
+  function onEnd(){
+    if(!live){ unbind(); return; }
+    live = false; window.__pkGesture = null; unbind();
+    if(dy >= THRESH){
+      const now = Date.now();
+      if(now - lastRun < COOLDOWN){
+        say("Up to date"); haptic("light");
+        slide(0, true);
+        setTimeout(()=>{ if(wrap) wrap.classList.remove("armed"); setArc(0); say("Pull to refresh");
+          if(el){ el.style.transform=""; } el=null; }, 900);
+        dy = 0; return;
+      }
+      lastRun = now; busy = true;
+      haptic("medium");
+      if(wrap){ wrap.classList.add("busy"); }
+      say("Updating");
+      slide(52, true);
+      try{ window.dispatchEvent(new CustomEvent("pk:refresh")); }catch(e){}
+      spinT = setTimeout(finish, SPIN_MAX);
+    } else {
+      slide(0, true); if(wrap) wrap.classList.remove("armed"); setArc(0);
+      setTimeout(()=>{ if(el){ el.style.transition=""; el.style.transform=""; } el=null; }, 320);
+    }
+    dy = 0;
+  }
+  document.addEventListener("touchstart", function(e){
+    if(live || busy || window.__pkGesture) return;
+    const t = e.touches && e.touches[0]; if(!t) return;
+    let sc = null;
+    try{ sc = e.target && e.target.closest ? (e.target.closest(".body") || e.target.closest(".lsx-scroll")) : null; }catch(err){}
+    if(!sc || (sc.scrollTop || 0) > 0) return;
+    el = sc; sy = t.clientY; sx = t.clientX; dy = 0; live = true; decided = false;
+    window.__pkGesture = "pull";
+    document.addEventListener("touchmove", onMove, {passive:false});
+    document.addEventListener("touchend", onEnd);
+    document.addEventListener("touchcancel", onEnd);
+  }, {passive:true});
+} }catch(e){}
+
 // ── Edge swipe back ────────────────────────────────────────
 // Drag from the left edge to go back. React owns the history and sets
 // data-pk-back="1" on <html> when a back target exists; this only drives the drag and
@@ -686,7 +788,7 @@ try{ if(typeof document!=="undefined" && typeof window!=="undefined" && !window.
   const reset = (animate)=>{
     if(el){ el.style.transition = animate ? "transform .2s cubic-bezier(0.32,0.72,0,1)" : "none";
             style("", ""); if(animate) setTimeout(()=>{ if(el) el.style.transition=""; }, 220); }
-    el=null; live=false; dx=0; unbind();
+    el=null; live=false; dx=0; window.__pkGesture=null; unbind();
   };
   function onCancel(){ reset(true); }
   function onMove(e){
@@ -713,7 +815,7 @@ try{ if(typeof document!=="undefined" && typeof window!=="undefined" && !window.
       const gone = el;
       setTimeout(()=>{ try{ gone.style.transform=""; gone.style.boxShadow=""; gone.style.transition=""; }catch(e){}
         try{ window.dispatchEvent(new CustomEvent("pk:back")); }catch(e){} }, 190);
-      el=null; live=false; dx=0; unbind();
+      el=null; live=false; dx=0; window.__pkGesture=null; unbind();
     } else { reset(true); }
   }
   document.addEventListener("touchstart", function(e){
@@ -724,6 +826,8 @@ try{ if(typeof document!=="undefined" && typeof window!=="undefined" && !window.
     // Claiming the gesture is the only way to stop iOS from taking it.
     const nearLeft = t.clientX <= EDGE, nearRight = t.clientX >= w - EDGE;
     if(!nearLeft && !nearRight) return;
+    if(window.__pkGesture) return;
+    window.__pkGesture = "swipe";
     allowed = nearLeft && document.documentElement.getAttribute("data-pk-back") === "1";
     el = document.querySelector(".body, .lsx-scroll");
     sx = t.clientX; sy = t.clientY; dx = 0; live = true;
@@ -733,6 +837,21 @@ try{ if(typeof document!=="undefined" && typeof window!=="undefined" && !window.
     document.addEventListener("touchcancel", onCancel);
   }, {passive:true});
 } }catch(e){}
+
+// ── Tap the active tab to scroll to top ──────────────────────────────
+// Only fires when there is somewhere to go: tapping a tab you are on while already at
+// the top should do nothing at all, not buzz.
+const scrollActiveToTop = () => {
+  try{
+    const sc = document.querySelector(".body, .lsx-scroll");
+    if(!sc || (sc.scrollTop || 0) <= 0) return false;
+    let smooth = true;
+    try{ smooth = !window.matchMedia("(prefers-reduced-motion: reduce)").matches; }catch(e){}
+    if(sc.scrollTo) sc.scrollTo({ top:0, behavior: smooth ? "smooth" : "auto" });
+    else sc.scrollTop = 0;
+    return true;
+  }catch(e){ return false; }
+};
 
 // ── Haptics ─────────────────────────────────────────────────
 // navigator.vibrate has never been supported by Safari or WKWebView, so every haptic
@@ -2072,7 +2191,13 @@ function MatchBody({ d, IOS, liveGames=[], onOpenGamecast }){
           {rows.length===0 && <div style={{padding:"20px 14px",textAlign:"center",fontSize:12,color:"rgba(255,255,255,0.3)"}}>No slips submitted</div>}
           {rows.map((r,i)=>{
             const ref = r.mine || r.theirs;
-            const mult = ref && ref.multiplier;
+            // Multipliers are assigned per player, so the two sides of a row can carry
+            // different ones. The old shared value took whichever side existed first and
+            // labelled BOTH picks with it — so an opponent's 4x read as your 7x. Points were
+            // always right (they come off each pick's own multiplier); only the label lied.
+            const multA = r.mine && r.mine.multiplier;
+            const multB = r.theirs && r.theirs.multiplier;
+            const multSame = (multA != null && multB != null && multA === multB);
             const type = (ref && (BMD_CHIP[ref.slot] || String(ref.slot||"").toUpperCase().slice(0,4))) || "";
             const aw = r.mine && r.mine.res==="W", bw = r.theirs && r.theirs.res==="W";
             const anyLive = (r.mine && r.mine.res==="pend") || (r.theirs && r.theirs.res==="pend");
@@ -2081,7 +2206,15 @@ function MatchBody({ d, IOS, liveGames=[], onOpenGamecast }){
                 {cell(r.mine, false, openRows[i])}
                 <div onClick={(e)=>{e.stopPropagation(); setOpenRows(o=>({...o,[i]:!o[i]}));}} style={{width:52,flexShrink:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,cursor:"pointer",
                   background:"rgba(255,255,255,0.02)",borderLeft:"0.5px solid rgba(255,255,255,0.05)",borderRight:"0.5px solid rgba(255,255,255,0.05)"}}>
-                  {mult ? <div style={{fontSize:11,fontWeight:900,color:"rgba(255,255,255,0.45)"}}>{mult}×</div> : null}
+                  {multSame
+                    ? <div style={{fontSize:11,fontWeight:900,color:"rgba(255,255,255,0.45)"}}>{multA}×</div>
+                    : ((multA!=null||multB!=null) ? (
+                      <div style={{display:"flex",alignItems:"baseline",gap:3,fontSize:11,fontWeight:900,lineHeight:1}}>
+                        <span style={{color:multA!=null?"rgba(255,255,255,0.62)":"rgba(255,255,255,0.2)"}}>{multA!=null?multA+"\u00d7":"\u2013"}</span>
+                        <span style={{color:"rgba(255,255,255,0.18)",fontWeight:700}}>{"|"}</span>
+                        <span style={{color:multB!=null?"rgba(255,255,255,0.62)":"rgba(255,255,255,0.2)"}}>{multB!=null?multB+"\u00d7":"\u2013"}</span>
+                      </div>
+                    ) : null)}
                   <div style={{fontSize:7.5,fontWeight:900,letterSpacing:"0.05em",color:"rgba(255,255,255,0.25)"}}>{type}</div>
                   <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{marginTop:1,transform:openRows[i]?"rotate(180deg)":"none",transition:"transform .18s"}}><path d="M6 9l6 6 6-6"/></svg>
                 </div>
@@ -2183,6 +2316,37 @@ function ChampCelebrate({ name, leagueName, isYou, members, record, points, runn
 }
 const BETSLIP_ENABLED = false; // flip on once affiliate + compliance (21+, geo, RG) are ready
 function betslipAllowedHere(){ return true; } // TODO: geo-gate to legal states + 21+ age check
+// Rolling numerals for values that change while you are watching — live scores, live
+// point totals. Only the columns whose digit changed move; the rest hold still, which is
+// what makes it read as a scoreboard rather than a re-render.
+//
+// size is required rather than measured: line-height is 1, so one glyph is exactly
+// size px tall and the row height needs no layout read at all.
+const ROLL_DIGITS = [0,1,2,3,4,5,6,7,8,9];
+function Roll({ value, size = 24, weight = 800, color, style, className }) {
+  const str = (value === null || value === undefined) ? "" : String(value);
+  const h = Math.round(size);
+  return (
+    <span className={"pk-roll" + (className ? " " + className : "")}
+      style={{ fontSize: size, fontWeight: weight, ...(color ? { color } : {}), ...style }}>
+      {str.split("").map((ch, i) => {
+        const isDigit = ch >= "0" && ch <= "9";
+        return (
+          <span key={i} className="pk-roll-d" style={{ height: h }}>
+            {isDigit ? (
+              <span className="pk-roll-c" style={{ transform: "translateY(" + (-parseInt(ch, 10) * h) + "px)" }}>
+                {ROLL_DIGITS.map(n => <span key={n} style={{ height: h }}>{n}</span>)}
+              </span>
+            ) : (
+              <span className="pk-roll-c"><span style={{ height: h }}>{ch}</span></span>
+            )}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
 function CountUp({ value, decimals = 1, ms = 900 }) {
   const [n, setN] = useState(0);
   useEffect(() => {
@@ -6967,6 +7131,30 @@ function App() {
     if(sports) sports.forEach(sp => { const have = liveOdds[sp]; if(!have || !have.ml || !have.ml.length) fetchLiveOdds(sp); });
   }, [activeLeagueId, isSoloMode, user, screen]);
 
+ // Pull-to-refresh target. The driver fires pk:refresh; whatever the current screen is
+ // about gets re-pulled, and pk:refresh-done stops the spinner. No dep array on purpose:
+ // a stale closure here would refresh the league you were looking at five minutes ago.
+ useEffect(()=>{
+   const onRefresh = ()=>{
+     const done = ()=>{ try{ window.dispatchEvent(new CustomEvent("pk:refresh-done")); }catch(e){} };
+     try{
+       const jobs = [];
+       if(isSoloMode){
+         jobs.push(fetchLiveOdds(soloSport||"mlb"));
+       } else if(activeLeagueId && user){
+         const lg2 = realLeagues.find(l=>l.id===activeLeagueId);
+         const sports = lg2?.sports || (lg2?.sport ? [lg2.sport] : (activeLeague?.sport ? [activeLeague.sport] : null));
+         if(sports) sports.forEach(sp => jobs.push(fetchLiveOdds(sp)));
+         jobs.push(fetchStandings(activeLeagueId));
+       }
+       if(!jobs.length){ done(); return; }
+       Promise.allSettled(jobs).then(done, done);
+     }catch(e){ done(); }
+   };
+   try{ window.addEventListener("pk:refresh", onRefresh); }catch(e){}
+   return ()=>{ try{ window.removeEventListener("pk:refresh", onRefresh); }catch(e){} };
+ });
+
  useEffect(()=>{ setBuildingSlip(false); }, [activeLeagueId, isSoloMode]);
 
  // Rehydrate the solo home's locked-slip card after a reload (in-memory state is lost otherwise).
@@ -7195,7 +7383,7 @@ function App() {
  .nav-subtitle{font-size:13px;color:${IOS.label3};margin-top:2px;}
 
  /* Scrollable body */
- .body{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;position:relative;z-index:1;padding-top:0;padding-bottom:calc(92px + var(--sa-bot));overscroll-behavior:contain;overscroll-behavior-x:none;}
+ .body{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior-y:contain;position:relative;z-index:1;padding-top:0;padding-bottom:calc(92px + var(--sa-bot));overscroll-behavior:contain;overscroll-behavior-x:none;}
  .body-pad{padding-bottom:calc(100px + var(--sa-bot));}
  .app-header{flex-shrink:0;z-index:25;position:relative;display:flex;align-items:center;gap:8px;height:52px;padding:0 14px;background:linear-gradient(180deg,#10101a 0%,#0b0b0e 100%);border-bottom:0.5px solid rgba(255,255,255,0.08);box-shadow:0 6px 18px rgba(0,0,0,0.45);}
  .gh-left{display:flex;align-items:center;min-width:0;flex-shrink:0;}
@@ -7327,6 +7515,37 @@ function App() {
  @keyframes pkScreenIn{from{opacity:0}to{opacity:1}}
  .body,.lsx-scroll{animation:pkScreenIn .26s cubic-bezier(0.32,0.72,0,1) both;}
  @media (prefers-reduced-motion: reduce){ .body,.lsx-scroll{animation:none;} }
+ /* Pull to refresh. The pill is built in JS and lives outside React, so no screen
+    needs to render it. Same glass as the dock. */
+ .pk-ptr{position:fixed;left:0;right:0;top:calc(var(--sa-top) + 4px);z-index:45;display:flex;
+   align-items:center;justify-content:center;pointer-events:none;}
+ .pk-ptr-pill{display:flex;align-items:center;gap:8px;padding:8px 15px;border-radius:999px;
+   background:rgba(18,18,24,0.72);-webkit-backdrop-filter:blur(22px) saturate(1.4);
+   backdrop-filter:blur(22px) saturate(1.4);border:0.5px solid rgba(255,255,255,0.12);
+   box-shadow:0 18px 40px -12px rgba(0,0,0,0.75), inset 0 1px 0 rgba(255,255,255,0.08);
+   opacity:0;transform:translateY(-14px) scale(0.9);
+   transition:opacity .16s ease, transform .2s cubic-bezier(0.34,1.3,0.42,1);}
+ .pk-ptr.armed .pk-ptr-pill,.pk-ptr.busy .pk-ptr-pill{opacity:1;transform:none;}
+ .pk-ptr-t{font-size:11.5px;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;
+   color:rgba(255,255,255,0.72);white-space:nowrap;}
+ .pk-ptr-ring{width:16px;height:16px;flex-shrink:0;}
+ .pk-ptr-ring circle{fill:none;stroke-width:2.4;stroke-linecap:round;}
+ .pk-ptr-ring .trk{stroke:rgba(255,255,255,0.16);}
+ .pk-ptr-ring .arc{stroke:${IOS.blue};stroke-dasharray:38;stroke-dashoffset:38;
+   transform:rotate(-90deg);transform-origin:50% 50%;}
+ .pk-ptr.busy .pk-ptr-ring{animation:pkPtrSpin .9s linear infinite;}
+ .pk-ptr.busy .pk-ptr-ring .arc{stroke-dashoffset:11;}
+ @keyframes pkPtrSpin{to{transform:rotate(360deg)}}
+ @media (prefers-reduced-motion: reduce){ .pk-ptr.busy .pk-ptr-ring{animation:none;} }
+ /* Rolling numerals. Row height is driven by the size prop, never measured — measuring
+    the element after filling it with a 0-9 strip returns the ten-row height, which
+    silently defeats the clip and shows the whole strip. */
+ .pk-roll{display:inline-flex;align-items:flex-start;font-family:'Barlow Semi Condensed',sans-serif;
+   font-variant-numeric:tabular-nums;line-height:1;}
+ .pk-roll-d{display:inline-block;overflow:hidden;position:relative;text-align:center;vertical-align:top;}
+ .pk-roll-c{display:block;transition:transform .42s cubic-bezier(0.32,0.9,0.28,1);}
+ .pk-roll-c > span{display:block;}
+ @media (prefers-reduced-motion: reduce){ .pk-roll-c{transition:none;} }
  .pk-hdr{transform-origin:left top;}
  @keyframes soGrow{from{height:0}to{height:var(--h);}}
  .so-bar{height:var(--h);animation:soGrow .62s cubic-bezier(0.34,1.16,0.42,1) both;}
@@ -9051,7 +9270,11 @@ function App() {
  <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>{myTotal}pts</div>
  </div>
  <div style={{textAlign:"center"}}>
- <div style={{fontSize:28,fontWeight:800,letterSpacing:-1,color:"#fff"}}>{myTotal} <span style={{fontSize:16,color:IOS.label3,fontWeight:500}}>–</span> {oppTotal}</div>
+ <div style={{display:"flex",alignItems:"baseline",justifyContent:"center",gap:7,letterSpacing:-1}}>
+   <Roll value={myTotal} size={28} color="#fff"/>
+   <span style={{fontSize:16,color:IOS.label3,fontWeight:500}}>{"\u2013"}</span>
+   <Roll value={oppTotal} size={28} color="#fff"/>
+ </div>
  <div style={{fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:isTied?IOS.blue:isWinning?IOS.green:IOS.red,marginTop:2}}>{isTied?"You're Tied":isWinning?"You're Leading":"You're Trailing"}</div>
  </div>
  <div style={{textAlign:"right"}}>
@@ -12502,7 +12725,11 @@ function App() {
  <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>{myTotal} pts</div>
  </div>
  <div style={{textAlign:"center",flexShrink:0}}>
- <div style={{fontSize:26,fontWeight:800,letterSpacing:"-1px",color:"#fff"}}>{myTotal} <span style={{fontSize:15,color:IOS.label3,fontWeight:500}}>–</span> {oppTotal}</div>
+ <div style={{display:"flex",alignItems:"baseline",justifyContent:"center",gap:7,letterSpacing:"-1px"}}>
+   <Roll value={myTotal} size={26} color="#fff"/>
+   <span style={{fontSize:15,color:IOS.label3,fontWeight:500}}>{"\u2013"}</span>
+   <Roll value={oppTotal} size={26} color="#fff"/>
+ </div>
  <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:accent,marginTop:2}}>{statusTxt}</div>
  </div>
  <div style={{textAlign:"right",minWidth:0,flex:1}}>
@@ -16916,7 +17143,7 @@ function App() {
  profile:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
  };
  return (
- <div key={t.id} className={"tab-item "+(isOn?"on":"")} onClick={()=>{ if(!isOn) haptic("select"); setScreen(t.id); }}>
+ <div key={t.id} className={"tab-item "+(isOn?"on":"")} onClick={()=>{ if(isOn){ if(scrollActiveToTop()) haptic("light"); return; } haptic("select"); setScreen(t.id); }}>
  {_lamp && <span className="tab-lamp"/>}
  {_anyLive && isOn && <span className="tab-lamp tab-lamp-sm"/>}
  <div className="tab-icon" style={{display:"flex",alignItems:"center",justifyContent:"center"}}>{svgs[t.icon]}</div>
