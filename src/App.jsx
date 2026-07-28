@@ -1182,6 +1182,142 @@ const SkelChat = ({n=6,pad="6px 2px"}) => (
   </SkelGroup>
 );
 
+// ── Player profile sheet ───────────────────────────────────
+// Opened by tapping a user anywhere (leaderboard, standings, chat, matchup).
+// Data comes from the get_public_profile RPC; the seed renders the hero
+// instantly while the rest loads. The avatar is ALWAYS the app accent gradient
+// (no per-user rainbow) — identity comes from initials plus founder gold.
+const PROF_STAR = (s)=>(<svg width={s} height={s} viewBox="0 0 24 24" fill="#FFD60A" stroke="none" style={{flexShrink:0}}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>);
+const PROF_BIC = {
+ star:(c)=>(<svg width="18" height="18" viewBox="0 0 24 24" fill={c}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>),
+ trophy:(c)=>(<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9a6 6 0 0 0 12 0V3H6z"/><path d="M6 5H3v2a4 4 0 0 0 4 4"/><path d="M18 5h3v2a4 4 0 0 1-4 4"/><path d="M12 15v4"/><path d="M8 21h8"/></svg>),
+ bolt:(c)=>(<svg width="18" height="18" viewBox="0 0 24 24" fill={c}><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z"/></svg>),
+ flame:(c)=>(<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22c4.4 0 7-2.8 7-6.5 0-3-2-5-3.5-6.5C14 7.5 13 5.5 13 3c-3 2-5.5 5-5.5 8 0 1-1-.5-1.5-2C4.7 10.6 5 12.7 5 15.5 5 19.2 7.6 22 12 22z"/></svg>),
+ stack:(c)=>(<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 12l10 5 10-5"/><path d="M2 17l10 5 10-5"/></svg>),
+};
+function ProfileSheet({view, data, loading, onClose, myId, globalRank}){
+ const seed = (view&&view.seed)||{};
+ const prof = (data&&data.profile)||{};
+ const stats = (data&&data.stats)||null;
+ const name = prof.username || seed.username || "Player";
+ const isFounder = prof.is_founder===true || seed.is_founder===true;
+ const ini = String(name).slice(0,2).toUpperCase();
+ const joined = (()=>{ if(!prof.created_at) return null; const d=new Date(prof.created_at); if(isNaN(d)) return null; try{ return d.toLocaleDateString([], {month:"long",year:"numeric"}); }catch(e){ return null; } })();
+ const wins = stats?(Number(stats.wins)||0):0, losses = stats?(Number(stats.losses)||0):0;
+ const graded = wins+losses, hit = graded?Math.round(wins/graded*100):0;
+ const pts = stats?Math.round(Number(stats.points)||0):0, lsPts = stats?Math.round(Number(stats.ls_pts)||0):0;
+ const lsWins = stats?(Number(stats.ls_wins)||0):0;
+ const form = (data&&Array.isArray(data.form))?data.form:[];
+ const streak = (data&&Number(data.streak))||0;
+ const champs = (data&&Array.isArray(data.championships))?data.championships:[];
+ const shared = (data&&Array.isArray(data.shared_leagues))?data.shared_leagues:[];
+ const h2h = (data&&data.h2h&&Number(data.h2h.total)>0)?data.h2h:null;
+ const cw = h2h?(Number(h2h.caller_wins)||0):0, twn = h2h?(Number(h2h.target_wins)||0):0;
+ const isMe = !!(view && myId && String(view.userId)===String(myId));
+ const badges = [];
+ if(isFounder) badges.push({id:"founder",name:"Founding Member",sub:prof.founder_number?("#"+prof.founder_number):"Early believer",color:IOS.yellow,icon:"star"});
+ if(champs.length) badges.push({id:"champ",name:"Season Champion",sub:champs.length>1?(champs.length+" titles"):((champs[0]&&champs[0].name)||"1 title"),color:IOS.yellow,icon:"trophy"});
+ if(lsWins>0) badges.push({id:"ls",name:"Longshot Hunter",sub:lsWins+(lsWins===1?" longshot hit":" longshots hit"),color:IOS.pink,icon:"bolt"});
+ if(streak>=3) badges.push({id:"streak",name:"Heater",sub:streak+"-pick win streak",color:IOS.orange,icon:"flame"});
+ if(graded>=100) badges.push({id:"vol",name:"Century Club",sub:"100+ graded picks",color:IOS.blue,icon:"stack"});
+ const SEC = (t)=>(<div style={{fontSize:10,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:IOS.label3,margin:"18px 0 8px"}}>{t}</div>);
+ return (
+ <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:70,background:"rgba(0,0,0,0.55)",display:"flex",alignItems:"flex-end"}}>
+ <div className="pk-sheet" onClick={(e)=>e.stopPropagation()} style={{position:"relative",width:"100%",maxWidth:480,margin:"0 auto",background:"#131316",maxHeight:"86%",overflowY:"auto",WebkitOverflowScrolling:"touch",overscrollBehavior:"contain",padding:"9px 16px calc(var(--sa-bot) + 22px)"}}>
+ <div style={{width:36,height:5,borderRadius:3,background:"rgba(255,255,255,0.18)",margin:"0 auto 4px"}}/>
+ {(loading&&!data) ? (
+ <SkelGroup>
+ <div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"10px 0 4px"}}>
+ <Skel w={76} h={76} r={38}/>
+ <Skel w={130} h={18} style={{marginTop:12}}/>
+ <Skel w={90} h={11} style={{marginTop:7}}/>
+ <Skel w={150} h={24} r={999} style={{marginTop:10}}/>
+ </div>
+ <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:7,marginTop:16}}>{[0,1,2,3].map(i=><Skel key={i} h={58} r={12} style={{width:"auto"}}/>)}</div>
+ <Skel h={26} r={7} style={{marginTop:26}}/>
+ <div style={{display:"flex",gap:8,marginTop:26}}>{[0,1,2].map(i=><Skel key={i} w={104} h={96} r={16}/>)}</div>
+ </SkelGroup>
+ ) : (
+ <>
+ <div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"10px 0 4px"}}>
+ <div style={{position:"relative",width:76,height:76}}>
+ <div style={{width:76,height:76,borderRadius:"50%",background:`linear-gradient(135deg,${IOS.blue},${IOS.indigo})`,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:27,color:"#fff",border:"1px solid rgba(255,255,255,0.14)"}}>{ini}</div>
+ {isFounder&&<div style={{position:"absolute",inset:-4,borderRadius:"50%",border:"1.5px solid rgba(255,214,10,0.55)",pointerEvents:"none"}}/>}
+ </div>
+ <div style={{fontSize:21,fontWeight:800,letterSpacing:"-0.3px",marginTop:11,display:"flex",alignItems:"center",gap:6}}>{name}{isFounder&&PROF_STAR(14)}{isMe&&<span style={{fontSize:11,fontWeight:800,color:IOS.label3}}>(you)</span>}</div>
+ {joined&&<div style={{fontSize:11.5,color:IOS.label3,fontWeight:600,marginTop:3}}>{"Joined "+joined}</div>}
+ {isFounder&&<div style={{display:"inline-flex",alignItems:"center",gap:6,marginTop:9,background:"linear-gradient(135deg,rgba(255,214,10,0.16),rgba(255,159,10,0.07))",border:"0.5px solid rgba(255,214,10,0.4)",borderRadius:RAD.pill,padding:"5px 13px"}}>{PROF_STAR(12)}<span style={{fontSize:11,fontWeight:800,letterSpacing:"0.5px",color:IOS.yellow,textTransform:"uppercase"}}>{"Founding Member"+(prof.founder_number?(" \u00b7 #"+prof.founder_number):"")}</span></div>}
+ {globalRank&&<div style={{display:"inline-flex",alignItems:"center",gap:6,marginTop:9,background:"rgba(59,111,224,0.13)",border:"0.5px solid rgba(59,111,224,0.35)",borderRadius:RAD.pill,padding:"5px 13px",fontSize:11,fontWeight:800,color:"#7EA4F2"}}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7EA4F2" strokeWidth="2.4" strokeLinecap="round"><path d="M12 20V10M18 20V4M6 20v-4"/></svg>{"#"+globalRank.rank+" of "+globalRank.total+" worldwide"}</div>}
+ </div>
+ {stats&&graded>0&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:7,marginTop:16}}>
+ {[[pts.toLocaleString(),"Points"],[wins+"-"+losses,"Record"],[hit+"%","Hit rate"],[lsPts.toLocaleString(),"Longshot pts"]].map(([v,l])=>(
+ <div key={l} style={{background:"linear-gradient(165deg,#1a1a1f,#141417)",border:EDGE.hair,borderRadius:RAD.md,padding:"10px 4px 9px",textAlign:"center"}}>
+ <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:20,lineHeight:1}}>{v}</div>
+ <div style={{fontSize:9,fontWeight:800,letterSpacing:"0.5px",textTransform:"uppercase",color:IOS.label3,marginTop:5}}>{l}</div>
+ </div>
+ ))}
+ </div>}
+ {form.length>0&&<>
+ {SEC("Last "+form.length+" picks")}
+ <div style={{display:"flex",gap:5}}>
+ {form.map((r,i)=>(
+ <div key={i} style={{flex:1,height:26,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10.5,fontWeight:900,background:r==="W"?"rgba(48,209,88,0.16)":"rgba(255,69,58,0.12)",border:"0.5px solid "+(r==="W"?"rgba(48,209,88,0.4)":"rgba(255,69,58,0.32)"),color:r==="W"?IOS.green:IOS.red}}>{r}</div>
+ ))}
+ </div>
+ </>}
+ {badges.length>0&&<>
+ {SEC("Badges \u00b7 "+badges.length)}
+ <div style={{display:"flex",gap:8,overflowX:"auto",margin:"0 -16px",padding:"0 16px 4px"}}>
+ {badges.map(b=>(
+ <div key={b.id} style={{flexShrink:0,width:104,borderRadius:RAD.lg,padding:"12px 10px 11px",display:"flex",flexDirection:"column",alignItems:"center",textAlign:"center",background:"linear-gradient(165deg,#1a1a1f,#141417)",border:EDGE.hair}}>
+ <div style={{width:38,height:38,borderRadius:"50%",background:b.color+"21",border:"0.5px solid "+b.color+"59",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:8}}>{PROF_BIC[b.icon](b.color)}</div>
+ <div style={{fontSize:11,fontWeight:800,lineHeight:1.25}}>{b.name}</div>
+ <div style={{fontSize:9,fontWeight:700,color:IOS.label3,marginTop:3}}>{b.sub}</div>
+ </div>
+ ))}
+ </div>
+ </>}
+ {h2h&&!isMe&&<>
+ {SEC("Head to head vs you")}
+ <div style={{background:"linear-gradient(135deg,rgba(59,111,224,0.10),#151519)",border:"0.5px solid rgba(59,111,224,0.3)",borderRadius:RAD.lg,padding:"13px 14px"}}>
+ <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+ <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,width:84}}>
+ <div style={{fontSize:10.5,fontWeight:800,color:IOS.label2}}>YOU</div>
+ <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:30,lineHeight:1,color:cw>=twn?"#fff":IOS.label3}}>{cw}</div>
+ </div>
+ <div style={{fontSize:10,fontWeight:800,letterSpacing:"1px",color:IOS.label3,textTransform:"uppercase"}}>Matchups won</div>
+ <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,width:84}}>
+ <div style={{fontSize:10.5,fontWeight:800,color:IOS.label2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:84}}>{String(name).toUpperCase()}</div>
+ <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:30,lineHeight:1,color:twn>=cw?"#fff":IOS.label3}}>{twn}</div>
+ </div>
+ </div>
+ <div style={{textAlign:"center",fontSize:10.5,color:IOS.label3,fontWeight:600,marginTop:8}}>{h2h.total+(Number(h2h.total)===1?" matchup":" matchups")+" head to head"}</div>
+ </div>
+ </>}
+ {shared.length>0&&<>
+ {SEC(isMe?"Leagues":("Leagues with you \u00b7 "+shared.length))}
+ {shared.map(l=>(
+ <div key={l.id} style={{display:"flex",alignItems:"center",gap:11,padding:"10px 12px",borderRadius:RAD.md,marginBottom:6,background:"linear-gradient(165deg,#1a1a1f,#141417)",border:EDGE.hair}}>
+ <div style={{width:34,height:34,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:13,flexShrink:0,background:"rgba(59,111,224,0.14)",border:"0.5px solid rgba(59,111,224,0.35)",color:"#7EA4F2"}}>{String(l.name||"?").slice(0,2).toUpperCase()}</div>
+ <div style={{flex:1,minWidth:0}}>
+ <div style={{fontSize:13,fontWeight:800,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.name}{l.is_champ?<span style={{color:IOS.yellow,fontSize:10,fontWeight:900,letterSpacing:"0.5px",marginLeft:6}}>CHAMP</span>:null}</div>
+ <div style={{fontSize:10.5,color:IOS.label3,fontWeight:600,marginTop:1}}>{(Number(l.wins)||0)+"-"+(Number(l.losses)||0)+" this season"}</div>
+ </div>
+ {l.rank?<div style={{textAlign:"right"}}>
+ <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:17}}>{"#"+l.rank}</div>
+ <div style={{fontSize:9,fontWeight:800,letterSpacing:"0.5px",color:IOS.label3,textTransform:"uppercase",marginTop:1}}>{"of "+l.members}</div>
+ </div>:null}
+ </div>
+ ))}
+ </>}
+ {(!stats||graded===0)&&!loading&&<div style={{textAlign:"center",color:IOS.label3,fontSize:12.5,padding:"22px 0 12px"}}>No graded picks yet.</div>}
+ </>
+ )}
+ </div>
+ </div>
+ );
+}
+
 const WHEEL_ITEMS = ["double","enhance15","insurance","second","enhance3","enhance45"].map(_id=>POWER_UPS.find(p=>p.id===_id)).filter(Boolean);
 
 // ─── SPORT DETECTION (by team name) ───────────────────────────────
@@ -6555,6 +6691,28 @@ function App() {
    setLbLoading(false); return [];
  };
  useEffect(()=>{ if(user) fetchLeaderboard("all"); }, [user]);
+
+ // ── Player profile sheet: who we're looking at + their RPC payload. The ref
+ // guards against a slow fetch for player A landing after the user tapped B
+ // (same stale-closure class of bug as the fetchMyPicks boot flash).
+ const [profileView, setProfileView] = useState(null);
+ const [profileData, setProfileData] = useState(null);
+ const [profileLoading, setProfileLoading] = useState(false);
+ const profileReqRef = useRef(null);
+ const openUserProfile = async (userId, seed) => {
+   if(!userId) return;
+   const id = String(userId);
+   profileReqRef.current = id;
+   setProfileView({ userId:id, seed:seed||null });
+   setProfileData(null); setProfileLoading(true);
+   if(!lbCache["all"]) fetchLeaderboard("all");   // rank chip needs the board
+   try{
+     const { data, error } = await supabase.rpc("get_public_profile", { target: userId });
+     if(profileReqRef.current!==id) return;         // user already tapped someone else
+     if(!error && data && data.profile){ setProfileData(data); }
+   }catch(e){}
+   if(profileReqRef.current===id) setProfileLoading(false);
+ };
  const fetchUserProfile = async (uid) => {
  const {data} = await supabase.from("users").select("id,username,email,is_pro,push_enabled,notif_results,notif_grades,notif_reminder,notif_league,notif_plok,referral_code,referred_by,is_founder,founder_number").eq("id",uid).maybeSingle();
  if(data) {
@@ -9408,7 +9566,7 @@ function App() {
  <div style={{fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:isTied?IOS.blue:isWinning?IOS.green:IOS.red,marginTop:2}}>{isTied?"You're Tied":isWinning?"You're Leading":"You're Trailing"}</div>
  </div>
  <div style={{textAlign:"right"}}>
- <div style={{fontSize:18,fontWeight:800,letterSpacing:-0.5,color:"rgba(255,255,255,0.46)"}}>{oppName}</div>
+ <div onClick={()=>{ if(oppId) openUserProfile(oppId,{username:oppName}); }} style={{fontSize:18,fontWeight:800,letterSpacing:-0.5,color:"rgba(255,255,255,0.46)",cursor:oppId?"pointer":"default"}}>{oppName}</div>
  <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>{oppTotal}pts</div>
  </div>
  </div>
@@ -11204,7 +11362,7 @@ function App() {
       top.length===0 ? <div style={{textAlign:"center",padding:30,color:IOS.label3,fontSize:13,lineHeight:1.6}}>No ranked players yet — graded picks show up here.</div> :
       top.map((r,i)=>{ const rk=i+1; const mc=medalC(rk); const isMe=String(r.user_id)===String(user?.id); const c=PAL[i%PAL.length];
         return (
-        <div key={r.user_id} style={{display:"flex",alignItems:"center",gap:11,padding:"9px 11px",borderRadius:RAD.md,marginBottom:6,background:isMe?"linear-gradient(135deg,rgba(10,132,255,0.13),#161619)":"linear-gradient(165deg,#1a1a1f,#141417)",border:"1px solid "+(isMe?"rgba(10,132,255,0.4)":"rgba(255,255,255,0.07)")}}>
+        <div key={r.user_id} onClick={()=>openUserProfile(r.user_id,{username:r.username,is_founder:r.is_founder===true})} style={{cursor:"pointer",display:"flex",alignItems:"center",gap:11,padding:"9px 11px",borderRadius:RAD.md,marginBottom:6,background:isMe?"linear-gradient(135deg,rgba(10,132,255,0.13),#161619)":"linear-gradient(165deg,#1a1a1f,#141417)",border:"1px solid "+(isMe?"rgba(10,132,255,0.4)":"rgba(255,255,255,0.07)")}}>
           {mc ? <div style={{width:26,height:26,borderRadius:"50%",background:mc,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:14,color:"#000",flexShrink:0}}>{rk}</div>
               : <div style={{width:26,textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:16,color:IOS.label3,flexShrink:0}}>{rk}</div>}
           <div style={{width:38,height:38,borderRadius:"50%",background:"linear-gradient(135deg,"+c+","+c+"99)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:14,color:"#fff",border:"1px solid rgba(255,255,255,0.12)",flexShrink:0}}>{ini(r.username)}</div>
@@ -12876,7 +13034,7 @@ function App() {
  </div>
  <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:accent,marginTop:2}}>{statusTxt}</div>
  </div>
- <div style={{textAlign:"right",minWidth:0,flex:1}}>
+ <div onClick={()=>{ if(oppId) openUserProfile(oppId,{username:oppName}); }} style={{textAlign:"right",minWidth:0,flex:1,cursor:oppId?"pointer":"default"}}>
  <div style={{fontSize:11,fontWeight:800,letterSpacing:"0.04em",textTransform:"uppercase",color:"rgba(255,255,255,0.46)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{oppName}</div>
  <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>{oppTotal} pts</div>
  </div>
@@ -13770,7 +13928,7 @@ function App() {
        <div style={{width:56,fontSize:8,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4,textAlign:"right"}}>Total Pts</div>
      </div>
      {realStandings.map((s,i)=>(
-        <div key={s.userId||i} className={"pk-strow"+(s.isYou?" me":"")} style={{borderBottom:i<realStandings.length-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
+        <div key={s.userId||i} onClick={()=>{ if(s.userId) openUserProfile(s.userId,{username:s.isYou?((userProfile&&userProfile.username)||"You"):(s.name||s.username)}); }} className={"pk-strow"+(s.isYou?" me":"")} style={{cursor:"pointer",borderBottom:i<realStandings.length-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
           <span className="pk-stpos">{i+1}</span>
           <span className="pk-stav" style={{background:s.isYou?IOS.blue:"#23242a",color:s.isYou?"#fff":"rgba(255,255,255,0.62)"}}>{String(s.isYou?"You":(s.name||s.username||"?")).slice(0,2).toUpperCase()}</span>
           <span className="pk-stnm">{s.isYou?"You":(s.name||s.username||"Unknown")}</span>
@@ -15798,7 +15956,7 @@ function App() {
  const cancelLP=()=>{ if(longPressT.current){ clearTimeout(longPressT.current); longPressT.current=null; } };
  return (
  <div key={msg.id} className={`msg-group ${isMe?"me":""}`}>
- {!isMe&&<div className="msg-av" style={{background:acColor(initial)}}>{initial}</div>}
+ {!isMe&&<div className="msg-av" onClick={()=>openUserProfile(msg.user_id,{username:msg.username})} style={{background:acColor(initial),cursor:"pointer"}}>{initial}</div>}
  <div className="msg-col" style={{position:"relative"}}>
  {!isMe&&<div className="msg-sender">{msg.username||"Unknown"}</div>}
  {reactFor===msg.id&&(
@@ -17298,6 +17456,9 @@ function App() {
  <div className="tab-grip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M8 5l7 7-7 7"/></svg></div>
  </div>
  </div>}
+ {profileView && <ProfileSheet view={profileView} data={profileData} loading={profileLoading} myId={user&&user.id}
+   onClose={()=>{ profileReqRef.current=null; setProfileView(null); setProfileData(null); setProfileLoading(false); }}
+   globalRank={(()=>{ const rows=lbCache["all"]; if(!rows||!rows.length||!profileView) return null; const sx=[...rows].sort((a,b)=>(Number(b.points)||0)-(Number(a.points)||0)); const i=sx.findIndex(r=>String(r.user_id)===String(profileView.userId)); return i>=0?{rank:i+1,total:sx.length}:null; })()}/>}
  </div>
  );
 }
