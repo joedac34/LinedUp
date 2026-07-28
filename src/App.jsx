@@ -7544,6 +7544,7 @@ function App() {
 
  const baseStandings = realStandings.length > 0 ? realStandings.map(s=>({
  rank: s.rank,
+ userId: s.userId,
  name: s.isYou ? "You" : s.name,
  record: s.record,
  streak: s.streak,
@@ -7556,6 +7557,7 @@ function App() {
  isYou: s.isYou,
  })) : leagueMembers.length > 0 ? leagueMembers.map((m,i)=>({
  rank: i+1,
+ userId: m.userId,
  name: m.isYou ? "You" : m.name,
  record: "0-0",
  units: "0",
@@ -9731,7 +9733,7 @@ function App() {
  const big=i<3;
  const st=(r.streak&&r.streak.count>=1)?`${r.streak.type}${r.streak.count}`:"";
  return (
- <div key={r.rank} style={{display:"flex",alignItems:"center",gap:11,padding:"0 13px",height:big?60:52,marginBottom:8,borderRadius:RAD.lg,
+ <div key={r.rank} onClick={()=>{ if(r.userId) openUserProfile(r.userId,{username:r.isYou?((userProfile&&userProfile.username)||"You"):(r.name)}); }} style={{cursor:"pointer",display:"flex",alignItems:"center",gap:11,padding:"0 13px",height:big?60:52,marginBottom:8,borderRadius:RAD.lg,
  background:"#131318",
  border:`0.5px solid ${isMe?"rgba(10,132,255,0.30)":"rgba(255,255,255,0.07)"}`}}>
  <div style={{fontSize:big?18:15,fontWeight:800,width:24,textAlign:"center",flexShrink:0,color:isMe?IOS.blue:top?"#fff":"rgba(255,255,255,0.46)"}}>{i+1}</div>
@@ -12688,7 +12690,7 @@ function App() {
    <div onClick={()=>setFieldPlayer(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",backdropFilter:"blur(3px)",display:"flex",alignItems:"flex-end",zIndex:200}}>
      <div className="pk-sheet" onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:440,margin:"0 auto",background:"#161618",borderTop:`0.5px solid ${IOS.sep}`,padding:"8px 16px 30px",maxHeight:"80%",overflow:"auto"}}>
        <div style={{width:40,height:4,borderRadius:3,background:"rgba(255,255,255,0.18)",margin:"6px auto 14px"}}/>
-       <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}>
+       <div onClick={()=>{ if(fieldPlayer&&fieldPlayer.userId){ const fp=fieldPlayer; setFieldPlayer(null); openUserProfile(fp.userId,{username:fp.isYou?((userProfile&&userProfile.username)||"You"):fp.name}); } }} style={{display:"flex",alignItems:"center",gap:12,marginBottom:4,cursor:"pointer"}}>
          <div style={{width:46,height:46,borderRadius:RAD.md,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:18,color:"#0c0c0e",background:`linear-gradient(150deg,${fieldPlayer.isYou?IOS.blue:IOS.indigo},${fieldPlayer.isYou?IOS.blue:IOS.indigo}bb)`}}>{fieldPlayer.isYou?"You":(fieldPlayer.name||"?").slice(0,2).toUpperCase()}</div>
          <div style={{flex:1,minWidth:0}}>
            <div style={{fontSize:19,fontWeight:900,color:fieldPlayer.isYou?IOS.blue:"#fff"}}>{fieldPlayer.isYou?"You":fieldPlayer.name}</div>
@@ -13884,25 +13886,26 @@ function App() {
      {realStandings.length>0 && <button onClick={()=>openLeagueRecap()} disabled={leagueRecapLoading} style={{display:"flex",alignItems:"center",gap:5,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.3)",color:IOS.blue,fontSize:10,fontWeight:700,padding:"4px 9px",borderRadius:RAD.sm,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg>{leagueRecapLoading?"…":"Week recap"}</button>}
    </div>
    <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.md,overflow:"hidden",marginBottom:10}}>
-     <div style={{display:"flex",padding:"5px 12px",borderBottom:`0.5px solid ${IOS.sep}`}}>
-       <div style={{width:22}}/>
-       <div style={{flex:1,fontSize:8,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4}}/>
-       <div style={{width:34,fontSize:8,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4,textAlign:"right"}}>W/L</div>
-       <div style={{width:52,fontSize:8,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4,textAlign:"right"}}>PTS</div>
+     {/* Same rows as the Standings tab — the preview is a slice of it, not a lookalike. */}
+     <div style={{display:"flex",padding:"6px 12px",borderBottom:`0.5px solid ${IOS.sep}`}}>
+       <div style={{width:24}}/>
+       <div style={{flex:1,fontSize:8,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4}}>Player</div>
+       <div style={{width:36,fontSize:8,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4,textAlign:"right"}}>W/L</div>
+       <div style={{width:56,fontSize:8,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4,textAlign:"right"}}>Total Pts</div>
      </div>
      {realStandings.slice(0,4).map((s,i)=>(
-       <div key={s.userId||i} style={{display:"flex",alignItems:"center",padding:"8px 12px",borderBottom:i<Math.min(realStandings.length,4)-1?`0.5px solid rgba(255,255,255,0.04)`:"none",background:s.isYou?"rgba(10,132,255,0.06)":"transparent"}}>
-         <div style={{width:22,fontSize:12,fontWeight:700,color:i===0?IOS.blue:IOS.label3}}>{i+1}</div>
-         <div style={{flex:1}}>
-           <div style={{fontSize:12,fontWeight:700,color:s.isYou?IOS.blue:"#ccc"}}>{s.isYou?"You":(s.name||s.username||"Unknown")}</div>
-           <div style={{fontSize:9,color:IOS.label3,marginTop:1}}>{s.wpct||"0%"} win rate</div>
-         </div>
-         <div style={{width:34,fontSize:11,color:IOS.label3,textAlign:"right"}}>{s.record}</div>
-         <div style={{width:52,fontSize:12,fontWeight:800,color:parseFloat(s.points)>0?IOS.green:"#555",textAlign:"right"}}>{parseFloat(s.points||0).toFixed(1)}</div>
-       </div>
+        <div key={s.userId||i} onClick={()=>{ if(s.userId) openUserProfile(s.userId,{username:s.isYou?((userProfile&&userProfile.username)||"You"):(s.name||s.username)}); }} className={"pk-strow"+(s.isYou?" me":"")} style={{cursor:"pointer",borderBottom:i<Math.min(realStandings.length,4)-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
+          <span className="pk-stpos">{i+1}</span>
+          <span className="pk-stav" style={{background:s.isYou?IOS.blue:"#23242a",color:s.isYou?"#fff":"rgba(255,255,255,0.62)"}}>{String(s.isYou?"You":(s.name||s.username||"?")).slice(0,2).toUpperCase()}</span>
+          <span className="pk-stnm">{s.isYou?"You":(s.name||s.username||"Unknown")}</span>
+          {/* Bar scales against the FULL table so the preview matches the standings page. */}
+          <span className="pk-stbar"><i style={{width:(()=>{ const m=Math.max.apply(null,[0,...realStandings.map(x=>parseFloat(x.points)||0)]); return (m>0?Math.max(4,Math.round((parseFloat(s.points)||0)/m*100)):0)+"%"; })()}}/></span>
+          <span className="pk-stwl">{s.record}</span>
+          <span className="pk-stpts" style={{color:s.isYou?"#fff":"rgba(255,255,255,0.78)"}}>{parseFloat(s.points||0).toFixed(1)}</span>
+        </div>
      ))}
      {realStandings.length>4&&(
-       <div onClick={()=>setLeagueSubTab("standings")} style={{padding:"8px 12px",textAlign:"center",borderTop:`0.5px solid ${IOS.sep}`}}>
+       <div onClick={()=>setLeagueSubTab("standings")} style={{padding:"8px 12px",textAlign:"center",borderTop:`0.5px solid ${IOS.sep}`,cursor:"pointer"}}>
          <div style={{fontSize:10,color:IOS.blue,fontWeight:600}}>See full standings</div>
        </div>
      )}
@@ -13986,8 +13989,8 @@ function App() {
           const lp=(cl.locked/_maxCeil)*100, mp=(cl.live/_maxCeil)*100;
           return (
            <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 13px",opacity:lead?1:(anyLead?0.7:1)}}>
-             <div style={{width:28,height:28,borderRadius:RAD.sm,flexShrink:0,background:tint+"33",color:tint,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900}}>{(nm(id)||"?").slice(0,2).toUpperCase()}</div>
-             <div style={{width:96,flexShrink:0,fontSize:13.5,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",color:you?IOS.blue:"#fff"}}>{nm(id)}</div>
+             <div onClick={(e)=>{ if(!id) return; e.stopPropagation(); openUserProfile(id,{username:you?((userProfile&&userProfile.username)||"You"):nm(id)}); }} style={{width:28,height:28,borderRadius:RAD.sm,flexShrink:0,background:tint+"33",color:tint,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900,cursor:id?"pointer":"default"}}>{(nm(id)||"?").slice(0,2).toUpperCase()}</div>
+             <div onClick={(e)=>{ if(!id) return; e.stopPropagation(); openUserProfile(id,{username:you?((userProfile&&userProfile.username)||"You"):nm(id)}); }} style={{width:96,flexShrink:0,fontSize:13.5,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",color:you?IOS.blue:"#fff",cursor:id?"pointer":"default"}}>{nm(id)}</div>
              <div style={{flex:1,height:8,borderRadius:4,background:"rgba(0,0,0,0.4)",position:"relative",overflow:"hidden",boxShadow:"inset 0 1px 2px rgba(0,0,0,0.55)"}}>
                <div style={{position:"absolute",left:0,top:0,bottom:0,borderRadius:4,width:lp+"%",background:`linear-gradient(180deg,${tint},${tint}cc)`,boxShadow:`0 0 8px ${tint}55`}}/>
                {cl.live>0 && <div style={{position:"absolute",top:0,bottom:0,left:lp+"%",width:mp+"%",background:`repeating-linear-gradient(115deg,${tint}3a 0 4px,transparent 4px 8px)`}}/>}
