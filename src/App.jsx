@@ -2136,6 +2136,10 @@ function MatchBody({ d, IOS, liveGames=[], onOpenGamecast }){
   const cA = ceilingOf(d.a.picks);
   const cB = ceilingOf(d.b.picks);
   const youAre = d.a.you ? "a" : (d.b.you ? "b" : null);
+  // Component scope, not inside the header IIFE — the ceiling bars below read these too,
+  // and declaring them in the IIFE threw a ReferenceError that the crash guard caught.
+  const _sA = youAre ? (youAre==="a"?SIDE_YOU:SIDE_OPP) : SIDE_A;
+  const _sB = youAre ? (youAre==="b"?SIDE_YOU:SIDE_OPP) : SIDE_B;
   const iAmA = youAre !== "b";
   const me = iAmA ? cA : cB;
   const them = iAmA ? cB : cA;
@@ -2243,8 +2247,6 @@ function MatchBody({ d, IOS, liveGames=[], onOpenGamecast }){
     <>
           {(()=>{
           const ini = (nm)=> (nm||"?").slice(0,2).toUpperCase();
-          const _sA = youAre ? (youAre==="a"?SIDE_YOU:SIDE_OPP) : SIDE_A;
-          const _sB = youAre ? (youAre==="b"?SIDE_YOU:SIDE_OPP) : SIDE_B;
           const aTint = aWin||!reallyFinal ? _sA : "rgba(255,255,255,0.3)";
           const bTint = bWin||!reallyFinal ? _sB : "rgba(255,255,255,0.3)";
           return (
@@ -4247,6 +4249,10 @@ function App() {
  const champSeenRef = useRef("");
  const [weekPicks, setWeekPicks] = useState([]);
  const [liveSchedule, setLiveSchedule] = useState([]);
+ // liveSchedule is empty both when there is no schedule AND while one is loading. Without
+ // this the Schedule tab flashed its empty state on every visit — and that empty state
+ // carries a button that deletes the season.
+ const [scheduleLoaded, setScheduleLoaded] = useState(false);
  const [realStandings, setRealStandings] = useState([]);
  const [allMyStats, setAllMyStats] = useState(null);
  const [lbCache, setLbCache] = useState({});
@@ -5803,7 +5809,7 @@ function App() {
  .eq("league_id", leagueId)
  .or(`user1_id.eq.${userId},user2_id.eq.${userId}`)
  .order("week", {ascending: true});
- if(!data || !data.length) { setLiveSchedule([]); return; }
+ if(!data || !data.length) { setLiveSchedule([]); setScheduleLoaded(true); return; }
  const userIds = [...new Set([...data.map(m=>m.user1_id), ...data.map(m=>m.user2_id)])];
  const {data:users} = await supabase.from("public_profiles").select("id,username").in("id",userIds);
  const getName = uid => {
@@ -5825,7 +5831,7 @@ function App() {
  myPts, oppPts, result, matchupId: m.id,
  };
  });
- setLiveSchedule(schedule);
+ setLiveSchedule(schedule); setScheduleLoaded(true);
  };
 
  const fetchPastMatchupPicks = async (week, myId, oppId) => {
@@ -12804,7 +12810,9 @@ function App() {
 
      {/* Primary action keeps you inside the league you are still a member of. Starting or
          joining another one is secondary — the exit should not be the loudest button. */}
-     <div className="pl-reveal" onClick={()=>{ setMatchupView("league"); setMWeek(mWeek||(activeLeague.current_week||1)); }}
+     {/* Same path the Home "playoffs are live" link uses — setMatchupView("league") only
+         opened the league matchups list, which is not the bracket. */}
+     <div className="pl-reveal" onClick={()=>{ setLeagueTab("playoff"); setScreen("league"); }}
        style={{marginTop:18,borderRadius:RAD.lg,padding:15,textAlign:"center",fontSize:15.5,fontWeight:800,cursor:"pointer",
        background:"linear-gradient(120deg,#0A84FF,#5E5CE6)",boxShadow:"0 10px 26px -10px rgba(10,132,255,0.8)"}}>{"Watch the bracket \u2192"}</div>
      <div className="pl-reveal" onClick={()=>setScreen("leagues")} style={{marginTop:9,borderRadius:RAD.lg,padding:13,textAlign:"center",fontSize:14,fontWeight:800,cursor:"pointer",color:"rgba(255,255,255,0.72)",background:"rgba(255,255,255,0.05)",boxShadow:"inset 0 0 0 0.5px rgba(255,255,255,0.1)"}}>Start a new league</div>
@@ -13863,16 +13871,27 @@ function App() {
  {lg && (leagueSubTab==="schedule"||leagueSubTab==="bracket") && (
  <div style={{padding:"12px 16px 20px"}}>
    <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:10}}>Season Schedule</div>
-   {liveSchedule.length===0 ? (
+   {(!scheduleLoaded && liveSchedule.length===0) ? (
+     <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.md,padding:"20px",textAlign:"center",fontSize:12.5,color:IOS.label3}}>Loading schedule…</div>
+   ) : liveSchedule.length===0 ? (
      <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.md,padding:"20px",textAlign:"center"}}>
        <div style={{fontSize:13,color:"#fff",fontWeight:700,marginBottom:4}}>No schedule yet</div>
-       {(()=>{ const _cm=!!(activeLeague&&activeLeague.isCommissioner)&&((activeLeague&&activeLeague.league_type)||"h2h")==="h2h"&&leagueMembers.length>=2; return (
+       {(()=>{
+       // generateSchedule() DELETES every matchup in the league. It must be unreachable
+       // once a season has started — otherwise an in-flight or failed fetch puts a
+       // season-wiping button in front of the commissioner.
+       const _started = (allMatchups||[]).length>0 || Number((activeLeague&&activeLeague.current_week)||1)>1;
+       const _cm=!_started && !!(activeLeague&&activeLeague.isCommissioner)&&((activeLeague&&activeLeague.league_type)||"h2h")==="h2h"&&leagueMembers.length>=2; return (
        <>
        <div style={{fontSize:11,color:IOS.label3,marginBottom:_cm?12:0}}>{_cm?"Generate the regular-season matchups now — playoff weeks are reserved automatically.":"Fill up the league to generate the schedule"}</div>
        {_cm && (
        <button onClick={async()=>{
          const memberIds=leagueMembers.map(m=>m.userId).filter(Boolean);
          if(memberIds.length<2){ alert("Need at least 2 members to generate a schedule."); return; }
+         if((allMatchups||[]).length>0 || Number((activeLeague&&activeLeague.current_week)||1)>1){
+           alert("This league already has a schedule. Generating a new one would delete every existing matchup and result.");
+           return;
+         }
          if(!window.confirm("Generate the schedule now for "+memberIds.length+" players? This pairs everyone into weekly matchups.")) return;
          await generateSchedule(activeLeague.id, memberIds, regularSeasonWeeksFor(activeLeague, memberIds.length));
          await fetchSchedule(activeLeague.id, user.id);
