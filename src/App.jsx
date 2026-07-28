@@ -667,6 +667,91 @@ try{ if(typeof document!=="undefined" && !document.getElementById("pk-shim-kf"))
 // Batched read-then-write measure, rAF'd, re-run on resize via ResizeObserver.
 // If the measurement never lands, --gw defaults to 100% and each bar simply carries
 // its own wave — degraded, never broken.
+// ── Sheet drag to dismiss ────────────────────────────────────
+// Drag a .pk-sheet down to close it. Past 28% of its height, or on a fast flick, it
+// leaves; otherwise it springs back.
+//
+// Closing works by dispatching a bubbling click on the sheet's parent. Every sheet
+// panel calls stopPropagation, which means an ancestor already closes on click — so
+// this reuses each sheet's own dismiss logic and needs no per-sheet wiring.
+//
+// Sheets scroll internally, so the drag only engages when the scrollable thing under
+// the finger is already at the top. Otherwise this would hijack every downward scroll.
+try{ if(typeof document!=="undefined" && typeof window!=="undefined" && !window.__pkSheetDrag){
+  window.__pkSheetDrag = 1;
+  const DISMISS = 0.28, FLICK = 0.55;   // fraction of height / px per ms
+  let el=null, sy=0, sx=0, dy=0, h=0, t0=0, live=false, decided=false;
+  const unbind = ()=>{
+    try{ document.removeEventListener("touchmove", onMove); }catch(e){}
+    try{ document.removeEventListener("touchend", onEnd); }catch(e){}
+    try{ document.removeEventListener("touchcancel", onEnd); }catch(e){}
+  };
+  const release = ()=>{ live=false; decided=false; dy=0; window.__pkGesture=null; unbind(); };
+  const snapBack = ()=>{
+    if(el){ const n=el; n.classList.add("pk-snap"); n.style.transform="";
+            setTimeout(()=>{ try{ n.classList.remove("pk-snap"); }catch(e){} }, 280); }
+    el=null; release();
+  };
+  function onMove(e){
+    if(!live || !el) return;
+    const t = e.touches && e.touches[0]; if(!t) return;
+    const ddy = t.clientY - sy, ddx = t.clientX - sx;
+    if(!decided){
+      if(Math.abs(ddy) < 10 && Math.abs(ddx) < 10) return;
+      if(Math.abs(ddx) > Math.abs(ddy) || ddy < 0){ snapBack(); return; }
+      decided = true;
+    }
+    if(ddy <= 0){ el.style.transform=""; dy=0; return; }
+    if(e.cancelable) e.preventDefault();
+    dy = ddy;
+    el.style.transform = "translateY(" + dy + "px)";
+  }
+  function onEnd(){
+    if(!live || !el){ release(); return; }
+    // Velocity needs a real elapsed window to mean anything; under 20ms it is noise,
+    // so distance alone decides.
+    const ms = Date.now() - t0;
+    const vel = ms >= 20 ? (dy / ms) : 0;
+    // A flick can dismiss on less distance, but it still needs SOME distance — velocity
+    // alone would let a quick 40px nudge close the sheet.
+    if(dy > h * DISMISS || (vel > FLICK && dy > h * 0.12)){
+      const node = el, parent = node.parentElement;
+      node.classList.add("pk-snap");
+      node.style.transform = "translateY(" + (h + 40) + "px)";
+      haptic("light");
+      el = null; release();
+      setTimeout(()=>{
+        try{ if(parent) parent.dispatchEvent(new MouseEvent("click", {bubbles:true, cancelable:true})); }catch(e){}
+        // If nothing closed it, put it back rather than leaving a sheet off-screen.
+        setTimeout(()=>{ try{ if(node.isConnected){ node.style.transform=""; node.classList.remove("pk-snap"); } }catch(e){} }, 60);
+      }, 230);
+    } else { snapBack(); }
+  }
+  document.addEventListener("touchstart", function(e){
+    if(live || window.__pkGesture) return;
+    let sheet = null;
+    try{ sheet = e.target && e.target.closest ? e.target.closest(".pk-sheet, .sheet, .pu-modal-sheet") : null; }catch(err){}
+    if(!sheet) return;
+    // Walk up from the touch to the sheet; if any scroller in between is scrolled,
+    // this is a scroll gesture, not a dismiss.
+    try{
+      let n = e.target;
+      while(n && n !== sheet.parentElement){
+        if(n.scrollHeight > n.clientHeight + 1 && (n.scrollTop || 0) > 0) return;
+        n = n.parentElement;
+      }
+      if((sheet.scrollTop || 0) > 0) return;
+    }catch(err){}
+    const t = e.touches && e.touches[0]; if(!t) return;
+    el = sheet; h = sheet.getBoundingClientRect().height || 400;
+    sy = t.clientY; sx = t.clientX; dy = 0; t0 = Date.now(); live = true; decided = false;
+    window.__pkGesture = "sheet";
+    document.addEventListener("touchmove", onMove, {passive:false});
+    document.addEventListener("touchend", onEnd);
+    document.addEventListener("touchcancel", onEnd);
+  }, {passive:true});
+} }catch(e){}
+
 // ── Pull to refresh ───────────────────────────────────────
 // Threshold 72px (approved). Fires pk:refresh; React does the work and answers with
 // pk:refresh-done. A 10s cooldown protects Odds API quota — each pull costs 3 units per
@@ -3803,7 +3888,7 @@ function GamecastSheet({ game, pick, onClose }){
 
   return (
     <div onClick={onClose} style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.62)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:9200}}>
-      <div onClick={(e)=>e.stopPropagation()} style={{width:"100%",maxWidth:480,background:"#131315",borderRadius:"22px 22px 0 0",maxHeight:"90%",overflowY:"auto",WebkitOverflowScrolling:"touch",paddingBottom:"calc(20px + var(--sa-bot))"}}>
+      <div className="pk-sheet" onClick={(e)=>e.stopPropagation()} style={{width:"100%",maxWidth:480,background:"#131315",maxHeight:"90%",overflowY:"auto",WebkitOverflowScrolling:"touch",paddingBottom:"calc(20px + var(--sa-bot))"}}>
         {/* ── scoreboard: crests + team-color hero, per the mockup ── */}
         {(()=>{
           const aLogo = teamLogo(game.sport||"mlb", game.away.name);
@@ -3818,7 +3903,7 @@ function GamecastSheet({ game, pick, onClose }){
             </div>
           );
           return (
-          <div style={{position:"relative",overflow:"hidden",padding:"0 18px 15px",borderRadius:"22px 22px 0 0"}}>
+          <div style={{position:"relative",overflow:"hidden",padding:"0 18px 15px",borderRadius:"26px 26px 0 0"}}>
             <div style={{position:"absolute",inset:0,background:`linear-gradient(105deg,${aCol}38 0%,${aCol}00 40%,${hCol}00 60%,${hCol}33 100%)`,pointerEvents:"none"}}/>
             {/* handle + status live INSIDE the tinted band so the hero reaches the sheet top */}
             <div style={{position:"relative",width:38,height:4,borderRadius:2,background:"rgba(255,255,255,0.28)",margin:"10px auto 8px"}}/>
@@ -7546,6 +7631,16 @@ function App() {
  .pk-roll-c{display:block;transition:transform .42s cubic-bezier(0.32,0.9,0.28,1);}
  .pk-roll-c > span{display:block;}
  @media (prefers-reduced-motion: reduce){ .pk-roll-c{transition:none;} }
+ /* Bottom sheets float instead of being welded to the bezel. Radius, inset and shadow
+    come from here so each sheet keeps its own background colour — this is a geometry
+    change, not a repaint. Works for flex-end children and for absolutely positioned
+    sheets alike, because the margins inset within left:0/right:0 either way. */
+ .pk-sheet{border-radius:26px;margin-left:8px;margin-right:8px;
+   margin-bottom:calc(8px + var(--sa-bot));
+   border:0.5px solid rgba(255,255,255,0.12);
+   box-shadow:0 24px 60px -16px rgba(0,0,0,0.88), inset 0 1px 0 rgba(255,255,255,0.08);}
+ .pk-sheet.pk-snap{transition:transform .26s cubic-bezier(0.32,0.72,0,1);}
+ @media (prefers-reduced-motion: reduce){ .pk-sheet.pk-snap{transition:none;} }
  .pk-hdr{transform-origin:left top;}
  @keyframes soGrow{from{height:0}to{height:var(--h);}}
  .so-bar{height:var(--h);animation:soGrow .62s cubic-bezier(0.34,1.16,0.42,1) both;}
@@ -7809,7 +7904,7 @@ function App() {
 
  /* Sheet / Modal */
  .sheet-bg{position:absolute;inset:0;background:rgba(0,0,0,0.5);z-index:50;display:flex;flex-direction:column;justify-content:flex-end;backdrop-filter:blur(8px);}
- .sheet{background:#1C1C1E;border-radius:20px 20px 0 0;max-height:72%;overflow-y:auto;}
+ .sheet{background:#1C1C1E;border-radius:26px;max-height:72%;overflow-y:auto;margin:0 8px calc(8px + var(--sa-bot));border:0.5px solid rgba(255,255,255,0.12);box-shadow:0 24px 60px -16px rgba(0,0,0,0.88), inset 0 1px 0 rgba(255,255,255,0.08);}
  .sheet-handle{width:36px;height:5px;border-radius:3px;background:rgba(255,255,255,0.2);margin:10px auto 0;}
  .sheet-hdr{padding:16px 20px 12px;display:flex;align-items:center;justify-content:space-between;border-bottom:0.5px solid ${IOS.sep};position:sticky;top:0;background:#1C1C1E;z-index:1;}
  .sheet-hdr-title{font-size:17px;font-weight:600;letter-spacing:-0.3px;}
@@ -7967,7 +8062,7 @@ function App() {
 
  /* Power-up modal */
  .pu-modal-bg{position:absolute;inset:0;background:rgba(0,0,0,0.6);z-index:80;display:flex;flex-direction:column;justify-content:flex-end;backdrop-filter:blur(6px);}
- .pu-modal-sheet{background:#1C1C1E;border-radius:20px 20px 0 0;padding:0 0 32px;}
+ .pu-modal-sheet{background:#1C1C1E;border-radius:26px;padding:0 0 32px;margin:0 8px calc(8px + var(--sa-bot));border:0.5px solid rgba(255,255,255,0.12);box-shadow:0 24px 60px -16px rgba(0,0,0,0.88), inset 0 1px 0 rgba(255,255,255,0.08);}
  .pu-modal-handle{width:36px;height:5px;border-radius:3px;background:rgba(255,255,255,0.2);margin:10px auto 0;}
  .pu-modal-hdr{padding:16px 20px 12px;border-bottom:0.5px solid rgba(255,255,255,0.08);}
  .pu-modal-title{font-size:17px;font-weight:700;letter-spacing:-0.3px;margin-bottom:3px;}
@@ -12393,7 +12488,7 @@ function App() {
    <div style={{height:24}}/>
    {fieldPlayer && (
    <div onClick={()=>setFieldPlayer(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",backdropFilter:"blur(3px)",display:"flex",alignItems:"flex-end",zIndex:200}}>
-     <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:440,margin:"0 auto",background:"#161618",borderRadius:"22px 22px 0 0",borderTop:`0.5px solid ${IOS.sep}`,padding:"8px 16px 30px",maxHeight:"80%",overflow:"auto"}}>
+     <div className="pk-sheet" onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:440,margin:"0 auto",background:"#161618",borderTop:`0.5px solid ${IOS.sep}`,padding:"8px 16px 30px",maxHeight:"80%",overflow:"auto"}}>
        <div style={{width:40,height:4,borderRadius:3,background:"rgba(255,255,255,0.18)",margin:"6px auto 14px"}}/>
        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}>
          <div style={{width:46,height:46,borderRadius:RAD.md,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:18,color:"#0c0c0e",background:`linear-gradient(150deg,${fieldPlayer.isYou?IOS.blue:IOS.indigo},${fieldPlayer.isYou?IOS.blue:IOS.indigo}bb)`}}>{fieldPlayer.isYou?"You":(fieldPlayer.name||"?").slice(0,2).toUpperCase()}</div>
@@ -12913,7 +13008,7 @@ function App() {
  <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.7)",zIndex:50,display:"flex",flexDirection:"column",justifyContent:"flex-end",backdropFilter:"blur(8px)"}}
  onClick={()=>{if(!newLeagueCreated){setShowNewLeague(false);setNewLeagueSport(null);setNewLeagueSports([]);setNewLeagueName("");setNewLeagueSize(8);setNewLeagueType(null);setNewLeagueStep(0);setNewLeagueWeeks(18);
  setNewLeagueSlots(DEFAULT_SLOTS); setSlotSheetIdx(null);setNewLeaguePrivacy('private');setNewLeaguePlayoffs(true);setNewLeaguePlayoffSize(4);setNewLeagueStartMode('auto');}}}>
- <div style={{background:IOS.bg2,borderRadius:"20px 20px 0 0",padding:"0 0 40px",maxHeight:"90vh",overflowY:"auto",WebkitOverflowScrolling:"touch",overscrollBehavior:"contain"}} onClick={e=>e.stopPropagation()}>
+ <div className="pk-sheet" style={{background:IOS.bg2,padding:"0 0 40px",maxHeight:"90vh",overflowY:"auto",WebkitOverflowScrolling:"touch",overscrollBehavior:"contain"}} onClick={e=>e.stopPropagation()}>
  <div style={{position:"sticky",top:0,zIndex:5,background:IOS.bg2,paddingTop:1}}><div style={{width:36,height:5,borderRadius:3,background:"rgba(255,255,255,0.2)",margin:"10px auto 8px"}}/></div>
 
  {/* Success screen — league created */}
@@ -15677,7 +15772,7 @@ function App() {
  </div>
  {gifOpen&&(
  <div onClick={()=>setGifOpen(false)} style={{position:"fixed",inset:0,zIndex:40,background:"rgba(0,0,0,0.45)"}}>
- <div onClick={(e)=>e.stopPropagation()} style={{position:"absolute",left:0,right:0,bottom:0,background:"#131318",borderRadius:"20px 20px 0 0",borderTop:"0.5px solid rgba(255,255,255,0.12)",padding:"10px 14px calc(var(--sa-bot) + 16px)",maxHeight:"62vh",display:"flex",flexDirection:"column",boxShadow:"0 -14px 40px rgba(0,0,0,0.55)"}}>
+ <div className="pk-sheet" onClick={(e)=>e.stopPropagation()} style={{position:"absolute",left:0,right:0,bottom:0,background:"#131318",borderTop:"0.5px solid rgba(255,255,255,0.12)",padding:"10px 14px calc(var(--sa-bot) + 16px)",maxHeight:"62vh",display:"flex",flexDirection:"column",boxShadow:"0 -14px 40px rgba(0,0,0,0.55)"}}>
  <div style={{width:38,height:4,borderRadius:2,background:"rgba(255,255,255,0.22)",margin:"0 auto 12px"}}/>
  <input autoFocus value={gifQ} onChange={e=>onGifQ(e.target.value)} placeholder="Search KLIPY" style={{height:38,borderRadius:RAD.md,background:"rgba(255,255,255,0.06)",border:EDGE.hair,padding:"0 14px",fontSize:13.5,color:"#fff",outline:"none",fontFamily:"Barlow,sans-serif",marginBottom:12}}/>
  <div style={{flex:1,overflowY:"auto"}}>
@@ -16094,7 +16189,7 @@ function App() {
  {gameSheet && (
  <div style={{position:"fixed",inset:0,zIndex:8000,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>setGameSheet(null)}>
  <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.6)",backdropFilter:"blur(4px)"}}/>
- <div onClick={e=>e.stopPropagation()} style={{position:"relative",background:"#1C1C1E",borderRadius:"24px 24px 0 0",maxHeight:"85vh",overflowY:"auto",paddingBottom:40}}>
+ <div className="pk-sheet" onClick={e=>e.stopPropagation()} style={{position:"relative",background:"#1C1C1E",maxHeight:"85vh",overflowY:"auto",paddingBottom:40}}>
  {/* Close — always visible, clears the notch */}
  <div onClick={()=>setGameSheet(null)} style={{position:"absolute",top:12,right:14,zIndex:20,width:32,height:32,borderRadius:"50%",background:"rgba(255,255,255,0.14)",border:EDGE.hair3,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -16371,7 +16466,7 @@ function App() {
  {/* ══ SOLO SPORT PICKER ══ */}
  {showSoloSportPicker && (
  <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",zIndex:9999,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>setShowSoloSportPicker(false)}>
-   <div style={{background:"#111",borderRadius:"20px 20px 0 0",padding:"0 0 40px",border:"0.5px solid #1E1E1E"}} onClick={e=>e.stopPropagation()}>
+   <div className="pk-sheet" style={{background:"#111",padding:"0 0 40px",border:"0.5px solid #1E1E1E"}} onClick={e=>e.stopPropagation()}>
      <div style={{width:36,height:4,background:"#2A2A2A",borderRadius:2,margin:"12px auto 16px"}}/>
      <div style={{padding:"0 20px 20px"}}>
        <div style={{fontSize:22,fontWeight:800,letterSpacing:-0.5,color:"#fff",marginBottom:4}}>Pick a Sport</div>
@@ -16533,7 +16628,7 @@ function App() {
  {/* ══ BROWSE PUBLIC LEAGUES SHEET ══ */}
  {showBrowse&&(
  <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:9998,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>setShowBrowse(false)}>
-   <div style={{background:"#111",borderRadius:"20px 20px 0 0",maxHeight:"85vh",display:"flex",flexDirection:"column",border:"0.5px solid #1E1E1E"}} onClick={e=>e.stopPropagation()}>
+   <div className="pk-sheet" style={{background:"#111",maxHeight:"85vh",display:"flex",flexDirection:"column",border:"0.5px solid #1E1E1E"}} onClick={e=>e.stopPropagation()}>
      <div style={{width:36,height:4,background:"#2A2A2A",borderRadius:2,margin:"12px auto 0"}}/>
 
      {/* Header */}
@@ -16652,7 +16747,7 @@ function App() {
    const _isDev = (()=>{ try{ return localStorage.getItem("picklock_dev")==="1"; }catch(e){ return false; } })();
    return (
      <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:9999,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>setShowPaywall(null)}>
-       <div style={{background:"#111",borderRadius:"20px 20px 0 0",padding:"0 0 40px",border:"0.5px solid #1E1E1E"}} onClick={e=>e.stopPropagation()}>
+       <div className="pk-sheet" style={{background:"#111",padding:"0 0 40px",border:"0.5px solid #1E1E1E"}} onClick={e=>e.stopPropagation()}>
          <div style={{width:36,height:4,background:"#2A2A2A",borderRadius:2,margin:"12px auto 20px"}}/>
          <div style={{padding:"0 20px"}}>
            <div style={{width:44,height:44,borderRadius:RAD.md,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.25)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:12}}>
@@ -16692,7 +16787,7 @@ function App() {
  {/* ══ POST LEAGUE UPSELL ══ */}
  {!IS_NATIVE && showLeaguePaywall && (
    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:9999,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>setShowLeaguePaywall(null)}>
-     <div style={{background:"#0d0d12",borderRadius:"20px 20px 0 0",padding:"0 18px calc(var(--sa-bot) + 24px)",border:"0.5px solid #1E1E1E"}} onClick={e=>e.stopPropagation()}>
+     <div className="pk-sheet" style={{background:"#0d0d12",padding:"0 18px calc(var(--sa-bot) + 24px)",border:"0.5px solid #1E1E1E"}} onClick={e=>e.stopPropagation()}>
        <div style={{width:36,height:4,background:"#2A2A2A",borderRadius:2,margin:"12px auto 16px"}}/>
        <div style={{fontSize:21,fontWeight:800,textAlign:"center",letterSpacing:-0.4,color:"#fff"}}>Unlock your league</div>
        <div style={{fontSize:12.5,color:IOS.label3,textAlign:"center",margin:"3px 0 16px"}}>Your custom league is ready. Choose how to unlock it:</div>
@@ -16712,7 +16807,7 @@ function App() {
  )}
  {!IS_NATIVE && showPostLeagueUpsell && (
    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:9999,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>setShowPostLeagueUpsell(false)}>
-     <div style={{background:"#111",borderRadius:"20px 20px 0 0",padding:"0 0 40px",border:"0.5px solid #1E1E1E"}} onClick={e=>e.stopPropagation()}>
+     <div className="pk-sheet" style={{background:"#111",padding:"0 0 40px",border:"0.5px solid #1E1E1E"}} onClick={e=>e.stopPropagation()}>
        <div style={{width:36,height:4,background:"#2A2A2A",borderRadius:2,margin:"12px auto 20px"}}/>
        <div style={{padding:"0 20px"}}>
          <div style={{width:44,height:44,borderRadius:RAD.md,background:"rgba(48,209,88,0.12)",border:"0.5px solid rgba(48,209,88,0.25)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:12}}>
