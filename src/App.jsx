@@ -8065,7 +8065,7 @@ function App() {
  .tab-bar.small{cursor:pointer;}
  .tab-bar.small .tab-item:not(.on){max-width:0;opacity:0;padding-left:0;padding-right:0;}
  .tab-bar.small .tab-item.on{padding:11px 11px;}
- .tab-label{max-height:14px;overflow:hidden;transition:max-height .3s ease,opacity .2s ease;}
+ .tab-label{max-height:20px;line-height:1.2;overflow:hidden;transition:max-height .3s ease,opacity .2s ease;}
  .tab-bar.small .tab-label{max-height:0;opacity:0;}
  .tab-grip{flex:none;display:flex;align-items:center;max-width:0;opacity:0;overflow:hidden;
    transition:max-width .3s ease,opacity .2s ease;}
@@ -11675,7 +11675,11 @@ function App() {
    const sideBtn = (b, label, fav) => {
    if(!b) return (<div style={{width:66,borderRadius:RAD.md,border:"1px solid rgba(255,255,255,0.06)",background:"rgba(255,255,255,0.02)",textAlign:"center",padding:"6px 3px 5px",opacity:0.45}}><div style={{fontSize:8,fontWeight:800,letterSpacing:"0.06em",color:"rgba(255,255,255,0.3)"}}>{label}</div><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:16,color:"rgba(255,255,255,0.3)",lineHeight:1.1,marginTop:1}}>—</div><div style={{fontSize:9,fontWeight:700,color:"rgba(255,255,255,0.25)",marginTop:1}}>n/a</div></div>);
    const on=sel(b); const pos=String(b.odds||"").charAt(0)==="+"; const pts=calcPickPoints(targetMult||1,b.impliedOdds,"W");
-   return (<div onClick={(e)=>{e.stopPropagation(); addCard(b);}} style={{width:66,borderRadius:RAD.md,cursor:"pointer",border:"1px solid "+(on?acc:fav?acc:"rgba(255,255,255,0.12)"),background:on?(acc+"2e"):fav?(acc+"14"):"rgba(255,255,255,0.04)",textAlign:"center",padding:"6px 3px 5px"}}><div style={{fontSize:8,fontWeight:800,letterSpacing:"0.06em",color:(fav||on)?acc:"rgba(255,255,255,0.4)"}}>{fav?"▲ ":""}{label}</div><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:16,color:pos?IOS.green:"#fff",lineHeight:1.1,marginTop:1}}>{b.odds}</div><div style={{fontSize:9,fontWeight:800,color:IOS.green,marginTop:1}}>+{pts} pts</div></div>);
+   // The lean no longer decorates the side button. The odds already say which side is
+   // favoured, and the row still carries the % and the bar on the left — an accent box
+   // on top of that was telling people something they could already read. `on`
+   // (selected) still highlights, because that is state, not commentary.
+   return (<div onClick={(e)=>{e.stopPropagation(); addCard(b);}} style={{width:66,borderRadius:RAD.md,cursor:"pointer",border:"1px solid "+(on?acc:"rgba(255,255,255,0.12)"),background:on?(acc+"2e"):"rgba(255,255,255,0.04)",textAlign:"center",padding:"6px 3px 5px"}}><div style={{fontSize:8,fontWeight:800,letterSpacing:"0.06em",color:on?acc:"rgba(255,255,255,0.4)"}}>{label}</div><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:16,color:pos?IOS.green:"#fff",lineHeight:1.1,marginTop:1}}>{b.odds}</div><div style={{fontSize:9,fontWeight:800,color:IOS.green,marginTop:1}}>+{pts} pts</div></div>);
    };
    return (
    <div key={pr.baseKey} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 13px",borderTop:isFirst?"none":"1px solid rgba(255,255,255,0.07)"}}>
@@ -11852,8 +11856,8 @@ function App() {
  <Chip b={g.ou.under} cat="ou" line={totPt!==""?("U "+totPt):""} value={isVal(g.ou.under,g._ov.ou)}/>
  </div>
  <div style={{display:"grid",gridTemplateRows:"1fr 1fr",gap:6,padding:"8px 4px"}}>
- <Chip b={g.ml.away} cat="ml" line="" value={isVal(g.ml.away,g._ov.ml)} mv={g.ml.away?lineMoves[g.ml.away.selKey]:null}/>
- <Chip b={g.ml.home} cat="ml" line="" value={isVal(g.ml.home,g._ov.ml)} mv={g.ml.home?lineMoves[g.ml.home.selKey]:null}/>
+ <Chip b={g.ml.away} cat="ml" line="ML" value={isVal(g.ml.away,g._ov.ml)} mv={g.ml.away?lineMoves[g.ml.away.selKey]:null}/>
+ <Chip b={g.ml.home} cat="ml" line="ML" value={isVal(g.ml.home,g._ov.ml)} mv={g.ml.home?lineMoves[g.ml.home.selKey]:null}/>
  </div>
  </div>
  <div onClick={()=>setSheetExpanded(exp?null:g.game)} style={{borderTop:"1px solid rgba(255,255,255,0.07)",padding:"7px 14px",display:"flex",alignItems:"center",gap:6,cursor:"pointer",background:"rgba(255,255,255,0.015)"}}>
