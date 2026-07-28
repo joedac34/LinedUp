@@ -152,6 +152,19 @@ const IOS = {
 // or shorter (3px bar fills, 6px dots, a 2.5px rail) where the radius is a
 // function of height, not a design decision. Snapping those would make lozenges.
 // Accent-coloured borders are also left alone — those are intentional signal.
+// Head-to-head sides: ONE hue at two weights. Cyan-vs-blue in the sheet and
+// blue-vs-purple in the list were three hues doing one job, and none of them meant
+// anything — purple was not "opponent", cyan was not "left side". Primary/secondary
+// weight works whether or not you are in the matchup, which a you-vs-neutral split
+// does not: most matchups on the Matchups tab are ones you are not in.
+// Module scope on purpose — both the sheet (top of file) and the league list use it.
+const SIDE_YOU  = "#3B6FE0";   // your side of a head-to-head
+const SIDE_OPP  = "#3a3d47";   // the opponent — neutral, not a second brand hue
+// When NEITHER side is you (most of the Matchups tab) "you vs neutral" has no answer,
+// so the two sides fall back to one hue at two weights rather than rendering identical.
+const SIDE_A    = "#3B6FE0";
+const SIDE_B    = "#31477A";
+
 const RAD  = { sm:8, md:12, lg:16, xl:20, pill:999 };
 const EDGE = {
   hair:  "0.5px solid rgba(255,255,255,0.08)",   // default card edge
@@ -2230,8 +2243,10 @@ function MatchBody({ d, IOS, liveGames=[], onOpenGamecast }){
     <>
           {(()=>{
           const ini = (nm)=> (nm||"?").slice(0,2).toUpperCase();
-          const aTint = aWin||!reallyFinal ? "#64D2FF" : "rgba(255,255,255,0.3)";
-          const bTint = bWin||!reallyFinal ? "#0A84FF" : "rgba(255,255,255,0.3)";
+          const _sA = youAre ? (youAre==="a"?SIDE_YOU:SIDE_OPP) : SIDE_A;
+          const _sB = youAre ? (youAre==="b"?SIDE_YOU:SIDE_OPP) : SIDE_B;
+          const aTint = aWin||!reallyFinal ? _sA : "rgba(255,255,255,0.3)";
+          const bTint = bWin||!reallyFinal ? _sB : "rgba(255,255,255,0.3)";
           return (
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"2px 20px 4px"}}>
             <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
@@ -2255,8 +2270,8 @@ function MatchBody({ d, IOS, liveGames=[], onOpenGamecast }){
             app could not answer at all before. ── */}
         <div style={{margin:"4px 14px 0",background:"rgba(255,255,255,0.03)",border:EDGE.hair,borderRadius:RAD.lg,padding:"11px 13px"}}>
           <div style={{fontSize:9,fontWeight:900,letterSpacing:"0.1em",textTransform:"uppercase",color:"rgba(255,255,255,0.25)",marginBottom:3}}>Locked vs. still possible</div>
-          {bar(cA, aWin||!d.winnerId ? "#64D2FF" : "rgba(255,255,255,0.3)", d.a.name)}
-          {bar(cB, bWin||!d.winnerId ? IOS.blue : "rgba(255,255,255,0.3)", d.b.name)}
+          {bar(cA, aWin||!d.winnerId ? _sA : "rgba(255,255,255,0.3)", d.a.name)}
+          {bar(cB, bWin||!d.winnerId ? _sB : "rgba(255,255,255,0.3)", d.b.name)}
           {openTotal>0 && (
             <div style={{display:"flex",justifyContent:"space-between",fontSize:9.5,fontWeight:700,color:"rgba(255,255,255,0.25)",marginTop:6}}>
               <span>■ settled</span>
@@ -12587,13 +12602,16 @@ function App() {
              const lead1=done?mu.winner_id===u1:(p1>p2);
              const lead2=done?mu.winner_id===u2:(p2>p1);
              const anyLead=lead1||lead2;
-             const row=(id,pts,lead,cl)=>{
+             const row=(id,pts,lead,cl,sideIdx)=>{
                const you=id===(user&&user.id);
-               const tint=you?IOS.blue:(lead?IOS.green:IOS.indigo);
+               // Green here meant "currently ahead" on an unsettled matchup — the same green
+               // as a settled win. Sides are weight now, not hue; the card ring says which
+               // one is yours.
+               const tint = mine ? (you?SIDE_YOU:SIDE_OPP) : (sideIdx===0?SIDE_A:SIDE_B);
                const lp=(cl.locked/_maxCeil)*100, mp=(cl.live/_maxCeil)*100;
                return (
                 <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 13px",opacity:lead?1:(anyLead?0.7:1)}}>
-                  <div style={{width:28,height:28,borderRadius:RAD.sm,flexShrink:0,background:(you?IOS.blue:IOS.indigo)+"33",color:you?IOS.blue:IOS.indigo,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900}}>{(nameOf(id)||"?").slice(0,2).toUpperCase()}</div>
+                  <div style={{width:28,height:28,borderRadius:RAD.sm,flexShrink:0,background:tint+"33",color:tint,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900}}>{(nameOf(id)||"?").slice(0,2).toUpperCase()}</div>
                   <div style={{width:96,flexShrink:0,fontSize:13.5,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",color:you?IOS.blue:"#fff"}}>{nameOf(id)}</div>
                   <div style={{flex:1,height:8,borderRadius:4,background:"rgba(0,0,0,0.4)",position:"relative",overflow:"hidden",boxShadow:"inset 0 1px 2px rgba(0,0,0,0.55)"}}>
                     <div style={{position:"absolute",left:0,top:0,bottom:0,borderRadius:4,width:lp+"%",background:`linear-gradient(180deg,${tint},${tint}cc)`,boxShadow:`0 0 8px ${tint}55`}}/>
@@ -12609,9 +12627,9 @@ function App() {
                    <div style={{fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",color:mine?IOS.blue:IOS.label3}}>{mine?"Your matchup":"Matchup"}</div>
                    <div style={{fontSize:10,fontWeight:800,padding:"3px 8px",borderRadius:RAD.sm,background:done?"rgba(255,255,255,0.08)":"rgba(48,209,88,0.14)",color:done?IOS.label2:IOS.green}}>{done?"FINAL":"LIVE"}</div>
                  </div>
-                 {row(u1,p1,lead1,_cA)}
+                 {row(u1,p1,lead1,_cA,0)}
                  <div style={{height:0.5,background:IOS.sep,margin:"0 13px"}}/>
-                 {row(u2,p2,lead2,_cB)}
+                 {row(u2,p2,lead2,_cB,1)}
                   {(() => {
                     const chip=(bp,label,align)=>{
                       const box=(inner)=>(<div style={{flex:1,minWidth:0,background:"rgba(255,255,255,0.03)",borderRadius:RAD.sm,padding:"7px 9px",textAlign:align}}>{inner}</div>);
@@ -13793,13 +13811,16 @@ function App() {
        const badge=done?"FINAL":(wk>curWk?"UPCOMING":"LIVE");
        const badgeBg=done?"rgba(255,255,255,0.08)":(wk>curWk?"rgba(255,255,255,0.06)":"rgba(48,209,88,0.14)");
        const badgeCol=done?IOS.label2:(wk>curWk?IOS.label3:IOS.green);
-        const row=(id,pts,lead,cl)=>{
+        const row=(id,pts,lead,cl,sideIdx)=>{
           const you=id===(user&&user.id);
-          const tint=you?IOS.blue:(lead?IOS.green:IOS.indigo);
+          // Green here meant "currently ahead" on an unsettled matchup — the same green
+          // as a settled win. Sides are weight now, not hue; the card ring says which
+          // one is yours.
+          const tint = mine ? (you?SIDE_YOU:SIDE_OPP) : (sideIdx===0?SIDE_A:SIDE_B);
           const lp=(cl.locked/_maxCeil)*100, mp=(cl.live/_maxCeil)*100;
           return (
            <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 13px",opacity:lead?1:(anyLead?0.7:1)}}>
-             <div style={{width:28,height:28,borderRadius:RAD.sm,flexShrink:0,background:(you?IOS.blue:IOS.indigo)+"33",color:you?IOS.blue:IOS.indigo,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900}}>{(nm(id)||"?").slice(0,2).toUpperCase()}</div>
+             <div style={{width:28,height:28,borderRadius:RAD.sm,flexShrink:0,background:tint+"33",color:tint,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900}}>{(nm(id)||"?").slice(0,2).toUpperCase()}</div>
              <div style={{width:96,flexShrink:0,fontSize:13.5,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",color:you?IOS.blue:"#fff"}}>{nm(id)}</div>
              <div style={{flex:1,height:8,borderRadius:4,background:"rgba(0,0,0,0.4)",position:"relative",overflow:"hidden",boxShadow:"inset 0 1px 2px rgba(0,0,0,0.55)"}}>
                <div style={{position:"absolute",left:0,top:0,bottom:0,borderRadius:4,width:lp+"%",background:`linear-gradient(180deg,${tint},${tint}cc)`,boxShadow:`0 0 8px ${tint}55`}}/>
@@ -13815,9 +13836,9 @@ function App() {
              <div style={{fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",color:mine?IOS.blue:IOS.label3}}>{mine?"Your matchup":"Matchup"}</div>
              {badge && <div style={{fontSize:10,fontWeight:800,padding:"3px 8px",borderRadius:RAD.sm,background:badgeBg,color:badgeCol}}>{badge}</div>}
            </div>
-           {row(u1,p1,lead1,_cA)}
+           {row(u1,p1,lead1,_cA,0)}
            <div style={{height:0.5,background:IOS.sep,margin:"0 13px"}}/>
-           {row(u2,p2,lead2,_cB)}
+           {row(u2,p2,lead2,_cB,1)}
           {(() => {
             const chip=(bp,label,align)=>{
               const box=(inner)=>(<div style={{flex:1,minWidth:0,background:"rgba(255,255,255,0.03)",borderRadius:RAD.sm,padding:"7px 9px",textAlign:align}}>{inner}</div>);
