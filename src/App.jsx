@@ -5119,7 +5119,7 @@ function App() {
           const _dec = calcParlayOddsDecimal(raw);
           if(parlayAmericanOdds(_dec) > PARLAY_MAX_ODDS){ rejected.push(idx); return; }
           if(raw.some(clash)){ conflicted.push(idx); return; }
-          const legs = raw.map(b=>({id:b.id,pick:b.pick,game:b.game||"",odds:b.odds,impliedOdds:b.impliedOdds}));
+          const legs = raw.map(b=>({id:b.id, pick:b.pick, game:b.game||"", odds:b.odds, impliedOdds:b.impliedOdds, eventId:b.eventId||null, marketKey:b.marketKey||null, outcome:b.outcome||null, gameTime:b.gameTime||null, point:(b.point!=null?b.point:null), selKey:b.selKey||null}));
           flex[idx] = {...flex[idx], bet:null, isParlay:true, parlayLegs:legs, category:"longshot", mult, _reason:pk.reason};
           raw.forEach(remember);
         } else {
@@ -5550,7 +5550,7 @@ function App() {
    const isCustomSlip = !!parseSlotConfig(activeLeague&&activeLeague.slot_config) || (picksArr||[]).some(p=>p.locked);
    const _pu = activatedPUs[slotIdx] || null; const _puId=_pu?_pu.id:null; const _puTier=(_pu&&_pu.tier!=null)?_pu.tier:null;
    if(slot.isParlay){
-     return (slot.parlayLegs||[]).map((b,legIdx)=>({ league_id:activeLeague.id, user_id:user.id, week:_weekNum, slot: isCustomSlip?`longshot_${slotIdx}_${legIdx}`:`longshot_${legIdx}`, multiplier:slot.mult, power_up_id:_puId, pu_tier:_puTier, pick_name:b.pick, game:b.game||"", odds:b.odds, implied_odds:b.impliedOdds, game_date:b.gameTime||null, result:"pending", points_earned:0 }));
+     return (slot.parlayLegs||[]).map((b,legIdx)=>({ league_id:activeLeague.id, user_id:user.id, week:_weekNum, slot: isCustomSlip?`longshot_${slotIdx}_${legIdx}`:`longshot_${legIdx}`, multiplier:slot.mult, power_up_id:_puId, pu_tier:_puTier, pick_name:b.pick, game:b.game||"", odds:b.odds, implied_odds:b.impliedOdds, game_date:b.gameTime||null, event_id:b.eventId||null, market_key:b.marketKey||null, outcome:b.outcome||null, outcome_point:(b.point!=null?b.point:null), sel_key:b.selKey||null, result:"pending", points_earned:0 }));
    }
    return [{ league_id:activeLeague.id, user_id:user.id, week:_weekNum, slot: isCustomSlip?`${slot.category||"ml"}_${slotIdx}`:(slot.category||"ml"), multiplier:slot.mult, power_up_id:_puId, pu_tier:_puTier, pick_name:slot.bet.pick, game:slot.bet.game||"", odds:slot.bet.odds, implied_odds:slot.bet.impliedOdds, game_date:slot.bet.gameTime||null, event_id:slot.bet.eventId||null, market_key:slot.bet.marketKey||null, outcome:slot.bet.outcome||null, outcome_point:(slot.bet.point!=null?slot.bet.point:null), sel_key:slot.bet.selKey||null, result:"pending", points_earned:0 }];
  };
@@ -6794,7 +6794,7 @@ function App() {
       id: slotId,
       mult: picks[0].multiplier,
       isParlay,
-      parlayLegs: isParlay ? picks.map(pp=>({id:pp.id, pick:pp.pick_name, game:pp.game||"", odds:pp.odds, impliedOdds:pp.implied_odds, gameTime:pp.game_date||null})) : [],
+      parlayLegs: isParlay ? picks.map(pp=>({id:pp.id, pick:pp.pick_name, game:pp.game||"", odds:pp.odds, impliedOdds:pp.implied_odds, gameTime:pp.game_date||null, eventId:pp.event_id||null, marketKey:pp.market_key||null, outcome:pp.outcome||null, point:(pp.outcome_point!=null?pp.outcome_point:null), selKey:pp.sel_key||null})) : [],
       bet: isParlay ? null : {pick:picks[0].pick_name, game:picks[0].game||"", odds:picks[0].odds, impliedOdds:picks[0].implied_odds, gameTime:picks[0].game_date||null, eventId:picks[0].event_id||null, marketKey:picks[0].market_key||null, outcome:picks[0].outcome||null, point:(picks[0].outcome_point!=null?picks[0].outcome_point:null), selKey:picks[0].sel_key||null},
       power_up_id: picks[0].power_up_id||null,
       pu_tier: picks[0].pu_tier!=null?picks[0].pu_tier:null,
@@ -11362,7 +11362,7 @@ function App() {
   const _pc = parlayConflict({...bet, category:_cat}, _curLegs);
   if(_pc){ setPickConflict(_pc); setTimeout(()=>setPickConflict(""),2800); setGridJustAdded(null); return; }
  }
- const leg = {id:bet.id, pick:bet.pick, game:bet.game||"", eventId:bet.eventId||null, marketKey:bet.marketKey||null, odds:bet.odds, impliedOdds:bet.impliedOdds, category:_cat, outcome:bet.outcome||null};
+ const leg = {id:bet.id, pick:bet.pick, game:bet.game||"", eventId:bet.eventId||null, marketKey:bet.marketKey||null, odds:bet.odds, impliedOdds:bet.impliedOdds, category:_cat, outcome:bet.outcome||null, gameTime:bet.gameTime||null, point:(bet.point!=null?bet.point:null), selKey:bet.selKey||null};
  setActivePicks(prev=>{
  let found=false;
  let next = prev.map(p=>{
@@ -12191,9 +12191,9 @@ function App() {
  </div>
  ); }
  return (
- <div className="gbx-scroll" style={{display:"flex",gap:6,padding:"0 16px 10px",overflowX:"auto"}}>
+ <div className="pk-rail" style={{margin:"0 16px 10px"}}>
  {propSubs.map(s=>{ const on = s.id===gridPropSub; return (
- <div key={s.id} onClick={()=>setGridPropSub(s.id)} style={{padding:"5px 11px",borderRadius:RAD.lg,fontSize:11,fontWeight:700,whiteSpace:"nowrap",cursor:"pointer",border:"1px solid",flexShrink:0, background:on?`${acc}1f`:"rgba(255,255,255,0.04)", borderColor:on?`${acc}66`:"rgba(255,255,255,0.08)", color:on?acc:"rgba(255,255,255,0.35)"}}>{s.l}</div>
+ <div key={s.id} onClick={()=>setGridPropSub(s.id)} className={"pk-chip"+(on?" on":"")} style={{"--on-a":acc+"52","--on-b":acc+"24"}}><span>{s.l}</span></div>
  );})}
  </div>
  );
@@ -12204,9 +12204,9 @@ function App() {
  if(!_subs.length) return null;
  const _cur = gridPeriodSub || _subs[0].id;
  return (
- <div className="gbx-scroll" style={{display:"flex",gap:6,padding:"0 16px 10px",overflowX:"auto"}}>
+ <div className="pk-rail" style={{margin:"0 16px 10px"}}>
  {_subs.map(s=>{ const on = s.id===_cur; return (
- <div key={s.id} onClick={()=>setGridPeriodSub(s.id)} style={{padding:"5px 11px",borderRadius:RAD.lg,fontSize:11,fontWeight:700,whiteSpace:"nowrap",cursor:"pointer",border:"1px solid",flexShrink:0, background:on?`${acc}1f`:"rgba(255,255,255,0.04)", borderColor:on?`${acc}66`:"rgba(255,255,255,0.08)", color:on?acc:"rgba(255,255,255,0.35)"}}>{s.l}</div>
+ <div key={s.id} onClick={()=>setGridPeriodSub(s.id)} className={"pk-chip"+(on?" on":"")} style={{"--on-a":acc+"52","--on-b":acc+"24"}}><span>{s.l}</span></div>
  );})}
  </div>
  );
@@ -12267,9 +12267,9 @@ function App() {
  </div>
  <span style={{fontSize:10.5,color:IOS.label3,fontWeight:700}}>{list.length} bet{list.length!==1?"s":""}</span>
  </div>
- <div style={{display:"flex",gap:6,overflowX:"auto",scrollbarWidth:"none",paddingBottom:2}}>
+ <div className="pk-rail" style={{marginBottom:2}}>
  {[{key:"all",label:"All"},...lsChips].map(c=>(
- <div key={c.key} onClick={()=>setGridLsMarket(c.key)} style={{flexShrink:0,fontSize:11.5,fontWeight:700,padding:"6px 11px",borderRadius:RAD.pill,cursor:"pointer",whiteSpace:"nowrap",border:"0.5px solid "+(gridLsMarket===c.key?"#fff":"rgba(255,255,255,0.12)"),background:gridLsMarket===c.key?"#fff":"rgba(255,255,255,0.04)",color:gridLsMarket===c.key?"#0b0b0e":IOS.label2}}>{c.label}</div>
+ <div key={c.key} onClick={()=>setGridLsMarket(c.key)} className={"pk-chip"+(gridLsMarket===c.key?" on":"")}><span>{c.label}</span></div>
  ))}
  </div>
  </div>
@@ -15497,10 +15497,10 @@ function App() {
                             {_open && (
                               <div style={{borderTop:"0.5px solid rgba(255,255,255,0.07)",padding:"9px 0 10px"}}>
                                 {_games.length>1 && (
-                                  <div style={{display:"flex",gap:5,overflowX:"auto",padding:"0 10px 8px"}}>
-                                    <div onClick={()=>setPlokRail(prev=>({...prev,[_key]:"all"}))} style={{flexShrink:0,fontSize:10.5,fontWeight:800,padding:"5px 9px",borderRadius:RAD.lg,cursor:"pointer",whiteSpace:"nowrap",background:_sel==="all"?"rgba(255,255,255,0.12)":"#1e1e25",color:_sel==="all"?"#fff":"rgba(255,255,255,0.4)",border:_sel==="all"?"0.5px solid rgba(255,255,255,0.2)":"0.5px solid rgba(255,255,255,0.08)"}}>All<span style={{color:"rgba(255,255,255,0.25)",marginLeft:3,fontSize:9}}>{_elig.length}</span></div>
+                                  <div className="pk-rail" style={{margin:"0 10px 8px"}}>
+                                    <div onClick={()=>setPlokRail(prev=>({...prev,[_key]:"all"}))} className={"pk-chip"+(_sel==="all"?" on":"")}>All<span style={{color:"rgba(255,255,255,0.25)",marginLeft:3,fontSize:9}}>{_elig.length}</span></div>
                                     {_games.map(g=>(
-                                      <div key={g} onClick={()=>setPlokRail(prev=>({...prev,[_key]:g}))} style={{flexShrink:0,fontSize:10.5,fontWeight:800,padding:"5px 9px",borderRadius:RAD.lg,cursor:"pointer",whiteSpace:"nowrap",background:_sel===g?"rgba(255,255,255,0.12)":"#1e1e25",color:_sel===g?"#fff":"rgba(255,255,255,0.4)",border:_sel===g?"0.5px solid rgba(255,255,255,0.2)":"0.5px solid rgba(255,255,255,0.08)"}}>{g}<span style={{color:"rgba(255,255,255,0.25)",marginLeft:3,fontSize:9}}>{_elig.filter(b=>b.game===g).length}</span></div>
+                                      <div key={g} onClick={()=>setPlokRail(prev=>({...prev,[_key]:g}))} className={"pk-chip"+(_sel===g?" on":"")}>{g}<span style={{color:"rgba(255,255,255,0.25)",marginLeft:3,fontSize:9}}>{_elig.filter(b=>b.game===g).length}</span></div>
                                     ))}
                                   </div>
                                 )}
@@ -16639,34 +16639,25 @@ function App() {
 
      {/* Filters */}
      <div style={{padding:"10px 16px 8px",borderBottom:"0.5px solid #1A1A1A",flexShrink:0}}>
-       <div style={{display:"flex",gap:6,overflowX:"auto",scrollbarWidth:"none",paddingBottom:2}}>
+       <div className="pk-rail" style={{marginBottom:2}}>
          {/* Sport filter */}
          {[{id:"all",l:"All Sports"},{id:"nfl",l:"NFL"},{id:"nba",l:"NBA"},{id:"mlb",l:"MLB"},{id:"nhl",l:"NHL"}].map(f=>(
            <div key={f.id} onClick={()=>setBrowseFilter(prev=>({...prev,sport:f.id}))}
-           style={{padding:"5px 12px",borderRadius:RAD.sm,fontSize:11,fontWeight:700,whiteSpace:"nowrap",cursor:"pointer",flexShrink:0,
-             background:browseFilter.sport===f.id?"rgba(10,132,255,0.15)":"#1A1A1A",
-             border:`0.5px solid ${browseFilter.sport===f.id?"rgba(10,132,255,0.4)":"#2A2A2A"}`,
-             color:browseFilter.sport===f.id?IOS.blue:"#666"}}>{f.l}</div>
+           className={"pk-chip"+(browseFilter.sport===f.id?" on":"")}><span>{f.l}</span></div>
          ))}
        </div>
-       <div style={{display:"flex",gap:6,marginTop:6,overflowX:"auto",scrollbarWidth:"none"}}>
+       <div className="pk-rail" style={{marginTop:6}}>
          {/* League type filter */}
          {[{id:"all",l:"Any Type"},{id:"h2h",l:"Head-to-head"},{id:"bracket",l:"Tournament"},{id:"points",l:"Total Points"}].map(f=>(
            <div key={f.id} onClick={()=>setBrowseFilter(prev=>({...prev,type:f.id}))}
-           style={{padding:"5px 12px",borderRadius:RAD.sm,fontSize:11,fontWeight:700,whiteSpace:"nowrap",cursor:"pointer",flexShrink:0,
-             background:browseFilter.type===f.id?"rgba(10,132,255,0.15)":"#1A1A1A",
-             border:`0.5px solid ${browseFilter.type===f.id?"rgba(10,132,255,0.4)":"#2A2A2A"}`,
-             color:browseFilter.type===f.id?IOS.blue:"#666"}}>{f.l}</div>
+           className={"pk-chip"+(browseFilter.type===f.id?" on":"")}><span>{f.l}</span></div>
          ))}
        </div>
-       <div style={{display:"flex",gap:6,marginTop:6,overflowX:"auto",scrollbarWidth:"none"}}>
+       <div className="pk-rail" style={{marginTop:6}}>
          {/* League size filter */}
          {[{id:"all",l:"Any Size"},{id:"small",l:"Small (4-8)"},{id:"medium",l:"Medium (10-12)"},{id:"large",l:"Large (16+)"}].map(f=>(
            <div key={f.id} onClick={()=>setBrowseFilter(prev=>({...prev,size:f.id}))}
-           style={{padding:"5px 12px",borderRadius:RAD.sm,fontSize:11,fontWeight:700,whiteSpace:"nowrap",cursor:"pointer",flexShrink:0,
-             background:browseFilter.size===f.id?"rgba(10,132,255,0.15)":"#1A1A1A",
-             border:`0.5px solid ${browseFilter.size===f.id?"rgba(10,132,255,0.4)":"#2A2A2A"}`,
-             color:browseFilter.size===f.id?IOS.blue:"#666"}}>{f.l}</div>
+           className={"pk-chip"+(browseFilter.size===f.id?" on":"")}><span>{f.l}</span></div>
          ))}
        </div>
      </div>
