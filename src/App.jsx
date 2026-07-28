@@ -117,7 +117,7 @@ const API_BASE = IS_NATIVE ? "https://app.picklockapp.com" : "";
 
 // iOS System Colors
 const IOS = {
- blue: "#0A84FF",
+ blue: "#3B6FE0",   // Deep — was iOS system #0A84FF
  green: "#30D158",
  red: "#FF453A",
  orange: "#FF9F0A",
@@ -125,7 +125,7 @@ const IOS = {
  teal: "#3A9EE0",
  yellow: "#FFD60A",
  pink: "#FF375F",
- indigo: "#5E5CE6",
+ indigo: "#4B4FBF",  // gradient partner for the deep accent
  gray: "#8E8E93",
  gray2: "#636366",
  gray3: "#48484A",
@@ -7641,6 +7641,20 @@ function App() {
    box-shadow:0 24px 60px -16px rgba(0,0,0,0.88), inset 0 1px 0 rgba(255,255,255,0.08);}
  .pk-sheet.pk-snap{transition:transform .26s cubic-bezier(0.32,0.72,0,1);}
  @media (prefers-reduced-motion: reduce){ .pk-sheet.pk-snap{transition:none;} }
+ /* Standings row: your row is unmistakable rather than a faint tint, and the bar shows
+    the gap to the leader without asking anyone to compare four columns of numbers. */
+ .pk-strow{display:flex;align-items:center;gap:10px;padding:10px 13px;position:relative;}
+ .pk-strow.me{background:linear-gradient(100deg,rgba(10,132,255,0.16),rgba(10,132,255,0.03) 62%);}
+ .pk-strow.me::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:${IOS.blue};}
+ .pk-stpos{font-family:'Barlow Semi Condensed',sans-serif;font-size:15px;font-weight:800;width:17px;text-align:center;color:rgba(255,255,255,0.4);}
+ .pk-strow.me .pk-stpos{color:#fff;}
+ .pk-stav{width:27px;height:27px;border-radius:50%;display:grid;place-items:center;flex-shrink:0;font-family:'Barlow Semi Condensed',sans-serif;font-size:10px;font-weight:800;}
+ .pk-stnm{font-size:13.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:38%;}
+ .pk-strow.me .pk-stnm{font-weight:800;}
+ .pk-stbar{flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,0.07);overflow:hidden;min-width:24px;}
+ .pk-stbar > i{display:block;height:100%;border-radius:2px;background:linear-gradient(90deg,rgba(10,132,255,0.5),${IOS.blue});}
+ .pk-stwl{font-family:'Barlow Semi Condensed',sans-serif;font-size:13px;font-weight:700;color:rgba(255,255,255,0.5);width:30px;text-align:right;}
+ .pk-stpts{font-family:'Barlow Semi Condensed',sans-serif;font-size:16px;font-weight:800;width:48px;text-align:right;}
  .pk-hdr{transform-origin:left top;}
  @keyframes soGrow{from{height:0}to{height:var(--h);}}
  .so-bar{height:var(--h);animation:soGrow .62s cubic-bezier(0.34,1.16,0.42,1) both;}
@@ -10591,7 +10605,8 @@ function App() {
  {/* Type row */}
  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:7}}>
  {slot.category ? (
- <span style={{fontSize:10,fontWeight:700,letterSpacing:"0.08em",color:catColors[slot.category]||IOS.label3}}>
+ <span style={{fontSize:10,fontWeight:700,letterSpacing:"0.08em",color:IOS.label3,display:"inline-flex",alignItems:"center",gap:5}}>
+ <span style={{width:4,height:4,borderRadius:"50%",background:catColors[slot.category]||IOS.label3,flexShrink:0}}/>
  {catLabels[slot.category]||slot.category.toUpperCase()}
  </span>
  ) : (
@@ -12037,7 +12052,9 @@ function App() {
  );
  })()}
  {!gridCfg && !isSoloMode && (()=>{
- const MC = {1:IOS.blue,2:IOS.yellow,3:IOS.orange,4:IOS.green,5:IOS.pink};
+ // Multiplier tiers are no longer colour-coded. Size, weight and card elevation already
+ // carry the multiplier, and tier 4 being green read as a win before anything settled.
+ const MC = {};
  const cur = gridBuildMode ? gridParlayMult : (gridFlexMult || 1);
  const curCol = MC[cur] || acc;
  return (
@@ -12054,7 +12071,7 @@ function App() {
  <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,zIndex:41,width:212,background:"#15151c",border:"1px solid rgba(255,255,255,0.12)",borderRadius:RAD.lg,padding:6,boxShadow:"0 16px 40px rgba(0,0,0,0.6)"}}>
  <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.08em",color:"rgba(255,255,255,0.35)",padding:"5px 8px 6px"}}>CHOOSE A MULTIPLIER</div>
  {[1,2,3,4,5].map(M=>{
- const sc = MC[M];
+ const sc = MC[M] || "rgba(255,255,255,0.72)";   // no tier hue; neutral by default
  if(M===gridParlayMult){
  const par = activePicks.find(p=>p.isParlay);
  const legs = (par&&par.parlayLegs)||[];
@@ -12447,7 +12464,9 @@ function App() {
  const ms = realStandings||[];
  const total = ms.length || (activeLeague.target_size||activeLeague.max_members||8);
  const playoffN = playoffFieldFor(activeLeague, total);
- const TCOL=[IOS.orange,IOS.pink,IOS.indigo,"#40E0C0","#BF5AF2","#64D2FF",IOS.yellow,IOS.green];
+ // Avatars are neutral. Only you get the accent — recognition comes from position and
+ // name, both of which are stable, unlike a hue keyed to row index.
+ const AV_NEUTRAL = "#23242a";
  return (
  <div className="body">
    <div style={{padding:"10px 20px 14px",background:"radial-gradient(120% 90% at 90% -10%, rgba(94,92,230,0.18), transparent 55%), linear-gradient(180deg,#0B1430 0%,#000 80%)"}}>
@@ -12460,7 +12479,7 @@ function App() {
      {ms.map((sp,i)=>{
        const wkPicks=(weekPicks||[]).filter(p=>p.user_id===sp.userId && p.week===cw);
        const wkPts=Math.round(wkPicks.filter(p=>p.result==="W").reduce((a,p)=>a+parseFloat(p.points_earned||0),0)*10)/10;
-       const col=sp.isYou?IOS.blue:TCOL[i%8];
+       const col=sp.isYou?IOS.blue:AV_NEUTRAL;
        const initials=sp.isYou?"You":(sp.name||"?").slice(0,2).toUpperCase();
        const playoff=playoffN>0 && i<playoffN;
        return (
@@ -13603,13 +13622,9 @@ function App() {
 
  {/* Sub-tabs - hide when dropdown is open */}
  {lg && leagueSubTab!=="dropdown" && (
- <div style={{display:"flex",borderBottom:`0.5px solid ${IOS.sep}`,margin:"10px 0 0"}}>
+ <div className="pk-rail" style={{margin:"10px 14px 0"}}>
    {["overview","standings",...(((lg.league_type||"h2h")==="h2h")?["matchups"]:[]),(lg.league_type||"h2h")==="bracket"?"bracket":"schedule", ...(((lg.league_type||"h2h")!=="bracket" && (Number(lg.playoff_size)||0)>=2)?["playoff"]:[])].map(t=>(
-     <div key={t} onClick={()=>setLeagueSubTab(t)} style={{flex:1,textAlign:"center",padding:"9px 4px",fontSize:11,fontWeight:700,textTransform:"capitalize",cursor:"pointer",
-       color:leagueSubTab===t?IOS.blue:"rgba(255,255,255,0.4)",
-       borderBottom:leagueSubTab===t?`2px solid ${IOS.blue}`:"2px solid transparent",transition:"all .15s"}}>
-       {t}
-     </div>
+     <div key={t} onClick={()=>setLeagueSubTab(t)} className={"pk-chip"+(leagueSubTab===t?" on":"")} style={{textTransform:"capitalize"}}><span>{t}</span></div>
    ))}
  </div>
  )}
@@ -13729,15 +13744,15 @@ function App() {
        <div style={{width:56,fontSize:8,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4,textAlign:"right"}}>Total Pts</div>
      </div>
      {realStandings.map((s,i)=>(
-       <div key={s.userId||i} style={{display:"flex",alignItems:"center",padding:"10px 12px",borderBottom:i<realStandings.length-1?`0.5px solid rgba(255,255,255,0.04)`:"none",background:s.isYou?"rgba(10,132,255,0.06)":"transparent"}}>
-         <div style={{width:24,fontSize:13,fontWeight:700,color:i===0?IOS.blue:IOS.label3}}>{i+1}</div>
-         <div style={{flex:1}}>
-           <div style={{fontSize:12,fontWeight:700,color:s.isYou?IOS.blue:"#ccc"}}>{s.isYou?"You":(s.name||s.username||"Unknown")}</div>
-           <div style={{fontSize:9,color:IOS.label3,marginTop:1}}>{s.wpct||"0%"} win rate</div>
-         </div>
-         <div style={{width:36,fontSize:11,color:IOS.label3,textAlign:"right"}}>{s.record}</div>
-         <div style={{width:56,fontSize:13,fontWeight:800,color:parseFloat(s.points)>0?IOS.green:"#555",textAlign:"right"}}>{parseFloat(s.points||0).toFixed(1)}</div>
-       </div>
+        <div key={s.userId||i} className={"pk-strow"+(s.isYou?" me":"")} style={{borderBottom:i<realStandings.length-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
+          <span className="pk-stpos">{i+1}</span>
+          <span className="pk-stav" style={{background:s.isYou?IOS.blue:"#23242a",color:s.isYou?"#fff":"rgba(255,255,255,0.62)"}}>{String(s.isYou?"You":(s.name||s.username||"?")).slice(0,2).toUpperCase()}</span>
+          <span className="pk-stnm">{s.isYou?"You":(s.name||s.username||"Unknown")}</span>
+          {/* The bar shows the gap to the leader at a glance; four number columns do not. */}
+          <span className="pk-stbar"><i style={{width:(()=>{ const m=Math.max.apply(null,[0,...realStandings.map(x=>parseFloat(x.points)||0)]); return (m>0?Math.max(4,Math.round((parseFloat(s.points)||0)/m*100)):0)+"%"; })()}}/></span>
+          <span className="pk-stwl">{s.record}</span>
+          <span className="pk-stpts" style={{color:s.isYou?"#fff":"rgba(255,255,255,0.78)"}}>{parseFloat(s.points||0).toFixed(1)}</span>
+        </div>
      ))}
    </div>
  </div>
@@ -16925,7 +16940,7 @@ function App() {
    </div>); })()}
  {(screen==="solostats"||screen==="analytics")&&(()=>{
  const s = allMyStats||{};
- const CC={blue:"#0A84FF",green:"#30D158",red:"#FF453A",orange:"#FF9F0A",yellow:"#FFD60A",pink:"#FF375F",purple:"#BF5AF2",teal:"#64D2FF",indigo:"#5E5CE6",l3:"rgba(255,255,255,0.34)",l2:"rgba(255,255,255,0.55)"};
+ const CC={blue:"#3B6FE0",green:"#30D158",red:"#FF453A",orange:"#FF9F0A",yellow:"#FFD60A",pink:"#FF375F",purple:"#BF5AF2",teal:"#64D2FF",indigo:"#5E5CE6",l3:"rgba(255,255,255,0.34)",l2:"rgba(255,255,255,0.55)"};
  const SURF={background:"linear-gradient(160deg,#15151A,#0B0B0E 78%)",border:EDGE.hair,borderRadius:RAD.xl,boxShadow:"0 6px 22px rgba(0,0,0,0.5)"};
  const byTypeArr=Object.values(s.byType||{}).filter(t=>t.wins+t.losses>0).sort((a,b)=>b.pts-a.pts);
  const bySportArr=Object.values(s.bySport||{}).filter(t=>t.wins+t.losses>0).sort((a,b)=>b.pts-a.pts);
