@@ -981,6 +981,27 @@ const errText = (e) => {
 
 const _HAPTIC_FB = { select:12, light:18, medium:25, heavy:35,
   success:[0,30,40,30,60], warning:[0,30,50,30], error:[0,45,60,45] };
+// Whole years between a YYYY-MM-DD string and today. Mirrors the SQL trigger:
+// month/day comparison, not a divide by 365, so a birthday that has not
+// happened yet this year still reads as the younger age.
+const ageFrom = (ymd) => {
+  if(!ymd) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd));
+  if(!m) return null;
+  const y=+m[1], mo=+m[2], d=+m[3];
+  if(mo<1||mo>12||d<1||d>31) return null;
+  const dt = new Date(y, mo-1, d);
+  if(dt.getFullYear()!==y || dt.getMonth()!==mo-1 || dt.getDate()!==d) return null; // e.g. Feb 30
+  const now = new Date();
+  if(dt > now) return -1;
+  let age = now.getFullYear() - y;
+  const before = (now.getMonth() < mo-1) || (now.getMonth() === mo-1 && now.getDate() < d);
+  if(before) age -= 1;
+  return age;
+};
+const MIN_AGE = 18;
+const AGE_BLOCK_KEY = "picklock_age_block";
+
 const haptic = (kind) => {
   const k = kind || "light";
   try{
@@ -4476,6 +4497,11 @@ function App() {
  // Delete-account flow. delStep 1 explains, 2 shows this account's real
  // consequences from get_deletion_impact, 3 confirms.
  // Change password + data export, both reached from the Account group.
+ // Accounts created before the age gate have birth_date null and are prompted
+ // once on next launch. Required, not dismissible: the Terms have always said
+ // 18+, this is the first time it is actually on file.
+ const [dobBusy, setDobBusy] = useState(false);
+ const [dobErr, setDobErr] = useState("");
  const [pwOpen, setPwOpen] = useState(false);
  const [pwBusy, setPwBusy] = useState(false);
  const [pwErr, setPwErr] = useState("");
@@ -6892,7 +6918,7 @@ function App() {
    if(profileReqRef.current===id) setProfileLoading(false);
  };
  const fetchUserProfile = async (uid) => {
- const {data} = await supabase.from("users").select("id,username,email,is_pro,push_enabled,notif_results,notif_grades,notif_reminder,notif_league,notif_plok,referral_code,referred_by,is_founder,founder_number").eq("id",uid).maybeSingle();
+ const {data} = await supabase.from("users").select("id,username,email,is_pro,push_enabled,notif_results,notif_grades,notif_reminder,notif_league,notif_plok,referral_code,referred_by,birth_date,is_founder,founder_number").eq("id",uid).maybeSingle();
  if(data) {
  setUserProfile(data);
  // DB is source of truth for pro status
@@ -6915,7 +6941,7 @@ function App() {
  const _row={ id:uid, email:(_au&&_au.user&&_au.user.email)||null, referral_code:_myRef };
  if(_meta.username) _row.username=_meta.username;
  if(_meta.referred_by) _row.referred_by=_meta.referred_by;
- const {data:_created}=await supabase.from("users").upsert(_row,{onConflict:"id"}).select("id,username,email,is_pro,push_enabled,notif_results,notif_grades,notif_reminder,notif_league,notif_plok,referral_code,referred_by,is_founder,founder_number").maybeSingle();
+ const {data:_created}=await supabase.from("users").upsert(_row,{onConflict:"id"}).select("id,username,email,is_pro,push_enabled,notif_results,notif_grades,notif_reminder,notif_league,notif_plok,referral_code,referred_by,birth_date,is_founder,founder_number").maybeSingle();
  if(_created){ setUserProfile(_created); setIsPro(_created.is_pro===true); if(!_created.username){ setShowUsernamePrompt(true); } }
  } catch(e) {}
  }
@@ -8581,6 +8607,33 @@ function App() {
  <style>{css}</style>
 
  {/* ══ TUTORIAL OVERLAY ══ */}
+{user && userProfile && !userProfile.birth_date && !recoveryMode && (
+<div style={{position:"fixed",inset:0,zIndex:9999,background:"#000",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"0 26px",fontFamily:"Barlow,sans-serif"}}>
+  <div style={{width:"100%",maxWidth:380}}>
+    <div style={{width:56,height:56,borderRadius:"50%",background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.3)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}>
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></svg>
+    </div>
+    <div style={{fontSize:24,fontWeight:800,color:"#fff",letterSpacing:-0.5,marginBottom:8,textAlign:"center"}}>One quick thing</div>
+    <div style={{fontSize:14,color:"rgba(255,255,255,0.5)",lineHeight:1.6,marginBottom:20,textAlign:"center"}}>PickLock has always been 18+. We need your date of birth on file to keep it that way.</div>
+    <input id="dob-backfill" className="auth-input" type="date" max={new Date().toISOString().slice(0,10)} style={{marginBottom:dobErr?7:16,colorScheme:"dark"}}/>
+    {dobErr?(<div style={{fontSize:12.5,fontWeight:600,color:IOS.red,margin:"0 2px 14px",lineHeight:1.45}}>{dobErr}</div>):null}
+    <button className="auth-cta" disabled={dobBusy} style={dobBusy?{opacity:0.55,cursor:"default"}:undefined} onClick={async()=>{
+      const v=(document.getElementById("dob-backfill")?.value||"").trim();
+      const a=ageFrom(v);
+      if(a===null){ setDobErr("Please enter your date of birth."); return; }
+      if(a<0){ setDobErr("That date is in the future."); return; }
+      if(a>=130){ setDobErr("Please check that date."); return; }
+      if(a<MIN_AGE){ setDobErr("PickLock is 18+. Your account will be closed \u2014 email joe@picklockapp.com with any questions."); return; }
+      setDobBusy(true); setDobErr("");
+      const {error}=await supabase.from("users").update({birth_date:v}).eq("id",user.id);
+      if(error){ setDobBusy(false); setDobErr(errText(error)||"Could not save that. Please try again."); return; }
+      setUserProfile(prev=>({...prev, birth_date:v}));
+      haptic("success"); setDobBusy(false);
+    }}>{dobBusy?"Saving…":"Continue"}</button>
+    <div style={{textAlign:"center",fontSize:11.5,color:"rgba(255,255,255,0.3)",marginTop:14,lineHeight:1.5}}>Stored only to confirm eligibility. See the Privacy Policy.</div>
+  </div>
+</div>
+)}
 {pwOpen && (
 <div style={{position:"fixed",inset:0,zIndex:10000,background:"#000",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"0 26px",fontFamily:"Barlow,sans-serif"}}>
   <div style={{width:"100%",maxWidth:380}}>
@@ -8866,6 +8919,10 @@ function App() {
  <input id="auth-password" className="auth-input" type="password" placeholder="Password" style={{marginBottom:11}}/>
  {authScreen==="signup"&&<input id="auth-username" className="auth-input" type="text" placeholder="Username (e.g. sharpshooter99)" style={{marginBottom:7}}/>}
  {authScreen==="signup"&&<div style={{fontSize:11,color:"rgba(255,255,255,0.32)",marginBottom:7,paddingLeft:4}}>This is how you'll appear to other players</div>}
+ {/* Neutral entry — no minimum stated beside the field. Announcing "18+" here
+     just tells someone which year to pick. */}
+ {authScreen==="signup"&&<div style={{fontSize:11,fontWeight:700,letterSpacing:"0.04em",textTransform:"uppercase",color:"rgba(255,255,255,0.34)",margin:"2px 0 6px 4px"}}>Date of birth</div>}
+ {authScreen==="signup"&&<input id="auth-dob" className="auth-input" type="date" max={new Date().toISOString().slice(0,10)} style={{marginBottom:12,colorScheme:"dark"}}/>}
  {authScreen==="signup"&&<input id="auth-referral" className="auth-input" type="text" placeholder="Friend's referral code (optional)" defaultValue={(new URLSearchParams(window.location.search).get("ref")||"").toUpperCase()} style={{marginBottom:6}}/>}
  {authScreen==="signup"&&<div style={{fontSize:11,color:"rgba(255,255,255,0.34)",margin:"0 2px 14px",lineHeight:1.4}}>Have a league code? Leave this blank — you’ll join your league after signing in, from Leagues → Join.</div>}
  {authScreen==="login"&&<div onClick={()=>{ setForgotEmail((document.getElementById("auth-email")?.value||"").trim()); setForgotSent(false); setForgotErr(""); setForgotOpen(true); }} style={{textAlign:"center",fontSize:13,fontWeight:600,color:IOS.blue,cursor:"pointer",margin:"2px 0 14px"}}>Forgot password?</div>}
@@ -8876,6 +8933,20 @@ function App() {
  const {error}=await supabase.auth.signInWithPassword({email,password});
  if(error)alert(error.message);
  } else {
+ // A device that already failed the age check does not get another go —
+ // otherwise the date field is a slot machine.
+ let _blocked=null; try{ _blocked=localStorage.getItem(AGE_BLOCK_KEY); }catch(e){}
+ if(_blocked){ alert("This device is not eligible to create a PickLock account. If this is a mistake, email joe@picklockapp.com."); return; }
+ const dob=(document.getElementById("auth-dob")?.value||"").trim();
+ const _age=ageFrom(dob);
+ if(_age===null){ alert("Please enter your date of birth."); return; }
+ if(_age<0){ alert("That date is in the future."); return; }
+ if(_age>=130){ alert("Please check your date of birth."); return; }
+ if(_age<MIN_AGE){
+   try{ localStorage.setItem(AGE_BLOCK_KEY, new Date().toISOString()); }catch(e){}
+   alert("You must be 18 or older to use PickLock.");
+   return;
+ }
  const username=(document.getElementById("auth-username")?.value||"").trim();
  if(!username){ alert("Please enter a username."); return; }
  if(username.length<3){ alert("Username must be at least 3 characters."); return; }
@@ -8888,7 +8959,7 @@ function App() {
  const uid = data?.user?.id;
  if(uid && data?.session){
  const myRef=Math.random().toString(36).substring(2,8).toUpperCase();
- await supabase.from("users").upsert({id:uid, email, username, referral_code:myRef, referred_by:refCode}, {onConflict:"id"});
+ await supabase.from("users").upsert({id:uid, email, username, referral_code:myRef, referred_by:refCode, birth_date:dob}, {onConflict:"id"});
  }
  if(uid && !data?.session){ alert("Account created! Check your email to confirm your address, then sign in."); setAuthScreen("login"); return; }
  setTutorialStep(0);
