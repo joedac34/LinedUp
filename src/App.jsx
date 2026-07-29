@@ -1172,6 +1172,35 @@ const SkelBets = ({n=5,pad="6px 16px"}) => (
 
 const SK_CH_W = ["58%","44%","70%","38%","62%","50%"];
 const SK_CH_H = [34,30,48,30,34,42];
+// Playoff bracket — two seed cards per quarterfinal, one semifinal card between
+// them, matching the real two-column layout so nothing shifts on swap.
+const SkelBracket = ({pad="12px 16px 20px"}) => (
+  <SkelGroup style={{padding:pad}}>
+    <Skel w="58%" h={11} r={4} style={{marginBottom:14}}/>
+    <div style={{display:"flex",gap:10,marginBottom:10}}>
+      <Skel w="46%" h={9} r={4}/><Skel w="40%" h={9} r={4}/>
+    </div>
+    {[0,1].map(g=>(
+      <div key={g} style={{display:"flex",alignItems:"center",gap:12,marginBottom:g===0?26:0}}>
+        <div style={{flex:"0 0 46%"}}>
+          {[0,1].map(i=>(
+            <div key={i} style={{...SK_CARD,padding:"13px 12px",marginBottom:i===0?10:0,display:"flex",alignItems:"center",gap:9}}>
+              <Skel w={10} h={10} r={3}/><Skel w={SK_W[(g*2+i)%SK_W.length]} h={12}/>
+            </div>
+          ))}
+        </div>
+        <div style={{flex:1,height:1,background:"rgba(255,255,255,0.06)"}}/>
+        <div style={{flex:"0 0 40%"}}>
+          <div style={{...SK_CARD,padding:"13px 12px"}}>
+            <Skel w={SK_W2[g%SK_W2.length]} h={12} style={{marginBottom:11}}/>
+            <Skel w={SK_W2[(g+2)%SK_W2.length]} h={12}/>
+          </div>
+        </div>
+      </div>
+    ))}
+  </SkelGroup>
+);
+
 const SkelChat = ({n=6,pad="6px 2px"}) => (
   <SkelGroup style={{padding:pad}}>
     {Array.from({length:n}).map((_,i)=>{ const mine = (i%3)===1;
@@ -4484,6 +4513,12 @@ function App() {
  const [leaguesLoading, setLeaguesLoading] = useState(true);
  const [leagueMembers, setLeagueMembers] = useState([]);
  const [bracketMatchups, setBracketMatchups] = useState([]);
+ // Which league bracketMatchups actually holds. Without this, an empty array
+ // reads as "no bracket yet" during the first fetch and the pre-playoff
+ // explainer flashes before the real bracket swaps in — and switching leagues
+ // briefly showed the PREVIOUS league's bracket.
+ const [bracketFor, setBracketFor] = useState(null);
+ const bracketReqRef = useRef(null);
  const [bracketDetail, setBracketDetail] = useState(null);
  const [matchupView, setMatchupView] = useState("mine");
  const [mWeek, setMWeek] = useState(0);
@@ -7211,10 +7246,13 @@ function App() {
  };
 
  const fetchBracket = async (lid) => {
+ bracketReqRef.current = lid;
  try {
  const { data } = await supabase.from("matchups").select("*").eq("league_id", lid);
  const ms = data||[];
- setBracketMatchups(ms);
+ // A slow response for the league we just navigated away from must not land.
+ if(bracketReqRef.current !== lid) return;
+ setBracketMatchups(ms); setBracketFor(lid);
  const wks = [...new Set(ms.map(m=>m.week))].sort((a,b)=>a-b);
  const fin = ms.filter(m=>m.week===wks[wks.length-1]);
  const champ = (fin.length===1)?fin[0].winner_id:null;
@@ -14485,8 +14523,12 @@ function App() {
    const pWeeks = playoffWeeksFor(N);
    const sw = Number(lg.season_weeks)||18;
    const startWeek = Math.max(1, sw - pWeeks + 1);
-   const playoffMs = (bracketMatchups||[]).filter(m=>String(m.bracket_match_id||"").startsWith("P"));
+   // Only trust bracketMatchups once it belongs to THIS league. Until then we do not
+   // know whether a bracket exists, so an empty array must not be read as "none".
+   const bracketReady = bracketFor === lg.id;
+   const playoffMs = bracketReady ? (bracketMatchups||[]).filter(m=>String(m.bracket_match_id||"").startsWith("P")) : [];
    const seeded = ms.slice(0,N);
+   if(!bracketReady) return <SkelBracket/>;
    if(N<2) return (<div style={{padding:"12px 16px 20px"}}><div style={{background:IOS.bg2,borderRadius:RAD.md,padding:"28px 20px",textAlign:"center"}}><div style={{fontSize:15,fontWeight:700,color:"#fff",marginBottom:6}}>No playoff in this league</div><div style={{fontSize:13,color:IOS.label3,lineHeight:1.6}}>Playoffs need at least 4 players. The top of the standings takes the title.</div></div></div>);
    if(playoffMs.length) return (
      <div style={{padding:"12px 16px 20px"}}>
@@ -15318,8 +15360,12 @@ function App() {
    const startWeek = Math.max(1, sw - pWeeks + 1);
    const cw = activeLeague.current_week||1;
    const regDone = cw >= startWeek;
-   const playoffMs = (bracketMatchups||[]).filter(m=>String(m.bracket_match_id||"").startsWith("P"));
+   // Only trust bracketMatchups once it belongs to THIS league. Until then we do not
+   // know whether a bracket exists, so an empty array must not be read as "none".
+   const bracketReady = bracketFor === lg.id;
+   const playoffMs = bracketReady ? (bracketMatchups||[]).filter(m=>String(m.bracket_match_id||"").startsWith("P")) : [];
    const seeded = ms.slice(0,N);
+   if(!bracketReady) return <SkelBracket/>;
    const seededIds = seeded.map(z=>z.userId);
    const doSeed = async ()=>{ if(seededIds.length!==N) return; const res = await generatePlayoffBracket(activeLeague.id, seededIds, startWeek); if(res&&res.ok){ await fetchBracket(activeLeague.id); } else { alert("Couldn't seed the bracket: "+((res&&res.error&&(res.error.message||res.error.hint))||"the matchups insert was rejected — run the SQL fix (add bracket_match_id column + make user1_id/user2_id nullable).")); } };
    if(N===0) return (
