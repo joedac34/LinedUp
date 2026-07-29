@@ -35,7 +35,12 @@ export default async function handler(req, res) {
     }
 
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-    const { userIds, userId, title, body: text, url, data, category } = body;
+    const { userIds, userId, title, body: text, url, data, category: rawCategory } = body;
+    // `category` is concatenated into a PostgREST column list below. It arrives
+    // straight from the request body, so restrict it to the real preference
+    // columns rather than letting a caller name any column on `users`.
+    const NOTIF_COLS = ['notif_results','notif_grades','notif_reminder','notif_league','notif_plok'];
+    const category = NOTIF_COLS.includes(rawCategory) ? rawCategory : null;
     let ids = (userIds && userIds.length ? userIds : (userId ? [userId] : [])).filter(Boolean);
     if (!ids.length || !title) return res.status(400).json({ error: 'missing userIds/title' });
 

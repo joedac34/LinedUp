@@ -117,7 +117,31 @@ function metabetLinks(/* ctx */) {
   return [];
 }
 
+// ── Caller verification ──────────────────────────────────────────────────────
+// Every request must carry a real Supabase user token. These endpoints spend
+// The Odds API credits (a metered, paid quota), so an unauthenticated caller
+// could loop them. The token is verified against Supabase auth, not merely
+// parsed; no user identity beyond "valid" is needed here.
+async function requireUser(req) {
+  const h = req.headers.authorization || "";
+  const token = h.startsWith("Bearer ") ? h.slice(7) : null;
+  if (!token) return null;
+  const base = process.env.VITE_SUPABASE_URL;
+  const apikey = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+  if (!base || !apikey) return null;
+  try {
+    const r = await fetch(base + "/auth/v1/user", {
+      headers: { apikey, Authorization: "Bearer " + token },
+    });
+    if (!r.ok) return null;
+    const u = await r.json();
+    return u && u.id ? u : null;
+  } catch (e) { return null; }
+}
+
 export default async function handler(req, res) {
+  const _caller = await requireUser(req);
+  if (!_caller) return res.status(401).json({ error: "unauthorized" });
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
   try {
     const ctx = req.body || {};
