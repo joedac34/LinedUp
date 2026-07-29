@@ -4446,6 +4446,13 @@ function App() {
  const [legalDoc, setLegalDoc] = useState("terms");
  // Delete-account flow. delStep 1 explains, 2 shows this account's real
  // consequences from get_deletion_impact, 3 confirms.
+ // Change password + data export, both reached from the Account group.
+ const [pwOpen, setPwOpen] = useState(false);
+ const [pwBusy, setPwBusy] = useState(false);
+ const [pwErr, setPwErr] = useState("");
+ const [pwDone, setPwDone] = useState(false);
+ const [expBusy, setExpBusy] = useState(false);
+ const [expMsg, setExpMsg] = useState("");
  const [delStep, setDelStep] = useState(1);
  const [delImpact, setDelImpact] = useState(null);
  const [delWord, setDelWord] = useState("");
@@ -6801,6 +6808,39 @@ function App() {
  const [profileData, setProfileData] = useState(null);
  const [profileLoading, setProfileLoading] = useState(false);
  const profileReqRef = useRef(null);
+ // Data export. The file is built server-side so it is complete regardless of
+ // what RLS lets the browser read. Delivery differs by platform: a WKWebView
+ // ignores <a download>, so on device we hand off to the share sheet instead.
+ const downloadMyData = async () => {
+   if(expBusy) return;
+   setExpBusy(true); setExpMsg("");
+   try{
+     const {data:sess}=await supabase.auth.getSession();
+     const tok=sess&&sess.session&&sess.session.access_token;
+     const r=await fetch(API_BASE+"/api/export-data",{method:"POST",
+       headers:{"Content-Type":"application/json","Authorization":"Bearer "+tok},body:"{}"});
+     if(!r.ok){ let m="Could not build your export."; try{ const j=await r.json(); if(j.error) m=j.error; }catch(e){}
+       setExpBusy(false); setExpMsg(m); return; }
+     const text=await r.text();
+     const name="picklock-data-"+new Date().toISOString().slice(0,10)+".json";
+     let handled=false;
+     if(IS_NATIVE && navigator.share){
+       try{
+         const file=new File([text],name,{type:"application/json"});
+         if(navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({files:[file],title:name}); handled=true; }
+         else { await navigator.share({title:name,text}); handled=true; }
+       }catch(e){ if(e && e.name==="AbortError"){ setExpBusy(false); setExpMsg(""); return; } }
+     }
+     if(!handled){
+       const url=URL.createObjectURL(new Blob([text],{type:"application/json"}));
+       const a=document.createElement("a"); a.href=url; a.download=name;
+       document.body.appendChild(a); a.click(); a.remove();
+       setTimeout(()=>{ try{ URL.revokeObjectURL(url); }catch(e){} },1000);
+     }
+     setExpBusy(false); setExpMsg("Saved "+name);
+   }catch(e){ setExpBusy(false); setExpMsg("Could not reach the server. Try again."); }
+ };
+
  const openUserProfile = async (userId, seed) => {
    if(!userId) return;
    const id = String(userId);
@@ -8502,6 +8542,46 @@ function App() {
  <style>{css}</style>
 
  {/* ══ TUTORIAL OVERLAY ══ */}
+{pwOpen && (
+<div style={{position:"fixed",inset:0,zIndex:10000,background:"#000",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"0 26px",fontFamily:"Barlow,sans-serif"}}>
+  <div style={{width:"100%",maxWidth:380}}>
+   {pwDone ? (<>
+     <div style={{width:64,height:64,borderRadius:"50%",background:"rgba(48,209,88,0.10)",border:"0.5px solid rgba(48,209,88,0.3)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}>
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+     </div>
+     <div style={{fontSize:24,fontWeight:800,color:"#fff",letterSpacing:-0.5,marginBottom:8,textAlign:"center"}}>Password updated</div>
+     <div style={{fontSize:14,color:"rgba(255,255,255,0.5)",lineHeight:1.6,marginBottom:20,textAlign:"center"}}>You are still signed in here. Any other device will need the new password.</div>
+     <button className="auth-cta" onClick={()=>{ setPwOpen(false); setPwDone(false); }}>Done</button>
+   </>) : (<>
+     <div style={{fontSize:26,fontWeight:800,color:"#fff",letterSpacing:-0.5,marginBottom:8,textAlign:"center"}}>Change password</div>
+     <div style={{fontSize:14,color:"rgba(255,255,255,0.5)",lineHeight:1.6,marginBottom:20,textAlign:"center"}}>Enter your current password, then choose a new one.</div>
+     <input id="pw-cur" className="auth-input" type="password" autoComplete="current-password" placeholder="Current password" style={{marginBottom:10}}/>
+     <input id="pw-new" className="auth-input" type="password" autoComplete="new-password" placeholder="New password (8+ characters)" style={{marginBottom:10}}/>
+     <input id="pw-new2" className="auth-input" type="password" autoComplete="new-password" placeholder="Confirm new password" style={{marginBottom:pwErr?7:16}}/>
+     {pwErr?(<div style={{fontSize:12.5,fontWeight:600,color:IOS.red,margin:"0 2px 14px",lineHeight:1.45}}>{pwErr}</div>):null}
+     <button className="auth-cta" disabled={pwBusy} style={pwBusy?{opacity:0.55,cursor:"default"}:undefined} onClick={async()=>{
+       const cur=(document.getElementById("pw-cur")?.value||"");
+       const p1=(document.getElementById("pw-new")?.value||"");
+       const p2=(document.getElementById("pw-new2")?.value||"");
+       if(!cur){ setPwErr("Enter your current password."); return; }
+       if(p1.length<8){ setPwErr("Your new password needs at least 8 characters."); return; }
+       if(p1!==p2){ setPwErr("Those passwords do not match."); return; }
+       if(p1===cur){ setPwErr("That is already your password."); return; }
+       setPwBusy(true); setPwErr("");
+       // Re-authenticate first. updateUser would accept the change on session
+       // alone, which means an unattended phone could have its password taken.
+       const email=(user&&user.email)||"";
+       const {error:reauth}=await supabase.auth.signInWithPassword({email,password:cur});
+       if(reauth){ setPwBusy(false); setPwErr("That current password is not right."); return; }
+       const {error}=await supabase.auth.updateUser({password:p1});
+       if(error){ setPwBusy(false); setPwErr(errText(error)||"Could not update your password."); return; }
+       haptic("success"); setPwBusy(false); setPwDone(true);
+     }}>{pwBusy?"Updating…":"Update password"}</button>
+     <div onClick={()=>{ if(!pwBusy){ setPwOpen(false); setPwErr(""); } }} style={{textAlign:"center",fontSize:13,fontWeight:600,color:IOS.blue,cursor:"pointer",marginTop:16}}>Cancel</div>
+   </>)}
+  </div>
+</div>
+)}
 {preAuthPage && (
 <div style={{position:"fixed",inset:0,zIndex:10001,background:"#000",overflowY:"auto",WebkitOverflowScrolling:"touch",fontFamily:"Barlow,sans-serif"}}>
   <div style={{maxWidth:480,margin:"0 auto"}}>
@@ -16686,6 +16766,29 @@ function App() {
  <button onClick={()=>setTutorialStep(0)} style={{width:"100%",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:RAD.md,padding:"14px",fontSize:15,fontWeight:600,color:"rgba(255,255,255,0.7)",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
  How to Play
  </button>
+ </div>
+
+ {/* Account */}
+ <div style={{margin:"0 16px 12px"}}>
+  <div style={{fontSize:11,fontWeight:700,color:IOS.label3,letterSpacing:1,textTransform:"uppercase",marginBottom:8,paddingLeft:4}}>Account</div>
+  <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",borderRadius:RAD.lg,overflow:"hidden",border:EDGE.hair}}>
+   <div onClick={()=>{ haptic("select"); setPwErr(""); setPwDone(false); setPwOpen(true); }} style={{display:"flex",alignItems:"center",gap:12,padding:"13px 16px",cursor:"pointer",borderBottom:`0.5px solid ${IOS.sep}`}}>
+    <div style={{width:36,height:36,borderRadius:RAD.md,background:"rgba(10,132,255,0.14)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M21 2l-9.6 9.6M15.5 7.5l3 3"/></svg>
+    </div>
+    <div style={{flex:1}}><div style={{fontSize:14.5,fontWeight:800}}>Change password</div>
+    <div style={{fontSize:11.5,color:IOS.label3,marginTop:1}}>Update the password you sign in with</div></div>
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.28)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+   </div>
+   <div onClick={()=>{ haptic("select"); downloadMyData(); }} style={{display:"flex",alignItems:"center",gap:12,padding:"13px 16px",cursor:"pointer",borderBottom:"none"}}>
+    <div style={{width:36,height:36,borderRadius:RAD.md,background:"rgba(10,132,255,0.14)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    </div>
+    <div style={{flex:1}}><div style={{fontSize:14.5,fontWeight:800}}>Download my data</div>
+    <div style={{fontSize:11.5,color:IOS.label3,marginTop:1}}>{expBusy?"Building your file\u2026":(expMsg||"Everything PickLock holds about you")}</div></div>
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.28)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+   </div>
+  </div>
  </div>
 
  {/* Sign Out + Delete Account */}
