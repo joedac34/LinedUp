@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, Component, Fragment } from "react";
 import { supabase } from './supabase';
+import { LEGAL } from './legal';
 // Attach the current user's Supabase access token so API routes verify the caller
 // server-side (endpoints derive the user from this token, not the request body).
 async function authHeaders() {
@@ -1181,6 +1182,88 @@ const SkelChat = ({n=6,pad="6px 2px"}) => (
     })}
   </SkelGroup>
 );
+
+// ── Legal + support content ──────────────────────────────────
+// Both render in two places: as a pushed screen once signed in, and as an
+// overlay from the sign-in card. Locked-out users need support and consent
+// links most, so neither may depend on a session.
+const SUPPORT_EMAIL = "picklockapp@gmail.com";
+const APP_VERSION = "1.0.3";
+const FAQS = [
+ ["How does scoring work?","Every slot carries a multiplier. A winning pick scores its multiplier; a loss scores zero. A voided pick scores nothing and frees the slot for a replacement."],
+ ["A game was postponed — what happens to my pick?","It voids automatically once the league sees the postponement, and you can replace it with a game that has not started yet."],
+ ["My pick graded wrong.","Report it below with the pick and the week. Grades come from official box scores, and genuine errors are corrected by hand."],
+ ["Can I change a pick after it locks?","No. A pick is final once its game starts. Before that you can swap freely."],
+ ["Is this gambling?","No. There are no entry fees and no cash prizes. PickLock is played for bragging rights, and the betting lines shown are reference points only."],
+ ["How do I leave a league?","Open the league and use its settings. Leaving mid-season forfeits your remaining matchups, so tell your commissioner first."],
+ ["Why can I not subscribe in the iOS app?","Subscriptions are handled on the web. The iOS build does not sell anything."],
+];
+function LegalDoc({doc}){
+ const d = LEGAL[doc] || LEGAL.terms;
+ return (
+  <div style={{padding:"0 16px 40px"}}>
+   <div style={{fontSize:11.5,fontWeight:700,color:IOS.label3,marginBottom:14}}>{"Effective "+d.eff}</div>
+   {(d.intro||[]).map((p,i)=>(<div key={"i"+i} style={{fontSize:13,lineHeight:1.68,color:IOS.label2,marginBottom:9}}>{p}</div>))}
+   {d.secs.map((sec,i)=>(
+    <div key={i}>
+     <div style={{fontSize:sec.lvl===1?15:13,fontWeight:800,color:sec.lvl===1?"#fff":IOS.label2,margin:sec.lvl===1?"20px 0 7px":"14px 0 5px"}}>{sec.h}</div>
+     {sec.p.map((p,j)=>(<div key={j} style={{fontSize:13,lineHeight:1.68,color:IOS.label2,marginBottom:9}}>{p}</div>))}
+    </div>
+   ))}
+   <div style={{textAlign:"center",fontSize:10.5,color:"rgba(255,255,255,0.2)",fontWeight:700,padding:"22px 0 4px"}}>PickLock LLC {"·"} Delaware</div>
+  </div>
+ );
+}
+function HelpContent({onLegal, email, version, native}){
+ const [open, setOpen] = useState(null);
+ const diag = "PickLock "+version+" \nPlatform: "+(native?"iOS native":"web")+"\nAccount: "+(email||"not signed in");
+ const SEC = (t)=>(<div style={{fontSize:10,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:IOS.label3,margin:"20px 0 8px"}}>{t}</div>);
+ const CARD = {background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.md,overflow:"hidden"};
+ const mailTo = (subject)=>{ try{ window.location.href = "mailto:"+SUPPORT_EMAIL+"?subject="+encodeURIComponent(subject)+"&body="+encodeURIComponent("\n\n\u2014\n"+diag); }catch(e){} };
+ const ROW = (label, sub, onClick)=>(
+  <div onClick={onClick} style={{display:"flex",alignItems:"center",gap:12,padding:"13px 14px",borderBottom:`0.5px solid ${IOS.sep}`,cursor:"pointer"}}>
+   <div style={{flex:1}}><div style={{fontSize:14,fontWeight:700}}>{label}</div>{sub?<div style={{fontSize:10.5,color:IOS.label3,fontWeight:600,marginTop:2}}>{sub}</div>:null}</div>
+   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.28)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+  </div>
+ );
+ return (
+  <div style={{padding:"0 16px 40px"}}>
+   {SEC("Common questions")}
+   <div style={CARD}>
+    {FAQS.map((f,i)=>(
+     <div key={i} style={{borderBottom:i<FAQS.length-1?`0.5px solid ${IOS.sep}`:"none"}}>
+      <div onClick={()=>{ haptic("select"); setOpen(open===i?null:i); }} style={{display:"flex",alignItems:"center",gap:11,padding:"13px 14px",cursor:"pointer"}}>
+       <div style={{flex:1,fontSize:14,fontWeight:700}}>{f[0]}</div>
+       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.32)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,transform:open===i?"rotate(90deg)":"none",transition:"transform .2s"}}><polyline points="9 18 15 12 9 6"/></svg>
+      </div>
+      {open===i?(<div style={{padding:"0 14px 14px",fontSize:12.5,lineHeight:1.6,color:IOS.label2}}>{f[1]}</div>):null}
+     </div>
+    ))}
+   </div>
+   {SEC("Get in touch")}
+   <div style={CARD}>
+    {ROW("Email support", SUPPORT_EMAIL, ()=>mailTo("PickLock support"))}
+    {ROW("Report a bug","Opens email with your diagnostics", ()=>mailTo("PickLock bug report"))}
+    {ROW("Request a feature","Tell me what is missing", ()=>mailTo("PickLock feature request"))}
+   </div>
+   {SEC("Legal")}
+   <div style={CARD}>
+    {ROW("Terms of Service", null, ()=>onLegal("terms"))}
+    {ROW("Privacy Policy", null, ()=>onLegal("privacy"))}
+   </div>
+   {SEC("Diagnostics")}
+   <div style={{...CARD, padding:"12px 14px"}}>
+    {[["App version", version],["Platform", native?"iOS native":"web"],["Account", email||"not signed in"]].map(([k,v])=>(
+     <div key={k} style={{display:"flex",justifyContent:"space-between",gap:12,fontSize:12,padding:"4px 0"}}>
+      <span style={{color:IOS.label3,fontWeight:700,flexShrink:0}}>{k}</span>
+      <span style={{fontWeight:800,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{v}</span>
+     </div>
+    ))}
+   </div>
+   <div style={{textAlign:"center",fontSize:10.5,color:"rgba(255,255,255,0.2)",fontWeight:700,padding:"22px 0 4px"}}>{"PickLock "+version+" · PickLock LLC"}</div>
+  </div>
+ );
+}
 
 // ── Player profile sheet ───────────────────────────────────
 // Opened by tapping a user anywhere (leaderboard, standings, chat, matchup).
@@ -4319,7 +4402,7 @@ function App() {
  // back-map: "where did I come from" is the correct answer for a back gesture, and the
  // league screen alone has three different entry points.
  const navHist = useRef(["home"]);
- const PUSHED_SCREENS = ["league","chat","commissioner","leaderboard","analytics","browser","ai"];
+ const PUSHED_SCREENS = ["league","chat","commissioner","leaderboard","analytics","browser","ai","help","legal","deleteaccount"];
  useEffect(()=>{
    const h = navHist.current;
    if(h[h.length-1] !== screen){ h.push(screen); if(h.length>25) h.shift(); }
@@ -4355,6 +4438,25 @@ function App() {
  const [usernameError, setUsernameError] = useState("");
  const [authScreen, setAuthScreen] = useState("login");
  const [recoveryMode, setRecoveryMode] = useState(false);
+ // Forgot-password sheet. Its own overlay rather than an authScreen value, so the
+ // sign-in card underneath is untouched and there is nothing to restore on close.
+ // Legal + support. legalDoc picks which document the "legal" screen shows.
+ // preAuthPage renders the same content as an overlay for signed-out users,
+ // because screen routing only exists inside the logged-in tree.
+ const [legalDoc, setLegalDoc] = useState("terms");
+ // Delete-account flow. delStep 1 explains, 2 shows this account's real
+ // consequences from get_deletion_impact, 3 confirms.
+ const [delStep, setDelStep] = useState(1);
+ const [delImpact, setDelImpact] = useState(null);
+ const [delWord, setDelWord] = useState("");
+ const [delBusy, setDelBusy] = useState(false);
+ const [delErr, setDelErr] = useState("");
+ const [preAuthPage, setPreAuthPage] = useState(null);
+ const [forgotOpen, setForgotOpen] = useState(false);
+ const [forgotSent, setForgotSent] = useState(false);
+ const [forgotBusy, setForgotBusy] = useState(false);
+ const [forgotEmail, setForgotEmail] = useState("");
+ const [forgotErr, setForgotErr] = useState("");
  const [anim, setAnim] = useState(false);
  const [timeLeft, setTimeLeft] = useState({h:0,m:0,s:0});
  const [submitted, setSubmitted] = useState(false);
@@ -8400,6 +8502,61 @@ function App() {
  <style>{css}</style>
 
  {/* ══ TUTORIAL OVERLAY ══ */}
+{preAuthPage && (
+<div style={{position:"fixed",inset:0,zIndex:10001,background:"#000",overflowY:"auto",WebkitOverflowScrolling:"touch",fontFamily:"Barlow,sans-serif"}}>
+  <div style={{maxWidth:480,margin:"0 auto"}}>
+   <div style={{display:"flex",alignItems:"center",gap:11,padding:"calc(var(--sa-top) + 14px) 16px 10px",position:"sticky",top:0,background:"#000",zIndex:2}}>
+    <div onClick={()=>setPreAuthPage(null)} style={{width:31,height:31,borderRadius:RAD.md,background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
+     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+    </div>
+    <div style={{fontSize:23,fontWeight:800,letterSpacing:"-0.5px",color:"#fff"}}>{preAuthPage==="help"?"Help & Support":LEGAL[preAuthPage].title}</div>
+   </div>
+   {preAuthPage==="help"
+     ? <HelpContent email={null} version={APP_VERSION} native={IS_NATIVE} onLegal={(d)=>setPreAuthPage(d)}/>
+     : <LegalDoc doc={preAuthPage}/>}
+  </div>
+</div>
+)}
+{forgotOpen && (
+<div style={{position:"fixed",inset:0,zIndex:10000,background:"#000",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"0 26px",fontFamily:"Barlow,sans-serif"}}>
+  <div style={{width:"100%",maxWidth:380}}>
+    {forgotSent ? (<>
+      <div style={{width:64,height:64,borderRadius:"50%",background:"rgba(48,209,88,0.10)",border:"0.5px solid rgba(48,209,88,0.3)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}>
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 6L2 7"/></svg>
+      </div>
+      <div style={{fontSize:24,fontWeight:800,color:"#fff",letterSpacing:-0.5,marginBottom:8,textAlign:"center"}}>Check your email</div>
+      {/* Deliberately identical whether or not the address is registered — saying
+          "no account found" tells a stranger which emails have accounts. */}
+      <div style={{fontSize:14,color:"rgba(255,255,255,0.5)",lineHeight:1.6,marginBottom:20,textAlign:"center"}}>{"If an account exists for "}<span style={{color:"#fff",fontWeight:700}}>{forgotEmail}</span>{", a reset link is on its way. Check spam if it is not there in a minute."}</div>
+      <button className="auth-cta" onClick={()=>{ setForgotOpen(false); setForgotSent(false); }}>Back to sign in</button>
+      <div onClick={()=>{ setForgotSent(false); setForgotErr(""); }} style={{textAlign:"center",fontSize:13,fontWeight:600,color:IOS.blue,cursor:"pointer",marginTop:16}}>Use a different email</div>
+    </>) : (<>
+      <div style={{fontSize:26,fontWeight:800,color:"#fff",letterSpacing:-0.5,marginBottom:8,textAlign:"center"}}>Reset password</div>
+      <div style={{fontSize:14,color:"rgba(255,255,255,0.5)",lineHeight:1.6,marginBottom:20,textAlign:"center"}}>Enter the email you signed up with and we will send you a link to set a new password.</div>
+      <input className="auth-input" type="email" autoComplete="email" placeholder="you@example.com" value={forgotEmail} onChange={(e)=>{ setForgotEmail(e.target.value); if(forgotErr) setForgotErr(""); }} style={{marginBottom:forgotErr?7:14}}/>
+      {forgotErr?(<div style={{fontSize:12.5,fontWeight:600,color:IOS.red,margin:"0 2px 12px",lineHeight:1.45}}>{forgotErr}</div>):null}
+      <button className="auth-cta" disabled={forgotBusy} style={forgotBusy?{opacity:0.55,cursor:"default"}:undefined} onClick={async()=>{
+        const em=(forgotEmail||"").trim();
+        if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)){ setForgotErr("Enter a valid email address."); return; }
+        setForgotBusy(true); setForgotErr("");
+        // The link has to come back to the real https origin. On device
+        // window.location.origin is capacitor://localhost, which no mail client
+        // can open, so the reset dead-ends.
+        const back = IS_NATIVE ? "https://app.picklockapp.com" : window.location.origin;
+        try{
+          const {error}=await supabase.auth.resetPasswordForEmail(em,{redirectTo:back});
+          // A send failure is still reported as sent: surfacing "user not found"
+          // here would leak account existence. Real faults go to the console.
+          if(error) console.warn("reset send:", errText(error));
+        }catch(e){ console.warn("reset send:", errText(e)); }
+        setForgotEmail(em); setForgotBusy(false); setForgotSent(true);
+      }}>{forgotBusy?"Sending…":"Send reset link"}</button>
+      <div onClick={()=>{ setForgotOpen(false); setForgotErr(""); }} style={{textAlign:"center",fontSize:13,fontWeight:600,color:IOS.blue,cursor:"pointer",marginTop:16}}>Back to sign in</div>
+      <div style={{marginTop:22,background:"rgba(10,132,255,0.08)",border:"0.5px solid rgba(10,132,255,0.24)",borderRadius:RAD.md,padding:"11px 13px",fontSize:12,lineHeight:1.5,color:"rgba(255,255,255,0.55)",fontWeight:600}}>Signed up with Apple or Google? There is no password to reset {"—"} use that same button on the sign-in screen.</div>
+    </>)}
+  </div>
+</div>
+)}
 {recoveryMode && (
 <div style={{position:"fixed",inset:0,zIndex:10000,background:"#000",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"0 26px",fontFamily:"Barlow,sans-serif"}}>
   <div style={{width:"100%",maxWidth:380}}>
@@ -8592,7 +8749,7 @@ function App() {
  {authScreen==="signup"&&<div style={{fontSize:11,color:"rgba(255,255,255,0.32)",marginBottom:7,paddingLeft:4}}>This is how you'll appear to other players</div>}
  {authScreen==="signup"&&<input id="auth-referral" className="auth-input" type="text" placeholder="Friend's referral code (optional)" defaultValue={(new URLSearchParams(window.location.search).get("ref")||"").toUpperCase()} style={{marginBottom:6}}/>}
  {authScreen==="signup"&&<div style={{fontSize:11,color:"rgba(255,255,255,0.34)",margin:"0 2px 14px",lineHeight:1.4}}>Have a league code? Leave this blank — you’ll join your league after signing in, from Leagues → Join.</div>}
- {authScreen==="login"&&<div onClick={async()=>{ const email=(document.getElementById("auth-email")?.value||"").trim(); if(!email){ alert("Enter your email above first, then tap Forgot password."); return; } const {error}=await supabase.auth.resetPasswordForEmail(email,{redirectTo:window.location.origin}); if(error){ alert(error.message); } else { alert("If an account exists for that email, a reset link is on its way - check your inbox and spam."); } }} style={{textAlign:"center",fontSize:13,fontWeight:600,color:IOS.blue,cursor:"pointer",margin:"2px 0 14px"}}>Forgot password?</div>}
+ {authScreen==="login"&&<div onClick={()=>{ setForgotEmail((document.getElementById("auth-email")?.value||"").trim()); setForgotSent(false); setForgotErr(""); setForgotOpen(true); }} style={{textAlign:"center",fontSize:13,fontWeight:600,color:IOS.blue,cursor:"pointer",margin:"2px 0 14px"}}>Forgot password?</div>}
  <button className="auth-cta" onClick={async()=>{
  const email=document.getElementById("auth-email").value.trim();
  const password=document.getElementById("auth-password").value;
@@ -8618,6 +8775,16 @@ function App() {
  setTutorialStep(0);
  }}}>{authScreen==="login"?"Sign In":"Create Account"}</button>
  <div onClick={()=>setAuthScreen(authScreen==="login"?"signup":"login")} style={{textAlign:"center",fontSize:13,color:"rgba(255,255,255,0.4)",cursor:"pointer",marginTop:16}}>{authScreen==="login"?"No account? Sign up":"Already have an account? Sign in"}</div>
+ </div>
+
+ {/* Legal + support, reachable with no session. Apple requires the consent
+     links at signup; a locked-out user needs support most of all. */}
+ <div style={{position:"relative",marginTop:18,textAlign:"center",fontSize:11.5,lineHeight:1.6,color:"rgba(255,255,255,0.34)",fontWeight:600}}>
+  {authScreen==="signup"?<span>{"By creating an account you agree to our "}</span>:null}
+  <span onClick={()=>setPreAuthPage("terms")} style={{color:"#7EA4F2",fontWeight:700,cursor:"pointer"}}>Terms</span>
+  <span>{authScreen==="signup"?" and ":" · "}</span>
+  <span onClick={()=>setPreAuthPage("privacy")} style={{color:"#7EA4F2",fontWeight:700,cursor:"pointer"}}>Privacy Policy</span>
+  {authScreen==="signup"?<span>{". You must be 18+ to play."}</span>:<><span>{" · "}</span><span onClick={()=>setPreAuthPage("help")} style={{color:"#7EA4F2",fontWeight:700,cursor:"pointer"}}>Help</span></>}
  </div>
 
  {/* Trust line */}
@@ -11315,6 +11482,146 @@ function App() {
  </div>
  );})()
  }
+
+ {screen==="deleteaccount"&&(()=>{
+ const imp = delImpact || {};
+ const comm = Array.isArray(imp.commissioner_of) ? imp.commissioner_of : [];
+ const armed = String(delWord||"").trim().toUpperCase()==="DELETE";
+ const back = ()=>{ haptic("select"); if(delStep>1){ setDelStep(delStep-1); setDelErr(""); } else { setScreen("profile"); } };
+ const SEC = (t)=>(<div style={{fontSize:10,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:IOS.label3,margin:"20px 0 8px"}}>{t}</div>);
+ const CARD = {background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.md,padding:"2px 14px"};
+ const CALLOUT = (tone,text)=>{ const c = tone==="dang"?"255,69,58":tone==="warn"?"255,159,10":"59,111,224";
+   return (<div style={{background:`rgba(${c},0.09)`,border:`0.5px solid rgba(${c},0.26)`,borderRadius:RAD.md,padding:"12px 13px",fontSize:12.5,lineHeight:1.5,fontWeight:600,color:`rgba(${c},1)`,filter:"brightness(1.35)"}}>{text}</div>); };
+ const IMP = (big,color,title,sub)=>(
+  <div style={{display:"flex",alignItems:"flex-start",gap:12,padding:"12px 0",borderBottom:`0.5px solid ${IOS.sep}`}}>
+   <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:22,width:38,textAlign:"center",color:color,flexShrink:0}}>{big}</div>
+   <div><div style={{fontSize:13.5,fontWeight:700}}>{title}</div><div style={{fontSize:11.5,color:IOS.label3,marginTop:2,lineHeight:1.45}}>{sub}</div></div>
+  </div>
+ );
+ const BTN = (label,tone,onClick,disabled)=>{
+  const st = tone==="solid" ? {background:IOS.red,color:"#fff",border:"none"}
+    : tone==="dang" ? {background:"rgba(255,69,58,0.10)",color:IOS.red,border:"1px solid rgba(255,69,58,0.28)"}
+    : {background:"rgba(255,255,255,0.05)",color:"#fff",border:EDGE.hair3};
+  return (<button onClick={onClick} disabled={!!disabled} style={{...st,width:"100%",borderRadius:RAD.md,padding:14,fontSize:15,fontWeight:800,fontFamily:"Barlow,sans-serif",cursor:disabled?"default":"pointer",opacity:disabled?0.45:1,marginBottom:9}}>{label}</button>);
+ };
+ return (
+ <div className="body">
+  <div style={{display:"flex",alignItems:"center",gap:11,padding:"calc(var(--sa-top) + 12px) 16px 10px"}}>
+   <div onClick={back} style={{width:31,height:31,borderRadius:RAD.md,background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+   </div>
+   <div><div style={{fontSize:23,fontWeight:800,letterSpacing:"-0.5px"}}>{delStep===1?"Delete account":delStep===2?"Before you go":"Confirm"}</div>
+   <div style={{fontSize:11.5,color:IOS.label3,fontWeight:600,marginTop:1}}>{"Step "+delStep+" of 3"}</div></div>
+  </div>
+  <div style={{padding:"0 16px 40px"}}>
+   <div style={{display:"flex",gap:5,marginBottom:16}}>{[1,2,3].map(i=>(<div key={i} style={{flex:1,height:3,borderRadius:2,background:i<=delStep?IOS.red:"rgba(255,255,255,0.09)"}}/>))}</div>
+
+   {delStep===1&&(<>
+    {CALLOUT("dang","This permanently deletes your PickLock account. It cannot be undone and there is no grace period.")}
+    {SEC("What gets deleted")}
+    <div style={CARD}>
+     {IMP("✕",IOS.red,"Your login","Email, password, and any connected sign-in")}
+     {IMP("✕",IOS.red,"Your profile","Username, badges, founding member status, leaderboard entry")}
+     {IMP("✕",IOS.red,"Your subscription","Pro is cancelled immediately. No refund for the current period.")}
+     {IMP("✕",IOS.red,"Your messages","Chat removed from every league")}
+    </div>
+    {SEC("What stays")}
+    <div style={CARD}>
+     {IMP("✓",IOS.label3,"Your picks, anonymised","Past slips stay attached to their weeks as \"Former player\", with your name removed. Deleting them would silently rewrite the scores of everyone who played against you.")}
+    </div>
+    <div style={{height:18}}/>
+    {BTN("Continue","dang",async()=>{ haptic("select"); setDelErr("");
+      try{ const {data}=await supabase.rpc("get_deletion_impact"); if(data) setDelImpact(data); }catch(e){}
+      setDelStep(2); })}
+    {BTN("Cancel","grey",()=>{ haptic("select"); setScreen("profile"); })}
+   </>)}
+
+   {delStep===2&&(<>
+    {(comm.length>0||Number(imp.live_matchups)>0)
+      ? CALLOUT("warn","You are still active in leagues. Deleting now affects other people's games.")
+      : CALLOUT("info","Nothing here depends on you right now.")}
+    {SEC("This account right now")}
+    <div style={CARD}>
+     {comm.length>0 ? IMP(comm.length,IOS.orange,comm.length===1?"League you commission":"Leagues you commission",
+        comm.map(c=>c.name).join(", ")+" — the longest-standing member takes over automatically.") : null}
+     {Number(imp.live_matchups)>0 ? IMP(Number(imp.live_matchups),IOS.orange,"Live matchups","Your opponents get a walkover for the rest of the season") : null}
+     {imp.is_founder ? IMP("#"+(imp.founder_number||"?"),IOS.yellow,"Founding member","Your founder number is released and cannot be reclaimed") : null}
+     {Number(imp.graded_picks)>0 ? IMP(Number(imp.graded_picks),IOS.label3,"Graded picks","Kept anonymised so league history stays correct") : null}
+     {(comm.length===0&&!Number(imp.live_matchups)&&!imp.is_founder&&!Number(imp.graded_picks))
+       ? (<div style={{padding:"14px 0",fontSize:13,color:IOS.label3}}>No active leagues or graded picks.</div>) : null}
+    </div>
+    {SEC("Did you mean one of these instead?")}
+    <div style={{...CARD,padding:0,overflow:"hidden"}}>
+     {[["Turn off all notifications","Keep the account, go quiet",()=>{ setScreen("profile"); }],
+       ...(imp.is_pro&&!IS_NATIVE?[["Cancel Pro only","Keep playing on the free tier",()=>{ openBillingPortal(); }]]:[]),
+      ].map(([t,sub,fn])=>(
+      <div key={t} onClick={()=>{ haptic("select"); fn(); }} style={{display:"flex",alignItems:"center",gap:12,padding:"13px 14px",borderBottom:`0.5px solid ${IOS.sep}`,cursor:"pointer"}}>
+       <div style={{flex:1}}><div style={{fontSize:14,fontWeight:700}}>{t}</div><div style={{fontSize:10.5,color:IOS.label3,fontWeight:600,marginTop:2}}>{sub}</div></div>
+       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.28)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>))}
+    </div>
+    <div style={{height:18}}/>
+    {BTN("Still delete my account","dang",()=>{ haptic("select"); setDelWord(""); setDelErr(""); setDelStep(3); })}
+    {BTN("Keep my account","grey",()=>{ haptic("select"); setScreen("profile"); })}
+   </>)}
+
+   {delStep===3&&(<>
+    {CALLOUT("dang","Last step. Once you confirm, your account and personal data are gone immediately.")}
+    <div style={{fontSize:11,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:IOS.label3,margin:"20px 0 7px"}}>Type DELETE to confirm</div>
+    <input className="auth-input" type="text" autoCapitalize="characters" autoCorrect="off" placeholder="DELETE" value={delWord} onChange={(e)=>{ setDelWord(e.target.value); if(delErr) setDelErr(""); }} style={{marginBottom:delErr?7:16}}/>
+    {delErr?(<div style={{fontSize:12.5,fontWeight:600,color:IOS.red,margin:"0 2px 14px",lineHeight:1.45}}>{delErr}</div>):null}
+    {BTN(delBusy?"Deleting…":"Permanently delete my account","solid",async()=>{
+      if(!armed||delBusy) return;
+      setDelBusy(true); setDelErr("");
+      try{
+        const {data:sess}=await supabase.auth.getSession();
+        const tok=sess&&sess.session&&sess.session.access_token;
+        const r=await fetch(API_BASE+"/api/delete-account",{method:"POST",
+          headers:{"Content-Type":"application/json","Authorization":"Bearer "+tok},
+          body:JSON.stringify({confirm:"DELETE"})});
+        const j=await r.json().catch(()=>({}));
+        if(!r.ok){ setDelBusy(false); setDelErr(j.error||"Could not delete your account. Nothing was changed — please try again."); return; }
+        // Gone. Drop the session and every trace of it in memory.
+        try{ posthog.reset(); }catch(e){}
+        await supabase.auth.signOut();
+        setUser(null); setUserProfile(null); setRealLeagues([]); setActiveLeagueId(null);
+        setSavedPicks(null); setFlexPicks(freshSlots()); setDelStep(1); setDelWord("");
+        setDelImpact(null); setDelBusy(false); setScreen("home");
+      }catch(e){ setDelBusy(false); setDelErr("Could not reach the server. Nothing was deleted — please try again."); }
+    },!armed||delBusy)}
+    {BTN("Cancel","grey",()=>{ haptic("select"); setScreen("profile"); },delBusy)}
+   </>)}
+  </div>
+ </div>
+ );})()
+}
+
+{screen==="help"&&(
+ <div className="body">
+  <div style={{display:"flex",alignItems:"center",gap:11,padding:"calc(var(--sa-top) + 12px) 16px 10px"}}>
+   <div onClick={()=>{ haptic("select"); setScreen("profile"); }} style={{width:31,height:31,borderRadius:RAD.md,background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+   </div>
+   <div><div style={{fontSize:23,fontWeight:800,letterSpacing:"-0.5px"}}>Help &amp; Support</div>
+   <div style={{fontSize:11.5,color:IOS.label3,fontWeight:600,marginTop:1}}>Answers, or a real person</div></div>
+  </div>
+  <HelpContent email={user&&user.email} version={APP_VERSION} native={IS_NATIVE}
+   onLegal={(d)=>{ setLegalDoc(d); setScreen("legal"); }}/>
+ </div>
+)}
+
+{screen==="legal"&&(
+ <div className="body">
+  <div style={{display:"flex",alignItems:"center",gap:11,padding:"calc(var(--sa-top) + 12px) 16px 10px"}}>
+   <div onClick={()=>{ haptic("select"); setScreen("profile"); }} style={{width:31,height:31,borderRadius:RAD.md,background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+   </div>
+   <div><div style={{fontSize:23,fontWeight:800,letterSpacing:"-0.5px"}}>{LEGAL[legalDoc].title}</div>
+   <div style={{fontSize:11.5,color:IOS.label3,fontWeight:600,marginTop:1}}>{"Effective "+LEGAL[legalDoc].eff}</div></div>
+  </div>
+  <LegalDoc doc={legalDoc}/>
+ </div>
+)}
 
  {/* ══ GRID BET BROWSER ══ */}
 {screen==="leaderboard"&&(()=>{
@@ -16346,6 +16653,34 @@ function App() {
  </div>
  </div>
 
+ {/* Support & legal */}
+ <div style={{margin:"0 16px 12px"}}>
+  <div style={{fontSize:11,fontWeight:700,color:IOS.label3,letterSpacing:1,textTransform:"uppercase",marginBottom:8,paddingLeft:4}}>Support</div>
+  <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",borderRadius:RAD.lg,overflow:"hidden",border:EDGE.hair}}>
+   <div onClick={()=>{ haptic("select"); setScreen("help"); }} style={{display:"flex",alignItems:"center",gap:12,padding:"13px 16px",cursor:"pointer",borderBottom:`0.5px solid ${IOS.sep}`}}>
+    <div style={{width:36,height:36,borderRadius:RAD.md,background:"rgba(10,132,255,0.14)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    </div>
+    <div style={{flex:1}}><div style={{fontSize:14.5,fontWeight:800}}>Help &amp; Support</div>    <div style={{fontSize:11.5,color:IOS.label3,marginTop:1}}>FAQs, contact, report a bug</div>
+    </div><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.28)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+   </div>
+   <div onClick={()=>{ haptic("select"); setLegalDoc("terms"); setScreen("legal"); }} style={{display:"flex",alignItems:"center",gap:12,padding:"13px 16px",cursor:"pointer",borderBottom:`0.5px solid ${IOS.sep}`}}>
+    <div style={{width:36,height:36,borderRadius:RAD.md,background:"rgba(10,132,255,0.14)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h6"/></svg>
+    </div>
+    <div style={{flex:1}}><div style={{fontSize:14.5,fontWeight:800}}>Terms of Service</div>
+    </div><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.28)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+   </div>
+   <div onClick={()=>{ haptic("select"); setLegalDoc("privacy"); setScreen("legal"); }} style={{display:"flex",alignItems:"center",gap:12,padding:"13px 16px",cursor:"pointer",borderBottom:"none"}}>
+    <div style={{width:36,height:36,borderRadius:RAD.md,background:"rgba(10,132,255,0.14)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+    </div>
+    <div style={{flex:1}}><div style={{fontSize:14.5,fontWeight:800}}>Privacy Policy</div>
+    </div><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.28)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+   </div>
+  </div>
+ </div>
+
  {/* How to Play */}
  <div style={{padding:"0 16px 4px"}}>
  <button onClick={()=>setTutorialStep(0)} style={{width:"100%",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:RAD.md,padding:"14px",fontSize:15,fontWeight:600,color:"rgba(255,255,255,0.7)",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
@@ -16369,26 +16704,7 @@ function App() {
  }} style={{width:"100%",background:"rgba(255,59,48,0.1)",border:"1px solid rgba(255,59,48,0.2)",borderRadius:RAD.md,padding:"14px",fontSize:15,fontWeight:600,color:IOS.red,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
  Sign Out
  </button>
- <button onClick={async()=>{
- const confirm1 = window.confirm("Are you sure you want to delete your account? This cannot be undone.");
- if(!confirm1) return;
- const confirm2 = window.confirm("Last chance — this will permanently delete your account and all your picks.");
- if(!confirm2) return;
- // Delete user data from DB
- await supabase.from("picks").delete().eq("user_id", user.id);
- await supabase.from("league_members").delete().eq("user_id", user.id);
- await supabase.from("users").delete().eq("id", user.id);
- await supabase.auth.admin?.deleteUser(user.id).catch(()=>{});
- await supabase.auth.signOut();
- setUser(null);
- setUserProfile(null);
- setRealLeagues([]);
- setActiveLeagueId(null);
- setSavedPicks(null);
- setFlexPicks(freshSlots());
- setScreen("home");
- alert("Your account has been deleted.");
- }} style={{width:"100%",background:"transparent",border:"none",borderRadius:RAD.md,padding:"10px",fontSize:13,fontWeight:600,color:"rgba(255,59,48,0.5)",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
+ <button onClick={()=>{ haptic("select"); setDelStep(1); setDelImpact(null); setDelWord(""); setDelErr(""); setScreen("deleteaccount"); }} style={{width:"100%",background:"transparent",border:"none",borderRadius:RAD.md,padding:"10px",fontSize:13,fontWeight:600,color:"rgba(255,59,48,0.5)",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
  Delete Account
  </button>
  </div>
