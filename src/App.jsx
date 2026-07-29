@@ -6853,21 +6853,22 @@ function App() {
      const {data:sess}=await supabase.auth.getSession();
      const tok=sess&&sess.session&&sess.session.access_token;
      const r=await fetch(API_BASE+"/api/export-data",{method:"POST",
-       headers:{"Content-Type":"application/json","Authorization":"Bearer "+tok},body:"{}"});
+       headers:{"Content-Type":"application/json","Authorization":"Bearer "+tok},
+       body:JSON.stringify({format:"html"})});
      if(!r.ok){ let m="Could not build your export."; try{ const j=await r.json(); if(j.error) m=j.error; }catch(e){}
        setExpBusy(false); setExpMsg(m); return; }
      const text=await r.text();
-     const name="picklock-data-"+new Date().toISOString().slice(0,10)+".json";
+     const name="picklock-data-"+new Date().toISOString().slice(0,10)+".html";
      let handled=false;
      if(IS_NATIVE && navigator.share){
        try{
-         const file=new File([text],name,{type:"application/json"});
+         const file=new File([text],name,{type:"text/html"});
          if(navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({files:[file],title:name}); handled=true; }
          else { await navigator.share({title:name,text}); handled=true; }
        }catch(e){ if(e && e.name==="AbortError"){ setExpBusy(false); setExpMsg(""); return; } }
      }
      if(!handled){
-       const url=URL.createObjectURL(new Blob([text],{type:"application/json"}));
+       const url=URL.createObjectURL(new Blob([text],{type:"text/html"}));
        const a=document.createElement("a"); a.href=url; a.download=name;
        document.body.appendChild(a); a.click(); a.remove();
        setTimeout(()=>{ try{ URL.revokeObjectURL(url); }catch(e){} },1000);
