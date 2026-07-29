@@ -229,10 +229,10 @@ const SPORTS = {
  season:"2024 NFL Season",
  slots:[
  { id:"ml", label:"Moneyline", mult:1, icon:"", color:"#0A84FF", bg:"rgba(10,132,255,0.15)", desc:"Pick a winner straight up" },
- { id:"prop", label:"Prop", mult:2, icon:"", color:"#FFD60A", bg:"rgba(255,214,10,0.15)", desc:"Player or game prop bet" },
+ { id:"prop", label:"Prop", mult:2, icon:"", color:"#FFD60A", bg:"rgba(255,214,10,0.15)", desc:"Player or game prop" },
  { id:"ou", label:"Over/Under", mult:3, icon:"", color:"#FF9F0A", bg:"rgba(255,159,10,0.15)", desc:"Total points over or under" },
  { id:"spread", label:"Spread", mult:4, icon:"", color:"#30D158", bg:"rgba(48,209,88,0.15)", desc:"Beat the point spread" },
- { id:"longshot", label:"Parlay", mult:5, icon:"", color:"#FF375F", bg:"rgba(255,55,95,0.15)", desc:"Build a mini parlay — pick 2+ bets" },
+ { id:"longshot", label:"Parlay", mult:5, icon:"", color:"#FF375F", bg:"rgba(255,55,95,0.15)", desc:"Build a mini parlay — pick 2+ legs" },
  ],
  bets:{
  ml:[
@@ -315,10 +315,10 @@ const SPORTS = {
  season:"2025 CFB Season",
  slots:[
  { id:"ml", label:"Moneyline", mult:1, icon:"", color:"#FF3B30", bg:"rgba(255,59,48,0.15)", desc:"Pick a winner straight up" },
- { id:"prop", label:"Prop", mult:2, icon:"", color:"#FFD60A", bg:"rgba(255,214,10,0.15)", desc:"Player or game prop bet" },
+ { id:"prop", label:"Prop", mult:2, icon:"", color:"#FFD60A", bg:"rgba(255,214,10,0.15)", desc:"Player or game prop" },
  { id:"ou", label:"Over/Under", mult:3, icon:"", color:"#FF9F0A", bg:"rgba(255,159,10,0.15)", desc:"Total points over or under" },
  { id:"spread", label:"Spread", mult:4, icon:"", color:"#30D158", bg:"rgba(48,209,88,0.15)", desc:"Beat the point spread" },
- { id:"longshot", label:"Parlay", mult:5, icon:"", color:"#FF375F", bg:"rgba(255,55,95,0.15)", desc:"Build a mini parlay - pick 2+ bets" },
+ { id:"longshot", label:"Parlay", mult:5, icon:"", color:"#FF375F", bg:"rgba(255,55,95,0.15)", desc:"Build a mini parlay - pick 2+ legs" },
  ],
  bets:{ ml:[], prop:[], ou:[], spread:[], longshot:[] },
  },
@@ -2736,7 +2736,7 @@ function BetslipButton({ bet, IOS }){
   useEffect(()=>{
     if(!BETSLIP_ENABLED || !betslipAllowedHere() || !bet || !bet.game){ setLoading(false); return; }
     let alive = true; setLoading(true);
-    fetch(API_BASE+"/api/betslip",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ sport:bet._sport||bet.sport, game:bet.game, category:bet.category, pick:bet.pick, point:bet.line })})
+    authHeaders().then(_h=>fetch(API_BASE+"/api/betslip",{method:"POST",headers:_h,body:JSON.stringify({ sport:bet._sport||bet.sport, game:bet.game, category:bet.category, pick:bet.pick, point:bet.line })}))
       .then(r=>r.json()).then(d=>{ if(alive){ setData(d); setLoading(false); } })
       .catch(()=>{ if(alive) setLoading(false); });
     return ()=>{ alive=false; };
@@ -4520,7 +4520,6 @@ function App() {
  const [forgotEmail, setForgotEmail] = useState("");
  const [forgotErr, setForgotErr] = useState("");
  const [anim, setAnim] = useState(false);
- const [timeLeft, setTimeLeft] = useState({h:0,m:0,s:0});
  const [submitted, setSubmitted] = useState(false);
  const [leagueTab, setLeagueTab] = useState("standings");
  const [fieldPlayer, setFieldPlayer] = useState(null);
@@ -4550,6 +4549,11 @@ function App() {
  const [mWeek, setMWeek] = useState(0);
  const [lmWeek, setLmWeek] = useState(null);
  const [allMatchups, setAllMatchups] = useState([]);
+ // Which league allMatchups actually holds. It is NOT in the league-switch clear
+ // block, so without this the Schedule and Matchups tabs render the PREVIOUS
+ // league's matchups under the new league's header until the refetch lands.
+ const [matchupsFor, setMatchupsFor] = useState(null);
+ const matchupsReqRef = useRef(null);
  const [bracketLive, setBracketLive] = useState({week:0,totals:{}});
  const [champCelebrate, setChampCelebrate] = useState(null);
  const champSeenRef = useRef("");
@@ -4560,6 +4564,11 @@ function App() {
  // carries a button that deletes the season.
  const [scheduleLoaded, setScheduleLoaded] = useState(false);
  const [realStandings, setRealStandings] = useState([]);
+ // Which league realStandings holds. The switch handler clears it to [], and an
+ // empty array is indistinguishable from "no graded picks yet" — so every league
+ // switch flashed that empty state before the real rows arrived.
+ const [standingsFor, setStandingsFor] = useState(null);
+ const standingsReqRef = useRef(null);
  const [allMyStats, setAllMyStats] = useState(null);
  const [lbCache, setLbCache] = useState({});
  const [lbTf, setLbTf] = useState("all");
@@ -4699,7 +4708,7 @@ function App() {
  if(!sportKey) { setOddsLoading(false); return; }
 
  // Fetch h2h + spreads + totals in one call
- const res = await fetch(API_BASE+`/api/odds?sport=${sportKey}`);
+ const res = await fetch(API_BASE+`/api/odds?sport=${sportKey}`, { headers: await authHeaders() });
  if(!res.ok) throw new Error(`API error ${res.status}`);
  const payload = await res.json();
  console.log(`[odds] ${sportId} games:`, (payload.games||payload)?.length, "| quota used:", payload.used, "remaining:", payload.remaining);
@@ -4771,7 +4780,7 @@ function App() {
  // Fetch live player props from separate endpoint
  let prop = []; // live props only — blank if the feed has none for this sport
  try {
- const propsRes = await fetch(API_BASE+`/api/props?sport=${sportKey}`);
+ const propsRes = await fetch(API_BASE+`/api/props?sport=${sportKey}`, { headers: await authHeaders() });
  if(propsRes.ok) {
  const propsPayload = await propsRes.json();
  if(propsPayload.props && propsPayload.props.length > 0) {
@@ -4833,7 +4842,7 @@ function App() {
  const marketKeys = [...new Set(periodTypes.map(t=>PERIOD_MARKETS[t]).filter(Boolean))];
  if(!marketKeys.length) return;
  try {
- const res = await fetch(API_BASE+`/api/eventodds?sport=${sportKey}&events=${eventIds.join(",")}&markets=${marketKeys.join(",")}`);
+ const res = await fetch(API_BASE+`/api/eventodds?sport=${sportKey}&events=${eventIds.join(",")}&markets=${marketKeys.join(",")}`, { headers: await authHeaders() });
  if(!res.ok) return;
  const data = await res.json();
  const grouped = {}; periodTypes.forEach(t=>{ grouped[t]=[]; });
@@ -5251,7 +5260,7 @@ function App() {
     return list.slice().sort((a,b)=>((b.edge!=null?b.edge:-999)-(a.edge!=null?a.edge:-999)));
   };
   const plokTypeLabel = (t) => {
-    if(!t) return "Any bet";
+    if(!t) return "Any type";
     if(t==="wildcard") return "Wildcard";
     if(PERIOD_MARKETS[t]) return PERIOD_TYPE_LABEL[t] || t;
     return ({ml:"Moneyline", spread:"Spread", ou:"Total", prop:"Player prop", longshot:"Longshot"})[SLOT_OF[t]||t] || t;
@@ -5939,7 +5948,7 @@ function App() {
   {id:"ou",l:"Over / Under",scope:"Game line",color:"#FF9F0A"},
   {id:"prop",l:"Player Prop",scope:"Props",color:"#FFD60A"},
   {id:"longshot",l:"Longshot / Parlay",scope:"Exotic",color:"#FF375F"},
-  {id:"wildcard",l:"Wildcard",scope:"Any bet type",color:"#BF5AF2"},
+  {id:"wildcard",l:"Wildcard",scope:"Any pick type",color:"#BF5AF2"},
   {id:"ml_h1",l:"1st Half ML",scope:"1st Half",color:"#64D2FF",sports:["nfl","nba"]},
   {id:"spread_h1",l:"1st Half Spread",scope:"1st Half",color:"#64D2FF",sports:["nfl","nba"]},
   {id:"ou_h1",l:"1st Half O / U",scope:"1st Half",color:"#64D2FF",sports:["nfl","nba"]},
@@ -5950,7 +5959,7 @@ function App() {
   {id:"nrfi",l:"NRFI",scope:"No Run 1st Inning",color:"#30D158",sports:["mlb"]},
  ];
  const PLOK_MODELS=[
-  {id:"ev", name:"+EV Hunter", ready:true, color:IOS.green, desc:"De-vigs the market and flags where the best price beats the true line.", icon:<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg>},
+  {id:"ev", name:"+EV Hunter", ready:true, color:IOS.green, desc:"Compares every book's price to the market consensus and flags the outliers.", icon:<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg>},
   {id:"trends", name:"Trends & Form", ready:true, color:IOS.teal, desc:"Last-10 form, hot/cold streaks, home/road splits and situational edges.", icon:<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={IOS.teal} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 4-5"/></svg>},
   {id:"projection", name:"The Projection", ready:true, color:IOS.blue, desc:"Projects the number from stats and shows it against the line.", icon:<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><line x1="12" y1="1" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="23"/></svg>},
   {id:"clv", name:"CLV Report Card", ready:false, color:IOS.purple, desc:"Did your locked picks beat the closing line? The pro's scorecard.", icon:<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={IOS.purple} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="6"/><path d="M9 13l-2 8 5-3 5 3-2-8"/></svg>},
@@ -7021,7 +7030,7 @@ function App() {
  // Personality
  const lsT=byType["longshot"]||{wins:0,pct:0};const mlT=byType["ml"]||{wins:0,pct:0};const spT=byType["spread"]||{pct:0};const prT=byType["prop"]||{wins:0,pct:0};
  let personality="The Rookie",personalityDesc="You're just getting started. Keep picking and your style will emerge.";
- if(total>=5){if(lsT.wins>=2&&lsT.pct>=25){personality="The Gambler";personalityDesc="You're not afraid of big odds. Your longshot hit rate is turning heads.";}else if(mlT.pct>=65&&mlT.wins>=8){personality="The Chalk";personalityDesc="You ride favorites hard and it's working. Boring? Maybe. Profitable? Yes.";}else if(spT.pct>=60){personality="The Handicapper";personalityDesc="You beat the spread at an elite clip. Vegas should be worried.";}else if(prT.pct>=60&&prT.wins>=6){personality="The Analyst";personalityDesc="Player props are your bread and butter. You do your homework.";}else if(wins/total>=0.60){personality="The Sharpshooter";personalityDesc="Consistent, disciplined, winning across the board. Textbook sharp.";}else{personality="The Contrarian";personalityDesc="You pick against the grain. Your record proves it's not always wrong.";}}
+ if(total>=5){if(lsT.wins>=2&&lsT.pct>=25){personality="The Gambler";personalityDesc="You're not afraid of big odds. Your longshot hit rate is turning heads.";}else if(mlT.pct>=65&&mlT.wins>=8){personality="The Chalk";personalityDesc="You ride favorites hard and it's working. Boring? Maybe. Working? Absolutely.";}else if(spT.pct>=60){personality="The Handicapper";personalityDesc="You beat the spread at an elite clip. The board rarely gets one past you.";}else if(prT.pct>=60&&prT.wins>=6){personality="The Analyst";personalityDesc="Player props are your bread and butter. You do your homework.";}else if(wins/total>=0.60){personality="The Sharpshooter";personalityDesc="Consistent, disciplined, winning across the board. Textbook sharp.";}else{personality="The Contrarian";personalityDesc="You pick against the grain. Your record proves it's not always wrong.";}}
  // Longshot deep stats
  const lsPicks=picks.filter(p=>p.slot?.startsWith("longshot_"));
  const lsByLegs={};
@@ -7046,6 +7055,7 @@ function App() {
 
  const fetchStandings = async (leagueId) => {
   if(!isUuid(leagueId)) return;   // a non-uuid makes Postgres 400 the whole query
+  standingsReqRef.current = leagueId;
  // Get all members first — always needed regardless of picks
  const {data:members} = await supabase
  .from("league_members")
@@ -7145,7 +7155,8 @@ function App() {
  })
  .map((s,i)=>({...s, rank:i+1}));
 
- setRealStandings(standings);
+ if(standingsReqRef.current !== leagueId) return;   // superseded by a newer league
+ setRealStandings(standings); setStandingsFor(leagueId);
  };
  const myPicksSeq = useRef(0);
  // Guard: only the NEWEST fetchMyPicks call may write savedPicks. Without this, the
@@ -7342,7 +7353,14 @@ function App() {
      setBracketDetail({ round: label, week, slides, index: si });
    } catch(e) {}
  };
- const fetchAllMatchups = async (leagueId) => { try{ const { data } = await supabase.from("matchups").select("*").eq("league_id", leagueId); setAllMatchups(data||[]); }catch(e){} };
+ const fetchAllMatchups = async (leagueId) => {
+   matchupsReqRef.current = leagueId;
+   try{
+     const { data } = await supabase.from("matchups").select("*").eq("league_id", leagueId);
+     if(matchupsReqRef.current !== leagueId) return;   // user already switched leagues
+     setAllMatchups(data||[]); setMatchupsFor(leagueId);
+   }catch(e){}
+ };
  useEffect(()=>{ if(screen==="matchup" && activeLeague && (activeLeague.league_type||"h2h")==="h2h" && activeLeague.id){ fetchAllMatchups(activeLeague.id); fetchWeekPicks(activeLeague.id, activeLeague.current_week||activeLeague.week||1); setMWeek(activeLeague.current_week||activeLeague.week||1); setBracketDetail(null); setMatchupView("mine"); } }, [screen, activeLeagueId]);
 
  useEffect(()=>{ if(screen==="leagues" && leagueSubTab==="matchups" && activeLeague && activeLeague.id){ fetchAllMatchups(activeLeague.id); fetchWeekPicks(activeLeague.id, activeLeague.current_week||activeLeague.week||1); setBracketDetail(null); } }, [screen, leagueSubTab, activeLeagueId]);
@@ -7534,8 +7552,8 @@ function App() {
  if(u) { fetchLeagues(u.id); fetchAllMyStats(u.id); fetchUserProfile(u.id); } else { try{ posthog.reset(); }catch(e){} }
  });
  setTimeout(()=>setAnim(true),80);
- const t=setInterval(()=>setTimeLeft(p=>{let{h,m,s}=p;s--;if(s<0){s=59;m--;}if(m<0){m=59;h--;}if(h<0){h=0;m=0;s=0;}return{h,m,s};}),1000);
- return()=>clearInterval(t);
+ // (a 1s interval used to tick a countdown state here that nothing rendered —
+ //  it re-reconciled the entire App tree every second for no output)
  },[]);
 
  // Solo home: fetch the live solo sport so the ticker + Plok's Play of the Day reflect the real live sport, not stale league data.
@@ -8905,7 +8923,7 @@ function App() {
  <svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{filter:"drop-shadow(0 0 10px rgba(10,132,255,0.6))"}}><rect x="3" y="11" width="18" height="11" rx="2.5"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
  <div style={{fontSize:40,fontWeight:900,letterSpacing:-1.5,lineHeight:1.1,display:"inline-block",padding:"6px 12px 12px",backgroundImage:"linear-gradient(135deg,#0A84FF,#64D2FF)",WebkitBackgroundClip:"text",backgroundClip:"text",WebkitTextFillColor:"transparent",animation:"authGlow 3.6s ease-in-out infinite"}}>PICKLOCK</div>
  </div>
- <div style={{fontSize:14,color:"rgba(255,255,255,0.5)",fontWeight:500}}>Where fantasy meets betting</div>
+ <div style={{fontSize:14,color:"rgba(255,255,255,0.5)",fontWeight:500}}>Real lines. Real bragging rights.</div>
  </div>
 
  {/* Glass form card */}
@@ -10071,7 +10089,9 @@ function App() {
  </div>
  </div>
  <div style={{margin:"0 16px"}}>
- {baseStandings.length===0 ? (<SkelGroup>{[0,1,2].map(i=>(
+ {/* Ownership, not emptiness. Previously an empty array rendered this skeleton
+     unconditionally, so a league with no standings shimmered indefinitely. */}
+ {(standingsFor !== (activeLeague && activeLeague.id) && baseStandings.length===0) ? (<SkelGroup>{[0,1,2].map(i=>(
  <div key={"sk"+i} style={{display:"flex",alignItems:"center",gap:11,padding:"0 13px",height:56,marginBottom:8,borderRadius:RAD.lg,background:"#131318",border:EDGE.hair}}>
  <Skel w={16} h={15}/><Skel w={32} h={32} r={16}/>
  <div style={{flex:1}}><Skel w="52%" h={13} style={{marginBottom:6}}/><Skel w="28%" h={9}/></div>
@@ -10401,7 +10421,7 @@ function App() {
  <div className="sheet-hdr">
  <div>
  <div className="sheet-hdr-title">
- {activePicks[activeFlexSlot]?.isParlay ? "Parlay Legs" : flexCategory ? ["Moneyline","Prop","Over/Under","Spread","Longshot"][["ml","prop","ou","spread","longshot"].indexOf(flexCategory)] : "Choose a Bet"}
+ {activePicks[activeFlexSlot]?.isParlay ? "Parlay Legs" : flexCategory ? ["Moneyline","Prop","Over/Under","Spread","Longshot"][["ml","prop","ou","spread","longshot"].indexOf(flexCategory)] : "Choose a Pick"}
  </div>
  <div className="sheet-hdr-sub">
  {activePicks[activeFlexSlot]?.isParlay
@@ -10462,7 +10482,7 @@ function App() {
  {id:"prop", label:"Prop", icon:"", color:IOS.yellow, desc:"Player or game prop"},
  {id:"ou", label:"Over/Under", icon:"", color:IOS.orange, desc:"Total points scored"},
  {id:"spread", label:"Spread", icon:"", color:IOS.green, desc:"Beat the point spread"},
- {id:"longshot",label:"Longshot", icon:"", color:IOS.pink, desc:"High odds single bet"},
+ {id:"longshot",label:"Longshot", icon:"", color:IOS.pink, desc:"High odds single pick"},
  ].map(cat=>{
  const taken = usedCats.includes(cat.id);
  return (
@@ -10661,7 +10681,7 @@ function App() {
  if(filtered.length === 0) return (
    <div style={{padding:"40px 20px",textAlign:"center"}}>
      <div style={{fontSize:14,fontWeight:600,color:"rgba(255,255,255,0.25)",marginBottom:6}}>
-       {flexCategory==="prop" ? "No props available yet" : "No bets available"}
+       {flexCategory==="prop" ? "No props available yet" : "No picks available"}
      </div>
      <div style={{fontSize:12,color:"rgba(255,255,255,0.15)",lineHeight:1.5}}>
        {flexCategory==="prop"
@@ -11102,7 +11122,7 @@ function App() {
          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
        </div>
        <div>
-         <div style={{fontSize:14,fontWeight:700,color:"#fff",letterSpacing:"-0.2px"}}>Browse all bets</div>
+         <div style={{fontSize:14,fontWeight:700,color:"#fff",letterSpacing:"-0.2px"}}>Browse all picks</div>
          <div style={{fontSize:11,color:"rgba(255,255,255,0.45)",marginTop:1}}>Grid view with stats &amp; recent form</div>
        </div>
      </div>
@@ -11254,7 +11274,7 @@ function App() {
  <div style={{padding:"7px 14px 8px",borderTop:"1px solid #222",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
  <div>
  <div style={{fontSize:11,color:IOS.label3}}>Make this a Parlay</div>
- <div style={{fontSize:10,color:"#444",marginTop:1}}>Pick 2+ legs instead of one straight bet</div>
+ <div style={{fontSize:10,color:"#444",marginTop:1}}>Pick 2+ legs instead of a single pick</div>
  </div>
  <div onClick={()=>setActivePicks(prev=>prev.map((p,i)=>i===idx?{...p,isParlay:!p.isParlay,bet:null,parlayLegs:[]}:p))}
  style={{width:40,height:24,borderRadius:RAD.md,background:slot.isParlay?IOS.pink:"rgba(255,255,255,0.1)",position:"relative",cursor:"pointer",transition:"background .2s",flexShrink:0}}>
@@ -12365,7 +12385,7 @@ function App() {
    const _spk = {mlb:"baseball_mlb",nfl:"americanfootball_nfl",nba:"basketball_nba",nhl:"icehockey_nhl",ncaaf:"americanfootball_ncaaf"}; const _rawSp = bet._sport||bet.sport||"mlb"; const q = new URLSearchParams({ sport: (_spk[_rawSp]||_rawSp||"baseball_mlb"), event: bet.eventId||"", market: mk });
    if(isProp && player) q.set("player", player);
    if(isSpread && bet.outcome) q.set("name", bet.outcome);
-   const r = await fetch(API_BASE+"/api/altlines?"+q.toString(), { cache: "no-store" });
+   const r = await fetch(API_BASE+"/api/altlines?"+q.toString(), { cache: "no-store", headers: await authHeaders() });
    const d = await r.json().catch(()=>({sides:[]}));
    setAltSheet(a=> a ? {...a, loading:false, sides:(d.sides||[])} : a);
    } catch(e){ setAltSheet(a=> a ? {...a, loading:false, sides:[]} : a); }
@@ -12685,7 +12705,7 @@ function App() {
  <div style={{display:"flex",alignItems:"center",gap:11,padding:"10px 16px 8px"}}>
  <div onClick={()=>setScreen("picks")} style={{width:34,height:34,borderRadius:RAD.md,background:"rgba(255,255,255,0.06)",border:EDGE.hair2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:acc,fontSize:18,flexShrink:0}}>‹</div>
  <div style={{flex:1,minWidth:0}}>
- <div style={{fontSize:21,fontWeight:800,letterSpacing:"-0.6px",color:"#fff",lineHeight:1}}>Bet Browser</div>
+ <div style={{fontSize:21,fontWeight:800,letterSpacing:"-0.6px",color:"#fff",lineHeight:1}}>Pick Browser</div>
  <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:3,display:"flex",alignItems:"center",gap:5}}>
  <span style={{width:6,height:6,borderRadius:"50%",background:isLiveOdds?IOS.green:IOS.orange,display:"inline-block",boxShadow:isLiveOdds?`0 0 6px ${IOS.green}`:"none"}}/>
  {isLiveOdds?"Live odds":"Sample odds"} · {isSoloMode ? (soloFreePicks.length+" pick"+(soloFreePicks.length===1?"":"s")+" added") : ("Filling Pick "+(target+1)+(targetMult?(" ("+targetMult+"×)"):""))}
@@ -12841,7 +12861,7 @@ function App() {
            </div>
            <div style={{flex:1,minWidth:0}}>
              <div style={{fontSize:8.5,fontWeight:900,letterSpacing:"0.08em",color:IOS.pink}}>{"PARLAY · "+_sl.length+" "+(_sl.length===1?"LEG":"LEGS")+(_ready?(" · "+_am):"")}</div>
-             <div style={{fontSize:10.5,fontWeight:600,color:"rgba(255,255,255,0.5)",marginTop:1}}>{_ready?"Tap more to add, or a leg below to remove":"Tap bets below to add legs — need 2+"}</div>
+             <div style={{fontSize:10.5,fontWeight:600,color:"rgba(255,255,255,0.5)",marginTop:1}}>{_ready?"Tap more to add, or a leg below to remove":"Tap picks below to add legs — need 2+"}</div>
            </div>
            <div onClick={()=>{ setSoloParlayMode(false); setScreen("picks"); }} style={{fontFamily:"Barlow",fontSize:12,fontWeight:800,color:_ready?"#08080B":"rgba(255,255,255,0.4)",background:_ready?IOS.pink:"rgba(255,255,255,0.08)",borderRadius:RAD.sm,padding:"8px 14px",cursor:"pointer",flexShrink:0}}>Done</div>
          </div>
@@ -12871,7 +12891,7 @@ function App() {
  <div style={{padding:"0 16px 9px"}}>
  <div style={{display:"flex",alignItems:"center",gap:8,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:RAD.md,padding:"9px 12px"}}>
  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
- <input value={gridSearch} onChange={e=>setGridSearch(e.target.value)} placeholder="Search teams, players, bets" style={{flex:1,background:"none",border:"none",outline:"none",color:"#fff",fontSize:13,fontFamily:"Barlow,sans-serif"}}/>
+ <input value={gridSearch} onChange={e=>setGridSearch(e.target.value)} placeholder="Search teams, players, picks" style={{flex:1,background:"none",border:"none",outline:"none",color:"#fff",fontSize:13,fontFamily:"Barlow,sans-serif"}}/>
  {gridSearch&&<div onClick={()=>setGridSearch("")} style={{color:"rgba(255,255,255,0.4)",fontSize:16,cursor:"pointer",lineHeight:1}}>×</div>}
  </div>
 </div>
@@ -12918,7 +12938,7 @@ function App() {
  </div>
  <div style={{flex:1,minWidth:0}}>
  <div style={{fontSize:8.5,fontWeight:900,letterSpacing:"0.08em",color:IOS.pink}}>PARLAY · {parlayLegs.length} {parlayLegs.length===1?"LEG":"LEGS"}{ready?(" · "+am):""}</div>
- <div style={{fontSize:10.5,fontWeight:600,color:"rgba(255,255,255,0.5)",marginTop:1}}>{ready?"Tap more to add, or a leg below to remove":"Tap bets below to add legs — need 2+"}</div>
+ <div style={{fontSize:10.5,fontWeight:600,color:"rgba(255,255,255,0.5)",marginTop:1}}>{ready?"Tap more to add, or a leg below to remove":"Tap picks below to add legs — need 2+"}</div>
  </div>
  <div onClick={()=>setGridBuildMode(false)} style={{fontFamily:"Barlow",fontSize:12,fontWeight:800,color:ready?"#08080B":"rgba(255,255,255,0.4)",background:ready?IOS.pink:"rgba(255,255,255,0.08)",borderRadius:RAD.sm,padding:"8px 14px",cursor:"pointer",flexShrink:0}}>Done</div>
  </div>
@@ -13021,7 +13041,7 @@ function App() {
  <div onClick={addAltPick} style={{margin:"6px 16px 0",marginBottom:"calc(18px + var(--sa-bot))",padding:15,borderRadius:RAD.md,background:IOS.blue,color:"#fff",fontSize:15.5,fontWeight:800,textAlign:"center",cursor:"pointer",flexShrink:0}}>Add to slip</div>
  </>);
  })() : (
- <div style={{textAlign:"center",color:"rgba(255,255,255,0.4)",fontSize:13,padding:"40px 20px 46px"}}>No alternate lines available for this bet right now.</div>
+ <div style={{textAlign:"center",color:"rgba(255,255,255,0.4)",fontSize:13,padding:"40px 20px 46px"}}>No alternate lines available for this pick right now.</div>
  )}
  </div>
  </div>
@@ -13230,7 +13250,9 @@ function App() {
    const wks = [...new Set((allMatchups||[]).map(m=>m.week))].sort((x,y)=>x-y);
    const maxWk = wks.length?wks[wks.length-1]:(activeLeague.season_weeks||1);
    const minWk = wks.length?wks[0]:1;
-   const weekMs = (allMatchups||[]).filter(m=>m.week===wkSel);
+   // Empty is only meaningful once these matchups belong to this league.
+   const _mReady = matchupsFor === (activeLeague && activeLeague.id);
+   const weekMs = _mReady ? (allMatchups||[]).filter(m=>m.week===wkSel) : [];
    const nameOf = (id)=>{ const m=leagueMembers.find(x=>x.userId===id); return id===(user&&user.id)?"You":(m?m.name:"Player"); };
    return (<>
      <div style={{display:"flex",background:IOS.bg2,borderRadius:RAD.md,padding:3,margin:"0 16px 8px"}}>
@@ -13250,7 +13272,7 @@ function App() {
            <div onClick={()=>setMWeek(Math.min(maxWk, wkSel+1))} style={{width:34,height:34,borderRadius:RAD.md,background:IOS.bg2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",opacity:wkSel>=maxWk?0.3:1}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4"><path d="M9 18l6-6-6-6"/></svg></div>
          </div>
          <div style={{flex:1,overflow:"auto",padding:"4px 16px 100px"}}>
-           {weekMs.length===0 ? (<div style={{textAlign:"center",color:IOS.label3,fontSize:14,padding:"40px 0"}}>No matchups scheduled for Week {wkSel}.</div>) : weekMs.map((mu,mi)=>{
+           {!_mReady ? (<SkelRows n={4} card={true} pad="8px 0"/>) : weekMs.length===0 ? (<div style={{textAlign:"center",color:IOS.label3,fontSize:14,padding:"40px 0"}}>No matchups scheduled for Week {wkSel}.</div>) : weekMs.map((mu,mi)=>{
              const u1=mu.user1_id,u2=mu.user2_id;
              const mine=u1===(user&&user.id)||u2===(user&&user.id);
              const done=mu.winner_id!=null;
@@ -13940,7 +13962,7 @@ function App() {
  {slotSheetIdx===-1&&<div style={{fontSize:12,color:"rgba(255,255,255,0.5)",marginBottom:12,lineHeight:1.4}}>Pick one type and every slot becomes that type.</div>}
  <div style={{display:"flex",alignItems:"center",gap:8,background:"#16161a",border:EDGE.hair2,borderRadius:RAD.md,padding:"9px 12px",marginBottom:10}}>
  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
- <input value={slotSearch} onChange={e=>setSlotSearch(e.target.value)} placeholder="Search bet types" style={{flex:1,background:"transparent",border:0,outline:0,color:"#fff",fontFamily:"Barlow,sans-serif",fontSize:14}}/>
+ <input value={slotSearch} onChange={e=>setSlotSearch(e.target.value)} placeholder="Search pick types" style={{flex:1,background:"transparent",border:0,outline:0,color:"#fff",fontFamily:"Barlow,sans-serif",fontSize:14}}/>
  </div>
  {(()=>{
  const cats=[{cat:"Game lines",ids:["ml","spread","ou"]},{cat:"Player props",ids:["prop"]},{cat:"Innings / periods",ids:["ml_f5","spread_f5","ou_f5","ml_h1","spread_h1","ou_h1","yrfi","nrfi"]},{cat:"Exotic",ids:["longshot","wildcard"]}];
@@ -13964,7 +13986,7 @@ function App() {
  );})}
  </div>);
  });
- return any?out:<div style={{textAlign:"center",color:"rgba(255,255,255,0.3)",fontSize:13,padding:"24px 0"}}>No bet types match your search</div>;
+ return any?out:<div style={{textAlign:"center",color:"rgba(255,255,255,0.3)",fontSize:13,padding:"24px 0"}}>No pick types match your search</div>;
  })()}
  </div>
  </div>
@@ -14449,7 +14471,8 @@ function App() {
    const totalWk = Number(lg.season_weeks)||curWk;
    const wk = lmWeek!=null ? lmWeek : curWk;
    const minWk=1, maxWk=Math.max(totalWk, curWk);
-   const weekMs = (allMatchups||[]).filter(m=>m.week===wk);
+   const _mReady2 = matchupsFor === lg.id;
+   const weekMs = _mReady2 ? (allMatchups||[]).filter(m=>m.week===wk) : [];
    const nm=(id)=>{ if(!id) return "Player"; if(id===(user&&user.id)) return "You"; const m=(leagueMembers||[]).find(x=>x.userId===id); return m?m.name:"Player"; };
    const liveSum=(uid)=>(weekPicks||[]).filter(pp=>pp.user_id===uid && pp.result==="W").reduce((sm,pp)=>sm+parseFloat(pp.points_earned||0),0);
    return (
@@ -14459,7 +14482,9 @@ function App() {
        <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:800}}>Week {wk}</div><div style={{fontSize:11,color:IOS.label3,fontWeight:600,marginTop:1}}>{weekMs.length} matchup{weekMs.length===1?"":"s"}</div></div>
        <div onClick={()=>setLmWeek(Math.min(maxWk, wk+1))} style={{width:34,height:34,borderRadius:RAD.md,background:IOS.bg2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",opacity:wk>=maxWk?0.3:1}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4"><path d="M9 18l6-6-6-6"/></svg></div>
      </div>
-     {weekMs.length===0 ? (
+     {!_mReady2 ? (
+       <SkelRows n={4} card={true} pad="8px 0"/>
+     ) : weekMs.length===0 ? (
        <div style={{textAlign:"center",color:IOS.label3,fontSize:14,padding:"40px 0"}}>No matchups scheduled for Week {wk}.</div>
      ) : weekMs.map((mu,mi)=>{
        const u1=mu.user1_id,u2=mu.user2_id;
@@ -14538,7 +14563,11 @@ function App() {
        // generateSchedule() DELETES every matchup in the league. It must be unreachable
        // once a season has started — otherwise an in-flight or failed fetch puts a
        // season-wiping button in front of the commissioner.
-       const _started = (allMatchups||[]).length>0 || Number((activeLeague&&activeLeague.current_week)||1)>1;
+       // Fail safe: until allMatchups is confirmed to belong to THIS league we do
+       // not know whether a schedule exists, and generateSchedule() deletes every
+       // matchup in the league. Unknown counts as started, so the button stays hidden.
+       const _mReady = matchupsFor === (activeLeague && activeLeague.id);
+       const _started = !_mReady || (allMatchups||[]).length>0 || Number((activeLeague&&activeLeague.current_week)||1)>1;
        const _cm=!_started && !!(activeLeague&&activeLeague.isCommissioner)&&((activeLeague&&activeLeague.league_type)||"h2h")==="h2h"&&leagueMembers.length>=2; return (
        <>
        <div style={{fontSize:11,color:IOS.label3,marginBottom:_cm?12:0}}>{_cm?"Generate the regular-season matchups now — playoff weeks are reserved automatically.":"Fill up the league to generate the schedule"}</div>
@@ -14546,8 +14575,8 @@ function App() {
        <button onClick={async()=>{
          const memberIds=leagueMembers.map(m=>m.userId).filter(Boolean);
          if(memberIds.length<2){ alert("Need at least 2 members to generate a schedule."); return; }
-         if((allMatchups||[]).length>0 || Number((activeLeague&&activeLeague.current_week)||1)>1){
-           alert("This league already has a schedule. Generating a new one would delete every existing matchup and result.");
+         if(matchupsFor !== (activeLeague && activeLeague.id) || (allMatchups||[]).length>0 || Number((activeLeague&&activeLeague.current_week)||1)>1){
+           alert("This league already has a schedule, or its matchups are still loading. Generating a new one would delete every existing matchup and result.");
            return;
          }
          if(!window.confirm("Generate the schedule now for "+memberIds.length+" players? This pairs everyone into weekly matchups.")) return;
@@ -14589,7 +14618,11 @@ function App() {
 
  {/* ── PLAYOFF TAB ── */}
  {lg && leagueSubTab==="playoff" && (()=>{
-   const ms = realStandings||[];
+   // Empty only means "no graded picks" once these standings belong to this
+   // league. The switch handler clears them to [], so without this the empty
+   // state flashed on every league change.
+   const _sReady = standingsFor === lg.id;
+   const ms = _sReady ? (realStandings||[]) : [];
    const total = ms.length || (lg.target_size||lg.max_members||0);
    const N = playoffFieldFor(lg, total);
    const pWeeks = playoffWeeksFor(N);
@@ -14618,7 +14651,7 @@ function App() {
        </div>
        <div style={{fontSize:11,fontWeight:800,letterSpacing:".5px",textTransform:"uppercase",color:IOS.label3,margin:"0 4px 8px"}}>Projected seeds</div>
        <div style={{background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:RAD.lg,overflow:"hidden"}}>
-        {seeded.length===0 ? (<div style={{padding:"22px 16px",textAlign:"center",color:IOS.label3,fontSize:14}}>No graded picks yet</div>) : (()=>{
+        {!_sReady ? (<SkelRows n={4} card={true} pad="10px 16px"/>) : seeded.length===0 ? (<div style={{padding:"22px 16px",textAlign:"center",color:IOS.label3,fontSize:14}}>No graded picks yet</div>) : (()=>{
           // Show the bubble too — the list used to stop at the cut, so if you missed you
           // simply weren't on the screen and had no idea by how much.
           const shown = ms.slice(0, Math.min(ms.length, N+3));
@@ -15424,7 +15457,11 @@ function App() {
  )}
 
  {leagueTab==="playoff"&&(()=>{
-   const ms = realStandings||[];
+   // Empty only means "no graded picks" once these standings belong to this
+   // league. The switch handler clears them to [], so without this the empty
+   // state flashed on every league change.
+   const _sReady2 = standingsFor === (activeLeague && activeLeague.id);
+   const ms = _sReady2 ? (realStandings||[]) : [];
    const total = ms.length || (activeLeague.target_size||activeLeague.max_members||0);
    const N = playoffFieldFor(activeLeague, total);
    const pWeeks = playoffWeeksFor(N);
@@ -15524,7 +15561,7 @@ function App() {
        </div>
        <div style={{fontSize:11,fontWeight:800,letterSpacing:".5px",textTransform:"uppercase",color:IOS.label3,margin:"0 4px 8px"}}>{regDone?"Seeds":"Projected seeds"}</div>
        <div style={{background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:RAD.lg,overflow:"hidden"}}>
-        {seeded.length===0 ? (<div style={{padding:"22px 16px",textAlign:"center",color:IOS.label3,fontSize:14}}>No graded picks yet</div>) : (()=>{
+        {!_sReady2 ? (<SkelRows n={4} card={true} pad="10px 16px"/>) : seeded.length===0 ? (<div style={{padding:"22px 16px",textAlign:"center",color:IOS.label3,fontSize:14}}>No graded picks yet</div>) : (()=>{
           // Show the bubble under the line. The list used to stop at the cut, so a player
           // who missed simply wasn't on screen and couldn't see by how much.
           const shown = ms.slice(0, Math.min(ms.length, N+3));
@@ -15576,7 +15613,11 @@ function App() {
  {leagueTab==="standings"&&(
  <>
 {activeLeague.league_type==="points" ? (()=>{
- const _ms = realStandings||[];
+   // Empty only means "no graded picks" once these standings belong to this
+   // league. The switch handler clears them to [], so without this the empty
+   // state flashed on every league change.
+   const _sReady3 = standingsFor === (activeLeague && activeLeague.id);
+   const _ms = _sReady3 ? (realStandings||[]) : [];
  const total = _ms.length || (activeLeague.target_size||activeLeague.max_members||8);
  const playoffN = playoffFieldFor(activeLeague, total);
  const me = _ms.find(z=>z.isYou) || {};
@@ -15621,7 +15662,7 @@ function App() {
  </div>
  <div style={{fontSize:17,fontWeight:800,color:"#fff",margin:"22px 20px 12px"}}>Season Standings</div>
  <div style={{margin:"0 16px 16px",background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:RAD.lg,overflow:"hidden"}}>
-   {_ms.length===0 ? (<div style={{padding:"22px 16px",textAlign:"center",color:IOS.label3,fontSize:14}}>No graded picks yet</div>) : _ms.map((r,i)=>{
+   {!_sReady3 ? (<SkelRows n={5} card={true} pad="10px 16px"/>) : _ms.length===0 ? (<div style={{padding:"22px 16px",textAlign:"center",color:IOS.label3,fontSize:14}}>No graded picks yet</div>) : _ms.map((r,i)=>{
      const initials=(r.name==="You"||r.isYou)?"You":(r.name||"?").slice(0,2).toUpperCase();
      const col=i===0?IOS.yellow:i===1?"#C7CBD1":i===2?"#E0915A":IOS.blue;
      return (
@@ -16382,7 +16423,7 @@ function App() {
                 <div onClick={(e)=>e.stopPropagation()} style={{background:"#101015",borderTopLeftRadius:18,borderTopRightRadius:18,borderTop:"0.5px solid rgba(255,255,255,0.12)",maxHeight:"70%",display:"flex",flexDirection:"column",overflow:"hidden"}}>
                   <div style={{padding:"14px 16px 11px",flexShrink:0,borderBottom:"0.5px solid rgba(255,255,255,0.07)"}}>
                     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                      <div style={{fontSize:16,fontWeight:800,color:"#fff"}}>{(PLOK_MODELS.find(x=>x.id===plokModel)||{}).name||"Find a bet"} · pick a game</div>
+                      <div style={{fontSize:16,fontWeight:800,color:"#fff"}}>{(PLOK_MODELS.find(x=>x.id===plokModel)||{}).name||"Find a pick"} · pick a game</div>
                       <div onClick={()=>setFindBetOpen(false)} style={{fontSize:13,fontWeight:700,color:IOS.blue,cursor:"pointer"}}>Cancel</div>
                     </div>
                     <div style={{fontSize:11.5,color:"rgba(255,255,255,0.45)",marginTop:3,lineHeight:1.4}}>{(PLOK_MODELS.find(x=>x.id===plokModel)||{}).desc||"Plok scans the game and flags the best value."}</div>
@@ -16424,7 +16465,7 @@ function App() {
                 </div>
               )}
               <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <input value={aiInput} onChange={(e)=>setAiInput(e.target.value)} placeholder="Ask Plok anything, or search a bet…"
+                <input value={aiInput} onChange={(e)=>setAiInput(e.target.value)} placeholder="Ask Plok anything, or search a pick…"
                   onKeyDown={(e)=>{ if(e.key==="Enter"){ sendAi(); } }}
                   style={{flex:1,background:"rgba(255,255,255,0.06)",border:EDGE.hair2,borderRadius:RAD.md,padding:"11px 13px",color:"#fff",fontSize:13.5,outline:"none",fontFamily:"inherit"}}/>
                 <button onClick={sendAi} disabled={aiBusy||!aiInput.trim()}
@@ -16650,7 +16691,7 @@ function App() {
      </div>
      <div style={{display:"flex",gap:8,marginBottom:10}}>
        <div style={{flex:1,...SURF,padding:"12px 14px"}}>
-         <div style={{fontSize:9,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:".5px",marginBottom:6}}>Best Bet Type</div>
+         <div style={{fontSize:9,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:".5px",marginBottom:6}}>Best Pick Type</div>
          <div style={{fontSize:15,fontWeight:800,color:bestType?bestType.color:"#fff"}}>{bestType?bestType.label:"—"}</div>
          <div style={{fontSize:11,color:IOS.label3,marginTop:2}}>{bestType?`${bestType.pct}% · ${bestType.wins}-${bestType.losses}`:"No graded picks yet"}</div>
        </div>
@@ -16678,7 +16719,7 @@ function App() {
  <div onClick={()=>setScreen("analytics")} style={{margin:"0 16px",background:isPro?"rgba(10,132,255,0.1)":"rgba(191,90,242,0.08)",border:`0.5px solid ${isPro?"rgba(10,132,255,0.3)":"rgba(191,90,242,0.3)"}`,borderRadius:RAD.lg,padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}}>
    <div>
      <div style={{fontSize:14,fontWeight:700,color:"#fff",marginBottom:2}}>Full Analytics</div>
-     <div style={{fontSize:11,color:IOS.label3}}>{isPro?"Bet types, sports, longshot, season recap":"5 analytics tabs — unlock with Pro"}</div>
+     <div style={{fontSize:11,color:IOS.label3}}>{isPro?"Pick types, sports, longshot, season recap":"5 analytics tabs — unlock with Pro"}</div>
    </div>
    <div style={{display:"flex",alignItems:"center",gap:6}}>
      {!isPro&&<div style={{background:"rgba(191,90,242,0.15)",border:"0.5px solid rgba(191,90,242,0.3)",borderRadius:5,padding:"2px 7px",fontSize:9,fontWeight:700,color:"#BF5AF2"}}>PRO</div>}
@@ -17479,10 +17520,10 @@ function App() {
  {/* ══ PAYWALL SHEET ══ */}
  {!IS_NATIVE && showPaywall && (()=>{
    const configs = {
-     ai:{icon:"star",title:"Unlock Plok + Pro",sub:"Plok is your AI betting analyst — data-backed reads on every game and prop, a +EV bet finder, and unlimited insights.",features:["Plok AI analyst on every bet & prop","+EV bet finder","Recent form, splits, matchup & injuries","Multi-sport leagues & custom settings"]},
-     picks:{icon:"ti-plus",title:"Unlimited picks",sub:"Commish Pro lets you add as many pick slots as you want each week.",features:["Unlimited pick slots per week","Custom multipliers on any slot","NFL, NBA, MLB, NHL","Power-ups and custom bet types"]},
-     settings:{icon:"settings",title:"Custom league settings",sub:"Set your own pick counts, multiplier ranges, and allowed bet types.",features:["Custom pick count per week","Custom multiplier ranges","Restrict or expand bet types","Multi-sport leagues"]},
-     sport:{icon:"world",title:"Multi-sport leagues",sub:"Run your league across NFL, NBA, MLB, and NHL — all in one place.",features:["NFL, NBA, MLB, NHL support","Custom pick counts and bet types","Custom multiplier ranges","Power-ups for your league"]},
+     ai:{icon:"star",title:"Unlock Plok + Pro",sub:"Plok is your AI pick analyst — data-backed reads on every game and prop, a +EV value finder, and unlimited insights.",features:["Plok AI analyst on every game & prop","+EV value finder","Recent form, splits, matchup & injuries","Multi-sport leagues & custom settings"]},
+     picks:{icon:"ti-plus",title:"Unlimited picks",sub:"Commish Pro lets you add as many pick slots as you want each week.",features:["Unlimited pick slots per week","Custom multipliers on any slot","NFL, NBA, MLB, NHL","Power-ups and custom pick types"]},
+     settings:{icon:"settings",title:"Custom league settings",sub:"Set your own pick counts, multiplier ranges, and allowed pick types.",features:["Custom pick count per week","Custom multiplier ranges","Restrict or expand pick types","Multi-sport leagues"]},
+     sport:{icon:"world",title:"Multi-sport leagues",sub:"Run your league across NFL, NBA, MLB, and NHL — all in one place.",features:["NFL, NBA, MLB, NHL support","Custom pick counts and pick types","Custom multiplier ranges","Power-ups for your league"]},
      powerups:{icon:"bolt",title:"Power-ups are a Pro feature",sub:"Double Down, Spread Enhancer, Insurance and more are unlocked with Commish Pro.",features:["All current and future power-ups","Unlimited picks and custom settings","Multi-sport league support"]},
    };
    const cfg = configs[showPaywall]||configs.picks;
@@ -17690,8 +17731,8 @@ function App() {
  const noData=!s.total;
  const fmtOdds=o=>!o?"—":(o>0?"+"+o:""+o);
  let run=0; const cumVals=[0]; byWeek.forEach(w=>{run+=w.pts; cumVals.push(parseFloat(run.toFixed(1)));});
- const ATABS=["Overview","Bet Types","Sports","Multiplier","Longshots"];
- const TDOT={Overview:CC.blue,"Bet Types":CC.green,Sports:CC.indigo,Multiplier:CC.yellow,Longshots:CC.pink};
+ const ATABS=["Overview","Pick Types","Sports","Multiplier","Longshots"];
+ const TDOT={Overview:CC.blue,"Pick Types":CC.green,Sports:CC.indigo,Multiplier:CC.yellow,Longshots:CC.pink};
  const TAGMAP={Moneyline:"ML",Spread:"SPR","Over/Under":"O/U",Prop:"PROP",Longshot:"LS"};
  const sweet=byMult.length?byMult.reduce((a,b)=>b.pts>a.pts?b:a):null;
 
@@ -17863,7 +17904,7 @@ function App() {
       if(!tot) return null;
       const axes=RT.map(([k,tag],i)=>({tag,value:cnts[i]/mx,color:((s.byType||{})[k]||{}).color||CC.blue}));
       return (<>
-       <SecH t="Betting Fingerprint" sub={s.personality||""}/>
+       <SecH t="Pick Fingerprint" sub={s.personality||""}/>
        <div style={{...SURF,padding:"12px 12px 16px",marginBottom:14}}>
         <StatRadar axes={axes} size={210} color={CC.blue}/>
         {s.personalityDesc && <div style={{textAlign:"center",fontSize:11.5,color:CC.l2,marginTop:4,padding:"0 18px",lineHeight:1.45}}>{s.personalityDesc}</div>}
@@ -17892,8 +17933,8 @@ function App() {
     </>)}
 
     {/* BET TYPES */}
-    {analyticsTab==="Bet Types"&&(
-     <ProBlur label="Unlock Bet Type Breakdown">
+    {analyticsTab==="Pick Types"&&(
+     <ProBlur label="Unlock Pick Type Breakdown">
       <div style={SURF}>
        <div style={{padding:"16px 16px 4px",position:"relative",display:"flex",alignItems:"center",justifyContent:"center"}}>
         <Donut segs={byTypeArr.map(t=>({value:t.pts,color:t.color}))}/>
