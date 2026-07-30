@@ -11909,6 +11909,31 @@ function App() {
       </div>))}
     </div>
 
+    {/* Trophy case: every award this player has won here, across all seasons. */}
+    {(()=>{
+      const won = seasons.flatMap(sn=>(Array.isArray(sn.trophies)?sn.trophies:[])
+        .filter(t=>String(t.holder_id)===String(user&&user.id))
+        .map(t=>({...t, season:sn.season_number})));
+      if(!won.length) return null;
+      const fmt=(t)=> t.unit==="pct" ? Math.round((Number(t.lead)||0)*100)+"%"
+                    : t.unit==="int" ? String(Math.round(Number(t.lead)||0))
+                    : (Number(t.lead)||0).toFixed(1)+" pts";
+      return (<>
+        {SEC("Trophy case \u00b7 "+won.length)}
+        <div style={CARD}>{won.map((t,i)=>(
+          <div key={t.season+"-"+t.id} style={{display:"flex",alignItems:"center",gap:11,padding:"12px 13px",borderBottom:i<won.length-1?`0.5px solid ${IOS.sep}`:"none"}}>
+            <div style={{width:32,height:32,borderRadius:9,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",background:(t.color||GOLD)+"21",border:"0.5px solid "+(t.color||GOLD)+"55"}}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={t.color||GOLD} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9a6 6 0 0 0 12 0V3H6z"/><path d="M6 5H3v2a4 4 0 0 0 4 4"/><path d="M18 5h3v2a4 4 0 0 1-4 4"/><path d="M12 15v4"/><path d="M8 21h8"/></svg>
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:13.5,fontWeight:800}}>{t.name}</div>
+              <div style={{fontSize:10.5,color:IOS.label3,fontWeight:600,marginTop:1}}>{(t.desc||"")+" \u00b7 season "+t.season}</div>
+            </div>
+            <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:t.color||GOLD,flexShrink:0}}>{fmt(t)}</div>
+          </div>))}</div>
+      </>);
+    })()}
+
     {SEC(seasons.length ? ("Seasons \u00b7 "+seasons.length) : "Seasons")}
     {seasons.length===0 ? (
      <div style={{...CARD,padding:"26px 18px",textAlign:"center"}}>
@@ -11934,6 +11959,13 @@ function App() {
         </div>
        </div>
        {won ? (<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={GOLD} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M6 9a6 6 0 0 0 12 0V3H6z"/><path d="M6 5H3v2a4 4 0 0 0 4 4"/><path d="M18 5h3v2a4 4 0 0 1-4 4"/><path d="M12 15v4"/><path d="M8 21h8"/></svg>) : null}
+       {Array.isArray(sn.trophies) && sn.trophies.length ? (
+         <div style={{display:"flex",gap:4,flexShrink:0,marginLeft:2}}>
+           {sn.trophies.slice(0,4).map(t=>(
+             <div key={t.id} title={t.name+" \u2014 "+t.holder}
+               style={{width:7,height:7,borderRadius:"50%",background:String(t.holder_id)===String(user&&user.id)?(t.color||GOLD):"rgba(255,255,255,0.16)"}}/>
+           ))}
+         </div>) : null}
       </div>);
      })}</div>
     )}
