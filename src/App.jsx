@@ -1002,6 +1002,8 @@ const ageFrom = (ymd) => {
 const MIN_AGE = 18;
 const AGE_BLOCK_KEY = "picklock_age_block";
 
+const ordSuffix = (n)=> (n%100>=11&&n%100<=13) ? "th" : (n%10===1?"st":n%10===2?"nd":n%10===3?"rd":"th");
+
 const haptic = (kind) => {
   const k = kind || "light";
   try{
@@ -4564,7 +4566,7 @@ function App() {
  // back-map: "where did I come from" is the correct answer for a back gesture, and the
  // league screen alone has three different entry points.
  const navHist = useRef(["home"]);
- const PUSHED_SCREENS = ["league","chat","commissioner","leaderboard","analytics","browser","ai","help","legal","deleteaccount"];
+ const PUSHED_SCREENS = ["league","chat","commissioner","leaderboard","analytics","browser","ai","help","legal","deleteaccount","leaguehistory"];
  useEffect(()=>{
    const h = navHist.current;
    if(h[h.length-1] !== screen){ h.push(screen); if(h.length>25) h.shift(); }
@@ -7070,6 +7072,23 @@ function App() {
  // the work in one transaction: snapshot, copy, verify, then clear. It refuses
  // unless the caller is the commissioner and a champion has been crowned.
  const [rollBusy, setRollBusy] = useState(false);
+ // League history is served whole by one definer RPC, so there is nothing to
+ // stitch client-side and no way for a non-member to read another league.
+ const [leagueHistory, setLeagueHistory] = useState(null);
+ const [historyFor, setHistoryFor] = useState(null);
+ const historyReqRef = useRef(null);
+ const openLeagueHistory = async () => {
+   if(!activeLeague || !activeLeague.id) return;
+   const lid = activeLeague.id;
+   historyReqRef.current = lid;
+   setScreen("leaguehistory");
+   if(historyFor === lid) return;                 // already loaded for this league
+   try{
+     const { data } = await supabase.rpc("get_league_history", { target_league: lid });
+     if(historyReqRef.current !== lid) return;    // switched away mid-fetch
+     setLeagueHistory(data || null); setHistoryFor(lid);
+   }catch(e){}
+ };
  const rollSeason = async () => {
    if(rollBusy || !activeLeague || !activeLeague.id) return;
    const _next = Number(activeLeague.season_number||1) + 1;
@@ -11855,6 +11874,75 @@ function App() {
  );})()
 }
 
+{screen==="leaguehistory"&&(()=>{
+ const ready = historyFor === (activeLeague && activeLeague.id);
+ const h = ready ? (leagueHistory||{}) : {};
+ const seasons = Array.isArray(h.seasons) ? h.seasons : [];
+ const titles = Number(h.your_titles)||0;
+ const cur = Number(h.current_season)||1;
+ const GOLD = "#FFD60A";
+ const SEC = (t)=>(<div style={{fontSize:10,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:IOS.label3,margin:"20px 0 8px"}}>{t}</div>);
+ const CARD = {background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.md,overflow:"hidden"};
+ // Career here spans every season: archived rows still count.
+ const allStand = seasons.flatMap(x=>Array.isArray(x.standings)?x.standings:[]);
+ const mine = allStand.filter(r=>String(r.user_id)===String(user&&user.id));
+ const cw = mine.reduce((a,r)=>a+(Number(r.wins)||0),0);
+ const cl = mine.reduce((a,r)=>a+(Number(r.losses)||0),0);
+ return (
+ <div className="body">
+  <div className="pk-cbar" style={{paddingLeft:20,paddingRight:20}}><div className="pk-cbar-t">League history</div></div>
+  <div style={{display:"flex",alignItems:"center",gap:11,padding:"calc(var(--sa-top) + 12px) 16px 10px"}}>
+   <div onClick={()=>{ haptic("select"); setScreen("league"); }} style={{width:31,height:31,borderRadius:RAD.md,background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+   </div>
+   <div><div style={{fontSize:23,fontWeight:800,letterSpacing:"-0.5px"}}>League history</div>
+   <div style={{fontSize:11.5,color:IOS.label3,fontWeight:600,marginTop:1}}>{activeLeague.name+" \u00b7 season "+cur}</div></div>
+  </div>
+  <div style={{padding:"0 16px 40px"}}>
+   {!ready ? (<SkelGroup><Skel h={78} r={12} style={{marginBottom:14}}/>{[0,1,2].map(i=><Skel key={i} h={66} r={12} style={{marginBottom:8}}/>)}</SkelGroup>) : (<>
+    {SEC("Your record here")}
+    <div style={{...CARD,display:"flex",textAlign:"center"}}>
+     {[[titles, titles===1?"title":"titles"],[seasons.length, seasons.length===1?"season":"seasons"],[cw+"-"+cl,"all-time"]].map(([v,l],i)=>(
+      <div key={l} style={{flex:1,padding:"14px 4px",borderRight:i<2?`0.5px solid ${IOS.sep}`:"none"}}>
+       <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:21,color:i===0&&titles>0?GOLD:"#fff"}}>{v}</div>
+       <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.5px",textTransform:"uppercase",color:IOS.label3,marginTop:4}}>{l}</div>
+      </div>))}
+    </div>
+
+    {SEC(seasons.length ? ("Seasons \u00b7 "+seasons.length) : "Seasons")}
+    {seasons.length===0 ? (
+     <div style={{...CARD,padding:"26px 18px",textAlign:"center"}}>
+      <div style={{fontSize:14,fontWeight:700,color:IOS.label2}}>Season {cur} is the first</div>
+      <div style={{fontSize:12.5,color:IOS.label3,marginTop:6,lineHeight:1.55}}>When it finishes, the final board and the champion are saved here permanently.</div>
+     </div>
+    ) : (
+     <div style={CARD}>{seasons.map((sn,i)=>{
+      const won = sn.you_won===true;
+      const top = (Array.isArray(sn.standings)?sn.standings:[]).slice().sort((a,b)=>(Number(b.points)||0)-(Number(a.points)||0));
+      const meRow = top.findIndex(r=>String(r.user_id)===String(user&&user.id));
+      return (
+      <div key={sn.season_number} style={{display:"flex",alignItems:"center",gap:12,padding:"13px 14px",borderBottom:i<seasons.length-1?`0.5px solid ${IOS.sep}`:"none"}}>
+       <div style={{width:40,height:40,borderRadius:11,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0,background:won?"rgba(255,214,10,0.12)":"rgba(255,255,255,0.05)",border:won?"0.5px solid rgba(255,214,10,0.38)":EDGE.hair}}>
+        <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:15,lineHeight:1,color:won?GOLD:"#fff"}}>{"S"+sn.season_number}</div>
+        <div style={{fontSize:7.5,fontWeight:800,letterSpacing:"0.06em",color:IOS.label3,textTransform:"uppercase",marginTop:1}}>done</div>
+       </div>
+       <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:13.5,fontWeight:800,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{sn.name||("Season "+sn.season_number)}</div>
+        <div style={{fontSize:11,color:IOS.label3,fontWeight:600,marginTop:2}}>
+         {"Champion: "}<span style={{color:won?GOLD:IOS.label2,fontWeight:800}}>{won?"You":(sn.champion_name||"Unknown")}</span>
+         {meRow>=0 ? (" \u00b7 you: "+(meRow+1)+ordSuffix(meRow+1)+" of "+top.length) : ""}
+        </div>
+       </div>
+       {won ? (<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={GOLD} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M6 9a6 6 0 0 0 12 0V3H6z"/><path d="M6 5H3v2a4 4 0 0 0 4 4"/><path d="M18 5h3v2a4 4 0 0 1-4 4"/><path d="M12 15v4"/><path d="M8 21h8"/></svg>) : null}
+      </div>);
+     })}</div>
+    )}
+   </>)}
+  </div>
+ </div>
+ );})()
+}
+
 {screen==="help"&&(
  <div className="body">
   <div style={{display:"flex",alignItems:"center",gap:11,padding:"calc(var(--sa-top) + 12px) 16px 10px"}}>
@@ -15443,6 +15531,38 @@ function App() {
  </div>
  {youWon&&<div style={{fontSize:9,fontWeight:800,letterSpacing:"0.08em",color:"#0B0B0E",background:"linear-gradient(135deg,#FFD60A,#FF9F0A)",borderRadius:RAD.sm,padding:"4px 8px",flexShrink:0}}>CHAMPION</div>}
  </div>
+ {/* Final board — the season is over, so this is the record, not a live table. */}
+ {(()=>{
+   const _fin = (realStandings||[]).slice().sort((a,b)=>(parseFloat(b.points)||0)-(parseFloat(a.points)||0));
+   if(!_fin.length) return null;
+   const _meIdx = _fin.findIndex(z=>z.isYou);
+   const _me = _meIdx>=0 ? _fin[_meIdx] : null;
+   const _mx = Math.max.apply(null,[0,..._fin.map(z=>parseFloat(z.points)||0)]);
+   return (<div style={{position:"relative",padding:"0 16px 14px"}}>
+     {_me ? (<div style={{display:"flex",textAlign:"center",background:"rgba(255,255,255,0.035)",borderRadius:RAD.md,border:EDGE.hair,marginBottom:11}}>
+       {[[(_meIdx+1)+ordSuffix(_meIdx+1),"of "+_fin.length],[_me.record||"0-0","record"],[parseFloat(_me.points||0).toFixed(1),"points"]].map(([v,l],i)=>(
+         <div key={l} style={{flex:1,padding:"11px 4px",borderRight:i<2?`0.5px solid ${IOS.sep}`:"none"}}>
+           <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:18}}>{v}</div>
+           <div style={{fontSize:8,fontWeight:800,letterSpacing:"0.5px",textTransform:"uppercase",color:IOS.label3,marginTop:3}}>{l}</div>
+         </div>))}
+     </div>) : null}
+     <div style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:IOS.label3,margin:"0 2px 7px"}}>Final standings</div>
+     <div style={{background:"rgba(255,255,255,0.035)",borderRadius:RAD.md,border:EDGE.hair,overflow:"hidden"}}>
+       {_fin.map((r,i)=>(
+         <div key={r.userId||i} onClick={()=>{ if(r.userId) openUserProfile(r.userId,{username:r.isYou?((userProfile&&userProfile.username)||"You"):(r.name||r.username)}); }}
+           style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",cursor:"pointer",borderBottom:i<_fin.length-1?`0.5px solid ${IOS.sep}`:"none",background:r.isYou?"rgba(10,132,255,0.09)":"transparent"}}>
+           <div style={{width:18,textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:14,color:i===0?"#FFD60A":IOS.label3,flexShrink:0}}>{i+1}</div>
+           <div style={{width:26,height:26,borderRadius:"50%",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9.5,fontWeight:800,background:r.isYou?IOS.blue:"#23242a",color:r.isYou?"#fff":"rgba(255,255,255,0.62)"}}>{String(r.isYou?"You":(r.name||r.username||"?")).slice(0,2).toUpperCase()}</div>
+           <div style={{flex:1,minWidth:0,fontSize:13,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.isYou?"You":(r.name||r.username||"Unknown")}</div>
+           <div style={{width:36,textAlign:"right",fontSize:11,color:IOS.label3,fontWeight:700}}>{r.record}</div>
+           <div style={{width:50,textAlign:"right",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:14.5,color:i===0?"#FFD60A":"#fff"}}>{parseFloat(r.points||0).toFixed(1)}</div>
+         </div>))}
+     </div>
+     {/* Points leader is often not the champion in a record-based league — name it. */}
+     {_mx>0 && _fin[0] && parseFloat(_fin[0].points||0)===_mx ? null : null}
+     <div onClick={()=>{ haptic("select"); openLeagueHistory(); }} style={{marginTop:11,padding:"10px 14px",borderRadius:RAD.md,textAlign:"center",cursor:"pointer",background:"rgba(255,255,255,0.05)",border:EDGE.hair,fontSize:13.5,fontWeight:800,color:"#fff"}}>View league history</div>
+   </div>);
+ })()}
  {activeLeague.isCommissioner && activeLeague.champion_id && (
    <div onClick={()=>{ if(!rollBusy){ haptic("select"); rollSeason(); } }}
      style={{marginTop:11,padding:"11px 14px",borderRadius:RAD.md,textAlign:"center",cursor:rollBusy?"default":"pointer",
