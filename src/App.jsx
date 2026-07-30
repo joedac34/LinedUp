@@ -4713,9 +4713,12 @@ function App() {
  const [showSoloSportPicker, setShowSoloSportPicker] = useState(false); // sport selector before building
  const activeLeague = isSoloMode ? {id:soloLeagueId||"solo",name:"Solo Mode",sport:soloSport,current_week:soloWeekNum(),season_weeks:99,max_members:1,target_size:1,isCommissioner:false} : ([...realLeagues].find(l=>l.id===activeLeagueId) || realLeagues[0] || {id:"",name:"",sport:"nfl",current_week:1,season_weeks:18,max_members:8,target_size:8,isCommissioner:false});
  const _lgTarget=(activeLeague&&(activeLeague.target_size||activeLeague.max_members))||8;
- const seasonNotStarted = !isSoloMode && !!(activeLeague&&activeLeague.id) && (!activeLeague.season_start || new Date(activeLeague.season_start).getTime() > Date.now());
  const _lgMembers = Math.max(Number((activeLeague&&activeLeague.memberCount)||0), (!isSoloMode && activeLeague && activeLeague.id && Array.isArray(leagueMembers)) ? leagueMembers.length : 0);
  const leagueFull = !isSoloMode && (_lgMembers >= _lgTarget);
+ // A league created with a scheduled start has season_start stamped at CREATION,
+ // before anyone joins. The date alone is not a season — an unfilled league has
+ // not started no matter what the calendar says.
+ const seasonNotStarted = !isSoloMode && !!(activeLeague&&activeLeague.id) && (!leagueFull || !activeLeague.season_start || new Date(activeLeague.season_start).getTime() > Date.now());
  const leagueAwaitingStart = seasonNotStarted && leagueFull;
  const _autoStartRef = useRef({});
  useEffect(()=>{
@@ -6288,6 +6291,15 @@ function App() {
   const checkAutoAdvanceWeek = async (leagueId, league) => {
  if(league && (league.league_type||"h2h")==="bracket") return; // tournaments settle server-side (grade.js)
  if(!league || !league.season_start) return; // league hasn't started yet
+ // season_start alone is not enough. A scheduled-start league carries a date from
+ // the moment it is created, so without this an empty league advances a week every
+ // seven days forever — Gaper U reached week 3 with one member and no schedule.
+ try{
+   const { count:_mc } = await supabase.from("league_members")
+     .select("user_id", { count:"exact", head:true }).eq("league_id", leagueId);
+   const _target = Number(league.target_size || league.max_members || 8);
+   if(!_mc || _mc < _target) return false;   // not full = not started
+ }catch(e){ return false; }                  // cannot confirm, so do not advance
  const WEEK_MS = 7*24*60*60*1000;
  const GRACE_MS = 3*60*60*1000; // buffer so late finals grade before a week closes
  const start = new Date(league.season_start).getTime();
@@ -6376,6 +6388,15 @@ function App() {
  await supabase.from("matchups").insert(matchupsToInsert);
     // Stamp the league start the first time a schedule is built — drives the 7-day week math.
     await supabase.from("leagues").update({ season_start: new Date().toISOString(), current_week: 1 }).eq("id", leagueId).is("season_start", null).or("start_mode.is.null,start_mode.neq.manual");
+    // A scheduled league carries its date from creation. If that date has already
+    // passed by the time the roster fills, leaving it would make week 1 start in the
+    // past and the clock would jump straight to the present week.
+    try{
+      const { data:_lg } = await supabase.from("leagues").select("season_start").eq("id", leagueId).maybeSingle();
+      if(_lg && _lg.season_start && new Date(_lg.season_start).getTime() < Date.now()-60000){
+        await supabase.from("leagues").update({ season_start: new Date().toISOString(), current_week: 1 }).eq("id", leagueId);
+      }
+    }catch(e){}
  };
 
  const getOrCreateSoloLeague = async () => {
@@ -15471,7 +15492,7 @@ function App() {
    const regDone = cw >= startWeek;
    // Only trust bracketMatchups once it belongs to THIS league. Until then we do not
    // know whether a bracket exists, so an empty array must not be read as "none".
-   const bracketReady = bracketFor === lg.id;
+   const bracketReady = bracketFor === (activeLeague && activeLeague.id);
    const playoffMs = bracketReady ? (bracketMatchups||[]).filter(m=>String(m.bracket_match_id||"").startsWith("P")) : [];
    const seeded = ms.slice(0,N);
    if(!bracketReady) return <SkelBracket/>;
