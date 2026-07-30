@@ -10213,7 +10213,17 @@ function App() {
  }
  return (<>
  {realLeagues.length>0 && !slipSlots &&
- <button className="ios-btn" style={{background:`linear-gradient(135deg,${sport.color},${IOS.indigo})`,color:"#fff",marginBottom:6,boxShadow:`0 6px 18px ${sport.color}33`}} onClick={()=>setScreen("picks")}>Build Your {leagueSports.length > 1 ? "Multi-Sport" : sport.label} Slip</button>
+ /* Elevated, accent edge. The old gradient ran the sport colour across the whole
+    button, which meant the primary CTA was green on MLB and red on NCAAF — the
+    two colours the result system reserves for won and lost. Sport is a dot now. */
+ <button className="ios-btn" onClick={()=>setScreen("picks")}
+  style={{background:"linear-gradient(165deg,#1B2338,#12141C)",color:"#fff",marginBottom:6,
+    border:`1px solid ${IOS.blue}6B`,fontWeight:800,
+    boxShadow:`0 6px 22px -14px ${IOS.blue}D9, inset 0 1px 0 rgba(255,255,255,0.05)`}}>
+  <span style={{width:7,height:7,borderRadius:"50%",background:sport.color,flexShrink:0}}/>
+  <span>Build Your {leagueSports.length > 1 ? "Multi-Sport" : sport.label} Slip</span>
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{opacity:0.9}}><path d="M5 12h13"/><path d="M13 6l6 6-6 6"/></svg>
+ </button>
  }
  {card}
  </>);
