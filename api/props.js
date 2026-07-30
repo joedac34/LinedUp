@@ -37,11 +37,18 @@ const MARKET_LABELS = {
   pitcher_outs:"Outs",
 };
 
-// ── Caller verification ──────────────────────────────────────────────────────
-// Every request must carry a real Supabase user token. These endpoints spend
-// The Odds API credits (a metered, paid quota), so an unauthenticated caller
-// could loop them. The token is verified against Supabase auth, not merely
-// parsed; no user identity beyond "valid" is needed here.
+// ── Caller verification (SOFT by default) ────────────────────────────────────
+// These endpoints spend metered Odds API credits, so they should require a real
+// Supabase user token. BUT the native app ships a frozen copy of App.jsx: a build
+// compiled before the client started sending Authorization headers cannot be
+// patched without an App Store release. Rejecting those callers takes odds away
+// from every tester on an older build.
+//
+// So: verify, LOG, and let it through. Set ODDS_REQUIRE_AUTH=1 in Vercel env once
+// the logs show no more anonymous callers (i.e. every tester has updated), and
+// this starts returning 401 with no code change.
+const ENFORCE_AUTH = process.env.ODDS_REQUIRE_AUTH === "1";
+
 async function requireUser(req) {
   const h = req.headers.authorization || "";
   const token = h.startsWith("Bearer ") ? h.slice(7) : null;
@@ -59,9 +66,18 @@ async function requireUser(req) {
   } catch (e) { return null; }
 }
 
+// Returns true if the request should be REJECTED.
+async function authBlocked(req, route) {
+  const caller = await requireUser(req);
+  if (caller) return false;
+  if (ENFORCE_AUTH) return true;
+  // Grep these in Vercel logs to see when legacy clients have drained away.
+  console.warn("[anon-call] " + route + " ua=" + String(req.headers["user-agent"] || "").slice(0, 80));
+  return false;
+}
+
 export default async function handler(req, res) {
-  const _caller = await requireUser(req);
-  if (!_caller) return res.status(401).json({ error: "unauthorized" });
+  if (await authBlocked(req, "props")) return res.status(401).json({ error: "unauthorized" });
   const { sport } = req.query;
   if (!sport) return res.status(400).json({ error: "Missing sport parameter" });
   const apiKey = process.env.ODDS_API_KEY;
