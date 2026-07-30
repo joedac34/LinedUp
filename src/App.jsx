@@ -7066,6 +7066,34 @@ function App() {
    }
  };
 
+ // Roll a finished season into the archive and start the next one. The RPC does
+ // the work in one transaction: snapshot, copy, verify, then clear. It refuses
+ // unless the caller is the commissioner and a champion has been crowned.
+ const [rollBusy, setRollBusy] = useState(false);
+ const rollSeason = async () => {
+   if(rollBusy || !activeLeague || !activeLeague.id) return;
+   const _next = Number(activeLeague.season_number||1) + 1;
+   if(!window.confirm("Start Season "+_next+"?\n\nThis season's standings, champion and trophies are kept permanently. Everyone starts 0-0.")) return;
+   setRollBusy(true);
+   try{
+     const { data, error } = await supabase.rpc("roll_league_season", { target_league: activeLeague.id, new_name: null });
+     if(error || !data || data.ok !== true){
+       setRollBusy(false);
+       alert((data && data.error) || errText(error) || "Could not start the new season.");
+       return;
+     }
+     haptic("success");
+     // Everything league-scoped is now stale by definition.
+     setBracketMatchups([]); setBracketFor(null);
+     setAllMatchups([]); setMatchupsFor(null);
+     setRealStandings([]); setStandingsFor(null);
+     setWeekPicks([]); setSavedPicks(null); setLeagueTrophies([]);
+     await fetchLeagues(user.id);
+     setRollBusy(false); setLeagueTab("standings");
+     alert("Season "+_next+" is live. Season "+data.archived_season+" is saved in league history.");
+   }catch(e){ setRollBusy(false); alert("Could not reach the server. Please try again."); }
+ };
+
  const openUserProfile = async (userId, seed) => {
    if(!userId) return;
    const id = String(userId);
@@ -15415,6 +15443,14 @@ function App() {
  </div>
  {youWon&&<div style={{fontSize:9,fontWeight:800,letterSpacing:"0.08em",color:"#0B0B0E",background:"linear-gradient(135deg,#FFD60A,#FF9F0A)",borderRadius:RAD.sm,padding:"4px 8px",flexShrink:0}}>CHAMPION</div>}
  </div>
+ {activeLeague.isCommissioner && activeLeague.champion_id && (
+   <div onClick={()=>{ if(!rollBusy){ haptic("select"); rollSeason(); } }}
+     style={{marginTop:11,padding:"11px 14px",borderRadius:RAD.md,textAlign:"center",cursor:rollBusy?"default":"pointer",
+       background:rollBusy?"rgba(255,255,255,0.06)":"linear-gradient(135deg,#FFD60A,#FF9F0A)",
+       color:rollBusy?IOS.label3:"#0B0B0E",fontSize:14,fontWeight:800,letterSpacing:"0.01em"}}>
+     {rollBusy?"Starting\u2026":("Run it back \u2014 start Season "+(Number(activeLeague.season_number||1)+1))}
+   </div>
+ )}
  </div>
  );
  })()}
