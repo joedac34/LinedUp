@@ -7071,6 +7071,7 @@ function App() {
  // Roll a finished season into the archive and start the next one. The RPC does
  // the work in one transaction: snapshot, copy, verify, then clear. It refuses
  // unless the caller is the commissioner and a champion has been crowned.
+ useEffect(()=>{ try{ document.documentElement.classList.toggle("pk-fullscreen", !!showNewLeague); }catch(e){} }, [showNewLeague]);
  const [rollBusy, setRollBusy] = useState(false);
  // League history is served whole by one definer RPC, so there is nothing to
  // stitch client-side and no way for a non-member to read another league.
@@ -8015,7 +8016,7 @@ function App() {
  html.native-insets{--sa-top:0px;--sa-bot:0px;}
  ::-webkit-scrollbar{display:none;}
 
- html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;position:fixed;width:100%;top:0;left:0;background:#000;} #root{height:100%;overflow:hidden;background:#000;} .phone{width:100%;max-width:480px;margin:0 auto;height:100vh;height:100dvh;max-height:100dvh;background:#000;position:relative;overflow:hidden;display:flex;flex-direction:column;font-family:'Barlow',system-ui,-apple-system,sans-serif;color:#fff;-webkit-font-smoothing:antialiased;padding-top:var(--sa-top);box-sizing:border-box;}
+ html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;position:fixed;width:100%;top:0;left:0;background:#000;touch-action:manipulation;-webkit-text-size-adjust:100%;text-size-adjust:100%;} #root{height:100%;overflow:hidden;background:#000;} .phone{width:100%;max-width:480px;margin:0 auto;height:100vh;height:100dvh;max-height:100dvh;background:#000;position:relative;overflow:hidden;display:flex;flex-direction:column;font-family:'Barlow',system-ui,-apple-system,sans-serif;color:#fff;-webkit-font-smoothing:antialiased;padding-top:var(--sa-top);box-sizing:border-box;}
 
  /* iOS Status Bar */
 
@@ -8777,7 +8778,15 @@ function App() {
  .tab-item.on .tab-label{color:#fff;}
  /* Folded state: only the tab you are on survives, so the dock still answers
     "where am I" at its smallest. Label is dropped (approved). */
- .tab-bar{transition:padding .34s cubic-bezier(0.4,0,0.2,1);}
+ .tab-bar{transition:padding .34s cubic-bezier(0.4,0,0.2,1), left .34s cubic-bezier(0.4,0,0.2,1), transform .34s cubic-bezier(0.4,0,0.2,1);}
+  /* Collapsed, the pill is narrow but still sat dead centre — directly over the
+     points and chevrons at the end of every list row. Anchor it left instead:
+     names live there, values do not. */
+  .tab-bar.small{left:calc(12px + var(--sa-left, 0px));transform:none;}
+  /* The dock was painting on top of the old create-league scrim (a stacking
+     context somewhere above it beat z-index). Hide it outright while a
+     full-screen flow is open instead of relying on layering. */
+  .pk-fullscreen .tab-bar{opacity:0;pointer-events:none;}
  .tab-bar.small{cursor:pointer;}
  .tab-bar.small .tab-item:not(.on){max-width:0;opacity:0;padding-left:0;padding-right:0;}
  .tab-bar.small .tab-item.on{padding:11px 11px;}
@@ -13908,11 +13917,33 @@ function App() {
 
  {/* ── NEW LEAGUE MODAL ── */}
  {showNewLeague && (
- <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.7)",zIndex:50,display:"flex",flexDirection:"column",justifyContent:"flex-end",backdropFilter:"blur(8px)"}}
- onClick={()=>{if(!newLeagueCreated){setShowNewLeague(false);setNewLeagueSport(null);setNewLeagueSports([]);setNewLeagueName("");setNewLeagueSize(8);setNewLeagueType(null);setNewLeagueStep(0);setNewLeagueWeeks(18);
- setNewLeagueSlots(DEFAULT_SLOTS); setSlotSheetIdx(null);setNewLeaguePrivacy('private');setNewLeaguePlayoffs(true);setNewLeaguePlayoffSize(4);setNewLeagueStartMode('auto');}}}>
- <div className="pk-sheet" style={{background:IOS.bg2,padding:"0 0 40px",maxHeight:"90vh",overflowY:"auto",WebkitOverflowScrolling:"touch",overscrollBehavior:"contain"}} onClick={e=>e.stopPropagation()}>
- <div style={{position:"sticky",top:0,zIndex:5,background:IOS.bg2,paddingTop:1}}><div style={{width:36,height:5,borderRadius:3,background:"rgba(255,255,255,0.2)",margin:"10px auto 8px"}}/></div>
+ /* A four-step flow with its own progress is a screen, not a sheet. Fixed rather
+    than absolute so it is sized by the viewport (the old one left the standings
+    showing under it), and above the dock rather than under it. Every entry point
+    already sets screen="leagues", so closing lands back on the leagues tab. */
+ <div style={{position:"fixed",inset:0,background:"#0A0A0C",zIndex:120,display:"flex",flexDirection:"column"}}>
+  <div style={{display:"flex",alignItems:"center",gap:11,padding:"calc(var(--sa-top) + 12px) 16px 8px",flexShrink:0}}>
+   {!newLeagueCreated ? (
+    <div onClick={()=>{ haptic("select");
+      // Step back through the flow first; only leave from the first step.
+      if(newLeagueStep>0){ setNewLeagueStep(newLeagueStep-1); return; }
+      setScreen("leagues"); setShowNewLeague(false);setNewLeagueSport(null);setNewLeagueSports([]);setNewLeagueName("");setNewLeagueSize(8);setNewLeagueType(null);setNewLeagueStep(0);setNewLeagueWeeks(18);
+ setNewLeagueSlots(DEFAULT_SLOTS); setSlotSheetIdx(null);setNewLeaguePrivacy('private');setNewLeaguePlayoffs(true);setNewLeaguePlayoffSize(4);setNewLeagueStartMode('auto');
+    }} style={{width:31,height:31,borderRadius:RAD.md,background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
+     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+    </div>
+   ) : null}
+   <div style={{flex:1,minWidth:0}}>
+    <div style={{fontSize:21,fontWeight:800,letterSpacing:"-0.4px"}}>{newLeagueCreated?"League created":"New league"}</div>
+    <div style={{fontSize:11.5,color:IOS.label3,fontWeight:600,marginTop:1}}>{newLeagueCreated?"Share the code to fill it":("Step "+(Math.min(newLeagueStep+1,4))+" of "+4)}</div>
+   </div>
+  </div>
+  {!newLeagueCreated ? (
+   <div style={{height:2,background:"rgba(255,255,255,0.07)",margin:"2px 16px 0",flexShrink:0,borderRadius:2,overflow:"hidden"}}>
+    <div style={{height:"100%",width:(Math.min(newLeagueStep+1,4)/4*100)+"%",background:IOS.blue,transition:"width .28s ease"}}/>
+   </div>
+  ) : null}
+  <div style={{flex:1,minHeight:0,overflowY:"auto",WebkitOverflowScrolling:"touch",overscrollBehavior:"contain",padding:"0 0 calc(var(--sa-bot) + 32px)"}}>
 
  {/* Success screen — league created */}
  {newLeagueCreated ? (
