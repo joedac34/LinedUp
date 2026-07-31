@@ -794,17 +794,38 @@ try{ if(typeof window!=="undefined" && typeof document!=="undefined" && !window.
   document.addEventListener("focusin", (e)=>{
     try{ if(!e.target || !e.target.closest || !e.target.closest(FIELD)) return; }catch(err){ return; }
     requestAnimationFrame(snap); setTimeout(snap,60); setTimeout(snap,180); setTimeout(snap,400);
+    // The keyboard animates in over ~250ms; measuring once at focus reads the
+    // geometry from before it existed, which is why the bar sometimes never moved.
+    [80,180,300,450].forEach(d=>setTimeout(()=>{ try{ window.__pkKbApply && window.__pkKbApply(); }catch(e){} }, d));
   }, true);
-  document.addEventListener("focusout", ()=>{ setTimeout(snap,60); setTimeout(snap,240); }, true);
+  document.addEventListener("focusout", ()=>{ setTimeout(snap,60); setTimeout(snap,240); 
+    [80,240,420].forEach(d=>setTimeout(()=>{ try{ window.__pkKbApply && window.__pkKbApply(); }catch(e){} }, d)); }, true);
   const vv = window.visualViewport;
   if(vv){
+    // Measure, do not predict. Ask each composer where its bottom edge actually
+    // is and move it up by exactly how far it sits below the visible area. If the
+    // webview already resized for the keyboard the overlap is 0 and nothing moves,
+    // so this cannot stack on top of a resize the way a padding guess did.
     const apply = ()=>{
-      const inset = Math.max(0, Math.round((window.innerHeight || 0) - vv.height - vv.offsetTop));
       const root = document.documentElement;
-      root.style.setProperty("--kb", inset > 80 ? (inset + "px") : "0px");
-      root.classList.toggle("kb-open", inset > 80);
+      const visBottom = vv.offsetTop + vv.height;
+      const kbGuess = Math.max(0, Math.round((window.innerHeight || 0) - vv.height - vv.offsetTop));
+      root.classList.toggle("kb-open", kbGuess > 80);
+      let els = [];
+      try{ els = Array.prototype.slice.call(document.querySelectorAll("[data-kb-stick]")); }catch(e){}
+      els.forEach((el)=>{
+        try{
+          // Read the untranslated position so the measurement never compounds.
+          const prev = el.style.transform;
+          if(prev) el.style.transform = "";
+          const rect = el.getBoundingClientRect();
+          const overlap = Math.round(rect.bottom - visBottom);
+          el.style.transform = overlap > 1 ? ("translateY(" + (-overlap) + "px)") : "";
+        }catch(e){}
+      });
       snap();
     };
+    window.__pkKbApply = apply;   // focus handlers re-measure through the animation
     vv.addEventListener("resize", apply);
     vv.addEventListener("scroll", apply);
     apply();
@@ -8783,8 +8804,10 @@ function App() {
  input[type="text"],input[type="email"],input[type="password"],input[type="search"],
  input[type="tel"],input[type="url"],input[type="number"],input[type="date"],
  input:not([type]),textarea{font-size:16px !important;}
- /* The composer rides the keyboard: --kb is the visual-viewport inset, set below. */
- .chat-input-bar{padding-bottom:calc(10px + var(--kb, 0px)) !important;transition:padding-bottom .18s ease;}
+ /* Composers are moved by a measured translate (see the keyboard driver), not by
+    padding. Padding guessed at the keyboard height and stacked on top of the
+    webview resize, which pushed the bar far higher than the keyboard. */
+ [data-kb-stick]{transition:transform .18s ease;will-change:transform;}
  .chat-field{flex:1;background:${IOS.bg3};border:none;border-radius:20px;padding:10px 16px;font-family:'Barlow',sans-serif;font-size:15px;color:#fff;outline:none;letter-spacing:-0.2px;}
  .chat-field::placeholder{color:${IOS.label3};}
  .chat-send{width:34px;height:34px;border-radius:50%;background:${IOS.blue};border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;}
@@ -8837,11 +8860,17 @@ function App() {
  .tab-item.on .tab-label{color:#fff;}
  /* Folded state: only the tab you are on survives, so the dock still answers
     "where am I" at its smallest. Label is dropped (approved). */
- .tab-bar{transition:padding .34s cubic-bezier(0.4,0,0.2,1), left .34s cubic-bezier(0.4,0,0.2,1), transform .34s cubic-bezier(0.4,0,0.2,1);}
-  /* Collapsed, the pill is narrow but still sat dead centre — directly over the
-     points and chevrons at the end of every list row. Anchor it left instead:
-     names live there, values do not. */
-  .tab-bar.small{left:calc(12px + var(--sa-left, 0px));transform:none;}
+ /* Position moves by transform only. Animating the left property too meant the anchor
+    slid right while translateX(-50%) resolved against a still-growing width, so
+    the pill bulged out to the right mid-expand and snapped back at the end. */
+ .tab-bar{transition:padding .34s cubic-bezier(0.4,0,0.2,1), transform .34s cubic-bezier(0.4,0,0.2,1);}
+  /* Collapsed, the pill sat dead centre — over the points and chevrons at the end
+     of every list row. Anchor it left: names live there, values do not.
+     --dock-half is the collapsed pill’s half-width. Hard-coding it keeps the shift
+     a CONSTANT: the moment this offset references the live width, the path stops
+     being monotonic and the bulge comes back. */
+  .tab-bar{--dock-half:48px;}
+  .tab-bar.small{transform:translateX(-50%) translateX(calc(12px + var(--sa-left, 0px) + var(--dock-half) - 50vw));}
   /* The dock was painting on top of the old create-league scrim (a stacking
      context somewhere above it beat z-index). Hide it outright while a
      full-screen flow is open instead of relying on layering. */
@@ -16764,7 +16793,7 @@ function App() {
                 </div>
               </div>
             )}
-            <div style={{flexShrink:0,position:"relative",borderTop:"0.5px solid rgba(255,255,255,0.08)",background:"#0B0B0E",padding:"10px 12px"}}>
+            <div data-kb-stick style={{flexShrink:0,position:"relative",borderTop:"0.5px solid rgba(255,255,255,0.08)",background:"#0B0B0E",padding:"10px 12px"}}>
               {aiSuggestions.length>0 && (
                 <div style={{position:"absolute",left:12,right:12,bottom:"100%",marginBottom:8,background:"#15151A",border:EDGE.hair2,borderRadius:RAD.md,overflow:"hidden",boxShadow:"0 -8px 24px rgba(0,0,0,0.5)"}}>
                   {aiSuggestions.map((b,bi)=>(
@@ -16861,7 +16890,7 @@ function App() {
  </div>
  </div>
  )}
- <div className="chat-input-bar">
+ <div className="chat-input-bar" data-kb-stick>
  <button onClick={openGifSheet} style={{flexShrink:0,height:36,padding:"0 11px",borderRadius:RAD.md,background:"rgba(255,255,255,0.07)",border:EDGE.hair,fontSize:10,fontWeight:800,letterSpacing:"0.06em",color:"rgba(255,255,255,0.75)",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>GIF</button>
  <input className="chat-field" placeholder="Message..." value={chatMsg} onChange={e=>setChatMsg(e.target.value)} onKeyDown={e=>e.key==="Enter"&&sendMsg()}/>
  <button className="chat-send" disabled={!chatMsg.trim()} onClick={sendMsg}>
