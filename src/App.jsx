@@ -746,6 +746,13 @@ try{ if(typeof document!=="undefined" && typeof window!=="undefined" && !window.
     let sheet = null;
     try{ sheet = e.target && e.target.closest ? e.target.closest(".pk-sheet, .sheet, .pu-modal-sheet") : null; }catch(err){}
     if(!sheet) return;
+    // Never claim a touch that starts on a form field. onMove is {passive:false}
+    // and preventDefaults, which on iOS stops the keyboard committing characters:
+    // typing in the GIF search only ever showed the last letter.
+    try{
+      const _t = e.target;
+      if(_t && _t.closest && _t.closest("input, textarea, select, [contenteditable='true']")) return;
+    }catch(err){}
     // Walk up from the touch to the sheet; if any scroller in between is scrolled,
     // this is a scroll gesture, not a dismiss.
     try{
@@ -764,6 +771,44 @@ try{ if(typeof document!=="undefined" && typeof window!=="undefined" && !window.
     document.addEventListener("touchend", onEnd);
     document.addEventListener("touchcancel", onEnd);
   }, {passive:true});
+} }catch(e){}
+
+// ── Keyboard: keep the app still ──────────────────────────────
+// Focusing a field made iOS scroll the webview to reveal it. The app is
+// position:fixed with nowhere to scroll, so instead of scrolling content it
+// shifted the entire layout up and off-centre. Two parts:
+//   1. snap the window back to 0 whenever a field takes focus
+//   2. publish the keyboard height as --kb so the composer can sit above it
+// visualViewport is the only reliable source for the keyboard height in a
+// WKWebView; window.innerHeight does not change when the keyboard opens.
+try{ if(typeof window!=="undefined" && typeof document!=="undefined" && !window.__pkKbd){
+  window.__pkKbd = 1;
+  const FIELD = "input, textarea, select, [contenteditable='true']";
+  const snap = ()=>{ try{
+    if(window.scrollY || window.pageYOffset) window.scrollTo(0,0);
+    if(document.documentElement.scrollTop) document.documentElement.scrollTop = 0;
+    if(document.body && document.body.scrollTop) document.body.scrollTop = 0;
+  }catch(e){} };
+  // iOS scrolls a little after focus settles, so snap across a few frames
+  // rather than once — a single call runs before the scroll happens.
+  document.addEventListener("focusin", (e)=>{
+    try{ if(!e.target || !e.target.closest || !e.target.closest(FIELD)) return; }catch(err){ return; }
+    requestAnimationFrame(snap); setTimeout(snap,60); setTimeout(snap,180); setTimeout(snap,400);
+  }, true);
+  document.addEventListener("focusout", ()=>{ setTimeout(snap,60); setTimeout(snap,240); }, true);
+  const vv = window.visualViewport;
+  if(vv){
+    const apply = ()=>{
+      const inset = Math.max(0, Math.round((window.innerHeight || 0) - vv.height - vv.offsetTop));
+      const root = document.documentElement;
+      root.style.setProperty("--kb", inset > 80 ? (inset + "px") : "0px");
+      root.classList.toggle("kb-open", inset > 80);
+      snap();
+    };
+    vv.addEventListener("resize", apply);
+    vv.addEventListener("scroll", apply);
+    apply();
+  }
 } }catch(e){}
 
 // ── Pull to refresh ───────────────────────────────────────
@@ -857,6 +902,9 @@ try{ if(typeof document!=="undefined" && typeof window!=="undefined" && !window.
   document.addEventListener("touchstart", function(e){
     if(live || busy || window.__pkGesture) return;
     const t = e.touches && e.touches[0]; if(!t) return;
+    // Same reason as the sheet driver: a touch that starts on a text field
+    // belongs to the field. This handler preventDefaults on move.
+    try{ if(e.target && e.target.closest && e.target.closest("input, textarea, select, [contenteditable='true']")) return; }catch(err){}
     let sc = null;
     try{ sc = e.target && e.target.closest ? (e.target.closest(".body") || e.target.closest(".lsx-scroll")) : null; }catch(err){}
     if(!sc || (sc.scrollTop || 0) > 0) return;
@@ -920,6 +968,9 @@ try{ if(typeof document!=="undefined" && typeof window!=="undefined" && !window.
   document.addEventListener("touchstart", function(e){
     if(live) return;
     const t = e.touches && e.touches[0]; if(!t) return;
+    // Same reason as the sheet driver: a touch that starts on a text field
+    // belongs to the field. This handler preventDefaults on move.
+    try{ if(e.target && e.target.closest && e.target.closest("input, textarea, select, [contenteditable='true']")) return; }catch(err){}
     const w = window.innerWidth || 390;
     // Engage on EITHER edge, and engage even when there is nowhere to go back to.
     // Claiming the gesture is the only way to stop iOS from taking it.
@@ -8726,6 +8777,14 @@ function App() {
  .date-sep{text-align:center;margin:6px 0;}
  .date-sep span{font-size:12px;color:${IOS.label3};font-weight:500;}
  .chat-input-bar{background:${IOS.bg2};border-top:0.5px solid ${IOS.sep};padding:10px 16px;display:flex;align-items:center;gap:10px;}
+ /* 16px is the WebKit threshold below which iOS zooms into a focused field.
+    That zoom is what shifts and off-centres the whole app when you tap to type.
+    !important because several fields set their size inline. */
+ input[type="text"],input[type="email"],input[type="password"],input[type="search"],
+ input[type="tel"],input[type="url"],input[type="number"],input[type="date"],
+ input:not([type]),textarea{font-size:16px !important;}
+ /* The composer rides the keyboard: --kb is the visual-viewport inset, set below. */
+ .chat-input-bar{padding-bottom:calc(10px + var(--kb, 0px)) !important;transition:padding-bottom .18s ease;}
  .chat-field{flex:1;background:${IOS.bg3};border:none;border-radius:20px;padding:10px 16px;font-family:'Barlow',sans-serif;font-size:15px;color:#fff;outline:none;letter-spacing:-0.2px;}
  .chat-field::placeholder{color:${IOS.label3};}
  .chat-send{width:34px;height:34px;border-radius:50%;background:${IOS.blue};border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;}
@@ -8787,6 +8846,8 @@ function App() {
      context somewhere above it beat z-index). Hide it outright while a
      full-screen flow is open instead of relying on layering. */
   .pk-fullscreen .tab-bar{opacity:0;pointer-events:none;}
+  /* The dock has no business hovering over an open keyboard. */
+  .kb-open .tab-bar{opacity:0;pointer-events:none;}
  .tab-bar.small{cursor:pointer;}
  .tab-bar.small .tab-item:not(.on){max-width:0;opacity:0;padding-left:0;padding-right:0;}
  .tab-bar.small .tab-item.on{padding:11px 11px;}
