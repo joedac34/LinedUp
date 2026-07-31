@@ -8857,12 +8857,13 @@ function App() {
  /* Hard ceiling: the pill may never outgrow the screen. Items shrink (labels clip)
     before the bar can clip at the edges the way the old wide tab set did. */
  .tab-bar{max-width:calc(100% - 16px);}
- .tab-bar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(12px + var(--sa-bot));z-index:40;
+ .tab-bar{position:fixed;left:50%;transform:translateX(-50%) translateX(0px);bottom:calc(12px + var(--sa-bot));z-index:40;
    display:flex;align-items:center;gap:2px;padding:7px;border-radius:26px;
    background:rgba(18,18,24,0.72);-webkit-backdrop-filter:blur(22px) saturate(1.4);backdrop-filter:blur(22px) saturate(1.4);
    border:0.5px solid rgba(255,255,255,0.12);
    box-shadow:0 18px 40px -12px rgba(0,0,0,0.75), inset 0 1px 0 rgba(255,255,255,0.08);}
- .tab-item{position:relative;flex:0 1 auto;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;padding:8px 13px 6px;border-radius:19px;overflow:hidden;max-width:110px;transition:max-width .34s cubic-bezier(0.4,0,0.2,1), opacity .2s ease, padding .34s cubic-bezier(0.4,0,0.2,1), transform .13s ease;}
+ .tab-item{position:relative;flex:0 1 auto;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;padding:8px 13px 6px;border-radius:19px;overflow:hidden;max-width:110px;transition:max-width .3s cubic-bezier(0.4,0,0.2,1) .28s, opacity .2s ease .28s, padding .3s cubic-bezier(0.4,0,0.2,1) .28s, transform .13s ease;}
+ .tab-bar.small .tab-item{transition:max-width .3s cubic-bezier(0.4,0,0.2,1), opacity .2s ease, padding .3s cubic-bezier(0.4,0,0.2,1), transform .13s ease;}
  .tab-item:active{transform:scale(0.9);}
  .tab-item::before{content:"";position:absolute;inset:0;border-radius:19px;background:linear-gradient(160deg,rgba(10,132,255,0.32),rgba(10,132,255,0.14));opacity:0;transition:opacity .2s ease;}
  .tab-item.on::before{opacity:1;}
@@ -8875,7 +8876,17 @@ function App() {
  /* Position moves by transform only. Animating the left property too meant the anchor
     slid right while translateX(-50%) resolved against a still-growing width, so
     the pill bulged out to the right mid-expand and snapped back at the end. */
- .tab-bar{transition:padding .34s cubic-bezier(0.4,0,0.2,1), transform .34s cubic-bezier(0.4,0,0.2,1);}
+ /* PHASE-SEPARATED: the pill never moves and resizes at once. -50% resolves against
+    the live width every frame, and the item max-width animation has a dead zone
+    (110px cap vs ~68px natural width), so animating slide and shrink together sent
+    the left edge provably off-screen mid-flight. Now: collapse = shrink centred,
+    THEN glide left at fixed small width; expand = glide to centre small, THEN bloom
+    centred. Translation only ever runs between two constants at frozen width;
+    width only ever changes symmetrically about centre. Bounded by construction.
+    Base rules are the EXPAND destination (transform first, items delayed);
+    .small rules are the COLLAPSE destination (items first, transform delayed). */
+ .tab-bar{transition:transform .26s cubic-bezier(0.4,0,0.2,1);}
+ .tab-bar.small{transition:transform .26s cubic-bezier(0.4,0,0.2,1) .32s;}
   /* Collapsed, the pill sat dead centre — over the points and chevrons at the end
      of every list row. Anchor it left: names live there, values do not.
      --dock-half is the collapsed pill’s half-width. Hard-coding it keeps the shift
@@ -8892,16 +8903,18 @@ function App() {
  .tab-bar.small{cursor:pointer;}
  .tab-bar.small .tab-item:not(.on){max-width:0;opacity:0;padding-left:0;padding-right:0;}
  .tab-bar.small .tab-item.on{padding:11px 11px;}
- .tab-label{max-height:20px;line-height:1.2;overflow:hidden;transition:max-height .3s ease,opacity .2s ease;}
+ .tab-label{max-height:20px;line-height:1.2;overflow:hidden;transition:max-height .3s ease .28s,opacity .2s ease .28s;}
+ .tab-bar.small .tab-label{transition:max-height .3s ease,opacity .2s ease;}
  .tab-bar.small .tab-label{max-height:0;opacity:0;}
  .tab-grip{flex:none;display:flex;align-items:center;max-width:0;opacity:0;overflow:hidden;
-   transition:max-width .3s ease,opacity .2s ease;}
+   transition:max-width .3s ease .28s,opacity .2s ease .28s;}
+ .tab-bar.small .tab-grip{transition:max-width .3s ease,opacity .2s ease;}
  .tab-bar.small .tab-grip{max-width:14px;opacity:.55;}
  /* Live lamp is promoted onto the folded button: when the dock is small the Matchup
     tab is gone, so "a pick is live" would vanish with it. */
  .tab-lamp-sm{display:none;}
  .tab-bar.small .tab-lamp-sm{display:block;}
- @media (prefers-reduced-motion: reduce){ .tab-bar,.tab-item,.tab-label,.tab-grip{transition:none;} }
+ @media (prefers-reduced-motion: reduce){ .tab-bar,.tab-item,.tab-label,.tab-grip,.tab-bar.small,.tab-bar.small .tab-item,.tab-bar.small .tab-label,.tab-bar.small .tab-grip{transition:none;} }
  .tab-lamp{position:absolute;top:4px;right:9px;width:5px;height:5px;border-radius:50%;background:#30D158;box-shadow:0 0 6px rgba(48,209,88,0.8);}
  .psb-bar{position:fixed;left:50%;transform:translateX(-50%) translateY(150%);bottom:calc(14px + var(--sa-bot));width:min(92%,440px);z-index:60;border-radius:22px;background:#fff;color:#0e0e12;box-shadow:0 20px 44px -12px rgba(0,0,0,0.85);display:flex;align-items:center;gap:11px;padding:13px 15px;cursor:pointer;transition:transform .38s cubic-bezier(0.34,1.3,0.4,1);}
  .psb-bar.up{transform:translateX(-50%);}
