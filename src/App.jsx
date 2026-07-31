@@ -816,8 +816,13 @@ try{ if(typeof window!=="undefined" && typeof document!=="undefined" && !window.
       els.forEach((el)=>{
         try{
           // Read the untranslated position so the measurement never compounds.
-          const prev = el.style.transform;
-          if(prev) el.style.transform = "";
+          // transition:none inline for the whole block: with any transform transition
+          // active, clearing the inline transform does not move the box, it starts an
+          // animation from the old value, so the rect read here was the translated one
+          // and the bar dropped back behind the keyboard on the next viewport event.
+          // Clear, measure, set all run in one tick, so nothing paints in between.
+          el.style.transition = "none";
+          el.style.transform = "";
           const rect = el.getBoundingClientRect();
           const overlap = Math.round(rect.bottom - visBottom);
           el.style.transform = overlap > 1 ? ("translateY(" + (-overlap) + "px)") : "";
@@ -8807,7 +8812,11 @@ function App() {
  /* Composers are moved by a measured translate (see the keyboard driver), not by
     padding. Padding guessed at the keyboard height and stacked on top of the
     webview resize, which pushed the bar far higher than the keyboard. */
- [data-kb-stick]{transition:transform .18s ease;will-change:transform;}
+ /* No transition on transform: the driver clears the inline transform and reads the
+    rect in the same tick. A transition made that clear animate from the old value,
+    so the rect came back still-translated, overlap measured 0, and the bar fell
+    back behind the keyboard on every viewport event. Movement is stepped instead. */
+ [data-kb-stick]{will-change:transform;}
  .chat-field{flex:1;background:${IOS.bg3};border:none;border-radius:20px;padding:10px 16px;font-family:'Barlow',sans-serif;font-size:15px;color:#fff;outline:none;letter-spacing:-0.2px;}
  .chat-field::placeholder{color:${IOS.label3};}
  .chat-send{width:34px;height:34px;border-radius:50%;background:${IOS.blue};border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;}
@@ -8845,12 +8854,15 @@ function App() {
  .pk-chip.on{color:#fff;}
  .pk-chip > *{position:relative;}
  @media (prefers-reduced-motion:reduce){ .pk-chip:active{transform:none;} }
+ /* Hard ceiling: the pill may never outgrow the screen. Items shrink (labels clip)
+    before the bar can clip at the edges the way the old wide tab set did. */
+ .tab-bar{max-width:calc(100% - 16px);}
  .tab-bar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(12px + var(--sa-bot));z-index:40;
    display:flex;align-items:center;gap:2px;padding:7px;border-radius:26px;
    background:rgba(18,18,24,0.72);-webkit-backdrop-filter:blur(22px) saturate(1.4);backdrop-filter:blur(22px) saturate(1.4);
    border:0.5px solid rgba(255,255,255,0.12);
    box-shadow:0 18px 40px -12px rgba(0,0,0,0.75), inset 0 1px 0 rgba(255,255,255,0.08);}
- .tab-item{position:relative;flex:none;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;padding:8px 13px 6px;border-radius:19px;overflow:hidden;max-width:110px;transition:max-width .34s cubic-bezier(0.4,0,0.2,1), opacity .2s ease, padding .34s cubic-bezier(0.4,0,0.2,1), transform .13s ease;}
+ .tab-item{position:relative;flex:0 1 auto;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;padding:8px 13px 6px;border-radius:19px;overflow:hidden;max-width:110px;transition:max-width .34s cubic-bezier(0.4,0,0.2,1), opacity .2s ease, padding .34s cubic-bezier(0.4,0,0.2,1), transform .13s ease;}
  .tab-item:active{transform:scale(0.9);}
  .tab-item::before{content:"";position:absolute;inset:0;border-radius:19px;background:linear-gradient(160deg,rgba(10,132,255,0.32),rgba(10,132,255,0.14));opacity:0;transition:opacity .2s ease;}
  .tab-item.on::before{opacity:1;}
