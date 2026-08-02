@@ -5495,6 +5495,7 @@ function App() {
  const [gridTargetSlot, setGridTargetSlot] = useState(null); // which flex slot a tapped card fills
  const [slipBarOpen, setSlipBarOpen] = useState(false); // DK-style slip sheet in the browser
  const [soloSlipOpen, setSoloSlipOpen] = useState(false); // solo equivalent (free-form picks)
+ const [openLegs, setOpenLegs] = useState({});            // which parlay rows are expanded
  const [slipPoolIdx, setSlipPoolIdx] = useState(-1);    // which slip row shows its multiplier pool
  const [slipToast, setSlipToast] = useState("");
  const [gridSearch, setGridSearch] = useState("");
@@ -6912,6 +6913,8 @@ function App() {
            category: _catOf(p.slot), slot: p.slot, gameTime: p.game_date||null, mult: p.multiplier||1,
            eventId: p.event_id||null, marketKey: p.market_key||null, outcome: p.outcome||null,
            point: (p.outcome_point!=null?p.outcome_point:null), selKey: p.sel_key||null, id: p.id||null, result: p.result,
+           isParlay: String(p.slot||"").split("_")[0]==="parlay",
+           parlayLegs: Array.isArray(p.parlay_legs) ? p.parlay_legs : [],
          }));
          _free.sort((a,b)=>{ const ai=parseInt(String(a.slot).split("_").pop())||0, bi=parseInt(String(b.slot).split("_").pop())||0; return ai-bi; });
          const _obj = { freePicks: _free, week: _curW, lockedAt: new Date().toISOString() };
@@ -12150,7 +12153,27 @@ function App() {
                <span style={{marginLeft:"auto",fontSize:10.5,color:IOS.label3}}>worth <b style={{color:IOS.label2,fontWeight:800}}>{(per*n).toFixed(1)} pts</b></span>
              )}
            </div>
-           {_showScore && <div style={{marginTop:8,marginLeft:13}}><ScoreChip pick={_scp} live={liveMatch(_scp, liveGames)}/></div>}
+           {b.isParlay && (b.parlayLegs||[]).length>0 && (
+             <div style={{marginTop:9,marginLeft:13,borderLeft:"1px solid rgba(255,255,255,0.10)",paddingLeft:11}}>
+               <div onClick={()=>setOpenLegs(prev=>({...prev,[b.slot||b.id]:!prev[b.slot||b.id]}))}
+                 style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:10,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:IOS.label3,cursor:"pointer",padding:"2px 0"}}>
+                 {(b.parlayLegs||[]).length} legs {"\u00b7"} all must hit
+                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"
+                   style={{transform:openLegs[b.slot||b.id]?"rotate(180deg)":"none",transition:"transform .2s"}}><path d="M6 9l6 6 6-6"/></svg>
+               </div>
+               {openLegs[b.slot||b.id] && (b.parlayLegs||[]).map((lg,li)=>(
+                 <div key={li} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderTop:li?EDGE.hair:"none"}}>
+                   <span style={{fontSize:9.5,fontWeight:800,color:IOS.label3,minWidth:13,flexShrink:0}}>{li+1}</span>
+                   <div style={{flex:1,minWidth:0}}>
+                     <div style={{fontSize:12.5,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lg.pick||lg.pick_name||"Leg"}</div>
+                     <div style={{fontSize:10,color:IOS.label3,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lg.game||""}</div>
+                   </div>
+                   <span style={{fontSize:11.5,fontWeight:800,fontFamily:"'Barlow Semi Condensed',sans-serif",color:IOS.label2,flexShrink:0}}>{lg.odds||""}</span>
+                 </div>
+               ))}
+             </div>
+           )}
+           {_showScore && <div style={{marginTop:8,marginLeft:13}} onClick={(e)=>e.stopPropagation()}><ScoreChip pick={_scp} live={liveMatch(_scp, liveGames)} onOpen={()=>openGamecast(_scp)}/></div>}
          </div>
          </SwipeRow>);
        })}
@@ -12190,7 +12213,10 @@ function App() {
          })}
        </>)}
 
-       <div style={{display:"flex",borderTop:"1px dashed rgba(255,255,255,0.16)"}}>
+       <div style={{padding:"9px 15px 0",borderTop:"1px dashed rgba(255,255,255,0.16)",textAlign:"center"}}>
+         <span style={{fontSize:9,fontWeight:800,letterSpacing:"0.14em",textTransform:"uppercase",color:IOS.label3}}>Add picks</span>
+       </div>
+       <div style={{display:"flex"}}>
          <div onClick={()=>{ setBuildingSlip(true); setGridTargetSlot(null); setGridType("ml"); setGridPropSub("all"); setScreen("browser"); }}
            style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"15px 8px",fontSize:13.5,fontWeight:800,cursor:"pointer",color:IOS.blue,borderRight:"1px dashed rgba(255,255,255,0.16)"}}>
            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.3" strokeLinecap="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
@@ -12313,12 +12339,35 @@ function App() {
                </div>
                <span style={{marginLeft:"auto",fontSize:10.5,color:IOS.label3}}>worth <b style={{color:IOS.label2,fontWeight:800}}>{(per*n).toFixed(1)} pts</b></span>
              </div>
+             {b.isParlay && (b.parlayLegs||[]).length>0 && (
+               <div style={{marginTop:9,marginLeft:13,borderLeft:"1px solid rgba(255,255,255,0.10)",paddingLeft:11}}>
+                 <div onClick={()=>setOpenLegs(prev=>({...prev,[b.id]:!prev[b.id]}))}
+                   style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:10,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:IOS.label3,cursor:"pointer",padding:"2px 0"}}>
+                   {(b.parlayLegs||[]).length} legs {"\u00b7"} all must hit
+                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"
+                     style={{transform:openLegs[b.id]?"rotate(180deg)":"none",transition:"transform .2s"}}><path d="M6 9l6 6 6-6"/></svg>
+                 </div>
+                 {openLegs[b.id] && (b.parlayLegs||[]).map((lg,li)=>(
+                   <div key={li} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderTop:li?EDGE.hair:"none"}}>
+                     <span style={{fontSize:9.5,fontWeight:800,color:IOS.label3,minWidth:13,flexShrink:0}}>{li+1}</span>
+                     <div style={{flex:1,minWidth:0}}>
+                       <div style={{fontSize:12.5,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lg.pick||lg.pick_name||"Leg"}</div>
+                       <div style={{fontSize:10,color:IOS.label3,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lg.game||""}</div>
+                     </div>
+                     <span style={{fontSize:11.5,fontWeight:800,fontFamily:"'Barlow Semi Condensed',sans-serif",color:IOS.label2,flexShrink:0}}>{lg.odds||""}</span>
+                   </div>
+                 ))}
+               </div>
+             )}
            </div>
            </SwipeRow>);
          })}
 
          {/* The add row IS the last row of the slate. */}
-         <div style={{display:"flex",borderTop:"1px dashed rgba(255,255,255,0.16)"}}>
+         <div style={{padding:"9px 15px 0",borderTop:"1px dashed rgba(255,255,255,0.16)",textAlign:"center"}}>
+           <span style={{fontSize:9,fontWeight:800,letterSpacing:"0.14em",textTransform:"uppercase",color:IOS.label3}}>Add picks</span>
+         </div>
+         <div style={{display:"flex"}}>
            <div onClick={()=>{ setBuildingSlip(true); setGridTargetSlot(null); setGridType("ml"); setGridPropSub("all"); setScreen("browser"); }}
              style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"15px 8px",fontSize:13.5,fontWeight:800,cursor:"pointer",color:IOS.blue,borderRight:"1px dashed rgba(255,255,255,0.16)"}}>
              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.3" strokeLinecap="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
