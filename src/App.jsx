@@ -1840,7 +1840,16 @@ function pairSlips(mine, theirs) {
 
 const pad=n=>String(n).padStart(2,"0");
 const acColor=i=>({D:"#5E5CE6",M:"#0A84FF",T:"#FF453A",C:"#30D158",A:"#FF9F0A",R:"#FF375F"}[i]||IOS.purple);
-const rarityColor=r=>r==="legendary"?IOS.pink:r==="rare"?IOS.purple:IOS.green;
+// Category -> human label. Rehydrated picks only carry a category (parsed out of the
+// slot string), never a label, so anything rendering a locked pick has to derive it.
+// Keep in sync with the _CL map in the solo add path.
+const CAT_LABEL={ml:"Moneyline",spread:"Spread",ou:"Over/Under",prop:"Prop",longshot:"Longshot",
+  yrfi:"YRFI",nrfi:"NRFI",ml_f5:"Moneyline (F5)",spread_f5:"Spread (F5)",ou_f5:"Over/Under (F5)",
+  ml_h1:"Moneyline (1H)",spread_h1:"Spread (1H)",ou_h1:"Over/Under (1H)"};
+const catLabel=(b)=>{ if(!b) return "Pick";
+  if(b.isParlay) return "Parlay"+((b.parlayLegs||[]).length?" \u00b7 "+b.parlayLegs.length+" legs":"");
+  return b.categoryLabel || CAT_LABEL[b.category] || (b.category?String(b.category).toUpperCase():"Pick"); };
+const rarityColor=r=>r==="legendary"?IOS.longshot:r==="rare"?IOS.purple:IOS.green;
 const rankMedal=r=>`${r}`;
 
 const polarToCart=(cx,cy,r,deg)=>{const rad=(deg-90)*Math.PI/180;return{x:cx+r*Math.cos(rad),y:cy+r*Math.sin(rad)};};
@@ -12050,7 +12059,7 @@ function App() {
            <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
              <div style={{width:3,borderRadius:2,alignSelf:"stretch",flexShrink:0,background:col}}/>
              <div style={{flex:1,minWidth:0,paddingRight:ro?4:24}}>
-               <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:col,marginBottom:5}}>{b.categoryLabel||"Pick"}</div>
+               <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:col,marginBottom:5}}>{catLabel(b)}</div>
                <div style={{fontSize:14.5,fontWeight:700,color:"#fff",lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.pick}</div>
                <div style={{fontSize:10.5,color:IOS.label3,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                  {[b.game, b.gameTime?_t(b.gameTime):""].filter(Boolean).join(" \u00b7 ")}
@@ -12101,7 +12110,7 @@ function App() {
              <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
                <div style={{width:3,borderRadius:2,alignSelf:"stretch",flexShrink:0,background:col}}/>
                <div style={{flex:1,minWidth:0,paddingRight:24}}>
-                 <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:col,marginBottom:5}}>{b.categoryLabel||"Pick"}</div>
+                 <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:col,marginBottom:5}}>{catLabel(b)}</div>
                  <div style={{fontSize:14.5,fontWeight:700,color:"#fff",lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.pick}</div>
                  <div style={{fontSize:10.5,color:IOS.label3,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.game}</div>
                </div>
@@ -12224,7 +12233,7 @@ function App() {
              <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
                <div style={{width:3,borderRadius:2,alignSelf:"stretch",flexShrink:0,background:col}}/>
                <div style={{flex:1,minWidth:0,paddingRight:24}}>
-                 <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:col,marginBottom:5}}>{b.categoryLabel||"Pick"}</div>
+                 <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:col,marginBottom:5}}>{catLabel(b)}</div>
                  <div style={{fontSize:14.5,fontWeight:700,color:"#fff",lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.pick}</div>
                  <div style={{fontSize:10.5,color:IOS.label3,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.game}</div>
                </div>
@@ -15229,6 +15238,9 @@ function App() {
        const u1=mu.user1_id,u2=mu.user2_id;
        const mine=u1===(user&&user.id)||u2===(user&&user.id);
        const done=mu.winner_id!=null;
+       // Third matchup renderer. The bye row-edits reached it; the declaration did not,
+       // and {!isBye && ...} evaluates on EVERY row — so this threw on every matchup.
+       const isBye=(!!u1)!==(!!u2);
        const useLive=!done && wk===curWk;
        const p1=useLive?liveSum(u1):Number(mu.user1_points||0), p2=useLive?liveSum(u2):Number(mu.user2_points||0);
         const _picksOf=(uid)=>(weekPicks||[]).filter(pp=>pp.user_id===uid);
