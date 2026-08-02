@@ -5546,10 +5546,16 @@ function App() {
  const GC_TABS = ["ov","lu","od","pk"];
  // The second jump when switching tabs was the scroller holding its old offset while
  // shorter content reflowed under it. Reset to the top as part of the switch.
+ const [gcOff, setGcOff] = useState(false);  // pane is parked off-centre for one frame
  const goGcTab = (k) => {
+   if(k===gcTab) return;
    setGcDir(GC_TABS.indexOf(k) >= GC_TABS.indexOf(gcTab) ? 1 : -1);
+   setGcOff(true);              // jump to the offset with transitions disabled
    setGcTab(k);
    try{ if(gcScrollRef.current) gcScrollRef.current.scrollTop = 0; }catch(e){}
+   // Two frames: one to paint the offset, one to release it so the transition runs.
+   try{ requestAnimationFrame(()=>requestAnimationFrame(()=>setGcOff(false))); }
+   catch(e){ setGcOff(false); }
  };
  const [gameTeamTab, setGameTeamTab] = useState('matchup'); // 'matchup' | 'away' | 'home' 
  const [gameLoading, setGameLoading] = useState(false);
@@ -9085,11 +9091,7 @@ function App() {
  @keyframes pkVeilIn{from{opacity:0}to{opacity:1}}
  /* Tab panes slide in from the side you came from. Short (200ms) and small (14px):
     long or far reads as a page change, which is the feel we are removing. */
- @keyframes gcInR{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:none}}
- @keyframes gcInL{from{opacity:0;transform:translateX(-14px)}to{opacity:1;transform:none}}
- .gc-pane-r{animation:gcInR .20s cubic-bezier(.22,1,.3,1) both;}
- .gc-pane-l{animation:gcInL .20s cubic-bezier(.22,1,.3,1) both;}
- @media (prefers-reduced-motion: reduce){ .gc-pane-r,.gc-pane-l{animation:none;} }
+ @media (prefers-reduced-motion: reduce){ .pk-sheet{animation:none;} }
  .pk-sheet{animation:pkSheetIn .30s cubic-bezier(0.32,0.72,0,1) both;}
  .pk-veil{animation:pkVeilIn .26s ease both;}
  .pk-sheet.pk-snap{transition:transform .26s cubic-bezier(0.32,0.72,0,1);animation:none;}
@@ -18342,7 +18344,7 @@ function App() {
  {/* height, not maxHeight: a bottom-anchored sheet that resizes with its content makes
      the top edge jump on every tab switch. Fixed height keeps the frame still and lets
      only the pane move. */}
- <div className="pk-sheet" ref={gcScrollRef} onClick={e=>e.stopPropagation()} style={{position:"relative",background:"#1C1C1E",height:"85vh",overflowY:"auto",overscrollBehavior:"contain",paddingBottom:40}}>
+ <div className="pk-sheet" ref={gcScrollRef} onClick={e=>e.stopPropagation()} style={{position:"relative",background:"#1C1C1E",height:"85vh",flexShrink:0,overflowY:"auto",overscrollBehavior:"contain",paddingBottom:40}}>
  {/* Close — always visible, clears the notch */}
  <div onClick={()=>setGameSheet(null)} style={{position:"absolute",top:12,right:14,zIndex:20,width:32,height:32,borderRadius:"50%",background:"rgba(255,255,255,0.14)",border:EDGE.hair3,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -18481,7 +18483,11 @@ function App() {
       {gcTab===k && <div style={{position:"absolute",left:12,right:12,bottom:0,height:2.5,borderRadius:2,background:IOS.blue}}/>}
     </div>))}
   </div>
-   <div key={gcTab} className={gcDir>0?"gc-pane-r":"gc-pane-l"} style={{padding:"0 16px 4px"}}>
+   <div style={{padding:"0 16px 4px",
+   transform: gcOff ? ("translateX("+(gcDir*14)+"px)") : "none",
+   opacity: gcOff ? 0 : 1,
+   transition: gcOff ? "none" : "transform .20s cubic-bezier(.22,1,.3,1), opacity .20s ease",
+   willChange:"transform,opacity"}}>
 {gcTab==="ov" && (<>
    {hasMound?(<>
    <Sec t="On the Mound"/>
