@@ -5455,7 +5455,8 @@ function App() {
  const applyMode = (solo, opts) => {
    setSoloModeWithRef(!!solo);
    try{ localStorage.setItem(MODE_KEY, solo ? "solo" : "leagues"); }catch(e){}
-   if(solo){ try{ fetchSoloWeeks(); }catch(e){} }
+   // soloWeeks is loaded by an effect keyed on isSoloMode, not from here — booting
+   // straight into solo must load them too, and that path never calls applyMode.
    if(opts && opts.leagueId) setActiveLeagueId(opts.leagueId);
  };
  const notStartedBody = (<div className="body" style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center",padding:"70px 30px",gap:11}}><div style={{width:56,height:56,borderRadius:"50%",background:"rgba(255,159,10,0.12)",display:"flex",alignItems:"center",justifyContent:"center"}}><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke={IOS.orange} strokeWidth="2.2"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg></div><div style={{fontSize:18,fontWeight:800,color:"#fff"}}>{(activeLeague&&activeLeague.season_start&&new Date(activeLeague.season_start).getTime()>Date.now())?("Starts "+new Date(activeLeague.season_start).toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"})):"Season hasn’t started"}</div><div style={{fontSize:13.5,color:IOS.label2,lineHeight:1.5,maxWidth:250}}>{(activeLeague&&activeLeague.season_start&&new Date(activeLeague.season_start).getTime()>Date.now())?("Week 1 opens "+new Date(activeLeague.season_start).toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"})+" — everyone’s picks stay locked until then."):((activeLeague&&activeLeague.isCommissioner)?"Open Week 1 from the Home tab when you’re ready.":"Picks open once the commissioner starts the season.")}</div><button onClick={async()=>{ applyMode(true); try{ const lid=await getOrCreateSoloLeague(); setActiveLeagueId(lid||"solo"); }catch(e){} try{fetchSoloWeeks();}catch(e){} setScreen("picks"); }} style={{marginTop:8,background:"rgba(191,90,242,0.12)",border:"0.5px solid "+(IOS.purple||"#BF5AF2")+"66",color:(IOS.purple||"#BF5AF2"),borderRadius:RAD.md,padding:"11px 22px",fontSize:13.5,fontWeight:800,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Make picks in Solo instead →</button></div>);
@@ -7230,6 +7231,10 @@ function App() {
  } catch(e) { console.error(errText(e)); }
  setSoloLoading(false);
  };
+ useEffect(()=>{
+   if(!isSoloMode || !user) return;
+   try{ fetchSoloWeeks(); }catch(e){}
+ }, [isSoloMode, user && user.id]);
 
  // Freeform solo: lock a variable-length slate. Each pick is an independent
  // straight bet at multiplier 1, so it scores purely on its own odds via the
