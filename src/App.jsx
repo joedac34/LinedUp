@@ -12092,52 +12092,6 @@ function App() {
        </div>
      )}
 
-     {soloParlay && (()=>{
-       const legs=soloParlay.legs||[];
-       const _ls = legs.length ? calcLS(legs) : null;
-       const _impNum = _ls ? (_ls.decimal>=2?Math.round((_ls.decimal-1)*100):-Math.round(100/(_ls.decimal-1))) : 0;
-       const _poss = _ls ? ((soloParlay.mult||2)*ptsFor(_impNum)).toFixed(1) : null;
-       const addToSlip=()=>{
-         const _e=legs.map(l=>l.gameTime?Date.parse(l.gameTime):Infinity).reduce((a,b)=>Math.min(a,b),Infinity);
-         const _gt=isFinite(_e)?new Date(_e).toISOString():null;
-         setSoloFreePicks(prev=>[...prev, {id:"parlay_"+Date.now(), isParlay:true, parlayLegs:legs, mult:soloParlay.mult||2, category:"longshot", categoryLabel:"Parlay", categoryColor:IOS.pink, odds:(_ls?_ls.american:""), impliedOdds:_impNum, pick:legs.length+"-leg parlay", game:((legs[0]&&legs[0].game)||""), gameTime:_gt}]);
-         setSoloParlay(null); setSoloParlayMode(false);
-       };
-       return (
-       <div style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.6)",display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>{ setSoloParlay(null); setSoloParlayMode(false); }}>
-         <div style={{background:"#0d0d12",borderTopLeftRadius:20,borderTopRightRadius:20,border:EDGE.hair2,padding:"18px 16px calc(var(--sa-bot) + 88px)",maxHeight:"82vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
-           <div style={{width:36,height:4,borderRadius:2,background:"rgba(255,255,255,0.2)",margin:"0 auto 14px"}}/>
-           <div style={{textAlign:"center",marginBottom:4}}><span style={{fontSize:20,fontWeight:800,color:IOS.pink}}>New Parlay</span></div>
-           <div style={{textAlign:"center",fontSize:12.5,color:IOS.label3,marginBottom:14}}>Add 2 to 6 legs. All must hit to score.</div>
-           {legs.length===0 ? (
-             <div style={{textAlign:"center",color:IOS.label3,fontSize:13,padding:"24px 0"}}>No legs yet. Tap Add legs to pick from the board.</div>
-           ) : (
-             <div style={{background:IOS.bg2,border:EDGE.hair,borderRadius:RAD.md,padding:"4px 12px",marginBottom:12}}>
-               {legs.map((l,i)=>(
-                 <div key={l.id||i} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 0",borderBottom:i<legs.length-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
-                   <span style={{fontSize:10,fontWeight:800,color:IOS.pink,width:15,flexShrink:0}}>{(i+1)+"."}</span>
-                   <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.pick}</div><div style={{fontSize:10,color:IOS.label3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.game}</div></div>
-                   <span style={{fontSize:12,fontWeight:800,color:(l.odds||"").startsWith("+")?IOS.green:IOS.blue,flexShrink:0}}>{l.odds}</span>
-                   <div onClick={()=>setSoloParlay(pv=>({...pv, legs:(pv.legs||[]).filter(x=>x.id!==l.id)}))} style={{width:22,height:22,borderRadius:"50%",background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",color:"rgba(255,255,255,0.45)",fontSize:14,cursor:"pointer",flexShrink:0}}>{"×"}</div>
-                 </div>
-               ))}
-             </div>
-           )}
-           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,55,95,0.08)",border:"0.5px solid rgba(255,55,95,0.3)",borderRadius:RAD.md,padding:"9px 12px",marginBottom:12}}>
-             <div><div style={{fontSize:8.5,fontWeight:800,textTransform:"uppercase",color:IOS.label3}}>Combined odds</div><div style={{fontSize:19,fontWeight:800,color:IOS.pink,fontFamily:"'Barlow Semi Condensed',sans-serif"}}>{_ls?_ls.american:"—"}</div></div>
-             <div style={{textAlign:"right"}}><div style={{fontSize:8.5,fontWeight:800,textTransform:"uppercase",color:IOS.label3}}>{"At "+(soloParlay.mult||2)+"x · Possible"}</div><div style={{fontSize:19,fontWeight:800,color:"#fff",fontFamily:"'Barlow Semi Condensed',sans-serif"}}>{_poss ? (_poss+" pts") : "—"}</div></div>
-           </div>
-           <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:14}}>
-             <span style={{fontSize:8.5,fontWeight:800,textTransform:"uppercase",color:IOS.label3,flexShrink:0}}>Units</span>
-             {[1,2,3,4,5].map(m=>{ const on=(soloParlay.mult||2)===m; return (<div key={m} onClick={()=>setSoloParlay(pv=>({...pv,mult:m}))} style={{flex:1,textAlign:"center",padding:"5px 0",borderRadius:RAD.sm,fontSize:11,fontWeight:800,cursor:"pointer",background:on?"rgba(255,55,95,0.18)":"rgba(255,255,255,0.04)",border:"1px solid "+(on?IOS.pink:"rgba(255,255,255,0.08)"),color:on?IOS.pink:"rgba(255,255,255,0.4)"}}>{m+"x"}</div>); })}
-           </div>
-           <button onClick={()=>{ setSoloParlayMode(true); setBuildingSlip(true); setGridTargetSlot(null); setGridPropSub("all"); setGridType("ml"); setScreen("browser"); }} style={{width:"100%",background:"rgba(255,255,255,0.06)",border:EDGE.hair3,borderRadius:RAD.md,padding:"12px",fontSize:14,fontWeight:800,color:"#fff",cursor:"pointer",marginBottom:8,fontFamily:"Barlow,sans-serif"}}>{legs.length?("Add more legs ("+legs.length+"/6)"):"Add legs"}</button>
-           <button onClick={addToSlip} disabled={legs.length<2} style={{width:"100%",background:legs.length<2?IOS.bg3:IOS.pink,border:"none",borderRadius:RAD.md,padding:"13px",fontSize:15,fontWeight:800,color:legs.length<2?IOS.label3:"#fff",cursor:legs.length<2?"default":"pointer",fontFamily:"Barlow,sans-serif"}}>{legs.length<2?"Add at least 2 legs":"Add parlay to slip"}</button>
-           <button onClick={()=>{ setSoloParlay(null); setSoloParlayMode(false); }} style={{width:"100%",background:"transparent",border:"none",color:IOS.label3,fontSize:13,fontWeight:700,cursor:"pointer",marginTop:10,fontFamily:"Barlow,sans-serif"}}>Cancel</button>
-         </div>
-       </div>
-       );
-     })()}
      <div onClick={()=>{ setBuildingSlip(true); setGridTargetSlot(null); setGridType("ml"); setGridPropSub("all"); setScreen("browser"); }} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,border:"1.5px dashed rgba(255,255,255,0.16)",background:"rgba(255,255,255,0.02)",borderRadius:RAD.md,padding:"14px",fontSize:14,fontWeight:800,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif",marginBottom:14}}>
        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
        Add another pick
@@ -12195,58 +12149,146 @@ function App() {
            Let Plok build my picks
          </button>
        )}
-       <div style={{marginBottom:12}}>
+       {/* ── The slate, as a ticket. Approved mockup: layout A + in-slip actions. ──
+            Every pick is a row on one continuous slip; the add actions are the last
+            row on a dashed edge so the slate reads as continuing rather than ending;
+            the projected total sits below a tear line like a receipt total.
+            Actions live ABOVE the lock button on purpose \u2014 they used to sit below it,
+            and people stop scanning once they hit a terminal action. */}
+       <div style={{background:"linear-gradient(180deg,#15151a,#0e0e12)",border:EDGE.hair,borderRadius:14,overflow:"hidden",marginBottom:12}}>
+
+         <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",padding:"12px 15px",borderBottom:EDGE.hair}}>
+           <span style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.14em",textTransform:"uppercase",color:IOS.label3}}>Your slate</span>
+           <span style={{fontSize:11,color:IOS.label2,fontWeight:700}}>Each pick scores on its own odds</span>
+         </div>
+
          {soloFreePicks.length===0 ? (
-           <div style={{background:IOS.bg2,border:"0.5px dashed rgba(255,255,255,0.14)",borderRadius:RAD.md,padding:"20px 16px",textAlign:"center"}}>
-             <div style={{fontSize:13,fontWeight:700,color:"rgba(255,255,255,0.8)"}}>No picks yet</div>
-             <div style={{fontSize:11.5,color:IOS.label3,marginTop:3}}>Tap “Browse all games” to add picks to your slate.</div>
+           <div style={{padding:"26px 18px",textAlign:"center"}}>
+             <div style={{fontSize:13.5,fontWeight:700,color:"rgba(255,255,255,0.8)"}}>No picks yet</div>
+             <div style={{fontSize:11.5,color:IOS.label3,marginTop:4}}>Add your first from the row below.</div>
            </div>
-         ) : (
-           <div style={{background:IOS.bg2,border:EDGE.hair,borderRadius:RAD.md,padding:"4px 12px"}}>
-             {soloFreePicks.map((b,i)=>{
-               const col=b.categoryColor||IOS.blue;
-               return (
-               <div key={b.id} style={{padding:"9px 0",borderBottom:i<soloFreePicks.length-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
-                 <div style={{display:"flex",alignItems:"center",gap:9}}>
-                   <div style={{fontSize:8.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:col,background:`${col}1c`,borderRadius:5,padding:"3px 6px",flexShrink:0}}>{b.categoryLabel||b.category}</div>
-                   <div style={{flex:1,minWidth:0}}>
-                     <div style={{fontSize:13,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.pick}</div>
-                     <div style={{fontSize:10.5,color:IOS.label3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.game}</div>
-                   </div>
-                   <div style={{textAlign:"right",flexShrink:0}}>
-                     <div style={{fontSize:12.5,fontWeight:800,color:(b.odds||"").startsWith("+")?IOS.green:IOS.blue}}>{b.odds}</div>
-                     <div style={{fontSize:9.5,color:IOS.label3}}>+{((b.mult||1)*ptsFor(b.impliedOdds)).toFixed(1)} pts</div>
-                   </div>
-                   <div onClick={()=>setSoloFreePicks(soloFreePicks.filter(x=>x.id!==b.id))} style={{width:24,height:24,borderRadius:RAD.sm,background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",color:"rgba(255,255,255,0.5)",fontSize:15,cursor:"pointer",flexShrink:0}}>×</div>
-                 </div>
-                 <div style={{display:"flex",alignItems:"center",gap:5,marginTop:8}}>
-                   <span style={{fontSize:8.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:IOS.label3,marginRight:1,flexShrink:0}}>Units</span>
-                   {[1,2,3,4,5].map(m=>{ const on=(b.mult||1)===m; return (
-                     <div key={m} onClick={()=>setSoloFreePicks(prev=>prev.map(x=>x.id===b.id?{...x,mult:m}:x))} style={{flex:1,textAlign:"center",padding:"4px 0",borderRadius:RAD.sm,fontSize:11,fontWeight:800,cursor:"pointer", background:on?"rgba(10,132,255,0.18)":"rgba(255,255,255,0.04)", border:`1px solid ${on?IOS.blue:"rgba(255,255,255,0.08)"}`, color:on?IOS.blue:"rgba(255,255,255,0.4)"}}>{m}×</div>
-                   );})}
-                 </div>
+         ) : soloFreePicks.map((b,i)=>{
+           const col=b.categoryColor||IOS.blue;
+           const per=ptsFor(b.impliedOdds);
+           const n=b.mult||1;
+           return (
+           <div key={b.id} style={{padding:"12px 15px",borderBottom:EDGE.hair,position:"relative"}}>
+             <div onClick={()=>setSoloFreePicks(soloFreePicks.filter(x=>x.id!==b.id))}
+               style={{position:"absolute",top:10,right:11,width:22,height:22,borderRadius:"50%",background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",color:IOS.label3,fontSize:13,cursor:"pointer"}}>{"\u00d7"}</div>
+             <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
+               <div style={{width:3,borderRadius:2,alignSelf:"stretch",flexShrink:0,background:col}}/>
+               <div style={{flex:1,minWidth:0,paddingRight:24}}>
+                 <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:col,marginBottom:5}}>{b.categoryLabel||"Pick"}</div>
+                 <div style={{fontSize:14.5,fontWeight:700,color:"#fff",lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.pick}</div>
+                 <div style={{fontSize:10.5,color:IOS.label3,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.game}</div>
                </div>
-               );
-             })}
+               <div style={{textAlign:"right",flexShrink:0}}>
+                 {/* Odds are white. A bet is not an outcome, so it does not wear green. */}
+                 <div style={{fontSize:15,fontWeight:800,fontFamily:"'Barlow Semi Condensed',sans-serif",color:"#fff"}}>{b.odds}</div>
+                 <div style={{fontSize:10,color:IOS.label3,marginTop:2}}>{per.toFixed(1)} pts</div>
+               </div>
+             </div>
+             {/* Units: a stepper, not five full-width buttons. That row used to be as
+                 tall as the pick itself and doubled the scroll on a long slate. */}
+             <div style={{display:"flex",alignItems:"center",gap:8,marginTop:9,marginLeft:13}}>
+               <span style={{fontSize:9,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:IOS.label3}}>Units</span>
+               <div style={{display:"flex",alignItems:"center",background:"rgba(255,255,255,0.055)",border:EDGE.hair2,borderRadius:8,overflow:"hidden"}}>
+                 <div onClick={()=>{ if(n>1) setSoloFreePicks(prev=>prev.map(x=>x.id===b.id?{...x,mult:n-1}:x)); }}
+                   style={{width:28,height:26,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,color:n>1?IOS.label2:"rgba(255,255,255,0.18)",cursor:n>1?"pointer":"default",userSelect:"none"}}>{"\u2212"}</div>
+                 <div style={{width:34,textAlign:"center",fontSize:13,fontWeight:800,fontFamily:"'Barlow Semi Condensed',sans-serif",borderLeft:EDGE.hair2,borderRight:EDGE.hair2,lineHeight:"26px",color:"#fff"}}>{n}{"\u00d7"}</div>
+                 <div onClick={()=>{ if(n<5) setSoloFreePicks(prev=>prev.map(x=>x.id===b.id?{...x,mult:n+1}:x)); }}
+                   style={{width:28,height:26,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,color:n<5?IOS.label2:"rgba(255,255,255,0.18)",cursor:n<5?"pointer":"default",userSelect:"none"}}>+</div>
+               </div>
+               <span style={{marginLeft:"auto",fontSize:10.5,color:IOS.label3}}>worth <b style={{color:IOS.label2,fontWeight:800}}>{(per*n).toFixed(1)} pts</b></span>
+             </div>
+           </div>);
+         })}
+
+         {/* The add row IS the last row of the slate. */}
+         <div style={{display:"flex",borderTop:"1px dashed rgba(255,255,255,0.16)"}}>
+           <div onClick={()=>{ setBuildingSlip(true); setGridTargetSlot(null); setGridType("ml"); setGridPropSub("all"); setScreen("browser"); }}
+             style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"15px 8px",fontSize:13.5,fontWeight:800,cursor:"pointer",color:IOS.blue,borderRight:"1px dashed rgba(255,255,255,0.16)"}}>
+             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.3" strokeLinecap="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+             Browse games
            </div>
-         )}
+           <div onClick={()=>setSoloParlay({legs:[],mult:2})}
+             style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"15px 8px",fontSize:13.5,fontWeight:800,cursor:"pointer",color:IOS.longshot}}>
+             <svg width="16" height="16" viewBox="0 0 24 24" fill={IOS.longshot} stroke="none"><path d="M13 2L3 14h7v8l10-12h-7z"/></svg>
+             Build a parlay
+           </div>
+         </div>
+
+         {/* Tear line: the receipt is about to total up. */}
+         <div style={{height:14,margin:"0 -1px",background:"radial-gradient(circle at 7px 50%, #07070A 5px, transparent 5.5px) 0 0/14px 14px repeat-x"}}/>
+         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 15px"}}>
+           <span style={{fontSize:10,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:IOS.label3}}>If everything hits</span>
+           <span style={{fontSize:27,fontWeight:800,fontFamily:"'Barlow Semi Condensed',sans-serif",color:"#fff"}}>{projTotal.toFixed(1)}</span>
+         </div>
        </div>
 
-       <div onClick={()=>{ setBuildingSlip(true); setGridTargetSlot(null); setGridType("ml"); setGridPropSub("all"); setScreen("browser"); }} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"rgba(10,132,255,0.1)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:RAD.md,padding:"13px",fontSize:14,fontWeight:800,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif",marginBottom:12}}>
-         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
-         Browse all games
-       </div>
-          {/* Build a Parlay entry */}
-     <div onClick={()=>setSoloParlay({legs:[],mult:2})} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,border:"1.5px dashed rgba(255,55,95,0.5)",background:"rgba(255,55,95,0.05)",borderRadius:RAD.md,padding:"14px",fontSize:14,fontWeight:800,color:IOS.pink,cursor:"pointer",fontFamily:"Barlow,sans-serif",marginBottom:10}}>
-       <svg width="16" height="16" viewBox="0 0 24 24" fill={IOS.pink} stroke="none"><path d="M13 2L3 14h7v8l10-12h-7z"/></svg>
-       Build a Parlay
-     </div>
-       <button onClick={lockSoloFreeSlate} disabled={soloFreePicks.length===0} style={{width:"100%",background:soloFreePicks.length?IOS.green:"rgba(255,255,255,0.08)",border:"none",borderRadius:RAD.md,padding:"14px",fontSize:15,fontWeight:800,color:soloFreePicks.length?"#fff":"rgba(255,255,255,0.35)",cursor:soloFreePicks.length?"pointer":"default",fontFamily:"Barlow,sans-serif",marginBottom:16}}>
-         {soloFreePicks.length ? `Lock Picks · ${soloFreePicks.length} pick${soloFreePicks.length>1?"s":""} · up to ${projTotal.toFixed(1)} pts` : "Add at least 1 pick"}
+       {/* Blue, not green. Green means a result in this app; a button that means "go"
+           cannot also be the colour that means "you won". */}
+       <button onClick={lockSoloFreeSlate} disabled={soloFreePicks.length===0}
+         style={{width:"100%",border:"none",borderRadius:13,padding:"15px",fontSize:15.5,fontWeight:800,color:"#fff",fontFamily:"Barlow,sans-serif",
+           cursor:soloFreePicks.length?"pointer":"default",
+           background:soloFreePicks.length?"linear-gradient(120deg,#0A84FF,#5E5CE6)":"rgba(255,255,255,0.08)",
+           opacity:soloFreePicks.length?1:0.6}}>
+         {soloFreePicks.length ? ("Lock "+soloFreePicks.length+" pick"+(soloFreePicks.length>1?"s":"")) : "Add at least 1 pick"}
        </button>
 
      </>
    )}
+
+   {/* Parlay sheet lives OUTSIDE the locked ternary on purpose. It used to sit in
+       the locked===true branch while the "Build a Parlay" button sat in the else
+       branch, so the two could never be mounted at the same time — tapping the
+       button set soloParlay and nothing rendered. */}
+     {soloParlay && (()=>{
+       const legs=soloParlay.legs||[];
+       const _ls = legs.length ? calcLS(legs) : null;
+       const _impNum = _ls ? (_ls.decimal>=2?Math.round((_ls.decimal-1)*100):-Math.round(100/(_ls.decimal-1))) : 0;
+       const _poss = _ls ? ((soloParlay.mult||2)*ptsFor(_impNum)).toFixed(1) : null;
+       const addToSlip=()=>{
+         const _e=legs.map(l=>l.gameTime?Date.parse(l.gameTime):Infinity).reduce((a,b)=>Math.min(a,b),Infinity);
+         const _gt=isFinite(_e)?new Date(_e).toISOString():null;
+         setSoloFreePicks(prev=>[...prev, {id:"parlay_"+Date.now(), isParlay:true, parlayLegs:legs, mult:soloParlay.mult||2, category:"longshot", categoryLabel:"Parlay", categoryColor:IOS.pink, odds:(_ls?_ls.american:""), impliedOdds:_impNum, pick:legs.length+"-leg parlay", game:((legs[0]&&legs[0].game)||""), gameTime:_gt}]);
+         setSoloParlay(null); setSoloParlayMode(false);
+       };
+       return (
+       <div style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.6)",display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>{ setSoloParlay(null); setSoloParlayMode(false); }}>
+         <div style={{background:"#0d0d12",borderTopLeftRadius:20,borderTopRightRadius:20,border:EDGE.hair2,padding:"18px 16px calc(var(--sa-bot) + 88px)",maxHeight:"82vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
+           <div style={{width:36,height:4,borderRadius:2,background:"rgba(255,255,255,0.2)",margin:"0 auto 14px"}}/>
+           <div style={{textAlign:"center",marginBottom:4}}><span style={{fontSize:20,fontWeight:800,color:IOS.pink}}>New Parlay</span></div>
+           <div style={{textAlign:"center",fontSize:12.5,color:IOS.label3,marginBottom:14}}>Add 2 to 6 legs. All must hit to score.</div>
+           {legs.length===0 ? (
+             <div style={{textAlign:"center",color:IOS.label3,fontSize:13,padding:"24px 0"}}>No legs yet. Tap Add legs to pick from the board.</div>
+           ) : (
+             <div style={{background:IOS.bg2,border:EDGE.hair,borderRadius:RAD.md,padding:"4px 12px",marginBottom:12}}>
+               {legs.map((l,i)=>(
+                 <div key={l.id||i} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 0",borderBottom:i<legs.length-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
+                   <span style={{fontSize:10,fontWeight:800,color:IOS.pink,width:15,flexShrink:0}}>{(i+1)+"."}</span>
+                   <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.pick}</div><div style={{fontSize:10,color:IOS.label3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.game}</div></div>
+                   <span style={{fontSize:12,fontWeight:800,color:(l.odds||"").startsWith("+")?IOS.green:IOS.blue,flexShrink:0}}>{l.odds}</span>
+                   <div onClick={()=>setSoloParlay(pv=>({...pv, legs:(pv.legs||[]).filter(x=>x.id!==l.id)}))} style={{width:22,height:22,borderRadius:"50%",background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",color:"rgba(255,255,255,0.45)",fontSize:14,cursor:"pointer",flexShrink:0}}>{"×"}</div>
+                 </div>
+               ))}
+             </div>
+           )}
+           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,55,95,0.08)",border:"0.5px solid rgba(255,55,95,0.3)",borderRadius:RAD.md,padding:"9px 12px",marginBottom:12}}>
+             <div><div style={{fontSize:8.5,fontWeight:800,textTransform:"uppercase",color:IOS.label3}}>Combined odds</div><div style={{fontSize:19,fontWeight:800,color:IOS.pink,fontFamily:"'Barlow Semi Condensed',sans-serif"}}>{_ls?_ls.american:"—"}</div></div>
+             <div style={{textAlign:"right"}}><div style={{fontSize:8.5,fontWeight:800,textTransform:"uppercase",color:IOS.label3}}>{"At "+(soloParlay.mult||2)+"x · Possible"}</div><div style={{fontSize:19,fontWeight:800,color:"#fff",fontFamily:"'Barlow Semi Condensed',sans-serif"}}>{_poss ? (_poss+" pts") : "—"}</div></div>
+           </div>
+           <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:14}}>
+             <span style={{fontSize:8.5,fontWeight:800,textTransform:"uppercase",color:IOS.label3,flexShrink:0}}>Units</span>
+             {[1,2,3,4,5].map(m=>{ const on=(soloParlay.mult||2)===m; return (<div key={m} onClick={()=>setSoloParlay(pv=>({...pv,mult:m}))} style={{flex:1,textAlign:"center",padding:"5px 0",borderRadius:RAD.sm,fontSize:11,fontWeight:800,cursor:"pointer",background:on?"rgba(255,55,95,0.18)":"rgba(255,255,255,0.04)",border:"1px solid "+(on?IOS.pink:"rgba(255,255,255,0.08)"),color:on?IOS.pink:"rgba(255,255,255,0.4)"}}>{m+"x"}</div>); })}
+           </div>
+           <button onClick={()=>{ setSoloParlayMode(true); setBuildingSlip(true); setGridTargetSlot(null); setGridPropSub("all"); setGridType("ml"); setScreen("browser"); }} style={{width:"100%",background:"rgba(255,255,255,0.06)",border:EDGE.hair3,borderRadius:RAD.md,padding:"12px",fontSize:14,fontWeight:800,color:"#fff",cursor:"pointer",marginBottom:8,fontFamily:"Barlow,sans-serif"}}>{legs.length?("Add more legs ("+legs.length+"/6)"):"Add legs"}</button>
+           <button onClick={addToSlip} disabled={legs.length<2} style={{width:"100%",background:legs.length<2?IOS.bg3:IOS.pink,border:"none",borderRadius:RAD.md,padding:"13px",fontSize:15,fontWeight:800,color:legs.length<2?IOS.label3:"#fff",cursor:legs.length<2?"default":"pointer",fontFamily:"Barlow,sans-serif"}}>{legs.length<2?"Add at least 2 legs":"Add parlay to slip"}</button>
+           <button onClick={()=>{ setSoloParlay(null); setSoloParlayMode(false); }} style={{width:"100%",background:"transparent",border:"none",color:IOS.label3,fontSize:13,fontWeight:700,cursor:"pointer",marginTop:10,fontFamily:"Barlow,sans-serif"}}>Cancel</button>
+         </div>
+       </div>
+       );
+     })()}
  </div>
  );})()
  }
