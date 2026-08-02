@@ -5368,6 +5368,22 @@ function App() {
    return EMPTY_FLEX.map(s=>({...s}));
  });
  const [soloFlexPicks, setSoloFlexPicks] = useState(EMPTY_FLEX);
+ // Mirrors the predicate the slip bar itself uses (App.jsx ~13691). Kept here so an
+ // effect can watch it — the bar is built inside a JSX IIFE and cannot host a hook.
+ const slipBarUp = (()=>{
+   try{
+     if(screen!=="browser") return false;
+     const ap = isSoloMode ? soloFlexPicks : flexPicks;
+     return (ap||[]).some(sl=> sl && !sl.committed && (sl.isParlay ? (sl.parlayLegs||[]).length>=2 : !!sl.bet));
+   }catch(e){ return false; }
+ })();
+ useEffect(()=>{
+   try{
+     const r=document.documentElement;
+     if(slipBarUp) r.classList.add("pk-slip-open"); else r.classList.remove("pk-slip-open");
+     return ()=>{ try{ r.classList.remove("pk-slip-open"); }catch(e){} };
+   }catch(e){}
+ },[slipBarUp]);
  const [soloFreePicks, setSoloFreePicks] = useState([]); const soloDraftReady = useRef(false); const [soloParlay, setSoloParlay] = useState(null); const [soloParlayMode, setSoloParlayMode] = useState(false); const [pushNudgeOff, setPushNudgeOff] = useState(()=>{ try{ return localStorage.getItem("picklock_push_nudge")==="1"; }catch(e){ return false; } }); const [replaceCtx, setReplaceCtx] = useState(null); // void-replace: {voidId, mult, week, type} // freeform solo slate (variable count)
  const [freeCat, setFreeCat] = useState("all");
  const parseSlotConfig=(raw)=>{ try{ const a=typeof raw==="string"?JSON.parse(raw):raw; return (Array.isArray(a)&&a.length)?a:null; }catch(e){ return null; } };
@@ -9197,6 +9213,9 @@ function App() {
      win this one — the sheet sits in a nested stacking context — so the dock stands
      down instead. */
   .pk-sheet-open .tab-bar{opacity:0;pointer-events:none;}
+  /* Slip bar owns the bottom strip while picks are staged — they are 2px apart and
+     would otherwise sit on top of each other regardless of z-index. */
+  .pk-slip-open .tab-bar{opacity:0;pointer-events:none;transform:translateX(-50%) translateY(120%);}
   /* The dock has no business hovering over an open keyboard. */
   .kb-open .tab-bar{opacity:0;pointer-events:none;}
  .tab-bar.small{cursor:pointer;}
