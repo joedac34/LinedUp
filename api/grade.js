@@ -760,6 +760,26 @@ function gradePick(pick, games, playerIndex, info = {}) {
       }
     }
   }
+  // market_key is written straight from the odds feed and records what the bet ACTUALLY
+  // is; slot only records which seat it landed in. The builder has let a spread into an
+  // ml seat 3 times (verified 2 Aug 2026), and a run line graded as a moneyline pays out
+  // on a 1-run win it never covered. When a PLAIN market disagrees with the slot, the
+  // feed wins.
+  //   - period markets (…_1st_N_innings, _h1, _q2 …) are excluded: gradePeriod already
+  //     owns them by market_key, above, and "totals_1st_1_innings" must never collapse
+  //     into a full-game total.
+  //   - prop and longshot_ are excluded: they have their own branches and legitimately
+  //     hold any market.
+  const _mk = (pick.market_key || "").trim();
+  if (/^(h2h|spreads|totals)$/.test(_mk)
+      && baseType !== "prop"
+      && !String(slot || "").startsWith("longshot_")) {
+    const want = _mk === "spreads" ? "spread" : _mk === "totals" ? "ou" : "ml";
+    if (baseType !== want) {
+      info.slotMismatch = `${baseType}->${want}`;
+      baseType = want;
+    }
+  }
   const name = (pick.pick_name || "").trim();
   // The matchup ("Away @ Home") lives in pick.game. O/U pick_names have NO team
   // in them (e.g. "Over 217.5"), so we MUST use pick.game to find the game.
