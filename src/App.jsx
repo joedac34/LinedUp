@@ -56,7 +56,7 @@ const API_BASE = IS_NATIVE ? "https://app.picklockapp.com" : "";
  "Tampa Bay Buccaneers":"TB","Pittsburgh Steelers":"PIT","Baltimore Ravens":"BAL",
  "Cleveland Browns":"CLE","Cincinnati Bengals":"CIN","Tennessee Titans":"TEN",
  "Indianapolis Colts":"IND","Houston Texans":"HOU","Jacksonville Jaguars":"JAX",
- "Denver Broncos":"DEN","Washington Commanders":"WAS","New York Giants":"NYG",
+ "Denver Broncos":"DEN","Washington Commanders":"WAS",
  // MLB
  "Los Angeles Dodgers":"LAD","New York Yankees":"NYY","Boston Red Sox":"BOS",
  "Chicago Cubs":"CHC","St. Louis Cardinals":"STL","Atlanta Braves":"ATL",
@@ -3449,6 +3449,40 @@ const soloWeekRange = (n) => {
     : M[s.getUTCMonth()]+" "+s.getUTCDate()+" – "+M[e.getUTCMonth()]+" "+e.getUTCDate();
 };
 
+// ── Units ────────────────────────────────────────────────────────────────────
+// Profit/loss at the price taken, with the multiplier as the stake. Same formula
+// fetchPlokRecord already uses (win +(dec-1), loss -1); Plok is just the mult=1 case.
+//   win        -> +mult * (decimal - 1)
+//   loss       -> -mult
+//   push/void  -> 0   (stake returned)
+//   pending    -> null (excluded from every total)
+// On a WIN this equals points/10 by construction, since ptsFor() is (dec-1)*10.
+// The two only diverge on losses: points award 0, units subtract the stake. That
+// divergence is the entire reason units are worth showing.
+// Verified against break-even at -145/-200/-110/+150/+420 before shipping.
+const unitsAmerican = (p) => {
+  let io = (p && p.implied_odds != null) ? p.implied_odds
+         : (p && p.impliedOdds != null) ? p.impliedOdds : null;
+  if(io == null && p && p.odds != null){
+    const n = parseFloat(String(p.odds).replace(/[^0-9+\-.]/g, ""));
+    if(!isNaN(n)) io = n;
+  }
+  const n = Number(io);
+  return (io == null || isNaN(n) || n === 0) ? null : n;
+};
+const unitsOf = (p) => {
+  if(!p) return null;
+  const r = p.result;
+  if(r !== "W" && r !== "L" && r !== "P") return null;
+  if(r === "P") return 0;
+  const m = Number(p.multiplier != null ? p.multiplier : (p.mult != null ? p.mult : 1)) || 1;
+  if(r === "L") return -m;
+  const a = unitsAmerican(p); if(a == null) return null;
+  return m * ((a > 0 ? (a/100)+1 : (100/Math.abs(a))+1) - 1);
+};
+const sumUnits = (arr) => (arr||[]).reduce((s,p)=>{ const u=unitsOf(p); return u==null ? s : s+u; }, 0);
+const fmtUnits = (u) => (u>=0?"+":"\u2212") + Math.abs(u).toFixed(1) + "u";
+
 // Axis label for the season strip: the slate's start date, M/D. Same anchor maths as
 // soloWeekRange so the two can never disagree about which week a slate is.
 const soloWeekShort = (n) => {
@@ -5546,6 +5580,7 @@ function App() {
  const [slipBarOpen, setSlipBarOpen] = useState(false); // DK-style slip sheet in the browser
  const [soloSlipOpen, setSoloSlipOpen] = useState(false); // solo equivalent (free-form picks)
  const [openLegs, setOpenLegs] = useState({});            // which parlay rows are expanded
+ const [histUnits, setHistUnits] = useState(true);        // history strip: units vs points
  const [slipPoolIdx, setSlipPoolIdx] = useState(-1);    // which slip row shows its multiplier pool
  const [slipToast, setSlipToast] = useState("");
  const [gridSearch, setGridSearch] = useState("");
@@ -7682,7 +7717,7 @@ function App() {
 
  const fetchAllMyStats = async (uid) => {
  const {data:picks} = await supabase.from("picks").select("*").eq("user_id", uid).neq("result", "pending");
- if(!picks||!picks.length){setAllMyStats({wins:0,losses:0,points:0,total:0,winRate:"0%",bestBet:null,worstBet:null,byType:{},bySport:{},byWeek:[],avgOdds:0,currentStreak:{count:0,type:"W"},maxStreak:0,maxWinStreak:0,bestWeek:null,personality:"The Rookie",personalityDesc:"Keep picking and your style will emerge.",longshotStats:[],byMult:[],oddsBands:[],clv:null});return;}
+ if(!picks||!picks.length){setAllMyStats({wins:0,losses:0,points:0,total:0,winRate:"0%",bestBet:null,worstBet:null,byType:{},bySport:{},byWeek:[],avgOdds:0,currentStreak:{count:0,type:"W"},maxStreak:0,maxWinStreak:0,units:0,bestWeek:null,personality:"The Rookie",personalityDesc:"Keep picking and your style will emerge.",longshotStats:[],byMult:[],oddsBands:[],clv:null});return;}
  const wins=picks.filter(p=>p.result==="W").length;
  const losses=picks.filter(p=>p.result==="L").length;
  const points=parseFloat(picks.filter(p=>p.result==="W").reduce((sum,p)=>sum+parseFloat(p.points_earned||0),0).toFixed(1));
@@ -7694,7 +7729,7 @@ function App() {
  const TYPE_COLORS={ml:"#0A84FF",prop:"#FFD60A",ou:"#FF9F0A",spread:"#30D158",longshot:"#FF375F"};
  const TYPE_LABELS={ml:"Moneyline",prop:"Prop",ou:"Over/Under",spread:"Spread",longshot:"Longshot"};
  const byType={};
- picks.forEach(p=>{const slot=p.slot?.startsWith("longshot")?"longshot":(p.slot||"ml").split("_")[0];if(!byType[slot])byType[slot]={wins:0,losses:0,pts:0,color:TYPE_COLORS[slot]||"#888",label:TYPE_LABELS[slot]||slot};if(p.result==="W"){byType[slot].wins++;byType[slot].pts+=parseFloat(p.points_earned||0);}else byType[slot].losses++;});
+ picks.forEach(p=>{const slot=p.slot?.startsWith("longshot")?"longshot":(p.slot||"ml").split("_")[0];if(!byType[slot])byType[slot]={wins:0,losses:0,pts:0,color:TYPE_COLORS[slot]||"#888",label:TYPE_LABELS[slot]||slot};byType[slot].units=(byType[slot].units||0)+(unitsOf(p)||0);if(p.result==="W"){byType[slot].wins++;byType[slot].pts+=parseFloat(p.points_earned||0);}else byType[slot].losses++;});
  Object.values(byType).forEach(t=>{const tot=t.wins+t.losses;t.pct=tot>0?Math.round(t.wins/tot*100):0;t.pts=parseFloat(t.pts.toFixed(1));});
  // By sport
  const leagueIds=[...new Set(picks.map(p=>p.league_id).filter(Boolean))];
@@ -7746,15 +7781,15 @@ function App() {
  // By multiplier (risk vs reward)
  const MULT_COLORS={1:"#0A84FF",2:"#2E8FE6",3:"#5E8FCC",4:"#8A7FB0",5:"#FF375F"};
  const byMultMap={};
- picks.forEach(p=>{const m=Math.max(1,Math.min(5,Math.round(p.multiplier||1)));if(!byMultMap[m])byMultMap[m]={mult:m,wins:0,losses:0,pts:0,color:MULT_COLORS[m]};if(p.result==="W"){byMultMap[m].wins++;byMultMap[m].pts+=parseFloat(p.points_earned||0);}else byMultMap[m].losses++;});
- const byMult=[1,2,3,4,5].map(m=>{const o=byMultMap[m]||{mult:m,wins:0,losses:0,pts:0,color:MULT_COLORS[m]};const tot=o.wins+o.losses;return{...o,pts:parseFloat(o.pts.toFixed(1)),pct:tot>0?Math.round(o.wins/tot*100):0,total:tot};});
+ picks.forEach(p=>{const m=Math.max(1,Math.min(5,Math.round(p.multiplier||1)));if(!byMultMap[m])byMultMap[m]={mult:m,wins:0,losses:0,pts:0,color:MULT_COLORS[m]};byMultMap[m].units=(byMultMap[m].units||0)+(unitsOf(p)||0);if(p.result==="W"){byMultMap[m].wins++;byMultMap[m].pts+=parseFloat(p.points_earned||0);}else byMultMap[m].losses++;});
+ const byMult=[1,2,3,4,5].map(m=>{const o=byMultMap[m]||{mult:m,wins:0,losses:0,pts:0,color:MULT_COLORS[m]};const tot=o.wins+o.losses;return{...o,pts:parseFloat(o.pts.toFixed(1)),units:parseFloat((o.units||0).toFixed(2)),pct:tot>0?Math.round(o.wins/tot*100):0,total:tot};});
  // Hit rate by odds band
  const bandDefs=[{key:"-200+",test:o=>o<=-200},{key:"-150",test:o=>o>-200&&o<=-140},{key:"-110",test:o=>o>-140&&o<100},{key:"+100",test:o=>o>=100&&o<200},{key:"+200",test:o=>o>=200&&o<400},{key:"+400+",test:o=>o>=400}];
  const bandColors=["#30D158","#5CC85A","#9FBE3E","#FFD60A","#FF9F0A","#FF375F"];
  const oddsBands=bandDefs.map((b,i)=>{const inB=picks.filter(p=>{const o=p.implied_odds||0;return o!==0&&b.test(o);});const w=inB.filter(p=>p.result==="W").length;return{key:b.key,color:bandColors[i],total:inB.length,wins:w,pct:inB.length>0?Math.round(w/inB.length*100):0};});
  const clvP=picks.filter(p=>p.clv!=null);
  const clvObj=clvP.length?{count:clvP.length,beatRate:Math.round(clvP.filter(p=>parseFloat(p.clv)>0).length/clvP.length*100),avgClv:parseFloat((clvP.reduce((a,p)=>a+parseFloat(p.clv||0),0)/clvP.length).toFixed(2))}:null;
- setAllMyStats({wins,losses,points,total,winRate,bestBet,worstBet,byType,bySport,byWeek,avgOdds,currentStreak:{count:curStreak,type:curType},maxStreak,maxWinStreak,bestWeek:bestWeekObj,personality,personalityDesc,longshotStats,byMult,oddsBands,clv:clvObj});
+ setAllMyStats({wins,losses,points,total,winRate,bestBet,worstBet,byType,bySport,byWeek,avgOdds,currentStreak:{count:curStreak,type:curType},maxStreak,maxWinStreak,units:parseFloat(sumUnits(picks).toFixed(2)),bestWeek:bestWeekObj,personality,personalityDesc,longshotStats,byMult,oddsBands,clv:clvObj});
  };
 
  const fetchStandings = async (leagueId) => {
@@ -7783,7 +7818,8 @@ function App() {
  // Group picks by user and calculate stats
  const statsByUser = {};
  (picks||[]).forEach(p=>{
- if(!statsByUser[p.user_id]) statsByUser[p.user_id] = {wins:0, losses:0, points:0};
+ if(!statsByUser[p.user_id]) statsByUser[p.user_id] = {wins:0, losses:0, points:0, units:0};
+ statsByUser[p.user_id].units += (unitsOf(p)||0);
  if(p.result==="W") {
  statsByUser[p.user_id].wins++;
  statsByUser[p.user_id].points += parseFloat(p.points_earned||0);
@@ -7846,6 +7882,7 @@ function App() {
  wins: s.wins,
  losses: s.losses,
  points: parseFloat(s.points.toFixed(1)),
+ units: parseFloat((s.units||0).toFixed(2)),
  record: isCume ? `${s.wins}-${s.losses}` : `${mr.mw}-${mr.ml}`,
  wpct: total > 0 ? `${Math.round(s.wins/total*100)}%` : "0%",
  isYou: uid === user?.id,
@@ -8477,9 +8514,8 @@ function App() {
  name: s.isYou ? "You" : s.name,
  record: s.record,
  streak: s.streak,
- units: `+${s.points}`,
+ units: s.units,
  roi: s.wpct,
- streak: "—",
  wpct: s.wpct,
  wr: [],
  points: s.points,
@@ -10404,7 +10440,7 @@ function App() {
    const _val={fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:700,fontSize:25,lineHeight:1,marginTop:7};
    const _cta={marginLeft:"auto",display:"inline-flex",alignItems:"center",gap:7,background:"#0A84FF",color:"#fff",fontWeight:700,fontSize:14,padding:"10px 15px",borderRadius:RAD.md,border:"none",cursor:"pointer"};
    return (
-   <div className="pl-rise pl-d1" style={{position:"relative",border:"none",boxShadow:"0 14px 32px -18px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.05)",borderRadius:RAD.xl,overflow:"hidden",background:"radial-gradient(120% 140% at 0% 0%, rgba(10,132,255,0.10), transparent 55%), #0B0B10",boxShadow:"inset 0 1px 0 rgba(255,255,255,0.06), 0 14px 40px rgba(0,0,0,0.4)",margin:"0 0 10px"}}>
+   <div className="pl-rise pl-d1" style={{position:"relative",border:"none",boxShadow:"0 14px 32px -18px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.06), 0 14px 40px rgba(0,0,0,0.4)",borderRadius:RAD.xl,overflow:"hidden",background:"radial-gradient(120% 140% at 0% 0%, rgba(10,132,255,0.10), transparent 55%), #0B0B10",margin:"0 0 10px"}}>
    <div style={{position:"absolute",left:0,top:0,right:0,bottom:0,backgroundImage:"repeating-linear-gradient(0deg,rgba(255,255,255,0.025) 0px,rgba(255,255,255,0.025) 1px,transparent 1px,transparent 4px)",pointerEvents:"none",opacity:0.5}}/>
    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",position:"relative"}}>
      <div style={{padding:"13px 12px 12px"}}>
@@ -16872,7 +16908,7 @@ function App() {
  <div style={{display:"flex",alignItems:"center",gap:8}}>
  <div style={{fontSize:18}}></div>
  <div><div style={{fontSize:17,fontWeight:700,letterSpacing:-0.3,color:"#fff"}}>Season Standings</div>
- <div style={{fontSize:11,color:IOS.label3,marginTop:1}}>Ranked by record {"\u00b7"} points break ties</div></div>
+ <div style={{fontSize:11,color:IOS.label3,marginTop:1}}>Ranked by record {"\u00b7"} points break ties {"\u00b7"} units are the price you paid</div></div>
  </div>
  </div>
 
@@ -16881,7 +16917,8 @@ function App() {
  <div style={{display:"flex",alignItems:"center",padding:"8px 16px",borderBottom:`0.5px solid ${IOS.sep}`}}>
  <div style={{width:28,flexShrink:0}}/>
  <div style={{flex:1}}/>
- <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3,width:52,textAlign:"center"}}>pts</div>
+ <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3,width:46,textAlign:"center"}}>pts</div>
+ <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.blue,width:52,textAlign:"center"}}>units</div>
  <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3,width:44,textAlign:"right"}}>record</div>
  </div>
  {sorted.map((row,i)=>{
@@ -16901,7 +16938,11 @@ function App() {
  )}
  <div className="st-streak" style={{color:IOS.label3}}>{row.wpct} win rate</div>
  </div>
- <div className="st-rec" style={{color:IOS.label3,width:52,textAlign:"center"}}>{row.points!==undefined?`${row.points}`:row.units}</div>
+ <div className="st-rec" style={{color:IOS.label3,width:46,textAlign:"center"}}>{row.points!==undefined?`${row.points}`:"\u2014"}</div>
+ {/* Units is a third axis for READING, not seeding — ranking stays record, points
+     break ties. Someone can lead on points and trail here; that is the interesting bit. */}
+ <div style={{width:52,textAlign:"center",fontSize:13,fontWeight:800,fontFamily:"'Barlow Semi Condensed',sans-serif",
+   color:row.units==null?IOS.label3:(row.units>=0?IOS.green:IOS.red)}}>{row.units==null?"\u2014":fmtUnits(row.units)}</div>
  <div className="st-units pos" style={{width:44,textAlign:"right",color:"#fff"}}>{row.record||"0-0"}</div>
  </div>
  {isExp&&(
@@ -18828,11 +18869,12 @@ function App() {
    {[
      {l:"Record",v:soloWeeks.reduce((s,w)=>s+w.wins,0)+"\u2013"+soloWeeks.reduce((s,w)=>s+w.losses,0),c:IOS.blue},
      {l:"Win rate",v:Math.round((soloWeeks.reduce((s,w)=>s+w.wins,0)/(soloWeeks.reduce((s,w)=>s+w.wins+w.losses,0)||1))*100)+"%",c:IOS.green},
-     {l:"Total pts",v:soloWeeks.reduce((s,w)=>s+w.pts,0).toFixed(1),c:"#fff"},
+     (()=>{ const u=sumUnits(soloWeeks.flatMap(w=>w.picks||[])); return {l:"Units",v:fmtUnits(u),c:u>=0?IOS.green:IOS.red}; })(),
+     {l:"Points",v:soloWeeks.reduce((s,w)=>s+w.pts,0).toFixed(1),c:"#fff"},
    ].map((s,i)=>(
-   <div key={i} style={{flex:1,background:"linear-gradient(180deg,#15151a,#0e0e12)",borderRadius:13,padding:"13px 9px",textAlign:"center",border:EDGE.hair}}>
-     <div style={{fontSize:25,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,lineHeight:0.95,color:s.c}}>{s.v}</div>
-     <div style={{fontSize:8.5,color:IOS.label3,textTransform:"uppercase",letterSpacing:"0.11em",fontWeight:800,marginTop:5}}>{s.l}</div>
+   <div key={i} style={{flex:1,minWidth:0,background:"linear-gradient(180deg,#15151a,#0e0e12)",borderRadius:13,padding:"12px 5px",textAlign:"center",border:EDGE.hair}}>
+     <div style={{fontSize:21,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,lineHeight:0.95,color:s.c,whiteSpace:"nowrap"}}>{s.v}</div>
+     <div style={{fontSize:8,color:IOS.label3,textTransform:"uppercase",letterSpacing:"0.09em",fontWeight:800,marginTop:5}}>{s.l}</div>
    </div>
    ))}
  </div>
@@ -18840,21 +18882,39 @@ function App() {
      so it is reversed here; reading a season left-to-right is the whole point. */}
  {soloWeeks.length>1 && (()=>{
    const arr=[...soloWeeks].reverse().slice(-10);
-   const mx=Math.max(1,...arr.map(w=>Math.abs(w.pts)||0));
-   const best=Math.max(...soloWeeks.map(w=>w.pts||0));
+   // Units can be negative, so this axis needs a zero line and bars that grow both
+   // ways. Points never can — that asymmetry is the point of offering both.
+   const vals=arr.map(w=> histUnits ? sumUnits(w.picks||[]) : (w.pts||0));
+   const mx=Math.max(1,...vals.map(Math.abs));
+   const anyNeg=vals.some(v=>v<0);
+   const best=histUnits ? Math.max(...soloWeeks.map(w=>sumUnits(w.picks||[]))) : Math.max(...soloWeeks.map(w=>w.pts||0));
    return (
    <div style={{background:"linear-gradient(180deg,#15151a,#0e0e12)",border:EDGE.hair,borderRadius:13,padding:"13px 14px 11px",marginBottom:14}}>
      <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:10}}>
-       <span style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.13em",textTransform:"uppercase",color:IOS.label3}}>Points by slate</span>
-       <b style={{fontSize:11,color:IOS.label2,fontWeight:700}}>Best {"\u00b7"} +{best.toFixed(1)}</b>
+       <div style={{display:"flex",gap:5}}>
+         {[["Units",true],["Points",false]].map(([lb,on])=>(
+           <div key={lb} onClick={()=>setHistUnits(on)} style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",padding:"5px 10px",borderRadius:7,cursor:"pointer",
+             color:histUnits===on?"#fff":IOS.label3,background:histUnits===on?"rgba(10,132,255,0.16)":"rgba(255,255,255,0.05)",
+             border:"0.5px solid "+(histUnits===on?"rgba(10,132,255,0.4)":"rgba(255,255,255,0.13)")}}>{lb}</div>
+         ))}
+       </div>
+       <b style={{fontSize:11,color:IOS.label2,fontWeight:700}}>Best {"\u00b7"} {histUnits?fmtUnits(best):("+"+best.toFixed(1))}</b>
      </div>
-     <div style={{display:"flex",alignItems:"flex-end",gap:5,height:54}}>
-       {arr.map(w=>{
-         const h=Math.max(6,Math.round((Math.abs(w.pts)||0)/mx*38));
+     <div style={{position:"relative",display:"flex",alignItems:anyNeg?"center":"flex-end",gap:5,height:62}}>
+       {anyNeg && <div style={{position:"absolute",left:0,right:0,top:"50%",height:1,background:"rgba(255,255,255,0.18)",pointerEvents:"none"}}/>}
+       {arr.map((w,ai)=>{
+         const v=vals[ai];
+         const h=Math.max(5,Math.round(Math.abs(v)/mx*(anyNeg?22:38)));
+         const col = v>0 ? IOS.green : v<0 ? IOS.red : "rgba(255,255,255,0.13)";
          return (
-         <div key={w.week} style={{flex:1,display:"flex",flexDirection:"column",justifyContent:"flex-end",alignItems:"center",gap:4,height:"100%",minWidth:0}}>
-           <div style={{width:"100%",height:h,borderRadius:"3px 3px 0 0",background:(w.pts||0)>0?IOS.green:"rgba(255,255,255,0.13)"}}/>
-           <span style={{fontSize:8,fontWeight:700,color:IOS.label3,whiteSpace:"nowrap"}}>{soloWeekShort(w.week)}</span>
+         <div key={w.week} style={{flex:1,display:"flex",flexDirection:"column",justifyContent:anyNeg?"center":"flex-end",alignItems:"center",height:"100%",minWidth:0}}>
+           {anyNeg ? (
+             <div style={{width:"100%",height:"100%",display:"flex",flexDirection:"column",justifyContent:"center"}}>
+               <div style={{height:22,display:"flex",alignItems:"flex-end"}}>{v>0 && <div style={{width:"100%",height:h,borderRadius:"3px 3px 0 0",background:col}}/>}</div>
+               <div style={{height:22,display:"flex",alignItems:"flex-start"}}>{v<0 && <div style={{width:"100%",height:h,borderRadius:"0 0 3px 3px",background:col}}/>}</div>
+             </div>
+           ) : (<div style={{width:"100%",height:h,borderRadius:"3px 3px 0 0",background:col}}/>)}
+           <span style={{fontSize:8,fontWeight:700,color:IOS.label3,whiteSpace:"nowrap",marginTop:4}}>{soloWeekShort(w.week)}</span>
          </div>);
        })}
      </div>
@@ -18925,7 +18985,11 @@ function App() {
      <div style={{height:14,margin:"0 -1px",background:"radial-gradient(circle at 7px 50%, #07070A 5px, transparent 5.5px) 0 0/14px 14px repeat-x"}}/>
      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 15px"}}>
        <span style={{fontSize:10,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:IOS.label3}}>{_pending>0?"If everything hits":"Slate total"}</span>
-       <span style={{fontSize:24,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,color:w.pts>0?IOS.green:"#fff"}}>{w.pts>0?"+"+w.pts:(w.pts||0)}</span>
+       <span style={{display:"flex",alignItems:"baseline",gap:10}}>
+         <span style={{fontSize:24,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,color:w.pts>0?IOS.green:"#fff"}}>{w.pts>0?"+"+w.pts:(w.pts||0)}</span>
+         {_g>0 && (()=>{ const u=sumUnits(w.picks||[]); return (
+           <span style={{fontSize:15,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,color:u>=0?IOS.green:IOS.red}}>{fmtUnits(u)}</span>); })()}
+       </span>
      </div>
    </div>
    );
@@ -19182,6 +19246,62 @@ function App() {
      <SecH t="Points by Week" sub={byWeek.length+(isSoloMode?" graded slates":" graded wks")}/>
      <div style={{...SURF,padding:"16px 16px 14px"}}><WeeklyBarsSVG weeks={byWeek}/></div>
     </>)}
+
+    {/* ── UNITS ── The one number that can go down. Points reward long odds; units
+         ask whether you were right at the price you took. Shown wherever points are. */}
+    {analyticsTab==="Pick Types" && byTypeArr.length>0 && (()=>{
+      const rows=[...byTypeArr].map(t=>({...t, u:t.units||0})).sort((a,b)=>b.u-a.u);
+      const mx=Math.max(1,...rows.map(r=>Math.abs(r.u)));
+      const tot=s.units||0;
+      const worst=rows[rows.length-1];
+      const bestR=rows[0];
+      return (<>
+        <SecH t="Units" sub="Profit at the price you took"/>
+        <div style={{...SURF,overflow:"hidden",marginBottom:12}}>
+          <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",padding:"14px 16px",borderBottom:EDGE.hair}}>
+            <span style={{fontSize:10,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:CC.l3}}>Season</span>
+            <span style={{fontSize:28,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,color:tot>=0?CC.green:CC.red}}>{fmtUnits(tot)}</span>
+          </div>
+          {rows.map(t=>{
+            const w=Math.min(50,Math.abs(t.u)/mx*50);
+            return (
+            <div key={t.label} style={{display:"flex",alignItems:"center",gap:11,padding:"11px 16px",borderBottom:EDGE.hair}}>
+              <div style={{width:3,alignSelf:"stretch",borderRadius:2,background:t.color,flexShrink:0}}/>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13.5,fontWeight:700,color:"#fff",textTransform:"uppercase"}}>{t.label}</div>
+                <div style={{fontSize:10.5,color:CC.l3,marginTop:1}}>{t.wins}{"\u2013"}{t.losses} {"\u00b7"} {t.pct}% hit {"\u00b7"} {t.pts} pts</div>
+              </div>
+              <div style={{width:74,height:5,borderRadius:99,background:"rgba(255,255,255,0.07)",position:"relative",flexShrink:0}}>
+                <div style={{position:"absolute",top:0,bottom:0,borderRadius:99,width:w+"%",background:t.u>=0?CC.green:CC.red,
+                  ...(t.u>=0?{left:"50%"}:{right:"50%"})}}/>
+              </div>
+              <div style={{width:56,textAlign:"right",flexShrink:0,fontSize:14,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,color:t.u>=0?CC.green:CC.red}}>{fmtUnits(t.u)}</div>
+            </div>);
+          })}
+          {rows.length>1 && bestR.u>0 && worst.u<0 && (
+            <div style={{padding:"12px 16px",fontSize:12.5,lineHeight:1.55,color:CC.l2}}>
+              Your <b style={{color:"#fff"}}>{bestR.label}</b> book is where the profit is. <b style={{color:"#fff"}}>{worst.label}</b> hits {worst.pct}% and still costs you {fmtUnits(worst.u)} {"\u2014"} the prices are too short to pay for the misses.
+            </div>
+          )}
+        </div>
+      </>);
+    })()}
+
+    {analyticsTab==="Pick Types" && (s.byMult||[]).some(m=>m.total>0) && (
+      <div style={{...SURF,overflow:"hidden",marginBottom:12}}>
+        <div style={{padding:"12px 16px",borderBottom:EDGE.hair,display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
+          <span style={{fontSize:10,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:CC.l3}}>Units by multiplier</span>
+          <span style={{fontSize:11,color:CC.l2}}>Are the big swings earning it?</span>
+        </div>
+        {(s.byMult||[]).filter(m=>m.total>0).map(m=>(
+          <div key={m.mult} style={{display:"flex",alignItems:"center",gap:11,padding:"10px 16px",borderBottom:EDGE.hair}}>
+            <div style={{fontSize:14,fontWeight:800,fontFamily:"'Barlow Semi Condensed',sans-serif",color:m.color,width:26,flexShrink:0}}>{m.mult}{"\u00d7"}</div>
+            <div style={{flex:1,minWidth:0,fontSize:11,color:CC.l3}}>{m.total} pick{m.total!==1?"s":""} {"\u00b7"} {m.pct}% hit</div>
+            <div style={{fontSize:14,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,color:(m.units||0)>=0?CC.green:CC.red,flexShrink:0}}>{fmtUnits(m.units||0)}</div>
+          </div>
+        ))}
+      </div>
+    )}
 
     {/* BET TYPES */}
     {analyticsTab==="Pick Types"&&(
