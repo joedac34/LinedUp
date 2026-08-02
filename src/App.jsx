@@ -4002,10 +4002,66 @@ function groupPicksByDay(picks){
   return keys.map(k=>{ const ps=map[k]; let w=0,l=0,pts=0,live=false; ps.forEach(p=>{ if(p.result==="W"){w++; pts+=parseFloat(p.points_earned||0);} else if(p.result==="L"){l++;} else if(p.result!=="P"){ const _gd=(p.game_date||p.gameTime)?Date.parse(p.game_date||p.gameTime):NaN; if(!isNaN(_gd)&&_gd<=Date.now()){ live=true; } } }); return {key:k,label:_dayLabel(k),picks:ps,w:w,l:l,pts:pts,live:live}; });
 }
 
+// ── PickRow ──────────────────────────────────────────────────────────────────
+// One pick, one strip. This markup existed twice in SoloHome byte-for-byte and in a
+// compact variant in History, which is why the bye fix, the parlay-chip fix and the
+// type-label fix each needed multiple passes to land.
+//
+// Extras are NOT props where the data already answers the question: a pick with no
+// result shows no result badge, a parlay shows no whole-row score chip. Props are
+// reserved for genuinely editorial choices the row cannot infer:
+//   onReplace   - can this pick be swapped here?
+//   isLast      - suppress the trailing hairline
+//   openLegs/setOpenLegs - who owns the expanded-parlay state for this list
+function PickRow({ p, pi, groupKey, isLast, openLegs, setOpenLegs, liveGames, onOpenGamecast, onReplace, currentWeekNum, IOS, RAD }){
+                        // A parlay spans several games, so one box-score button on the row
+                        // is meaningless — it can only point at one of them. The chip moves
+                        // onto each leg instead, where it maps to exactly one game.
+                        const _isPar=String(p.slot||"").split("_")[0]==="parlay" && Array.isArray(p.parlay_legs) && p.parlay_legs.length>0;
+                        const _lk="h"+(p.id||(groupKey+"-"+pi));
+                        const res=(p.result||"pending");
+                        const rc=res==="W"?IOS.green:res==="L"?IOS.red:res==="P"?IOS.label3:"rgba(255,255,255,0.3)";
+                        const rl=res==="W"?"WON":res==="L"?"LOST":res==="P"?"VOID":"PENDING";
+                        return (
+                          <div key={pi} style={{display:"flex",alignItems:"center",gap:9,padding:"8px 0",borderBottom:isLast?"none":"0.5px solid rgba(255,255,255,0.05)"}}>
+                            <div style={{width:7,height:7,borderRadius:"50%",background:rc,flexShrink:0}}/>
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{fontSize:12,fontWeight:600,color:"rgba(255,255,255,0.85)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.pick_name}</div>
+                              {p.game && !_isPar && <div style={{fontSize:10,color:IOS.label3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.game}</div>}
+                              {_isPar && <div onClick={(e)=>{ e.stopPropagation(); setOpenLegs(o=>({...o,[_lk]:!o[_lk]})); }}
+                                style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:9.5,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:IOS.label3,cursor:"pointer",marginTop:2}}>
+                                {p.parlay_legs.length} legs {"\u00b7"} all must hit
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" style={{transform:openLegs[_lk]?"rotate(180deg)":"none",transition:"transform .2s"}}><path d="M6 9l6 6 6-6"/></svg>
+                              </div>}
+                              {_isPar && openLegs[_lk] && (
+                                <div style={{marginTop:7,borderLeft:"1px solid rgba(255,255,255,0.10)",paddingLeft:10}}>
+                                  {p.parlay_legs.map((lg,li)=>{
+                                    const _lp={game:lg.game||"",game_date:lg.gameTime||lg.game_date||p.game_date||null,pick_name:lg.pick||lg.pick_name||"",odds:lg.odds,created_at:p.created_at};
+                                    return (
+                                    <div key={li} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderTop:li?"0.5px solid rgba(255,255,255,0.06)":"none"}}>
+                                      <span style={{fontSize:9,fontWeight:800,color:IOS.label3,minWidth:11,flexShrink:0}}>{li+1}</span>
+                                      <div style={{flex:1,minWidth:0}}>
+                                        <div style={{fontSize:11.5,fontWeight:700,color:"rgba(255,255,255,0.9)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lg.pick||lg.pick_name||"Leg"}</div>
+                                        <div style={{fontSize:9.5,color:IOS.label3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lg.game||""}</div>
+                                      </div>
+                                      <span style={{fontSize:10.5,fontWeight:800,color:IOS.label2,flexShrink:0}}>{lg.odds||""}</span>
+                                      <ScoreChip pick={_lp} live={liveMatch(_lp, liveGames)} onOpen={()=>{ if(onOpenGamecast) onOpenGamecast(_lp); }}/>
+                                    </div>);
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                            <div style={{fontSize:11,fontWeight:800,color:String(p.odds||"").startsWith("+")?IOS.green:IOS.blue,flexShrink:0}}>{p.odds}</div>
+                            <div style={{minWidth:52,flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1}}><div style={{fontSize:8.5,fontWeight:800,letterSpacing:0.3,color:rc}}>{rl}{res==="W"&&p.points_earned?` +${parseFloat(p.points_earned).toFixed(1)}`:""}</div>{!_isPar && <ScoreChip pick={p} live={liveMatch(p, liveGames)} onOpen={()=>{ if(onOpenGamecast) onOpenGamecast(p); }}/>}</div>{res==="P" && p.replaced_by && (<span style={{flexShrink:0,fontSize:8.5,fontWeight:800,letterSpacing:0.3,color:IOS.label3}}>REPLACED</span>)}{res==="P" && !p.replaced_by && p.week===currentWeekNum && onReplace && (<div onClick={(e)=>{ e.stopPropagation(); onReplace(p); }} style={{flexShrink:0,fontSize:9.5,fontWeight:800,color:IOS.blue,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.35)",borderRadius:RAD.sm,padding:"4px 9px",cursor:"pointer"}}>REPLACE</div>)}{res==="P" && !p.replaced_by && p.week<currentWeekNum && (<span style={{flexShrink:0,fontSize:8.5,fontWeight:800,letterSpacing:0.3,color:"#FF9F0A"}}>COOKED</span>)}
+                          </div>
+                        );
+}
+
 function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeague, setNewLeagueStep, setShowBrowse, fetchPublicLeagues, setIsSoloMode, setActiveLeagueId, getOrCreateSoloLeague, soloSavedPicks, setSoloSavedPicks, soloFlexPicks, setSoloFlexPicks, soloSport, setSoloSport, setShowSoloSportPicker, soloSubmitted, setSoloSubmitted, username, soloTopPct, onDeleteSlate, onJoinCode, setShowPaywall, tickerGames=[], espnGames=[], globalRank=null, onOpenLeaderboard, liveGames=[], onOpenGamecast, onReplace}) {
   const [shareToast,setShareToast]=useState("");
   const [openSlate,setOpenSlate]=useState(null);
   const [openDays,setOpenDays]=useState({});
+  const [openLegs,setOpenLegs]=useState({});   // which parlay rows are expanded here
   const [joinCode,setJoinCode]=useState("");
   const [dayPlay,setDayPlay]=useState(null); // Plok Play of the Day: {loading|data|error}
   const [heroCollapsed, setHeroCollapsed] = useState(()=>{ try{return localStorage.getItem("picklock_lobby_collapsed")==="1";}catch(e){return false;} });
@@ -4228,22 +4284,14 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2.4" strokeLinecap="round" style={{transform:dOpen?"rotate(180deg)":"none",transition:"transform .2s"}}><polyline points="6 9 12 15 18 9"/></svg>
                         </div>
                       </div>
-                      {dOpen && grp.picks.map((p,pi)=>{
-                        const res=(p.result||"pending");
-                        const rc=res==="W"?IOS.green:res==="L"?IOS.red:res==="P"?IOS.label3:"rgba(255,255,255,0.3)";
-                        const rl=res==="W"?"WON":res==="L"?"LOST":res==="P"?"VOID":"PENDING";
-                        return (
-                          <div key={pi} style={{display:"flex",alignItems:"center",gap:9,padding:"8px 0",borderBottom:pi<grp.picks.length-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
-                            <div style={{width:7,height:7,borderRadius:"50%",background:rc,flexShrink:0}}/>
-                            <div style={{flex:1,minWidth:0}}>
-                              <div style={{fontSize:12,fontWeight:600,color:"rgba(255,255,255,0.85)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.pick_name}</div>
-                              {p.game && <div style={{fontSize:10,color:IOS.label3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.game}</div>}
-                            </div>
-                            <div style={{fontSize:11,fontWeight:800,color:String(p.odds||"").startsWith("+")?IOS.green:IOS.blue,flexShrink:0}}>{p.odds}</div>
-                            <div style={{minWidth:52,flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1}}><div style={{fontSize:8.5,fontWeight:800,letterSpacing:0.3,color:rc}}>{rl}{res==="W"&&p.points_earned?` +${parseFloat(p.points_earned).toFixed(1)}`:""}</div><ScoreChip pick={p} live={liveMatch(p, liveGames)} onOpen={()=>{ if(onOpenGamecast) onOpenGamecast(p); }}/></div>{res==="P" && p.replaced_by && (<span style={{flexShrink:0,fontSize:8.5,fontWeight:800,letterSpacing:0.3,color:IOS.label3}}>REPLACED</span>)}{res==="P" && !p.replaced_by && p.week===currentWeekNum && onReplace && (<div onClick={(e)=>{ e.stopPropagation(); onReplace(p); }} style={{flexShrink:0,fontSize:9.5,fontWeight:800,color:IOS.blue,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.35)",borderRadius:RAD.sm,padding:"4px 9px",cursor:"pointer"}}>REPLACE</div>)}{res==="P" && !p.replaced_by && p.week<currentWeekNum && (<span style={{flexShrink:0,fontSize:8.5,fontWeight:800,letterSpacing:0.3,color:"#FF9F0A"}}>COOKED</span>)}
-                          </div>
-                        );
-                      })}
+                      {dOpen && grp.picks.map((p,pi)=>(
+                        <PickRow key={p.id||pi} p={p} pi={pi} groupKey={grp.key}
+                          isLast={pi===grp.picks.length-1}
+                          openLegs={openLegs} setOpenLegs={setOpenLegs}
+                          liveGames={liveGames} onOpenGamecast={onOpenGamecast}
+                          onReplace={onReplace} currentWeekNum={currentWeekNum}
+                          IOS={IOS} RAD={RAD}/>
+                      ))}
                     </div>
                     );
                   })}
@@ -4357,22 +4405,14 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2.4" strokeLinecap="round" style={{transform:dOpen?"rotate(180deg)":"none",transition:"transform .2s"}}><polyline points="6 9 12 15 18 9"/></svg>
                         </div>
                       </div>
-                      {dOpen && grp.picks.map((p,pi)=>{
-                        const res=(p.result||"pending");
-                        const rc=res==="W"?IOS.green:res==="L"?IOS.red:res==="P"?IOS.label3:"rgba(255,255,255,0.3)";
-                        const rl=res==="W"?"WON":res==="L"?"LOST":res==="P"?"VOID":"PENDING";
-                        return (
-                          <div key={pi} style={{display:"flex",alignItems:"center",gap:9,padding:"8px 0",borderBottom:pi<grp.picks.length-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
-                            <div style={{width:7,height:7,borderRadius:"50%",background:rc,flexShrink:0}}/>
-                            <div style={{flex:1,minWidth:0}}>
-                              <div style={{fontSize:12,fontWeight:600,color:"rgba(255,255,255,0.85)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.pick_name}</div>
-                              {p.game && <div style={{fontSize:10,color:IOS.label3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.game}</div>}
-                            </div>
-                            <div style={{fontSize:11,fontWeight:800,color:String(p.odds||"").startsWith("+")?IOS.green:IOS.blue,flexShrink:0}}>{p.odds}</div>
-                            <div style={{minWidth:52,flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1}}><div style={{fontSize:8.5,fontWeight:800,letterSpacing:0.3,color:rc}}>{rl}{res==="W"&&p.points_earned?` +${parseFloat(p.points_earned).toFixed(1)}`:""}</div><ScoreChip pick={p} live={liveMatch(p, liveGames)} onOpen={()=>{ if(onOpenGamecast) onOpenGamecast(p); }}/></div>{res==="P" && p.replaced_by && (<span style={{flexShrink:0,fontSize:8.5,fontWeight:800,letterSpacing:0.3,color:IOS.label3}}>REPLACED</span>)}{res==="P" && !p.replaced_by && p.week===currentWeekNum && onReplace && (<div onClick={(e)=>{ e.stopPropagation(); onReplace(p); }} style={{flexShrink:0,fontSize:9.5,fontWeight:800,color:IOS.blue,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.35)",borderRadius:RAD.sm,padding:"4px 9px",cursor:"pointer"}}>REPLACE</div>)}{res==="P" && !p.replaced_by && p.week<currentWeekNum && (<span style={{flexShrink:0,fontSize:8.5,fontWeight:800,letterSpacing:0.3,color:"#FF9F0A"}}>COOKED</span>)}
-                          </div>
-                        );
-                      })}
+                      {dOpen && grp.picks.map((p,pi)=>(
+                        <PickRow key={p.id||pi} p={p} pi={pi} groupKey={grp.key}
+                          isLast={pi===grp.picks.length-1}
+                          openLegs={openLegs} setOpenLegs={setOpenLegs}
+                          liveGames={liveGames} onOpenGamecast={onOpenGamecast}
+                          onReplace={onReplace} currentWeekNum={currentWeekNum}
+                          IOS={IOS} RAD={RAD}/>
+                      ))}
                     </div>
                     );
                   })}
@@ -5169,7 +5209,9 @@ function App() {
  const lastAuthUidRef = useRef(null);
  const [soloTopPct, setSoloTopPct] = useState(null);
  const [soloLoading, setSoloLoading] = useState(false);
- const [isSoloMode, setIsSoloMode] = useState(false);
+ const MODE_KEY = "picklock_mode";
+ const MODE_SOLO_AT_BOOT = (()=>{ try{ return localStorage.getItem(MODE_KEY)==="solo"; }catch(e){ return false; } })();
+ const [isSoloMode, setIsSoloMode] = useState(MODE_SOLO_AT_BOOT);
  // MUST sit below realLeagues AND isSoloMode. A useEffect dep array is evaluated during
  // render, so placing this above their useState calls read them in the TDZ and crashed
  // the whole tree with 'Cannot access realLeagues before initialization'.
@@ -5179,7 +5221,9 @@ function App() {
   if(realLeagues.some(l=>l.id===activeLeagueId)) return;
   setActiveLeagueId(realLeagues[0].id);   // empty, stale or deleted -> first real league
  }, [realLeagues, activeLeagueId, isSoloMode]);
- const isSoloModeRef = useRef(false);
+ const isSoloModeRef = useRef(MODE_SOLO_AT_BOOT);
+ // Derived, never stored. Any screen asking "which mode am I in" gets one answer.
+ const homeMode = isSoloMode ? "solo" : "leagues";
  // Mirror, do not hand-maintain: setIsSoloMode is also called from child
  // components through props, where the wrapper below is not reachable.
  useEffect(()=>{ isSoloModeRef.current = isSoloMode; }, [isSoloMode]);
@@ -5259,14 +5303,10 @@ function App() {
      }catch(e){}
    })();
  }, [isSoloMode, activeLeague&&activeLeague.id, activeLeague&&activeLeague.season_start, activeLeague&&activeLeague.start_mode, activeLeague&&activeLeague.isCommissioner, leagueFull, liveSchedule.length]);
- const MODE_KEY = "picklock_mode";
- const [homeMode, setHomeMode] = useState(()=>{ try{ return localStorage.getItem(MODE_KEY)==="solo" ? "solo" : "leagues"; }catch(e){ return "leagues"; } });
  // The ONLY way to change mode. Never call setIsSoloMode or setHomeMode directly.
  const applyMode = (solo, opts) => {
-   const m = solo ? "solo" : "leagues";
-   setHomeMode(m);
    setSoloModeWithRef(!!solo);
-   try{ localStorage.setItem(MODE_KEY, m); }catch(e){}
+   try{ localStorage.setItem(MODE_KEY, solo ? "solo" : "leagues"); }catch(e){}
    if(solo){ try{ fetchSoloWeeks(); }catch(e){} }
    if(opts && opts.leagueId) setActiveLeagueId(opts.leagueId);
  };
@@ -18996,12 +19036,14 @@ function App() {
              </div>
            </div>
            {dOpen && grp.picks.map((p,j)=>{
+                        // A parlay spans several games; one box-score chip cannot represent it.
+                        const _isPar=String(p.slot||"").split("_")[0]==="parlay" && Array.isArray(p.parlay_legs) && p.parlay_legs.length>0;
              const won=p.result==="W",lost=p.result==="L";
              return (
              <div key={j} style={{display:"flex",alignItems:"center",padding:"3px 0"}}>
                <div style={{width:8,height:8,borderRadius:"50%",background:won?IOS.green:lost?IOS.red:"#444",flexShrink:0,marginRight:8}}/>
                <div style={{flex:1,fontSize:11,color:"#ccc"}}>{p.pick_name}</div>
-               <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:2,flexShrink:0}}><div style={{fontSize:11,fontWeight:700,color:won?IOS.green:lost?IOS.red:"#555"}}>{won?"+"+parseFloat(p.points_earned||0).toFixed(1)+"pts":lost?"L":"—"}</div><ScoreChip pick={p} live={liveMatch(p, liveGames)} onOpen={()=>{ if(openGamecast) openGamecast(p); }}/></div>
+               <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:2,flexShrink:0}}><div style={{fontSize:11,fontWeight:700,color:won?IOS.green:lost?IOS.red:"#555"}}>{won?"+"+parseFloat(p.points_earned||0).toFixed(1)+"pts":lost?"L":"—"}</div>{!_isPar && <ScoreChip pick={p} live={liveMatch(p, liveGames)} onOpen={()=>{ if(openGamecast) openGamecast(p); }}/>}</div>
              </div>
              );
            })}
