@@ -4013,6 +4013,63 @@ function groupPicksByDay(picks){
 //   onReplace   - can this pick be swapped here?
 //   isLast      - suppress the trailing hairline
 //   openLegs/setOpenLegs - who owns the expanded-parlay state for this list
+// ── MatchupRow ───────────────────────────────────────────────────────────────
+// One head-to-head card: two seats, points, ceiling bars, best-pick chips.
+// This markup existed twice (Matchup screen, leagues Matchups tab) and the copies
+// had already drifted — the leagues one rendered "FINAL" on a bye, because the bye
+// treatment only ever reached its bar and scores, never its badge.
+//
+// Anything the two callers computed differently — live point sums, which week, how a
+// user id becomes a name, where a tap goes — is computed by the CALLER and passed in.
+// This component only draws.
+function MatchupRow({ mi, u1, u2, p1, p2, done, mine, isBye, badge, badgeBg, badgeCol,
+                      lead1, lead2, anyLead, _cA, _cB, _maxCeil, _bpA, _bpB,
+                      nameOf, onOpenProfile, onOpen, user,
+                      IOS, RAD, SIDE_YOU, SIDE_OPP, SIDE_A, SIDE_B }){
+             const row=(id,pts,lead,cl,sideIdx)=>{
+               const you=id===(user&&user.id);
+               // Green here meant "currently ahead" on an unsettled matchup — the same green
+               // as a settled win. Sides are weight now, not hue; the card ring says which
+               // one is yours.
+               const tint = mine ? (you?SIDE_YOU:SIDE_OPP) : (sideIdx===0?SIDE_A:SIDE_B);
+               const lp=(cl.locked/_maxCeil)*100, mp=(cl.live/_maxCeil)*100;
+               return (
+                <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 13px",opacity:lead?1:(anyLead?0.7:1)}}>
+                  <div style={{width:28,height:28,borderRadius:RAD.sm,flexShrink:0,background:tint+"33",color:tint,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900}}>{id?(nameOf(id)||"?").slice(0,2).toUpperCase():"\u2014"}</div>
+                  <div onClick={(e)=>{ if(!id||!onOpenProfile) return; e.stopPropagation(); onOpenProfile(id, you); }} style={{width:96,flexShrink:0,fontSize:13.5,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",color:!id?IOS.label3:(you?IOS.blue:"#fff"),cursor:(id&&onOpenProfile)?"pointer":"default"}}>{id?nameOf(id):"BYE"}</div>
+                  <div style={{flex:1,height:8,borderRadius:4,background:"rgba(0,0,0,0.4)",position:"relative",overflow:"hidden",boxShadow:"inset 0 1px 2px rgba(0,0,0,0.55)"}}>
+                    {!isBye && <div style={{position:"absolute",left:0,top:0,bottom:0,borderRadius:4,width:lp+"%",background:`linear-gradient(180deg,${tint},${tint}cc)`,boxShadow:`0 0 8px ${tint}55`}}/>}
+                    {!isBye && cl.live>0 && <div style={{position:"absolute",top:0,bottom:0,left:lp+"%",width:mp+"%",background:`repeating-linear-gradient(115deg,${tint}3a 0 4px,transparent 4px 8px)`}}/>}
+                  </div>
+                  <div style={{width:50,textAlign:"right",flexShrink:0,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:19,color:isBye?IOS.label3:(lead?IOS.green:"#fff")}}>{isBye?"\u2014":pts.toFixed(1)}</div>
+                </div>
+               );
+             };
+             return (
+               <div key={mi} onClick={onOpen} style={{background:IOS.bg2,border:mine?("1px solid "+IOS.blue+"88"):`1px solid ${IOS.sep}`,borderRadius:RAD.lg,marginBottom:11,overflow:"hidden",cursor:"pointer"}}>
+                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 13px 2px"}}>
+                   <div style={{fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",color:mine?IOS.blue:IOS.label3}}>{isBye?(mine?"You have a bye":"Bye"):(mine?"Your matchup":"Matchup")}</div>
+                   <div style={{fontSize:10,fontWeight:800,padding:"3px 8px",borderRadius:RAD.sm,background:isBye?"rgba(255,159,10,0.14)":(done?"rgba(255,255,255,0.08)":"rgba(48,209,88,0.14)"),color:isBye?IOS.orange:(done?IOS.label2:IOS.green)}}>{isBye?"BYE":(done?"FINAL":"LIVE")}</div>
+                 </div>
+                 {row(u1,p1,lead1,_cA,0)}
+                 <div style={{height:0.5,background:IOS.sep,margin:"0 13px"}}/>
+                 {row(u2,p2,lead2,_cB,1)}
+                  {(() => {
+                    const chip=(bp,label,align)=>{
+                      const box=(inner)=>(<div style={{flex:1,minWidth:0,background:"rgba(255,255,255,0.03)",borderRadius:RAD.sm,padding:"7px 9px",textAlign:align}}>{inner}</div>);
+                      const head=(<div style={{fontSize:7.5,fontWeight:900,letterSpacing:0.5,color:"rgba(255,255,255,0.28)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</div>);
+                      if(!bp) return box(<>{head}<div style={{fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.3)",marginTop:2}}>No slip submitted</div></>);
+              if(bp.state==="hidden") return box(<>{head}<div style={{fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.35)",marginTop:2}}>{bp.n+" pick"+(bp.n===1?"":"s")+" \u00b7 locked"}</div><div style={{fontSize:9.5,fontWeight:700,color:"rgba(255,255,255,0.22)",marginTop:1}}>Reveals at game time</div></>);
+                      const c=bp.state==="won"?IOS.green:bp.state==="live"?IOS.blue:"rgba(255,255,255,0.3)";
+                      const w=bp.state==="won"?("+"+bp.worth.toFixed(1)):bp.state==="live"?("to win "+bp.worth.toFixed(1)):"0.0";
+                      return box(<>{head}<div style={{fontSize:11.5,fontWeight:800,marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{bp.pick.pick_name||"Pick"}</div><div style={{fontSize:10,fontWeight:800,marginTop:1,color:c,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{(bp.pick.multiplier?bp.pick.multiplier+"\u00d7 \u00b7 ":"")+w}</div></>);
+                    };
+                    return (<div style={{display:"flex",gap:7,padding:"9px 13px 11px"}}>{chip(_bpA,(nameOf(u1)||"").toUpperCase().slice(0,12),"left")}{chip(_bpB,(nameOf(u2)||"").toUpperCase().slice(0,12),"right")}</div>);
+                  })()}
+               </div>
+             );
+}
+
 function PickRow({ p, pi, groupKey, isLast, openLegs, setOpenLegs, liveGames, onOpenGamecast, onReplace, currentWeekNum, IOS, RAD }){
                         // A parlay spans several games, so one box-score button on the row
                         // is meaningless — it can only point at one of them. The chip moves
@@ -14430,47 +14487,16 @@ function App() {
              const lead1=done?mu.winner_id===u1:(p1>p2);
              const lead2=done?mu.winner_id===u2:(p2>p1);
              const anyLead=lead1||lead2;
-             const row=(id,pts,lead,cl,sideIdx)=>{
-               const you=id===(user&&user.id);
-               // Green here meant "currently ahead" on an unsettled matchup — the same green
-               // as a settled win. Sides are weight now, not hue; the card ring says which
-               // one is yours.
-               const tint = mine ? (you?SIDE_YOU:SIDE_OPP) : (sideIdx===0?SIDE_A:SIDE_B);
-               const lp=(cl.locked/_maxCeil)*100, mp=(cl.live/_maxCeil)*100;
-               return (
-                <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 13px",opacity:lead?1:(anyLead?0.7:1)}}>
-                  <div style={{width:28,height:28,borderRadius:RAD.sm,flexShrink:0,background:tint+"33",color:tint,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900}}>{id?(nameOf(id)||"?").slice(0,2).toUpperCase():"\u2014"}</div>
-                  <div style={{width:96,flexShrink:0,fontSize:13.5,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",color:!id?IOS.label3:(you?IOS.blue:"#fff")}}>{id?nameOf(id):"BYE"}</div>
-                  <div style={{flex:1,height:8,borderRadius:4,background:"rgba(0,0,0,0.4)",position:"relative",overflow:"hidden",boxShadow:"inset 0 1px 2px rgba(0,0,0,0.55)"}}>
-                    {!isBye && <div style={{position:"absolute",left:0,top:0,bottom:0,borderRadius:4,width:lp+"%",background:`linear-gradient(180deg,${tint},${tint}cc)`,boxShadow:`0 0 8px ${tint}55`}}/>}
-                    {!isBye && cl.live>0 && <div style={{position:"absolute",top:0,bottom:0,left:lp+"%",width:mp+"%",background:`repeating-linear-gradient(115deg,${tint}3a 0 4px,transparent 4px 8px)`}}/>}
-                  </div>
-                  <div style={{width:50,textAlign:"right",flexShrink:0,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:19,color:isBye?IOS.label3:(lead?IOS.green:"#fff")}}>{isBye?"\u2014":pts.toFixed(1)}</div>
-                </div>
-               );
-             };
              return (
-               <div key={mi} onClick={()=>openMatchupPager(weekMs, mi, "Week "+wkSel, wkSel)} style={{background:IOS.bg2,border:mine?("1px solid "+IOS.blue+"88"):`1px solid ${IOS.sep}`,borderRadius:RAD.lg,marginBottom:11,overflow:"hidden",cursor:"pointer"}}>
-                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 13px 2px"}}>
-                   <div style={{fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",color:mine?IOS.blue:IOS.label3}}>{isBye?(mine?"You have a bye":"Bye"):(mine?"Your matchup":"Matchup")}</div>
-                   <div style={{fontSize:10,fontWeight:800,padding:"3px 8px",borderRadius:RAD.sm,background:isBye?"rgba(255,159,10,0.14)":(done?"rgba(255,255,255,0.08)":"rgba(48,209,88,0.14)"),color:isBye?IOS.orange:(done?IOS.label2:IOS.green)}}>{isBye?"BYE":(done?"FINAL":"LIVE")}</div>
-                 </div>
-                 {row(u1,p1,lead1,_cA,0)}
-                 <div style={{height:0.5,background:IOS.sep,margin:"0 13px"}}/>
-                 {row(u2,p2,lead2,_cB,1)}
-                  {(() => {
-                    const chip=(bp,label,align)=>{
-                      const box=(inner)=>(<div style={{flex:1,minWidth:0,background:"rgba(255,255,255,0.03)",borderRadius:RAD.sm,padding:"7px 9px",textAlign:align}}>{inner}</div>);
-                      const head=(<div style={{fontSize:7.5,fontWeight:900,letterSpacing:0.5,color:"rgba(255,255,255,0.28)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</div>);
-                      if(!bp) return box(<>{head}<div style={{fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.3)",marginTop:2}}>No slip submitted</div></>);
-              if(bp.state==="hidden") return box(<>{head}<div style={{fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.35)",marginTop:2}}>{bp.n+" pick"+(bp.n===1?"":"s")+" \u00b7 locked"}</div><div style={{fontSize:9.5,fontWeight:700,color:"rgba(255,255,255,0.22)",marginTop:1}}>Reveals at game time</div></>);
-                      const c=bp.state==="won"?IOS.green:bp.state==="live"?IOS.blue:"rgba(255,255,255,0.3)";
-                      const w=bp.state==="won"?("+"+bp.worth.toFixed(1)):bp.state==="live"?("to win "+bp.worth.toFixed(1)):"0.0";
-                      return box(<>{head}<div style={{fontSize:11.5,fontWeight:800,marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{bp.pick.pick_name||"Pick"}</div><div style={{fontSize:10,fontWeight:800,marginTop:1,color:c,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{(bp.pick.multiplier?bp.pick.multiplier+"\u00d7 \u00b7 ":"")+w}</div></>);
-                    };
-                    return (<div style={{display:"flex",gap:7,padding:"9px 13px 11px"}}>{chip(_bpA,(nameOf(u1)||"").toUpperCase().slice(0,12),"left")}{chip(_bpB,(nameOf(u2)||"").toUpperCase().slice(0,12),"right")}</div>);
-                  })()}
-               </div>
+               <MatchupRow mi={mi} u1={u1} u2={u2} p1={p1} p2={p2} done={done} mine={mine} isBye={isBye}
+                 badge={isBye?"BYE":(done?"FINAL":"LIVE")}
+                 badgeBg={isBye?"rgba(255,159,10,0.14)":(done?"rgba(255,255,255,0.08)":"rgba(48,209,88,0.14)")}
+                 badgeCol={isBye?IOS.orange:(done?IOS.label2:IOS.green)}
+                 lead1={lead1} lead2={lead2} anyLead={anyLead}
+                 _cA={_cA} _cB={_cB} _maxCeil={_maxCeil} _bpA={_bpA} _bpB={_bpB}
+                 nameOf={nameOf} onOpen={()=>openMatchupPager(weekMs, mi, "Week "+wkSel, wkSel)}
+                 user={user} IOS={IOS} RAD={RAD}
+                 SIDE_YOU={SIDE_YOU} SIDE_OPP={SIDE_OPP} SIDE_A={SIDE_A} SIDE_B={SIDE_B}/>
              );
            })}
          </div>
@@ -15634,50 +15660,19 @@ function App() {
        const lead1=done?mu.winner_id===u1:(p1>p2);
        const lead2=done?mu.winner_id===u2:(p2>p1);
        const anyLead=lead1||lead2;
-       const badge=done?"FINAL":(wk>curWk?"UPCOMING":"LIVE");
-       const badgeBg=done?"rgba(255,255,255,0.08)":(wk>curWk?"rgba(255,255,255,0.06)":"rgba(48,209,88,0.14)");
-       const badgeCol=done?IOS.label2:(wk>curWk?IOS.label3:IOS.green);
-        const row=(id,pts,lead,cl,sideIdx)=>{
-          const you=id===(user&&user.id);
-          // Green here meant "currently ahead" on an unsettled matchup — the same green
-          // as a settled win. Sides are weight now, not hue; the card ring says which
-          // one is yours.
-          const tint = mine ? (you?SIDE_YOU:SIDE_OPP) : (sideIdx===0?SIDE_A:SIDE_B);
-          const lp=(cl.locked/_maxCeil)*100, mp=(cl.live/_maxCeil)*100;
-          return (
-           <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 13px",opacity:lead?1:(anyLead?0.7:1)}}>
-             <div onClick={(e)=>{ if(!id) return; e.stopPropagation(); openUserProfile(id,{username:you?((userProfile&&userProfile.username)||"You"):nm(id)}); }} style={{width:28,height:28,borderRadius:RAD.sm,flexShrink:0,background:tint+"33",color:tint,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900,cursor:id?"pointer":"default"}}>{id?(nm(id)||"?").slice(0,2).toUpperCase():"\u2014"}</div>
-             <div onClick={(e)=>{ if(!id) return; e.stopPropagation(); openUserProfile(id,{username:you?((userProfile&&userProfile.username)||"You"):nm(id)}); }} style={{width:96,flexShrink:0,fontSize:13.5,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",color:!id?IOS.label3:(you?IOS.blue:"#fff"),cursor:id?"pointer":"default"}}>{id?nm(id):"BYE"}</div>
-             <div style={{flex:1,height:8,borderRadius:4,background:"rgba(0,0,0,0.4)",position:"relative",overflow:"hidden",boxShadow:"inset 0 1px 2px rgba(0,0,0,0.55)"}}>
-               {!isBye && <div style={{position:"absolute",left:0,top:0,bottom:0,borderRadius:4,width:lp+"%",background:`linear-gradient(180deg,${tint},${tint}cc)`,boxShadow:`0 0 8px ${tint}55`}}/>}
-               {!isBye && cl.live>0 && <div style={{position:"absolute",top:0,bottom:0,left:lp+"%",width:mp+"%",background:`repeating-linear-gradient(115deg,${tint}3a 0 4px,transparent 4px 8px)`}}/>}
-             </div>
-             <div style={{width:50,textAlign:"right",flexShrink:0,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:19,color:isBye?IOS.label3:(lead?IOS.green:"#fff")}}>{isBye?"\u2014":pts.toFixed(1)}</div>
-           </div>
-          );
-        };
+       const badge=isBye?"BYE":(done?"FINAL":(wk>curWk?"UPCOMING":"LIVE"));
+       const badgeBg=isBye?"rgba(255,159,10,0.14)":(done?"rgba(255,255,255,0.08)":(wk>curWk?"rgba(255,255,255,0.06)":"rgba(48,209,88,0.14)"));
+       const badgeCol=isBye?IOS.orange:(done?IOS.label2:(wk>curWk?IOS.label3:IOS.green));
        return (
-         <div key={mi} onClick={()=>openMatchupPager(weekMs, mi, "Week "+wk, wk)} style={{background:IOS.bg2,border:mine?("1px solid "+IOS.blue+"88"):("1px solid "+IOS.sep),borderRadius:RAD.lg,marginBottom:11,overflow:"hidden",cursor:"pointer"}}>
-           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 13px 2px"}}>
-             <div style={{fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",color:mine?IOS.blue:IOS.label3}}>{mine?"Your matchup":"Matchup"}</div>
-             {badge && <div style={{fontSize:10,fontWeight:800,padding:"3px 8px",borderRadius:RAD.sm,background:badgeBg,color:badgeCol}}>{badge}</div>}
-           </div>
-           {row(u1,p1,lead1,_cA,0)}
-           <div style={{height:0.5,background:IOS.sep,margin:"0 13px"}}/>
-           {row(u2,p2,lead2,_cB,1)}
-          {(() => {
-            const chip=(bp,label,align)=>{
-              const box=(inner)=>(<div style={{flex:1,minWidth:0,background:"rgba(255,255,255,0.03)",borderRadius:RAD.sm,padding:"7px 9px",textAlign:align}}>{inner}</div>);
-              const head=(<div style={{fontSize:7.5,fontWeight:900,letterSpacing:0.5,color:"rgba(255,255,255,0.28)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</div>);
-              if(!bp) return box(<>{head}<div style={{fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.3)",marginTop:2}}>No slip submitted</div></>);
-              if(bp.state==="hidden") return box(<>{head}<div style={{fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.35)",marginTop:2}}>{bp.n+" pick"+(bp.n===1?"":"s")+" \u00b7 locked"}</div><div style={{fontSize:9.5,fontWeight:700,color:"rgba(255,255,255,0.22)",marginTop:1}}>Reveals at game time</div></>);
-              const c=bp.state==="won"?IOS.green:bp.state==="live"?IOS.blue:"rgba(255,255,255,0.3)";
-              const w=bp.state==="won"?("+"+bp.worth.toFixed(1)):bp.state==="live"?("to win "+bp.worth.toFixed(1)):"0.0";
-              return box(<>{head}<div style={{fontSize:11.5,fontWeight:800,marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{bp.pick.pick_name||"Pick"}</div><div style={{fontSize:10,fontWeight:800,marginTop:1,color:c,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{(bp.pick.multiplier?bp.pick.multiplier+"\u00d7 \u00b7 ":"")+w}</div></>);
-            };
-            return (<div style={{display:"flex",gap:7,padding:"9px 13px 11px"}}>{chip(_bpA,(nm(u1)||"").toUpperCase().slice(0,12),"left")}{chip(_bpB,(nm(u2)||"").toUpperCase().slice(0,12),"right")}</div>);
-          })()}
-         </div>
+         <MatchupRow mi={mi} u1={u1} u2={u2} p1={p1} p2={p2} done={done} mine={mine} isBye={isBye}
+           badge={badge} badgeBg={badgeBg} badgeCol={badgeCol}
+           lead1={lead1} lead2={lead2} anyLead={anyLead}
+           _cA={_cA} _cB={_cB} _maxCeil={_maxCeil} _bpA={_bpA} _bpB={_bpB}
+           nameOf={nm}
+           onOpenProfile={(id,you)=>openUserProfile(id,{username:you?((userProfile&&userProfile.username)||"You"):nm(id)})}
+           onOpen={()=>openMatchupPager(weekMs, mi, "Week "+wk, wk)}
+           user={user} IOS={IOS} RAD={RAD}
+           SIDE_YOU={SIDE_YOU} SIDE_OPP={SIDE_OPP} SIDE_A={SIDE_A} SIDE_B={SIDE_B}/>
        );
      })}
      {bracketDetail && <BracketMatchSheet d={bracketDetail} IOS={IOS} onClose={()=>setBracketDetail(null)} liveGames={liveGames} onOpenGamecast={openGamecast}/>}
