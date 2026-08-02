@@ -2296,6 +2296,63 @@ function soloDrawCard(d){
   x.textAlign="right"; x.fillStyle=MUT2; x.font="600 15px Barlow, system-ui, sans-serif"; x.fillText("lined-up-murex.vercel.app",W-P,H-46);
   return c;
 }
+// Season recap share card. Same 600x900 canvas contract as the solo and league cards.
+function seasonDrawCard(d){
+  const W=600,H=900,c=document.createElement("canvas"); c.width=W; c.height=H; const x=c.getContext("2d");
+  const P=50, AC="#0A84FF", GR="#30D158", RD="#FF453A", MUT="rgba(255,255,255,.52)", MUT2="rgba(255,255,255,.32)";
+  const rr=(a,b,w,h,r)=>{ if(x.roundRect){x.beginPath();x.roundRect(a,b,w,h,r);} else {x.beginPath();x.moveTo(a+r,b);x.arcTo(a+w,b,a+w,b+h,r);x.arcTo(a+w,b+h,a,b+h,r);x.arcTo(a,b+h,a,b,r);x.arcTo(a,b,a+w,b,r);} x.closePath(); };
+  const g=x.createLinearGradient(0,0,0,H); g.addColorStop(0,"#101725"); g.addColorStop(.5,"#0a0c14"); g.addColorStop(1,"#07070c");
+  rr(0,0,W,H,46); x.fillStyle=g; x.fill();
+  x.lineWidth=3; x.strokeStyle="rgba(10,132,255,.4)"; rr(8,8,W-16,H-16,40); x.stroke();
+  x.textBaseline="top"; x.textAlign="left";
+  x.fillStyle=MUT2; x.font="800 15px Barlow, system-ui, sans-serif";
+  x.fillText(String(d.leagueName||"League").toUpperCase().slice(0,26)+"  \u00b7  SEASON RECAP", P, 56);
+  // Finish
+  x.fillStyle="#fff"; x.font="800 132px 'Barlow Semi Condensed', Barlow, sans-serif";
+  x.fillText(String(d.rank||"-"), P, 92);
+  const rw=x.measureText(String(d.rank||"-")).width;
+  x.fillStyle=MUT; x.font="800 34px 'Barlow Semi Condensed', Barlow, sans-serif";
+  x.fillText(d.ordSuffix||"", P+rw+6, 118);
+  x.fillStyle=MUT2; x.font="700 20px Barlow, system-ui, sans-serif";
+  x.fillText("of "+(d.total||0)+" \u00b7 "+(d.weeks||0)+" weeks", P, 246);
+  // Stat strip
+  const stats=[["RECORD",String(d.record||"0-0"),"#fff"],["POINTS",String(d.points!=null?d.points:0),"#64D2FF"],
+               ["HIT RATE",(d.hit!=null?d.hit+"%":"\u2014"),GR],["PICKS",String(d.graded||0),"#fff"]];
+  const sw=(W-P*2-24)/4;
+  stats.forEach((st,i)=>{
+    const sx=P+i*(sw+8);
+    rr(sx,300,sw,104,18); x.fillStyle="rgba(255,255,255,.05)"; x.fill();
+    x.textAlign="center"; x.fillStyle=st[2]; x.font="800 34px 'Barlow Semi Condensed', Barlow, sans-serif";
+    x.fillText(st[1], sx+sw/2, 320);
+    x.fillStyle=MUT2; x.font="800 12px Barlow, system-ui, sans-serif"; x.fillText(st[0], sx+sw/2, 368);
+  });
+  // Week-by-week arc
+  x.textAlign="left"; x.fillStyle=MUT2; x.font="800 13px Barlow, system-ui, sans-serif";
+  x.fillText("YOUR SEASON, WEEK BY WEEK", P, 438);
+  const arc=(d.arc||[]).slice(0,18);
+  if(arc.length){
+    const maxP=Math.max(1,...arc.map(w=>Number(w.pts)||0));
+    const bw=Math.min(38,(W-P*2-(arc.length-1)*7)/arc.length);
+    const base=618, tall=132;
+    arc.forEach((w,i)=>{
+      const h=Math.max(10, Math.round((Number(w.pts)||0)/maxP*tall));
+      const bx=P+i*(bw+7);
+      rr(bx, base-h, bw, h, 6);
+      x.fillStyle = w.result==="W" ? "rgba(48,209,88,.85)" : "rgba(255,69,58,.7)";
+      x.fill();
+    });
+  }
+  // Highlight rows
+  let ry=666;
+  const row=(k,v)=>{ x.textAlign="left"; x.fillStyle=MUT; x.font="600 17px Barlow, system-ui, sans-serif"; x.fillText(k,P,ry);
+                     x.textAlign="right"; x.fillStyle="#fff"; x.font="800 17px Barlow, system-ui, sans-serif"; x.fillText(String(v).slice(0,26),W-P,ry); ry+=36; };
+  if(d.bestWeek!=null) row("Best week", d.bestWeek+" pts");
+  if(d.champion) row("Champion", d.champion);
+  if(d.topScorer) row("Most points", d.topScorer);
+  x.textBaseline="alphabetic"; x.textAlign="left"; x.fillStyle=MUT2; x.font="800 17px Barlow, system-ui, sans-serif"; x.fillText("PICKLOCK",P,H-44);
+  x.textAlign="right"; x.fillStyle=MUT2; x.font="600 15px Barlow, system-ui, sans-serif"; x.fillText("picklockapp.com",W-P,H-46);
+  return c;
+}
 function leagueDrawCard(d){
   const W=600,H=900,c=document.createElement("canvas"); c.width=W; c.height=H; const x=c.getContext("2d");
   const P=50, GR="#30D158", MUT="rgba(255,255,255,.55)", MUT2="rgba(255,255,255,.32)";
@@ -2588,6 +2645,102 @@ function playoffWeeksFor(n){ return n>=2 ? Math.ceil(Math.log2(n)) : 0; }
 // Regular-season weeks = season_weeks minus the reserved playoff rounds (last N weeks).
 function regularSeasonWeeksFor(league, total){ const sw=Number(league&&league.season_weeks||18); const N=playoffFieldFor(league, total); const pw=N>=2?playoffWeeksFor(N):0; return Math.max(1, sw-pw); }
 
+// Season recap. Rendered from the Matchup screen when a member is knocked out, and
+// from a dedicated screen reachable from Home and Picks. One component, three entry
+// points — the Matchup version used to be the only place this existed.
+function SeasonRecap({ league, me, total, arc, leader, topScorer, bestWk, hit, graded, champion, IOS, RAD, onBracket, onLeagues, onSolo, embedded }){
+  const [toast,setToast]=useState("");
+  const ordS=(n)=>{ const e=["th","st","nd","rd"],v=n%100; return (e[(v-20)%10]||e[v]||e[0]); };
+  const arcMax = Math.max(1, ...(arc||[]).map(w=>Number(w.myPts)||0));
+  const stat={flex:1,borderRadius:RAD.lg,padding:"11px 8px",textAlign:"center",
+    background:"linear-gradient(180deg,rgba(255,255,255,0.038),rgba(255,255,255,0.015))",
+    boxShadow:"inset 0 0 0 0.5px rgba(255,255,255,0.06)"};
+  const statV={fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:23,fontWeight:800,lineHeight:0.9};
+  const statK={fontSize:8,fontWeight:800,letterSpacing:"0.11em",color:"rgba(255,255,255,0.3)",textTransform:"uppercase",marginTop:5};
+  const row={display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 14px",fontSize:13};
+  const share=async()=>{
+    try{
+      if(document.fonts&&document.fonts.ready){ try{ await document.fonts.ready; }catch(e){} }
+      const cv=seasonDrawCard({
+        leagueName:league&&league.name, rank:me&&me.rank, ordSuffix:ordS(me&&me.rank||0), total,
+        weeks:(arc||[]).length, record:me&&me.record, points:me&&me.points, hit, graded,
+        arc:(arc||[]).map(w=>({pts:w.myPts,result:w.result})),
+        bestWeek: bestWk? Number(bestWk.myPts).toFixed(1) : null,
+        champion: champion||null, topScorer: topScorer? (topScorer.isYou?"You":topScorer.name) : null,
+      });
+      const url="https://picklockapp.com";
+      const text=(league&&league.name?league.name+" \u2014 ":"")+"finished "+(me&&me.rank)+ordS(me&&me.rank||0)+" of "+total+" ("+(me&&me.record)+", "+(me&&me.points)+" pts). My PickLock season.";
+      const blob=await new Promise(r=>cv.toBlob(r,"image/png"));
+      const file=blob?new File([blob],"picklock-season.png",{type:"image/png"}):null;
+      if(file && navigator.canShare && navigator.canShare({files:[file]})) await navigator.share({files:[file],text,title:"My PickLock Season"});
+      else if(navigator.share) await navigator.share({text,url,title:"My PickLock Season"});
+      else { const a=document.createElement("a"); a.href=cv.toDataURL("image/png"); a.download="picklock-season.png"; a.click();
+             try{ await navigator.clipboard.writeText(text+" "+url); }catch(e){}
+             setToast("Card saved \u2014 caption copied"); setTimeout(()=>setToast(""),2400); }
+    }catch(e){}
+  };
+  if(!me) return null;
+  return (
+  <>
+    <div className="pl-reveal" style={{position:"relative",overflow:"hidden",borderRadius:RAD.xl,padding:"16px 16px 12px",
+      background:"linear-gradient(160deg,rgba(255,159,10,0.10),transparent 58%),linear-gradient(180deg,#16161c,#0f0f14)",
+      boxShadow:"inset 0 1px 0 rgba(255,255,255,0.06), 0 10px 30px rgba(0,0,0,0.45)"}}>
+      <div style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.14em",color:"rgba(255,255,255,0.34)",textTransform:"uppercase"}}>{(league&&league.name)||"League"}{" \u00b7 Season recap"}</div>
+      <div style={{display:"flex",alignItems:"baseline",gap:9,marginTop:5}}>
+        <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:52,fontWeight:800,lineHeight:0.82,letterSpacing:"-0.02em",color:"#fff"}}>{me.rank}<sup style={{fontSize:20,fontWeight:800,marginLeft:2}}>{ordS(me.rank)}</sup></div>
+        <div style={{fontSize:13,color:"rgba(255,255,255,0.36)",fontWeight:700}}>of {total}</div>
+      </div>
+      {(arc||[]).length>0 && (
+      <div style={{marginTop:14}}>
+        <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",marginBottom:8}}>
+          <span style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.14em",color:"rgba(255,255,255,0.34)",textTransform:"uppercase"}}>Your season, week by week</span>
+          {bestWk && <span style={{fontSize:11,color:"rgba(255,255,255,0.42)",fontWeight:700}}>Best {Number(bestWk.myPts).toFixed(1)}</span>}
+        </div>
+        <div style={{display:"flex",alignItems:"flex-end",gap:5,height:72}}>
+          {arc.map((w,wi)=>(
+            <div key={w.week} style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",alignItems:"center",gap:5}}>
+              <div className="so-bar" style={{width:"100%",borderRadius:"5px 5px 2px 2px",
+                "--h":Math.max(8,Math.round((Number(w.myPts)||0)/arcMax*64))+"px",
+                animationDelay:(wi*0.055)+"s",
+                background:w.result==="W" ? "linear-gradient(180deg,#30D158,rgba(48,209,88,0.35))"
+                                          : "linear-gradient(180deg,rgba(255,69,58,0.85),rgba(255,69,58,0.25))"}}/>
+            </div>
+          ))}
+        </div>
+        <div style={{display:"flex",gap:5,marginTop:6}}>
+          {arc.map(w=>(<div key={w.week} style={{flex:1,minWidth:0,textAlign:"center",fontSize:8.5,fontWeight:800,letterSpacing:"0.06em",color:"rgba(255,255,255,0.28)",textTransform:"uppercase"}}>{"W"+w.week}</div>))}
+        </div>
+      </div>
+      )}
+    </div>
+
+    <div className="pl-reveal" style={{display:"flex",gap:7,marginTop:14}}>
+      <div style={stat}><div style={statV}>{me.record}</div><div style={statK}>Record</div></div>
+      <div style={stat}><div style={{...statV,color:"#64D2FF"}}>{me.points}</div><div style={statK}>Total pts</div></div>
+      {hit!=null && (<div style={stat}><div style={{...statV,color:IOS.green}}>{hit}%</div><div style={statK}>Hit rate</div></div>)}
+      <div style={stat}><div style={statV}>{graded}</div><div style={statK}>Graded</div></div>
+    </div>
+
+    {(leader||topScorer||bestWk||champion) && (<>
+      <div className="pl-reveal" style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.14em",color:"rgba(255,255,255,0.3)",textTransform:"uppercase",margin:"20px 0 8px 3px"}}>How the league finished</div>
+      <div className="pl-reveal" style={{borderRadius:RAD.lg,overflow:"hidden",background:"linear-gradient(180deg,#16161c,#111116)",boxShadow:"inset 0 1px 0 rgba(255,255,255,0.05), 0 5px 16px rgba(0,0,0,0.34)"}}>
+        {champion && (<div style={row}><span style={{color:"rgba(255,255,255,0.5)",fontWeight:600}}>Champion</span><span style={{fontWeight:800,color:IOS.yellow}}>{champion}</span></div>)}
+        {leader && (<div style={{...row,borderTop:champion?"0.5px solid rgba(255,255,255,0.055)":"none"}}><span style={{color:"rgba(255,255,255,0.5)",fontWeight:600}}>Top seed</span><span style={{fontWeight:800}}>{leader.isYou?"You":leader.name}{" \u00b7 "}{leader.record}</span></div>)}
+        {topScorer && (<div style={{...row,borderTop:"0.5px solid rgba(255,255,255,0.055)"}}><span style={{color:"rgba(255,255,255,0.5)",fontWeight:600}}>Most points</span><span style={{fontWeight:800}}>{topScorer.isYou?"You":topScorer.name}{" \u00b7 "}{topScorer.points}</span></div>)}
+        {bestWk && (<div style={{...row,borderTop:"0.5px solid rgba(255,255,255,0.055)"}}><span style={{color:"rgba(255,255,255,0.5)",fontWeight:600}}>Your best week</span><span style={{fontWeight:800}}>{"W"+bestWk.week}{" \u00b7 "}{Number(bestWk.myPts).toFixed(1)}</span></div>)}
+      </div>
+    </>)}
+
+    <div className="pl-reveal" onClick={share}
+      style={{marginTop:18,borderRadius:RAD.lg,padding:15,textAlign:"center",fontSize:15.5,fontWeight:800,cursor:"pointer",color:"#fff",
+      background:"linear-gradient(120deg,#0A84FF,#5E5CE6)",boxShadow:"0 10px 26px -10px rgba(10,132,255,0.8)"}}>{"Share your season"}</div>
+    {onBracket && <div className="pl-reveal" onClick={onBracket} style={{marginTop:9,borderRadius:RAD.lg,padding:13,textAlign:"center",fontSize:14,fontWeight:800,cursor:"pointer",color:"rgba(255,255,255,0.72)",background:"rgba(255,255,255,0.05)",boxShadow:"inset 0 0 0 0.5px rgba(255,255,255,0.1)"}}>{"Watch the bracket \u2192"}</div>}
+    {onSolo && <div className="pl-reveal" onClick={onSolo} style={{marginTop:9,borderRadius:RAD.lg,padding:13,textAlign:"center",fontSize:14,fontWeight:800,cursor:"pointer",color:"rgba(255,255,255,0.72)",background:"rgba(255,255,255,0.05)",boxShadow:"inset 0 0 0 0.5px rgba(255,255,255,0.1)"}}>Keep picking in Solo</div>}
+    {onLeagues && <div className="pl-reveal" onClick={onLeagues} style={{marginTop:9,borderRadius:RAD.lg,padding:13,textAlign:"center",fontSize:14,fontWeight:800,cursor:"pointer",color:"rgba(255,255,255,0.72)",background:"rgba(255,255,255,0.05)",boxShadow:"inset 0 0 0 0.5px rgba(255,255,255,0.1)"}}>Start or join another league</div>}
+    {toast && <div className="pc-toast">{toast}</div>}
+  </>
+  );
+}
 function BracketView({ matchups, members, uid, IOS, onOpenMatch, live, onChampion }){
   const nameOf = (id)=>{ if(!id) return null; const m=(members||[]).find(x=>x.userId===id); return m?m.name:"Player"; };
   const byWeek = {};
@@ -4890,6 +5043,25 @@ function App() {
      if(!_rows.length) return false;
      return !_rows.some(m=>m.user1_id===(user&&user.id)||m.user2_id===(user&&user.id));
    }catch(e){ return false; }
+ })();
+ // Everything the recap needs, derived once. Kept beside isEliminated so Home, Picks
+ // and the recap screen cannot disagree about a member's season.
+ const recapData=(()=>{
+   try{
+     if(isSoloMode||!activeLeague||!activeLeague.id) return null;
+     const me=(realStandings||[]).find(z=>z.isYou); if(!me) return null;
+     const total=(realStandings&&realStandings.length)||(leagueMembers||[]).length||0;
+     const regW=regularSeasonWeeksFor(activeLeague,total);
+     const arc=(liveSchedule||[]).filter(w=>w&&w.week<=regW&&(w.result==="W"||w.result==="L")).sort((a,b)=>a.week-b.week);
+     const w=me.wins||0, l=me.losses||0;
+     const champId=activeLeague.champion_id;
+     const champ=!champId?null:(champId===(user&&user.id)?"You":(((leagueMembers||[]).find(z=>z.userId===champId)||{}).name||null));
+     return { me, total, arc,
+       leader:(realStandings||[])[0],
+       topScorer:[...(realStandings||[])].sort((a,b)=>b.points-a.points)[0],
+       bestWk:arc.reduce((b,x)=>(!b||(Number(x.myPts)||0)>(Number(b.myPts)||0))?x:b,null),
+       hit:(w+l)>0?Math.round(w/(w+l)*100):null, graded:w+l, champion:champ };
+   }catch(e){ return null; }
  })();
  const _lgTarget=(activeLeague&&(activeLeague.target_size||activeLeague.max_members))||8;
  const _lgMembers = Math.max(Number((activeLeague&&activeLeague.memberCount)||0), (!isSoloMode && activeLeague && activeLeague.id && Array.isArray(leagueMembers)) ? leagueMembers.length : 0);
@@ -10070,12 +10242,23 @@ function App() {
    const _stripDot=liveCount>0?"#64D2FF":(hit>0?"#30D158":"#FF453A");
    const _stripText=liveCount>0?(liveCount+" of "+slotCount+" legs live"+(settleMs?(" · settles ~"+fmtClk(settleMs)):"")+" · "+weekPts+" this week"):(hit+" of "+total+" hit · "+weekPts+" pts this week");
    const _buildLabel=isSoloMode?"Build this week's slip":("Build Week "+(activeLeague.current_week||activeLeague.week||1)+" slip");
-   /* Knocked out: the builder is not offered at all, and the reason is on screen. */
+   if(!isSoloMode && activeLeague.champion_id) return (
+     <div className="pl-reveal" style={{margin:"0 16px 14px",background:"linear-gradient(160deg,rgba(255,214,10,0.10),transparent 60%),linear-gradient(160deg,#141418,#0B0B0E 80%)",border:"0.5px solid rgba(255,214,10,0.28)",borderRadius:RAD.lg,padding:"16px"}}>
+       <div style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:IOS.yellow}}>Season complete</div>
+       <div style={{fontSize:16,fontWeight:800,color:"#fff",marginTop:5}}>{activeLeague.name} is in the books</div>
+       <div style={{fontSize:12,color:IOS.label2,marginTop:4,lineHeight:1.45}}>Every pick is graded and the standings are final.</div>
+       <div onClick={()=>setScreen("recap")} style={{marginTop:13,borderRadius:RAD.md,padding:"12px",textAlign:"center",fontSize:14,fontWeight:800,cursor:"pointer",color:"#fff",background:"linear-gradient(120deg,#0A84FF,#5E5CE6)"}}>Check out your season recap</div>
+     </div>
+   );
+   /* Knocked out: no builder. The card states what is actually true \u2014 league scoring is
+      done, but picks made in Solo still feed career stats, OVR and global rank. */
    if(isEliminated) return (
      <div className="pl-reveal" style={{margin:"0 16px 14px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.lg,padding:"16px"}}>
        <div style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:IOS.label3}}>Season over</div>
        <div style={{fontSize:16,fontWeight:800,color:"#fff",marginTop:5}}>You're out of the playoffs</div>
-       <div style={{fontSize:12,color:IOS.label2,marginTop:4,lineHeight:1.45}}>No matchup this week, so there's nothing to pick for. Your season record and stats are locked in {"\u2014"} watch the bracket to see who takes it.</div>
+       <div style={{fontSize:12,color:IOS.label2,marginTop:4,lineHeight:1.45}}>No matchup this week, so there's nothing to score against in {activeLeague.name}. Your record and standing are locked in.</div>
+       <div onClick={()=>setScreen("recap")} style={{marginTop:13,borderRadius:RAD.md,padding:"12px",textAlign:"center",fontSize:14,fontWeight:800,cursor:"pointer",color:"#fff",background:"linear-gradient(120deg,#0A84FF,#5E5CE6)"}}>Check out your season recap</div>
+       <div onClick={()=>{ setIsSoloMode(true); setScreen("picks"); }} style={{marginTop:8,borderRadius:RAD.md,padding:"11px",textAlign:"center",fontSize:13,fontWeight:800,cursor:"pointer",color:IOS.label2,background:"rgba(255,255,255,0.05)",boxShadow:"inset 0 0 0 0.5px rgba(255,255,255,0.1)"}}>Keep picking in Solo {"\u2014"} still counts toward your career</div>
      </div>
    );
    const _addLabel=openSlots===1?"Add a pick":("Add "+openSlots+" picks");
@@ -10617,11 +10800,28 @@ function App() {
 
  {/* ══ PICKS ══ */}
  {screen==="picks"&&!isSoloMode&&(()=>{ if(seasonNotStarted){ return notStartedBody; }
+ // Knocked out: the slip UI implies league scoring that no longer exists. Show the
+ // season instead, and a real way forward.
+ if(isEliminated){ return (
+   <div className="body" style={{paddingTop:18,paddingLeft:16,paddingRight:16}}>
+     <div className="pl-reveal" style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.lg,padding:"16px",marginBottom:14}}>
+       <div style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:IOS.label3}}>Season over</div>
+       <div style={{fontSize:16,fontWeight:800,color:"#fff",marginTop:5}}>No slip this week</div>
+       <div style={{fontSize:12,color:IOS.label2,marginTop:4,lineHeight:1.45}}>You're out of the playoffs in {activeLeague.name}, so there's no matchup to score against. Solo picks still count toward your career stats and global rank.</div>
+       <div onClick={()=>{ setIsSoloMode(true); }} style={{marginTop:13,borderRadius:RAD.md,padding:"12px",textAlign:"center",fontSize:14,fontWeight:800,cursor:"pointer",color:"#fff",background:"linear-gradient(120deg,#0A84FF,#5E5CE6)"}}>Switch to Solo</div>
+     </div>
+     {recapData && <SeasonRecap league={activeLeague} me={recapData.me} total={recapData.total} arc={recapData.arc}
+       leader={recapData.leader} topScorer={recapData.topScorer} bestWk={recapData.bestWk} hit={recapData.hit}
+       graded={recapData.graded} champion={recapData.champion} IOS={IOS} RAD={RAD}
+       onBracket={()=>{ setLeagueTab("playoff"); setScreen("league"); }}/>}
+     <div style={{height:20}}/>
+   </div>
+ ); }
  if(!buildingSlip && picksLoading && !(savedPicks&&savedPicks.flexPicks)) return (<SkelGroup style={{padding:"18px 16px"}}><Skel w={150} h={24} r={8}/><div style={{display:"flex",gap:9,margin:"16px 0 18px"}}>{[0,1,2].map(i=><Skel key={i} h={62} r={13} style={{flex:1,width:"auto"}}/>)}</div>{[0,1,2].map(i=>(<div key={i} style={{background:"#131318",border:EDGE.hair,borderRadius:RAD.lg,padding:"14px 15px",marginBottom:10}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:11}}><Skel w={92} h={10}/><Skel w={46} h={14}/></div><Skel w="68%" h={16} style={{marginBottom:8}}/><Skel w="44%" h={11} style={{marginBottom:13}}/><div style={{display:"flex",gap:8}}><Skel w={31} h={24}/><Skel w={92} h={24}/></div></div>))}</SkelGroup>);
  // Use separate state for solo mode vs league mode
  const activePicks = isSoloMode ? soloFlexPicks : flexPicks;
  const setActivePicks = isSoloMode ? setSoloFlexPicks : setFlexPicks;
- const openSlot=(i)=>{ if(isEliminated){ alert("Your season is over \u2014 you're out of the playoffs. Picks would not count toward anything."); return; } const s=activePicks[i]; if(s&&s.committed){ alert(slotGraded(s)?"This pick has already been graded — it can’t be changed.":slotStarted(s)?"That game has started — this pick is locked in.":"This pick is locked in. Tap Unlock first to change it."); return; } setBuildingSlip(true); setGridTargetSlot(i); setGridType((s&&s.category)?s.category:"ml"); setGridPropSub("all"); setScreen("browser"); };
+ const openSlot=(i)=>{ if(isEliminated){ alert("Your league season is over \u2014 there's no matchup to score against. Switch to Solo and your picks still count toward your career stats."); return; } const s=activePicks[i]; if(s&&s.committed){ alert(slotGraded(s)?"This pick has already been graded — it can’t be changed.":slotStarted(s)?"That game has started — this pick is locked in.":"This pick is locked in. Tap Unlock first to change it."); return; } setBuildingSlip(true); setGridTargetSlot(i); setGridType((s&&s.category)?s.category:"ml"); setGridPropSub("all"); setScreen("browser"); };
  const activeSubmitted = isSoloMode ? soloSubmitted : submitted;
  const activeSavedPicks = isSoloMode ? soloSavedPicks : savedPicks;
  const setActiveSavedPicks = isSoloMode ? setSoloSavedPicks : setSavedPicks;
@@ -11446,8 +11646,10 @@ function App() {
  </div>
  )}
 
- {/* Grid Bet Browser entry */}
- {!activeSubmitted && (()=>{
+ {/* Grid Bet Browser entry. THE LEAK: this only checked !activeSubmitted, so an
+     eliminated member walked straight past the gate into the browser and their picks
+     landed in slots normally — and then into league standings and trophies. */}
+ {!activeSubmitted && !isEliminated && (()=>{
    const firstEmpty = activePicks.findIndex(p=>!p.isParlay && p.bet===null);
    const target = firstEmpty===-1 ? 0 : firstEmpty;
    return (
@@ -13854,91 +14056,58 @@ function App() {
  // Eliminated = playoffs are running and you are in none of this week's matchups.
  // Asking the bracket directly (instead of inferring from standings rank) also covers
  // a member removed from the bracket by hand while still ranked inside the cut.
- // _sWkMs.length>0 guards the load: no rows yet means "unknown", not "eliminated".
+ //
+ // THE FLASH: _sWkMs.length>0 stops us wrongly declaring someone eliminated, but it
+ // does not stop us rendering the WRONG SCREEN while the data is in flight. With
+ // allMatchups empty or still holding another league's rows, the condition below is
+ // false, so this fell straight through to the live "vs opponent" view for ~130ms
+ // before the recap replaced it. "No rows yet" and "loaded, no rows" are different
+ // states and only the ownership flags can tell them apart.
+ const _sDataReady = (matchupsFor === (activeLeague && activeLeague.id))
+                  && (standingsFor === (activeLeague && activeLeague.id));
+ // Solo has no league matchups to wait on — gating it would hang the skeleton forever.
+ if(!isSoloMode && matchupView==="mine" && !_sDataReady){
+   return (
+     <div className="body" style={{paddingTop:18,paddingLeft:16,paddingRight:16}}>
+       <SkelGroup>
+         <div style={{...SK_CARD,padding:"16px",marginBottom:14}}>
+           <div className="pk-sk" style={{width:"46%",height:11,borderRadius:6}}/>
+           <div className="pk-sk" style={{width:"32%",height:44,borderRadius:9,marginTop:12}}/>
+           <div className="pk-sk" style={{width:"100%",height:72,borderRadius:10,marginTop:16}}/>
+         </div>
+         <div style={{display:"flex",gap:7,marginBottom:14}}>
+           {[0,1,2,3].map(i=>(<div key={i} style={{...SK_CARD,flex:1,padding:"14px 8px"}}><div className="pk-sk" style={{width:"70%",height:20,borderRadius:6,margin:"0 auto"}}/><div className="pk-sk" style={{width:"50%",height:8,borderRadius:5,margin:"7px auto 0"}}/></div>))}
+         </div>
+       </SkelGroup>
+       <SkelRows n={3} card={true} pad="0"/>
+     </div>
+   );
+ }
  const _sWkMs = (allMatchups||[]).filter(m=>m.week===_sCurWk);
  const _sInBracket = _sWkMs.some(m=>m.user1_id===(user&&user.id) || m.user2_id===(user&&user.id));
  if(matchupView==="mine" && _sPlayoffN>=2 && _sCurWk>_sRegWeeks && _sMe && _sWkMs.length>0 && !_sInBracket){
    const _pw=_sMe.wins||0, _pl=_sMe.losses||0; const _hit=(_pw+_pl)>0?Math.round(_pw/(_pw+_pl)*100):null;
    const _topScorer=[...(realStandings||[])].sort((a,b)=>b.points-a.points)[0];
    const _leader=(realStandings||[])[0];
- const _ord=(n)=>{ const _e=["th","st","nd","rd"],_v=n%100; return n+(_e[(_v-20)%10]||_e[_v]||_e[0]); };
- const _ordS=(n)=>{ const _e=["th","st","nd","rd"],_v=n%100; return (_e[(_v-20)%10]||_e[_v]||_e[0]); };
- // Season arc: points per regular-season week, coloured by result. liveSchedule already
- // carries {week,myPts,oppPts,result} for this user, so no extra query. Graded weeks only
- // — an unplayed or live week has no bar to draw.
- const _arc = (liveSchedule||[]).filter(w=>w && w.week<=_sRegWeeks && (w.result==="W"||w.result==="L"))
-   .sort((a,b)=>a.week-b.week);
- const _arcMax = Math.max(1, ..._arc.map(w=>Number(w.myPts)||0));
- const _bestWk = _arc.reduce((b,w)=>(!b || (Number(w.myPts)||0)>(Number(b.myPts)||0)) ? w : b, null);
- const _stat={flex:1,borderRadius:RAD.lg,padding:"11px 8px",textAlign:"center",
-   background:"linear-gradient(180deg,rgba(255,255,255,0.038),rgba(255,255,255,0.015))",
-   boxShadow:"inset 0 0 0 0.5px rgba(255,255,255,0.06)"};
- const _statV={fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:23,fontWeight:800,lineHeight:0.9};
- const _statK={fontSize:8,fontWeight:800,letterSpacing:"0.11em",color:"rgba(255,255,255,0.3)",textTransform:"uppercase",marginTop:5};
- const _row={display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 14px",fontSize:13};
- return (
-   <div className="body" style={{paddingTop:18,paddingLeft:16,paddingRight:16}}>
-
-     <div className="pl-reveal" style={{position:"relative",overflow:"hidden",borderRadius:RAD.xl,padding:"16px 16px 12px",
-       background:"linear-gradient(160deg,rgba(255,159,10,0.10),transparent 58%),linear-gradient(180deg,#16161c,#0f0f14)",
-       boxShadow:"inset 0 1px 0 rgba(255,255,255,0.06), 0 10px 30px rgba(0,0,0,0.45)"}}>
-       <div style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.14em",color:"rgba(255,255,255,0.34)",textTransform:"uppercase"}}>{activeLeague.name}{" \u00b7 Regular season final"}</div>
-       <div style={{display:"flex",alignItems:"baseline",gap:9,marginTop:5}}>
-         <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:52,fontWeight:800,lineHeight:0.82,letterSpacing:"-0.02em",color:"#fff"}}>{_sMe.rank}<sup style={{fontSize:22,fontWeight:800}}>{_ordS(_sMe.rank)}</sup></div>
-         <div style={{fontSize:13,color:"rgba(255,255,255,0.36)",fontWeight:700}}>of {_sTotal}</div>
-       </div>
-
-       {_arc.length>0 && (
-       <div style={{marginTop:14}}>
-         <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",marginBottom:8}}>
-           <span style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.14em",color:"rgba(255,255,255,0.34)",textTransform:"uppercase"}}>Your season, week by week</span>
-           {_bestWk && <span style={{fontSize:11,color:"rgba(255,255,255,0.42)",fontWeight:700}}>Best {Number(_bestWk.myPts).toFixed(1)}</span>}
-         </div>
-         <div style={{display:"flex",alignItems:"flex-end",gap:5,height:72}}>
-           {_arc.map((w,wi)=>(
-             <div key={w.week} style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",alignItems:"center",gap:5}}>
-               <div className="so-bar" style={{width:"100%",borderRadius:"5px 5px 2px 2px",
-                 "--h":Math.max(8,Math.round((Number(w.myPts)||0)/_arcMax*64))+"px",
-                 animationDelay:(wi*0.055)+"s",
-                 background:w.result==="W" ? "linear-gradient(180deg,#30D158,rgba(48,209,88,0.35))"
-                                           : "linear-gradient(180deg,rgba(255,69,58,0.85),rgba(255,69,58,0.25))"}}/>
-             </div>
-           ))}
-         </div>
-         <div style={{display:"flex",gap:5,marginTop:6}}>
-           {_arc.map(w=>(<div key={w.week} style={{flex:1,minWidth:0,textAlign:"center",fontSize:8.5,fontWeight:800,letterSpacing:"0.06em",color:"rgba(255,255,255,0.28)",textTransform:"uppercase"}}>{_arc.length>8 ? (w.week%2?w.week:"") : ("Wk "+w.week)}</div>))}
-         </div>
-       </div>
-       )}
+   // Season arc: points per regular-season week. liveSchedule already carries
+   // {week,myPts,oppPts,result} for this user, so no extra query. Graded weeks only.
+   const _arc = (liveSchedule||[]).filter(w=>w && w.week<=_sRegWeeks && (w.result==="W"||w.result==="L"))
+     .sort((a,b)=>a.week-b.week);
+   const _bestWk = _arc.reduce((b,w)=>(!b || (Number(w.myPts)||0)>(Number(b.myPts)||0)) ? w : b, null);
+   const _champ = (()=>{ try{ const cid=activeLeague&&activeLeague.champion_id; if(!cid) return null;
+     if(cid===(user&&user.id)) return "You";
+     const m=(leagueMembers||[]).find(z=>z.userId===cid); return m?m.name:null; }catch(e){ return null; } })();
+   return (
+     <div className="body" style={{paddingTop:18,paddingLeft:16,paddingRight:16}}>
+       <SeasonRecap league={activeLeague} me={_sMe} total={_sTotal} arc={_arc} leader={_leader}
+         topScorer={_topScorer} bestWk={_bestWk} hit={_hit} graded={_pw+_pl} champion={_champ}
+         IOS={IOS} RAD={RAD}
+         onBracket={()=>{ setLeagueTab("playoff"); setScreen("league"); }}
+         onSolo={()=>{ setIsSoloMode(true); setScreen("picks"); }}
+         onLeagues={()=>setScreen("leagues")}/>
+       <div style={{height:20}}/>
      </div>
-
-     <div className="pl-reveal" style={{display:"flex",gap:7,marginTop:14}}>
-       <div style={_stat}><div style={_statV}>{_sMe.record}</div><div style={_statK}>Record</div></div>
-       <div style={_stat}><div style={{..._statV,color:"#64D2FF"}}>{_sMe.points}</div><div style={_statK}>Total pts</div></div>
-       {_hit!=null && (<div style={_stat}><div style={{..._statV,color:IOS.green}}>{_hit}%</div><div style={_statK}>Hit rate</div></div>)}
-       <div style={_stat}><div style={_statV}>{_pw+_pl}</div><div style={_statK}>Graded</div></div>
-     </div>
-
-     {(_leader||_topScorer||_bestWk) && (<>
-       <div className="pl-reveal" style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.14em",color:"rgba(255,255,255,0.3)",textTransform:"uppercase",margin:"20px 0 8px 3px"}}>How the league finished</div>
-       <div className="pl-reveal" style={{borderRadius:RAD.lg,overflow:"hidden",background:"linear-gradient(180deg,#16161c,#111116)",boxShadow:"inset 0 1px 0 rgba(255,255,255,0.05), 0 5px 16px rgba(0,0,0,0.34)"}}>
-         {_leader && (<div style={_row}><span style={{color:"rgba(255,255,255,0.5)",fontWeight:600}}>Top seed</span><span style={{fontWeight:800}}>{_leader.isYou?"You":_leader.name}{" \u00b7 "}{_leader.record}</span></div>)}
-         {_topScorer && (<div style={{..._row,borderTop:"0.5px solid rgba(255,255,255,0.055)"}}><span style={{color:"rgba(255,255,255,0.5)",fontWeight:600}}>Most points</span><span style={{fontWeight:800,color:IOS.green}}>{_topScorer.isYou?"You":_topScorer.name}{" \u00b7 "}{_topScorer.points}</span></div>)}
-         {_bestWk && (<div style={{..._row,borderTop:"0.5px solid rgba(255,255,255,0.055)"}}><span style={{color:"rgba(255,255,255,0.5)",fontWeight:600}}>Your best week</span><span style={{fontWeight:800}}>{"Week "+_bestWk.week+" \u00b7 "+Number(_bestWk.myPts).toFixed(1)}</span></div>)}
-       </div>
-     </>)}
-
-     {/* Primary action keeps you inside the league you are still a member of. Starting or
-         joining another one is secondary — the exit should not be the loudest button. */}
-     {/* Same path the Home "playoffs are live" link uses — setMatchupView("league") only
-         opened the league matchups list, which is not the bracket. */}
-     <div className="pl-reveal" onClick={()=>{ setLeagueTab("playoff"); setScreen("league"); }}
-       style={{marginTop:18,borderRadius:RAD.lg,padding:15,textAlign:"center",fontSize:15.5,fontWeight:800,cursor:"pointer",
-       background:"linear-gradient(120deg,#0A84FF,#5E5CE6)",boxShadow:"0 10px 26px -10px rgba(10,132,255,0.8)"}}>{"Watch the bracket \u2192"}</div>
-     <div className="pl-reveal" onClick={()=>setScreen("leagues")} style={{marginTop:9,borderRadius:RAD.lg,padding:13,textAlign:"center",fontSize:14,fontWeight:800,cursor:"pointer",color:"rgba(255,255,255,0.72)",background:"rgba(255,255,255,0.05)",boxShadow:"inset 0 0 0 0.5px rgba(255,255,255,0.1)"}}>Start a new league</div>
-     <div className="pl-reveal" onClick={()=>setScreen("leagues")} style={{marginTop:9,borderRadius:RAD.lg,padding:13,textAlign:"center",fontSize:14,fontWeight:800,cursor:"pointer",color:"rgba(255,255,255,0.72)",background:"rgba(255,255,255,0.05)",boxShadow:"inset 0 0 0 0.5px rgba(255,255,255,0.1)"}}>Join with a code</div>
-   </div>
- );
+   );
  }
  const myPicks = weekPicks.filter(p=>p.user_id===user?.id);
  const currentWeekNum = activeLeague.current_week||activeLeague.week||1;
@@ -18328,6 +18497,29 @@ function App() {
  </>
  )}
  </div>
+ )}
+
+ {/* ══ SEASON RECAP ══ */}
+ {screen==="recap"&&(
+   <div className="body" style={{paddingTop:14,paddingLeft:16,paddingRight:16}}>
+     <div style={{display:"flex",alignItems:"center",gap:11,marginBottom:14}}>
+       <div onClick={()=>setScreen("home")} style={{width:34,height:34,borderRadius:RAD.md,background:IOS.bg2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
+         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4"><path d="M15 18l-6-6 6-6"/></svg>
+       </div>
+       <div style={{fontSize:20,fontWeight:800,color:"#fff"}}>Season recap</div>
+     </div>
+     {recapData ? (
+       <SeasonRecap league={activeLeague} me={recapData.me} total={recapData.total} arc={recapData.arc}
+         leader={recapData.leader} topScorer={recapData.topScorer} bestWk={recapData.bestWk} hit={recapData.hit}
+         graded={recapData.graded} champion={recapData.champion} IOS={IOS} RAD={RAD}
+         onBracket={()=>{ setLeagueTab("playoff"); setScreen("league"); }}
+         onSolo={()=>{ setIsSoloMode(true); setScreen("picks"); }}
+         onLeagues={()=>setScreen("leagues")}/>
+     ) : (
+       <div style={{padding:"46px 20px",textAlign:"center",color:IOS.label3,fontSize:14,lineHeight:1.6}}>Your recap appears once this league has graded picks.</div>
+     )}
+     <div style={{height:20}}/>
+   </div>
  )}
 
  {/* ══ SOLO STATS ══ */}
