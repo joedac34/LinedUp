@@ -5372,6 +5372,9 @@ function App() {
   if(realLeagues.some(l=>l.id===activeLeagueId)) return;
   setActiveLeagueId(realLeagues[0].id);   // empty, stale or deleted -> first real league
  }, [realLeagues, activeLeagueId, isSoloMode]);
+ // Which league+week the entry fetches have already run for, so the retry effect below
+ // fires once and only once per league+week.
+ const leagueEntryRef = useRef(null);
  const isSoloModeRef = useRef(MODE_SOLO_AT_BOOT);
  // Derived, never stored. Any screen asking "which mode am I in" gets one answer.
  const homeMode = isSoloMode ? "solo" : "leagues";
@@ -8586,6 +8589,32 @@ function App() {
   // navigated Bet Browser -> Picks, which re-fetched odds and rehydrated picks from the DB,
   // clobbering the in-progress draft. That was the "add a pick, it vanishes" bug.
   },[activeLeagueId, user]);
+
+  // Same failure the odds effect below documents, and the same fix. The league-entry
+  // effect above guards its work behind `if(lg2)` but is keyed only on [activeLeagueId,
+  // user] — so on a cold start, where realLeagues has not landed yet, lg2 is undefined,
+  // the block is skipped, and the effect NEVER re-runs. Schedule, power-ups and the
+  // saved-picks restore simply never happened. Refreshing "fixed" it only when
+  // realLeagues happened to arrive first, which is why it looked like slowness.
+  //
+  // The ref makes this run exactly once per league+week, so retrying can never re-fetch
+  // over an in-progress draft — the clobber the entry effect warns about.
+  useEffect(()=>{
+    if(isSoloMode || !activeLeagueId || !user) return;
+    const lg2 = realLeagues.find(l=>l.id===activeLeagueId);
+    if(!lg2) return;                     // row still in flight; a later run will catch it
+    const week = lg2.current_week||lg2.week||1;
+    const key = activeLeagueId+":"+week;
+    if(leagueEntryRef.current===key) return;
+    leagueEntryRef.current=key;
+    fetchMyPicks(activeLeagueId, week, user.id, lg2);
+    fetchSchedule(activeLeagueId, user.id);
+    fetchLeaguePowerUps(activeLeagueId, user.id);
+    try{
+      const stored = localStorage.getItem(`linedup_picks_${activeLeagueId}_wk${week}`);
+      if(stored) setSavedPicks(JSON.parse(stored));
+    }catch(e){}
+  }, [activeLeagueId, user, isSoloMode, realLeagues.length]);
 
   // Odds fetch is SEPARATE from league-entry so it can retry when realLeagues finally
   // loads (first entry often runs before the league object exists -> odds fetched for the
