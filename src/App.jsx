@@ -12301,12 +12301,43 @@ function App() {
            <span style={{fontSize:11,color:IOS.label2,fontWeight:700}}>Each pick scores on its own odds</span>
          </div>
 
-         {soloFreePicks.length===0 ? (
-           <div style={{padding:"26px 18px",textAlign:"center"}}>
-             <div style={{fontSize:13.5,fontWeight:700,color:"rgba(255,255,255,0.8)"}}>No picks yet</div>
-             <div style={{fontSize:11.5,color:IOS.label3,marginTop:4}}>Add your first from the row below.</div>
+         {soloFreePicks.length===0 ? (()=>{
+           // Empty slate: browse IS the screen, so it stops being a quiet row at the
+           // bottom and becomes the thing where the picks would be. Once you have picks
+           // the quiet row is correct again — browse is genuinely secondary then.
+           // Counts are real: moneyline bets always carry a true "Away @ Home" string,
+           // so unique games off BETS.ml is an honest game count.
+           const _games = new Set((((typeof BETS!=="undefined" && BETS && BETS.ml)||[]).map(b=>b.game).filter(Boolean))).size;
+           const _bets  = ((typeof ALL_BETS!=="undefined" && ALL_BETS) || []).length;
+           const _sub = _games>0
+             ? (_games+" game"+(_games!==1?"s":"")+" today"+(_bets>0?(" \u00b7 "+_bets+" picks live"):""))
+             : "Loading today's board\u2026";
+           return (
+           <div style={{padding:"20px 16px 18px"}}>
+             <div onClick={()=>{ setBuildingSlip(true); setGridTargetSlot(null); setGridType("ml"); setGridPropSub("all"); setScreen("browser"); }}
+               style={{display:"flex",alignItems:"center",gap:13,padding:"16px 15px",borderRadius:13,cursor:"pointer",
+                 background:"linear-gradient(120deg,#0A84FF,#5E5CE6)",boxShadow:"0 12px 30px -12px rgba(10,132,255,0.85)"}}>
+               <div style={{width:38,height:38,borderRadius:11,background:"rgba(255,255,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.3" strokeLinecap="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+               </div>
+               <div style={{minWidth:0}}>
+                 <div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Browse games</div>
+                 <div style={{fontSize:11.5,color:"rgba(255,255,255,0.72)",marginTop:2}}>{_sub}</div>
+               </div>
+               <div style={{marginLeft:"auto",fontSize:20,fontWeight:800,opacity:0.8,color:"#fff"}}>{"\u203a"}</div>
+             </div>
+             <div style={{display:"flex",gap:9,marginTop:11}}>
+               <div onClick={()=>setSoloParlay({legs:[],mult:2})}
+                 style={{flex:1,textAlign:"center",padding:11,borderRadius:11,fontSize:12.5,fontWeight:800,cursor:"pointer",
+                   color:IOS.longshot,border:"1px solid rgba(255,55,95,0.3)",background:"rgba(255,55,95,0.06)"}}>Build a parlay</div>
+               <div onClick={()=>{ if(!plokSlateBusy) buildPlokSlate(); }}
+                 style={{flex:1,textAlign:"center",padding:11,borderRadius:11,fontSize:12.5,fontWeight:800,
+                   cursor:plokSlateBusy?"default":"pointer",opacity:plokSlateBusy?0.55:1,
+                   color:IOS.blue,border:"1px solid rgba(10,132,255,0.3)",background:"rgba(10,132,255,0.07)"}}>{plokSlateBusy?"Plok is picking\u2026":"Let Plok pick"}</div>
+             </div>
            </div>
-         ) : soloFreePicks.map((b,i)=>{
+           );
+         })() : soloFreePicks.map((b,i)=>{
            const col=b.categoryColor||IOS.blue;
            const per=ptsFor(b.impliedOdds);
            const n=b.mult||1;
