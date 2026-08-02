@@ -4013,6 +4013,97 @@ function groupPicksByDay(picks){
 //   onReplace   - can this pick be swapped here?
 //   isLast      - suppress the trailing hairline
 //   openLegs/setOpenLegs - who owns the expanded-parlay state for this list
+// ── SlateRow ─────────────────────────────────────────────────────────────────
+// One pick on a solo slate. This markup existed three times — locked, drafts and
+// unlocked — and the copies had drifted twice: drafts lost the parlay legs expander,
+// and before that the locked row was the only one with a start-state chip.
+//
+// IOS / EDGE / RAD / catLabel are module-level, so they are not props. Points-per-unit,
+// the multiplier, the type colour and the leg key are derived here because the pick
+// already answers them. Only what the CALLER computes differently is passed in:
+// how a multiplier change is applied, whether the row is sealed, and the pre-formatted
+// time strings (their formatters are scoped to the picks screen).
+function SlateRow({ b, onMult, readOnly, settled, result, started, lockText, timeText,
+                    showState, scorePick, liveGames, onOpenGamecast, openLegs, setOpenLegs }){
+  const col = b.categoryColor || IOS.blue;
+  const n = b.mult || 1;
+  // Same formula as ptsFor() on the picks screen: implied American odds -> decimal -> x10.
+  const per = (()=>{ const io=b.impliedOdds; if(io==null) return 0;
+    const d = io>0 ? (io/100)+1 : (100/Math.abs(io))+1; return parseFloat(((d-1)*10).toFixed(1)); })();
+  const legKey = b.slot || b.id;
+  return (
+         <div style={{padding:"12px 15px",borderBottom:EDGE.hair,position:"relative",background:readOnly?"rgba(255,255,255,0.012)":"transparent"}}>
+           <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
+             <div style={{width:3,borderRadius:2,alignSelf:"stretch",flexShrink:0,background:col}}/>
+             <div style={{flex:1,minWidth:0,paddingRight:readOnly?4:24}}>
+               <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:col,marginBottom:5}}>{catLabel(b)}</div>
+               <div style={{fontSize:14.5,fontWeight:700,color:"#fff",lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.pick}</div>
+               <div style={{fontSize:10.5,color:IOS.label3,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                 {[b.game, timeText].filter(Boolean).join(" \u00b7 ")}
+               </div>
+               {showState && (<div style={{display:"inline-flex",alignItems:"center",gap:5,marginTop:5,padding:"3px 8px",borderRadius:6,
+                 background: settled ? "rgba(255,255,255,0.05)" : (started ? "rgba(48,209,88,0.13)" : "rgba(255,159,10,0.13)"),
+                 border: "0.5px solid "+(settled ? "rgba(255,255,255,0.12)" : (started ? "rgba(48,209,88,0.32)" : "rgba(255,159,10,0.32)")),
+                 color: settled ? IOS.label3 : (started ? IOS.green : IOS.orange),
+                 fontSize:9.5,fontWeight:800,letterSpacing:"0.07em",textTransform:"uppercase",whiteSpace:"nowrap"}}>
+                 {!settled && <span style={{width:5,height:5,borderRadius:"50%",background:"currentColor",
+                   animation:started?"pkPulse 1.6s ease-in-out infinite":"none"}}/>}
+                 {settled ? "Final" : (started ? "Started" : (lockText||"Not started"))}
+               </div>)}
+             </div>
+             <div style={{textAlign:"right",flexShrink:0}}>
+               <div style={{fontSize:15,fontWeight:800,fontFamily:"'Barlow Semi Condensed',sans-serif",color:"#fff"}}>{b.odds}</div>
+               <div style={{fontSize:10,color:IOS.label3,marginTop:2}}>{per.toFixed(1)} pts</div>
+             </div>
+           </div>
+           <div style={{display:"flex",alignItems:"center",gap:8,marginTop:9,marginLeft:13}}>
+             {readOnly ? (
+               <span style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:10,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:IOS.label3,background:"rgba(255,255,255,0.045)",border:EDGE.hair2,borderRadius:8,padding:"6px 10px"}}>
+                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+                 {settled?"Settled":"Locked"} {"\u00b7"} {n}{"\u00d7"}
+               </span>
+             ) : (<>
+               <span style={{fontSize:9,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:IOS.label3}}>Multiplier</span>
+               <div style={{display:"flex",alignItems:"center",background:"rgba(255,255,255,0.055)",border:EDGE.hair2,borderRadius:8,overflow:"hidden"}}>
+                 <div onClick={()=>{ if(n>1) onMult(n-1); }} style={{width:28,height:26,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,color:n>1?IOS.label2:"rgba(255,255,255,0.18)",cursor:n>1?"pointer":"default",userSelect:"none"}}>{"\u2212"}</div>
+                 <div style={{width:34,textAlign:"center",fontSize:13,fontWeight:800,fontFamily:"'Barlow Semi Condensed',sans-serif",borderLeft:EDGE.hair2,borderRight:EDGE.hair2,lineHeight:"26px",color:"#fff"}}>{n}{"\u00d7"}</div>
+                 <div onClick={()=>{ if(n<5) onMult(n+1); }} style={{width:28,height:26,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,color:n<5?IOS.label2:"rgba(255,255,255,0.18)",cursor:n<5?"pointer":"default",userSelect:"none"}}>+</div>
+               </div>
+             </>)}
+             {settled ? (
+               <span style={{marginLeft:"auto",fontSize:10,fontWeight:800,letterSpacing:"0.09em",textTransform:"uppercase",padding:"3px 7px",borderRadius:5,
+                 color:result==="W"?IOS.green:IOS.red, background:result==="W"?"rgba(48,209,88,0.14)":"rgba(255,69,58,0.14)"}}>
+                 {result==="W"?("Won +"+(per*n).toFixed(1)):"Lost"}
+               </span>
+             ) : (
+               <span style={{marginLeft:"auto",fontSize:10.5,color:IOS.label3}}>worth <b style={{color:IOS.label2,fontWeight:800}}>{(per*n).toFixed(1)} pts</b></span>
+             )}
+           </div>
+           {b.isParlay && (b.parlayLegs||[]).length>0 && (
+             <div style={{marginTop:9,marginLeft:13,borderLeft:"1px solid rgba(255,255,255,0.10)",paddingLeft:11}}>
+               <div onClick={()=>setOpenLegs(prev=>({...prev,[legKey]:!prev[legKey]}))}
+                 style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:10,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:IOS.label3,cursor:"pointer",padding:"2px 0"}}>
+                 {(b.parlayLegs||[]).length} legs {"\u00b7"} all must hit
+                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"
+                   style={{transform:openLegs[legKey]?"rotate(180deg)":"none",transition:"transform .2s"}}><path d="M6 9l6 6 6-6"/></svg>
+               </div>
+               {openLegs[legKey] && (b.parlayLegs||[]).map((lg,li)=>(
+                 <div key={li} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderTop:li?EDGE.hair:"none"}}>
+                   <span style={{fontSize:9.5,fontWeight:800,color:IOS.label3,minWidth:13,flexShrink:0}}>{li+1}</span>
+                   <div style={{flex:1,minWidth:0}}>
+                     <div style={{fontSize:12.5,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lg.pick||lg.pick_name||"Leg"}</div>
+                     <div style={{fontSize:10,color:IOS.label3,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lg.game||""}</div>
+                   </div>
+                   <span style={{fontSize:11.5,fontWeight:800,fontFamily:"'Barlow Semi Condensed',sans-serif",color:IOS.label2,flexShrink:0}}>{lg.odds||""}</span>
+                 </div>
+               ))}
+             </div>
+           )}
+           {scorePick && <div style={{marginTop:8,marginLeft:13}} onClick={(e)=>e.stopPropagation()}><ScoreChip pick={scorePick} live={liveMatch(scorePick, liveGames)} onOpen={()=>onOpenGamecast(scorePick)}/></div>}
+         </div>
+  );
+}
+
 // ── MatchupRow ───────────────────────────────────────────────────────────────
 // One head-to-head card: two seats, points, ceiling bars, best-pick chips.
 // This markup existed twice (Matchup screen, leagues Matchups tab) and the copies
@@ -12329,75 +12420,13 @@ function App() {
          return (
          <SwipeRow key={b.slot||i} disabled={ro} onDelete={()=>removeSoloPick(b.slot)}
            bg={ro?"rgba(255,255,255,0.012)":"transparent"}>
-         <div style={{padding:"12px 15px",borderBottom:EDGE.hair,position:"relative",background:ro?"rgba(255,255,255,0.012)":"transparent"}}>
-           <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
-             <div style={{width:3,borderRadius:2,alignSelf:"stretch",flexShrink:0,background:col}}/>
-             <div style={{flex:1,minWidth:0,paddingRight:ro?4:24}}>
-               <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:col,marginBottom:5}}>{catLabel(b)}</div>
-               <div style={{fontSize:14.5,fontWeight:700,color:"#fff",lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.pick}</div>
-               <div style={{fontSize:10.5,color:IOS.label3,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                 {[b.game, b.gameTime?_t(b.gameTime):""].filter(Boolean).join(" \u00b7 ")}
-               </div>
-               <div style={{display:"inline-flex",alignItems:"center",gap:5,marginTop:5,padding:"3px 8px",borderRadius:6,
-                 background: settled ? "rgba(255,255,255,0.05)" : (isLk ? "rgba(48,209,88,0.13)" : "rgba(255,159,10,0.13)"),
-                 border: "0.5px solid "+(settled ? "rgba(255,255,255,0.12)" : (isLk ? "rgba(48,209,88,0.32)" : "rgba(255,159,10,0.32)")),
-                 color: settled ? IOS.label3 : (isLk ? IOS.green : IOS.orange),
-                 fontSize:9.5,fontWeight:800,letterSpacing:"0.07em",textTransform:"uppercase",whiteSpace:"nowrap"}}>
-                 {!settled && <span style={{width:5,height:5,borderRadius:"50%",background:"currentColor",
-                   animation:isLk?"pkPulse 1.6s ease-in-out infinite":"none"}}/>}
-                 {settled ? "Final" : (isLk ? "Started" : (_lk(b.gameTime)||"Not started"))}
-               </div>
-             </div>
-             <div style={{textAlign:"right",flexShrink:0}}>
-               <div style={{fontSize:15,fontWeight:800,fontFamily:"'Barlow Semi Condensed',sans-serif",color:"#fff"}}>{b.odds}</div>
-               <div style={{fontSize:10,color:IOS.label3,marginTop:2}}>{per.toFixed(1)} pts</div>
-             </div>
-           </div>
-           <div style={{display:"flex",alignItems:"center",gap:8,marginTop:9,marginLeft:13}}>
-             {ro ? (
-               <span style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:10,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:IOS.label3,background:"rgba(255,255,255,0.045)",border:EDGE.hair2,borderRadius:8,padding:"6px 10px"}}>
-                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
-                 {settled?"Settled":"Locked"} {"\u00b7"} {n}{"\u00d7"}
-               </span>
-             ) : (<>
-               <span style={{fontSize:9,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:IOS.label3}}>Multiplier</span>
-               <div style={{display:"flex",alignItems:"center",background:"rgba(255,255,255,0.055)",border:EDGE.hair2,borderRadius:8,overflow:"hidden"}}>
-                 <div onClick={()=>{ if(n>1) editSoloPickMult(b.slot,n-1); }} style={{width:28,height:26,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,color:n>1?IOS.label2:"rgba(255,255,255,0.18)",cursor:n>1?"pointer":"default",userSelect:"none"}}>{"\u2212"}</div>
-                 <div style={{width:34,textAlign:"center",fontSize:13,fontWeight:800,fontFamily:"'Barlow Semi Condensed',sans-serif",borderLeft:EDGE.hair2,borderRight:EDGE.hair2,lineHeight:"26px",color:"#fff"}}>{n}{"\u00d7"}</div>
-                 <div onClick={()=>{ if(n<5) editSoloPickMult(b.slot,n+1); }} style={{width:28,height:26,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,color:n<5?IOS.label2:"rgba(255,255,255,0.18)",cursor:n<5?"pointer":"default",userSelect:"none"}}>+</div>
-               </div>
-             </>)}
-             {settled ? (
-               <span style={{marginLeft:"auto",fontSize:10,fontWeight:800,letterSpacing:"0.09em",textTransform:"uppercase",padding:"3px 7px",borderRadius:5,
-                 color:_db.result==="W"?IOS.green:IOS.red, background:_db.result==="W"?"rgba(48,209,88,0.14)":"rgba(255,69,58,0.14)"}}>
-                 {_db.result==="W"?("Won +"+(per*n).toFixed(1)):"Lost"}
-               </span>
-             ) : (
-               <span style={{marginLeft:"auto",fontSize:10.5,color:IOS.label3}}>worth <b style={{color:IOS.label2,fontWeight:800}}>{(per*n).toFixed(1)} pts</b></span>
-             )}
-           </div>
-           {b.isParlay && (b.parlayLegs||[]).length>0 && (
-             <div style={{marginTop:9,marginLeft:13,borderLeft:"1px solid rgba(255,255,255,0.10)",paddingLeft:11}}>
-               <div onClick={()=>setOpenLegs(prev=>({...prev,[b.slot||b.id]:!prev[b.slot||b.id]}))}
-                 style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:10,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:IOS.label3,cursor:"pointer",padding:"2px 0"}}>
-                 {(b.parlayLegs||[]).length} legs {"\u00b7"} all must hit
-                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"
-                   style={{transform:openLegs[b.slot||b.id]?"rotate(180deg)":"none",transition:"transform .2s"}}><path d="M6 9l6 6 6-6"/></svg>
-               </div>
-               {openLegs[b.slot||b.id] && (b.parlayLegs||[]).map((lg,li)=>(
-                 <div key={li} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderTop:li?EDGE.hair:"none"}}>
-                   <span style={{fontSize:9.5,fontWeight:800,color:IOS.label3,minWidth:13,flexShrink:0}}>{li+1}</span>
-                   <div style={{flex:1,minWidth:0}}>
-                     <div style={{fontSize:12.5,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lg.pick||lg.pick_name||"Leg"}</div>
-                     <div style={{fontSize:10,color:IOS.label3,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lg.game||""}</div>
-                   </div>
-                   <span style={{fontSize:11.5,fontWeight:800,fontFamily:"'Barlow Semi Condensed',sans-serif",color:IOS.label2,flexShrink:0}}>{lg.odds||""}</span>
-                 </div>
-               ))}
-             </div>
-           )}
-           {_showScore && <div style={{marginTop:8,marginLeft:13}} onClick={(e)=>e.stopPropagation()}><ScoreChip pick={_scp} live={liveMatch(_scp, liveGames)} onOpen={()=>openGamecast(_scp)}/></div>}
-         </div>
+         <SlateRow b={b}
+           onMult={(m)=>editSoloPickMult(b.slot,m)}
+           readOnly={ro} settled={settled} result={_db&&_db.result}
+           started={isLk} lockText={_lk(b.gameTime)} timeText={b.gameTime?_t(b.gameTime):""}
+           showState={true}
+           scorePick={_showScore?_scp:null} liveGames={liveGames} onOpenGamecast={openGamecast}
+           openLegs={openLegs} setOpenLegs={setOpenLegs}/>
          </SwipeRow>);
        })}
 
@@ -12409,49 +12438,11 @@ function App() {
            const col=b.categoryColor||IOS.blue; const per=ptsFor(b.impliedOdds); const n=b.mult||1;
            return (
            <SwipeRow key={b.id||i} onDelete={()=>setSoloFreePicks(soloFreePicks.filter(x=>x.id!==b.id))}>
-           <div style={{padding:"12px 15px",borderBottom:EDGE.hair,position:"relative"}}>
-             <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
-               <div style={{width:3,borderRadius:2,alignSelf:"stretch",flexShrink:0,background:col}}/>
-               <div style={{flex:1,minWidth:0,paddingRight:24}}>
-                 <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:col,marginBottom:5}}>{catLabel(b)}</div>
-                 <div style={{fontSize:14.5,fontWeight:700,color:"#fff",lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.pick}</div>
-                 <div style={{fontSize:10.5,color:IOS.label3,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.game}</div>
-               </div>
-               <div style={{textAlign:"right",flexShrink:0}}>
-                 <div style={{fontSize:15,fontWeight:800,fontFamily:"'Barlow Semi Condensed',sans-serif",color:"#fff"}}>{b.odds}</div>
-                 <div style={{fontSize:10,color:IOS.label3,marginTop:2}}>{per.toFixed(1)} pts</div>
-               </div>
-             </div>
-             <div style={{display:"flex",alignItems:"center",gap:8,marginTop:9,marginLeft:13}}>
-               <span style={{fontSize:9,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:IOS.label3}}>Multiplier</span>
-               <div style={{display:"flex",alignItems:"center",background:"rgba(255,255,255,0.055)",border:EDGE.hair2,borderRadius:8,overflow:"hidden"}}>
-                 <div onClick={()=>{ if(n>1) setSoloFreePicks(prev=>prev.map(x=>x.id===b.id?{...x,mult:n-1}:x)); }} style={{width:28,height:26,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,color:n>1?IOS.label2:"rgba(255,255,255,0.18)",cursor:n>1?"pointer":"default",userSelect:"none"}}>{"\u2212"}</div>
-                 <div style={{width:34,textAlign:"center",fontSize:13,fontWeight:800,fontFamily:"'Barlow Semi Condensed',sans-serif",borderLeft:EDGE.hair2,borderRight:EDGE.hair2,lineHeight:"26px",color:"#fff"}}>{n}{"\u00d7"}</div>
-                 <div onClick={()=>{ if(n<5) setSoloFreePicks(prev=>prev.map(x=>x.id===b.id?{...x,mult:n+1}:x)); }} style={{width:28,height:26,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,color:n<5?IOS.label2:"rgba(255,255,255,0.18)",cursor:n<5?"pointer":"default",userSelect:"none"}}>+</div>
-               </div>
-               <span style={{marginLeft:"auto",fontSize:10.5,color:IOS.label3}}>worth <b style={{color:IOS.label2,fontWeight:800}}>{(per*n).toFixed(1)} pts</b></span>
-             </div>
-             {b.isParlay && (b.parlayLegs||[]).length>0 && (
-               <div style={{marginTop:9,marginLeft:13,borderLeft:"1px solid rgba(255,255,255,0.10)",paddingLeft:11}}>
-                 <div onClick={()=>setOpenLegs(prev=>({...prev,[b.id]:!prev[b.id]}))}
-                   style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:10,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:IOS.label3,cursor:"pointer",padding:"2px 0"}}>
-                   {(b.parlayLegs||[]).length} legs {"\u00b7"} all must hit
-                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"
-                     style={{transform:openLegs[b.id]?"rotate(180deg)":"none",transition:"transform .2s"}}><path d="M6 9l6 6 6-6"/></svg>
-                 </div>
-                 {openLegs[b.id] && (b.parlayLegs||[]).map((lg,li)=>(
-                   <div key={li} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderTop:li?EDGE.hair:"none"}}>
-                     <span style={{fontSize:9.5,fontWeight:800,color:IOS.label3,minWidth:13,flexShrink:0}}>{li+1}</span>
-                     <div style={{flex:1,minWidth:0}}>
-                       <div style={{fontSize:12.5,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lg.pick||lg.pick_name||"Leg"}</div>
-                       <div style={{fontSize:10,color:IOS.label3,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lg.game||""}</div>
-                     </div>
-                     <span style={{fontSize:11.5,fontWeight:800,fontFamily:"'Barlow Semi Condensed',sans-serif",color:IOS.label2,flexShrink:0}}>{lg.odds||""}</span>
-                   </div>
-                 ))}
-               </div>
-             )}
-           </div>
+           <SlateRow b={b}
+             onMult={(m)=>setSoloFreePicks(prev=>prev.map(x=>x.id===b.id?{...x,mult:m}:x))}
+             readOnly={false} settled={false} started={false}
+             timeText={""} showState={false} scorePick={null}
+             openLegs={openLegs} setOpenLegs={setOpenLegs}/>
            </SwipeRow>);
          })}
        </>)}
@@ -12586,54 +12577,11 @@ function App() {
            const n=b.mult||1;
            return (
            <SwipeRow key={b.id} onDelete={()=>setSoloFreePicks(soloFreePicks.filter(x=>x.id!==b.id))}>
-           <div style={{padding:"12px 15px",borderBottom:EDGE.hair,position:"relative"}}>
-             <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
-               <div style={{width:3,borderRadius:2,alignSelf:"stretch",flexShrink:0,background:col}}/>
-               <div style={{flex:1,minWidth:0,paddingRight:24}}>
-                 <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:col,marginBottom:5}}>{catLabel(b)}</div>
-                 <div style={{fontSize:14.5,fontWeight:700,color:"#fff",lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.pick}</div>
-                 <div style={{fontSize:10.5,color:IOS.label3,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.game}</div>
-               </div>
-               <div style={{textAlign:"right",flexShrink:0}}>
-                 {/* Odds are white. A bet is not an outcome, so it does not wear green. */}
-                 <div style={{fontSize:15,fontWeight:800,fontFamily:"'Barlow Semi Condensed',sans-serif",color:"#fff"}}>{b.odds}</div>
-                 <div style={{fontSize:10,color:IOS.label3,marginTop:2}}>{per.toFixed(1)} pts</div>
-               </div>
-             </div>
-             {/* Units: a stepper, not five full-width buttons. That row used to be as
-                 tall as the pick itself and doubled the scroll on a long slate. */}
-             <div style={{display:"flex",alignItems:"center",gap:8,marginTop:9,marginLeft:13}}>
-               <span style={{fontSize:9,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:IOS.label3}}>Multiplier</span>
-               <div style={{display:"flex",alignItems:"center",background:"rgba(255,255,255,0.055)",border:EDGE.hair2,borderRadius:8,overflow:"hidden"}}>
-                 <div onClick={()=>{ if(n>1) setSoloFreePicks(prev=>prev.map(x=>x.id===b.id?{...x,mult:n-1}:x)); }}
-                   style={{width:28,height:26,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,color:n>1?IOS.label2:"rgba(255,255,255,0.18)",cursor:n>1?"pointer":"default",userSelect:"none"}}>{"\u2212"}</div>
-                 <div style={{width:34,textAlign:"center",fontSize:13,fontWeight:800,fontFamily:"'Barlow Semi Condensed',sans-serif",borderLeft:EDGE.hair2,borderRight:EDGE.hair2,lineHeight:"26px",color:"#fff"}}>{n}{"\u00d7"}</div>
-                 <div onClick={()=>{ if(n<5) setSoloFreePicks(prev=>prev.map(x=>x.id===b.id?{...x,mult:n+1}:x)); }}
-                   style={{width:28,height:26,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,color:n<5?IOS.label2:"rgba(255,255,255,0.18)",cursor:n<5?"pointer":"default",userSelect:"none"}}>+</div>
-               </div>
-               <span style={{marginLeft:"auto",fontSize:10.5,color:IOS.label3}}>worth <b style={{color:IOS.label2,fontWeight:800}}>{(per*n).toFixed(1)} pts</b></span>
-             </div>
-             {b.isParlay && (b.parlayLegs||[]).length>0 && (
-               <div style={{marginTop:9,marginLeft:13,borderLeft:"1px solid rgba(255,255,255,0.10)",paddingLeft:11}}>
-                 <div onClick={()=>setOpenLegs(prev=>({...prev,[b.id]:!prev[b.id]}))}
-                   style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:10,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:IOS.label3,cursor:"pointer",padding:"2px 0"}}>
-                   {(b.parlayLegs||[]).length} legs {"\u00b7"} all must hit
-                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"
-                     style={{transform:openLegs[b.id]?"rotate(180deg)":"none",transition:"transform .2s"}}><path d="M6 9l6 6 6-6"/></svg>
-                 </div>
-                 {openLegs[b.id] && (b.parlayLegs||[]).map((lg,li)=>(
-                   <div key={li} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderTop:li?EDGE.hair:"none"}}>
-                     <span style={{fontSize:9.5,fontWeight:800,color:IOS.label3,minWidth:13,flexShrink:0}}>{li+1}</span>
-                     <div style={{flex:1,minWidth:0}}>
-                       <div style={{fontSize:12.5,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lg.pick||lg.pick_name||"Leg"}</div>
-                       <div style={{fontSize:10,color:IOS.label3,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lg.game||""}</div>
-                     </div>
-                     <span style={{fontSize:11.5,fontWeight:800,fontFamily:"'Barlow Semi Condensed',sans-serif",color:IOS.label2,flexShrink:0}}>{lg.odds||""}</span>
-                   </div>
-                 ))}
-               </div>
-             )}
-           </div>
+           <SlateRow b={b}
+             onMult={(m)=>setSoloFreePicks(prev=>prev.map(x=>x.id===b.id?{...x,mult:m}:x))}
+             readOnly={false} settled={false} started={false}
+             timeText={""} showState={false} scorePick={null}
+             openLegs={openLegs} setOpenLegs={setOpenLegs}/>
            </SwipeRow>);
          })}
 
