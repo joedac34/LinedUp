@@ -5346,6 +5346,7 @@ function App() {
  // switch flashed that empty state before the real rows arrived.
  const [standingsFor, setStandingsFor] = useState(null);
  const [membersFor, setMembersFor] = useState(null);   // which league leagueMembers belongs to
+ const [weekPicksFor, setWeekPicksFor] = useState(null); // "<leagueId>:<week>" weekPicks belongs to
  const standingsReqRef = useRef(null);
  const [allMyStats, setAllMyStats] = useState(null);
  const [lbCache, setLbCache] = useState({});
@@ -5358,6 +5359,7 @@ function App() {
  const lastAuthUidRef = useRef(null);
  const [soloTopPct, setSoloTopPct] = useState(null);
  const [soloLoading, setSoloLoading] = useState(false);
+ const [soloWeeksLoaded, setSoloWeeksLoaded] = useState(false); // a load has COMPLETED
  const MODE_KEY = "picklock_mode";
  const MODE_SOLO_AT_BOOT = (()=>{ try{ return localStorage.getItem(MODE_KEY)==="solo"; }catch(e){ return false; } })();
  const [isSoloMode, setIsSoloMode] = useState(MODE_SOLO_AT_BOOT);
@@ -7198,11 +7200,11 @@ function App() {
  };
 
  const fetchSoloWeeks = async () => {
- if(!user) return;
+ if(!user){ setSoloWeeksLoaded(true); return; }
  setSoloLoading(true);
  try {
    const lgId = soloLeagueId || await getOrCreateSoloLeague();
-   if(!lgId) { setSoloLoading(false); return; }
+   if(!lgId) { setSoloLoading(false); setSoloWeeksLoaded(true); return; }
    const {data} = await supabase
      .from("picks")
      .select("*")
@@ -7249,6 +7251,7 @@ function App() {
    }
  } catch(e) { console.error(errText(e)); }
  setSoloLoading(false);
+ setSoloWeeksLoaded(true);
  };
  useEffect(()=>{
    if(!isSoloMode || !user) return;
@@ -8231,12 +8234,13 @@ function App() {
  if(_seq===myPicksSeq.current) setPicksLoading(false);
  };
  const fetchWeekPicks = async (leagueId, week) => {
+  const _own = leagueId+":"+week;
  const {data:picks} = await supabase
  .from("picks")
  .select("*")
  .eq("league_id", leagueId)
  .eq("week", week);
- if(!picks||!picks.length) return;
+ if(!picks||!picks.length){ setWeekPicks([]); setWeekPicksFor(_own); return; }
  const userIds = [...new Set(picks.map(p=>p.user_id))];
  const {data:users} = await supabase
  .from("public_profiles")
@@ -8246,6 +8250,7 @@ function App() {
  ...p,
  users: users?.find(u=>u.id===p.user_id)||null
  })));
+ setWeekPicksFor(_own);
 };
 
  const fetchLeagueMembers = async (leagueId, uid) => {
@@ -11088,7 +11093,7 @@ function App() {
  </>);
  })()}
 
-{realLeagues.length===0 && (
+{!leaguesLoading && realLeagues.length===0 && (
  <div style={{margin:"6px 16px 4px",borderRadius:RAD.xl,padding:"18px",position:"relative",overflow:"hidden",background:"radial-gradient(130% 120% at 10% -10%, rgba(10,132,255,0.32), rgba(94,92,230,0.12) 45%, rgba(12,12,16,0) 75%),linear-gradient(160deg,#10204a 0%,#0c0c12 78%)",border:"1px solid rgba(10,132,255,0.3)",boxShadow:"0 18px 50px -26px rgba(10,132,255,0.6)"}}>
    <div style={{fontSize:20,fontWeight:900,letterSpacing:-0.4,color:"#fff"}}>Get in a league</div>
    <div style={{fontSize:13,color:"rgba(255,255,255,0.72)",lineHeight:1.5,marginTop:6}}>You’re browsing games solo. Create or join a league to put your picks up against friends — weekly matchups, playoffs, bragging rights.</div>
@@ -11275,7 +11280,9 @@ function App() {
  const _ts = activeLeague.target_size||activeLeague.max_members||8;
  const leagueNotStarted = !isSoloMode && leagueMembers.length>0 && leagueMembers.length < _ts;
  const _need = Math.max(0, _ts - leagueMembers.length);
- const noRealLeague = !isSoloMode && (!activeLeague || !activeLeague.id || (realLeagues||[]).length===0);
+ // Loading is not the same as having no league — without this the app briefly decides
+ // you are league-less on every cold start.
+ const noRealLeague = !isSoloMode && !leaguesLoading && (!activeLeague || !activeLeague.id || (realLeagues||[]).length===0);
    if(noRealLeague){
      return (
        <div className="body" style={{paddingTop:16,paddingLeft:16,paddingRight:16}}>
@@ -15888,7 +15895,7 @@ function App() {
  <div style={{fontSize:12,color:IOS.orange,fontWeight:600}}>{weekPicks.filter(p=>p.result==="pending").length} pending</div>
  </div>
 
- {weekPicks.length===0&&(
+ {weekPicksFor===((activeLeague&&activeLeague.id)+":"+(activeLeague&&(activeLeague.current_week||activeLeague.week||1))) && weekPicks.length===0&&(
  <div style={{margin:"0 16px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.lg,padding:"24px 16px",textAlign:"center",color:IOS.label3,fontSize:15}}>
  No picks submitted yet this week
  </div>
@@ -18923,7 +18930,13 @@ function App() {
  <div style={{fontSize:30,fontWeight:800,letterSpacing:"-0.7px",color:"#fff",lineHeight:1.05,marginTop:2}}>History</div>
  <div style={{fontSize:13,color:IOS.label3,marginTop:3}}>Your solo slate record</div>
  </div>
- {soloWeeks.length===0 ? (
+ {(!soloWeeksLoaded && soloWeeks.length===0) ? (
+ <div style={{paddingTop:4}}>
+   <SkelGroup><div style={{display:"flex",gap:8,marginBottom:14}}>{[0,1,2,3].map(i=>(
+     <div key={i} style={{...SK_CARD,flex:1,padding:"12px 5px"}}><div className="pk-sk" style={{width:"70%",height:20,borderRadius:6,margin:"0 auto"}}/><div className="pk-sk" style={{width:"52%",height:8,borderRadius:5,margin:"7px auto 0"}}/></div>))}</div></SkelGroup>
+   <SkelRows n={3} card={true} pad="0"/>
+ </div>
+ ) : soloWeeks.length===0 ? (
  <div style={{textAlign:"center",padding:"40px 20px",background:IOS.bg2,borderRadius:RAD.md,border:EDGE.hair}}>
    <div style={{fontSize:14,fontWeight:700,color:"#fff",marginBottom:6}}>No history yet</div>
    <div style={{fontSize:12,color:IOS.label3}}>Lock in your first solo slip to start building your record.</div>
