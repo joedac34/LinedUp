@@ -5345,6 +5345,7 @@ function App() {
  // empty array is indistinguishable from "no graded picks yet" — so every league
  // switch flashed that empty state before the real rows arrived.
  const [standingsFor, setStandingsFor] = useState(null);
+ const [membersFor, setMembersFor] = useState(null);   // which league leagueMembers belongs to
  const standingsReqRef = useRef(null);
  const [allMyStats, setAllMyStats] = useState(null);
  const [lbCache, setLbCache] = useState({});
@@ -5422,10 +5423,17 @@ function App() {
  const _lgTarget=(activeLeague&&(activeLeague.target_size||activeLeague.max_members))||8;
  const _lgMembers = Math.max(Number((activeLeague&&activeLeague.memberCount)||0), (!isSoloMode && activeLeague && activeLeague.id && Array.isArray(leagueMembers)) ? leagueMembers.length : 0);
  const leagueFull = !isSoloMode && (_lgMembers >= _lgTarget);
+ // leagueMembers is emptied on every league change, so before the refetch lands
+ // _lgMembers is 0 and leagueFull is false — which read as "season hasn't started"
+ // on a league in week 5. "Not loaded" and "not full" are different states and only
+ // an ownership flag can tell them apart.
+ const _lgReady = isSoloMode || !activeLeague || !activeLeague.id
+   || membersFor === activeLeague.id
+   || Number(activeLeague.memberCount||0) > 0;
  // A league created with a scheduled start has season_start stamped at CREATION,
  // before anyone joins. The date alone is not a season — an unfilled league has
  // not started no matter what the calendar says.
- const seasonNotStarted = !isSoloMode && !!(activeLeague&&activeLeague.id) && (!leagueFull || !activeLeague.season_start || new Date(activeLeague.season_start).getTime() > Date.now());
+ const seasonNotStarted = !isSoloMode && !!(activeLeague&&activeLeague.id) && _lgReady && (!leagueFull || !activeLeague.season_start || new Date(activeLeague.season_start).getTime() > Date.now());
  const leagueAwaitingStart = seasonNotStarted && leagueFull;
  const _autoStartRef = useRef({});
  useEffect(()=>{
@@ -5459,6 +5467,17 @@ function App() {
    // straight into solo must load them too, and that path never calls applyMode.
    if(opts && opts.leagueId) setActiveLeagueId(opts.leagueId);
  };
+ const leagueLoadingBody = (
+   <div className="body" style={{paddingLeft:16,paddingRight:16,paddingTop:18}}>
+     <SkelGroup>
+       <div style={{...SK_CARD,padding:"16px",marginBottom:14}}>
+         <div className="pk-sk" style={{width:"42%",height:11,borderRadius:6}}/>
+         <div className="pk-sk" style={{width:"64%",height:30,borderRadius:8,marginTop:12}}/>
+       </div>
+     </SkelGroup>
+     <SkelRows n={4} card={true} pad="0"/>
+   </div>
+ );
  const notStartedBody = (<div className="body" style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center",padding:"70px 30px",gap:11}}><div style={{width:56,height:56,borderRadius:"50%",background:"rgba(255,159,10,0.12)",display:"flex",alignItems:"center",justifyContent:"center"}}><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke={IOS.orange} strokeWidth="2.2"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg></div><div style={{fontSize:18,fontWeight:800,color:"#fff"}}>{(activeLeague&&activeLeague.season_start&&new Date(activeLeague.season_start).getTime()>Date.now())?("Starts "+new Date(activeLeague.season_start).toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"})):"Season hasn’t started"}</div><div style={{fontSize:13.5,color:IOS.label2,lineHeight:1.5,maxWidth:250}}>{(activeLeague&&activeLeague.season_start&&new Date(activeLeague.season_start).getTime()>Date.now())?("Week 1 opens "+new Date(activeLeague.season_start).toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"})+" — everyone’s picks stay locked until then."):((activeLeague&&activeLeague.isCommissioner)?"Open Week 1 from the Home tab when you’re ready.":"Picks open once the commissioner starts the season.")}</div><button onClick={async()=>{ applyMode(true); try{ const lid=await getOrCreateSoloLeague(); setActiveLeagueId(lid||"solo"); }catch(e){} try{fetchSoloWeeks();}catch(e){} setScreen("picks"); }} style={{marginTop:8,background:"rgba(191,90,242,0.12)",border:"0.5px solid "+(IOS.purple||"#BF5AF2")+"66",color:(IOS.purple||"#BF5AF2"),borderRadius:RAD.md,padding:"11px 22px",fontSize:13.5,fontWeight:800,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Make picks in Solo instead →</button></div>);
  const sport = SPORTS[activeLeague?.sport] || SPORTS["nfl"];
  const SLOTS = sport.slots;
@@ -8246,6 +8265,7 @@ function App() {
  isYou: m.user_id === uid,
  })));
  }
+ setMembersFor(leagueId);
  };
 
  const fetchBracket = async (lid) => {
@@ -8326,7 +8346,7 @@ function App() {
      setAllMatchups(data||[]); setMatchupsFor(leagueId);
    }catch(e){}
  };
- useEffect(()=>{ if(screen==="matchup" && activeLeague && (activeLeague.league_type||"h2h")==="h2h" && activeLeague.id){ fetchAllMatchups(activeLeague.id); fetchWeekPicks(activeLeague.id, activeLeague.current_week||activeLeague.week||1); setMWeek(activeLeague.current_week||activeLeague.week||1); setBracketDetail(null); setMatchupView("mine"); } }, [screen, activeLeagueId]);
+ useEffect(()=>{ if((screen==="matchup"||screen==="picks") && activeLeague && (activeLeague.league_type||"h2h")==="h2h" && activeLeague.id){ fetchAllMatchups(activeLeague.id); fetchWeekPicks(activeLeague.id, activeLeague.current_week||activeLeague.week||1); setMWeek(activeLeague.current_week||activeLeague.week||1); setBracketDetail(null); setMatchupView("mine"); } }, [screen, activeLeagueId]);
 
  useEffect(()=>{ if(screen==="leagues" && leagueSubTab==="matchups" && activeLeague && activeLeague.id){ fetchAllMatchups(activeLeague.id); fetchWeekPicks(activeLeague.id, activeLeague.current_week||activeLeague.week||1); setBracketDetail(null); } }, [screen, leagueSubTab, activeLeagueId]);
 
@@ -11196,7 +11216,15 @@ function App() {
  )}
 
  {/* ══ PICKS ══ */}
- {screen==="picks"&&!isSoloMode&&(()=>{ if(seasonNotStarted){ return notStartedBody; }
+ {screen==="picks"&&!isSoloMode&&(()=>{ if(!_lgReady){ return leagueLoadingBody; } if(seasonNotStarted){ return notStartedBody; }
+ // Playoffs running and the bracket has not arrived yet: elimination is unknowable,
+ // so render a skeleton rather than a builder we may have to yank away.
+ if(!isSoloMode && activeLeague && (activeLeague.league_type||"h2h")==="h2h"
+    && playoffFieldFor(activeLeague,(leagueMembers||[]).length)>=2
+    && (activeLeague.current_week||activeLeague.week||1) > regularSeasonWeeksFor(activeLeague,(leagueMembers||[]).length)
+    && matchupsFor !== activeLeague.id){
+   return leagueLoadingBody;
+ }
  // Knocked out: the slip UI implies league scoring that no longer exists. Show the
  // season instead, and a real way forward.
  if(isEliminated){ return (
@@ -12984,7 +13012,7 @@ function App() {
    </div>
    );
    })()}
- {screen==="browser"&&(()=>{ if(seasonNotStarted){ return notStartedBody; }
+ {screen==="browser"&&(()=>{ if(!_lgReady){ return leagueLoadingBody; } if(seasonNotStarted){ return notStartedBody; }
  const activePicks = isSoloMode ? soloFlexPicks : flexPicks;
  const setActivePicks = isSoloMode ? setSoloFlexPicks : setFlexPicks;
 
