@@ -120,12 +120,17 @@ const API_BASE = IS_NATIVE ? "https://app.picklockapp.com" : "";
 const IOS = {
  blue: "#3B6FE0",   // Deep — was iOS system #0A84FF
  green: "#30D158",
+ // ONE outcome red. Losses, losing streaks, negative deltas, destructive actions.
+ // Nothing else wears it — a rate is not an outcome.
  red: "#FF453A",
  orange: "#FF9F0A",
  purple: "#BF5AF2",
  teal: "#3A9EE0",
  yellow: "#FFD60A",
- pink: "#FF375F",
+ // Longshot / parlay IDENTITY, never a verdict: chips, 5x multiplier, combined odds,
+ // underdog tags. It reads as a red, so it must never sit where a loss could.
+ longshot: "#FF375F",
+ pink: "#FF375F",   // deprecated alias of longshot
  indigo: "#4B4FBF",  // gradient partner for the deep accent
  gray: "#8E8E93",
  gray2: "#636366",
@@ -311,10 +316,10 @@ const SPORTS = {
  },
  },
  ncaaf: {
- id:"ncaaf", label:"NCAAF", icon:"", color:"#FF3B30",
+ id:"ncaaf", label:"NCAAF", icon:"", color:"#FF453A",
  season:"2025 CFB Season",
  slots:[
- { id:"ml", label:"Moneyline", mult:1, icon:"", color:"#FF3B30", bg:"rgba(255,59,48,0.15)", desc:"Pick a winner straight up" },
+ { id:"ml", label:"Moneyline", mult:1, icon:"", color:"#FF453A", bg:"rgba(255,69,58,0.15)", desc:"Pick a winner straight up" },
  { id:"prop", label:"Prop", mult:2, icon:"", color:"#FFD60A", bg:"rgba(255,214,10,0.15)", desc:"Player or game prop" },
  { id:"ou", label:"Over/Under", mult:3, icon:"", color:"#FF9F0A", bg:"rgba(255,159,10,0.15)", desc:"Total points over or under" },
  { id:"spread", label:"Spread", mult:4, icon:"", color:"#30D158", bg:"rgba(48,209,88,0.15)", desc:"Beat the point spread" },
@@ -555,17 +560,8 @@ const POWER_UPS = [
  { id:"second", icon:"clock", name:"Second Chance", desc:"While your pick's game is live, bail to an unstarted game for half points", rarity:"legendary", color:IOS.orange, type:"offensive" },
 ];
 
-const TROPHIES = [
- { id:"sharp", icon:"", name:"Sharpshooter", desc:"Highest season win rate", holder:"Dave K.", yours:false, color:IOS.yellow },
- { id:"long", icon:"", name:"Longshot King", desc:"Most longshots hit", holder:"YOU", yours:true, color:IOS.pink },
- { id:"hot", icon:"", name:"Hot Hand", desc:"Longest win streak", holder:"Dave K.", yours:false, color:IOS.orange },
- { id:"upset", icon:"🃏", name:"Upset Artist", desc:"Most upsets correctly called", holder:"YOU", yours:true, color:IOS.purple },
- { id:"whale", icon:"", name:"The Whale", desc:"Most units won in a single week", holder:"Chris R.", yours:false, color:IOS.green },
- { id:"cold", icon:"", name:"Ice Cold", desc:"Worst ROI in the league", holder:"Jake P.", yours:false, color:IOS.teal },
- { id:"grind", icon:"", name:"The Grinder", desc:"Most picks submitted all season", holder:"Ryan S.", yours:false, color:IOS.gray },
- { id:"come", icon:"", name:"Comeback Kid", desc:"Biggest weekly points swing", holder:"Tom B.", yours:false, color:IOS.yellow },
- { id:"goat", icon:"", name:"GOAT", desc:"Season champion", holder:"???", yours:false, color:IOS.yellow },
-];
+// TROPHIES table removed: it was unreachable (profTab is only ever "stats" or
+// "power-ups") and held mock holders. Real trophies come from fetchLeagueTrophies.
 
 
 const MATCHUP_HISTORY = []; // replaced by real Supabase data
@@ -2025,6 +2021,88 @@ function PlayerCard({ data, IOS }){
     cd.style.setProperty("--mx",(50+px*60)+"%"); cd.style.setProperty("--my",(50+py*60)+"%");
     cd.style.setProperty("--gx",(50+px*50)+"%"); cd.style.setProperty("--gy",(50+py*50)+"%"); };
   const onEnter=()=>{ if(cardRef.current) cardRef.current.classList.add("act"); };
+  // ── Motion tilt ───────────────────────────────────────────────
+  // onMouseMove above never fires on a phone, which is why the card has always been
+  // flat on device. This drives the SAME variables from the gyroscope, and falls back
+  // to dragging a finger across the card if motion is unavailable — a WKWebView that
+  // withholds deviceorientation must not leave the card dead.
+  //
+  // Calibration is the part that matters: nobody holds a phone flat, so the first
+  // reading becomes neutral and everything after is a delta from it. Without that the
+  // card sits pegged at full tilt in a normal reading posture. Low-pass filter kills
+  // gyro jitter; the clamp keeps it inside the perspective box.
+  const tiltRef=useRef({x:0,y:0,base:null,raf:0,live:false});
+  const [tiltOn,setTiltOn]=useState(false);
+  const MAXTILT=13;
+  const paintTilt=()=>{
+    const t=tiltRef.current; t.raf=0;
+    const cd=cardRef.current; if(!cd) return;
+    if(!flipped) cd.style.transform="rotateX("+t.x.toFixed(2)+"deg) rotateY("+t.y.toFixed(2)+"deg)";
+    const nx=t.y/MAXTILT, ny=-t.x/MAXTILT;
+    cd.style.setProperty("--mx",(50+nx*60)+"%"); cd.style.setProperty("--my",(50+ny*60)+"%");
+    cd.style.setProperty("--gx",(50+nx*50)+"%"); cd.style.setProperty("--gy",(50+ny*50)+"%");
+  };
+  const pushTilt=(rx,ry)=>{
+    const t=tiltRef.current;
+    const cl=(v)=>Math.max(-MAXTILT,Math.min(MAXTILT,v));
+    t.x=t.x*0.78+cl(rx)*0.22; t.y=t.y*0.78+cl(ry)*0.22;
+    if(!t.raf && typeof requestAnimationFrame!=="undefined") t.raf=requestAnimationFrame(paintTilt);
+  };
+  useEffect(()=>{
+    if(!tiltOn) return;
+    const onOrient=(e)=>{
+      if(e.beta==null && e.gamma==null) return;
+      const t=tiltRef.current; t.live=true;
+      const b=e.beta||0, g=e.gamma||0;
+      if(!t.base) t.base={b,g};
+      pushTilt(-(b-t.base.b)*0.55,(g-t.base.g)*0.55);
+    };
+    try{ window.addEventListener("deviceorientation",onOrient,true); }catch(e){}
+    if(cardRef.current) cardRef.current.classList.add("act");
+    return ()=>{ try{ window.removeEventListener("deviceorientation",onOrient,true); }catch(e){}
+      const t=tiltRef.current; if(t.raf){ try{ cancelAnimationFrame(t.raf); }catch(e){} t.raf=0; }
+      t.base=null; t.live=false; t.x=0; t.y=0;
+      const cd=cardRef.current; if(cd){ cd.classList.remove("act"); if(!flipped) cd.style.transform="rotateX(0) rotateY(0)"; } };
+  },[tiltOn,flipped]);
+  // iOS gates motion behind a real tap. Ask once on mount only if the gate is absent
+  // (Android / older iOS); otherwise the Tilt button below does the asking.
+  useEffect(()=>{
+    try{
+      if(typeof DeviceOrientationEvent==="undefined") return;
+      if(typeof DeviceOrientationEvent.requestPermission!=="function") setTiltOn(true);
+    }catch(e){}
+  },[]);
+  const askTilt=async()=>{
+    if(tiltOn){ setTiltOn(false); return; }
+    try{
+      if(typeof DeviceOrientationEvent!=="undefined" && typeof DeviceOrientationEvent.requestPermission==="function"){
+        const r=await DeviceOrientationEvent.requestPermission();
+        if(r!=="granted"){ setToast("Motion access is off — drag the card to tilt it"); setTimeout(()=>setToast(""),2600); return; }
+      }
+    }catch(e){ setToast("Motion access is off — drag the card to tilt it"); setTimeout(()=>setToast(""),2600); return; }
+    setTiltOn(true); haptic("light");
+  };
+  // Finger-drag tilt: always available, and the only path if motion is withheld.
+  const onTouch=(e)=>{
+    const st=stageRef.current; if(!st || flipped) return;
+    const tp=e.touches&&e.touches[0]; if(!tp) return;
+    if(tiltRef.current.live) return;   // gyro owns it once it is delivering
+    const r=st.getBoundingClientRect();
+    const px=((tp.clientX-r.left)/r.width-.5)*2, py=((tp.clientY-r.top)/r.height-.5)*2;
+    if(cardRef.current) cardRef.current.classList.add("act");
+    pushTilt(-py*MAXTILT,px*MAXTILT);
+  };
+  const onTouchEnd=()=>{ if(tiltRef.current.live) return; pushTilt(0,0);
+    setTimeout(()=>{ const cd=cardRef.current; if(cd && !tiltRef.current.live){ cd.classList.remove("act"); if(!flipped) cd.style.transform="rotateX(0) rotateY(0)"; } },420); };
+  // The badge sheet owns the bottom of the screen while open; the dock stands down.
+  // Cleanup runs on unmount too, so leaving the screen mid-sheet cannot strand it hidden.
+  useEffect(()=>{
+    try{
+      const r=document.documentElement;
+      if(badge) r.classList.add("pk-sheet-open"); else r.classList.remove("pk-sheet-open");
+      return ()=>{ try{ r.classList.remove("pk-sheet-open"); }catch(e){} };
+    }catch(e){}
+  },[badge]);
   const onLeave=()=>{ const cd=cardRef.current; if(!cd) return; cd.classList.remove("act"); if(!flipped) cd.style.transform="rotateX(0) rotateY(0)"; };
   const shareCard=async()=>{
     try{
@@ -2047,8 +2125,10 @@ function PlayerCard({ data, IOS }){
   };
   return (
   <div style={{position:"relative"}}>
-    <div className="pc-stage" ref={stageRef} onMouseEnter={onEnter} onMouseMove={onMove} onMouseLeave={onLeave}>
-      <div ref={cardRef} className={"pc-card"+(flipped?" flip":"")} onClick={()=>{ if(window.matchMedia("(pointer:coarse)").matches) setFlipped(f=>!f); }}>
+    <div className="pc-stage" ref={stageRef} onMouseEnter={onEnter} onMouseMove={onMove} onMouseLeave={onLeave}
+         onTouchStart={onTouch} onTouchMove={onTouch} onTouchEnd={onTouchEnd} onTouchCancel={onTouchEnd}>
+      <div ref={cardRef} className={"pc-card"+(flipped?" flip":"")+(tiltOn?" gyro":"")} onClick={()=>{ if(window.matchMedia("(pointer:coarse)").matches) setFlipped(f=>!f); }}
+           onDoubleClick={()=>{ tiltRef.current.base=null; if(tiltOn){ setToast("Tilt re-centred"); setTimeout(()=>setToast(""),1600); } }}>
         <div className={"pc-face pc-front pc-skin-"+data.tier+" pc-bd-"+data.tier}>
           <div className={"pc-holo"+(data.tier==="legend"?" legend":"")}/><div className="pc-glare"/>
           <div className="pc-pad">
@@ -2089,6 +2169,7 @@ function PlayerCard({ data, IOS }){
     </div>
     <div className="pc-actions">
       <button className="pc-btn share" onClick={shareCard}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg>Share card</button>
+      <button className="pc-btn flip" onClick={askTilt} aria-pressed={tiltOn} title={tiltOn?"Motion tilt on":"Motion tilt off"}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={tiltOn?"#30D158":"#fff"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="2" width="14" height="20" rx="3"/><path d="M12 6v4"/></svg>Tilt</button>
       <button className="pc-btn flip" onClick={()=>setFlipped(f=>!f)}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg>Flip</button>
     </div>
     {badge && (
@@ -4668,7 +4749,7 @@ function App() {
  };
  const [user, setUser] = useState(null);
  const [userProfile, setUserProfile] = useState(null); // { username, email }
- const [refStats, setRefStats] = useState({signups:0, paying:0});
+ const [refStats, setRefStats] = useState({signups:0, paying:0, people:[]});
  const [editingUsername, setEditingUsername] = useState(false);
  const [showUsernamePrompt, setShowUsernamePrompt] = useState(false);
  const [usernamePromptInput, setUsernamePromptInput] = useState("");
@@ -7028,30 +7109,36 @@ function App() {
 
  // Stats per user
  const stats = {};
- picks.forEach(p=>{
- if(!stats[p.user_id]) stats[p.user_id]={wins:0,losses:0,points:0,longshotPts:0,streak:0,maxStreak:0,lastResult:null};
+ // Chronological, not database order. Supabase returns rows however it likes, so
+ // walking them unsorted built streaks out of a shuffled deck. game_date is when
+ // the result actually landed; created_at only says when the pick was entered.
+ const _when=(x)=>new Date(x.game_date||x.created_at||0).getTime()||0;
+ [...picks].sort((a,b)=>_when(a)-_when(b)).forEach(p=>{
+ if(!stats[p.user_id]) stats[p.user_id]={wins:0,losses:0,points:0,longshotPts:0,streak:0,maxStreak:0};
  const s = stats[p.user_id];
  if(p.result==="W") {
  s.wins++;
  s.points += parseFloat(p.points_earned||0);
  if(p.slot==="longshot"||p.slot?.startsWith("longshot_")) s.longshotPts += parseFloat(p.points_earned||0);
- s.streak = s.lastResult==="W" ? s.streak+1 : 1;
+ s.streak++;                                  /* run of consecutive WINS only */
+ s.maxStreak = Math.max(s.maxStreak, s.streak);
  } else {
  s.losses++;
  s.streak = 0;
  }
- s.maxStreak = Math.max(s.maxStreak, s.streak);
- s.lastResult = p.result;
  });
 
  const uids = Object.keys(stats);
  if(!uids.length) { setLeagueTrophies([]); return; }
 
  const byPoints = [...uids].sort((a,b)=>stats[b].points-stats[a].points);
- const byWinRate = [...uids].sort((a,b)=>{
- const ra = stats[a].wins/(stats[a].wins+stats[a].losses||1);
- const rb = stats[b].wins/(stats[b].wins+stats[b].losses||1);
- return rb-ra;
+ const RATE_FLOOR = 10;   /* graded picks needed before a win rate is rankable */
+ const graded = (u)=>stats[u].wins+stats[u].losses;
+ const rateEligible = uids.filter(u=>graded(u)>=RATE_FLOOR);
+ const byWinRate = [...rateEligible].sort((a,b)=>{
+ const ra = stats[a].wins/(graded(a)||1);
+ const rb = stats[b].wins/(graded(b)||1);
+ return (rb-ra) || (graded(b)-graded(a));   /* ties go to the bigger sample */
  });
  const byStreak = [...uids].sort((a,b)=>stats[b].maxStreak-stats[a].maxStreak);
  const byLongshot = [...uids].sort((a,b)=>stats[b].longshotPts-stats[a].longshotPts);
@@ -7060,25 +7147,30 @@ function App() {
  // the tab was six facts about other people with nothing to compare against.
  // unit drives formatting: pts | pct | int.
  const winRate = (uid) => { const st = stats[uid]; if(!st) return 0; const n = st.wins + st.losses; return n ? st.wins/n : 0; };
- const mkT = (id, name, desc, color, order, val, unit) => {
+ const mkT = (id, name, desc, color, order, val, unit, pending) => {
   const leadUid = order[0];
-  const lead = val(leadUid) || 0;
   const mine = (user && user.id && stats[user.id]) ? (val(user.id) || 0) : 0;
-  return { id, name, desc, color, holder:getName(leadUid), isYou:isMe(leadUid), lead, mine, unit };
+  // No eligible holder yet: show the trophy unclaimed rather than crowning a
+  // one-pick player. lead 0 makes every gap bar read as wide open.
+  if(!leadUid) return { id, name, desc, color, holder:pending||"Unclaimed", isYou:false, lead:0, mine, unit };
+  return { id, name, desc, color, holder:getName(leadUid), isYou:isMe(leadUid), lead:val(leadUid)||0, mine, unit };
  };
  const trophies = [
   mkT("whale","The Whale","Most total points",IOS.green,byPoints,(u)=>stats[u]?stats[u].points:0,"pts"),
-  mkT("sharp","Sharpshooter","Highest win rate",IOS.yellow,byWinRate,winRate,"pct"),
-  mkT("hot","Hot Hand","Longest win streak",IOS.orange,byStreak,(u)=>stats[u]?stats[u].maxStreak:0,"int"),
+  mkT("sharp","Sharpshooter","Highest win rate (10+ picks)",IOS.yellow,byWinRate,winRate,"pct","Needs 10 picks"),
+  mkT("hot","Hot Hand","Longest win streak",IOS.orange,byStreak,(u)=>stats[u]?stats[u].maxStreak:0,"int"),   /* maxStreak here is win-only, see loop above */
   mkT("longshot","Longshot King","Most points from longshots",IOS.pink,byLongshot,(u)=>stats[u]?stats[u].longshotPts:0,"pts"),
  ];
  setLeagueTrophies(trophies);
  };
 
  useEffect(()=>{
-   const code=userProfile&&userProfile.referral_code; if(!code){ setRefStats({signups:0,paying:0}); return; }
+   const code=userProfile&&userProfile.referral_code; if(!code){ setRefStats({signups:0,paying:0,people:[]}); return; }
    let cancelled=false;
-   (async()=>{ try{ const {data}=await supabase.from("public_profiles").select("id,is_pro").eq("referred_by",code); if(cancelled) return; const rows=data||[]; setRefStats({signups:rows.length, paying:rows.filter(r=>r.is_pro===true).length}); }catch(e){} })();
+   (async()=>{ try{ const {data}=await supabase.from("public_profiles").select("id,username,is_pro").eq("referred_by",code); if(cancelled) return; const rows=data||[];
+     const people=rows.map(r=>({id:r.id, name:r.username||"New player", pro:r.is_pro===true}))
+       .sort((a,b)=>(b.pro?1:0)-(a.pro?1:0)||String(a.name).localeCompare(String(b.name)));
+     setRefStats({signups:rows.length, paying:rows.filter(r=>r.is_pro===true).length, people}); }catch(e){} })();
    return ()=>{cancelled=true;};
  }, [userProfile&&userProfile.referral_code]);
  const fetchLeaderboard = async (tf) => {
@@ -7266,7 +7358,7 @@ function App() {
 
  const fetchAllMyStats = async (uid) => {
  const {data:picks} = await supabase.from("picks").select("*").eq("user_id", uid).neq("result", "pending");
- if(!picks||!picks.length){setAllMyStats({wins:0,losses:0,points:0,total:0,winRate:"0%",bestBet:null,worstBet:null,byType:{},bySport:{},byWeek:[],avgOdds:0,currentStreak:{count:0,type:"W"},maxStreak:0,bestWeek:null,personality:"The Rookie",personalityDesc:"Keep picking and your style will emerge.",longshotStats:[],byMult:[],oddsBands:[],clv:null});return;}
+ if(!picks||!picks.length){setAllMyStats({wins:0,losses:0,points:0,total:0,winRate:"0%",bestBet:null,worstBet:null,byType:{},bySport:{},byWeek:[],avgOdds:0,currentStreak:{count:0,type:"W"},maxStreak:0,maxWinStreak:0,bestWeek:null,personality:"The Rookie",personalityDesc:"Keep picking and your style will emerge.",longshotStats:[],byMult:[],oddsBands:[],clv:null});return;}
  const wins=picks.filter(p=>p.result==="W").length;
  const losses=picks.filter(p=>p.result==="L").length;
  const points=parseFloat(picks.filter(p=>p.result==="W").reduce((sum,p)=>sum+parseFloat(p.points_earned||0),0).toFixed(1));
@@ -7294,10 +7386,13 @@ function App() {
  picks.forEach(p=>{const w=p.week||1;if(!byWeekMap[w])byWeekMap[w]={week:w,wins:0,losses:0,pts:0};if(p.result==="W"){byWeekMap[w].wins++;byWeekMap[w].pts+=parseFloat(p.points_earned||0);}else byWeekMap[w].losses++;});
  const byWeek=Object.values(byWeekMap).sort((a,b)=>a.week-b.week).map(w=>({...w,pts:parseFloat(w.pts.toFixed(1)),label:`Wk${w.week}`}));
  // Streak
- const sorted=[...picks].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+ const _when=(x)=>new Date(x.game_date||x.created_at||0).getTime()||0;
+ const sorted=[...picks].sort((a,b)=>_when(a)-_when(b));
  let curStreak=0,curType=sorted[sorted.length-1]?.result||"W",maxStreak=0,tmpStreak=0,tmpType=sorted[0]?.result;
  for(let i=sorted.length-1;i>=0;i--){if(i===sorted.length-1){curStreak=1;curType=sorted[i].result;}else if(sorted[i].result===curType)curStreak++;else break;}
- sorted.forEach(p=>{if(p.result===tmpType){tmpStreak++;maxStreak=Math.max(maxStreak,tmpStreak);}else{tmpType=p.result;tmpStreak=1;}});
+ let maxWinStreak=0, runW=0;
+ sorted.forEach(p=>{if(p.result===tmpType){tmpStreak++;maxStreak=Math.max(maxStreak,tmpStreak);}else{tmpType=p.result;tmpStreak=1;}
+   if(p.result==="W"){ runW++; maxWinStreak=Math.max(maxWinStreak,runW); } else { runW=0; }});
  // Avg odds
  const oddsVals=picks.filter(p=>!(p.slot&&p.slot.startsWith("longshot_"))).map(p=>p.implied_odds||0).filter(v=>v!==0);
  // Average odds properly: you can't arithmetic-mean American odds across the +/-100 gap.
@@ -7329,7 +7424,7 @@ function App() {
  const oddsBands=bandDefs.map((b,i)=>{const inB=picks.filter(p=>{const o=p.implied_odds||0;return o!==0&&b.test(o);});const w=inB.filter(p=>p.result==="W").length;return{key:b.key,color:bandColors[i],total:inB.length,wins:w,pct:inB.length>0?Math.round(w/inB.length*100):0};});
  const clvP=picks.filter(p=>p.clv!=null);
  const clvObj=clvP.length?{count:clvP.length,beatRate:Math.round(clvP.filter(p=>parseFloat(p.clv)>0).length/clvP.length*100),avgClv:parseFloat((clvP.reduce((a,p)=>a+parseFloat(p.clv||0),0)/clvP.length).toFixed(2))}:null;
- setAllMyStats({wins,losses,points,total,winRate,bestBet,worstBet,byType,bySport,byWeek,avgOdds,currentStreak:{count:curStreak,type:curType},maxStreak,bestWeek:bestWeekObj,personality,personalityDesc,longshotStats,byMult,oddsBands,clv:clvObj});
+ setAllMyStats({wins,losses,points,total,winRate,bestBet,worstBet,byType,bySport,byWeek,avgOdds,currentStreak:{count:curStreak,type:curType},maxStreak,maxWinStreak,bestWeek:bestWeekObj,personality,personalityDesc,longshotStats,byMult,oddsBands,clv:clvObj});
  };
 
  const fetchStandings = async (leagueId) => {
@@ -8391,6 +8486,9 @@ function App() {
  @keyframes lrFlash{0%{opacity:.9;}100%{opacity:0;}}
  .pc-stage{perspective:1200px;width:300px;height:454px;margin:6px auto 0;}
  .pc-card{position:relative;width:100%;height:100%;border-radius:22px;transform-style:preserve-3d;transition:transform .12s ease-out;cursor:pointer;}
+ /* Live motion already runs through a JS low-pass filter. A CSS transition on top of
+    that is a second smoothing pass, and the card visibly trails the handset. */
+ .pc-card.gyro{transition:none;}
  .pc-card.flip{transition:transform .7s cubic-bezier(.2,.8,.2,1);transform:rotateY(180deg);}
  .pc-face{position:absolute;inset:0;border-radius:22px;overflow:hidden;-webkit-backface-visibility:hidden;backface-visibility:hidden;display:flex;flex-direction:column;transition:opacity 0s linear .35s;}
  .pc-front{opacity:1;}
@@ -8440,7 +8538,7 @@ function App() {
  .pc-btn.share{background:#0A84FF;color:#fff;box-shadow:0 8px 22px -8px rgba(10,132,255,.7);}
  .pc-btn.flip{background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(255,255,255,.12);}
  .pc-bsheet-bg{position:fixed;inset:0;z-index:99998;background:rgba(2,3,8,.6);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);display:flex;align-items:flex-end;justify-content:center;}
- .pc-bsheet{width:390px;max-width:100vw;background:#15151b;border-top-left-radius:20px;border-top-right-radius:20px;border:1px solid rgba(255,255,255,.1);border-bottom:none;padding:8px 20px 30px;animation:pcSheetUp .25s cubic-bezier(.2,.8,.2,1);}
+ .pc-bsheet{width:390px;max-width:100vw;background:#15151b;border-top-left-radius:20px;border-top-right-radius:20px;border:1px solid rgba(255,255,255,.1);border-bottom:none;padding:8px 20px calc(30px + var(--sa-bot));animation:pcSheetUp .25s cubic-bezier(.2,.8,.2,1);}
  @keyframes pcSheetUp{from{transform:translateY(40px);}to{transform:translateY(0);}}
  .pc-grip{width:38px;height:4px;border-radius:3px;background:rgba(255,255,255,.2);margin:6px auto 16px;}
  .pc-bs-top{display:flex;align-items:center;gap:14px;}
@@ -8898,6 +8996,10 @@ function App() {
      context somewhere above it beat z-index). Hide it outright while a
      full-screen flow is open instead of relying on layering. */
   .pk-fullscreen .tab-bar{opacity:0;pointer-events:none;}
+  /* A bottom sheet owns the bottom of the screen while it is open. z-index cannot
+     win this one — the sheet sits in a nested stacking context — so the dock stands
+     down instead. */
+  .pk-sheet-open .tab-bar{opacity:0;pointer-events:none;}
   /* The dock has no business hovering over an open keyboard. */
   .kb-open .tab-bar{opacity:0;pointer-events:none;}
  .tab-bar.small{cursor:pointer;}
@@ -16937,8 +17039,29 @@ function App() {
  const cs=st.currentStreak||{count:0,type:"W"};
  const lsW=(st.byType&&st.byType.longshot&&st.byType.longshot.wins)||0;
  const lsRate=((st.byType&&st.byType.longshot&&st.byType.longshot.pct)||0)/100;
- const mx=st.maxStreak||0;
- let ovr=40+winFrac*46+Math.min(total/180,1)*7+(cs.type==="W"?Math.min(cs.count,7):0)+lsRate*5;
+ const mx=st.maxWinStreak||0;   /* WIN streak only — maxStreak counts loss runs too */
+ // ── Rating ──────────────────────────────────────────────────────
+ // The old formula had three faults. Win rate applied at FULL weight from pick one,
+ // so a 2-1 start read as 67% and rated silver. The live streak was worth 7 points —
+ // the same as 180 picks of volume — so a tier flipped week to week on nothing.
+ // And longshot rate was worth 5 off a sample too small to mean anything, the exact
+ // thing the longshot hit rate elsewhere now refuses to judge.
+ //
+ // Now: shrink the win rate toward .500 by sample size, so the rating earns its way
+ // up instead of starting there. Volume and a DURABLE best win streak carry real
+ // weight; the live streak is a nudge that cannot cross a tier line on its own.
+ const _n=total;
+ const CONF=_n/(_n+40);                              /* 40-pick prior */
+ const adjWin=0.5+(winFrac-0.5)*CONF;                /* regressed to the mean */
+ const _skill=Math.max(0,Math.min(40,(adjWin-0.30)/0.40*40));   /* .30–.70 spans it */
+ const _vol=Math.min(_n/150,1)*14;
+ // Both of these are gated on the same 10-pick floor the trophies and the longshot
+ // rate use. Without it a 5-0 opening pays for skill, consistency AND form off one
+ // five-win run, and the rating triple-counts a week of luck.
+ const _rated=_n>=10;
+ const _consist=_rated?Math.min(mx/12,1)*4:0;        /* best WIN streak, durable */
+ const _form=(_rated&&cs.count>=3)?(cs.type==="W"?2:-2):0;   /* live nudge, capped ±2 */
+ let ovr=40+_skill+_vol+_consist+_form;
  ovr=Math.round(Math.max(40,Math.min(99,ovr)));
  const tier=ovr<64?"bronze":ovr<77?"silver":ovr<89?"gold":"legend";
  const arch=(st.personality||"The Rookie").replace(/^The\s+/,"");
@@ -17000,30 +17123,65 @@ function App() {
  {(()=>{
    const code=(userProfile&&userProfile.referral_code)||"";
    const link="https://picklockapp.com/?ref="+code;
+   const people=refStats.people||[];
+   const MILE=5;                         /* milestone the bar is measured against */
+   const filled=Math.min(people.length,MILE);
+   /* No app-level toast exists in this scope \u2014 setToast lives inside PlayerCard.
+      Matching the alert() the rest of this screen already uses. */
+   const copyCode=async()=>{ try{ await navigator.clipboard.writeText(code); alert("Code copied!"); }catch(e){ alert(code); } };
+   const shareInvite=async()=>{ const msg="Join me on PickLock \u2014 use my code "+code+" when you sign up: "+link;
+     try{ if(navigator.share){ await navigator.share({title:"PickLock",text:msg,url:link}); } else { await navigator.clipboard.writeText(msg); alert("Invite copied!"); } }catch(e){} };
+   /* Ledger: names the people you brought in rather than showing two anonymous
+      counters. public_profiles exposes username and is_pro; it does NOT expose a
+      join date, so rows report Pro status instead of inventing one. */
    return (
-   <div style={{margin:"2px 0 16px",background:"linear-gradient(135deg,rgba(10,132,255,0.13),rgba(94,92,230,0.05))",border:"0.5px solid rgba(10,132,255,0.28)",borderRadius:RAD.lg,padding:"15px 16px"}}>
-     <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
-       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
-       <div style={{fontSize:15,fontWeight:800,color:"#fff"}}>Invite friends</div>
+   <div style={{margin:"2px 0 16px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.lg,overflow:"hidden"}}>
+
+     <div style={{padding:"15px 16px 13px",borderBottom:EDGE.hair,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+       <div style={{minWidth:0}}>
+         <div style={{fontSize:15,fontWeight:800,color:"#fff"}}>Invite friends</div>
+         <div style={{fontSize:11,color:IOS.label2,marginTop:2}}>{refStats.signups} signed up{refStats.paying>0?" \u00b7 "+refStats.paying+" on Pro":""}</div>
+       </div>
+       {code && <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:16,fontWeight:900,letterSpacing:"0.2em",background:"rgba(0,0,0,0.4)",border:EDGE.hair2,borderRadius:RAD.sm,padding:"7px 11px",color:"#fff",flexShrink:0}}>{code}</div>}
      </div>
-     <div style={{fontSize:12,color:IOS.label2,lineHeight:1.5,marginBottom:13}}>Share your code. Everyone who signs up with it counts toward you.</div>
-     {code ? (
-       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:13}}>
-         <div style={{flex:1,background:"rgba(0,0,0,0.32)",border:EDGE.hair2,borderRadius:RAD.md,padding:"11px 14px",fontSize:18,fontWeight:800,letterSpacing:3,color:"#fff",fontFamily:"'Barlow Semi Condensed',sans-serif"}}>{code}</div>
-         <button onClick={async()=>{ try{ await navigator.clipboard.writeText(code); alert("Code copied!"); }catch(e){ alert(code); } }} style={{background:IOS.blue,border:"none",borderRadius:RAD.md,padding:"11px 15px",fontSize:13,fontWeight:800,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Copy</button>
-         <button onClick={async()=>{ const msg="Join me on PickLock — use my code "+code+" when you sign up: "+link; try{ if(navigator.share){ await navigator.share({title:"PickLock",text:msg,url:link}); } else { await navigator.clipboard.writeText(msg); alert("Invite copied!"); } }catch(e){} }} style={{background:"rgba(255,255,255,0.08)",border:EDGE.hair3,borderRadius:RAD.md,padding:"11px 15px",fontSize:13,fontWeight:800,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Share</button>
+
+     <div style={{padding:"12px 16px 14px",borderBottom:EDGE.hair}}>
+       <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",fontSize:11.5,color:IOS.label2,marginBottom:8}}>
+         <span>Next milestone</span>
+         <span><b style={{color:"#fff",fontWeight:700}}>{people.length}</b> / {MILE} recruits</span>
        </div>
-     ) : <div style={{fontSize:12,color:IOS.label3,marginBottom:13}}>Your code appears here once your profile loads.</div>}
-     <div style={{display:"flex",gap:9}}>
-       <div style={{flex:1,background:"rgba(255,255,255,0.04)",border:EDGE.hair,borderRadius:RAD.md,padding:"11px 13px"}}>
-         <div style={{fontSize:22,fontWeight:800,color:"#fff",fontFamily:"'Barlow Semi Condensed',sans-serif",lineHeight:1}}>{refStats.signups}</div>
-         <div style={{fontSize:10,color:IOS.label3,fontWeight:700,textTransform:"uppercase",letterSpacing:.4,marginTop:3}}>Signups</div>
-       </div>
-       <div style={{flex:1,background:"rgba(255,255,255,0.04)",border:EDGE.hair,borderRadius:RAD.md,padding:"11px 13px"}}>
-         <div style={{fontSize:22,fontWeight:800,color:IOS.green,fontFamily:"'Barlow Semi Condensed',sans-serif",lineHeight:1}}>{refStats.paying}</div>
-         <div style={{fontSize:10,color:IOS.label3,fontWeight:700,textTransform:"uppercase",letterSpacing:.4,marginTop:3}}>Paying</div>
+       <div style={{height:6,borderRadius:99,background:"rgba(255,255,255,0.07)",overflow:"hidden"}}>
+         <div style={{height:"100%",borderRadius:99,width:Math.round(filled/MILE*100)+"%",background:"linear-gradient(90deg,"+IOS.blue+","+IOS.indigo+")",transition:"width .5s cubic-bezier(0.4,0,0.2,1)"}}/>
        </div>
      </div>
+
+     {people.map(pr=>(
+       <div key={pr.id} style={{display:"flex",alignItems:"center",gap:11,padding:"12px 16px",borderBottom:EDGE.hair}}>
+         <div style={{width:32,height:32,borderRadius:"50%",background:"linear-gradient(150deg,"+IOS.blue+","+IOS.indigo+")",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:"#fff",flexShrink:0}}>{String(pr.name).slice(0,2).toUpperCase()}</div>
+         <div style={{flex:1,minWidth:0}}>
+           <div style={{fontSize:13.5,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pr.name}</div>
+           <div style={{fontSize:10.5,color:IOS.label3,marginTop:1}}>{pr.pro?"Subscribed":"Free account"}</div>
+         </div>
+         <div style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.08em",padding:"3px 7px",borderRadius:5,flexShrink:0,
+           background:pr.pro?"rgba(48,209,88,0.14)":"rgba(255,255,255,0.06)",
+           color:pr.pro?IOS.green:IOS.label3,
+           border:"0.5px solid "+(pr.pro?"rgba(48,209,88,0.3)":"rgba(255,255,255,0.12)")}}>{pr.pro?"PRO":"FREE"}</div>
+       </div>
+     ))}
+
+     <div style={{display:"flex",alignItems:"center",gap:11,padding:"12px 16px",borderBottom:EDGE.hair}}>
+       <div style={{width:32,height:32,borderRadius:"50%",background:"rgba(255,255,255,0.05)",border:"1px dashed rgba(255,255,255,0.16)",flexShrink:0}}/>
+       <div style={{flex:1,minWidth:0}}>
+         <div style={{fontSize:13.5,fontWeight:700,color:"rgba(255,255,255,0.42)"}}>Open slot</div>
+         <div style={{fontSize:10.5,color:IOS.label3,marginTop:1}}>{code?"Share your code to fill it":"Your code appears here once your profile loads"}</div>
+       </div>
+     </div>
+
+     <div style={{padding:"13px 16px",background:"rgba(255,255,255,0.03)",display:"flex",gap:9}}>
+       <button onClick={copyCode} disabled={!code} style={{flex:1,padding:"11px",borderRadius:RAD.md,fontSize:13,fontWeight:800,fontFamily:"Barlow,sans-serif",cursor:code?"pointer":"default",background:"rgba(255,255,255,0.07)",border:EDGE.hair2,color:code?"#fff":IOS.label3}}>Copy code</button>
+       <button onClick={shareInvite} disabled={!code} style={{flex:1,padding:"11px",borderRadius:RAD.md,fontSize:13,fontWeight:800,fontFamily:"Barlow,sans-serif",cursor:code?"pointer":"default",background:code?IOS.blue:"rgba(255,255,255,0.07)",border:"none",color:"#fff"}}>Share invite</button>
+     </div>
+
    </div>
    );
    })()}
@@ -17040,44 +17198,121 @@ function App() {
    const bestType = types.length ? [...types].sort((a,b)=>(b.pct-a.pct)||(b.wins-a.wins))[0] : null;
    const ls = (s.byType||{}).longshot;
    const streak = s.currentStreak||{count:0,type:"W"};
+   const weeks = (s.byWeek||[]);
+   const wkMax = weeks.length ? Math.max(...weeks.map(w=>w.pts||0)) : 0;
+   const winPctNum = parseInt(s.winRate)||0;
    const SURF = {background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.lg};
+   const CELL = {padding:"13px 15px",borderBottom:EDGE.hair};
+   const KEY  = {fontSize:9,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:IOS.label3};
+   const VAL  = {fontSize:22,fontWeight:900,fontFamily:"'Barlow Semi Condensed',sans-serif",marginTop:5,letterSpacing:"-0.01em"};
+   const SUB  = {fontSize:10.5,color:IOS.label3,marginTop:2};
+   /* Ring geometry: r=28 -> circumference 175.93. Offset is the UNfilled remainder. */
+   const RC = 175.93, ringOff = RC - (RC * Math.max(0,Math.min(100,winPctNum)) / 100);
+   /* LONGSHOT RULE. A rate is not an outcome, so it renders white until the sample can
+      support a claim. Ten graded longshots is the floor; below that "0%" over three
+      tries is noise, and painting it red asserts something the data cannot. Past the
+      floor the benchmark is longshot break-even (~20%), never 50% \u2014 a 25% longshot
+      hitter is doing well, and a coin-flip standard would call that a failure. */
+   const lsGraded = ls ? ((ls.wins||0)+(ls.losses||0)) : 0;
+   const LS_FLOOR = 10, LS_BREAKEVEN = 20;
+   const lsRated  = lsGraded >= LS_FLOOR;
+   const lsColor  = !lsRated ? "#fff" : (ls.pct >= LS_BREAKEVEN ? IOS.green : IOS.red);
+   const lsSub    = !ls ? "No longshots yet"
+                  : lsRated ? (ls.wins+"-"+ls.losses+" \u00b7 break-even is "+LS_BREAKEVEN+"%")
+                  : (ls.wins+"-"+ls.losses+" \u00b7 needs "+LS_FLOOR+" to rate");
    return (
    <div style={{padding:"4px 16px 0"}}>
-     <div style={{...SURF,padding:"14px",marginBottom:10,boxShadow:"0 4px 14px rgba(0,0,0,0.35)"}}>
-       <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:"rgba(255,255,255,0.4)",marginBottom:10}}>Career</div>
-       <div style={{display:"flex",gap:8}}>
-         {[{l:"Record",v:`${s.wins||0}-${s.losses||0}`,c:IOS.blue},{l:"Win %",v:s.winRate||"0%",c:IOS.green,tick:parseInt(s.winRate)||0,suffix:"%"},{l:"Total Pts",v:(s.points||0),c:"#fff",tick:(s.points||0),dec:1}].map((tile,i)=>(
-           <div key={i} style={{flex:1,background:"rgba(0,0,0,0.3)",borderRadius:RAD.sm,padding:"10px 6px",textAlign:"center"}}>
-             <div style={{fontSize:18,fontWeight:800,color:tile.c,letterSpacing:"-0.5px"}}>{tile.tick!==undefined?<Ticker value={tile.tick} decimals={tile.dec||0} suffix={tile.suffix||""}/>:tile.v}</div>
-             <div style={{fontSize:8.5,color:IOS.label3,textTransform:"uppercase",letterSpacing:".4px",marginTop:2}}>{tile.l}</div>
+
+     <div style={{...SURF,marginBottom:10,overflow:"hidden",boxShadow:"0 4px 14px rgba(0,0,0,0.35)"}}>
+       <div style={{padding:"16px 15px",borderBottom:EDGE.hair,display:"flex",alignItems:"center",gap:14}}>
+         <div style={{width:66,height:66,flexShrink:0,position:"relative"}}>
+           <svg width="66" height="66" viewBox="0 0 66 66" style={{transform:"rotate(-90deg)"}}>
+             <circle cx="33" cy="33" r="28" fill="none" stroke="rgba(255,255,255,0.09)" strokeWidth="7"/>
+             <circle cx="33" cy="33" r="28" fill="none" stroke={IOS.green} strokeWidth="7" strokeLinecap="round"
+               strokeDasharray={RC} strokeDashoffset={ringOff} style={{transition:"stroke-dashoffset .8s cubic-bezier(0.4,0,0.2,1)"}}/>
+           </svg>
+           <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+             <div style={{fontSize:19,fontWeight:900,fontFamily:"'Barlow Semi Condensed',sans-serif",lineHeight:1,color:"#fff"}}>{s.winRate||"0%"}</div>
+             <div style={{fontSize:7.5,fontWeight:800,letterSpacing:"0.1em",color:IOS.label3,marginTop:2}}>WIN</div>
            </div>
-         ))}
+         </div>
+         <div style={{flex:1,minWidth:0}}>
+           <div style={{fontSize:26,fontWeight:900,fontFamily:"'Barlow Semi Condensed',sans-serif",letterSpacing:"-0.01em",color:"#fff"}}>
+             {s.wins||0}<span style={{opacity:.4}}>{"\u2013"}</span>{s.losses||0}
+           </div>
+           <div style={{...KEY,marginTop:1}}>Career record {"\u00b7"} {s.total||0} picks</div>
+           {s.personality && <div style={{fontSize:11,color:IOS.label2,marginTop:7,lineHeight:1.4}}>Playing as <b style={{color:"#64D2FF",fontWeight:800}}>{s.personality}</b></div>}
+         </div>
+       </div>
+
+       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr"}}>
+         <div style={{...CELL,borderRight:EDGE.hair}}>
+           <div style={KEY}>Total points</div>
+           <div style={{...VAL,color:"#fff"}}><Ticker value={s.points||0} decimals={1}/></div>
+           <div style={SUB}>{s.bestWeek?("Best week \u00b7 "+s.bestWeek.pts):"\u2014"}</div>
+         </div>
+         <div style={CELL}>
+           <div style={KEY}>Current streak</div>
+           <div style={{...VAL,color:streak.count>0?(streak.type==="W"?IOS.green:IOS.red):"#fff"}}>{streak.count>0?(streak.count+streak.type):"\u2014"}</div>
+           <div style={SUB}>{s.maxWinStreak?("Longest \u00b7 "+s.maxWinStreak+"W"):"\u2014"}</div>
+         </div>
+         <div style={{...CELL,borderRight:EDGE.hair,borderBottom:"none"}}>
+           <div style={KEY}>Best pick type</div>
+           <div style={{...VAL,fontSize:19,color:bestType?bestType.color:"#fff",textTransform:"uppercase"}}>{bestType?bestType.label:"\u2014"}</div>
+           <div style={SUB}>{bestType?(bestType.pct+"% \u00b7 "+bestType.wins+"-"+bestType.losses):"No graded picks yet"}</div>
+         </div>
+         <div style={{...CELL,borderBottom:"none"}}>
+           <div style={KEY}>Longshots</div>
+           <div style={{...VAL,color:lsColor}}>{ls?(ls.pct+"%"):"\u2014"}</div>
+           <div style={SUB}>{lsSub}</div>
+           {ls && <div style={{height:3,borderRadius:99,background:"rgba(255,255,255,0.08)",overflow:"hidden",marginTop:7}}>
+             <div style={{height:"100%",borderRadius:99,width:Math.max(2,Math.min(100,ls.pct))+"%",background:IOS.longshot}}/>
+           </div>}
+         </div>
        </div>
      </div>
-     <div style={{display:"flex",gap:8,marginBottom:10}}>
-       <div style={{flex:1,...SURF,padding:"12px 14px"}}>
-         <div style={{fontSize:9,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:".5px",marginBottom:6}}>Best Pick Type</div>
-         <div style={{fontSize:15,fontWeight:800,color:bestType?bestType.color:"#fff"}}>{bestType?bestType.label:"—"}</div>
-         <div style={{fontSize:11,color:IOS.label3,marginTop:2}}>{bestType?`${bestType.pct}% · ${bestType.wins}-${bestType.losses}`:"No graded picks yet"}</div>
+
+     {weeks.length>0 && (
+     <div style={{...SURF,marginBottom:10,overflow:"hidden"}}>
+       <div style={{padding:"13px 15px",borderBottom:EDGE.hair,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+         <span style={{fontSize:10,fontWeight:800,letterSpacing:"0.13em",textTransform:"uppercase",color:IOS.label3}}>Season form</span>
+         <span style={{fontSize:11,color:IOS.label2}}>Points by week</span>
        </div>
-       <div style={{flex:1,...SURF,padding:"12px 14px"}}>
-         <div style={{fontSize:9,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:".5px",marginBottom:6}}>Longshot Hit Rate</div>
-         <div style={{fontSize:15,fontWeight:800,color:IOS.pink}}>{ls?`${ls.pct}%`:"—"}</div>
-         <div style={{fontSize:11,color:IOS.label3,marginTop:2}}>{ls?`${ls.wins}-${ls.losses} longshots`:"No longshots yet"}</div>
-       </div>
-     </div>
-     <div style={{display:"flex",gap:8,marginBottom:10}}>
-       <div style={{flex:1,...SURF,padding:"12px 14px"}}>
-         <div style={{fontSize:9,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:".5px",marginBottom:6}}>Current Streak</div>
-         <div style={{fontSize:15,fontWeight:800,color:streak.type==="W"?IOS.green:IOS.red}}>{streak.count>0?`${streak.count}${streak.type}`:"—"}</div>
-         <div style={{fontSize:11,color:IOS.label3,marginTop:2}}>{s.total||0} total picks</div>
-       </div>
-       <div style={{flex:1,...SURF,padding:"12px 14px"}}>
-         <div style={{fontSize:9,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:".5px",marginBottom:6}}>Best Pick</div>
-         <div style={{fontSize:13,fontWeight:700,color:IOS.green,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.bestBet?.pick_name||"—"}</div>
-         <div style={{fontSize:11,color:IOS.label3,marginTop:2}}>{s.bestBet?`+${parseFloat(s.bestBet.points_earned||0).toFixed(1)} pts`:"—"}</div>
+       <div style={{padding:"14px 15px 15px",display:"flex",alignItems:"flex-end",gap:5,height:82}}>
+         {weeks.map(w=>{
+           const h=wkMax>0?Math.max(8,Math.round((w.pts||0)/wkMax*46)):8;
+           const best=wkMax>0&&w.pts===wkMax;
+           return (
+           <div key={w.week} style={{flex:1,display:"flex",flexDirection:"column",justifyContent:"flex-end",alignItems:"center",gap:5,height:"100%"}}>
+             <div style={{fontSize:8.5,fontWeight:700,color:best?"#fff":IOS.label3}}>{Math.round(w.pts||0)}</div>
+             <div style={{width:"100%",height:h,borderRadius:"3px 3px 0 0",background:best?"linear-gradient(180deg,#fff,rgba(255,255,255,0.35))":"linear-gradient(180deg,"+IOS.blue+",rgba(59,111,224,0.28))"}}/>
+             <div style={{fontSize:8.5,fontWeight:700,color:IOS.label3}}>{w.label}</div>
+           </div>);
+         })}
        </div>
      </div>
+     )}
+
+     <div style={{...SURF,marginBottom:10,overflow:"hidden"}}>
+       <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 15px",borderBottom:EDGE.hair}}>
+         <div style={{flex:1,minWidth:0}}>
+           <div style={{fontSize:13,fontWeight:700,color:"#fff"}}>Best pick</div>
+           <div style={{fontSize:10.5,color:IOS.label3,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.bestBet?.pick_name||"\u2014"}</div>
+         </div>
+         <div style={{textAlign:"right",flexShrink:0}}>
+           <div style={{fontSize:16,fontWeight:900,fontFamily:"'Barlow Semi Condensed',sans-serif",color:s.bestBet?IOS.green:"#fff"}}>{s.bestBet?("+"+parseFloat(s.bestBet.points_earned||0).toFixed(1)):"\u2014"}</div>
+           <div style={{fontSize:10,color:IOS.label3,marginTop:1}}>pts</div>
+         </div>
+       </div>
+       <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 15px"}}>
+         <div style={{flex:1,minWidth:0}}>
+           <div style={{fontSize:13,fontWeight:700,color:"#fff"}}>Average odds</div>
+           <div style={{fontSize:10.5,color:IOS.label3,marginTop:1}}>Straight picks only</div>
+         </div>
+         <div style={{fontSize:16,fontWeight:900,fontFamily:"'Barlow Semi Condensed',sans-serif",color:"#fff",flexShrink:0}}>{s.avgOdds?(s.avgOdds>0?"+"+s.avgOdds:String(s.avgOdds)):"\u2014"}</div>
+       </div>
+     </div>
+
    </div>
    );
  })()}
@@ -17093,26 +17328,6 @@ function App() {
  </div>
  <div style={{height:20}}/>
  </>
- )}
-
- {profTab==="trophies"&&(
- <div style={{paddingBottom:24}}>
- <div style={{padding:"14px 20px 8px"}}>
- <div style={{fontSize:15,color:IOS.label3}}>You hold 2 trophies this season</div>
- </div>
- {TROPHIES.map(t=>(
- <div key={t.id} className="trophy-card" style={t.yours?{borderWidth:1,borderStyle:"solid",borderColor:`${t.color}30`}:{}}>
- {t.yours&&<div style={{position:"absolute",left:0,top:0,bottom:0,width:4,background:t.color,borderRadius:"14px 0 0 14px"}}/>}
- <div className="trophy-icon-bg" style={{background:`${t.color}15`,border:`1px solid ${t.color}20`}}>{t.icon}</div>
- <div style={{flex:1}}>
- <div className="trophy-name" style={{color:t.yours?t.color:"#fff"}}>{t.name}</div>
- <div className="trophy-desc">{t.desc}</div>
- <div className="trophy-holder" style={{color:t.yours?t.color:IOS.label3}}>{t.holder==="???"?"Awarded at season end":t.yours?" Currently yours":`Held by ${t.holder}`}</div>
- </div>
- {t.yours&&<div className="trophy-mine-pill">YOURS</div>}
- </div>
- ))}
- </div>
  )}
 
  {profTab==="power-ups"&&(
@@ -18258,7 +18473,7 @@ function App() {
        <StreakFlame count={streak.count} size={26}/>
        <div>
         <div style={{fontSize:17,fontWeight:800,color:"#FF6A00",lineHeight:1.1}}>{streak.count} pick win streak</div>
-        <div style={{fontSize:11,color:CC.l3,marginTop:2}}>Best ever: {Math.max(s.maxStreak||0,streak.count)}</div>
+        <div style={{fontSize:11,color:CC.l3,marginTop:2}}>Best ever: {Math.max(s.maxWinStreak||0,streak.type==="W"?streak.count:0)}W</div>
        </div>
       </div>
      )}
@@ -18266,7 +18481,7 @@ function App() {
       <Tile lbl="Record" val={(s.wins||0)+"-"+(s.losses||0)} meta={(s.winRate||"0%")+" win"} glow={CC.blue} vcolor="#fff"/>
       <Tile lbl="Avg Odds" val={fmtOdds(s.avgOdds)} meta="across all picks" glow={CC.teal} vcolor={CC.teal}/>
       <Tile lbl={isSoloMode?"Best Slate":"Best Week"} val={s.bestWeek?(s.bestWeek.pts+" pts"):"—"} meta={s.bestWeek?s.bestWeek.label:"—"} glow={CC.yellow} vcolor={CC.green}/>
-      <Tile lbl="Streak" val={streak.type+streak.count} meta={"best "+(s.maxStreak||0)} glow={CC.pink} vcolor={streak.type==="W"?CC.green:CC.red}/>
+      <Tile lbl="Streak" val={streak.type+streak.count} meta={"best "+(s.maxWinStreak||0)+"W"} glow={CC.pink} vcolor={streak.type==="W"?CC.green:CC.red}/>
      </div>
      {(()=>{
       const RT=[["ml","ML"],["spread","SPR"],["ou","O/U"],["prop","PROP"],["longshot","LS"]];
