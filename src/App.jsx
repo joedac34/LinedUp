@@ -12431,6 +12431,26 @@ function App() {
                </div>
                <span style={{marginLeft:"auto",fontSize:10.5,color:IOS.label3}}>worth <b style={{color:IOS.label2,fontWeight:800}}>{(per*n).toFixed(1)} pts</b></span>
              </div>
+             {b.isParlay && (b.parlayLegs||[]).length>0 && (
+               <div style={{marginTop:9,marginLeft:13,borderLeft:"1px solid rgba(255,255,255,0.10)",paddingLeft:11}}>
+                 <div onClick={()=>setOpenLegs(prev=>({...prev,[b.id]:!prev[b.id]}))}
+                   style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:10,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:IOS.label3,cursor:"pointer",padding:"2px 0"}}>
+                   {(b.parlayLegs||[]).length} legs {"\u00b7"} all must hit
+                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"
+                     style={{transform:openLegs[b.id]?"rotate(180deg)":"none",transition:"transform .2s"}}><path d="M6 9l6 6 6-6"/></svg>
+                 </div>
+                 {openLegs[b.id] && (b.parlayLegs||[]).map((lg,li)=>(
+                   <div key={li} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderTop:li?EDGE.hair:"none"}}>
+                     <span style={{fontSize:9.5,fontWeight:800,color:IOS.label3,minWidth:13,flexShrink:0}}>{li+1}</span>
+                     <div style={{flex:1,minWidth:0}}>
+                       <div style={{fontSize:12.5,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lg.pick||lg.pick_name||"Leg"}</div>
+                       <div style={{fontSize:10,color:IOS.label3,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lg.game||""}</div>
+                     </div>
+                     <span style={{fontSize:11.5,fontWeight:800,fontFamily:"'Barlow Semi Condensed',sans-serif",color:IOS.label2,flexShrink:0}}>{lg.odds||""}</span>
+                   </div>
+                 ))}
+               </div>
+             )}
            </div>
            </SwipeRow>);
          })}
