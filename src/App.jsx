@@ -3449,6 +3449,13 @@ const soloWeekRange = (n) => {
     : M[s.getUTCMonth()]+" "+s.getUTCDate()+" – "+M[e.getUTCMonth()]+" "+e.getUTCDate();
 };
 
+// Axis label for the season strip: the slate's start date, M/D. Same anchor maths as
+// soloWeekRange so the two can never disagree about which week a slate is.
+const soloWeekShort = (n) => {
+  const s = new Date(SOLO_WEEK_ANCHOR + (n-1)*SOLO_WEEK_MS);
+  return (s.getUTCMonth()+1)+"/"+s.getUTCDate();
+};
+
 const TEAM_ABBR = {
   mlb:{ "diamondbacks":"ari","braves":"atl","orioles":"bal","red sox":"bos","cubs":"chc","white sox":"chw","reds":"cin","guardians":"cle","rockies":"col","tigers":"det","astros":"hou","royals":"kc","angels":"laa","dodgers":"lad","marlins":"mia","brewers":"mil","twins":"min","mets":"nym","yankees":"nyy","athletics":"oak","phillies":"phi","pirates":"pit","padres":"sd","giants":"sf","mariners":"sea","cardinals":"stl","rays":"tb","rangers":"tex","blue jays":"tor","nationals":"wsh" },
   nfl:{ "cardinals":"ari","falcons":"atl","ravens":"bal","bills":"buf","panthers":"car","bears":"chi","bengals":"cin","browns":"cle","cowboys":"dal","broncos":"den","lions":"det","packers":"gb","texans":"hou","colts":"ind","jaguars":"jax","chiefs":"kc","raiders":"lv","chargers":"lac","rams":"lar","dolphins":"mia","vikings":"min","patriots":"ne","saints":"no","giants":"nyg","jets":"nyj","eagles":"phi","steelers":"pit","49ers":"sf","seahawks":"sea","buccaneers":"tb","titans":"ten","commanders":"wsh" },
@@ -4008,6 +4015,16 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
   const curLive = _cur.filter(p=>p && p.result!=="W" && p.result!=="L" && p.result!=="P" && (p.game_date||p.gameTime) && Date.parse(p.game_date||p.gameTime)<=Date.now()).length;
   const curUpcoming = Math.max(0, curPending - curLive);
   const curPts = _cur.reduce((s,p)=>s+parseFloat((p&&p.points_earned)||0),0);
+  // Riding-on total: banked points for settled picks + full value of everything still
+  // open. Implied odds -> decimal -> x10, the same formula the slate screen uses.
+  const _ptsOf=(io)=>{ if(io==null) return 0; const d = io>0 ? (io/100)+1 : (100/Math.abs(io))+1; return parseFloat(((d-1)*10).toFixed(1)); };
+  const curRiding = _cur.reduce((sum,p)=>{
+    if(!p) return sum;
+    if(p.result==="W") return sum + parseFloat(p.points_earned||0);
+    if(p.result==="L" || p.result==="P") return sum;
+    return sum + (p.multiplier||p.mult||1) * _ptsOf(p.implied_odds!=null?p.implied_odds:p.impliedOdds);
+  },0);
+  const curHit = curGraded>0 ? Math.round(curW/curGraded*100) : null;
   const buildingCount = (soloFlexPicks && soloFlexPicks.length) || 0;
   const _okSport = (g)=> !soloSport || !g.sport || g.sport===soloSport;
  const featGame = (tickerGames||[]).find(g=>{ const t=g&&g.time?new Date(g.time):null; return _okSport(g) && t && t>new Date(); }) || (tickerGames||[]).find(_okSport) || null;
@@ -4131,7 +4148,22 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
       ))}
 
       {/* This Week — expansive live tracker */}
-      <div style={{background:IOS.bg2,border:`0.5px solid ${weekHasPicks?"rgba(48,209,88,0.25)":"rgba(255,255,255,0.07)"}`,borderRadius:RAD.md,padding:"14px",marginBottom:16}}>
+      <div style={{background:"linear-gradient(180deg,#15151a,#0e0e12)",border:EDGE.hair,borderRadius:14,overflow:"hidden",marginBottom:16}}>
+        {weekHasPicks && (
+        <div style={{padding:"15px 15px 13px",borderBottom:EDGE.hair}}>
+          <div style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.14em",textTransform:"uppercase",color:IOS.label3}}>Riding on this week</div>
+          <div style={{display:"flex",alignItems:"baseline",gap:9,marginTop:6}}>
+            <span style={{fontSize:38,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,lineHeight:0.9,color:"#fff"}}>{curRiding.toFixed(1)}</span>
+            <span style={{fontSize:12,color:IOS.label3,fontWeight:700}}>{curGraded>0?"pts \u00b7 "+curPts.toFixed(1)+" banked":"pts if everything hits"}</span>
+          </div>
+          <div style={{fontSize:11.5,color:IOS.label2,marginTop:8,lineHeight:1.45}}>
+            {_cur.length} pick{_cur.length!==1?"s":""} locked
+            {curLive>0 && <> {"\u00b7"} <b style={{color:IOS.green,fontWeight:800}}>{curLive} live</b></>}
+            {curUpcoming>0 && <> {"\u00b7"} {curUpcoming} not started</>}
+            {curHit!=null && <> {"\u00b7"} <b style={{color:curHit>=50?IOS.green:IOS.label2,fontWeight:800}}>{curHit}% hit</b></>}
+          </div>
+        </div>)}
+        <div style={{padding:"14px 15px 0"}}>
         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:weekHasPicks?10:8}}>
           <div style={{minWidth:0}}>
             <div style={{fontSize:11,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5}}>This Week · {soloWeekRange(currentWeekNum)}</div>
@@ -4193,6 +4225,14 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
           {weekHasPicks && <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>}
           {weekHasPicks ? "Add picks" : "Build This Slate"}
         </button>
+        </div>
+        {weekHasPicks && (<>
+          <div style={{height:14,margin:"0 -1px",background:"radial-gradient(circle at 7px 50%, #07070A 5px, transparent 5.5px) 0 0/14px 14px repeat-x"}}/>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 15px"}}>
+            <span style={{fontSize:10,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:IOS.label3}}>{curGraded>0&&curGraded===_cur.length?"Slate total":"If everything hits"}</span>
+            <span style={{fontSize:24,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,color:curRiding>0?"#fff":IOS.label3}}>{curRiding.toFixed(1)}</span>
+          </div>
+        </>)}
       </div>
 
        {/* Upcoming picks (locked-ahead future weeks) */}
@@ -5154,7 +5194,18 @@ function App() {
      }catch(e){}
    })();
  }, [isSoloMode, activeLeague&&activeLeague.id, activeLeague&&activeLeague.season_start, activeLeague&&activeLeague.start_mode, activeLeague&&activeLeague.isCommissioner, leagueFull, liveSchedule.length]);
- const notStartedBody = (<div className="body" style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center",padding:"70px 30px",gap:11}}><div style={{width:56,height:56,borderRadius:"50%",background:"rgba(255,159,10,0.12)",display:"flex",alignItems:"center",justifyContent:"center"}}><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke={IOS.orange} strokeWidth="2.2"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg></div><div style={{fontSize:18,fontWeight:800,color:"#fff"}}>{(activeLeague&&activeLeague.season_start&&new Date(activeLeague.season_start).getTime()>Date.now())?("Starts "+new Date(activeLeague.season_start).toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"})):"Season hasn’t started"}</div><div style={{fontSize:13.5,color:IOS.label2,lineHeight:1.5,maxWidth:250}}>{(activeLeague&&activeLeague.season_start&&new Date(activeLeague.season_start).getTime()>Date.now())?("Week 1 opens "+new Date(activeLeague.season_start).toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"})+" — everyone’s picks stay locked until then."):((activeLeague&&activeLeague.isCommissioner)?"Open Week 1 from the Home tab when you’re ready.":"Picks open once the commissioner starts the season.")}</div><button onClick={async()=>{ setHomeMode("solo"); setSoloModeWithRef(true); try{ const lid=await getOrCreateSoloLeague(); setActiveLeagueId(lid||"solo"); }catch(e){} try{fetchSoloWeeks();}catch(e){} setScreen("picks"); }} style={{marginTop:8,background:"rgba(191,90,242,0.12)",border:"0.5px solid "+(IOS.purple||"#BF5AF2")+"66",color:(IOS.purple||"#BF5AF2"),borderRadius:RAD.md,padding:"11px 22px",fontSize:13.5,fontWeight:800,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Make picks in Solo instead →</button></div>);
+ const MODE_KEY = "picklock_mode";
+ const [homeMode, setHomeMode] = useState(()=>{ try{ return localStorage.getItem(MODE_KEY)==="solo" ? "solo" : "leagues"; }catch(e){ return "leagues"; } });
+ // The ONLY way to change mode. Never call setIsSoloMode or setHomeMode directly.
+ const applyMode = (solo, opts) => {
+   const m = solo ? "solo" : "leagues";
+   setHomeMode(m);
+   setSoloModeWithRef(!!solo);
+   try{ localStorage.setItem(MODE_KEY, m); }catch(e){}
+   if(solo){ try{ fetchSoloWeeks(); }catch(e){} }
+   if(opts && opts.leagueId) setActiveLeagueId(opts.leagueId);
+ };
+ const notStartedBody = (<div className="body" style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center",padding:"70px 30px",gap:11}}><div style={{width:56,height:56,borderRadius:"50%",background:"rgba(255,159,10,0.12)",display:"flex",alignItems:"center",justifyContent:"center"}}><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke={IOS.orange} strokeWidth="2.2"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg></div><div style={{fontSize:18,fontWeight:800,color:"#fff"}}>{(activeLeague&&activeLeague.season_start&&new Date(activeLeague.season_start).getTime()>Date.now())?("Starts "+new Date(activeLeague.season_start).toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"})):"Season hasn’t started"}</div><div style={{fontSize:13.5,color:IOS.label2,lineHeight:1.5,maxWidth:250}}>{(activeLeague&&activeLeague.season_start&&new Date(activeLeague.season_start).getTime()>Date.now())?("Week 1 opens "+new Date(activeLeague.season_start).toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"})+" — everyone’s picks stay locked until then."):((activeLeague&&activeLeague.isCommissioner)?"Open Week 1 from the Home tab when you’re ready.":"Picks open once the commissioner starts the season.")}</div><button onClick={async()=>{ applyMode(true); try{ const lid=await getOrCreateSoloLeague(); setActiveLeagueId(lid||"solo"); }catch(e){} try{fetchSoloWeeks();}catch(e){} setScreen("picks"); }} style={{marginTop:8,background:"rgba(191,90,242,0.12)",border:"0.5px solid "+(IOS.purple||"#BF5AF2")+"66",color:(IOS.purple||"#BF5AF2"),borderRadius:RAD.md,padding:"11px 22px",fontSize:13.5,fontWeight:800,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Make picks in Solo instead →</button></div>);
  const sport = SPORTS[activeLeague?.sport] || SPORTS["nfl"];
  const SLOTS = sport.slots;
 
@@ -5195,9 +5246,8 @@ function App() {
     }
     if (g) setGamecastSel({ game:g, pick });
   };
- const [homeMode, setHomeMode] = useState('leagues');
  // No leagues yet -> route into the Solo lobby (never the phantom NFL league).
- useEffect(()=>{ if(!leaguesLoading && realLeagues.length===0 && !isSoloModeRef.current){ setHomeMode('solo'); setSoloModeWithRef(true); } }, [leaguesLoading, realLeagues.length]);
+ useEffect(()=>{ if(!leaguesLoading && realLeagues.length===0 && !isSoloModeRef.current){ applyMode(true); } }, [leaguesLoading, realLeagues.length]);
  const [leagueSubTab, setLeagueSubTab] = useState("overview");
  const [tickerGames, setTickerGames] = useState([]); // raw games for the ticker
  const [espnGames, setEspnGames] = useState([]); // ESPN scoreboard with IDs
@@ -7065,7 +7115,7 @@ function App() {
    const targetSize = league.target_size||league.max_members||8;
    if(currentMembers && currentMembers.length >= targetSize){alert("This league is already full ("+targetSize+"/"+targetSize+").");return;}
    const {data:_mine}=await supabase.from("league_members").select("user_id").eq("league_id",league.id).eq("user_id",user.id).maybeSingle();
-   if(_mine){ setHomeMode("leagues"); setSoloModeWithRef(false); setActiveLeagueId(league.id); await fetchLeagues(user.id); alert("You're already in "+league.name+" — opening it now."); return; }
+   if(_mine){ applyMode(false,{leagueId:league.id}); await fetchLeagues(user.id); alert("You're already in "+league.name+" — opening it now."); return; }
    const {error:joinError}=await supabase.from("league_members").insert({league_id:league.id,user_id:user.id,is_commissioner:false});
    if(joinError){alert("Couldn't join "+league.name+": "+(joinError.message||joinError.code||"unknown error"));return;}
    try{ posthog.capture('league_joined', { league_id: league.id, league_type: league.league_type||'h2h', via: 'code' }); }catch(e){}
@@ -7125,7 +7175,7 @@ function App() {
      return;
    }
    const {data:_mine} = await supabase.from("league_members").select("user_id").eq("league_id",league.id).eq("user_id",user.id).maybeSingle();
-   if(_mine){ setHomeMode("leagues"); setSoloModeWithRef(false); setActiveLeagueId(league.id); await fetchLeagues(user.id); setShowBrowse(false); alert("You're already in "+league.name+" — opening it now."); setJoiningLeagueId(null); return; }
+   if(_mine){ applyMode(false,{leagueId:league.id}); await fetchLeagues(user.id); setShowBrowse(false); alert("You're already in "+league.name+" — opening it now."); setJoiningLeagueId(null); return; }
    const {error:joinError} = await supabase.from("league_members").insert({league_id:league.id,user_id:user.id,is_commissioner:false});
    if(joinError) { alert("Couldn't join: "+(joinError.message||joinError.code||"unknown error")); setJoiningLeagueId(null); return; }
    try{ posthog.capture('league_joined', { league_id: league.id, league_type: league.league_type||'h2h', via: 'browse' }); }catch(e){}
@@ -7138,7 +7188,7 @@ function App() {
    }
    await fetchLeagues(user.id);
    setShowBrowse(false);
-   setHomeMode("leagues"); setSoloModeWithRef(false); setActiveLeagueId(league.id);
+   applyMode(false,{leagueId:league.id});
    alert(`Joined ${league.name}!`);
  } catch(e) { alert("Something went wrong."); }
  setJoiningLeagueId(null);
@@ -8768,6 +8818,7 @@ function App() {
  .pc-card{position:relative;width:100%;height:100%;border-radius:22px;transform-style:preserve-3d;transition:transform .12s ease-out;cursor:pointer;}
  /* Live motion already runs through a JS low-pass filter. A CSS transition on top of
     that is a second smoothing pass, and the card visibly trails the handset. */
+ @keyframes pkPulse{0%,100%{opacity:1}50%{opacity:.25}}
  .pc-card.gyro{transition:none;}
  .pc-card.flip{transition:transform .7s cubic-bezier(.2,.8,.2,1);transform:rotateY(180deg);}
  .pc-face{position:absolute;inset:0;border-radius:22px;overflow:hidden;-webkit-backface-visibility:hidden;backface-visibility:hidden;display:flex;flex-direction:column;transition:opacity 0s linear .35s;}
@@ -9569,7 +9620,7 @@ function App() {
      <button onClick={()=>{dismissOnboard();setScreen("leagues");setShowNewLeague(true);setNewLeagueCreated(null);setNewLeagueSport(null);setNewLeagueName("");setNewLeagueSize(8);setNewLeagueStep(0);}} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:RAD.lg,padding:"15px",fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Create a League</button>
      <button onClick={()=>{dismissOnboard();setShowBrowse(true);fetchPublicLeagues();}} style={{width:"100%",background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:RAD.lg,padding:"15px",fontSize:15,fontWeight:700,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Browse Public Leagues</button>
      <button onClick={()=>{ const c=(window.prompt("Enter invite code")||"").trim(); if(c){ dismissOnboard(); handleJoinCode(c); } }} style={{width:"100%",background:"rgba(255,255,255,0.06)",border:EDGE.hair2,borderRadius:RAD.lg,padding:"15px",fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Join with a code</button>
-     <button onClick={()=>{dismissOnboard();setHomeMode("solo");setSoloModeWithRef(true);try{fetchSoloWeeks();}catch(e){}setScreen("home");}} style={{width:"100%",background:"none",border:"none",padding:"12px",fontSize:14,fontWeight:600,color:"rgba(255,255,255,0.35)",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Go Solo for now</button>
+     <button onClick={()=>{dismissOnboard();applyMode(true);setScreen("home");}} style={{width:"100%",background:"none",border:"none",padding:"12px",fontSize:14,fontWeight:600,color:"rgba(255,255,255,0.35)",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Go Solo for now</button>
    </div>
  </div>
  ),
@@ -10040,13 +10091,13 @@ function App() {
  <div className="gh-sheet" onClick={e=>e.stopPropagation()}>
  <div className="gh-grip"/>
  <div className="gh-sheet-h">Switch</div>
- <div className="gh-opt" onClick={()=>{setHomeMode("solo");setSoloModeWithRef(true);try{fetchSoloWeeks();}catch(e){} setScreen("home");setShowSwitcher(false);}}>
+ <div className="gh-opt" onClick={()=>{applyMode(true); setScreen("home");setShowSwitcher(false);}}>
  <div className="gh-od" style={{background:"rgba(255,55,95,0.12)"}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FF375F" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
  <div style={{flex:1}}><div className="gh-on">Solo Mode</div><div className="gh-osub">Just you, every week</div></div>
  {isSoloMode && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
  </div>
  {realLeagues.map(l=>(
- <div key={l.id} className="gh-opt" onClick={()=>{setHomeMode("leagues");setSoloModeWithRef(false);setActiveLeagueId(l.id);setScreen("home");setShowSwitcher(false);}}>
+ <div key={l.id} className="gh-opt" onClick={()=>{applyMode(false,{leagueId:l.id});setScreen("home");setShowSwitcher(false);}}>
  <div className="gh-od" style={{background:"rgba(10,132,255,0.12)"}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
  <div style={{flex:1}}><div className="gh-on">{l.name}</div><div className="gh-osub">{(SPORTS[l.sport]&&SPORTS[l.sport].label)||"League"}</div></div>
  {!isSoloMode && activeLeagueId===l.id && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
@@ -10246,7 +10297,7 @@ function App() {
  <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
  <div style={{display:"flex",background:"rgba(255,255,255,0.08)",borderRadius:RAD.sm,padding:2}}>
  {[{id:"leagues",label:"Leagues"},{id:"solo",label:"Solo"}].map(m=>(
- <div key={m.id} onClick={()=>{setHomeMode(m.id);setScreen("home");if(m.id==="solo"){setSoloModeWithRef(true);try{fetchSoloWeeks();}catch(e){}}else{setSoloModeWithRef(false);}}}
+ <div key={m.id} onClick={()=>{applyMode(m.id==="solo");setScreen("home");}}
  style={{padding:"5px 11px",borderRadius:RAD.sm,fontSize:11.5,fontWeight:700,cursor:"pointer",transition:"all .15s",whiteSpace:"nowrap",
  background:homeMode===m.id?"rgba(255,255,255,0.14)":"transparent",
  color:homeMode===m.id?"#fff":"rgba(255,255,255,0.4)"}}>{m.label}</div>
@@ -10344,7 +10395,7 @@ function App() {
        <div style={{fontSize:16,fontWeight:800,color:"#fff",marginTop:5}}>You're out of the playoffs</div>
        <div style={{fontSize:12,color:IOS.label2,marginTop:4,lineHeight:1.45}}>No matchup this week, so there's nothing to score against in {activeLeague.name}. Your record and standing are locked in.</div>
        <div onClick={()=>setScreen("recap")} style={{marginTop:13,borderRadius:RAD.md,padding:"12px",textAlign:"center",fontSize:14,fontWeight:800,cursor:"pointer",color:"#fff",background:"linear-gradient(120deg,#0A84FF,#5E5CE6)"}}>Check out your season recap</div>
-       <div onClick={()=>{ setIsSoloMode(true); setScreen("picks"); }} style={{marginTop:8,borderRadius:RAD.md,padding:"11px",textAlign:"center",fontSize:13,fontWeight:800,cursor:"pointer",color:IOS.label2,background:"rgba(255,255,255,0.05)",boxShadow:"inset 0 0 0 0.5px rgba(255,255,255,0.1)"}}>Keep picking in Solo {"\u2014"} still counts toward your career</div>
+       <div onClick={()=>{ applyMode(true); setScreen("picks"); }} style={{marginTop:8,borderRadius:RAD.md,padding:"11px",textAlign:"center",fontSize:13,fontWeight:800,cursor:"pointer",color:IOS.label2,background:"rgba(255,255,255,0.05)",boxShadow:"inset 0 0 0 0.5px rgba(255,255,255,0.1)"}}>Keep picking in Solo {"\u2014"} still counts toward your career</div>
      </div>
    );
    const _addLabel=openSlots===1?"Add a pick":("Add "+openSlots+" picks");
@@ -10396,7 +10447,7 @@ function App() {
  </div>
 
  {/* ══ SOLO MODE HOME SCREEN ══ */}
- {homeMode==="solo" && <SoloHome soloWeeks={soloWeeks} soloLoading={soloLoading} isPro={isPro} IOS={IOS} setScreen={setScreen} setShowNewLeague={setShowNewLeague} setNewLeagueStep={setNewLeagueStep} setShowBrowse={setShowBrowse} fetchPublicLeagues={fetchPublicLeagues} setIsSoloMode={setIsSoloMode} setActiveLeagueId={setActiveLeagueId} getOrCreateSoloLeague={getOrCreateSoloLeague} soloSavedPicks={soloSavedPicks} setSoloSavedPicks={setSoloSavedPicks} soloFlexPicks={soloFlexPicks} setSoloFlexPicks={setSoloFlexPicks} soloSport={soloSport} setSoloSport={setSoloSportPersist} setShowSoloSportPicker={setShowSoloSportPicker} soloSubmitted={soloSubmitted} setSoloSubmitted={setSoloSubmitted} username={userProfile?.username||""} soloTopPct={soloTopPct} onDeleteSlate={deleteSoloSlate} onJoinCode={handleJoinCode} setShowPaywall={setShowPaywall} tickerGames={tickerGames} espnGames={espnGames} globalRank={(()=>{ const rows=lbCache["all"]; if(!rows||!rows.length) return null; const sx=[...rows].sort((a,b)=>(Number(b.points)||0)-(Number(a.points)||0)); const i=sx.findIndex(r=>String(r.user_id)===String(user?.id)); return i>=0?{rank:i+1,total:sx.length}:null; })()} onOpenLeaderboard={()=>{ fetchLeaderboard("all"); setScreen("leaderboard"); }} liveGames={liveGames} onOpenGamecast={openGamecast} onReplace={startReplace}/>}
+ {homeMode==="solo" && <SoloHome soloWeeks={soloWeeks} soloLoading={soloLoading} isPro={isPro} IOS={IOS} setScreen={setScreen} setShowNewLeague={setShowNewLeague} setNewLeagueStep={setNewLeagueStep} setShowBrowse={setShowBrowse} fetchPublicLeagues={fetchPublicLeagues} setIsSoloMode={applyMode} setActiveLeagueId={setActiveLeagueId} getOrCreateSoloLeague={getOrCreateSoloLeague} soloSavedPicks={soloSavedPicks} setSoloSavedPicks={setSoloSavedPicks} soloFlexPicks={soloFlexPicks} setSoloFlexPicks={setSoloFlexPicks} soloSport={soloSport} setSoloSport={setSoloSportPersist} setShowSoloSportPicker={setShowSoloSportPicker} soloSubmitted={soloSubmitted} setSoloSubmitted={setSoloSubmitted} username={userProfile?.username||""} soloTopPct={soloTopPct} onDeleteSlate={deleteSoloSlate} onJoinCode={handleJoinCode} setShowPaywall={setShowPaywall} tickerGames={tickerGames} espnGames={espnGames} globalRank={(()=>{ const rows=lbCache["all"]; if(!rows||!rows.length) return null; const sx=[...rows].sort((a,b)=>(Number(b.points)||0)-(Number(a.points)||0)); const i=sx.findIndex(r=>String(r.user_id)===String(user?.id)); return i>=0?{rank:i+1,total:sx.length}:null; })()} onOpenLeaderboard={()=>{ fetchLeaderboard("all"); setScreen("leaderboard"); }} liveGames={liveGames} onOpenGamecast={openGamecast} onReplace={startReplace}/>}
        {homeMode==="solo" && screen==="home" && (()=>{
          const SP=["mlb","nfl","nba","ncaaf"];
          const games=(tickerGames||[]).filter(g=>g&&g.sport===soloSport);
@@ -10894,7 +10945,7 @@ function App() {
        <div style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:IOS.label3}}>Season over</div>
        <div style={{fontSize:16,fontWeight:800,color:"#fff",marginTop:5}}>No slip this week</div>
        <div style={{fontSize:12,color:IOS.label2,marginTop:4,lineHeight:1.45}}>You're out of the playoffs in {activeLeague.name}, so there's no matchup to score against. Solo picks still count toward your career stats and global rank.</div>
-       <div onClick={()=>{ setIsSoloMode(true); }} style={{marginTop:13,borderRadius:RAD.md,padding:"12px",textAlign:"center",fontSize:14,fontWeight:800,cursor:"pointer",color:"#fff",background:"linear-gradient(120deg,#0A84FF,#5E5CE6)"}}>Switch to Solo</div>
+       <div onClick={()=>{ applyMode(true); }} style={{marginTop:13,borderRadius:RAD.md,padding:"12px",textAlign:"center",fontSize:14,fontWeight:800,cursor:"pointer",color:"#fff",background:"linear-gradient(120deg,#0A84FF,#5E5CE6)"}}>Switch to Solo</div>
      </div>
      {recapData && <SeasonRecap league={activeLeague} me={recapData.me} total={recapData.total} arc={recapData.arc}
        leader={recapData.leader} topScorer={recapData.topScorer} bestWk={recapData.bestWk} hit={recapData.hit}
@@ -10955,7 +11006,7 @@ function App() {
          <div style={{display:"flex",alignItems:"center",gap:10,margin:"16px 4px"}}>
            <div style={{flex:1,height:"0.5px",background:"rgba(255,255,255,0.1)"}}/><div style={{fontSize:11,color:IOS.label3,fontWeight:700}}>or</div><div style={{flex:1,height:"0.5px",background:"rgba(255,255,255,0.1)"}}/>
          </div>
-         <button onClick={()=>{ setHomeMode("solo"); setSoloModeWithRef(true); try{fetchSoloWeeks();}catch(e){} setScreen("picks"); }} style={{width:"100%",background:"rgba(191,90,242,0.12)",border:"0.5px solid "+(IOS.purple||"#BF5AF2")+"66",color:(IOS.purple||"#BF5AF2"),borderRadius:RAD.md,padding:"13px",fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Track your own picks in Solo →</button>
+         <button onClick={()=>{ applyMode(true); setScreen("picks"); }} style={{width:"100%",background:"rgba(191,90,242,0.12)",border:"0.5px solid "+(IOS.purple||"#BF5AF2")+"66",color:(IOS.purple||"#BF5AF2"),borderRadius:RAD.md,padding:"13px",fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Track your own picks in Solo →</button>
        </div>
      );
    }
@@ -12122,7 +12173,15 @@ function App() {
                <div style={{fontSize:14.5,fontWeight:700,color:"#fff",lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.pick}</div>
                <div style={{fontSize:10.5,color:IOS.label3,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                  {[b.game, b.gameTime?_t(b.gameTime):""].filter(Boolean).join(" \u00b7 ")}
-                 {b.gameTime && !isLk && <span style={{color:IOS.orange,fontWeight:700}}>{" \u00b7 "+_lk(b.gameTime)}</span>}
+               </div>
+               <div style={{display:"inline-flex",alignItems:"center",gap:5,marginTop:5,padding:"3px 8px",borderRadius:6,
+                 background: settled ? "rgba(255,255,255,0.05)" : (isLk ? "rgba(48,209,88,0.13)" : "rgba(255,159,10,0.13)"),
+                 border: "0.5px solid "+(settled ? "rgba(255,255,255,0.12)" : (isLk ? "rgba(48,209,88,0.32)" : "rgba(255,159,10,0.32)")),
+                 color: settled ? IOS.label3 : (isLk ? IOS.green : IOS.orange),
+                 fontSize:9.5,fontWeight:800,letterSpacing:"0.07em",textTransform:"uppercase",whiteSpace:"nowrap"}}>
+                 {!settled && <span style={{width:5,height:5,borderRadius:"50%",background:"currentColor",
+                   animation:isLk?"pkPulse 1.6s ease-in-out infinite":"none"}}/>}
+                 {settled ? "Final" : (isLk ? "Started" : (_lk(b.gameTime)||"Not started"))}
                </div>
              </div>
              <div style={{textAlign:"right",flexShrink:0}}>
@@ -14437,7 +14496,7 @@ function App() {
          topScorer={_topScorer} bestWk={_bestWk} hit={_hit} graded={_pw+_pl} champion={_champ}
          IOS={IOS} RAD={RAD}
          onBracket={()=>{ setLeagueTab("playoff"); setScreen("league"); }}
-         onSolo={()=>{ setIsSoloMode(true); setScreen("picks"); }}
+         onSolo={()=>{ applyMode(true); setScreen("picks"); }}
          onLeagues={()=>setScreen("leagues")}/>
        <div style={{height:20}}/>
      </div>
@@ -14724,7 +14783,7 @@ function App() {
  </div>
  <button onClick={()=>{
  setActiveLeagueId(newLeagueCreated.id);
- setHomeMode("leagues"); setSoloModeWithRef(false);
+ applyMode(false);
  setShowNewLeague(false);
  setNewLeagueCreated(null);
  setNewLeagueSport(null);
@@ -17213,7 +17272,7 @@ function App() {
                           const _C = 2*Math.PI*9;
                           const _pct = _f.tot ? _f.n/_f.tot : 0;
                           return (
-                            <div key={l.id} onClick={()=>{ setIsSoloMode(false); setActiveLeagueId(l.id); }} style={{flexShrink:0,display:"flex",alignItems:"center",gap:7,padding:"7px 11px 7px 8px",borderRadius:RAD.md,cursor:"pointer",whiteSpace:"nowrap",background:_on?`${IOS.blue}21`:"#141419",border:_on?`0.5px solid ${IOS.blue}80`:"0.5px solid rgba(255,255,255,0.09)"}}>
+                            <div key={l.id} onClick={()=>{ applyMode(false,{leagueId:l.id}); }} style={{flexShrink:0,display:"flex",alignItems:"center",gap:7,padding:"7px 11px 7px 8px",borderRadius:RAD.md,cursor:"pointer",whiteSpace:"nowrap",background:_on?`${IOS.blue}21`:"#141419",border:_on?`0.5px solid ${IOS.blue}80`:"0.5px solid rgba(255,255,255,0.09)"}}>
                               <svg width="22" height="22" style={{flexShrink:0,transform:"rotate(-90deg)"}}>
                                 <circle cx="11" cy="11" r="9" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="2.5"/>
                                 <circle cx="11" cy="11" r="9" fill="none" stroke={_done?IOS.green:IOS.blue} strokeWidth="2.5" strokeLinecap="round" strokeDasharray={_C} strokeDashoffset={_C*(1-_pct)}/>
@@ -17225,7 +17284,7 @@ function App() {
                             </div>
                           );
                         })}
-                        <div onClick={()=>setIsSoloMode(true)} style={{flexShrink:0,display:"flex",alignItems:"center",gap:7,padding:"7px 11px 7px 8px",borderRadius:RAD.md,cursor:"pointer",whiteSpace:"nowrap",background:isSoloMode?`${IOS.blue}21`:"#141419",border:isSoloMode?`0.5px solid ${IOS.blue}80`:"0.5px solid rgba(255,255,255,0.09)"}}>
+                        <div onClick={()=>applyMode(true)} style={{flexShrink:0,display:"flex",alignItems:"center",gap:7,padding:"7px 11px 7px 8px",borderRadius:RAD.md,cursor:"pointer",whiteSpace:"nowrap",background:isSoloMode?`${IOS.blue}21`:"#141419",border:isSoloMode?`0.5px solid ${IOS.blue}80`:"0.5px solid rgba(255,255,255,0.09)"}}>
                           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.45)" strokeWidth="2" strokeLinecap="round" style={{flexShrink:0}}><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6"/></svg>
                           <div>
                             <div style={{fontSize:12.5,fontWeight:800,lineHeight:1.1,color:isSoloMode?"#fff":"rgba(255,255,255,0.62)"}}>Solo</div>
@@ -18402,7 +18461,7 @@ function App() {
          <div key={s.id} onClick={async()=>{
            setSoloSportPersist(s.id);
            setShowSoloSportPicker(false);
-           setIsSoloMode(true);
+           applyMode(true);
            const lgId = await getOrCreateSoloLeague();
            setActiveLeagueId(lgId||"solo");
            // Fetch odds for selected sport
@@ -18764,41 +18823,76 @@ function App() {
  </div>
  ) : (
  <>
- {/* Summary stats */}
- <div style={{display:"flex",gap:8,marginBottom:16}}>
+ {/* Summary stats, on the same ticket surfaces as the slate screen. */}
+ <div style={{display:"flex",gap:8,marginBottom:14}}>
    {[
-     {l:"Record",v:soloWeeks.reduce((s,w)=>s+w.wins,0)+"-"+soloWeeks.reduce((s,w)=>s+w.losses,0),c:IOS.blue},
-     {l:"Win %",v:Math.round((soloWeeks.reduce((s,w)=>s+w.wins,0)/(soloWeeks.reduce((s,w)=>s+w.wins+w.losses,0)||1))*100)+"%",c:IOS.green},
-     {l:"Total Pts",v:soloWeeks.reduce((s,w)=>s+w.pts,0).toFixed(1),c:"#fff"},
+     {l:"Record",v:soloWeeks.reduce((s,w)=>s+w.wins,0)+"\u2013"+soloWeeks.reduce((s,w)=>s+w.losses,0),c:IOS.blue},
+     {l:"Win rate",v:Math.round((soloWeeks.reduce((s,w)=>s+w.wins,0)/(soloWeeks.reduce((s,w)=>s+w.wins+w.losses,0)||1))*100)+"%",c:IOS.green},
+     {l:"Total pts",v:soloWeeks.reduce((s,w)=>s+w.pts,0).toFixed(1),c:"#fff"},
    ].map((s,i)=>(
-   <div key={i} style={{flex:1,background:IOS.bg2,borderRadius:RAD.md,padding:"10px 8px",textAlign:"center",border:EDGE.hair}}>
-     <div style={{fontSize:18,fontWeight:800,color:s.c}}>{s.v}</div>
-     <div style={{fontSize:9,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4,marginTop:2}}>{s.l}</div>
+   <div key={i} style={{flex:1,background:"linear-gradient(180deg,#15151a,#0e0e12)",borderRadius:13,padding:"13px 9px",textAlign:"center",border:EDGE.hair}}>
+     <div style={{fontSize:25,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,lineHeight:0.95,color:s.c}}>{s.v}</div>
+     <div style={{fontSize:8.5,color:IOS.label3,textTransform:"uppercase",letterSpacing:"0.11em",fontWeight:800,marginTop:5}}>{s.l}</div>
    </div>
    ))}
  </div>
+ {/* Season strip — one bar per slate, oldest to newest. soloWeeks is newest-first,
+     so it is reversed here; reading a season left-to-right is the whole point. */}
+ {soloWeeks.length>1 && (()=>{
+   const arr=[...soloWeeks].reverse().slice(-10);
+   const mx=Math.max(1,...arr.map(w=>Math.abs(w.pts)||0));
+   const best=Math.max(...soloWeeks.map(w=>w.pts||0));
+   return (
+   <div style={{background:"linear-gradient(180deg,#15151a,#0e0e12)",border:EDGE.hair,borderRadius:13,padding:"13px 14px 11px",marginBottom:14}}>
+     <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:10}}>
+       <span style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.13em",textTransform:"uppercase",color:IOS.label3}}>Points by slate</span>
+       <b style={{fontSize:11,color:IOS.label2,fontWeight:700}}>Best {"\u00b7"} +{best.toFixed(1)}</b>
+     </div>
+     <div style={{display:"flex",alignItems:"flex-end",gap:5,height:54}}>
+       {arr.map(w=>{
+         const h=Math.max(6,Math.round((Math.abs(w.pts)||0)/mx*38));
+         return (
+         <div key={w.week} style={{flex:1,display:"flex",flexDirection:"column",justifyContent:"flex-end",alignItems:"center",gap:4,height:"100%",minWidth:0}}>
+           <div style={{width:"100%",height:h,borderRadius:"3px 3px 0 0",background:(w.pts||0)>0?IOS.green:"rgba(255,255,255,0.13)"}}/>
+           <span style={{fontSize:8,fontWeight:700,color:IOS.label3,whiteSpace:"nowrap"}}>{soloWeekShort(w.week)}</span>
+         </div>);
+       })}
+     </div>
+   </div>);
+ })()}
  {/* Week list */}
  <div style={{fontSize:11,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>All Slates</div>
  {soloWeeks.map((w,i)=>{
    const isBest = soloWeeks.length>1 && w.pts===Math.max(...soloWeeks.map(x=>x.pts));
    const wOpen = (w.week in histOpenWeeks) ? histOpenWeeks[w.week] : (i===0);
+   // Hit rate per slate. Graded picks only — a slate that is still running would
+   // otherwise read 0% while every pick is pending, which is a lie about how you did.
+   const _g = (w.wins||0)+(w.losses||0);
+   const _hit = _g>0 ? Math.round((w.wins||0)/_g*100) : null;
+   const _pending = (w.picks||[]).length - _g;
    return (
-   <div key={w.week} style={{background:IOS.bg2,border:EDGE.hair,borderRadius:RAD.md,padding:"12px 14px",marginBottom:8}}>
-     <div onClick={()=>setHistOpenWeeks(o=>({...o,[w.week]:!((w.week in o)?o[w.week]:(i===0))}))} style={{display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}}>
+   <div key={w.week} style={{background:"linear-gradient(180deg,#15151a,#0e0e12)",border:EDGE.hair,borderRadius:14,overflow:"hidden",marginBottom:11}}>
+     <div onClick={()=>setHistOpenWeeks(o=>({...o,[w.week]:!((w.week in o)?o[w.week]:(i===0))}))} style={{display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",padding:"13px 15px"}}>
        <div style={{minWidth:0}}>
-         <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>{soloWeekRange(w.week)}</div>
-         <div style={{fontSize:11,color:IOS.label3,marginTop:2}}>{w.wins}W · {w.losses}L · {w.picks.length} picks</div>
+         <div style={{fontSize:15,fontWeight:800,color:"#fff",letterSpacing:"-0.2px"}}>{soloWeekRange(w.week)}</div>
+         <div style={{fontSize:10.5,color:IOS.label3,marginTop:2}}>
+           {w.wins}W {"\u00b7"} {w.losses}L {"\u00b7"} {w.picks.length} pick{w.picks.length!==1?"s":""}
+           {_hit!=null && <> {"\u00b7"} <b style={{color:_hit>=50?IOS.green:IOS.label2,fontWeight:800}}>{_hit}% hit</b></>}
+           {_pending>0 && <> {"\u00b7"} <span style={{color:IOS.orange,fontWeight:700}}>{_pending} pending</span></>}
+         </div>
        </div>
        <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
          <div style={{textAlign:"right"}}>
-           <div style={{fontSize:18,fontWeight:800,color:w.pts>0?IOS.green:"#555"}}>{w.pts>0?"+"+w.pts:"0"} pts</div>
+           <div style={{fontSize:20,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,color:w.pts>0?IOS.green:(_g>0?IOS.label3:IOS.label3)}}>
+             {_g===0 && _pending>0 ? "\u2014" : (w.pts>0?"+"+w.pts:"0")}
+           </div>
            {isBest&&<div style={{fontSize:8,fontWeight:700,color:IOS.green,background:"rgba(48,209,88,0.1)",border:"0.5px solid rgba(48,209,88,0.2)",borderRadius:4,padding:"1px 5px",marginTop:2}}>BEST SLATE</div>}
          </div>
          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2.4" strokeLinecap="round" style={{transform:wOpen?"rotate(180deg)":"none",transition:"transform .2s"}}><polyline points="6 9 12 15 18 9"/></svg>
        </div>
      </div>
      {wOpen && (
-     <div style={{borderTop:"0.5px solid rgba(255,255,255,0.06)",paddingTop:4,marginTop:8}}>
+     <div style={{borderTop:"0.5px solid rgba(255,255,255,0.06)",padding:"4px 15px 0"}}>
        {groupPicksByDay(w.picks).map((grp,gi,arr)=>{
          const dk=w.week+":"+grp.key; const dOpen=(dk in histOpenDays)?histOpenDays[dk]:(gi===arr.length-1);
          return (
@@ -18828,6 +18922,11 @@ function App() {
        })}
      </div>
      )}
+     <div style={{height:14,margin:"0 -1px",background:"radial-gradient(circle at 7px 50%, #07070A 5px, transparent 5.5px) 0 0/14px 14px repeat-x"}}/>
+     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 15px"}}>
+       <span style={{fontSize:10,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:IOS.label3}}>{_pending>0?"If everything hits":"Slate total"}</span>
+       <span style={{fontSize:24,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,color:w.pts>0?IOS.green:"#fff"}}>{w.pts>0?"+"+w.pts:(w.pts||0)}</span>
+     </div>
    </div>
    );
  })}
@@ -18850,7 +18949,7 @@ function App() {
          leader={recapData.leader} topScorer={recapData.topScorer} bestWk={recapData.bestWk} hit={recapData.hit}
          graded={recapData.graded} champion={recapData.champion} IOS={IOS} RAD={RAD}
          onBracket={()=>{ setLeagueTab("playoff"); setScreen("league"); }}
-         onSolo={()=>{ setIsSoloMode(true); setScreen("picks"); }}
+         onSolo={()=>{ applyMode(true); setScreen("picks"); }}
          onLeagues={()=>setScreen("leagues")}/>
      ) : (
        <div style={{padding:"46px 20px",textAlign:"center",color:IOS.label3,fontSize:14,lineHeight:1.6}}>Your recap appears once this league has graded picks.</div>
