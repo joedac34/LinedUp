@@ -4263,8 +4263,18 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
         {weekHasPicks && (<>
           <div style={{height:14,margin:"0 -1px",background:"radial-gradient(circle at 7px 50%, #07070A 5px, transparent 5.5px) 0 0/14px 14px repeat-x"}}/>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 15px"}}>
-            <span style={{fontSize:10,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:IOS.label3}}>{curGraded>0&&curGraded===_cur.length?"Slate total":"If everything hits"}</span>
-            <span style={{fontSize:24,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,color:curRiding>0?"#fff":IOS.label3}}>{curRiding.toFixed(1)}</span>
+            <span style={{fontSize:10,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:IOS.label3}}>Settled so far</span>
+            <span style={{display:"flex",alignItems:"baseline",gap:14}}>
+              <span style={{display:"flex",alignItems:"baseline",gap:4}}>
+                <span style={{fontSize:22,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,color:curPts>0?IOS.green:IOS.label3}}>{curGraded>0?(curPts>0?"+"+curPts.toFixed(1):curPts.toFixed(1)):"\u2014"}</span>
+                <span style={{fontSize:10,fontWeight:800,color:IOS.label3,letterSpacing:"0.06em"}}>PTS</span>
+              </span>
+              {curGraded>0 && (()=>{ const u=sumUnits(_cur); return (
+              <span style={{display:"flex",alignItems:"baseline",gap:3}}>
+                <span style={{fontSize:17,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,color:u>=0?IOS.green:IOS.red}}>{(u>=0?"+":"\u2212")+Math.abs(u).toFixed(1)}</span>
+                <span style={{fontSize:10,fontWeight:800,color:IOS.label3,letterSpacing:"0.06em"}}>U</span>
+              </span>); })()}
+            </span>
           </div>
         </>)}
       </div>
@@ -4310,14 +4320,24 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
             const isBest=bestWeek && bestWeek.week===w.week && bestWeek.pts>0 && soloWeeks.length>1;
             const stamp=slateStamp(w);
             return (
-            <div key={w.week} style={{background:IOS.bg2,border:`0.5px solid ${isOpen?"rgba(255,255,255,0.16)":"rgba(255,255,255,0.07)"}`,borderRadius:RAD.md,marginBottom:6,overflow:"hidden"}}>
+            <div key={w.week} style={{background:"linear-gradient(180deg,#15151a,#0e0e12)",border:EDGE.hair,borderRadius:14,marginBottom:9,overflow:"hidden"}}>
               <div onClick={()=>setOpenSlate(isOpen?null:w.week)} style={{padding:"11px 14px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}}>
                 <div style={{minWidth:0}}>
                   <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:2,display:"flex",alignItems:"center",gap:7}}>{soloWeekRange(w.week)}{isBest&&<span style={{fontSize:8,fontWeight:800,color:"#08110a",background:IOS.gold,borderRadius:4,padding:"1px 5px",letterSpacing:.3}}>BEST</span>}</div>
-                  <div style={{fontSize:11,color:IOS.label3}}>{stamp?stamp+" · ":""}<span style={{color:w.wins>0?IOS.green:IOS.label3}}>{w.wins}W</span>-<span style={{color:w.losses>0?IOS.red:IOS.label3}}>{w.losses}L</span> · {w.picks.length} picks</div>
+                  <div style={{fontSize:11,color:IOS.label3}}>{stamp?stamp+" · ":""}<span style={{color:w.wins>0?IOS.green:IOS.label3}}>{w.wins}W</span>-<span style={{color:w.losses>0?IOS.red:IOS.label3}}>{w.losses}L</span>{(()=>{const _g=(w.wins||0)+(w.losses||0);return _g>0?(<> {"\u00b7"} <b style={{color:Math.round(w.wins/_g*100)>=50?IOS.green:IOS.label2,fontWeight:800}}>{Math.round(w.wins/_g*100)}% hit</b></>):null;})()} · {w.picks.length} picks</div>
                 </div>
                 <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
-                  <div style={{fontSize:16,fontWeight:800,color:w.pts>0?IOS.green:"#555"}}>{w.pts>0?"+"+w.pts:"0"} pts</div>
+                  {(()=>{ const _g=(w.wins||0)+(w.losses||0); const u=sumUnits(w.picks||[]); return (
+                  <div style={{display:"flex",alignItems:"baseline",gap:12}}>
+                    <span style={{display:"flex",alignItems:"baseline",gap:3}}>
+                      <span style={{fontSize:18,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,color:w.pts>0?IOS.green:IOS.label3}}>{_g===0?"\u2014":(w.pts>0?"+"+w.pts:w.pts||0)}</span>
+                      <span style={{fontSize:9,fontWeight:800,color:IOS.label3,letterSpacing:"0.06em"}}>PTS</span>
+                    </span>
+                    {_g>0 && <span style={{display:"flex",alignItems:"baseline",gap:2}}>
+                      <span style={{fontSize:14,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,color:u>=0?IOS.green:IOS.red}}>{(u>=0?"+":"\u2212")+Math.abs(u).toFixed(1)}</span>
+                      <span style={{fontSize:9,fontWeight:800,color:IOS.label3,letterSpacing:"0.06em"}}>U</span>
+                    </span>}
+                  </div>); })()}
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{transform:isOpen?"rotate(180deg)":"none",transition:"transform .2s"}}><polyline points="6 9 12 15 18 9"/></svg>
                 </div>
               </div>
@@ -4580,6 +4600,17 @@ function liveMatch(pick, games){
     else {
       // No usable date: prefer a game that ISN'T over (a fresh pick can't be on a final —
       // the doubleheader tiebreak) and only take a final if nothing else matches.
+      //
+      // But "no date" must not mean "any date". Props are saved with game_date null when
+      // the bet carried no gameTime, so a June prop on Reds@Pirates matched TODAY's
+      // Reds game and rendered a live score on a settled pick. created_at is not precise
+      // enough to match on, but it is more than good enough to REJECT with: a pick made
+      // weeks ago cannot belong to a game starting now.
+      const _made = pick && pick.created_at ? Date.parse(pick.created_at) : NaN;
+      if(!isNaN(_made) && g.gameDate){
+        const gd = Date.parse(g.gameDate);
+        if(!isNaN(gd) && Math.abs(gd-_made) > 36*3600*1000) continue;
+      }
       const rank = g.state==="final" ? 2 : (g.state==="live" ? 0 : 1);
       if(best===null || (best.diff===Infinity && rank < (best._rank!=null?best._rank:9))) best={g,diff:Infinity,_rank:rank};
     }
@@ -18943,9 +18974,6 @@ function App() {
        </div>
        <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
          <div style={{textAlign:"right"}}>
-           <div style={{fontSize:20,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,color:w.pts>0?IOS.green:(_g>0?IOS.label3:IOS.label3)}}>
-             {_g===0 && _pending>0 ? "\u2014" : (w.pts>0?"+"+w.pts:"0")}
-           </div>
            {isBest&&<div style={{fontSize:8,fontWeight:700,color:IOS.green,background:"rgba(48,209,88,0.1)",border:"0.5px solid rgba(48,209,88,0.2)",borderRadius:4,padding:"1px 5px",marginTop:2}}>BEST SLATE</div>}
          </div>
          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2.4" strokeLinecap="round" style={{transform:wOpen?"rotate(180deg)":"none",transition:"transform .2s"}}><polyline points="6 9 12 15 18 9"/></svg>
@@ -18985,10 +19013,16 @@ function App() {
      <div style={{height:14,margin:"0 -1px",background:"radial-gradient(circle at 7px 50%, #07070A 5px, transparent 5.5px) 0 0/14px 14px repeat-x"}}/>
      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 15px"}}>
        <span style={{fontSize:10,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:IOS.label3}}>{_pending>0?"If everything hits":"Slate total"}</span>
-       <span style={{display:"flex",alignItems:"baseline",gap:10}}>
-         <span style={{fontSize:24,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,color:w.pts>0?IOS.green:"#fff"}}>{w.pts>0?"+"+w.pts:(w.pts||0)}</span>
+       <span style={{display:"flex",alignItems:"baseline",gap:14}}>
+         <span style={{display:"flex",alignItems:"baseline",gap:4}}>
+           <span style={{fontSize:24,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,color:w.pts>0?IOS.green:"#fff"}}>{_g===0&&_pending>0?"\u2014":(w.pts>0?"+"+w.pts:(w.pts||0))}</span>
+           <span style={{fontSize:10,fontWeight:800,color:IOS.label3,letterSpacing:"0.06em"}}>PTS</span>
+         </span>
          {_g>0 && (()=>{ const u=sumUnits(w.picks||[]); return (
-           <span style={{fontSize:15,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,color:u>=0?IOS.green:IOS.red}}>{fmtUnits(u)}</span>); })()}
+         <span style={{display:"flex",alignItems:"baseline",gap:3}}>
+           <span style={{fontSize:18,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,color:u>=0?IOS.green:IOS.red}}>{(u>=0?"+":"\u2212")+Math.abs(u).toFixed(1)}</span>
+           <span style={{fontSize:10,fontWeight:800,color:IOS.label3,letterSpacing:"0.06em"}}>U</span>
+         </span>); })()}
        </span>
      </div>
    </div>
