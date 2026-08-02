@@ -18339,7 +18339,10 @@ function App() {
  {gameSheet && (
  <div style={{position:"fixed",inset:0,zIndex:8000,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>setGameSheet(null)}>
  <div className="pk-veil" style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.6)",backdropFilter:"blur(4px)"}}/>
- <div className="pk-sheet" ref={gcScrollRef} onClick={e=>e.stopPropagation()} style={{position:"relative",background:"#1C1C1E",maxHeight:"85vh",overflowY:"auto",paddingBottom:40}}>
+ {/* height, not maxHeight: a bottom-anchored sheet that resizes with its content makes
+     the top edge jump on every tab switch. Fixed height keeps the frame still and lets
+     only the pane move. */}
+ <div className="pk-sheet" ref={gcScrollRef} onClick={e=>e.stopPropagation()} style={{position:"relative",background:"#1C1C1E",height:"85vh",overflowY:"auto",overscrollBehavior:"contain",paddingBottom:40}}>
  {/* Close — always visible, clears the notch */}
  <div onClick={()=>setGameSheet(null)} style={{position:"absolute",top:12,right:14,zIndex:20,width:32,height:32,borderRadius:"50%",background:"rgba(255,255,255,0.14)",border:EDGE.hair3,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -18360,7 +18363,11 @@ function App() {
  const awayRec=eg?.awayRecord||(T0&&T0.record)||""; const homeRec=eg?.homeRecord||(T1&&T1.record)||"";
  const awaySt=((T0&&T0.standing)||"").replace(" in "," "); const homeSt=((T1&&T1.standing)||"").replace(" in "," ");
  const awayLogo=eg?.awayLogo; const homeLogo=eg?.homeLogo;
- const awayColor=(T0&&T0.color)||IOS.blue; const homeColor=(T1&&T1.color)||IOS.orange;
+ // Neutral until the real team colours arrive. The old fallbacks (blue/orange) painted
+ // a confident identity for a beat and then swapped — which reads as a stale screen,
+ // not as loading. Grey says "not known yet", which is the truth.
+ const _tint="rgba(255,255,255,0.22)";
+ const awayColor=(T0&&T0.color)||_tint; const homeColor=(T1&&T1.color)||_tint;
  const AC=IOS.red; const HC=IOS.green;
  const venue=det.venue||""; const tv=det.broadcast||""; const wx=det.weather||null;
  const gid=eg&&eg.id; const read=(gid&&gameRead[gid])||null;
