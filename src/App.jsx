@@ -5512,6 +5512,7 @@ function App() {
     return () => { alive=false; if(_liveTimer.current) clearInterval(_liveTimer.current); };
   }, []);
   const openGamecast = async (pick) => {
+   setGcTab("ov");
     let g = liveMatch(pick, liveGames);
     if (!g && pick && pick.game_date) {
       try {
@@ -5535,6 +5536,7 @@ function App() {
  const [strayPicks, setStrayPicks] = useState([]);
  const [leagueRecapLoading, setLeagueRecapLoading] = useState(false);
  const [gameSheet, setGameSheet] = useState(null); // { tickerGame, espnGame, detail }
+ const [gcTab, setGcTab] = useState("ov");   // game sheet tab: Overview | Lineups | Odds | Plok
  const [gameTeamTab, setGameTeamTab] = useState('matchup'); // 'matchup' | 'away' | 'home' 
  const [gameLoading, setGameLoading] = useState(false);
  const [gameRead, setGameRead] = useState({});
@@ -9063,7 +9065,14 @@ function App() {
    margin-bottom:calc(8px + var(--sa-bot));
    border:0.5px solid rgba(255,255,255,0.12);
    box-shadow:0 24px 60px -16px rgba(0,0,0,0.88), inset 0 1px 0 rgba(255,255,255,0.08);}
- .pk-sheet.pk-snap{transition:transform .26s cubic-bezier(0.32,0.72,0,1);}
+ /* Straight slide — the sheet travels its own height. No fade or scale: those read as
+    "a panel appeared"; this reads as "a surface came up", which is what it is. */
+ @keyframes pkSheetIn{from{transform:translateY(100%)}to{transform:none}}
+ @keyframes pkVeilIn{from{opacity:0}to{opacity:1}}
+ .pk-sheet{animation:pkSheetIn .30s cubic-bezier(0.32,0.72,0,1) both;}
+ .pk-veil{animation:pkVeilIn .26s ease both;}
+ .pk-sheet.pk-snap{transition:transform .26s cubic-bezier(0.32,0.72,0,1);animation:none;}
+ @media (prefers-reduced-motion: reduce){ .pk-sheet{animation:none;} .pk-veil{animation:none;} }
  @media (prefers-reduced-motion: reduce){ .pk-sheet.pk-snap{transition:none;} }
  /* Standings row: your row is unmistakable rather than a faint tint, and the bar shows
     the gap to the leader without asking anyone to compare four columns of numbers. */
@@ -18308,7 +18317,7 @@ function App() {
       {/* ══ GAME DETAIL SHEET ══ */}
  {gameSheet && (
  <div style={{position:"fixed",inset:0,zIndex:8000,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>setGameSheet(null)}>
- <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.6)",backdropFilter:"blur(4px)"}}/>
+ <div className="pk-veil" style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.6)",backdropFilter:"blur(4px)"}}/>
  <div className="pk-sheet" onClick={e=>e.stopPropagation()} style={{position:"relative",background:"#1C1C1E",maxHeight:"85vh",overflowY:"auto",paddingBottom:40}}>
  {/* Close — always visible, clears the notch */}
  <div onClick={()=>setGameSheet(null)} style={{position:"absolute",top:12,right:14,zIndex:20,width:32,height:32,borderRadius:"50%",background:"rgba(255,255,255,0.14)",border:EDGE.hair3,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
@@ -18437,7 +18446,15 @@ function App() {
    ):null}
    </div>
 
+  <div style={{position:"sticky",top:0,zIndex:12,display:"flex",padding:"0 6px",background:"rgba(11,11,15,0.97)",backdropFilter:"blur(14px)",WebkitBackdropFilter:"blur(14px)",borderBottom:EDGE.hair,overflowX:"auto"}}>
+  {[["ov","Overview"],["lu","Lineups"],["od","Odds"],["pk","Plok"]].map(([k,lb])=>(
+    <div key={k} onClick={()=>setGcTab(k)} style={{flex:"0 0 auto",padding:"12px 14px",fontSize:13,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap",position:"relative",color:gcTab===k?"#fff":IOS.label3}}>
+      {lb}
+      {gcTab===k && <div style={{position:"absolute",left:12,right:12,bottom:0,height:2.5,borderRadius:2,background:IOS.blue}}/>}
+    </div>))}
+  </div>
    <div style={{padding:"0 16px 4px"}}>
+{gcTab==="ov" && (<>
    {hasMound?(<>
    <Sec t="On the Mound"/>
    <div style={{background:_card.background,border:_card.border,borderRadius:RAD.lg,overflow:"hidden",display:"flex",alignItems:"stretch",padding:"14px 10px"}}>
@@ -18446,14 +18463,20 @@ function App() {
    <PitCol m={mH} color={homeColor} abbr={homeAbbr}/>
    </div>
    </>):null}
+</>)}
 
+{gcTab==="lu" && (<>
    {((activeLeague&&activeLeague.sport)==="mlb")?(<LineupSection away={away} home={home} date={tg.time} firstPitchLabel={gameTime||"first pitch"} IOS={IOS}/>):null}
+</>)}
 
+{gcTab==="ov" && (<>
    {hasTiles?(
    <StatTiles tiles={tiles} sport={(activeLeague&&activeLeague.sport)} away={away} home={home} date={tg.time} aColor={_brite(awayColor)} hColor={_brite(homeColor)} IOS={IOS} mt={hasMound?14:8}/>
    ):null}
 
    <div style={{marginTop:16}}/>
+</>)}
+{gcTab==="pk" && (<>
    {(read && (read.loading || (read.data && read.data.summary))) ? (
  <div onClick={()=>{ if(read.loading) return; setGameSheet(null); askFindBet({sport:(activeLeague&&activeLeague.sport)||"nfl", game:away+" @ "+home}); }} style={{background:"linear-gradient(135deg,rgba(10,132,255,0.16),rgba(94,92,230,0.08))",border:"0.5px solid rgba(10,132,255,0.34)",borderRadius:RAD.lg,padding:"13px 15px",marginBottom:2,cursor:"pointer"}}>
  <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:read.loading?6:8}}>
@@ -18471,7 +18494,9 @@ function App() {
  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={IOS.label3} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6"/></svg>
  </div>
  )}
+</>)}
 
+{gcTab==="ov" && (<>
    {tapeRows.filter(r=>r.k!=="Streak").length>0?(<>
    <Sec t="The Tape"/>
    <div style={_card}>
@@ -18491,7 +18516,9 @@ function App() {
    ); })}
    </div>
    </>):null}
+</>)}
 
+{gcTab==="ov" && (<>
    {hasLeaders?(<>
    <Sec t="Leaders"/>
    <div style={{background:_card.background,border:_card.border,borderRadius:RAD.lg,overflow:"hidden",display:"flex"}}>
@@ -18508,7 +18535,9 @@ function App() {
    ))}
    </div>
    </>):null}
+</>)}
 
+{gcTab==="ov" && (<>
    {(form0.length>0||form1.length>0)?(<>
    <Sec t="Form · Last 5"/>
    <div style={_card}>
@@ -18522,7 +18551,9 @@ function App() {
    ))}
    </div>
    </>):null}
+</>)}
 
+{gcTab==="ov" && (<>
    {(h2h.length>0||h2hSummary)?(<>
    <Sec t="Head to Head"/>
    <div style={_card}>
@@ -18539,7 +18570,9 @@ function App() {
    ); })}
    </div>
    </>):null}
+</>)}
 
+{gcTab==="od" && (<>
    {((odds.ml&&odds.ml.length>0)||(odds.spread&&odds.spread.length>0)||(odds.ou&&odds.ou.length>0))?(<>
    <Sec t="DraftKings Odds"/>
    <div style={{background:_card.background,border:_card.border,borderRadius:RAD.lg,overflow:"hidden",display:"flex"}}>
@@ -18555,8 +18588,20 @@ function App() {
    </div>
    ))}
    </div>
+   <div onClick={()=>{ setGameSheet(null); setBuildingSlip(true); setGridTargetSlot(null); setGridType("prop"); setGridPropSub("all"); setGridSearch(((tg&&tg.away)||away||"")); setScreen("browser"); }}
+     style={{display:"flex",alignItems:"center",gap:10,marginTop:9,padding:"12px 14px",borderRadius:RAD.lg,cursor:"pointer",
+       background:"rgba(10,132,255,0.09)",border:"1px solid rgba(10,132,255,0.32)"}}>
+     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.3" strokeLinecap="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+     <div style={{flex:1,minWidth:0}}>
+       <div style={{fontSize:13.5,fontWeight:800,color:"#fff"}}>Player props</div>
+       <div style={{fontSize:10.5,color:IOS.label3,marginTop:1}}>Open the board for this game</div>
+     </div>
+     <span style={{color:IOS.blue,fontSize:18,fontWeight:800}}>{"\u203a"}</span>
+   </div>
    </>):null}
+</>)}
 
+{gcTab==="lu" && (<>
    {injuries.length>0?(<>
    <Sec t="Injury Report"/>
    <div style={{background:_card.background,border:_card.border,borderRadius:RAD.lg,overflow:"hidden",display:"flex",padding:"12px 6px",marginBottom:8}}>
@@ -18565,17 +18610,20 @@ function App() {
    <InjCol list={injHome} color={homeColor} abbr={homeAbbr}/>
    </div>
    </>):null}
+</>)}
 
    {gameLoading?<SkelRows n={6} avatar={false} sub={false} pad="14px 4px 6px"/>:null}
    {(!gameLoading&&!det.teams&&!eg)?<div style={{textAlign:"center",padding:"16px 8px 8px",color:IOS.label3,fontSize:13,lineHeight:1.6}}>Detailed stats not available yet — check back closer to game time.</div>:null}
    </div>
 
+{gcTab==="od" && (<>
    {/* Footer CTA */}
    <div style={{padding:"16px 16px calc(20px + var(--sa-bot))"}}>
    <div onClick={()=>{ setGameSheet(null); setScreen("picks"); }} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"linear-gradient(135deg,"+IOS.blue+",#5e5ce6)",borderRadius:RAD.lg,padding:14,fontWeight:800,fontSize:15,color:"#fff",cursor:"pointer",boxShadow:"0 10px 26px -8px rgba(10,132,255,0.6)"}}>
    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg> Add a pick from this game
    </div>
    </div>
+</>)}
    </div>
    );
  })()}
