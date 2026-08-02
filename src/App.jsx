@@ -4872,6 +4872,25 @@ function App() {
  const setSoloSportPersist = (sp) => { setSoloSport(sp); try{localStorage.setItem("picklock_solo_sport",sp);}catch(e){} };
  const [showSoloSportPicker, setShowSoloSportPicker] = useState(false); // sport selector before building
  const activeLeague = isSoloMode ? {id:soloLeagueId||"solo",name:"Solo Mode",sport:soloSport,current_week:soloWeekNum(),season_weeks:99,max_members:1,target_size:1,isCommissioner:false} : ([...realLeagues].find(l=>l.id===activeLeagueId) || realLeagues[0] || {id:"",name:"",sport:"nfl",current_week:1,season_weeks:18,max_members:8,target_size:8,isCommissioner:false});
+ // Eliminated: the playoffs are running, the bracket has rows for this week, and you
+ // are in none of them. Same test the Matchup tab already uses for its eliminated
+ // recap — that knowledge just never reached the slip builder, so a knocked-out
+ // player could lock eight picks that counted toward nothing.
+ // Declared HERE, above every use: as a const it would sit in the temporal dead zone
+ // if it were defined further down, and throw at render.
+ // Deliberately conservative — zero rows means "not loaded yet", never "eliminated".
+ const isEliminated=(()=>{
+   try{
+     if(isSoloMode||!activeLeague||!activeLeague.id) return false;
+     const _tot=(leagueMembers||[]).length;
+     const _N=playoffFieldFor(activeLeague,_tot); if(_N<2) return false;
+     const _cw=activeLeague.current_week||activeLeague.week||1;
+     if(_cw<=regularSeasonWeeksFor(activeLeague,_tot)) return false;
+     const _rows=(allMatchups||[]).filter(m=>m.week===_cw);
+     if(!_rows.length) return false;
+     return !_rows.some(m=>m.user1_id===(user&&user.id)||m.user2_id===(user&&user.id));
+   }catch(e){ return false; }
+ })();
  const _lgTarget=(activeLeague&&(activeLeague.target_size||activeLeague.max_members))||8;
  const _lgMembers = Math.max(Number((activeLeague&&activeLeague.memberCount)||0), (!isSoloMode && activeLeague && activeLeague.id && Array.isArray(leagueMembers)) ? leagueMembers.length : 0);
  const leagueFull = !isSoloMode && (_lgMembers >= _lgTarget);
@@ -10045,6 +10064,14 @@ function App() {
    const _stripDot=liveCount>0?"#64D2FF":(hit>0?"#30D158":"#FF453A");
    const _stripText=liveCount>0?(liveCount+" of "+slotCount+" legs live"+(settleMs?(" · settles ~"+fmtClk(settleMs)):"")+" · "+weekPts+" this week"):(hit+" of "+total+" hit · "+weekPts+" pts this week");
    const _buildLabel=isSoloMode?"Build this week's slip":("Build Week "+(activeLeague.current_week||activeLeague.week||1)+" slip");
+   /* Knocked out: the builder is not offered at all, and the reason is on screen. */
+   if(isEliminated) return (
+     <div style={{margin:"0 16px 14px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.lg,padding:"16px"}}>
+       <div style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:IOS.label3}}>Season over</div>
+       <div style={{fontSize:16,fontWeight:800,color:"#fff",marginTop:5}}>You're out of the playoffs</div>
+       <div style={{fontSize:12,color:IOS.label2,marginTop:4,lineHeight:1.45}}>No matchup this week, so there's nothing to pick for. Your season record and stats are locked in {"\u2014"} watch the bracket to see who takes it.</div>
+     </div>
+   );
    const _addLabel=openSlots===1?"Add a pick":("Add "+openSlots+" picks");
    const _openLabel=openSlots+" slot"+(openSlots>1?"s":"")+" open";
    const _lab={fontSize:9.5,letterSpacing:"0.12em",color:"rgba(255,255,255,0.3)",fontWeight:700,textTransform:"uppercase"};
@@ -10588,7 +10615,7 @@ function App() {
  // Use separate state for solo mode vs league mode
  const activePicks = isSoloMode ? soloFlexPicks : flexPicks;
  const setActivePicks = isSoloMode ? setSoloFlexPicks : setFlexPicks;
- const openSlot=(i)=>{ const s=activePicks[i]; if(s&&s.committed){ alert(slotGraded(s)?"This pick has already been graded — it can’t be changed.":slotStarted(s)?"That game has started — this pick is locked in.":"This pick is locked in. Tap Unlock first to change it."); return; } setBuildingSlip(true); setGridTargetSlot(i); setGridType((s&&s.category)?s.category:"ml"); setGridPropSub("all"); setScreen("browser"); };
+ const openSlot=(i)=>{ if(isEliminated){ alert("Your season is over \u2014 you're out of the playoffs. Picks would not count toward anything."); return; } const s=activePicks[i]; if(s&&s.committed){ alert(slotGraded(s)?"This pick has already been graded — it can’t be changed.":slotStarted(s)?"That game has started — this pick is locked in.":"This pick is locked in. Tap Unlock first to change it."); return; } setBuildingSlip(true); setGridTargetSlot(i); setGridType((s&&s.category)?s.category:"ml"); setGridPropSub("all"); setScreen("browser"); };
  const activeSubmitted = isSoloMode ? soloSubmitted : submitted;
  const activeSavedPicks = isSoloMode ? soloSavedPicks : savedPicks;
  const setActiveSavedPicks = isSoloMode ? setSoloSavedPicks : setSavedPicks;
@@ -11059,7 +11086,7 @@ function App() {
  const _wt = (m) => { const r=(Number(m)||1)/_mMax; return r>=0.75?3:r>=0.4?2:1; };
  const _wash = (x) => washAccent(x&&x.isParlay?null:(x&&x.bet?x.bet.pick:null), !!(x&&x.isParlay));
  const emptyLeft=allSlots.filter(x=>!x.committed && !x.mult && !x.bet && !(x.isParlay&&x.parlayLegs&&x.parlayLegs.length)).length;
- const canEdit=slots.some(x=>!slotLocked(x)) || emptyLeft>0;
+ const canEdit=(slots.some(x=>!slotLocked(x)) || emptyLeft>0) && !isEliminated;
  const wk=activeLeague.current_week||activeLeague.week||1;
  const catColors={ml:IOS.blue,prop:IOS.yellow,ou:IOS.orange,spread:IOS.green,longshot:IOS.pink};
  const catLabels={ml:"Moneyline",prop:"Prop",ou:"Over/Under",spread:"Spread",longshot:"Longshot",yrfi:"YRFI",nrfi:"NRFI",wildcard:"Wildcard"};
@@ -13681,6 +13708,9 @@ function App() {
              const u1=mu.user1_id,u2=mu.user2_id;
              const mine=u1===(user&&user.id)||u2===(user&&user.id);
              const done=mu.winner_id!=null;
+             // A bye is one seated player and one empty seat — never played, so no score
+             // and no FINAL. The empty seat is a BYE, not a person named "Player".
+             const isBye=(!!u1)!==(!!u2);
              const _curWk=activeLeague.current_week||activeLeague.week||1;
              const _useLive=!done && mu.week===_curWk;
              const _liveSum=(uid)=>(weekPicks||[]).filter(pp=>pp.user_id===uid && pp.result==="W").reduce((sm,pp)=>sm+parseFloat(pp.points_earned||0),0);
@@ -13701,21 +13731,21 @@ function App() {
                const lp=(cl.locked/_maxCeil)*100, mp=(cl.live/_maxCeil)*100;
                return (
                 <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 13px",opacity:lead?1:(anyLead?0.7:1)}}>
-                  <div style={{width:28,height:28,borderRadius:RAD.sm,flexShrink:0,background:tint+"33",color:tint,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900}}>{(nameOf(id)||"?").slice(0,2).toUpperCase()}</div>
-                  <div style={{width:96,flexShrink:0,fontSize:13.5,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",color:you?IOS.blue:"#fff"}}>{nameOf(id)}</div>
+                  <div style={{width:28,height:28,borderRadius:RAD.sm,flexShrink:0,background:tint+"33",color:tint,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900}}>{id?(nameOf(id)||"?").slice(0,2).toUpperCase():"\u2014"}</div>
+                  <div style={{width:96,flexShrink:0,fontSize:13.5,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",color:!id?IOS.label3:(you?IOS.blue:"#fff")}}>{id?nameOf(id):"BYE"}</div>
                   <div style={{flex:1,height:8,borderRadius:4,background:"rgba(0,0,0,0.4)",position:"relative",overflow:"hidden",boxShadow:"inset 0 1px 2px rgba(0,0,0,0.55)"}}>
-                    <div style={{position:"absolute",left:0,top:0,bottom:0,borderRadius:4,width:lp+"%",background:`linear-gradient(180deg,${tint},${tint}cc)`,boxShadow:`0 0 8px ${tint}55`}}/>
-                    {cl.live>0 && <div style={{position:"absolute",top:0,bottom:0,left:lp+"%",width:mp+"%",background:`repeating-linear-gradient(115deg,${tint}3a 0 4px,transparent 4px 8px)`}}/>}
+                    {!isBye && <div style={{position:"absolute",left:0,top:0,bottom:0,borderRadius:4,width:lp+"%",background:`linear-gradient(180deg,${tint},${tint}cc)`,boxShadow:`0 0 8px ${tint}55`}}/>}
+                    {!isBye && cl.live>0 && <div style={{position:"absolute",top:0,bottom:0,left:lp+"%",width:mp+"%",background:`repeating-linear-gradient(115deg,${tint}3a 0 4px,transparent 4px 8px)`}}/>}
                   </div>
-                  <div style={{width:50,textAlign:"right",flexShrink:0,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:19,color:lead?IOS.green:"#fff"}}>{pts.toFixed(1)}</div>
+                  <div style={{width:50,textAlign:"right",flexShrink:0,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:19,color:isBye?IOS.label3:(lead?IOS.green:"#fff")}}>{isBye?"\u2014":pts.toFixed(1)}</div>
                 </div>
                );
              };
              return (
                <div key={mi} onClick={()=>openMatchupPager(weekMs, mi, "Week "+wkSel, wkSel)} style={{background:IOS.bg2,border:mine?("1px solid "+IOS.blue+"88"):`1px solid ${IOS.sep}`,borderRadius:RAD.lg,marginBottom:11,overflow:"hidden",cursor:"pointer"}}>
                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 13px 2px"}}>
-                   <div style={{fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",color:mine?IOS.blue:IOS.label3}}>{mine?"Your matchup":"Matchup"}</div>
-                   <div style={{fontSize:10,fontWeight:800,padding:"3px 8px",borderRadius:RAD.sm,background:done?"rgba(255,255,255,0.08)":"rgba(48,209,88,0.14)",color:done?IOS.label2:IOS.green}}>{done?"FINAL":"LIVE"}</div>
+                   <div style={{fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",color:mine?IOS.blue:IOS.label3}}>{isBye?(mine?"You have a bye":"Bye"):(mine?"Your matchup":"Matchup")}</div>
+                   <div style={{fontSize:10,fontWeight:800,padding:"3px 8px",borderRadius:RAD.sm,background:isBye?"rgba(255,159,10,0.14)":(done?"rgba(255,255,255,0.08)":"rgba(48,209,88,0.14)"),color:isBye?IOS.orange:(done?IOS.label2:IOS.green)}}>{isBye?"BYE":(done?"FINAL":"LIVE")}</div>
                  </div>
                  {row(u1,p1,lead1,_cA,0)}
                  <div style={{height:0.5,background:IOS.sep,margin:"0 13px"}}/>
@@ -14938,13 +14968,13 @@ function App() {
           const lp=(cl.locked/_maxCeil)*100, mp=(cl.live/_maxCeil)*100;
           return (
            <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 13px",opacity:lead?1:(anyLead?0.7:1)}}>
-             <div onClick={(e)=>{ if(!id) return; e.stopPropagation(); openUserProfile(id,{username:you?((userProfile&&userProfile.username)||"You"):nm(id)}); }} style={{width:28,height:28,borderRadius:RAD.sm,flexShrink:0,background:tint+"33",color:tint,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900,cursor:id?"pointer":"default"}}>{(nm(id)||"?").slice(0,2).toUpperCase()}</div>
-             <div onClick={(e)=>{ if(!id) return; e.stopPropagation(); openUserProfile(id,{username:you?((userProfile&&userProfile.username)||"You"):nm(id)}); }} style={{width:96,flexShrink:0,fontSize:13.5,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",color:you?IOS.blue:"#fff",cursor:id?"pointer":"default"}}>{nm(id)}</div>
+             <div onClick={(e)=>{ if(!id) return; e.stopPropagation(); openUserProfile(id,{username:you?((userProfile&&userProfile.username)||"You"):nm(id)}); }} style={{width:28,height:28,borderRadius:RAD.sm,flexShrink:0,background:tint+"33",color:tint,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900,cursor:id?"pointer":"default"}}>{id?(nm(id)||"?").slice(0,2).toUpperCase():"\u2014"}</div>
+             <div onClick={(e)=>{ if(!id) return; e.stopPropagation(); openUserProfile(id,{username:you?((userProfile&&userProfile.username)||"You"):nm(id)}); }} style={{width:96,flexShrink:0,fontSize:13.5,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",color:!id?IOS.label3:(you?IOS.blue:"#fff"),cursor:id?"pointer":"default"}}>{id?nm(id):"BYE"}</div>
              <div style={{flex:1,height:8,borderRadius:4,background:"rgba(0,0,0,0.4)",position:"relative",overflow:"hidden",boxShadow:"inset 0 1px 2px rgba(0,0,0,0.55)"}}>
-               <div style={{position:"absolute",left:0,top:0,bottom:0,borderRadius:4,width:lp+"%",background:`linear-gradient(180deg,${tint},${tint}cc)`,boxShadow:`0 0 8px ${tint}55`}}/>
-               {cl.live>0 && <div style={{position:"absolute",top:0,bottom:0,left:lp+"%",width:mp+"%",background:`repeating-linear-gradient(115deg,${tint}3a 0 4px,transparent 4px 8px)`}}/>}
+               {!isBye && <div style={{position:"absolute",left:0,top:0,bottom:0,borderRadius:4,width:lp+"%",background:`linear-gradient(180deg,${tint},${tint}cc)`,boxShadow:`0 0 8px ${tint}55`}}/>}
+               {!isBye && cl.live>0 && <div style={{position:"absolute",top:0,bottom:0,left:lp+"%",width:mp+"%",background:`repeating-linear-gradient(115deg,${tint}3a 0 4px,transparent 4px 8px)`}}/>}
              </div>
-             <div style={{width:50,textAlign:"right",flexShrink:0,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:19,color:lead?IOS.green:"#fff"}}>{pts.toFixed(1)}</div>
+             <div style={{width:50,textAlign:"right",flexShrink:0,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:19,color:isBye?IOS.label3:(lead?IOS.green:"#fff")}}>{isBye?"\u2014":pts.toFixed(1)}</div>
            </div>
           );
         };
@@ -16270,7 +16300,8 @@ function App() {
  <div style={{padding:"4px 20px 8px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
  <div style={{display:"flex",alignItems:"center",gap:8}}>
  <div style={{fontSize:18}}></div>
- <div style={{fontSize:17,fontWeight:700,letterSpacing:-0.3,color:"#fff"}}>Season Standings</div>
+ <div><div style={{fontSize:17,fontWeight:700,letterSpacing:-0.3,color:"#fff"}}>Season Standings</div>
+ <div style={{fontSize:11,color:IOS.label3,marginTop:1}}>Ranked by record {"\u00b7"} points break ties</div></div>
  </div>
  </div>
 
@@ -16279,8 +16310,8 @@ function App() {
  <div style={{display:"flex",alignItems:"center",padding:"8px 16px",borderBottom:`0.5px solid ${IOS.sep}`}}>
  <div style={{width:28,flexShrink:0}}/>
  <div style={{flex:1}}/>
- <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3,width:38,textAlign:"center"}}>W/L</div>
- <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3,width:52,textAlign:"right"}}>total pts</div>
+ <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3,width:52,textAlign:"center"}}>pts</div>
+ <div style={{fontSize:10,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3,width:44,textAlign:"right"}}>record</div>
  </div>
  {sorted.map((row,i)=>{
  const isMe=row.isYou||row.name==="You";
@@ -16299,8 +16330,8 @@ function App() {
  )}
  <div className="st-streak" style={{color:IOS.label3}}>{row.wpct} win rate</div>
  </div>
- <div className="st-rec" style={{color:IOS.label3}}>{row.record||"0-0"}</div>
- <div className={`st-units ${(row.points||0)>0?"pos":"neg"}`}>{row.points!==undefined?`${row.points}`:row.units}</div>
+ <div className="st-rec" style={{color:IOS.label3,width:52,textAlign:"center"}}>{row.points!==undefined?`${row.points}`:row.units}</div>
+ <div className="st-units pos" style={{width:44,textAlign:"right",color:"#fff"}}>{row.record||"0-0"}</div>
  </div>
  {isExp&&(
  <div className="expand-row">

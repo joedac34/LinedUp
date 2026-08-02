@@ -118,12 +118,20 @@ export default async function handler(req, res) {
 async function finalizeWeek(supabase, leagueId, week) {
   const { data: _lgRow } = await supabase.from("leagues").select("name").eq("id", leagueId).maybeSingle();
   const _leagueName = (_lgRow && _lgRow.name) || null;
-  const { data: wonPicks } = await supabase
-    .from("picks").select("user_id, points_earned")
-    .eq("league_id", leagueId).eq("week", week).eq("result", "W");
+  // Every pick for the week, not just the winners. Points still come only from wins,
+  // but we also need to know WHO SHOWED UP: submitting nothing scored 0, and going
+  // 0-for-8 scored 0, so the two were indistinguishable. With ties handed to user1 by
+  // seat, a player who skipped the week could beat a player who actually played.
+  const { data: weekPicks } = await supabase
+    .from("picks").select("user_id, result, points_earned")
+    .eq("league_id", leagueId).eq("week", week);
 
   const totals = {};
-  (wonPicks || []).forEach((p) => { totals[p.user_id] = (totals[p.user_id] || 0) + parseFloat(p.points_earned || 0); });
+  const submitted = {};
+  (weekPicks || []).forEach((p) => {
+    submitted[p.user_id] = (submitted[p.user_id] || 0) + 1;
+    if (p.result === "W") totals[p.user_id] = (totals[p.user_id] || 0) + parseFloat(p.points_earned || 0);
+  });
 
   const { data: matchups } = await supabase
     .from("matchups").select("id, user1_id, user2_id")
@@ -133,7 +141,15 @@ async function finalizeWeek(supabase, leagueId, week) {
     if (!m.user1_id || !m.user2_id) continue; // bye / not-yet-seated slot
     const p1 = totals[m.user1_id] || 0;
     const p2 = totals[m.user2_id] || 0;
-    const winner = p1 >= p2 ? m.user1_id : m.user2_id; // tie → user1 (better seed)
+    const s1 = submitted[m.user1_id] || 0;
+    const s2 = submitted[m.user2_id] || 0;
+    // Points decide it. On a tie, showing up beats not showing up — otherwise a no-show
+    // ties an 0-for-8 opponent, and wins outright whenever it happens to sit in seat 1.
+    // Only a genuine tie between two players who both played falls back to seed order.
+    let winner;
+    if (p1 !== p2) winner = p1 > p2 ? m.user1_id : m.user2_id;
+    else if (s1 !== s2) winner = s1 > s2 ? m.user1_id : m.user2_id;
+    else winner = m.user1_id; // tie → user1 (better seed)
 
     await supabase.from("matchups").update({
       winner_id: winner,
