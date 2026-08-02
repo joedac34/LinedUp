@@ -2654,6 +2654,56 @@ function playoffWeeksFor(n){ return n>=2 ? Math.ceil(Math.log2(n)) : 0; }
 // Regular-season weeks = season_weeks minus the reserved playoff rounds (last N weeks).
 function regularSeasonWeeksFor(league, total){ const sw=Number(league&&league.season_weeks||18); const N=playoffFieldFor(league, total); const pw=N>=2?playoffWeeksFor(N):0; return Math.max(1, sw-pw); }
 
+// Swipe-left to reveal a delete action. Replaces the absolutely-positioned "x", which
+// sat at top-right of the row and collided with the odds block that lives in the same
+// corner. touchAction:"pan-y" lets the browser keep vertical scrolling while we own the
+// horizontal axis, so the list still scrolls normally.
+function SwipeRow({ onDelete, disabled, label="Delete", children, bg="transparent" }){
+  const W=96;
+  const [dx,setDx]=useState(0);
+  const [anim,setAnim]=useState(true);
+  const st=useRef({x:0,y:0,axis:null,open:false});
+  if(disabled) return <div style={{background:bg}}>{children}</div>;
+  const start=(e)=>{ const t=e.touches&&e.touches[0]; if(!t) return;
+    st.current.x=t.clientX; st.current.y=t.clientY; st.current.axis=null; setAnim(false); };
+  const move=(e)=>{ const t=e.touches&&e.touches[0]; if(!t) return;
+    const dX=t.clientX-st.current.x, dY=t.clientY-st.current.y;
+    if(st.current.axis===null){
+      if(Math.abs(dX)<7 && Math.abs(dY)<7) return;              // wait for real intent
+      st.current.axis = Math.abs(dX)>Math.abs(dY) ? "x" : "y";
+    }
+    if(st.current.axis!=="x") return;
+    const base = st.current.open ? -W : 0;
+    let next = base + dX;
+    if(next>0) next = next*0.25;                                 // rubber-band past closed
+    if(next < -W-28) next = -W-28;
+    setDx(next);
+  };
+  const end=()=>{ setAnim(true);
+    if(st.current.axis!=="x"){ return; }
+    const open = dx < -W*0.42;
+    st.current.open = open; setDx(open?-W:0);
+  };
+  const close=()=>{ st.current.open=false; setAnim(true); setDx(0); };
+  return (
+    <div style={{position:"relative",overflow:"hidden",background:bg}}>
+      <div onClick={()=>{ close(); onDelete&&onDelete(); }}
+        style={{position:"absolute",top:0,bottom:0,right:0,width:W,background:"#FF453A",color:"#fff",
+          display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,cursor:"pointer"}}>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round">
+          <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/>
+        </svg>
+        <span style={{fontSize:10.5,fontWeight:800,letterSpacing:"0.04em"}}>{label}</span>
+      </div>
+      <div onTouchStart={start} onTouchMove={move} onTouchEnd={end} onTouchCancel={end}
+        style={{position:"relative",transform:"translateX("+dx+"px)",
+          transition:anim?"transform .24s cubic-bezier(.2,.8,.2,1)":"none",
+          touchAction:"pan-y",background:"#111116"}}>
+        {children}
+      </div>
+    </div>
+  );
+}
 // Season recap. Rendered from the Matchup screen when a member is knocked out, and
 // from a dedicated screen reachable from Home and Picks. One component, three entry
 // points — the Matchup version used to be the only place this existed.
@@ -5377,11 +5427,16 @@ function App() {
    return EMPTY_FLEX.map(s=>({...s}));
  });
  const [soloFlexPicks, setSoloFlexPicks] = useState(EMPTY_FLEX);
+ const [soloFreePicks, setSoloFreePicks] = useState([]); const soloDraftReady = useRef(false); const [soloParlay, setSoloParlay] = useState(null); const [soloParlayMode, setSoloParlayMode] = useState(false); const [pushNudgeOff, setPushNudgeOff] = useState(()=>{ try{ return localStorage.getItem("picklock_push_nudge")==="1"; }catch(e){ return false; } }); const [replaceCtx, setReplaceCtx] = useState(null); // void-replace: {voidId, mult, week, type} // freeform solo slate (variable count)
  // Mirrors the predicate the slip bar itself uses (App.jsx ~13691). Kept here so an
  // effect can watch it — the bar is built inside a JSX IIFE and cannot host a hook.
  const slipBarUp = (()=>{
    try{
      if(screen!=="browser") return false;
+     // Solo free-form picks live in soloFreePicks with a flat shape — reading only
+     // soloFlexPicks meant the dock never stood down for the solo slip bar, and the
+     // two would sit on top of each other exactly like the league bar used to.
+     if(isSoloMode && (soloFreePicks||[]).some(b=>b && !b.committed)) return true;
      const ap = isSoloMode ? soloFlexPicks : flexPicks;
      return (ap||[]).some(sl=> sl && !sl.committed && (sl.isParlay ? (sl.parlayLegs||[]).length>=2 : !!sl.bet));
    }catch(e){ return false; }
@@ -5393,7 +5448,6 @@ function App() {
      return ()=>{ try{ r.classList.remove("pk-slip-open"); }catch(e){} };
    }catch(e){}
  },[slipBarUp]);
- const [soloFreePicks, setSoloFreePicks] = useState([]); const soloDraftReady = useRef(false); const [soloParlay, setSoloParlay] = useState(null); const [soloParlayMode, setSoloParlayMode] = useState(false); const [pushNudgeOff, setPushNudgeOff] = useState(()=>{ try{ return localStorage.getItem("picklock_push_nudge")==="1"; }catch(e){ return false; } }); const [replaceCtx, setReplaceCtx] = useState(null); // void-replace: {voidId, mult, week, type} // freeform solo slate (variable count)
  const [freeCat, setFreeCat] = useState("all");
  const parseSlotConfig=(raw)=>{ try{ const a=typeof raw==="string"?JSON.parse(raw):raw; return (Array.isArray(a)&&a.length)?a:null; }catch(e){ return null; } };
  const freshSlots=()=>{ const cfg = !isSoloMode ? parseSlotConfig(activeLeague&&activeLeague.slot_config) : null; return cfg ? cfg.map((c,i)=>({id:i,bet:null,mult:null,category:c.type,slotType:c.type,market:c.market||null,isParlay:false,parlayLegs:[],locked:true})) : EMPTY_FLEX.map(s=>({...s})); };
@@ -5440,6 +5494,7 @@ function App() {
  const [gridPeriodSub, setGridPeriodSub] = useState(""); // period sub-type (solo browser)
  const [gridTargetSlot, setGridTargetSlot] = useState(null); // which flex slot a tapped card fills
  const [slipBarOpen, setSlipBarOpen] = useState(false); // DK-style slip sheet in the browser
+ const [soloSlipOpen, setSoloSlipOpen] = useState(false); // solo equivalent (free-form picks)
  const [slipPoolIdx, setSlipPoolIdx] = useState(-1);    // which slip row shows its multiplier pool
  const [slipToast, setSlipToast] = useState("");
  const [gridSearch, setGridSearch] = useState("");
@@ -12054,8 +12109,9 @@ function App() {
          const _showScore = b.game && _scp && (liveMatch(_scp, liveGames) || (_scp.away_score!=null && _scp.home_score!=null));
          const settled = _db && (_db.result==="W" || _db.result==="L");
          return (
-         <div key={b.slot||i} style={{padding:"12px 15px",borderBottom:EDGE.hair,position:"relative",background:ro?"rgba(255,255,255,0.012)":"transparent"}}>
-           {!ro && <div onClick={()=>removeSoloPick(b.slot)} style={{position:"absolute",top:10,right:11,width:22,height:22,borderRadius:"50%",background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",color:IOS.label3,fontSize:13,cursor:"pointer"}}>{"\u00d7"}</div>}
+         <SwipeRow key={b.slot||i} disabled={ro} onDelete={()=>removeSoloPick(b.slot)}
+           bg={ro?"rgba(255,255,255,0.012)":"transparent"}>
+         <div style={{padding:"12px 15px",borderBottom:EDGE.hair,position:"relative",background:ro?"rgba(255,255,255,0.012)":"transparent"}}>
            <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
              <div style={{width:3,borderRadius:2,alignSelf:"stretch",flexShrink:0,background:col}}/>
              <div style={{flex:1,minWidth:0,paddingRight:ro?4:24}}>
@@ -12095,7 +12151,8 @@ function App() {
              )}
            </div>
            {_showScore && <div style={{marginTop:8,marginLeft:13}}><ScoreChip pick={_scp} live={liveMatch(_scp, liveGames)}/></div>}
-         </div>);
+         </div>
+         </SwipeRow>);
        })}
 
        {drafts.length>0 && (<>
@@ -12105,8 +12162,8 @@ function App() {
          {drafts.map((b,i)=>{
            const col=b.categoryColor||IOS.blue; const per=ptsFor(b.impliedOdds); const n=b.mult||1;
            return (
-           <div key={b.id||i} style={{padding:"12px 15px",borderBottom:EDGE.hair,position:"relative"}}>
-             <div onClick={()=>setSoloFreePicks(soloFreePicks.filter(x=>x.id!==b.id))} style={{position:"absolute",top:10,right:11,width:22,height:22,borderRadius:"50%",background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",color:IOS.label3,fontSize:13,cursor:"pointer"}}>{"\u00d7"}</div>
+           <SwipeRow key={b.id||i} onDelete={()=>setSoloFreePicks(soloFreePicks.filter(x=>x.id!==b.id))}>
+           <div style={{padding:"12px 15px",borderBottom:EDGE.hair,position:"relative"}}>
              <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
                <div style={{width:3,borderRadius:2,alignSelf:"stretch",flexShrink:0,background:col}}/>
                <div style={{flex:1,minWidth:0,paddingRight:24}}>
@@ -12128,7 +12185,8 @@ function App() {
                </div>
                <span style={{marginLeft:"auto",fontSize:10.5,color:IOS.label3}}>worth <b style={{color:IOS.label2,fontWeight:800}}>{(per*n).toFixed(1)} pts</b></span>
              </div>
-           </div>);
+           </div>
+           </SwipeRow>);
          })}
        </>)}
 
@@ -12227,9 +12285,8 @@ function App() {
            const per=ptsFor(b.impliedOdds);
            const n=b.mult||1;
            return (
-           <div key={b.id} style={{padding:"12px 15px",borderBottom:EDGE.hair,position:"relative"}}>
-             <div onClick={()=>setSoloFreePicks(soloFreePicks.filter(x=>x.id!==b.id))}
-               style={{position:"absolute",top:10,right:11,width:22,height:22,borderRadius:"50%",background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",color:IOS.label3,fontSize:13,cursor:"pointer"}}>{"\u00d7"}</div>
+           <SwipeRow key={b.id} onDelete={()=>setSoloFreePicks(soloFreePicks.filter(x=>x.id!==b.id))}>
+           <div style={{padding:"12px 15px",borderBottom:EDGE.hair,position:"relative"}}>
              <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
                <div style={{width:3,borderRadius:2,alignSelf:"stretch",flexShrink:0,background:col}}/>
                <div style={{flex:1,minWidth:0,paddingRight:24}}>
@@ -12256,7 +12313,8 @@ function App() {
                </div>
                <span style={{marginLeft:"auto",fontSize:10.5,color:IOS.label3}}>worth <b style={{color:IOS.label2,fontWeight:800}}>{(per*n).toFixed(1)} pts</b></span>
              </div>
-           </div>);
+           </div>
+           </SwipeRow>);
          })}
 
          {/* The add row IS the last row of the slate. */}
@@ -13903,6 +13961,86 @@ function App() {
        </div>
      </div>}
      <div className={"psb-toast"+(slipToast?" on":"")}>{slipToast}</div>
+   </>);
+ })()}
+
+ {/* ══ Solo pick slip bar ══
+      The league bar above is welded to the slot pool — gridCfg, P-chips, swapTo,
+      canTake — and reads activePicks (soloFlexPicks in solo), which free-form solo
+      picks never touch. They live in soloFreePicks with a flat shape and an unlimited
+      1-5 multiplier per pick, so this is a sibling rather than a shared component. */}
+ {isSoloMode && screen==="browser" && (()=>{
+   const st=(soloFreePicks||[]).filter(b=>b && !b.committed);
+   if(!st.length) return null;
+   // Same formula as ptsFor() in the solo picks screen, which is scoped to that screen.
+   // Inlined rather than hoisted: one small pure expression beats exporting a helper
+   // across two unrelated screens.
+   const per=(b)=>{ const io=b.impliedOdds; if(io==null) return 0;
+     const d = io>0 ? (io/100)+1 : (100/Math.abs(io))+1;
+     return parseFloat(((d-1)*10).toFixed(1)); };
+   const tot=st.reduce((a,b)=>a+(b.mult||1)*per(b),0);
+   const nameOf=(b)=> b.isParlay ? ((b.parlayLegs||[]).length+"-leg parlay") : (b.pick||"Pick");
+   const setMult=(id,m)=>setSoloFreePicks(prev=>prev.map(x=>x.id===id?{...x,mult:m}:x));
+   const drop=(id)=>setSoloFreePicks(prev=>prev.filter(x=>x.id!==id));
+   return (<>
+     {!soloSlipOpen && <div className="psb-bar up" onClick={()=>setSoloSlipOpen(true)}>
+       <div className="psb-cnt">{st.length}</div>
+       <div style={{flex:1,minWidth:0}}>
+         <div style={{fontSize:14.5,fontWeight:900,letterSpacing:"-0.2px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+           {st.length===1 ? nameOf(st[0]) : (st.length+" picks on your slate")}
+         </div>
+         <div style={{fontSize:11,fontWeight:700,color:"rgba(14,14,18,0.38)",marginTop:1}}>
+           tap to set multipliers {"\u00b7"} <b style={{color:"#0a7d33"}}>{tot.toFixed(1)} pts</b> if all hit
+         </div>
+       </div>
+       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="rgba(14,14,18,0.4)" strokeWidth="2.4" strokeLinecap="round"><path d="M6 15l6-6 6 6"/></svg>
+     </div>}
+
+     <div className={"psb-veil"+(soloSlipOpen?" on":"")} onClick={()=>setSoloSlipOpen(false)}/>
+     <div className={"psb-sheet"+(soloSlipOpen?" up":"")}>
+       <div style={{width:36,height:4,borderRadius:2,background:"rgba(14,14,18,0.18)",margin:"9px auto 2px",flexShrink:0}}/>
+       <div style={{display:"flex",alignItems:"center",gap:11,padding:"8px 16px 10px",flexShrink:0}}>
+         <div className="psb-cnt">{st.length}</div>
+         <div style={{fontSize:19,fontWeight:900,letterSpacing:"-0.3px"}}>Pick Slip</div>
+         <div onClick={()=>setSoloSlipOpen(false)} style={{marginLeft:"auto",fontSize:13.5,fontWeight:800,color:"#0a7d33",cursor:"pointer"}}>+ Add more</div>
+       </div>
+       <div style={{flex:1,minHeight:0,overflowY:"auto",padding:"0 14px"}}>
+         {st.map((b)=>{
+           const n=b.mult||1;
+           return (
+           <div key={b.id} style={{padding:"13px 3px",borderBottom:"1px solid rgba(14,14,18,0.09)"}}>
+             <div style={{display:"flex",alignItems:"center",gap:11}}>
+               <div onClick={()=>drop(b.id)} style={{width:24,height:24,borderRadius:"50%",border:"1.5px solid rgba(255,69,58,0.5)",color:"#FF453A",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,cursor:"pointer",flexShrink:0,lineHeight:1}}>{"\u2212"}</div>
+               <div style={{flex:1,minWidth:0}}>
+                 <div style={{fontSize:15,fontWeight:800,letterSpacing:"-0.2px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nameOf(b)}</div>
+                 <div style={{fontSize:11.5,color:"rgba(14,14,18,0.45)",fontWeight:600,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.game}</div>
+               </div>
+               <div style={{textAlign:"right",flexShrink:0}}>
+                 <div style={{fontSize:15,fontWeight:900,fontFamily:"'Barlow Semi Condensed',sans-serif"}}>{b.odds}</div>
+                 <div style={{fontSize:11,fontWeight:800,color:"#0a7d33",marginTop:1}}>{(n*per(b)).toFixed(1)} pts</div>
+               </div>
+             </div>
+             <div style={{display:"flex",alignItems:"center",gap:6,marginTop:9}}>
+               <span style={{fontSize:9,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:"rgba(14,14,18,0.4)",marginRight:2}}>Multiplier</span>
+               {[1,2,3,4,5].map(m=>(
+                 <div key={m} onClick={()=>setMult(b.id,m)} style={{flex:1,textAlign:"center",padding:"6px 0",borderRadius:8,fontSize:12.5,fontWeight:800,cursor:"pointer",
+                   background:n===m?"#0A84FF":"rgba(14,14,18,0.06)",color:n===m?"#fff":"rgba(14,14,18,0.55)"}}>{m}{"\u00d7"}</div>
+               ))}
+             </div>
+           </div>);
+         })}
+       </div>
+       <div style={{padding:"11px 16px calc(14px + var(--sa-bot))",flexShrink:0,borderTop:"1px solid rgba(14,14,18,0.09)"}}>
+         <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",marginBottom:9}}>
+           <span style={{fontSize:12,fontWeight:700,color:"rgba(14,14,18,0.45)"}}>{st.length} pick{st.length!==1?"s":""}</span>
+           <span style={{fontSize:22,fontWeight:900,fontFamily:"'Barlow Semi Condensed',sans-serif"}}>{tot.toFixed(1)}<span style={{fontSize:11,fontWeight:700,color:"rgba(14,14,18,0.4)"}}> pts if all hit</span></span>
+         </div>
+         <button onClick={()=>{ setSoloSlipOpen(false); setBuildingSlip(false); setScreen("picks"); }}
+           style={{width:"100%",border:"none",borderRadius:13,padding:"14px",fontSize:15.5,fontWeight:800,color:"#fff",fontFamily:"Barlow,sans-serif",cursor:"pointer",background:"linear-gradient(120deg,#0A84FF,#5E5CE6)"}}>
+           Review slate
+         </button>
+       </div>
+     </div>
    </>);
  })()}
  </div>
