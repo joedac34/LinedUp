@@ -12020,91 +12020,137 @@ function App() {
    const possTotal=lp.reduce((su,b)=>su+(b.mult||1)*ptsFor(b.impliedOdds),0)+drafts.reduce((su,b)=>su+(b.mult||1)*ptsFor(b.impliedOdds),0);
    return (
    <>
-     <div style={{display:"flex",flexDirection:"column",gap:9,marginBottom:12}}>
+     {/* ── Locked slate, same ticket as the build state. Approved mockup 1. ──
+          Three per-pick states live here: PENDING (game not started, multiplier still
+          editable), SEALED (started \u2014 read-only), and SETTLED (graded). The sealed chip
+          deliberately matches the stepper's footprint so nothing shifts when a game
+          starts while you are looking at it. Picks added after locking sit under a
+          dashed band inside the same ticket rather than in a separate list. */}
+     <div className="pl-reveal" style={{background:"linear-gradient(180deg,#15151a,#0e0e12)",border:EDGE.hair,borderRadius:14,overflow:"hidden",marginBottom:12}}>
+
+       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"11px 15px",borderBottom:EDGE.hair}}>
+         <span style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.14em",textTransform:"uppercase",color:IOS.label3}}>Your slate</span>
+         <span style={{fontSize:9,fontWeight:800,letterSpacing:"0.09em",textTransform:"uppercase",padding:"4px 8px",borderRadius:6,color:IOS.orange,background:"rgba(255,159,10,0.13)",border:"1px solid rgba(255,159,10,0.32)"}}>Pending results</span>
+       </div>
+
        {lp.map((b,i)=>{
          const col=b.categoryColor||IOS.blue;
-         const _gtv=b.gameTime?new Date(b.gameTime).getTime():0; const isLk=(!b.gameTime||isNaN(_gtv))?true:(now>=_gtv);
+         const _gtv=b.gameTime?new Date(b.gameTime).getTime():0;
+         const isLk=(!b.gameTime||isNaN(_gtv))?true:(now>=_gtv);
          const ro=isLk||!b.slot;
-         const pp=(b.mult||1)*ptsFor(b.impliedOdds);
+         const per=ptsFor(b.impliedOdds);
+         const n=b.mult||1;
          const _db=_soloDb.find(x=>x.game===b.game && x.pick_name===b.pick);
-         const _scp=_db?{game:_db.game,game_date:_db.game_date||b.gameTime||null,result:_db.result,home_score:_db.home_score,away_score:_db.away_score,pick_name:b.pick,odds:b.odds}:{game:b.game,game_date:b.gameTime||null,result:b.result||"pending",pick_name:b.pick,odds:b.odds};
+         const _scp=_db?{game:_db.game,game_date:_db.game_date||b.gameTime||null,result:_db.result,home_score:_db.home_score,away_score:_db.away_score,pick_name:b.pick,odds:b.odds}:null;
+         const _showScore = b.game && _scp && (liveMatch(_scp, liveGames) || (_scp.away_score!=null && _scp.home_score!=null));
+         const settled = _db && (_db.result==="W" || _db.result==="L");
          return (
-         <div key={b.slot||i} className="pl-reveal" style={{position:"relative",background:IOS.bg2,border:EDGE.hair,borderRadius:RAD.lg,padding:"12px 13px"}}>
-           {!ro && <div onClick={()=>removeSoloPick(b.slot)} style={{position:"absolute",top:10,right:11,width:22,height:22,borderRadius:"50%",background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",color:"rgba(255,255,255,0.45)",fontSize:14,cursor:"pointer"}}>×</div>}
-           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:7,paddingRight:24}}>
-             <div style={{fontSize:8.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:col,background:`${col}1c`,borderRadius:5,padding:"3px 6px",flexShrink:0}}>{b.categoryLabel||b.category}</div>
-             <div style={{marginLeft:"auto",fontSize:13,fontWeight:800,color:(b.odds||"").startsWith("+")?IOS.green:IOS.blue}}>{b.odds}</div>
-           </div>
-           <div style={{fontSize:14.5,fontWeight:800,color:"#fff",letterSpacing:-0.2,lineHeight:1.15}}>{b.pick}</div>
-           <div style={{display:"flex",alignItems:"center",gap:5,fontSize:10.5,color:IOS.label3,marginTop:4,fontWeight:500}}>
-             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-             <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{[b.game, b.gameTime?_t(b.gameTime):""].filter(Boolean).join(" · ")}</span>
-             {b.gameTime && <span style={{color:isLk?IOS.label3:IOS.orange,fontWeight:700,flexShrink:0}}>{" · "+_lk(b.gameTime)}</span>}
-           </div>
-           {b.game && (liveMatch(_scp, liveGames) || (_scp.away_score!=null && _scp.home_score!=null)) && <div style={{marginTop:6}}><ScoreChip pick={_scp} live={liveMatch(_scp, liveGames)} onOpen={()=>openGamecast(_scp)}/></div>}
-           <div style={{height:1,background:"rgba(255,255,255,0.06)",margin:"10px 0 9px"}}/>
-           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
-             {ro ? (
-               <div style={{display:"flex",alignItems:"center",gap:5,fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:IOS.label3}}>
-                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
-                 Locked · {b.mult||1}×
+         <div key={b.slot||i} style={{padding:"12px 15px",borderBottom:EDGE.hair,position:"relative",background:ro?"rgba(255,255,255,0.012)":"transparent"}}>
+           {!ro && <div onClick={()=>removeSoloPick(b.slot)} style={{position:"absolute",top:10,right:11,width:22,height:22,borderRadius:"50%",background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",color:IOS.label3,fontSize:13,cursor:"pointer"}}>{"\u00d7"}</div>}
+           <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
+             <div style={{width:3,borderRadius:2,alignSelf:"stretch",flexShrink:0,background:col}}/>
+             <div style={{flex:1,minWidth:0,paddingRight:ro?4:24}}>
+               <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:col,marginBottom:5}}>{b.categoryLabel||"Pick"}</div>
+               <div style={{fontSize:14.5,fontWeight:700,color:"#fff",lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.pick}</div>
+               <div style={{fontSize:10.5,color:IOS.label3,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                 {[b.game, b.gameTime?_t(b.gameTime):""].filter(Boolean).join(" \u00b7 ")}
+                 {b.gameTime && !isLk && <span style={{color:IOS.orange,fontWeight:700}}>{" \u00b7 "+_lk(b.gameTime)}</span>}
                </div>
-             ) : (
-               <div style={{display:"flex",alignItems:"center",gap:5,flex:1}}>
-                 <span style={{fontSize:8.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:IOS.label3,marginRight:1,flexShrink:0}}>Units</span>
-                 {[1,2,3,4,5].map(m=>{ const on=(b.mult||1)===m; return (
-                   <div key={m} onClick={()=>editSoloPickMult(b.slot,m)} style={{flex:1,textAlign:"center",padding:"4px 0",borderRadius:RAD.sm,fontSize:11,fontWeight:800,cursor:"pointer",background:on?"rgba(10,132,255,0.18)":"rgba(255,255,255,0.04)",border:`1px solid ${on?IOS.blue:"rgba(255,255,255,0.08)"}`,color:on?IOS.blue:"rgba(255,255,255,0.4)"}}>{m}×</div>
-                 );})}
-               </div>
-             )}
-             <div style={{textAlign:"right",flexShrink:0,minWidth:58}}>
-               <div style={{fontSize:8,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",color:IOS.label3}}>Possible</div>
-               <div style={{fontSize:16,fontWeight:800,color:"#fff",fontFamily:"'Barlow Semi Condensed',sans-serif"}}>{pp.toFixed(1)}<span style={{fontSize:9.5,color:IOS.label3,fontWeight:600}}> pts</span></div>
+             </div>
+             <div style={{textAlign:"right",flexShrink:0}}>
+               <div style={{fontSize:15,fontWeight:800,fontFamily:"'Barlow Semi Condensed',sans-serif",color:"#fff"}}>{b.odds}</div>
+               <div style={{fontSize:10,color:IOS.label3,marginTop:2}}>{per.toFixed(1)} pts</div>
              </div>
            </div>
-         </div>
-         );
+           <div style={{display:"flex",alignItems:"center",gap:8,marginTop:9,marginLeft:13}}>
+             {ro ? (
+               <span style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:10,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:IOS.label3,background:"rgba(255,255,255,0.045)",border:EDGE.hair2,borderRadius:8,padding:"6px 10px"}}>
+                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+                 {settled?"Settled":"Locked"} {"\u00b7"} {n}{"\u00d7"}
+               </span>
+             ) : (<>
+               <span style={{fontSize:9,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:IOS.label3}}>Multiplier</span>
+               <div style={{display:"flex",alignItems:"center",background:"rgba(255,255,255,0.055)",border:EDGE.hair2,borderRadius:8,overflow:"hidden"}}>
+                 <div onClick={()=>{ if(n>1) editSoloPickMult(b.slot,n-1); }} style={{width:28,height:26,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,color:n>1?IOS.label2:"rgba(255,255,255,0.18)",cursor:n>1?"pointer":"default",userSelect:"none"}}>{"\u2212"}</div>
+                 <div style={{width:34,textAlign:"center",fontSize:13,fontWeight:800,fontFamily:"'Barlow Semi Condensed',sans-serif",borderLeft:EDGE.hair2,borderRight:EDGE.hair2,lineHeight:"26px",color:"#fff"}}>{n}{"\u00d7"}</div>
+                 <div onClick={()=>{ if(n<5) editSoloPickMult(b.slot,n+1); }} style={{width:28,height:26,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,color:n<5?IOS.label2:"rgba(255,255,255,0.18)",cursor:n<5?"pointer":"default",userSelect:"none"}}>+</div>
+               </div>
+             </>)}
+             {settled ? (
+               <span style={{marginLeft:"auto",fontSize:10,fontWeight:800,letterSpacing:"0.09em",textTransform:"uppercase",padding:"3px 7px",borderRadius:5,
+                 color:_db.result==="W"?IOS.green:IOS.red, background:_db.result==="W"?"rgba(48,209,88,0.14)":"rgba(255,69,58,0.14)"}}>
+                 {_db.result==="W"?("Won +"+(per*n).toFixed(1)):"Lost"}
+               </span>
+             ) : (
+               <span style={{marginLeft:"auto",fontSize:10.5,color:IOS.label3}}>worth <b style={{color:IOS.label2,fontWeight:800}}>{(per*n).toFixed(1)} pts</b></span>
+             )}
+           </div>
+           {_showScore && <div style={{marginTop:8,marginLeft:13}}><ScoreChip pick={_scp} live={liveMatch(_scp, liveGames)}/></div>}
+         </div>);
        })}
+
+       {drafts.length>0 && (<>
+         <div style={{display:"flex",alignItems:"center",gap:9,padding:"10px 15px",background:"rgba(255,255,255,0.022)",borderBottom:EDGE.hair,borderTop:"1px dashed rgba(255,255,255,0.16)"}}>
+           <span style={{fontSize:9,fontWeight:800,letterSpacing:"0.13em",textTransform:"uppercase",color:IOS.orange}}>Not locked yet {"\u00b7"} {drafts.length} pick{drafts.length!==1?"s":""}</span>
+         </div>
+         {drafts.map((b,i)=>{
+           const col=b.categoryColor||IOS.blue; const per=ptsFor(b.impliedOdds); const n=b.mult||1;
+           return (
+           <div key={b.id||i} style={{padding:"12px 15px",borderBottom:EDGE.hair,position:"relative"}}>
+             <div onClick={()=>setSoloFreePicks(soloFreePicks.filter(x=>x.id!==b.id))} style={{position:"absolute",top:10,right:11,width:22,height:22,borderRadius:"50%",background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",color:IOS.label3,fontSize:13,cursor:"pointer"}}>{"\u00d7"}</div>
+             <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
+               <div style={{width:3,borderRadius:2,alignSelf:"stretch",flexShrink:0,background:col}}/>
+               <div style={{flex:1,minWidth:0,paddingRight:24}}>
+                 <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:col,marginBottom:5}}>{b.categoryLabel||"Pick"}</div>
+                 <div style={{fontSize:14.5,fontWeight:700,color:"#fff",lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.pick}</div>
+                 <div style={{fontSize:10.5,color:IOS.label3,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.game}</div>
+               </div>
+               <div style={{textAlign:"right",flexShrink:0}}>
+                 <div style={{fontSize:15,fontWeight:800,fontFamily:"'Barlow Semi Condensed',sans-serif",color:"#fff"}}>{b.odds}</div>
+                 <div style={{fontSize:10,color:IOS.label3,marginTop:2}}>{per.toFixed(1)} pts</div>
+               </div>
+             </div>
+             <div style={{display:"flex",alignItems:"center",gap:8,marginTop:9,marginLeft:13}}>
+               <span style={{fontSize:9,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:IOS.label3}}>Multiplier</span>
+               <div style={{display:"flex",alignItems:"center",background:"rgba(255,255,255,0.055)",border:EDGE.hair2,borderRadius:8,overflow:"hidden"}}>
+                 <div onClick={()=>{ if(n>1) setSoloFreePicks(prev=>prev.map(x=>x.id===b.id?{...x,mult:n-1}:x)); }} style={{width:28,height:26,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,color:n>1?IOS.label2:"rgba(255,255,255,0.18)",cursor:n>1?"pointer":"default",userSelect:"none"}}>{"\u2212"}</div>
+                 <div style={{width:34,textAlign:"center",fontSize:13,fontWeight:800,fontFamily:"'Barlow Semi Condensed',sans-serif",borderLeft:EDGE.hair2,borderRight:EDGE.hair2,lineHeight:"26px",color:"#fff"}}>{n}{"\u00d7"}</div>
+                 <div onClick={()=>{ if(n<5) setSoloFreePicks(prev=>prev.map(x=>x.id===b.id?{...x,mult:n+1}:x)); }} style={{width:28,height:26,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,color:n<5?IOS.label2:"rgba(255,255,255,0.18)",cursor:n<5?"pointer":"default",userSelect:"none"}}>+</div>
+               </div>
+               <span style={{marginLeft:"auto",fontSize:10.5,color:IOS.label3}}>worth <b style={{color:IOS.label2,fontWeight:800}}>{(per*n).toFixed(1)} pts</b></span>
+             </div>
+           </div>);
+         })}
+       </>)}
+
+       <div style={{display:"flex",borderTop:"1px dashed rgba(255,255,255,0.16)"}}>
+         <div onClick={()=>{ setBuildingSlip(true); setGridTargetSlot(null); setGridType("ml"); setGridPropSub("all"); setScreen("browser"); }}
+           style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"15px 8px",fontSize:13.5,fontWeight:800,cursor:"pointer",color:IOS.blue,borderRight:"1px dashed rgba(255,255,255,0.16)"}}>
+           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.3" strokeLinecap="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+           Browse games
+         </div>
+         <div onClick={()=>setSoloParlay({legs:[],mult:2})}
+           style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"15px 8px",fontSize:13.5,fontWeight:800,cursor:"pointer",color:IOS.longshot}}>
+           <svg width="16" height="16" viewBox="0 0 24 24" fill={IOS.longshot} stroke="none"><path d="M13 2L3 14h7v8l10-12h-7z"/></svg>
+           Build a parlay
+         </div>
+       </div>
+
+       <div style={{height:14,margin:"0 -1px",background:"radial-gradient(circle at 7px 50%, #07070A 5px, transparent 5.5px) 0 0/14px 14px repeat-x"}}/>
+       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 15px"}}>
+         <span style={{fontSize:10,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:IOS.label3}}>If everything hits</span>
+         <span style={{fontSize:27,fontWeight:800,fontFamily:"'Barlow Semi Condensed',sans-serif",color:"#fff"}}>{possTotal.toFixed(1)}</span>
+       </div>
      </div>
 
      {drafts.length>0 && (
-       <div style={{marginBottom:12}}>
-         <div style={{fontSize:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",color:IOS.orange,margin:"2px 2px 8px"}}>Not locked yet · {drafts.length}</div>
-         <div style={{background:IOS.bg2,border:`0.5px solid ${IOS.orange}33`,borderRadius:RAD.md,padding:"4px 12px"}}>
-           {drafts.map((b,i)=>{ const col=b.categoryColor||IOS.blue; return (
-             <div key={b.id||i} style={{padding:"9px 0",borderBottom:i<drafts.length-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
-               <div style={{display:"flex",alignItems:"center",gap:9}}>
-                 <div style={{fontSize:8.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:col,background:`${col}1c`,borderRadius:5,padding:"3px 6px",flexShrink:0}}>{b.categoryLabel||b.category}</div>
-                 <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.pick}</div><div style={{fontSize:10.5,color:IOS.label3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.game}</div></div>
-                 <div style={{textAlign:"right",flexShrink:0}}><div style={{fontSize:12.5,fontWeight:800,color:(b.odds||"").startsWith("+")?IOS.green:IOS.blue}}>{b.odds}</div><div style={{fontSize:9.5,color:IOS.label3}}>+{((b.mult||1)*ptsFor(b.impliedOdds)).toFixed(1)} pts</div></div>
-                 <div onClick={()=>setSoloFreePicks(soloFreePicks.filter(x=>x.id!==b.id))} style={{width:24,height:24,borderRadius:RAD.sm,background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",color:"rgba(255,255,255,0.5)",fontSize:15,cursor:"pointer",flexShrink:0}}>×</div>
-               </div>
-               <div style={{display:"flex",alignItems:"center",gap:5,marginTop:8}}>
-                 <span style={{fontSize:8.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:IOS.label3,marginRight:1,flexShrink:0}}>Units</span>
-                 {[1,2,3,4,5].map(m=>{ const on=(b.mult||1)===m; return (
-                   <div key={m} onClick={()=>setSoloFreePicks(prev=>prev.map(x=>x.id===b.id?{...x,mult:m}:x))} style={{flex:1,textAlign:"center",padding:"4px 0",borderRadius:RAD.sm,fontSize:11,fontWeight:800,cursor:"pointer",background:on?"rgba(10,132,255,0.18)":"rgba(255,255,255,0.04)",border:`1px solid ${on?IOS.blue:"rgba(255,255,255,0.08)"}`,color:on?IOS.blue:"rgba(255,255,255,0.4)"}}>{m}×</div>
-                 );})}
-               </div>
-             </div>
-           );})}
-         </div>
-         <button onClick={lockSoloFreeSlate} style={{width:"100%",marginTop:9,background:IOS.green,border:"none",borderRadius:RAD.md,padding:"12px",fontSize:14,fontWeight:800,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Lock {drafts.length} new pick{drafts.length>1?"s":""}</button>
-       </div>
+       <button onClick={lockSoloFreeSlate} style={{width:"100%",border:"none",borderRadius:13,padding:"15px",fontSize:15.5,fontWeight:800,color:"#fff",fontFamily:"Barlow,sans-serif",cursor:"pointer",background:"linear-gradient(120deg,#0A84FF,#5E5CE6)",marginBottom:9}}>
+         Lock {drafts.length} new pick{drafts.length>1?"s":""}
+       </button>
      )}
-
-     <div onClick={()=>{ setBuildingSlip(true); setGridTargetSlot(null); setGridType("ml"); setGridPropSub("all"); setScreen("browser"); }} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,border:"1.5px dashed rgba(255,255,255,0.16)",background:"rgba(255,255,255,0.02)",borderRadius:RAD.md,padding:"14px",fontSize:14,fontWeight:800,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif",marginBottom:14}}>
-       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
-       Add another pick
-     </div>
-
-     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 4px",marginBottom:12}}>
-       <span style={{fontSize:12,fontWeight:700,color:IOS.label2}}>{lp.length+drafts.length} pick{(lp.length+drafts.length)!==1?"s":""}</span>
-       <span style={{display:"flex",alignItems:"baseline",gap:5}}><span style={{fontSize:22,fontWeight:800,color:"#fff",fontFamily:"'Barlow Semi Condensed',sans-serif"}}>{possTotal.toFixed(1)}</span><span style={{fontSize:11,color:IOS.label3,fontWeight:700}}>possible pts</span></span>
-     </div>
-
      <div style={{display:"flex",gap:9,marginBottom:16}}>
-       <button onClick={()=>setScreen("home")} style={{flex:1,background:IOS.blue,border:"none",borderRadius:RAD.md,padding:"13px",fontSize:14,fontWeight:800,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Back to Home</button>
-       <button onClick={clearSoloSlate} style={{background:"rgba(255,69,58,0.12)",border:`0.5px solid ${IOS.red}40`,borderRadius:RAD.md,padding:"13px 16px",fontSize:14,fontWeight:800,color:IOS.red,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Clear</button>
+       <button onClick={()=>setScreen("home")} style={{flex:1,background:"rgba(255,255,255,0.055)",border:EDGE.hair2,borderRadius:12,padding:"13px",fontSize:13.5,fontWeight:800,color:IOS.label2,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Back to home</button>
+       <button onClick={clearSoloSlate} style={{background:"rgba(255,69,58,0.1)",border:`1px solid ${IOS.red}4d`,borderRadius:12,padding:"13px 18px",fontSize:13.5,fontWeight:800,color:IOS.red,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Clear</button>
      </div>
    </>
    );
@@ -12191,7 +12237,7 @@ function App() {
              {/* Units: a stepper, not five full-width buttons. That row used to be as
                  tall as the pick itself and doubled the scroll on a long slate. */}
              <div style={{display:"flex",alignItems:"center",gap:8,marginTop:9,marginLeft:13}}>
-               <span style={{fontSize:9,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:IOS.label3}}>Units</span>
+               <span style={{fontSize:9,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:IOS.label3}}>Multiplier</span>
                <div style={{display:"flex",alignItems:"center",background:"rgba(255,255,255,0.055)",border:EDGE.hair2,borderRadius:8,overflow:"hidden"}}>
                  <div onClick={()=>{ if(n>1) setSoloFreePicks(prev=>prev.map(x=>x.id===b.id?{...x,mult:n-1}:x)); }}
                    style={{width:28,height:26,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,color:n>1?IOS.label2:"rgba(255,255,255,0.18)",cursor:n>1?"pointer":"default",userSelect:"none"}}>{"\u2212"}</div>
@@ -12279,7 +12325,7 @@ function App() {
              <div style={{textAlign:"right"}}><div style={{fontSize:8.5,fontWeight:800,textTransform:"uppercase",color:IOS.label3}}>{"At "+(soloParlay.mult||2)+"x · Possible"}</div><div style={{fontSize:19,fontWeight:800,color:"#fff",fontFamily:"'Barlow Semi Condensed',sans-serif"}}>{_poss ? (_poss+" pts") : "—"}</div></div>
            </div>
            <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:14}}>
-             <span style={{fontSize:8.5,fontWeight:800,textTransform:"uppercase",color:IOS.label3,flexShrink:0}}>Units</span>
+             <span style={{fontSize:8.5,fontWeight:800,textTransform:"uppercase",color:IOS.label3,flexShrink:0}}>Multiplier</span>
              {[1,2,3,4,5].map(m=>{ const on=(soloParlay.mult||2)===m; return (<div key={m} onClick={()=>setSoloParlay(pv=>({...pv,mult:m}))} style={{flex:1,textAlign:"center",padding:"5px 0",borderRadius:RAD.sm,fontSize:11,fontWeight:800,cursor:"pointer",background:on?"rgba(255,55,95,0.18)":"rgba(255,255,255,0.04)",border:"1px solid "+(on?IOS.pink:"rgba(255,255,255,0.08)"),color:on?IOS.pink:"rgba(255,255,255,0.4)"}}>{m+"x"}</div>); })}
            </div>
            <button onClick={()=>{ setSoloParlayMode(true); setBuildingSlip(true); setGridTargetSlot(null); setGridPropSub("all"); setGridType("ml"); setScreen("browser"); }} style={{width:"100%",background:"rgba(255,255,255,0.06)",border:EDGE.hair3,borderRadius:RAD.md,padding:"12px",fontSize:14,fontWeight:800,color:"#fff",cursor:"pointer",marginBottom:8,fontFamily:"Barlow,sans-serif"}}>{legs.length?("Add more legs ("+legs.length+"/6)"):"Add legs"}</button>
