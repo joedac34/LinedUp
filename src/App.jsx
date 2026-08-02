@@ -4657,17 +4657,21 @@ const PERIOD_SUBS_BY_SPORT = {
  nba:[{id:"ml_h1",l:"1H ML"},{id:"spread_h1",l:"1H Spread"},{id:"ou_h1",l:"1H O/U"}],
 };
 // ── MLB starting lineup (StatsAPI) — shown on game detail, under the mound ──
+const _lineupCache = {};   // "away|home|date" -> payload; survives pane remounts
 function LineupSection({ away, home, date, firstPitchLabel, IOS }) {
   const BLUE=(IOS&&IOS.blue)||"#0A84FF", GREEN=(IOS&&IOS.green)||"#30D158", L3=(IOS&&IOS.label3)||"rgba(255,255,255,0.3)";
-  const [data,setData]=useState(null);
-  const [loading,setLoading]=useState(true);
+  const _ck=(away||"")+"|"+(home||"")+"|"+(date||"");
+  const [data,setData]=useState(_lineupCache[_ck]||null);
+  const [loading,setLoading]=useState(!_lineupCache[_ck]);
   const [side,setSide]=useState("away");
   useEffect(()=>{
-    let alive=true; setLoading(true);
+    let alive=true;
+    if(_lineupCache[_ck]){ setData(_lineupCache[_ck]); setLoading(false); return; }
+    setLoading(true);
     const qs=new URLSearchParams({away:away||"",home:home||"",date:date||""});
-    fetch(API_BASE+"/api/lineup?"+qs.toString()).then(r=>r.json()).then(j=>{ if(alive){ setData(j); setLoading(false); } }).catch(()=>{ if(alive){ setData(null); setLoading(false); } });
+    fetch(API_BASE+"/api/lineup?"+qs.toString()).then(r=>r.json()).then(j=>{ _lineupCache[_ck]=j; if(alive){ setData(j); setLoading(false); } }).catch(()=>{ if(alive){ setData(null); setLoading(false); } });
     return ()=>{ alive=false; };
-  },[away,home,date]);
+  },[away,home,date,_ck]);
   const cur=data?(side==="away"?data.away:data.home):null;
   const oppHand=data?(side==="away"?(data.home&&data.home.pitcherHand):(data.away&&data.away.pitcherHand)):"";
   const fav=(bat)=> bat==="S"||(!!oppHand&&!!bat&&bat!==oppHand);
@@ -5537,6 +5541,16 @@ function App() {
  const [leagueRecapLoading, setLeagueRecapLoading] = useState(false);
  const [gameSheet, setGameSheet] = useState(null); // { tickerGame, espnGame, detail }
  const [gcTab, setGcTab] = useState("ov");   // game sheet tab: Overview | Lineups | Odds | Plok
+ const [gcDir, setGcDir] = useState(1);      // +1 moving right, -1 moving left
+ const gcScrollRef = useRef(null);
+ const GC_TABS = ["ov","lu","od","pk"];
+ // The second jump when switching tabs was the scroller holding its old offset while
+ // shorter content reflowed under it. Reset to the top as part of the switch.
+ const goGcTab = (k) => {
+   setGcDir(GC_TABS.indexOf(k) >= GC_TABS.indexOf(gcTab) ? 1 : -1);
+   setGcTab(k);
+   try{ if(gcScrollRef.current) gcScrollRef.current.scrollTop = 0; }catch(e){}
+ };
  const [gameTeamTab, setGameTeamTab] = useState('matchup'); // 'matchup' | 'away' | 'home' 
  const [gameLoading, setGameLoading] = useState(false);
  const [gameRead, setGameRead] = useState({});
@@ -9069,6 +9083,13 @@ function App() {
     "a panel appeared"; this reads as "a surface came up", which is what it is. */
  @keyframes pkSheetIn{from{transform:translateY(100%)}to{transform:none}}
  @keyframes pkVeilIn{from{opacity:0}to{opacity:1}}
+ /* Tab panes slide in from the side you came from. Short (200ms) and small (14px):
+    long or far reads as a page change, which is the feel we are removing. */
+ @keyframes gcInR{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:none}}
+ @keyframes gcInL{from{opacity:0;transform:translateX(-14px)}to{opacity:1;transform:none}}
+ .gc-pane-r{animation:gcInR .20s cubic-bezier(.22,1,.3,1) both;}
+ .gc-pane-l{animation:gcInL .20s cubic-bezier(.22,1,.3,1) both;}
+ @media (prefers-reduced-motion: reduce){ .gc-pane-r,.gc-pane-l{animation:none;} }
  .pk-sheet{animation:pkSheetIn .30s cubic-bezier(0.32,0.72,0,1) both;}
  .pk-veil{animation:pkVeilIn .26s ease both;}
  .pk-sheet.pk-snap{transition:transform .26s cubic-bezier(0.32,0.72,0,1);animation:none;}
@@ -18318,7 +18339,7 @@ function App() {
  {gameSheet && (
  <div style={{position:"fixed",inset:0,zIndex:8000,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>setGameSheet(null)}>
  <div className="pk-veil" style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.6)",backdropFilter:"blur(4px)"}}/>
- <div className="pk-sheet" onClick={e=>e.stopPropagation()} style={{position:"relative",background:"#1C1C1E",maxHeight:"85vh",overflowY:"auto",paddingBottom:40}}>
+ <div className="pk-sheet" ref={gcScrollRef} onClick={e=>e.stopPropagation()} style={{position:"relative",background:"#1C1C1E",maxHeight:"85vh",overflowY:"auto",paddingBottom:40}}>
  {/* Close — always visible, clears the notch */}
  <div onClick={()=>setGameSheet(null)} style={{position:"absolute",top:12,right:14,zIndex:20,width:32,height:32,borderRadius:"50%",background:"rgba(255,255,255,0.14)",border:EDGE.hair3,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -18448,12 +18469,12 @@ function App() {
 
   <div style={{position:"sticky",top:0,zIndex:12,display:"flex",padding:"0 6px",background:"rgba(11,11,15,0.97)",backdropFilter:"blur(14px)",WebkitBackdropFilter:"blur(14px)",borderBottom:EDGE.hair,overflowX:"auto"}}>
   {[["ov","Overview"],["lu","Lineups"],["od","Odds"],["pk","Plok"]].map(([k,lb])=>(
-    <div key={k} onClick={()=>setGcTab(k)} style={{flex:"0 0 auto",padding:"12px 14px",fontSize:13,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap",position:"relative",color:gcTab===k?"#fff":IOS.label3}}>
+    <div key={k} onClick={()=>goGcTab(k)} style={{flex:"0 0 auto",padding:"12px 14px",fontSize:13,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap",position:"relative",color:gcTab===k?"#fff":IOS.label3}}>
       {lb}
       {gcTab===k && <div style={{position:"absolute",left:12,right:12,bottom:0,height:2.5,borderRadius:2,background:IOS.blue}}/>}
     </div>))}
   </div>
-   <div style={{padding:"0 16px 4px"}}>
+   <div key={gcTab} className={gcDir>0?"gc-pane-r":"gc-pane-l"} style={{padding:"0 16px 4px"}}>
 {gcTab==="ov" && (<>
    {hasMound?(<>
    <Sec t="On the Mound"/>
