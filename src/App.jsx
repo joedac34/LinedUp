@@ -7402,8 +7402,14 @@ function App() {
  Object.values(bySport).forEach(s=>{const tot=s.wins+s.losses;s.pct=tot>0?Math.round(s.wins/tot*100):0;s.pts=parseFloat(s.pts.toFixed(1));});
  // By week trend
  const byWeekMap={};
- picks.forEach(p=>{const w=p.week||1;if(!byWeekMap[w])byWeekMap[w]={week:w,wins:0,losses:0,pts:0};if(p.result==="W"){byWeekMap[w].wins++;byWeekMap[w].pts+=parseFloat(p.points_earned||0);}else byWeekMap[w].losses++;});
- const byWeek=Object.values(byWeekMap).sort((a,b)=>a.week-b.week).map(w=>({...w,pts:parseFloat(w.pts.toFixed(1)),label:`Wk${w.week}`}));
+ picks.forEach(p=>{
+   const d=new Date(p.game_date||p.created_at||0); if(isNaN(d.getTime())) return;
+   const mon=new Date(d); mon.setDate(d.getDate()-((d.getDay()+6)%7)); /* Monday of that week */
+   const k=mon.getFullYear()*10000+(mon.getMonth()+1)*100+mon.getDate();
+   if(!byWeekMap[k])byWeekMap[k]={week:k,wins:0,losses:0,pts:0,label:(mon.getMonth()+1)+"/"+mon.getDate()};
+   if(p.result==="W"){byWeekMap[k].wins++;byWeekMap[k].pts+=parseFloat(p.points_earned||0);}else byWeekMap[k].losses++;
+ });
+ const byWeek=Object.values(byWeekMap).sort((a,b)=>a.week-b.week).map(w=>({...w,pts:parseFloat(w.pts.toFixed(1))}));
  // Streak
  const _when=(x)=>new Date(x.game_date||x.created_at||0).getTime()||0;
  const sorted=[...picks].sort((a,b)=>_when(a)-_when(b));
@@ -10066,7 +10072,7 @@ function App() {
    const _buildLabel=isSoloMode?"Build this week's slip":("Build Week "+(activeLeague.current_week||activeLeague.week||1)+" slip");
    /* Knocked out: the builder is not offered at all, and the reason is on screen. */
    if(isEliminated) return (
-     <div style={{margin:"0 16px 14px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.lg,padding:"16px"}}>
+     <div className="pl-reveal" style={{margin:"0 16px 14px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.lg,padding:"16px"}}>
        <div style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:IOS.label3}}>Season over</div>
        <div style={{fontSize:16,fontWeight:800,color:"#fff",marginTop:5}}>You're out of the playoffs</div>
        <div style={{fontSize:12,color:IOS.label2,marginTop:4,lineHeight:1.45}}>No matchup this week, so there's nothing to pick for. Your season record and stats are locked in {"\u2014"} watch the bracket to see who takes it.</div>
@@ -10219,7 +10225,7 @@ function App() {
  <span onClick={()=>setHomeTab("games")} style={{color:IOS.blue,fontSize:13,textTransform:"none",fontWeight:500,letterSpacing:0,cursor:"pointer"}}>See All</span>
  </div>
  </div>
- <div className="wr-carousel">
+ <div className="wr-carousel pl-reveal">
  {_games.slice(0,10).map((g,gi)=>{
  const away=g.away.split(" ").pop(), home=g.home.split(" ").pop();
  const espn=matchEspnGame(espnGames, away, home);
@@ -10500,7 +10506,7 @@ function App() {
  <span onClick={()=>{setProfTab("power-ups");setScreen("profile");}} style={{color:IOS.blue,fontSize:13,textTransform:"none",fontWeight:500,letterSpacing:0,cursor:"pointer"}}>See All</span>
  </div>
  </div>
- <div className="pu-scroll" style={{paddingBottom:6}}>
+ <div className="pu-scroll pl-reveal" style={{paddingBottom:6}}>
  {myPUs.map((pu,i)=>(
  <div key={i} className="pu-chip">
  <div className="pu-chip-icon">{puSVG(pu.id,pu.color)}</div>
@@ -10525,7 +10531,7 @@ function App() {
  <span onClick={()=>setScreen("league")} style={{color:IOS.blue,fontSize:13,textTransform:"none",fontWeight:500,letterSpacing:0,cursor:"pointer"}}>See All</span>
  </div>
  </div>
- <div style={{margin:"0 16px"}}>
+ <div className="pl-reveal" style={{margin:"0 16px"}}>
  {/* Ownership, not emptiness. Previously an empty array rendered this skeleton
      unconditionally, so a league with no standings shimmered indefinitely. */}
  {(standingsFor !== (activeLeague && activeLeague.id) && baseStandings.length===0) ? (<SkelGroup>{[0,1,2].map(i=>(
@@ -11802,7 +11808,7 @@ function App() {
          const _db=_soloDb.find(x=>x.game===b.game && x.pick_name===b.pick);
          const _scp=_db?{game:_db.game,game_date:_db.game_date||b.gameTime||null,result:_db.result,home_score:_db.home_score,away_score:_db.away_score,pick_name:b.pick,odds:b.odds}:{game:b.game,game_date:b.gameTime||null,result:b.result||"pending",pick_name:b.pick,odds:b.odds};
          return (
-         <div key={b.slot||i} style={{position:"relative",background:IOS.bg2,border:EDGE.hair,borderRadius:RAD.lg,padding:"12px 13px"}}>
+         <div key={b.slot||i} className="pl-reveal" style={{position:"relative",background:IOS.bg2,border:EDGE.hair,borderRadius:RAD.lg,padding:"12px 13px"}}>
            {!ro && <div onClick={()=>removeSoloPick(b.slot)} style={{position:"absolute",top:10,right:11,width:22,height:22,borderRadius:"50%",background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",color:"rgba(255,255,255,0.45)",fontSize:14,cursor:"pointer"}}>×</div>}
            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:7,paddingRight:24}}>
              <div style={{fontSize:8.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:col,background:`${col}1c`,borderRadius:5,padding:"3px 6px",flexShrink:0}}>{b.categoryLabel||b.category}</div>
@@ -14761,7 +14767,7 @@ function App() {
        const lsp=SPORTS[l.sport];
        const isSelected=l.id===activeLeagueId;
        return (
-       <div key={l.id} onClick={()=>{ if(l.paid===false && user && l.commissioner_id===user.id){ startLeagueCheckout(l.id); return; } setActiveLeagueId(l.id);setLeagueSubTab("overview");setLmWeek(null);}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 14px",borderBottom:i<realLeagues.length-1?`0.5px solid ${IOS.sep}`:"none",background:isSelected?"rgba(10,132,255,0.08)":"transparent",cursor:"pointer"}}>
+       <div key={l.id} className="pl-reveal" onClick={()=>{ if(l.paid===false && user && l.commissioner_id===user.id){ startLeagueCheckout(l.id); return; } setActiveLeagueId(l.id);setLeagueSubTab("overview");setLmWeek(null);}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 14px",borderBottom:i<realLeagues.length-1?`0.5px solid ${IOS.sep}`:"none",background:isSelected?"rgba(10,132,255,0.08)":"transparent",cursor:"pointer"}}>
          <div>
            <div style={{display:"flex",alignItems:"center",gap:6}}>
              <div style={{fontSize:13,fontWeight:700,color:isSelected?IOS.blue:"#fff"}}>{l.name}</div>{unreadByLeague[l.id]>0&&<span style={{minWidth:16,height:16,borderRadius:RAD.sm,background:IOS.pink,color:"#fff",fontSize:10,fontWeight:800,display:"inline-flex",alignItems:"center",justifyContent:"center",padding:"0 4px"}}>{unreadByLeague[l.id]>9?"9+":unreadByLeague[l.id]}</span>}
@@ -17140,7 +17146,7 @@ function App() {
  }
  return (
  <div style={{padding:"8px 0 4px"}}>
- <PlayerCard data={cardData} IOS={IOS}/>
+ <div className="pl-reveal"><PlayerCard data={cardData} IOS={IOS}/></div>
           {userProfile?.is_founder && <div style={{display:"flex",justifyContent:"center",marginTop:12}}><div style={{display:"inline-flex",alignItems:"center",gap:7,background:"linear-gradient(135deg,rgba(255,214,10,0.16),rgba(255,159,10,0.07))",border:"0.5px solid rgba(255,214,10,0.4)",borderRadius:RAD.pill,padding:"6px 14px"}}><svg width="13" height="13" viewBox="0 0 24 24" fill="#FFD60A" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg><span style={{fontSize:11.5,fontWeight:800,letterSpacing:0.5,color:"#FFD60A",textTransform:"uppercase"}}>Founding Member{userProfile?.founder_number?(" · #"+userProfile.founder_number):""}</span></div></div>}
  <div style={{textAlign:"center",marginTop:12}}>
  <span onClick={()=>{setUsernameInput(userProfile?.username||"");setEditingUsername(true);}} style={{fontSize:12.5,fontWeight:700,color:IOS.blue,cursor:"pointer"}}>{userProfile?.username?"Edit name":"Set username"}</span>
@@ -17166,7 +17172,7 @@ function App() {
       counters. public_profiles exposes username and is_pro; it does NOT expose a
       join date, so rows report Pro status instead of inventing one. */
    return (
-   <div style={{margin:"2px 0 16px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.lg,overflow:"hidden"}}>
+   <div className="pl-reveal" style={{margin:"2px 0 16px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.lg,overflow:"hidden"}}>
 
      <div style={{padding:"15px 16px 13px",borderBottom:EDGE.hair,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
        <div style={{minWidth:0}}>
@@ -17229,7 +17235,7 @@ function App() {
    const bestType = types.length ? [...types].sort((a,b)=>(b.pct-a.pct)||(b.wins-a.wins))[0] : null;
    const ls = (s.byType||{}).longshot;
    const streak = s.currentStreak||{count:0,type:"W"};
-   const weeks = (s.byWeek||[]);
+   const weeks = (s.byWeek||[]).slice(-8);   /* last 8 calendar weeks */
    const wkMax = weeks.length ? Math.max(...weeks.map(w=>w.pts||0)) : 0;
    const winPctNum = parseInt(s.winRate)||0;
    const SURF = {background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.lg};
@@ -17237,8 +17243,8 @@ function App() {
    const KEY  = {fontSize:9,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:IOS.label3};
    const VAL  = {fontSize:22,fontWeight:900,fontFamily:"'Barlow Semi Condensed',sans-serif",marginTop:5,letterSpacing:"-0.01em"};
    const SUB  = {fontSize:10.5,color:IOS.label3,marginTop:2};
-   /* Ring geometry: r=28 -> circumference 175.93. Offset is the UNfilled remainder. */
-   const RC = 175.93, ringOff = RC - (RC * Math.max(0,Math.min(100,winPctNum)) / 100);
+   /* Ring geometry: r=32 -> circumference 201.06. Offset is the UNfilled remainder. */
+   const RC = 201.06, ringOff = RC - (RC * Math.max(0,Math.min(100,winPctNum)) / 100);
    /* LONGSHOT RULE. A rate is not an outcome, so it renders white until the sample can
       support a claim. Ten graded longshots is the floor; below that "0%" over three
       tries is noise, and painting it red asserts something the data cannot. Past the
@@ -17254,17 +17260,17 @@ function App() {
    return (
    <div style={{padding:"4px 16px 0"}}>
 
-     <div style={{...SURF,marginBottom:10,overflow:"hidden",boxShadow:"0 4px 14px rgba(0,0,0,0.35)"}}>
+     <div className="pl-reveal" style={{...SURF,marginBottom:10,overflow:"hidden",boxShadow:"0 4px 14px rgba(0,0,0,0.35)"}}>
        <div style={{padding:"16px 15px",borderBottom:EDGE.hair,display:"flex",alignItems:"center",gap:14}}>
-         <div style={{width:66,height:66,flexShrink:0,position:"relative"}}>
-           <svg width="66" height="66" viewBox="0 0 66 66" style={{transform:"rotate(-90deg)"}}>
-             <circle cx="33" cy="33" r="28" fill="none" stroke="rgba(255,255,255,0.09)" strokeWidth="7"/>
-             <circle cx="33" cy="33" r="28" fill="none" stroke={IOS.green} strokeWidth="7" strokeLinecap="round"
+         <div style={{width:76,height:76,flexShrink:0,position:"relative"}}>
+           <svg width="76" height="76" viewBox="0 0 76 76" style={{transform:"rotate(-90deg)"}}>
+             <circle cx="38" cy="38" r="32" fill="none" stroke="rgba(255,255,255,0.09)" strokeWidth="7"/>
+             <circle cx="38" cy="38" r="32" fill="none" stroke={IOS.green} strokeWidth="7" strokeLinecap="round"
                strokeDasharray={RC} strokeDashoffset={ringOff} style={{transition:"stroke-dashoffset .8s cubic-bezier(0.4,0,0.2,1)"}}/>
            </svg>
            <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
-             <div style={{fontSize:19,fontWeight:900,fontFamily:"'Barlow Semi Condensed',sans-serif",lineHeight:1,color:"#fff"}}>{s.winRate||"0%"}</div>
-             <div style={{fontSize:7.5,fontWeight:800,letterSpacing:"0.1em",color:IOS.label3,marginTop:2}}>WIN</div>
+             <div style={{fontSize:18,fontWeight:900,fontFamily:"'Barlow Semi Condensed',sans-serif",lineHeight:1,color:"#fff",letterSpacing:"-0.02em"}}>{s.winRate||"0%"}</div>
+             <div style={{fontSize:8,fontWeight:800,letterSpacing:"0.1em",color:IOS.label3,marginTop:3}}>WIN</div>
            </div>
          </div>
          <div style={{flex:1,minWidth:0}}>
@@ -17304,27 +17310,27 @@ function App() {
      </div>
 
      {weeks.length>0 && (
-     <div style={{...SURF,marginBottom:10,overflow:"hidden"}}>
+     <div className="pl-reveal" style={{...SURF,marginBottom:10,overflow:"hidden"}}>
        <div style={{padding:"13px 15px",borderBottom:EDGE.hair,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
          <span style={{fontSize:10,fontWeight:800,letterSpacing:"0.13em",textTransform:"uppercase",color:IOS.label3}}>Season form</span>
          <span style={{fontSize:11,color:IOS.label2}}>Points by week</span>
        </div>
-       <div style={{padding:"14px 15px 15px",display:"flex",alignItems:"flex-end",gap:5,height:82}}>
+       <div style={{padding:"14px 13px 14px",display:"flex",alignItems:"flex-end",gap:6,height:108}}>
          {weeks.map(w=>{
-           const h=wkMax>0?Math.max(8,Math.round((w.pts||0)/wkMax*46)):8;
+           const h=wkMax>0?Math.max(8,Math.round((w.pts||0)/wkMax*52)):8;
            const best=wkMax>0&&w.pts===wkMax;
            return (
-           <div key={w.week} style={{flex:1,display:"flex",flexDirection:"column",justifyContent:"flex-end",alignItems:"center",gap:5,height:"100%"}}>
-             <div style={{fontSize:8.5,fontWeight:700,color:best?"#fff":IOS.label3}}>{Math.round(w.pts||0)}</div>
+           <div key={w.week} style={{flex:1,display:"flex",flexDirection:"column",justifyContent:"flex-end",alignItems:"center",gap:5,height:"100%",minWidth:0}}>
+             <div style={{fontSize:13,fontWeight:800,fontFamily:"'Barlow Semi Condensed',sans-serif",color:best?"#fff":IOS.label2}}>{Math.round(w.pts||0)}</div>
              <div style={{width:"100%",height:h,borderRadius:"3px 3px 0 0",background:best?"linear-gradient(180deg,#fff,rgba(255,255,255,0.35))":"linear-gradient(180deg,"+IOS.blue+",rgba(59,111,224,0.28))"}}/>
-             <div style={{fontSize:8.5,fontWeight:700,color:IOS.label3}}>{w.label}</div>
+             <div style={{fontSize:10.5,fontWeight:700,color:IOS.label3,whiteSpace:"nowrap"}}>{w.label}</div>
            </div>);
          })}
        </div>
      </div>
      )}
 
-     <div style={{...SURF,marginBottom:10,overflow:"hidden"}}>
+     <div className="pl-reveal" style={{...SURF,marginBottom:10,overflow:"hidden"}}>
        <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 15px",borderBottom:EDGE.hair}}>
          <div style={{flex:1,minWidth:0}}>
            <div style={{fontSize:13,fontWeight:700,color:"#fff"}}>Best pick</div>
@@ -18400,7 +18406,7 @@ function App() {
     return (<g key={i}>
      <rect x={x} y={y} width={bw} height={Math.max(bh,1.5)} rx="3" fill={best?CC.green:"url(#wbg)"}/>
      {bw>=15&&v>0&&<text x={x+bw/2} y={y-3} textAnchor="middle" fontSize="8.5" fill={best?CC.green:CC.l2} fontWeight="800">{v.toFixed(0)}</text>}
-     {showLbl&&<text x={x+bw/2} y={H-bpad+12} textAnchor="middle" fontSize="8" fill={CC.l3} fontWeight="700">{String(w.label||("W"+(i+1))).replace(/^Week\s*/i,"W").slice(0,4)}</text>}
+     {showLbl&&<text x={x+bw/2} y={H-bpad+12} textAnchor="middle" fontSize="8" fill={CC.l3} fontWeight="700">{String(w.label||("W"+(i+1))).replace(/^Week\s*/i,"W").slice(0,5)}</text>}
     </g>);
    })}
   </svg>);
