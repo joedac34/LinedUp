@@ -19035,18 +19035,14 @@ function App() {
                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2.4" strokeLinecap="round" style={{transform:dOpen?"rotate(180deg)":"none",transition:"transform .2s"}}><polyline points="6 9 12 15 18 9"/></svg>
              </div>
            </div>
-           {dOpen && grp.picks.map((p,j)=>{
-                        // A parlay spans several games; one box-score chip cannot represent it.
-                        const _isPar=String(p.slot||"").split("_")[0]==="parlay" && Array.isArray(p.parlay_legs) && p.parlay_legs.length>0;
-             const won=p.result==="W",lost=p.result==="L";
-             return (
-             <div key={j} style={{display:"flex",alignItems:"center",padding:"3px 0"}}>
-               <div style={{width:8,height:8,borderRadius:"50%",background:won?IOS.green:lost?IOS.red:"#444",flexShrink:0,marginRight:8}}/>
-               <div style={{flex:1,fontSize:11,color:"#ccc"}}>{p.pick_name}</div>
-               <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:2,flexShrink:0}}><div style={{fontSize:11,fontWeight:700,color:won?IOS.green:lost?IOS.red:"#555"}}>{won?"+"+parseFloat(p.points_earned||0).toFixed(1)+"pts":lost?"L":"—"}</div>{!_isPar && <ScoreChip pick={p} live={liveMatch(p, liveGames)} onOpen={()=>{ if(openGamecast) openGamecast(p); }}/>}</div>
-             </div>
-             );
-           })}
+           {dOpen && grp.picks.map((p,j)=>(
+             <PickRow key={p.id||j} p={p} pi={j} groupKey={grp.key}
+               isLast={j===grp.picks.length-1}
+               openLegs={openLegs} setOpenLegs={setOpenLegs}
+               liveGames={liveGames} onOpenGamecast={openGamecast}
+               currentWeekNum={soloWeekNum()}
+               IOS={IOS} RAD={RAD}/>
+           ))}
          </div>
          );
        })}
