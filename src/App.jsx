@@ -6960,7 +6960,110 @@ function App() {
 // ── WEB PUSH ──  Paste your VAPID *public* key here (web-push generate-vapid-keys)
  const PUSH_VAPID_PUBLIC = "BN9_7tHVUx2NA3yIGEihKMoa0UG0ycpEaO5wehMmQ9i9RN2UpttTMl-9b_-NcWtFZqGD9o2utgjdqzKQ8wm_hEI";
  const _urlB64ToUint8 = (base64) => { const pad="=".repeat((4-base64.length%4)%4); const b=(base64+pad).replace(/-/g,"+").replace(/_/g,"/"); const raw=atob(b); const out=new Uint8Array(raw.length); for(let i=0;i<raw.length;i++) out[i]=raw.charCodeAt(i); return out; };
+// \u2500\u2500 NATIVE PUSH (APNs) \u2500\u2500
+// Web Push does not exist inside the Capacitor wrap: no service worker, no
+// PushManager. iOS only exposes Web Push to Home Screen PWAs in Safari. So the
+// native build has to go through APNs, which means a device token instead of a
+// subscription object. Everything downstream (categories, prefs, shared-league
+// restriction) is shared \u2014 only the transport differs.
+ const _pushPlugin = () => {
+   try{ return (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.PushNotifications) || null; }
+   catch(e){ return null; }
+ };
+
+ // A build run from Xcode gets a SANDBOX device token; TestFlight and App Store
+ // builds get PRODUCTION tokens, and the two are not interchangeable \u2014 sending to
+ // the wrong APNs host returns BadDeviceToken and delivers nothing. The webview
+ // cannot read the provisioning profile, so this is a build-time signal: Vite sets
+ // DEV on `npm run dev` builds only. Anything shipped is treated as production,
+ // which is the safe default since every distributed build is.
+ const _apnsEnv = () => {
+   try{ return (import.meta && import.meta.env && import.meta.env.DEV) ? "sandbox" : "production"; }
+   catch(e){ return "production"; }
+ };
+
+ const _sendDeviceToken = async (token) => {
+   try{
+     const r = await fetch(API_BASE+"/api/push-subscribe", {
+       method:"POST", headers: await authHeaders(),
+       body: JSON.stringify({ deviceToken: token, environment: _apnsEnv(), platform: "ios" })
+     });
+     if(!r.ok) return false;
+     setUserProfile(prev=>({...(prev||{}), push_enabled:true }));
+     return true;
+   }catch(e){ return false; }
+ };
+
+ // Listeners are attached ONCE per app launch, not per toggle. Capacitor listeners
+ // stack: registering them inside subscribeToPush would fire the handler N times
+ // after N taps, and re-POST the same token on every one.
+ const _pushListeners = useRef(false);
+ const _lastDeviceToken = useRef(null);
+ const _attachPushListeners = () => {
+   const P = _pushPlugin();
+   if(!P || _pushListeners.current) return;
+   _pushListeners.current = true;
+   try{
+     P.addListener("registration", (t)=>{ const tok = t && (t.value || t.token); if(tok){ _lastDeviceToken.current = String(tok); _sendDeviceToken(String(tok)); } });
+     P.addListener("registrationError", (err)=>{
+       // Silent failure here is the classic "push just does not work" report.
+       try{ console.error("[picklock] APNs registration failed", err); }catch(e){}
+       try{ posthog.capture("$exception", {
+         $exception_message: "APNs registration failed: " + String((err && (err.error || err.message)) || err).slice(0,200),
+         $exception_type: "apns_registration", native: true }); }catch(e){}
+     });
+     // Tapping a notification while the app is backgrounded. The payload carries
+     // `url` the same way the service worker click handler receives it on web.
+     P.addListener("pushNotificationActionPerformed", (a)=>{
+       try{
+         const d = (a && a.notification && a.notification.data) || {};
+         const u = String(d.url || "/");
+         if(u.indexOf("/league")===0) setScreen("leagues");
+         else if(u.indexOf("/picks")===0) setScreen("picks");
+         else setScreen("home");
+       }catch(e){}
+     });
+   }catch(e){}
+ };
+
+ const subscribeToPushNative = async () => {
+   const P = _pushPlugin();
+   if(!P){ alert("Push isn\u2019t available in this build."); return false; }
+   try{
+     _attachPushListeners();
+     let perm = await P.checkPermissions();
+     if(perm.receive === "prompt" || perm.receive === "prompt-with-rationale") perm = await P.requestPermissions();
+     if(perm.receive !== "granted"){
+       alert("Notifications are off for PickLock. Turn them on in Settings \u203a PickLock \u203a Notifications.");
+       return false;
+     }
+     // register() does not resolve with the token \u2014 it arrives on the "registration"
+     // listener attached above, which POSTs it and flips push_enabled.
+     await P.register();
+     return true;
+   }catch(e){
+     try{ console.error("[picklock] native push subscribe failed", e); }catch(_){}
+     alert("Couldn\u2019t enable push: " + ((e && e.message) || e));
+     return false;
+   }
+ };
+
+ // Re-attach on launch so a already-registered device keeps its tap handler, and
+ // refresh the token: APNs can reissue one after a restore or an OS update, and a
+ // stale row would silently stop delivering.
+ useEffect(()=>{
+   if(!IS_NATIVE || !user || !user.id) return;
+   const P = _pushPlugin(); if(!P) return;
+   (async ()=>{
+     try{
+       _attachPushListeners();
+       const perm = await P.checkPermissions();
+       if(perm && perm.receive === "granted") await P.register();
+     }catch(e){}
+   })();
+ }, [user && user.id]);
  const subscribeToPush = async () => {
+   if(IS_NATIVE) return subscribeToPushNative();
    try {
      if(!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)){ alert("Push isn't supported here. On iPhone, add PickLock to your Home Screen and open it from the icon, then try again."); return false; }
      const perm = await Notification.requestPermission();
@@ -6975,6 +7078,17 @@ function App() {
    } catch(e) { console.error("push subscribe failed", e); alert("Couldn't enable push: "+((e&&e.message)||e)); return false; }
  };
  const disablePush = async () => {
+   // Native: drop the APNs row. The OS-level permission stays granted \u2014 revoking
+   // that is only possible from iOS Settings \u2014 but no token means no sends.
+   if(IS_NATIVE){
+     try{
+       const tok = _lastDeviceToken.current;
+       if(tok) await fetch(API_BASE+"/api/push-subscribe",{ method:"DELETE", headers:await authHeaders(), body:JSON.stringify({ deviceToken: tok }) });
+     }catch(e){}
+     try { if(user&&user.id) await supabase.from("users").update({ push_enabled:false }).eq("id", user.id); } catch(e) {}
+     setUserProfile(prev=>({...(prev||{}), push_enabled:false }));
+     return;
+   }
    try { const reg = await navigator.serviceWorker.ready; const sub = await reg.pushManager.getSubscription(); if(sub){ try{ await fetch(API_BASE+"/api/push-subscribe",{ method:"DELETE", headers:await authHeaders(), body:JSON.stringify({ endpoint:sub.endpoint }) }); }catch(e){} try{ await sub.unsubscribe(); }catch(e){} } } catch(e) {}
    try { if(user&&user.id) await supabase.from("users").update({ push_enabled:false }).eq("id", user.id); } catch(e) {}
    setUserProfile(prev=>({...(prev||{}), push_enabled:false }));
