@@ -8386,6 +8386,30 @@ function App() {
  };
  useEffect(()=>{ if((screen==="matchup"||screen==="picks") && activeLeague && (activeLeague.league_type||"h2h")==="h2h" && activeLeague.id){ fetchAllMatchups(activeLeague.id); fetchWeekPicks(activeLeague.id, activeLeague.current_week||activeLeague.week||1); setMWeek(activeLeague.current_week||activeLeague.week||1); setBracketDetail(null); setMatchupView("mine"); } }, [screen, activeLeagueId]);
 
+ // Screen transition restart. Measured on device 3 Aug 2026: arriving on the Leagues
+ // tab, the .body node reports animationName "pkScreenIn" with currentTime 260 and
+ // playState "finished" — the rule is attached and the keyframes have already run to
+ // completion, so nothing animates on arrival. Every other tab fades in over ~300ms
+ // (verified frame-by-frame at 60fps); Leagues jumps to full opacity in one frame.
+ //
+ // A CSS mount animation only fires when the browser creates a NEW element. This
+ // forces the restart explicitly rather than relying on that, so the transition no
+ // longer depends on how React happens to reconcile any one screen block. Setting
+ // animation to "" restores the stylesheet value, which under prefers-reduced-motion
+ // is already none — the accessibility opt-out still wins.
+ useEffect(()=>{
+   let raf = 0;
+   raf = requestAnimationFrame(()=>{
+     try{
+       const el = document.querySelector(".body, .lsx-scroll");
+       if(!el) return;
+       el.style.animation = "none";
+       void el.offsetWidth;          // reflow: without this the two writes coalesce
+       el.style.animation = "";
+     }catch(e){}
+   });
+   return ()=>{ if(raf) cancelAnimationFrame(raf); };
+ }, [screen]);
  useEffect(()=>{ if(screen==="leagues" && leagueSubTab==="matchups" && activeLeague && activeLeague.id){ fetchAllMatchups(activeLeague.id); fetchWeekPicks(activeLeague.id, activeLeague.current_week||activeLeague.week||1); setBracketDetail(null); } }, [screen, leagueSubTab, activeLeagueId]);
 
  useEffect(()=>{
