@@ -1060,51 +1060,6 @@ const errText = (e) => {
   }catch(_){ return "(unprintable error)"; }
 };
 
-// == Global error capture ====================================================
-// ErrorBoundary only sees RENDER errors. An async failure in a fetch, a bad map
-// in an event handler, or a rejected promise never reaches componentDidCatch --
-// those were landing in a console nobody reads. These two listeners are the gap.
-//
-// Dedupe: iOS fires the same script error repeatedly on some redraw paths, and a
-// single bad render loop could otherwise bill thousands of PostHog events in a
-// minute. Same kind+message inside 30s counts once; hard ceiling 25 per session.
-try{ if(typeof window!=="undefined" && !window.__pkErrHooks){
-  window.__pkErrHooks = 1;
-  const _seen = new Map(); let _sent = 0;
-  const _report = (kind, msg, stack, extra)=>{
-    try{
-      if(_sent >= 25) return;
-      const key = kind + "|" + String(msg).slice(0,180);
-      const now = Date.now();
-      if(_seen.has(key) && (now - _seen.get(key)) < 30000) return;
-      _seen.set(key, now); _sent++;
-      try{ console.error("[picklock] " + kind + ":", msg); }catch(e){}
-      posthog.capture("$exception", Object.assign({
-        $exception_message: String(msg).slice(0,500),
-        $exception_type: kind,
-        $exception_stack_trace_raw: stack ? String(stack).slice(0,4000) : null,
-        native: IS_NATIVE,
-      }, extra||{}));
-    }catch(e){}
-  };
-  window.addEventListener("error", (e)=>{
-    try{
-      // Failed <img>/<script> loads also fire "error" but carry no .error and are
-      // not exceptions -- a broken team crest is not a crash report.
-      if(!e || (!e.error && !e.message)) return;
-      _report("window.onerror", (e.error && e.error.message) || e.message,
-        e.error && e.error.stack,
-        { source: e.filename || null, line: e.lineno || null, col: e.colno || null });
-    }catch(err){}
-  });
-  window.addEventListener("unhandledrejection", (e)=>{
-    try{
-      const r = e && e.reason;
-      _report("unhandledrejection", errText(r), r && r.stack, null);
-    }catch(err){}
-  });
-} }catch(e){}
-
 const _HAPTIC_FB = { select:12, light:18, medium:25, heavy:35,
   success:[0,30,40,30,60], warning:[0,30,50,30], error:[0,45,60,45] };
 // Whole years between a YYYY-MM-DD string and today. Mirrors the SQL trigger:

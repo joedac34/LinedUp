@@ -5,11 +5,22 @@ import { PostHogProvider } from 'posthog-js/react'
 import './index.css'
 import App from './App.jsx'
 
+// CapacitorHttp (enabled in capacitor.config.json) monkey-patches window.fetch AND
+// XMLHttpRequest, routing every request through native URLSession. It cannot serialise
+// a gzip-compressed binary body, so EVERY PostHog request from the iOS wrap failed with
+// `CapacitorUrlRequestError error 0` — no status, just a dead request. Verified on
+// device 3 Aug 2026: an identical POST with a plain JSON body returns 200, so the
+// compression is the only thing breaking. Web is unaffected and keeps compression;
+// turning it off there would inflate every payload for no reason.
+const IS_NATIVE = !!(typeof window !== 'undefined' && window.Capacitor
+  && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())
+
 posthog.init('phc_ttRQobQ8V6qoENHvehxX64SuQFCctjXfyHhnDRqak2h6',{
   api_host: 'https://us.i.posthog.com',
   person_profiles: 'identified_only', // cost-saver: only bills for logged-in users
   capture_pageview: false,            // PWA has no page loads; you'll fire events manually
   autocapture: false,                 // avoid noise/garbage from SW + slip builder clicks
+  ...(IS_NATIVE ? { disable_compression: true } : {}),
 })
 
 // ── Error reporting ─────────────────────────────────────────────────────────
@@ -19,15 +30,29 @@ posthog.init('phc_ttRQobQ8V6qoENHvehxX64SuQFCctjXfyHhnDRqak2h6',{
 //
 // Deliberately NO session replay: the privacy policy still doesn't disclose
 // session recording, and that has to land before anything records a user.
+// One bad render loop can fire the same error every frame. Without a guard that is
+// thousands of billed PostHog events a minute, and the signal is buried anyway.
+// Same kind+message inside 30s counts once; hard ceiling of 25 per session.
+const _seen = new Map()
+let _sent = 0
+
 export function report(err, context) {
+  const _msg = String((err && err.message) || err)
+  const _key = ((context && context.kind) || 'error') + '|' + _msg.slice(0, 180)
+  const _now = Date.now()
+  if (_sent >= 25) return
+  if (_seen.has(_key) && _now - _seen.get(_key) < 30000) return
+  _seen.set(_key, _now); _sent++
+
   try { console.error('[picklock]', err, context || '') } catch (e) {}
   try {
-    if (posthog.captureException) posthog.captureException(err, context)
+    const _ctx = { native: IS_NATIVE, ...(context || {}) }
+    if (posthog.captureException) posthog.captureException(err, _ctx)
     else posthog.capture('$exception', {
       $exception_message: String((err && err.message) || err),
       $exception_type: (err && err.name) || 'Error',
       $exception_stack_trace_raw: (err && err.stack) || null,
-      ...context,
+      ..._ctx,
     })
   } catch (e) {}
   try { if (window.Sentry) window.Sentry.captureException(err, { extra: context }) } catch (e) {}
