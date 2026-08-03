@@ -2,6 +2,13 @@ const SPORT_MAP = {
   americanfootball_nfl: { sport: "football",   league: "nfl" },
   basketball_nba:       { sport: "basketball", league: "nba" },
   baseball_mlb:         { sport: "baseball",   league: "mlb" },
+  // ESPN's college football slug is "college-football", NOT "ncaaf" — the Odds API
+  // key is americanfootball_ncaaf and the two do not share a vocabulary. Without this
+  // entry every /api/espn call for an NCAAF game returned 400 "Unsupported sport",
+  // which the call sites swallow in a catch: no event IDs, so no game detail sheet,
+  // no team records, no probables. Odds still rendered (those come from the Odds API),
+  // which is why the gap was invisible on the surface.
+  americanfootball_ncaaf: { sport: "football", league: "college-football" },
 };
 
 // Season "tape" stats, by ESPN standings stat name (present for every sport in
