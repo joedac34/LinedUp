@@ -95,28 +95,59 @@ export default async function handler(req, res) {
 
     // APNs. The aps payload shape is Apple's, not ours; `url` rides along as a
     // custom key so the tap handler can route the same way the service worker does.
-    let sentIos = 0; const deadToks = []; const iosErrors = [];
+    let sentIos = 0; const deadToks = []; const iosErrors = []; const flipped = [];
+    const apsBody = {
+      aps: {
+        alert: { title: safeTitle, body: safeText || '' },
+        sound: 'default',
+        'thread-id': category || undefined,
+      },
+      url: clickUrl,
+    };
     await Promise.all((toks || []).map(async row => {
-      const r = await sendApns(row.token, {
-        aps: {
-          alert: { title: safeTitle, body: safeText || '' },
-          sound: 'default',
-          'thread-id': category || undefined,
-        },
-        url: clickUrl,
-      }, row.environment || 'production');
+      const first = row.environment === 'sandbox' ? 'sandbox' : 'production';
+      let r = await sendApns(row.token, apsBody, first);
+
+      // BadDeviceToken means "valid-looking token, wrong environment" far more often
+      // than it means "dead token". The webview cannot read the aps-environment
+      // entitlement, so the client's guess is a hint, not a fact: a build run from
+      // Xcode mints a SANDBOX token while any build made with `npm run build` reports
+      // production. Rather than make that a thing anyone has to remember, try the
+      // other host once and believe the result.
+      if (!r.ok && r.reason === 'BadDeviceToken') {
+        const other = first === 'sandbox' ? 'production' : 'sandbox';
+        const r2 = await sendApns(row.token, apsBody, other);
+        if (r2.ok) {
+          // Persist the correction so this costs one wasted request, once, per device
+          // — not one on every send forever.
+          flipped.push({ token: row.token, environment: other });
+          sentIos++;
+          return;
+        }
+        r = r2;
+      }
+
       if (r.ok) { sentIos++; return; }
-      // Only prune on reasons that mean the token is permanently invalid. A 429 or
-      // a 500 during an Apple incident must not unsubscribe the whole beta.
+      // Only prune on reasons that mean the token is permanently invalid, and only
+      // after the retry above has ruled out a mismatched environment. A 429 or a 500
+      // during an Apple incident must not unsubscribe the whole beta.
       if (r.reason && DEAD_REASONS.has(r.reason)) deadToks.push(row.token);
       else iosErrors.push({ status: r.status, reason: r.reason });
     }));
+
+    // Sequential on purpose: this fires at most once per device, ever, and a bulk
+    // upsert here would need the full row shape (user_id is NOT NULL) for no gain.
+    for (const f of flipped) {
+      try { await supabase.from('push_tokens').update({ environment: f.environment }).eq('token', f.token); }
+      catch (e) { /* a failed correction just means one more retry next send */ }
+    }
     if (deadToks.length) await supabase.from('push_tokens').delete().in('token', deadToks);
 
     return res.status(200).json({
       ok: true,
       sent, pruned: dead.length,
       sentIos, prunedIos: deadToks.length,
+      ...(flipped.length ? { envFixed: flipped.length } : {}),
       ...(errors.length ? { errors } : {}),
       ...(iosErrors.length ? { iosErrors } : {}),
     });
