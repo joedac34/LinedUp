@@ -698,8 +698,11 @@ try{ if(typeof document!=="undefined" && typeof window!=="undefined" && !window.
   };
   const release = ()=>{ live=false; decided=false; dy=0; window.__pkGesture=null; unbind(); };
   const snapBack = ()=>{
-    if(el){ const n=el; n.classList.add("pk-snap"); n.style.transform="";
+    // Only animate home if the sheet actually moved. Taps land here too (touchend with
+    // dy 0), and toggling pk-snap on every tap churned animation state for nothing.
+    if(el && dy > 0){ const n=el; n.classList.add("pk-snap"); n.style.transform="";
             setTimeout(()=>{ try{ n.classList.remove("pk-snap"); }catch(e){} }, 280); }
+    else if(el){ el.style.transform=""; }
     el=null; release();
   };
   function onMove(e){
@@ -760,7 +763,12 @@ try{ if(typeof document!=="undefined" && typeof window!=="undefined" && !window.
       if((sheet.scrollTop || 0) > 0) return;
     }catch(err){}
     const t = e.touches && e.touches[0]; if(!t) return;
-    el = sheet; h = sheet.getBoundingClientRect().height || 400;
+    // Grab zone: the handle + hero only (top 140px of the sheet). A drag that starts
+    // lower is a SCROLL attempt inside the panes; claiming it moved the whole sheet
+    // 1:1 and sprang it back, which read as the sheet re-opening on every tab switch.
+    const _r = sheet.getBoundingClientRect();
+    if((t.clientY - _r.top) > 140) return;
+    el = sheet; h = _r.height || 400;
     sy = t.clientY; sx = t.clientX; dy = 0; t0 = Date.now(); live = true; decided = false;
     window.__pkGesture = "sheet";
     document.addEventListener("touchmove", onMove, {passive:false});
