@@ -3,9 +3,15 @@
          OR a valid Supabase user access token (used by the client "league is live" call).
          Anonymous callers are rejected — this closes the open push-spam/phishing vector.
    Body: { userIds:[...] | userId, title, body, url?, data?, category? }
-   Env: VITE_SUPABASE_URL, SUPABASE_SERVICE_KEY, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT, CRON_SECRET */
+   Env: VITE_SUPABASE_URL, SUPABASE_SERVICE_KEY, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT, CRON_SECRET
+        APNS_KEY_P8, APNS_KEY_ID, APNS_TEAM_ID, APNS_BUNDLE_ID
+   Two transports: Web Push (browsers + installed PWAs) and APNs (the native iOS
+   wrap, where Web Push does not exist at all). Recipient selection, category
+   preferences and the shared-league restriction are shared by both — only the
+   final send differs. A user on both web and phone gets both, by design. */
 import { createClient } from '@supabase/supabase-js';
 import webpush from 'web-push';
+import { sendApns, DEAD_REASONS } from './_apns.js';
 
 const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 const _vsubj = process.env.VAPID_SUBJECT || 'admin@picklockapp.com';
@@ -71,7 +77,10 @@ export default async function handler(req, res) {
       .map(u => u.id);
     if (!allowed.length) return res.status(200).json({ ok: true, sent: 0, skipped: ids.length });
 
-    const { data: subs } = await supabase.from('push_subscriptions').select('*').in('user_id', allowed);
+    const [{ data: subs }, { data: toks }] = await Promise.all([
+      supabase.from('push_subscriptions').select('*').in('user_id', allowed),
+      supabase.from('push_tokens').select('token,environment').in('user_id', allowed),
+    ]);
     const payload = JSON.stringify({ title: safeTitle, body: safeText || '', url: clickUrl, tag: category || undefined });
 
     let sent = 0; const dead = []; const errors = [];
@@ -84,7 +93,33 @@ export default async function handler(req, res) {
     }));
     if (dead.length) await supabase.from('push_subscriptions').delete().in('endpoint', dead);
 
-    return res.status(200).json({ ok: true, sent, pruned: dead.length, ...(errors.length ? { errors } : {}) });
+    // APNs. The aps payload shape is Apple's, not ours; `url` rides along as a
+    // custom key so the tap handler can route the same way the service worker does.
+    let sentIos = 0; const deadToks = []; const iosErrors = [];
+    await Promise.all((toks || []).map(async row => {
+      const r = await sendApns(row.token, {
+        aps: {
+          alert: { title: safeTitle, body: safeText || '' },
+          sound: 'default',
+          'thread-id': category || undefined,
+        },
+        url: clickUrl,
+      }, row.environment || 'production');
+      if (r.ok) { sentIos++; return; }
+      // Only prune on reasons that mean the token is permanently invalid. A 429 or
+      // a 500 during an Apple incident must not unsubscribe the whole beta.
+      if (r.reason && DEAD_REASONS.has(r.reason)) deadToks.push(row.token);
+      else iosErrors.push({ status: r.status, reason: r.reason });
+    }));
+    if (deadToks.length) await supabase.from('push_tokens').delete().in('token', deadToks);
+
+    return res.status(200).json({
+      ok: true,
+      sent, pruned: dead.length,
+      sentIos, prunedIos: deadToks.length,
+      ...(errors.length ? { errors } : {}),
+      ...(iosErrors.length ? { iosErrors } : {}),
+    });
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }

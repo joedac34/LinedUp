@@ -1,4 +1,9 @@
-/* Store or remove a Web Push subscription.  Place at: api/push-subscribe.js
+/* Store or remove a push registration.  Place at: api/push-subscribe.js
+   Handles BOTH transports:
+     { subscription: {...} }              Web Push  -> push_subscriptions
+     { deviceToken, environment, ... }    APNs      -> push_tokens
+   The native wrap has no service worker and no PushManager, so it can only ever
+   send the second shape; browsers can only ever send the first.
    Auth: requires a valid Supabase user access token; the user is derived from the token,
          so a subscription can only be stored/removed for the caller themselves.
    Env: VITE_SUPABASE_URL, SUPABASE_SERVICE_KEY */
@@ -21,10 +26,36 @@ export default async function handler(req, res) {
 
     if (req.method === 'DELETE') {
       if (body.endpoint) await supabase.from('push_subscriptions').delete().eq('endpoint', body.endpoint).eq('user_id', userId);
+      // Scoped to user_id as well as token: without it, knowing any token would let
+      // a caller unsubscribe someone else's device.
+      if (body.deviceToken) await supabase.from('push_tokens').delete().eq('token', body.deviceToken).eq('user_id', userId);
       return res.status(200).json({ ok: true });
     }
     if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
+    // ── APNs (native) ──
+    const { deviceToken } = body;
+    if (deviceToken) {
+      if (typeof deviceToken !== 'string' || !/^[0-9a-fA-F]{64,200}$/.test(deviceToken)) {
+        return res.status(400).json({ error: 'bad device token' });
+      }
+      // A build run from Xcode gets a SANDBOX token; TestFlight and App Store builds
+      // get PRODUCTION tokens. They are not interchangeable — sending to the wrong
+      // host returns BadDeviceToken and delivers nothing. The client reports which
+      // one it is; anything unrecognised falls back to production, since that is
+      // what every shipped build will be.
+      const environment = body.environment === 'sandbox' ? 'sandbox' : 'production';
+      const platform = body.platform === 'android' ? 'android' : 'ios';
+      await supabase.from('push_tokens').upsert(
+        { token: deviceToken, user_id: userId, platform, environment,
+          app_version: (body.appVersion || null), updated_at: new Date().toISOString() },
+        { onConflict: 'token' }
+      );
+      await supabase.from('users').update({ push_enabled: true }).eq('id', userId);
+      return res.status(200).json({ ok: true, transport: 'apns', environment });
+    }
+
+    // ── Web Push ──
     const { subscription } = body;
     if (!subscription || !subscription.endpoint) return res.status(400).json({ error: 'missing subscription' });
     await supabase.from('push_subscriptions').upsert(
