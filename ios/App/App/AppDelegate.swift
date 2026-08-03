@@ -46,4 +46,26 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
     }
 
+    // MARK: - Push notifications (APNs)
+    //
+    // iOS hands the device token to the AppDelegate and nowhere else. Capacitor's
+    // PushNotifications plugin listens on NotificationCenter for it, so without these
+    // two forwards the token arrives and is dropped on the floor: register() resolves
+    // successfully, and neither the "registration" nor the "registrationError"
+    // listener ever fires. That silence is exactly what a missing forward looks like,
+    // and it is indistinguishable from a broken entitlement without checking here.
+    //
+    // Capacitor does NOT add these automatically, and `npx cap sync` does not
+    // regenerate this file — so this edit persists, but it is also lost if the ios/
+    // folder is ever deleted and recreated.
+
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: deviceToken)
+    }
+
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
+    }
+
 }
+
