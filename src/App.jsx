@@ -8386,30 +8386,6 @@ function App() {
  };
  useEffect(()=>{ if((screen==="matchup"||screen==="picks") && activeLeague && (activeLeague.league_type||"h2h")==="h2h" && activeLeague.id){ fetchAllMatchups(activeLeague.id); fetchWeekPicks(activeLeague.id, activeLeague.current_week||activeLeague.week||1); setMWeek(activeLeague.current_week||activeLeague.week||1); setBracketDetail(null); setMatchupView("mine"); } }, [screen, activeLeagueId]);
 
- // Screen transition restart. Measured on device 3 Aug 2026: arriving on the Leagues
- // tab, the .body node reports animationName "pkScreenIn" with currentTime 260 and
- // playState "finished" — the rule is attached and the keyframes have already run to
- // completion, so nothing animates on arrival. Every other tab fades in over ~300ms
- // (verified frame-by-frame at 60fps); Leagues jumps to full opacity in one frame.
- //
- // A CSS mount animation only fires when the browser creates a NEW element. This
- // forces the restart explicitly rather than relying on that, so the transition no
- // longer depends on how React happens to reconcile any one screen block. Setting
- // animation to "" restores the stylesheet value, which under prefers-reduced-motion
- // is already none — the accessibility opt-out still wins.
- useEffect(()=>{
-   let raf = 0;
-   raf = requestAnimationFrame(()=>{
-     try{
-       const el = document.querySelector(".body, .lsx-scroll");
-       if(!el) return;
-       el.style.animation = "none";
-       void el.offsetWidth;          // reflow: without this the two writes coalesce
-       el.style.animation = "";
-     }catch(e){}
-   });
-   return ()=>{ if(raf) cancelAnimationFrame(raf); };
- }, [screen]);
  useEffect(()=>{ if(screen==="leagues" && leagueSubTab==="matchups" && activeLeague && activeLeague.id){ fetchAllMatchups(activeLeague.id); fetchWeekPicks(activeLeague.id, activeLeague.current_week||activeLeague.week||1); setBracketDetail(null); } }, [screen, leagueSubTab, activeLeagueId]);
 
  useEffect(()=>{
@@ -10563,7 +10539,7 @@ function App() {
  {/* ══ HOME ══ */}
  {screen==="home"&&(
  <>
- <div className="body">
+ <div className="body" key={screen}>
            {(() => {
              const _sup = (typeof Notification !== "undefined") && ("serviceWorker" in navigator) && ("PushManager" in window);
              const _perm = _sup ? Notification.permission : "denied";
@@ -12000,7 +11976,7 @@ function App() {
  );
  })()}
 
- <div className="body">
+ <div className="body" key={screen}>
  <div style={{padding:"8px 16px 14px",display:"flex",alignItems:"center",gap:12}}>
  <button onClick={()=>{
  // If editing (no savedPicks) but localStorage has a locked slip, restore it
@@ -12834,7 +12810,7 @@ function App() {
   return (<button onClick={onClick} disabled={!!disabled} style={{...st,width:"100%",borderRadius:RAD.md,padding:14,fontSize:15,fontWeight:800,fontFamily:"Barlow,sans-serif",cursor:disabled?"default":"pointer",opacity:disabled?0.45:1,marginBottom:9}}>{label}</button>);
  };
  return (
- <div className="body">
+ <div className="body" key={screen}>
   <div style={{display:"flex",alignItems:"center",gap:11,padding:"calc(var(--sa-top) + 12px) 16px 10px"}}>
    <div onClick={back} style={{width:31,height:31,borderRadius:RAD.md,background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
@@ -12940,7 +12916,7 @@ function App() {
  const cw = mine.reduce((a,r)=>a+(Number(r.wins)||0),0);
  const cl = mine.reduce((a,r)=>a+(Number(r.losses)||0),0);
  return (
- <div className="body">
+ <div className="body" key={screen}>
   <div className="pk-cbar" style={{paddingLeft:20,paddingRight:20}}><div className="pk-cbar-t">League history</div></div>
   <div style={{display:"flex",alignItems:"center",gap:11,padding:"calc(var(--sa-top) + 12px) 16px 10px"}}>
    <div onClick={()=>{ haptic("select"); setScreen("league"); }} style={{width:31,height:31,borderRadius:RAD.md,background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
@@ -13027,7 +13003,7 @@ function App() {
 }
 
 {screen==="help"&&(
- <div className="body">
+ <div className="body" key={screen}>
   <div style={{display:"flex",alignItems:"center",gap:11,padding:"calc(var(--sa-top) + 12px) 16px 10px"}}>
    <div onClick={()=>{ haptic("select"); setScreen("profile"); }} style={{width:31,height:31,borderRadius:RAD.md,background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
@@ -13041,7 +13017,7 @@ function App() {
 )}
 
 {screen==="legal"&&(
- <div className="body">
+ <div className="body" key={screen}>
   <div style={{display:"flex",alignItems:"center",gap:11,padding:"calc(var(--sa-top) + 12px) 16px 10px"}}>
    <div onClick={()=>{ haptic("select"); setScreen("profile"); }} style={{width:31,height:31,borderRadius:RAD.md,background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
@@ -14466,7 +14442,7 @@ function App() {
  // name, both of which are stable, unlike a hue keyed to row index.
  const AV_NEUTRAL = "#23242a";
  return (
- <div className="body">
+ <div className="body" key={screen}>
    <div style={{padding:"10px 20px 14px",background:"radial-gradient(120% 90% at 90% -10%, rgba(94,92,230,0.18), transparent 55%), linear-gradient(180deg,#0B1430 0%,#000 80%)"}}>
      <div style={{fontSize:11,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(255,255,255,0.42)"}}>Week {cw} · {activeLeague.name}</div>
      <div style={{fontSize:30,fontWeight:800,letterSpacing:"-0.7px",color:"#fff",lineHeight:1.05,marginTop:2}}>The Field</div>
@@ -14537,7 +14513,7 @@ function App() {
  </div>
  );
  })() : (<>
- <div className="body">
+ <div className="body" key={screen}>
  {/* Header */}
  <div className="pk-cbar" style={{paddingLeft:20,paddingRight:20}}><div className="pk-cbar-t">Matchup</div></div>
  <div className="pk-hdr" style={{textAlign:"left",padding:"10px 20px 14px",background:"radial-gradient(120% 90% at 90% -10%, rgba(10,132,255,0.18), transparent 55%), linear-gradient(180deg,#0B1A2E 0%,#000 80%)"}}>
@@ -14964,7 +14940,7 @@ function App() {
  {/* ══ LEAGUES LIST ══ */}
  {screen==="leagues"&&(
  <>
- <div className="body">
+ <div className="body" key={screen}>
 
  {/* ── NEW LEAGUE MODAL ── */}
  {showNewLeague && (
@@ -15965,7 +15941,7 @@ function App() {
  {/* ══ COMMISSIONER ══ */}
  {screen==="commissioner"&&(
  <>
- <div className="body">
+ <div className="body" key={screen}>
  {/* Header */}
  <div style={{padding:"10px 20px 16px",display:"flex",alignItems:"center",gap:12,marginBottom:14,background:"radial-gradient(120% 90% at 90% -10%, rgba(255,214,10,0.12), transparent 55%), linear-gradient(180deg,#15130B 0%,#000 82%)"}}>
  <button onClick={()=>setScreen("leagues")} style={{background:IOS.fill2,border:"none",borderRadius:RAD.md,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:17,flexShrink:0}}>‹</button>
@@ -16583,7 +16559,7 @@ function App() {
  {/* ══ LEAGUE ══ */}
  {screen==="league"&&(
  <>
- <div className="body">
+ <div className="body" key={screen}>
  <div className="pk-cbar" style={{paddingLeft:20,paddingRight:20}}><div className="pk-cbar-t">{activeLeague.name||"My League"}</div></div>
  <div className="pk-hdr" style={{padding:"0 20px 12px"}}>
  <div className="nav-title-large">{activeLeague.name||"My League"}</div>
@@ -17843,7 +17819,7 @@ function App() {
  {/* ══ PROFILE ══ */}
  {screen==="profile"&&(
  <>
- <div className="body">
+ <div className="body" key={screen}>
  {(()=>{
  const st=allMyStats||{};
  const wins=st.wins||0, losses=st.losses||0, total=st.total||0;
@@ -19385,7 +19361,7 @@ function App() {
  const SecH=({t,sub})=>(<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",margin:"4px 4px 11px"}}><div style={{fontSize:16,fontWeight:800,letterSpacing:"-0.2px"}}>{t}</div><div style={{fontSize:11,color:CC.l3,fontWeight:600}}>{sub}</div></div>);
 
  return (
- <div className="body">
+ <div className="body" key={screen}>
   <div className="pk-cbar" style={{paddingLeft:20,paddingRight:20}}><div className="pk-cbar-t">{screen==="solostats"?"Stats":"Analytics"}</div></div>
   {/* Gradient hero */}
   <div style={{padding:"46px 20px 16px",background:"radial-gradient(120% 90% at 88% -10%, rgba(10,132,255,0.22), transparent 55%),linear-gradient(180deg,#0A1A2E 0%,#000 92%)"}}>
