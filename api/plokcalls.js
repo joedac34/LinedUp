@@ -6,6 +6,8 @@
  * type "plok_call". This is Plok reaching out proactively instead of waiting to be asked.
  *
  * Query params (cron uses defaults): ?sports=mlb  ?min=2.5  ?top=2  ?dry=1 (preview, no insert)
+ *   ?logas=<user_id>  log picks to plok_calls under this user so grade.js settles them
+ *   ?only=<user_id>   send notifications to just this user (soak test before going wide)
  *
  * ENV: ODDS_API_KEY, VITE_SUPABASE_URL, SUPABASE_SERVICE_KEY
  * Reuses: analyzeGame + SPORT_KEYS from ./findbet.js (single source for the odds math).
@@ -32,6 +34,49 @@ async function sbInsert(rows) {
     done += chunk.length;
   }
   return done;
+}
+
+// Log each call to plok_calls so grade.js self-grades it with the same settlement
+// engine as user picks. Until now this cron wrote ONLY to notifications, which means
+// Plok's Call has never had a track record — the 55.7%/+7.13u figures people quote
+// come from the in-app "ask Plok" feature (App.jsx writes those rows), a completely
+// different pipeline with a different scoring model. Two features, one name, and no
+// way to tell them apart after the fact. Now the cron's own picks are auditable.
+//
+// conviction is NULL on purpose: the in-app feature stores GPT's 0-100 self-rating,
+// which this pipeline does not produce. Writing evPct into that column would make two
+// incompatible scales look like one number. Store it in `verdict` as text instead so
+// the edge is preserved without corrupting conviction.
+async function logPlokCalls(picks, userId) {
+  if (!userId) return 0;
+  const rows = picks.map((p) => ({
+    user_id: userId,
+    sport: p.sport,
+    bet_type: p.betType,
+    selection: p.label,
+    game: p.game,
+    // analyzeGame() does not surface `point` separately — labelFor() bakes the
+    // number into `label` ("Cubs -1.5"). Parse it back out so gradePick sees a
+    // real line: a spread stored with line=null grades as a moneyline, which is
+    // the exact run-line bug grade.js documents for user picks (2 Aug 2026).
+    line: (function () {
+      const m = String(p.label || "").match(/([+-]?\d+(?:\.\d+)?)\s*$/);
+      return (p.betType === "spread" || p.betType === "ou") && m ? m[1] : null;
+    })(),
+    odds: p.bestOdds != null ? String(p.bestOdds) : null,
+    conviction: null,
+    verdict: `cron_ev_${p.evPct}`,
+    game_date: p.commence_time || null,
+    result: "pending",
+  }));
+  if (!rows.length) return 0;
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/plok_calls`, {
+      method: "POST", headers: { ...sbH, Prefer: "return=minimal" }, body: JSON.stringify(rows),
+    });
+    if (!r.ok) return 0;
+    return rows.length;
+  } catch (e) { return 0; }
 }
 
 const betTypeFor = (m) => (m === "h2h" ? "ml" : m === "spreads" ? "spread" : m === "totals" ? "ou" : m);
@@ -92,10 +137,21 @@ export default async function handler(req, res) {
 
   if (dry) return res.status(200).json({ ok: true, dry: true, sportsScanned: sports, candidates: cands.length, picks });
 
+  // Logged before recipients are resolved: a run with zero eligible users still made
+  // real calls, and excluding them would quietly bias the record toward days when
+  // somebody happened to be listening.
+  const logOwner = String(q.logas || "").trim() || null;
+  const logged = await logPlokCalls(picks, logOwner);
+
   // 2) Eligible users: Pro with Plok's Calls not disabled.
+  const only = String(q.only || "").trim();
   const users = await sbGet(`users?select=id,notif_plok&is_pro=eq.true`);
-  const recipients = users.filter((u) => u.notif_plok !== false).map((u) => u.id);
-  if (!recipients.length) return res.status(200).json({ ok: true, calls: picks.length, usersNotified: 0, note: "no eligible Pro users" });
+  let recipients = users.filter((u) => u.notif_plok !== false).map((u) => u.id);
+  // Soak-test mode: ?only=<user_id> sends to exactly one person while the calls are
+  // still being logged and graded for everyone to review later. The picks are logged
+  // either way (see below) — restricting recipients limits blast radius, not data.
+  if (only) recipients = recipients.filter((id) => id === only);
+  if (!recipients.length) return res.status(200).json({ ok: true, calls: picks.length, logged, usersNotified: 0, note: only ? "soak mode: target not Pro or opted out" : "no eligible Pro users" });
 
   // 3) Dedupe: don't re-notify a (user, pick) already sent in the last 3 days.
   const since = new Date(now - 3 * 86400 * 1000).toISOString();
@@ -118,5 +174,5 @@ export default async function handler(req, res) {
   try { inserted = rows.length ? await sbInsert(rows) : 0; }
   catch (e) { return res.status(500).json({ error: String(e.message || e), calls: picks.length, prepared: rows.length }); }
 
-  return res.status(200).json({ ok: true, sportsScanned: sports, candidates: cands.length, calls: picks.length, usersEligible: recipients.length, inserted, picks: picks.map((p) => ({ sport: p.sport, game: p.game, label: p.label, evPct: p.evPct, bestOdds: p.bestOdds })) });
+  return res.status(200).json({ ok: true, sportsScanned: sports, candidates: cands.length, calls: picks.length, logged, usersEligible: recipients.length, inserted, picks: picks.map((p) => ({ sport: p.sport, game: p.game, label: p.label, evPct: p.evPct, bestOdds: p.bestOdds })) });
 }
