@@ -101,6 +101,9 @@ async function underRateLimit(identity) {
 // best-effort and wrapped — a wrong path just yields fewer stats, never a crash.
 // Verify against your plan at https://sportsdata.io/developers/api-documentation
 const SDIO_BASE = "https://api.sportsdata.io/v3";
+// No ncaaf here on purpose: SDIO's CFB paths/season strings are unverified for
+// this subscription, and the ESPN map above already feeds CFB reads. Add only
+// after probing a real endpoint (see the NOTE above).
 const LEAGUE = { nfl: "nfl", nba: "nba", mlb: "mlb" };
 
 // market keyword -> SportsDataIO stat field on a player game-log object
@@ -179,6 +182,10 @@ async function teamStats(sport, teamHint) {
 // source for real numbers. Endpoints below are the same ones grade.js uses.
 const ESPN_MAP = {
   nfl: { sp: "football",   lg: "nfl" },
+  // ESPN's college slug is "college-football", not "ncaaf" — same mapping as
+  // api/espn.js and api/grade.js. Without this entry every Plok read on a CFB
+  // game ran with no stats context and the model padded around missing DATA.
+  ncaaf: { sp: "football", lg: "college-football" },
   nba: { sp: "basketball", lg: "nba" },
   mlb: { sp: "baseball",   lg: "mlb" },
 };
