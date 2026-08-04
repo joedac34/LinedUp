@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, Component, Fragment } from "react";
 import { supabase } from './supabase';
 import { LEGAL } from './legal';
+import { initPurchases, logOutPurchases } from './purchases';
 // Attach the current user's Supabase access token so API routes verify the caller
 // server-side (endpoints derive the user from this token, not the request body).
 async function authHeaders() {
@@ -8687,7 +8688,7 @@ function App() {
  supabase.auth.getSession().then(({data:{session}})=>{
  const u = session?.user??null;
  setUser(u);
- if(u) { fetchLeagues(u.id); fetchAllMyStats(u.id); fetchUserProfile(u.id); }
+ if(u) { fetchLeagues(u.id); fetchAllMyStats(u.id); fetchUserProfile(u.id); initPurchases(u.id); }
  });
  supabase.auth.onAuthStateChange((_e,session)=>{
  if(_e==="PASSWORD_RECOVERY"){ setRecoveryMode(true); }
@@ -8700,7 +8701,7 @@ function App() {
    lastAuthUidRef.current = u?.id ?? null;
  }
  setUser(u);
- if(u) { fetchLeagues(u.id); fetchAllMyStats(u.id); fetchUserProfile(u.id); } else { try{ posthog.reset(); }catch(e){} }
+ if(u) { fetchLeagues(u.id); fetchAllMyStats(u.id); fetchUserProfile(u.id); initPurchases(u.id); } else { logOutPurchases(); try{ posthog.reset(); }catch(e){} }
  });
  setTimeout(()=>setAnim(true),80);
  // (a 1s interval used to tick a countdown state here that nothing rendered —
