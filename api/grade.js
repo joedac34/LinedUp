@@ -85,6 +85,67 @@ async function notifyPick(pick, league, result, pts, legs) {
     });
   } catch (e) { /* swallow */ }
 }
+// "Cannizzop just passed you." The single most engaging notification in a pick'em
+// league, and also the easiest one to turn into spam: ranks churn on every graded
+// pick during a slate, so a naive version fires every time two people trade places.
+//
+// Three guards keep it sane:
+//   1. ONE notification per (user, week, passer). If they trade places six times on
+//      a Sunday, you hear about it once.
+//   2. Only the person who LOST ground is told. Notifying the passer too would
+//      double the volume for the same event and reads as gloating-by-robot.
+//   3. Solo and one-person leagues are skipped — there is nobody to pass.
+async function maybeNotifyPassed(league, oldRanks, ranked) {
+  try {
+    if (!league || !league.id || league.league_type === "solo") return;
+    if (!oldRanks || !ranked || ranked.length < 2) return;
+    const week = league.current_week;
+
+    // Who dropped, and who is now directly above them.
+    const drops = [];
+    ranked.forEach(([uid], idx) => {
+      const newRank = idx + 1;
+      const oldRank = oldRanks[uid];
+      if (!oldRank || newRank <= oldRank) return;      // new entrant, or held/improved
+      const passerUid = ranked[idx - 1] && ranked[idx - 1][0];
+      if (!passerUid || passerUid === uid) return;
+      // Only count it if the passer actually came from below them.
+      const passerOld = oldRanks[passerUid];
+      if (!passerOld || passerOld <= oldRank) return;
+      drops.push({ uid, passerUid, newRank });
+    });
+    if (!drops.length) return;
+
+    const uids = [...new Set(drops.map(d => d.uid))];
+    const prefRows = await sbGet(`users?id=in.(${uids.join(",")})&select=id,notif_results`);
+    const optOut = new Set((Array.isArray(prefRows) ? prefRows : []).filter(u => u.notif_results === false).map(u => u.id));
+
+    const already = await sbGet(`notifications?type=eq.passed&user_id=in.(${uids.join(",")})&select=user_id,data`);
+    const seen = new Set((Array.isArray(already) ? already : [])
+      .filter(n => n.data && n.data.league_id === league.id && String(n.data.week) === String(week))
+      .map(n => `${n.user_id}|${n.data.by}`));
+
+    // Names for the passers, one lookup for the whole batch.
+    const passerIds = [...new Set(drops.map(d => d.passerUid))];
+    const nameRows = await sbGet(`users?id=in.(${passerIds.join(",")})&select=id,username`);
+    const nameById = {};
+    (Array.isArray(nameRows) ? nameRows : []).forEach(u => { nameById[u.id] = u.username || "Someone"; });
+
+    for (const d of drops) {
+      if (optOut.has(d.uid)) continue;
+      if (seen.has(`${d.uid}|${d.passerUid}`)) continue;
+      const who = nameById[d.passerUid] || "Someone";
+      const title = `${who} passed you`;
+      const body = `You're now #${d.newRank} in ${league.name || "your league"}.`;
+      await sbPost("notifications", {
+        user_id: d.uid, type: "passed", title, body,
+        data: { league_id: league.id, week, by: d.passerUid, rank: d.newRank },
+        created_at: new Date().toISOString(),
+      });
+      await pushNotify(d.uid, title, body, "notif_results", "/");
+    }
+  } catch (e) { /* never break grading */ }
+}
 // Snapshot each member's cumulative league rank for the current week, so the
 // weekly recap can show week-over-week movement. Ranks by total points across
 // all graded picks. Service-role upsert (bypasses RLS). Best-effort.
@@ -97,8 +158,21 @@ async function stashWeekRanks(league) {
     for (const r of rows) { if (!r.user_id) continue; totals[r.user_id] = (totals[r.user_id] || 0) + (parseFloat(r.points_earned) || 0); }
     const ranked = Object.entries(totals).sort((a, b) => b[1] - a[1]);
     const week = league.current_week;
+    // Read the standing BEFORE the upsert below overwrites it — this row IS the
+    // previous state, and there is no history table to fall back on.
+    let oldRanks = null;
+    try {
+      const prev = await sbGet(`weekly_ranks?league_id=eq.${league.id}&week=eq.${week}&select=user_id,rank`);
+      if (Array.isArray(prev) && prev.length) {
+        oldRanks = {};
+        prev.forEach(r => { oldRanks[r.user_id] = r.rank; });
+      }
+    } catch (e) { oldRanks = null; }
     const payload = ranked.map(([user_id, pts], idx) => ({ league_id: league.id, user_id, week, rank: idx + 1, points: parseFloat(pts.toFixed(1)) }));
     if (payload.length) await sbUpsert("weekly_ranks?on_conflict=league_id,user_id,week", payload);
+    // After the write, so a failed upsert cannot produce a notification about a
+    // standing that was never recorded.
+    if (oldRanks) await maybeNotifyPassed(league, oldRanks, ranked);
   } catch (e) { /* never break grading */ }
 }
 // Fire a real push alongside the in-app row. Everything in this file writes to the
