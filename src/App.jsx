@@ -5548,6 +5548,10 @@ function App() {
  const [leagueRecap, setLeagueRecap] = useState(null);
  const [strayPicks, setStrayPicks] = useState([]);
  const [leagueRecapLoading, setLeagueRecapLoading] = useState(false);
+ // Which profile settings section is expanded. One at a time: the three cards
+ // together are taller than a screen, and an accordion keeps the whole group
+ // inside one thumb-reach. null = all collapsed, which is the landing state.
+ const [profSec, setProfSec] = useState(null);
  const [gameSheet, setGameSheet] = useState(null); // { tickerGame, espnGame, detail }
  const [gcTab, setGcTab] = useState("ov");   // game sheet tab: Overview | Lineups | Odds | Plok
  const [gcDir, setGcDir] = useState(1);      // +1 moving right, -1 moving left
@@ -9719,6 +9723,17 @@ function App() {
     so the rect came back still-translated, overlap measured 0, and the bar fell
     back behind the keyboard on every viewport event. Movement is stepped instead. */
  [data-kb-stick]{will-change:transform;}
+ /* Collapsible profile sections. max-height animates (height:auto cannot);
+    620px clears the tallest body (4 notification rows) with room to spare. */
+ .pf-sec{background:linear-gradient(160deg,#141418,#0B0B0E 80%);border-radius:14px;overflow:hidden;border:0.5px solid rgba(255,255,255,0.07);margin-bottom:12px;}
+ .pf-head{display:flex;align-items:center;gap:12px;padding:15px 14px;cursor:pointer;user-select:none;-webkit-user-select:none;}
+ .pf-head:active{background:rgba(255,255,255,0.03);}
+ .pf-chev{margin-left:auto;flex:none;transition:transform .26s cubic-bezier(0.4,0,0.2,1);}
+ .pf-sec.open .pf-chev{transform:rotate(90deg);}
+ .pf-body{max-height:0;overflow:hidden;transition:max-height .3s cubic-bezier(0.4,0,0.2,1);}
+ .pf-sec.open .pf-body{max-height:620px;}
+ .pf-inner{border-top:0.5px solid rgba(255,255,255,0.07);}
+ @media (prefers-reduced-motion: reduce){ .pf-chev,.pf-body{transition:none;} }
  .chat-field{flex:1;background:${IOS.bg3};border:none;border-radius:20px;padding:10px 16px;font-family:'Barlow',sans-serif;font-size:15px;color:#fff;outline:none;letter-spacing:-0.2px;}
  .chat-field::placeholder{color:${IOS.label3};}
  .chat-send{width:34px;height:34px;border-radius:50%;background:${IOS.blue};border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;}
@@ -18328,10 +18343,40 @@ function App() {
  </div>
  )}
 
- {/* Notification Preferences */}
+ {/* ══ SETTINGS: three collapsible sections ══ */}
+ {(()=>{ const _push=!!(userProfile&&userProfile.push_enabled);
+   const _cats=["notif_results","notif_grades","notif_reminder","notif_league"];
+   const _on=_cats.filter(k=>userProfile?.[k]!==false).length;
+   return (
  <div style={{margin:"0 16px 12px"}}>
- <div style={{fontSize:11,fontWeight:700,color:IOS.label3,letterSpacing:1,textTransform:"uppercase",marginBottom:8,paddingLeft:4}}>Notifications</div>
- <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",borderRadius:RAD.lg,overflow:"hidden",border:EDGE.hair}}>
+  <div className={"pf-sec"+(profSec==="notif"?" open":"")}>
+   <div className="pf-head" onClick={()=>{ haptic("select"); setProfSec(profSec==="notif"?null:"notif"); }}>
+    <div style={{width:34,height:34,borderRadius:RAD.md,background:"rgba(10,132,255,0.13)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+    </div>
+    <div style={{minWidth:0}}>
+     <div style={{fontSize:15.5,fontWeight:800,letterSpacing:-0.2,color:"#fff"}}>Notifications</div>
+     <div style={{fontSize:11.5,fontWeight:600,color:IOS.label3,marginTop:2}}>{_push?("On \u2014 "+_on+" of 4 alerts"):"Off"}</div>
+    </div>
+    {/* Master toggle lives in the HEADER: turning everything off should never
+        require expanding first. stopPropagation so tapping it does not also
+        collapse the card. */}
+    <div style={{marginLeft:"auto"}} onClick={(e)=>e.stopPropagation()}>
+     <div className={"nt-tg"+(_push?" on":"")} onClick={async()=>{ haptic("select"); if(_push){ await disablePush(); } else { const _ok=await subscribeToPush(); if(_ok!==false) setProfSec("notif"); } }}>
+      <div className="nt-fill"/>
+      <div className="nt-knob">
+       <svg className="lk-off" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8a8a90" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7-1.5"/></svg>
+      </div>
+     </div>
+    </div>
+    <svg className="pf-chev" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2.2" strokeLinecap="round"><path d="M9 6l6 6-6 6"/></svg>
+   </div>
+   <div className="pf-body"><div className="pf-inner">
+    {!_push ? (
+     /* Hidden, not padlocked. The old screen showed four locked toggles you
+        could not operate, which reads as broken rather than gated. */
+     <div style={{padding:16,fontSize:12.5,fontWeight:600,color:IOS.label3,lineHeight:1.5,textAlign:"center"}}>Push is off, so nothing will be sent.<br/>Turn it on above to choose which alerts you get.</div>
+    ) : (<>
  {[
  {key:"notif_results", label:"Weekly Results", sub:"When your week is graded", emblem:'<path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/>'},
  {key:"notif_grades", label:"Picks Graded", sub:"When a pick result comes in", emblem:'<polyline points="20 6 9 17 4 12"/>'},
@@ -18363,29 +18408,21 @@ function App() {
  </div>
  );
  })}
- {/* Master push toggle */}
- <div style={{display:"flex",alignItems:"center",padding:"13px 16px",borderTop:`1px solid ${IOS.sep}`,background:"rgba(255,255,255,0.03)"}}>
- <div style={{width:36,height:36,borderRadius:RAD.md,background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",marginRight:12,flexShrink:0}}>
- <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
- </div>
- <div style={{flex:1}}>
- <div style={{fontSize:14.5,fontWeight:800,color:"#fff"}}>Push Notifications</div>
- <div style={{fontSize:11.5,color:IOS.label3,marginTop:1}}>{(userProfile&&userProfile.push_enabled)?"On — alerts even when the app is closed":"Off — tap to turn on alerts"}</div>
- </div>
- <div className={"nt-tg"+((userProfile&&userProfile.push_enabled)?" on":"")} onClick={async()=>{ const _on=!!(userProfile&&userProfile.push_enabled); haptic("select"); if(_on){ await disablePush(); } else { await subscribeToPush(); } }}>
- <div className="nt-fill"/>
- <div className="nt-knob">
- <svg className="lk-off" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8a8a90" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7-1.5"/></svg>
- </div>
- </div>
- </div>
- </div>
- </div>
-
- {/* Support & legal */}
- <div style={{margin:"0 16px 12px"}}>
-  <div style={{fontSize:11,fontWeight:700,color:IOS.label3,letterSpacing:1,textTransform:"uppercase",marginBottom:8,paddingLeft:4}}>Support</div>
-  <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",borderRadius:RAD.lg,overflow:"hidden",border:EDGE.hair}}>
+    </>)}
+   </div></div>
+  </div>
+  <div className={"pf-sec"+(profSec==="support"?" open":"")}>
+   <div className="pf-head" onClick={()=>{ haptic("select"); setProfSec(profSec==="support"?null:"support"); }}>
+    <div style={{width:34,height:34,borderRadius:RAD.md,background:"rgba(10,132,255,0.13)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 2.5-3 4"/><path d="M12 17.5v.01"/></svg>
+    </div>
+    <div style={{minWidth:0}}>
+     <div style={{fontSize:15.5,fontWeight:800,letterSpacing:-0.2,color:"#fff"}}>Support</div>
+     <div style={{fontSize:11.5,fontWeight:600,color:IOS.label3,marginTop:2}}>Help, terms, privacy, how to play</div>
+    </div>
+    <svg className="pf-chev" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2.2" strokeLinecap="round"><path d="M9 6l6 6-6 6"/></svg>
+   </div>
+   <div className="pf-body"><div className="pf-inner">
    <div onClick={()=>{ haptic("select"); setScreen("help"); }} style={{display:"flex",alignItems:"center",gap:12,padding:"13px 16px",cursor:"pointer",borderBottom:`0.5px solid ${IOS.sep}`}}>
     <div style={{width:36,height:36,borderRadius:RAD.md,background:"rgba(10,132,255,0.14)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -18407,20 +18444,30 @@ function App() {
     <div style={{flex:1}}><div style={{fontSize:14.5,fontWeight:800}}>Privacy Policy</div>
     </div><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.28)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
    </div>
+   {/* How to Play folded in: it was orphaned between two labelled groups. */}
+   <div onClick={()=>{ haptic("select"); setTutorialStep(0); }} style={{display:"flex",alignItems:"center",gap:12,padding:"13px 16px",cursor:"pointer"}}>
+    <div style={{width:36,height:36,borderRadius:RAD.md,background:"rgba(10,132,255,0.14)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+    </div>
+    <div style={{flex:1}}><div style={{fontSize:14.5,fontWeight:800}}>How to Play</div>
+    <div style={{fontSize:11.5,color:IOS.label3,marginTop:1}}>Pick types, sports, longshot, season recap</div></div>
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.28)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+   </div>
+   </div></div>
   </div>
- </div>
 
- {/* How to Play */}
- <div style={{padding:"0 16px 4px"}}>
- <button onClick={()=>setTutorialStep(0)} style={{width:"100%",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:RAD.md,padding:"14px",fontSize:15,fontWeight:600,color:"rgba(255,255,255,0.7)",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
- How to Play
- </button>
- </div>
-
- {/* Account */}
- <div style={{margin:"0 16px 12px"}}>
-  <div style={{fontSize:11,fontWeight:700,color:IOS.label3,letterSpacing:1,textTransform:"uppercase",marginBottom:8,paddingLeft:4}}>Account</div>
-  <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",borderRadius:RAD.lg,overflow:"hidden",border:EDGE.hair}}>
+  <div className={"pf-sec"+(profSec==="account"?" open":"")}>
+   <div className="pf-head" onClick={()=>{ haptic("select"); setProfSec(profSec==="account"?null:"account"); }}>
+    <div style={{width:34,height:34,borderRadius:RAD.md,background:"rgba(10,132,255,0.13)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/></svg>
+    </div>
+    <div style={{minWidth:0}}>
+     <div style={{fontSize:15.5,fontWeight:800,letterSpacing:-0.2,color:"#fff"}}>Account</div>
+     <div style={{fontSize:11.5,fontWeight:600,color:IOS.label3,marginTop:2}}>Password, your data, sign out</div>
+    </div>
+    <svg className="pf-chev" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2.2" strokeLinecap="round"><path d="M9 6l6 6-6 6"/></svg>
+   </div>
+   <div className="pf-body"><div className="pf-inner">
    <div onClick={()=>{ haptic("select"); setPwErr(""); setPwDone(false); setPwOpen(true); }} style={{display:"flex",alignItems:"center",gap:12,padding:"13px 16px",cursor:"pointer",borderBottom:`0.5px solid ${IOS.sep}`}}>
     <div style={{width:36,height:36,borderRadius:RAD.md,background:"rgba(10,132,255,0.14)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M21 2l-9.6 9.6M15.5 7.5l3 3"/></svg>
@@ -18437,12 +18484,13 @@ function App() {
     <div style={{fontSize:11.5,color:IOS.label3,marginTop:1}}>{expBusy?"Building your file\u2026":(expMsg||"Everything PickLock holds about you")}</div></div>
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.28)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
    </div>
+   </div></div>
   </div>
  </div>
+ ); })()}
 
  {/* Sign Out + Delete Account */}
  <div style={{padding:"8px 16px 32px",display:"flex",flexDirection:"column",gap:10}}>
- <button onClick={async()=>{ if(userProfile&&userProfile.push_enabled){ await disablePush(); } else { await subscribeToPush(); } }} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.05)",border:EDGE.hair3,borderRadius:RAD.md,padding:"14px",fontSize:15,fontWeight:600,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}><span>Push notifications</span><span style={{fontSize:13,fontWeight:700,color:(userProfile&&userProfile.push_enabled)?IOS.green:IOS.label3}}>{(userProfile&&userProfile.push_enabled)?"On":"Off"}</span></button>
  {(isPro&&!IS_NATIVE)?(<button onClick={openBillingPortal} style={{width:"100%",background:"rgba(255,255,255,0.05)",border:EDGE.hair3,borderRadius:RAD.md,padding:"14px",fontSize:15,fontWeight:600,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Manage subscription</button>):null}
  <button onClick={async()=>{
  await supabase.auth.signOut();
