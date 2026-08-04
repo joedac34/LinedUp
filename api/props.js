@@ -1,6 +1,8 @@
 const PROP_MARKETS = {
   americanfootball_nfl: [
-    "player_anytime_td","player_first_td","player_pass_yds","player_pass_tds",
+    // player_first_td removed: settlement needs scoring-play ORDER, which the box
+    // score does not carry. Never offer a pick type that cannot be graded.
+    "player_anytime_td","player_pass_yds","player_pass_tds",
     "player_rush_yds","player_receptions","player_reception_yds","player_rush_tds","player_reception_tds",
   ],
   basketball_nba: [

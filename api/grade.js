@@ -454,6 +454,10 @@ function parseProp(pickName) {
   if (m) return { player: m[1].trim(), dir: "over_eq", line: parseFloat(m[2]), stat: m[3].trim().toLowerCase() };
   m = s.match(/^([\d.]+)\s*\+\s*(.+)$/);
   if (m) return { player: null, dir: "over_eq", line: parseFloat(m[1]), stat: m[2].trim().toLowerCase() };
+  // "Saquon Barkley - Anytime TD" (props.js TD-scorer label: player, dash, market —
+  // no direction and no line). Settles as over_eq 1 on the combined TD count.
+  m = s.match(/^(.+?)\s*-\s*anytime\s+td(?:s|scorer)?\s*$/i);
+  if (m) return { player: m[1].trim(), dir: "over_eq", line: 1, stat: "anytime td" };
   return null;
 }
 
@@ -717,7 +721,11 @@ function gradeProp(pickName, gameField, index, info = {}, gameDate = null) {
   const sget = (keys) => { for (const k of keys) { if (stats[k] != null) { const n = statNumber(stats[k]); if (n != null) return n; } } return null; };
   const shas = (keys) => keys.some(k => stats[k] != null);
   let val;
-  if (/total\s*bases?\b/.test(parsed.stat) || /^tb$/.test(parsed.stat.trim())) {
+  if (parsed.stat === "anytime td") {
+    const rush = sget(["rushingTouchdowns"]) || 0;
+    const rec  = sget(["receivingTouchdowns"]) || 0;
+    val = rush + rec;
+  } else if (/total\s*bases?\b/.test(parsed.stat) || /^tb$/.test(parsed.stat.trim())) {
     // Total bases = 1B + 2B*2 + 3B*3 + HR*4 = H + 2B + 2*3B + 3*HR. ESPN's batting line
     // doesn't always carry doubles/triples; only grade when the components are actually
     // present (direct stat, OR both 2B and 3B keys so a missing value means zero).

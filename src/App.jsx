@@ -6858,12 +6858,16 @@ function App() {
   {id:"ml",l:"Moneyline",scope:"Game line",color:"#0A84FF"},
   {id:"spread",l:"Spread",scope:"Game line",color:"#30D158"},
   {id:"ou",l:"Over / Under",scope:"Game line",color:"#FF9F0A"},
-  {id:"prop",l:"Player Prop",scope:"Props",color:"#FFD60A"},
+  {id:"prop",l:"Player Prop",scope:"Props",color:"#FFD60A",
+   // No ncaaf: /api/props has no market list for it (400), NCAAF player props are
+   // banned in many states, and books post them thinly. Revisit only with a real
+   // props.js entry AND a grading test. No nhl until that sport is wired end-to-end.
+   sports:["nfl","nba","mlb"]},
   {id:"longshot",l:"Longshot / Parlay",scope:"Exotic",color:"#FF375F"},
   {id:"wildcard",l:"Wildcard",scope:"Any pick type",color:"#BF5AF2"},
-  {id:"ml_h1",l:"1st Half ML",scope:"1st Half",color:"#64D2FF",sports:["nfl","nba"]},
-  {id:"spread_h1",l:"1st Half Spread",scope:"1st Half",color:"#64D2FF",sports:["nfl","nba"]},
-  {id:"ou_h1",l:"1st Half O / U",scope:"1st Half",color:"#64D2FF",sports:["nfl","nba"]},
+  {id:"ml_h1",l:"1st Half ML",scope:"1st Half",color:"#64D2FF",sports:["nfl","ncaaf","nba"]},
+  {id:"spread_h1",l:"1st Half Spread",scope:"1st Half",color:"#64D2FF",sports:["nfl","ncaaf","nba"]},
+  {id:"ou_h1",l:"1st Half O / U",scope:"1st Half",color:"#64D2FF",sports:["nfl","ncaaf","nba"]},
   {id:"ml_f5",l:"First 5 ML",scope:"First 5 innings",color:"#5E5CE6",sports:["mlb"]},
   {id:"spread_f5",l:"First 5 Spread",scope:"First 5 innings",color:"#5E5CE6",sports:["mlb"]},
   {id:"ou_f5",l:"First 5 O / U",scope:"First 5 innings",color:"#5E5CE6",sports:["mlb"]},
