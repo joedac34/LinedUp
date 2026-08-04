@@ -4662,6 +4662,7 @@ const PERIOD_CATS = ["ml_h1","spread_h1","ou_h1","ml_f5","spread_f5","ou_f5","yr
 const PERIOD_SUBS_BY_SPORT = {
  mlb:[{id:"ml_f5",l:"F5 ML"},{id:"spread_f5",l:"F5 Spread"},{id:"ou_f5",l:"F5 O/U"},{id:"yrfi",l:"YRFI"},{id:"nrfi",l:"NRFI"}],
  nfl:[{id:"ml_h1",l:"1H ML"},{id:"spread_h1",l:"1H Spread"},{id:"ou_h1",l:"1H O/U"}],
+ ncaaf:[{id:"ml_h1",l:"1H ML"},{id:"spread_h1",l:"1H Spread"},{id:"ou_h1",l:"1H O/U"}],
  nba:[{id:"ml_h1",l:"1H ML"},{id:"spread_h1",l:"1H Spread"},{id:"ou_h1",l:"1H O/U"}],
 };
 // ── MLB starting lineup (StatsAPI) — shown on game detail, under the mound ──
@@ -15362,7 +15363,10 @@ function App() {
    </div>
    <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:isPro?4:16}}>
    {[
-     {id:"nfl",label:"NFL"},{id:"ncaaf",label:"NCAAF"},{id:"nba",label:"NBA"},{id:"mlb",label:"MLB"},{id:"nhl",label:"NHL"},
+     {id:"nfl",label:"NFL"},{id:"ncaaf",label:"NCAAF"},{id:"nba",label:"NBA"},{id:"mlb",label:"MLB"},
+     /* NHL hidden: no entry in ESPN_MAP in api/grade.js or api/espn.js, so an NHL
+        league returns no scores and NOTHING ever grades. Restore this line only
+        after both maps carry icehockey_nhl and a pick has graded end-to-end. */
    ].map(sp=>{
      const isSelected = newLeagueSports.includes(sp.id);
      return (
@@ -18971,7 +18975,7 @@ function App() {
      <div style={{padding:"10px 16px 8px",borderBottom:"0.5px solid #1A1A1A",flexShrink:0}}>
        <div className="pk-rail" style={{marginBottom:2}}>
          {/* Sport filter */}
-         {[{id:"all",l:"All Sports"},{id:"nfl",l:"NFL"},{id:"nba",l:"NBA"},{id:"mlb",l:"MLB"},{id:"nhl",l:"NHL"}].map(f=>(
+         {[{id:"all",l:"All Sports"},{id:"nfl",l:"NFL"},{id:"ncaaf",l:"NCAAF"},{id:"nba",l:"NBA"},{id:"mlb",l:"MLB"}].map(f=>(
            <div key={f.id} onClick={()=>setBrowseFilter(prev=>({...prev,sport:f.id}))}
            className={"pk-chip"+(browseFilter.sport===f.id?" on":"")}><span>{f.l}</span></div>
          ))}
