@@ -17,6 +17,10 @@ const SPORT_KEYS = {
 
 // ── Supabase REST helpers ─────────────────────────────────────────────────────
 const SB_URL = process.env.VITE_SUPABASE_URL;
+// Set once per invocation from the incoming request (see handler). Vercel's
+// VERCEL_URL points at the deployment alias rather than the production domain,
+// so calling ourselves through it can hit a different build than the one running.
+let PUSH_BASE = null;
 const SB_KEY = process.env.SUPABASE_SERVICE_KEY; // service role key
 const SB_ANON = process.env.VITE_SUPABASE_ANON_KEY;
 
@@ -97,6 +101,29 @@ async function stashWeekRanks(league) {
     if (payload.length) await sbUpsert("weekly_ranks?on_conflict=league_id,user_id,week", payload);
   } catch (e) { /* never break grading */ }
 }
+// Fire a real push alongside the in-app row. Everything in this file writes to the
+// `notifications` table, which only feeds the bell icon — nothing here has ever sent
+// a push. /api/notify owns both transports (Web Push + APNs) and re-checks the
+// user's category preference itself, so this is a fan-out, not a second policy.
+//
+// Best-effort by construction: grading correctness outranks a notification, so a
+// failure here is swallowed and never propagates. No await on the response body.
+async function pushNotify(userIds, title, body, category, url) {
+  try {
+    const ids = (Array.isArray(userIds) ? userIds : [userIds]).filter(Boolean);
+    if (!ids.length || !process.env.CRON_SECRET) return;
+    const base = PUSH_BASE;
+    if (!base) return;
+    await fetch(base + '/api/notify', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.CRON_SECRET}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ userIds: ids, title, body, url: url || '/', category }),
+    });
+  } catch (e) { /* never break grading for a notification */ }
+}
 // Fire a one-time "your week is in" tease when a user has no pending picks left
 // for the week. Respects the notif_results ("Weekly Results") toggle and never
 // double-sends (checks for an existing week_recap notification first).
@@ -113,13 +140,19 @@ async function maybeNotifyRecap(userId, league, week) {
     if (!arr.length) return;
     const wins = arr.filter(p => p.result === "W").length, losses = arr.filter(p => p.result === "L").length;
     const pts = arr.reduce((a, p) => a + (parseFloat(p.points_earned) || 0), 0);
+    const recapTitle = `Your Week ${week} recap is in`;
+    const recapBody = `You went ${wins}-${losses} for ${pts >= 0 ? "+" : ""}${pts.toFixed(1)} pts — tap to see your week.`;
     await sbPost("notifications", {
       user_id: userId, type: "week_recap",
-      title: `Your Week ${week} recap is in`,
-      body: `You went ${wins}-${losses} for ${pts >= 0 ? "+" : ""}${pts.toFixed(1)} pts — tap to see your week.`,
+      title: recapTitle,
+      body: recapBody,
       data: { league_id: league.id, week, record: `${wins}-${losses}`, points: parseFloat(pts.toFixed(1)) },
       created_at: new Date().toISOString(),
     });
+    // Push fires only here, once per user per week — deliberately NOT in notifyPick().
+    // The dedup guard above (existing week_recap row) already ran, so this cannot
+    // re-send on the next cron minute.
+    await pushNotify(userId, recapTitle, recapBody, "notif_results", "/");
   } catch (e) { /* never break grading */ }
 }
 // When a league's week is fully sealed, nudge the COMMISH (once) to share the league
@@ -965,39 +998,6 @@ function calcParlayPoints(multiplier, legs) {
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
-// Reminds league members who have NOT locked a slip for the current week.
-// Respects the notif_reminder ("Pick Reminders") toggle and dedupes per league+week
-// so a member is nudged at most once per week. Solo leagues are skipped.
-async function maybeRemindPicks(league) {
-  try {
-    if (!league || !league.id || !league.current_week) return;
-    if (league.league_type === "solo") return;
-    const week = league.current_week;
-    const members = await sbGet(`league_members?league_id=eq.${league.id}&select=user_id`);
-    if (!Array.isArray(members) || !members.length) return;
-    const memberIds = members.map(m => m.user_id);
-    const pickRows = await sbGet(`picks?league_id=eq.${league.id}&week=eq.${week}&select=user_id`);
-    const hasPicks = new Set((Array.isArray(pickRows) ? pickRows : []).map(p => p.user_id));
-    const need = memberIds.filter(id => !hasPicks.has(id));
-    if (!need.length) return;
-    // Preference (defaults on when the column is null)
-    const prefRows = await sbGet(`users?id=in.(${need.join(",")})&select=id,notif_reminder`);
-    const optOut = new Set((Array.isArray(prefRows) ? prefRows : []).filter(u => u.notif_reminder === false).map(u => u.id));
-    // Already reminded for this exact league+week?
-    const already = await sbGet(`notifications?type=eq.pick_reminder&user_id=in.(${need.join(",")})&select=user_id,data`);
-    const reminded = new Set((Array.isArray(already) ? already : []).filter(n => n.data && n.data.league_id === league.id && n.data.week === week).map(n => n.user_id));
-    for (const uid of need) {
-      if (optOut.has(uid) || reminded.has(uid)) continue;
-      await sbPost("notifications", {
-        user_id: uid,
-        type: "pick_reminder",
-        title: `Lock your Week ${week} slip`,
-        body: `You haven't locked your picks for ${league.name || "your league"} yet — don't get left behind.`,
-        data: { league_id: league.id, week },
-      });
-    }
-  } catch (e) { /* never let a reminder failure break grading */ }
-}
 
 // Grades PLOK's own recommendations (plok_calls) with the SAME settlement engine
 // as user picks, so PLOK keeps an auditable, self-graded track record. Calls that
@@ -1078,6 +1078,7 @@ async function isCommissionerOf(userId, leagueId) {
 
 export default async function handler(req, res) {
   // Auth check — allow GET from Vercel cron (Authorization header) or POST with secret
+  try { PUSH_BASE = 'https://' + (req.headers.host || process.env.VERCEL_URL || ''); } catch (e) { PUSH_BASE = null; }
   const cronSecret = process.env.CRON_SECRET;
   const authHeader = req.headers.authorization;
   const bodySecret = req.body?.secret;
@@ -1111,7 +1112,14 @@ export default async function handler(req, res) {
     if (!Array.isArray(leagues)) throw new Error("Failed to fetch leagues");
 
     for (const league of leagues) {
-      await maybeRemindPicks(league);
+      // maybeRemindPicks() removed here: api/remind.js already owns pick reminders and
+      // does it better (counts PARTIAL slips, not just empty ones; only fires in the
+      // final 72h; collapses parlay legs; includes a day countdown). Both were live at
+      // once, deduping through different stores — notifications.type='pick_reminder'
+      // here vs the notif_reminders table there — so members were getting two
+      // differently-worded nudges per week. Silent while it was bell-only; it would
+      // have become two phone buzzes the moment push was wired in.
+
       const espnMap = ESPN_MAP[league.sport];
       if (!espnMap) continue;
 
