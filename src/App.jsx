@@ -5312,6 +5312,9 @@ function App() {
  const [anim, setAnim] = useState(false);
  const [submitted, setSubmitted] = useState(false);
  const [leagueTab, setLeagueTab] = useState("standings");
+ // Single-elim leagues have no standings tab; "standings" is still the boot and
+ // roll-over default for every other mode, so remap rather than change defaults.
+ useEffect(()=>{ if(activeLeague && activeLeague.league_type==="bracket" && (leagueTab==="standings"||leagueTab==="schedule"||leagueTab==="playoff")) setLeagueTab("bracket"); }, [activeLeagueId, leagueTab, activeLeague && activeLeague.league_type]);
  const [fieldPlayer, setFieldPlayer] = useState(null);
  const [expanded, setExpanded] = useState(null);
  const [sortBy, setSortBy] = useState("rank");
@@ -16813,7 +16816,7 @@ function App() {
 
  {/* Tabs */}
  <div className="seg-control" style={{marginBottom:14}}>
- {(activeLeague.league_type==="bracket"?["standings","trophies","bracket"]:activeLeague.league_type==="points"?["standings","trophies","playoff"]:["standings","trophies","schedule","playoff"]).map(t=><div key={t} className={`seg-item ${leagueTab===t?"on":""}`} onClick={()=>setLeagueTab(t)}>{t.charAt(0).toUpperCase()+t.slice(1)}</div>)}
+ {(activeLeague.league_type==="bracket"?["bracket","trophies"]:activeLeague.league_type==="points"?["standings","trophies","playoff"]:["standings","trophies","schedule","playoff"]).map(t=><div key={t} className={`seg-item ${leagueTab===t?"on":""}`} onClick={()=>setLeagueTab(t)}>{t.charAt(0).toUpperCase()+t.slice(1)}</div>)}
  </div>
 
  {(leagueTab==="bracket"||(leagueTab==="schedule"&&activeLeague.league_type==="bracket"))&&(
