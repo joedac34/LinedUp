@@ -5312,9 +5312,6 @@ function App() {
  const [anim, setAnim] = useState(false);
  const [submitted, setSubmitted] = useState(false);
  const [leagueTab, setLeagueTab] = useState("standings");
- // Single-elim leagues have no standings tab; "standings" is still the boot and
- // roll-over default for every other mode, so remap rather than change defaults.
- useEffect(()=>{ if(activeLeague && activeLeague.league_type==="bracket" && (leagueTab==="standings"||leagueTab==="schedule"||leagueTab==="playoff")) setLeagueTab("bracket"); }, [activeLeagueId, leagueTab, activeLeague && activeLeague.league_type]);
  const [fieldPlayer, setFieldPlayer] = useState(null);
  const [expanded, setExpanded] = useState(null);
  const [sortBy, setSortBy] = useState("rank");
@@ -5403,6 +5400,11 @@ function App() {
  const setSoloSportPersist = (sp) => { setSoloSport(sp); try{localStorage.setItem("picklock_solo_sport",sp);}catch(e){} };
  const [showSoloSportPicker, setShowSoloSportPicker] = useState(false); // sport selector before building
  const activeLeague = isSoloMode ? {id:soloLeagueId||"solo",name:"Solo Mode",sport:soloSport,current_week:soloWeekNum(),season_weeks:99,max_members:1,target_size:1,isCommissioner:false} : ([...realLeagues].find(l=>l.id===activeLeagueId) || realLeagues[0] || {id:"",name:"",sport:"nfl",current_week:1,season_weeks:18,max_members:8,target_size:8,isCommissioner:false});
+ // Single-elim leagues have no standings tab; "standings" is still the boot and
+ // roll-over default for every other mode, so remap rather than change defaults.
+ // MUST live below the activeLeague/activeLeagueId declarations: the dependency
+ // array is read during render, and consts above their declaration are TDZ.
+ useEffect(()=>{ if(activeLeague && activeLeague.league_type==="bracket" && (leagueTab==="standings"||leagueTab==="schedule"||leagueTab==="playoff")) setLeagueTab("bracket"); }, [activeLeagueId, leagueTab, activeLeague && activeLeague.league_type]);
  // Eliminated: the playoffs are running, the bracket has rows for this week, and you
  // are in none of them. Same test the Matchup tab already uses for its eliminated
  // recap — that knowledge just never reached the slip builder, so a knocked-out
