@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, Component, Fragment } from "react";
 import { supabase } from './supabase';
 import { LEGAL } from './legal';
-import { initPurchases, logOutPurchases } from './purchases';
+import { initPurchases, logOutPurchases, getProPackages, purchasePro, restorePurchases, checkProStatus, onProStatusChange } from './purchases';
 // Attach the current user's Supabase access token so API routes verify the caller
 // server-side (endpoints derive the user from this token, not the request body).
 async function authHeaders() {
@@ -5844,8 +5844,10 @@ function App() {
  // a client-side display override only — users.is_pro in the DB is still written solely
  // by the Stripe webhook, and the web/PWA keeps Stripe checkout unchanged.
  const [isProState, setIsPro] = useState(()=>{ try { return localStorage.getItem("picklock_is_pro")==="true"; } catch(e){ return false; } });
- const isPro = IS_NATIVE || isProState;
+ const isPro = isProState;
  const [showPaywall, setShowPaywall] = useState(null);
+ // Live StoreKit prices on iOS (web keeps its hardcoded Stripe copy).
+ const [nativePrices, setNativePrices] = useState(null);
  const [altSheet, setAltSheet] = useState(null);
  const [checkoutLoading, setCheckoutLoading] = useState(null);
  const [showPostLeagueUpsell, setShowPostLeagueUpsell] = useState(false);
@@ -8101,7 +8103,28 @@ function App() {
  // is_pro is written ONLY by the Stripe webhook (server-side). Never from the client.
  };
  const startCheckout = async (plan) => {
- if(IS_NATIVE){ setShowPaywall(null); return; } // no purchases in the App Store build
+ if(IS_NATIVE){
+   // App Store build: Apple IAP via RevenueCat. Stripe is web-only (Guideline 3.1.1).
+   if(!user || !user.id){ setShowPaywall(null); setScreen("auth"); return; }
+   try{
+     setCheckoutLoading(plan);
+     const pkgs = await getProPackages();
+     const wanted = (plan==="annual") ? "$rc_annual" : "$rc_monthly";
+     const pkg = pkgs.find(p=>p.identifier===wanted);
+     if(!pkg){ setCheckoutLoading(null); alert("Plans are unavailable right now. Please try again in a moment."); return; }
+     const res = await purchasePro(pkg);
+     setCheckoutLoading(null);
+     if(res.cancelled) return;              // user backed out - not an error
+     if(res.ok && res.isPro){
+       setIsPro(true);
+       try { localStorage.setItem("picklock_is_pro","true"); } catch(e){}
+       setShowPaywall(null);
+       return;
+     }
+     alert("That purchase didn't complete. You have not been charged.");
+   }catch(e){ setCheckoutLoading(null); alert("Purchase failed: " + ((e&&e.message)||e)); }
+   return;
+ }
  if(!user || !user.id){ setShowPaywall(null); setScreen("auth"); return; }
  try {
  setCheckoutLoading(plan);
@@ -8707,6 +8730,29 @@ function App() {
  // (a 1s interval used to tick a countdown state here that nothing rendered —
  //  it re-reconciled the entire App tree every second for no output)
  },[]);
+
+ // NATIVE (iOS): pull live StoreKit prices and the RevenueCat entitlement.
+ // Only ever promotes to Pro - never demotes. A user who subscribed on the web
+ // via Stripe has no RevenueCat entitlement, and must not lose access here.
+ useEffect(()=>{
+ if(!IS_NATIVE || !user || !user.id) return;
+ let alive = true;
+ (async()=>{
+   try{
+     const pkgs = await getProPackages();
+     if(!alive) return;
+     const m = pkgs.find(p=>p.identifier==="$rc_monthly");
+     const a = pkgs.find(p=>p.identifier==="$rc_annual");
+     setNativePrices({ monthly:(m&&m.product&&m.product.priceString)||null, annual:(a&&a.product&&a.product.priceString)||null });
+   }catch(e){}
+   try{
+     const active = await checkProStatus();
+     if(alive && active){ setIsPro(true); try{ localStorage.setItem("picklock_is_pro","true"); }catch(e){} }
+   }catch(e){}
+ })();
+ try{ onProStatusChange((active)=>{ if(active){ setIsPro(true); try{ localStorage.setItem("picklock_is_pro","true"); }catch(e){} } }); }catch(e){}
+ return ()=>{ alive=false; };
+ }, [user]);
 
  // Solo home: fetch the live solo sport so the ticker + Plok's Play of the Day reflect the real live sport, not stale league data.
  useEffect(()=>{
@@ -18498,6 +18544,7 @@ function App() {
  {/* Sign Out + Delete Account */}
  <div style={{padding:"8px 16px 32px",display:"flex",flexDirection:"column",gap:10}}>
  {(isPro&&!IS_NATIVE)?(<button onClick={openBillingPortal} style={{width:"100%",background:"rgba(255,255,255,0.05)",border:EDGE.hair3,borderRadius:RAD.md,padding:"14px",fontSize:15,fontWeight:600,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Manage subscription</button>):null}
+ {(isPro&&IS_NATIVE)?(<button onClick={()=>{ try{ window.open("https://apps.apple.com/account/subscriptions","_blank"); }catch(e){} }} style={{width:"100%",background:"rgba(255,255,255,0.05)",border:EDGE.hair3,borderRadius:RAD.md,padding:"14px",fontSize:15,fontWeight:600,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif",marginTop:10}}>Manage subscription</button>):null}
  <button onClick={async()=>{
  await supabase.auth.signOut();
  setUser(null);
@@ -19112,7 +19159,7 @@ function App() {
  )}
 
  {/* ══ PAYWALL SHEET ══ */}
- {!IS_NATIVE && showPaywall && (()=>{
+ {showPaywall && (()=>{
    const configs = {
      ai:{icon:"star",title:"Unlock Plok + Pro",sub:"Plok is your AI pick analyst — data-backed reads on every game and prop, a +EV value finder, and unlimited insights.",features:["Plok AI analyst on every game & prop","+EV value finder","Recent form, splits, matchup & injuries","Multi-sport leagues & custom settings"]},
      picks:{icon:"ti-plus",title:"Unlimited picks",sub:"Commish Pro lets you add as many pick slots as you want each week.",features:["Unlimited pick slots per week","Custom multipliers on any slot","NFL, NBA, MLB, NHL","Power-ups and custom pick types"]},
@@ -19144,14 +19191,19 @@ function App() {
              </div>
            ))}
           <button disabled={checkoutLoading!==null} onClick={()=>startCheckout("annual")} style={{display:"block",width:"100%",background:IOS.blue,color:"#fff",border:"none",borderRadius:RAD.md,padding:14,fontSize:14,fontWeight:800,textAlign:"center",marginTop:16,cursor:checkoutLoading?"default":"pointer",fontFamily:"Barlow,sans-serif",opacity:checkoutLoading?0.6:1}}>
-             {checkoutLoading==="annual" ? "Redirecting..." : "Go Pro — $60/yr (save 50%)"}
+             {checkoutLoading==="annual" ? (IS_NATIVE?"Purchasing...":"Redirecting...") : (IS_NATIVE ? ("Go Pro — "+((nativePrices&&nativePrices.annual)||"$59.99")+"/yr (save 50%)") : "Go Pro — $60/yr (save 50%)")}
            </button>
           <button disabled={checkoutLoading!==null} onClick={()=>startCheckout("monthly")} style={{display:"block",width:"100%",background:"rgba(255,255,255,0.06)",color:"#fff",border:EDGE.hair3,borderRadius:RAD.md,padding:13,fontSize:13.5,fontWeight:700,textAlign:"center",marginTop:8,cursor:checkoutLoading?"default":"pointer",fontFamily:"Barlow,sans-serif",opacity:checkoutLoading?0.6:1}}>
-             {checkoutLoading==="monthly" ? "Redirecting..." : "Or $10/mo"}
+             {checkoutLoading==="monthly" ? (IS_NATIVE?"Purchasing...":"Redirecting...") : (IS_NATIVE ? ("Or "+((nativePrices&&nativePrices.monthly)||"$9.99")+"/mo") : "Or $10/mo")}
            </button>
-          {_isDev && (
+          {_isDev && !IS_NATIVE && (
              <button onClick={()=>{setProStatus(true);setShowPaywall(null);}} style={{display:"block",width:"100%",background:"none",border:"0.5px dashed rgba(48,209,88,0.4)",color:"#30D158",borderRadius:RAD.sm,padding:9,fontSize:11,fontWeight:700,textAlign:"center",marginTop:10,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
                Dev: instant unlock
+             </button>
+           )}
+          {IS_NATIVE && (
+             <button onClick={async()=>{ const r = await restorePurchases(); if(r&&r.isPro){ setIsPro(true); try{ localStorage.setItem("picklock_is_pro","true"); }catch(e){} setShowPaywall(null); alert("Your purchases have been restored."); } else { alert("No previous purchases found for this Apple ID."); } }} style={{display:"block",width:"100%",background:"none",border:"none",color:IOS.blue,fontSize:12.5,fontWeight:700,textAlign:"center",marginTop:12,cursor:"pointer",fontFamily:"Barlow,sans-serif",padding:4}}>
+               Restore purchases
              </button>
            )}
            <button onClick={()=>setShowPaywall(null)} style={{display:"block",width:"100%",background:"none",border:"none",color:"#555",fontSize:12,textAlign:"center",marginTop:10,cursor:"pointer",fontFamily:"Barlow,sans-serif",padding:4}}>
