@@ -19,7 +19,7 @@ const OPENAI = process.env.OPENAI_API_KEY;
 const ODDS   = process.env.ODDS_API_KEY;
 
 const sbHeaders = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, "Content-Type": "application/json" };
-const SPORT_KEYS = { nfl: "americanfootball_nfl", nba: "basketball_nba", mlb: "baseball_mlb" };
+const SPORT_KEYS = { nfl: "americanfootball_nfl", ncaaf: "americanfootball_ncaaf", nba: "basketball_nba", mlb: "baseball_mlb" };
 
 // ── per-identity rate limit on the EXPENSIVE (uncached) path ──────────────────
 // Same pattern + SAME table as insight.js (insight_rate): one shared hourly Plok
@@ -72,9 +72,9 @@ function poissonCDF(k, lam) { // P(X <= k)
 }
 function blendMu(series, sport) {
   const all = mean(series);
-  const rn = { nba: 5, nfl: 3, mlb: 7 }[sport] || 5;
+  const rn = { nba: 5, nfl: 3, ncaaf: 3, mlb: 7 }[sport] || 5;
   const recent = series.slice(0, rn);
-  let [Wa, Wb] = ({ nba: [0.7, 0.3], nfl: [0.6, 0.4], mlb: [0.8, 0.2] }[sport]) || [0.7, 0.3];
+  let [Wa, Wb] = ({ nba: [0.7, 0.3], nfl: [0.6, 0.4], ncaaf: [0.6, 0.4], mlb: [0.8, 0.2] }[sport]) || [0.7, 0.3];
   if (recent.length < 3) { Wb = Wb / 2; Wa = 1 - Wb; }
   const rMean = recent.length ? mean(recent) : all;
   return all * Wa + rMean * Wb;
@@ -107,7 +107,7 @@ async function storeCache(key, payload) {
 }
 
 // ── ESPN (game logs for prop projections) ─────────────────────────────────────
-const ESPN_MAP = { nfl: { sp: "football", lg: "nfl" }, nba: { sp: "basketball", lg: "nba" }, mlb: { sp: "baseball", lg: "mlb" } };
+const ESPN_MAP = { nfl: { sp: "football", lg: "nfl" }, ncaaf: { sp: "football", lg: "college-football" }, nba: { sp: "basketball", lg: "nba" }, mlb: { sp: "baseball", lg: "mlb" } };
 const STAT_ALIASES = {
   "points": ["PTS", "points"], "rebounds": ["REB", "rebounds"], "assists": ["AST", "assists"],
   "3-pointers": ["3PT"], "passing yards": ["YDS", "passingYards"], "rushing yards": ["YDS", "rushingYards"],
@@ -282,6 +282,10 @@ const PROP_MARKETS = {
     { key: "pitcher_strikeouts", stat: "strikeouts", short: "Ks", tier: "poisson" },
     { key: "batter_hits", stat: "hits", short: "H", tier: "poisson" },
   ],
+  // No ncaaf on purpose: NCAAF player props are gated off app-wide (no props.js
+  // market list, banned in several states, thinly posted). analyzeProps returns []
+  // for a missing entry, so CFB games still get full game-line analysis — Plok's
+  // Call just never recommends a pick nobody can place.
 };
 async function analyzeProps(sport, eventId, opts = {}) {
   const markets = PROP_MARKETS[sport]; const sk = SPORT_KEYS[sport];
@@ -474,7 +478,7 @@ async function buildMatchup(sport, ctx) {
   const em = ESPN_MAP[sport]; if (!em) return null;
   const { away, home } = parseTeams(ctx.game); if (!away && !home) return null;
   const standings = await espnStandings(sport);
-  const events = await espnEvents(em.sp, em.lg, sport === "nfl" ? 50 : 30);
+  const events = await espnEvents(em.sp, em.lg, (sport === "nfl" || sport === "ncaaf") ? 80 : 30);
   const completed = events.filter(e => e.status?.type?.completed);
   const collect = (teamName) => {
     const tn = normName(teamName); if (!tn) return [];
@@ -493,7 +497,7 @@ async function buildMatchup(sport, ctx) {
     return gs;
   };
   const team = (teamName) => {
-    const gs = collect(teamName).slice(0, sport === "nfl" ? 16 : 20);
+    const gs = collect(teamName).slice(0, (sport === "nfl" || sport === "ncaaf") ? 16 : 20);
     const avg = (k) => gs.length ? (gs.reduce((acc, x) => acc + x[k], 0) / gs.length) : null;
     let ws = null; if (gs.length) { let n = 0; for (const x of gs) { if (x.win === gs[0].win) n++; else break; } if (n > 1) ws = `${gs[0].win ? "W" : "L"}${n}`; }
     const st = findTeamStanding(standings, teamName);
