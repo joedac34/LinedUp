@@ -10978,7 +10978,7 @@ function App() {
    <div className="pl-rise pl-d1" style={{position:"relative",border:"0.5px solid rgba(120,150,255,0.16)",boxShadow:"0 14px 32px -18px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.06)",borderRadius:RAD.xl,overflow:"hidden",margin:"0 0 10px",
      background:"radial-gradient(120% 90% at 85% -10%, rgba(59,111,224,0.32), transparent 55%), radial-gradient(90% 70% at -10% 110%, rgba(94,92,230,0.16), transparent 60%), linear-gradient(160deg,#15161E,#0B0B10 75%)"}}>
    <div style={{position:"absolute",inset:0,backgroundImage:"repeating-linear-gradient(0deg,rgba(255,255,255,0.022) 0px,rgba(255,255,255,0.022) 1px,transparent 1px,transparent 4px)",pointerEvents:"none",opacity:0.5}}/>
-   <div style={{position:"relative",padding:"14px 14px 12px"}}>
+   <div style={{position:"relative",padding:"13px 14px 12px"}}>
 
      {/* Kicker: week + what is actually happening right now. */}
      <div style={{display:"flex",alignItems:"center",gap:6,fontSize:9.5,fontWeight:800,letterSpacing:"0.13em",textTransform:"uppercase",color:liveCount>0?"#64D2FF":IOS.label3}}>
@@ -10986,32 +10986,32 @@ function App() {
        <span>{"Week "+(activeLeague.current_week||activeLeague.week||1)}{liveCount>0?(" \u00B7 "+liveCount+" live"):""}</span>
      </div>
 
-     <div style={{display:"flex",alignItems:"center",gap:14,marginTop:12}}>
+     <div style={{display:"flex",alignItems:"center",gap:16,marginTop:11}}>
        {/* Progress ring = graded / slotted. Reads at a glance whether the week is
            done, in flight, or untouched \u2014 the old strip never said. */}
        {(()=>{ const _tot=Math.max(total,slotCount)||1; const _done=hit+myPicks.filter(p=>p.result==="L").length;
-         const R=37, C=2*Math.PI*R, off=C-(C*Math.min(1,_done/_tot));
+         const R=30, C=2*Math.PI*R, off=C-(C*Math.min(1,_tot?_done/_tot:0));
          return (
-       <div style={{width:86,height:86,flexShrink:0,position:"relative"}}>
-         <svg width="86" height="86" viewBox="0 0 86 86" style={{transform:"rotate(-90deg)"}}>
+       <div style={{width:72,height:72,flexShrink:0,position:"relative"}}>
+         <svg width="72" height="72" viewBox="0 0 72 72" style={{transform:"rotate(-90deg)"}}>
            <defs><linearGradient id="pkRing" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#2E7CF6"/><stop offset="1" stopColor="#64D2FF"/></linearGradient></defs>
-           <circle cx="43" cy="43" r={R} fill="none" strokeWidth="7" stroke="rgba(255,255,255,0.09)"/>
-           <circle cx="43" cy="43" r={R} fill="none" strokeWidth="7" stroke="url(#pkRing)" strokeLinecap="round"
+           <circle cx="36" cy="36" r={R} fill="none" strokeWidth="6" stroke="rgba(255,255,255,0.08)"/>
+           <circle cx="36" cy="36" r={R} fill="none" strokeWidth="6" stroke="url(#pkRing)" strokeLinecap="round"
                    strokeDasharray={C} strokeDashoffset={off} style={{transition:"stroke-dashoffset .6s cubic-bezier(0.4,0,0.2,1)"}}/>
          </svg>
          <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
-           <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:22,fontWeight:800,letterSpacing:-0.5,lineHeight:1}}>{_done}/{_tot}</div>
-           <div style={{fontSize:8.5,fontWeight:800,color:"rgba(255,255,255,0.3)",letterSpacing:"0.08em",marginTop:2}}>GRADED</div>
+           <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:19,fontWeight:800,letterSpacing:-0.5,lineHeight:1}}>{_done+"/"+_tot}</div>
+           <div style={{fontSize:8,fontWeight:800,color:"rgba(255,255,255,0.28)",letterSpacing:"0.07em",marginTop:2}}>GRADED</div>
          </div>
        </div>); })()}
 
-       {/* Four stats, two-up. "Riding" is new and is the one people open the app
-           for: points already banked this week. */}
-       <div style={{flex:1,minWidth:0,display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px 8px"}}>
-         <div><div style={_lab}>Week</div><div style={{..._val,fontSize:21,marginTop:2,color:rec==="0-0"?"rgba(255,255,255,0.3)":"#fff"}}>{hit}\u2013{myPicks.filter(p=>p.result==="L").length}</div></div>
-         <div><div style={_lab}>Riding</div><div style={{..._val,fontSize:21,marginTop:2,color:weekPts>0?IOS.green:"rgba(255,255,255,0.3)"}}>{weekPts>0?("+"+weekPts):"\u2014"}</div></div>
-         <div><div style={_lab}>Seed</div><div style={{..._val,fontSize:21,marginTop:2}}>{myRank>0?("#"+myRank):"\u2014"}<span style={{fontSize:12,color:"rgba(255,255,255,0.3)",fontWeight:700}}> /{sorted.length}</span></div></div>
-         <div><div style={_lab}>Net pts</div><div style={{..._val,fontSize:21,marginTop:2,color:seasonPts>0?"#64D2FF":"rgba(255,255,255,0.3)"}}>{seasonPts>0?<CountUp value={seasonPts}/>:"\u2014"}</div></div>
+       {/* Four stats, two-up. Plain labels on purpose: "Net pts" meant nothing to a
+           user and "Riding" was jargon nobody asked for. */}
+       <div style={{flex:1,minWidth:0,display:"grid",gridTemplateColumns:"1fr 1fr",gap:"9px 10px"}}>
+         <div><div style={_lab}>Record</div><div style={{..._val,fontSize:20,marginTop:1,color:total===0?"rgba(255,255,255,0.3)":"#fff"}}>{hit+"\u2013"+myPicks.filter(p=>p.result==="L").length}</div></div>
+         <div><div style={_lab}>Week pts</div><div style={{..._val,fontSize:20,marginTop:1,color:weekPts>0?IOS.green:"rgba(255,255,255,0.3)"}}>{weekPts>0?("+"+weekPts):"\u2014"}</div></div>
+         <div><div style={_lab}>Seed</div><div style={{..._val,fontSize:20,marginTop:1}}>{myRank>0?("#"+myRank):"\u2014"}<span style={{fontSize:12,color:"rgba(255,255,255,0.3)",fontWeight:700}}> /{sorted.length}</span></div></div>
+         <div><div style={_lab}>Total pts</div><div style={{..._val,fontSize:20,marginTop:1,color:seasonPts>0?"#64D2FF":"rgba(255,255,255,0.3)"}}>{seasonPts>0?<CountUp value={seasonPts}/>:"\u2014"}</div></div>
        </div>
      </div>
 
@@ -11030,7 +11030,7 @@ function App() {
        return (
        <div style={{marginTop:13,background:"rgba(0,0,0,0.35)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:RAD.md,padding:"10px 12px",display:"flex",alignItems:"center",gap:10}}>
          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={urgent?IOS.red:IOS.yellow} strokeWidth="2.1" strokeLinecap="round" style={{flexShrink:0}}><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
-         <div style={{fontSize:12,fontWeight:700,color:"rgba(255,255,255,0.55)",minWidth:0}}><span style={{color:"#fff"}}>{_openLabel}</span> \u2014 first lock in</div>
+         <div style={{fontSize:12,fontWeight:700,color:"rgba(255,255,255,0.55)",minWidth:0}}><span style={{color:"#fff"}}>{_openLabel}</span>{" \u2014 first lock in"}</div>
          <div style={{marginLeft:"auto",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:17,fontWeight:800,color:urgent?IOS.red:IOS.yellow,fontVariantNumeric:"tabular-nums",letterSpacing:"0.03em"}}>
            {hh>0?(hh+":"+String(mm).padStart(2,"0")+":"+String(ss).padStart(2,"0")):(mm+":"+String(ss).padStart(2,"0"))}
          </div>
@@ -14551,7 +14551,7 @@ function App() {
        <div style={{fontSize:16.5,fontWeight:900,letterSpacing:"-0.3px"}}>Pick Slip</div>
        <div style={{marginLeft:"auto",textAlign:"right"}}>
          <div style={{fontSize:12,fontWeight:800,maxWidth:170,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{staged.length===1?nameOf(staged[0]):(staged.length+" picks ready")}</div>
-         <div style={{fontSize:11,fontWeight:700,color:"rgba(14,14,18,0.38)",marginTop:1}}>{allM?<>to win <b style={{color:"#0a7d33"}}>{tot.toFixed(1)} pts</b> \u00b7 tap to review</>:"tap to set multipliers"}</div>
+         <div style={{fontSize:11,fontWeight:700,color:"rgba(14,14,18,0.38)",marginTop:1}}>{allM?<>to win <b style={{color:"#0a7d33"}}>{tot.toFixed(1)} pts</b>{" \u00b7 tap to review"}</>:"tap to set multipliers"}</div>
        </div>
      </div>}
      <div className={"psb-veil"+(slipBarOpen&&staged.length?" on":"")} onClick={()=>{ setSlipBarOpen(false); setSlipPoolIdx(-1); }}/>
