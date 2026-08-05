@@ -20,6 +20,12 @@ posthog.init('phc_ttRQobQ8V6qoENHvehxX64SuQFCctjXfyHhnDRqak2h6',{
   person_profiles: 'identified_only', // cost-saver: only bills for logged-in users
   capture_pageview: false,            // PWA has no page loads; you'll fire events manually
   autocapture: false,                 // avoid noise/garbage from SW + slip builder clicks
+  // Session replay stays off in code, not just in the PostHog dashboard. Without this
+  // flag the client follows the project's "Record user sessions" setting, so flipping
+  // that toggle would silently start recording screens — including league chat — on a
+  // build whose App Store privacy declaration and privacy policy say it does not.
+  // Removing this line is a privacy-declaration change, not a config tweak.
+  disable_session_recording: true,
   ...(IS_NATIVE ? { disable_compression: true } : {}),
 })
 
