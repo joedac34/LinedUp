@@ -19201,6 +19201,24 @@ function App() {
                Dev: instant unlock
              </button>
            )}
+          {/* Guideline 3.1.2 — auto-renewing subscription disclosure must be on the
+              purchase screen itself: name, duration, price per period, renewal
+              terms, and functional links to Terms of Use and Privacy Policy. */}
+          <div style={{marginTop:14,paddingTop:12,borderTop:"0.5px solid #1A1A1A"}}>
+             <div style={{fontSize:11,color:"#888",lineHeight:1.55}}>
+               PickLock Pro is an auto-renewing subscription. Annual: {IS_NATIVE ? ((nativePrices&&nativePrices.annual)||"$59.99") : "$60.00"} per year. Monthly: {IS_NATIVE ? ((nativePrices&&nativePrices.monthly)||"$9.99") : "$10.00"} per month.
+             </div>
+             {IS_NATIVE && (
+               <div style={{fontSize:11,color:"#666",lineHeight:1.55,marginTop:8}}>
+                 Payment is charged to your Apple Account at confirmation of purchase. The subscription renews automatically unless auto-renew is turned off at least 24 hours before the end of the current period. Your account is charged for renewal within 24 hours prior to the end of the current period. You can manage or cancel your subscription in your Apple Account settings after purchase.
+               </div>
+             )}
+             <div style={{fontSize:11,color:"#666",marginTop:8}}>
+               <span onClick={()=>{ setShowPaywall(null); setLegalDoc("terms"); setScreen("legal"); }} style={{color:"#7EA4F2",fontWeight:700,cursor:"pointer"}}>Terms of Use</span>
+               <span>{"  \u00B7  "}</span>
+               <span onClick={()=>{ setShowPaywall(null); setLegalDoc("privacy"); setScreen("legal"); }} style={{color:"#7EA4F2",fontWeight:700,cursor:"pointer"}}>Privacy Policy</span>
+             </div>
+           </div>
           {IS_NATIVE && (
              <button onClick={async()=>{ const r = await restorePurchases(); if(r&&r.isPro){ setIsPro(true); try{ localStorage.setItem("picklock_is_pro","true"); }catch(e){} setShowPaywall(null); alert("Your purchases have been restored."); } else { alert("No previous purchases found for this Apple ID."); } }} style={{display:"block",width:"100%",background:"none",border:"none",color:IOS.blue,fontSize:12.5,fontWeight:700,textAlign:"center",marginTop:12,cursor:"pointer",fontFamily:"Barlow,sans-serif",padding:4}}>
                Restore purchases
