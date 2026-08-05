@@ -5472,30 +5472,6 @@ function App() {
  // not started no matter what the calendar says.
  const seasonNotStarted = !isSoloMode && !!(activeLeague&&activeLeague.id) && _lgReady && (!leagueFull || !activeLeague.season_start || new Date(activeLeague.season_start).getTime() > Date.now());
  const leagueAwaitingStart = seasonNotStarted && leagueFull;
- const _autoStartRef = useRef({});
- useEffect(()=>{
-   if(isSoloMode || !activeLeague || !activeLeague.id) return;
-   if(!activeLeague.isCommissioner) return;
-   if(((activeLeague.start_mode)||"auto")==="manual" || ((activeLeague.start_mode)||"auto")==="scheduled") return;
-   if(activeLeague.season_start) return;
-   const _isH2H=((activeLeague.league_type)||"h2h")==="h2h";
-   // Both conditions for h2h: the league must be full (which is what the
-   // not-started screen promises) AND a schedule must exist, or there are no
-   // matchups to play. Points leagues only need to be full.
-   const _ready=_isH2H ? (leagueFull && liveSchedule.length>0) : leagueFull;
-   if(!_ready) return;
-   if(_autoStartRef.current[activeLeague.id]) return;
-   _autoStartRef.current[activeLeague.id]=true;
-   (async()=>{
-     try{
-       const { data:_upd } = await supabase.from("leagues").update({ season_start:new Date().toISOString(), current_week:1 }).eq("id",activeLeague.id).is("season_start",null).select("id");
-       if(_upd && _upd.length){
-         try{ const {data:_mem}=await supabase.from("league_members").select("user_id").eq("league_id",activeLeague.id); const _ids=(_mem||[]).map(m=>m.user_id); fetch(API_BASE+"/api/notify",{method:"POST",headers:await authHeaders(),body:JSON.stringify({ userIds:_ids, title:(activeLeague.name||"Your league")+" is live!", body:"Week 1 is open — make your picks before they lock.", url:"/", category:"notif_league" })}); }catch(e){}
-       }
-       if(user&&user.id) await fetchLeagues(user.id);
-     }catch(e){}
-   })();
- }, [isSoloMode, activeLeague&&activeLeague.id, activeLeague&&activeLeague.season_start, activeLeague&&activeLeague.start_mode, activeLeague&&activeLeague.isCommissioner, leagueFull, liveSchedule.length]);
  // The ONLY way to change mode. Never call setIsSoloMode or setHomeMode directly.
  const applyMode = (solo, opts) => {
    setSoloModeWithRef(!!solo);
@@ -5788,6 +5764,51 @@ function App() {
    return merged;
  })();
  const isLiveOdds = leagueSports.some(sp => !!liveOdds[sp]);
+
+ /* Does any of this league's sports have a game on the board soon?
+    tickerGames is every game pulled from the odds feed, tagged with its sport, so
+    this reads the real slate rather than a hardcoded season calendar that rots every
+    year. Empty means either the offseason or the feed has not answered yet — both are
+    reasons to wait rather than to start a season. */
+ const SLATE_WINDOW_DAYS = 10;
+ const seasonHasSlate = (()=>{
+   if(!activeLeague || !activeLeague.id) return false;
+   const cutoff = Date.now() + SLATE_WINDOW_DAYS*86400000;
+   return (tickerGames||[]).some(g=>{
+     if(!g || !leagueSports.includes(g.sport)) return false;
+     const t = new Date(g.time).getTime();
+     return isFinite(t) && t <= cutoff;
+   });
+ })();
+
+ const _autoStartRef = useRef({});
+ useEffect(()=>{
+   if(isSoloMode || !activeLeague || !activeLeague.id) return;
+   if(!activeLeague.isCommissioner) return;
+   if(((activeLeague.start_mode)||"auto")==="manual" || ((activeLeague.start_mode)||"auto")==="scheduled") return;
+   if(activeLeague.season_start) return;
+   const _isH2H=((activeLeague.league_type)||"h2h")==="h2h";
+   // Both conditions for h2h: the league must be full (which is what the
+   // not-started screen promises) AND a schedule must exist, or there are no
+   // matchups to play. Points leagues only need to be full.
+   const _ready=_isH2H ? (leagueFull && liveSchedule.length>0) : leagueFull;
+   // A full roster is not a season. Auto-start used to stamp season_start the moment
+   // the league filled, which in the offseason opened Week 1 with no games AND locked
+   // the roster so nobody else could join. Hold until the sport actually has a slate.
+   if(!seasonHasSlate) return;
+   if(!_ready) return;
+   if(_autoStartRef.current[activeLeague.id]) return;
+   _autoStartRef.current[activeLeague.id]=true;
+   (async()=>{
+     try{
+       const { data:_upd } = await supabase.from("leagues").update({ season_start:new Date().toISOString(), current_week:1 }).eq("id",activeLeague.id).is("season_start",null).select("id");
+       if(_upd && _upd.length){
+         try{ const {data:_mem}=await supabase.from("league_members").select("user_id").eq("league_id",activeLeague.id); const _ids=(_mem||[]).map(m=>m.user_id); fetch(API_BASE+"/api/notify",{method:"POST",headers:await authHeaders(),body:JSON.stringify({ userIds:_ids, title:(activeLeague.name||"Your league")+" is live!", body:"Week 1 is open — make your picks before they lock.", url:"/", category:"notif_league" })}); }catch(e){}
+       }
+       if(user&&user.id) await fetchLeagues(user.id);
+     }catch(e){}
+   })();
+ }, [isSoloMode, activeLeague&&activeLeague.id, activeLeague&&activeLeague.season_start, activeLeague&&activeLeague.start_mode, activeLeague&&activeLeague.isCommissioner, leagueFull, liveSchedule.length, seasonHasSlate]);
 
  const [picks, setPicks] = useState({ml:null,prop:null,ou:null,spread:null});
  const [lsBets, setLsBets] = useState([]);
@@ -6881,6 +6902,26 @@ function App() {
  const [newLeaguePrivacy, setNewLeaguePrivacy] = useState('private');
  const [newLeaguePlayoffs, setNewLeaguePlayoffs] = useState(true);
  const [newLeagueStartMode, setNewLeagueStartMode] = useState('auto');
+ /* Offseason guard for league creation. Auto-start is the right default in season and
+    the wrong one out of it: a league that fills in August would open Week 1 with no
+    games and lock its roster, so the friend who signs up next week can never join.
+    We read the real slate from tickerGames rather than a hardcoded season calendar.
+    The commissioner can still override — this only moves the default. */
+ const _startModeTouched = useRef(false);
+ const newLeagueHasSlate = (()=>{
+   const sports = (newLeagueSports && newLeagueSports.length) ? newLeagueSports : (newLeagueSport ? [newLeagueSport] : []);
+   if(!sports.length) return true;   // nothing chosen yet — don't nag
+   const cutoff = Date.now() + 10*86400000;
+   return (tickerGames||[]).some(g=>{
+     if(!g || !sports.includes(g.sport)) return false;
+     const t = new Date(g.time).getTime();
+     return isFinite(t) && t <= cutoff;
+   });
+ })();
+ useEffect(()=>{
+   if(_startModeTouched.current) return;
+   setNewLeagueStartMode(newLeagueHasSlate ? 'auto' : 'manual');
+ }, [newLeagueHasSlate]);
  const [newLeagueStartAt, setNewLeagueStartAt] = useState('');
  const [newLeaguePlayoffSize, setNewLeaguePlayoffSize] = useState(4);
  const SLOT_TYPES=[
@@ -11201,8 +11242,8 @@ function App() {
    <div style={{margin:"6px 16px 16px",background:"linear-gradient(160deg,#0c1f38,#0b0d12)",border:"0.5px solid rgba(10,132,255,0.25)",borderRadius:RAD.xl,padding:"18px",textAlign:"center"}}>
      <div style={{display:"inline-flex",alignItems:"center",gap:5,background:"rgba(48,209,88,0.14)",border:"0.5px solid rgba(48,209,88,0.3)",borderRadius:RAD.pill,padding:"4px 11px",fontSize:11,fontWeight:800,color:IOS.green}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>Roster full · {(activeLeague.memberCount||0)}/{_lgTarget}</div>
      <div style={{fontSize:20,fontWeight:900,color:"#fff",marginTop:11,letterSpacing:-0.3}}>Roster’s full</div>
-     <div style={{fontSize:13,color:IOS.label2,lineHeight:1.5,marginTop:7}}>You chose manual start, so the season hasn’t begun. Start it whenever everyone’s signed and the slate looks right.</div>
-     <button onClick={async()=>{ if(!window.confirm("Start the season now? Week 1 opens, the roster locks, and this week\u2019s games become everyone\u2019s first slate. This can\u2019t be undone.")) return; await supabase.from("leagues").update({season_start:new Date().toISOString(),current_week:1}).eq("id",activeLeague.id).is("season_start",null); try{ const {data:_mem}=await supabase.from("league_members").select("user_id").eq("league_id",activeLeague.id); const _ids=(_mem||[]).map(m=>m.user_id); fetch(API_BASE+"/api/notify",{method:"POST",headers:await authHeaders(),body:JSON.stringify({userIds:_ids,title:(activeLeague.name||"Your league")+" is live!",body:"Week 1 is open — make your picks before they lock.",url:"/",category:"notif_league"})}); }catch(e){} await fetchLeagues(user.id); }} style={{width:"100%",marginTop:16,background:IOS.blue,border:"none",color:"#fff",borderRadius:RAD.md,padding:"15px",fontSize:16,fontWeight:800,fontFamily:"Barlow,sans-serif",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><svg width="16" height="16" viewBox="0 0 24 24" fill="#fff" stroke="none"><polygon points="6 4 20 12 6 20 6 4"/></svg>Start League</button>
+     <div style={{fontSize:13,color:IOS.label2,lineHeight:1.5,marginTop:7}}>{seasonHasSlate ? "You chose manual start, so the season hasn’t begun. Start it whenever everyone’s signed and the slate looks right." : "The roster is full, but there are no games on the board for this sport yet. Starting now would open Week 1 with an empty slate and lock the roster — wait for the schedule."}</div>
+     <button onClick={async()=>{ if(!seasonHasSlate && !window.confirm("There are no games on the board for this sport yet. Starting now opens Week 1 with an empty slate and permanently locks the roster. Start anyway?")) return; if(!window.confirm("Start the season now? Week 1 opens, the roster locks, and this week\u2019s games become everyone\u2019s first slate. This can\u2019t be undone.")) return; await supabase.from("leagues").update({season_start:new Date().toISOString(),current_week:1}).eq("id",activeLeague.id).is("season_start",null); try{ const {data:_mem}=await supabase.from("league_members").select("user_id").eq("league_id",activeLeague.id); const _ids=(_mem||[]).map(m=>m.user_id); fetch(API_BASE+"/api/notify",{method:"POST",headers:await authHeaders(),body:JSON.stringify({userIds:_ids,title:(activeLeague.name||"Your league")+" is live!",body:"Week 1 is open — make your picks before they lock.",url:"/",category:"notif_league"})}); }catch(e){} await fetchLeagues(user.id); }} style={{width:"100%",marginTop:16,background:IOS.blue,border:"none",color:"#fff",borderRadius:RAD.md,padding:"15px",fontSize:16,fontWeight:800,fontFamily:"Barlow,sans-serif",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><svg width="16" height="16" viewBox="0 0 24 24" fill="#fff" stroke="none"><polygon points="6 4 20 12 6 20 6 4"/></svg>Start League</button>
      <div style={{marginTop:14,textAlign:"left"}}>
        {["Week 1 opens and picks go live for everyone","This week\u2019s games become your Week 1 slate","The roster locks — no new joins after start"].map((t,i)=>(
          <div key={i} style={{display:"flex",gap:9,alignItems:"flex-start",padding:"7px 0",borderTop:i>0?"0.5px solid rgba(255,255,255,0.07)":"none"}}>
@@ -15738,12 +15779,16 @@ function App() {
    <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"rgba(255,255,255,0.6)",marginBottom:8}}>When does it start?</div>
    <div style={{display:"flex",gap:6,marginBottom:16}}>
    {[{id:"auto",l:"Auto-start",d:"Goes live when it fills"},{id:"manual",l:"Manual",d:"You start it when ready"},{id:"scheduled",l:"Scheduled",d:"Set an exact time"}].map(v=>{ const on=(newLeagueStartMode||"auto")===v.id; return (
-     <div key={v.id} onClick={()=>setNewLeagueStartMode(v.id)} style={{flex:1,borderRadius:RAD.sm,padding:"11px 10px",border:"0.5px solid "+(on?"rgba(10,132,255,0.4)":"#222"),background:on?"rgba(10,132,255,0.08)":"transparent",cursor:"pointer"}}>
+     <div key={v.id} onClick={()=>{ _startModeTouched.current=true; setNewLeagueStartMode(v.id); }} style={{flex:1,borderRadius:RAD.sm,padding:"11px 10px",border:"0.5px solid "+(on?"rgba(10,132,255,0.4)":"#222"),background:on?"rgba(10,132,255,0.08)":"transparent",cursor:"pointer"}}>
        <div style={{fontSize:12,fontWeight:700,color:on?IOS.blue:"rgba(255,255,255,0.6)"}}>{v.l}</div>
        <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginTop:3}}>{v.d}</div>
      </div>
    );})}
    </div>
+   {!newLeagueHasSlate && <div style={{marginTop:8,marginBottom:14,background:"rgba(255,159,10,0.07)",border:"0.5px solid rgba(255,159,10,0.25)",borderRadius:RAD.sm,padding:"10px 11px"}}>
+     <div style={{fontSize:11.5,fontWeight:800,color:"#FFB340",marginBottom:3}}>This season hasn’t started yet</div>
+     <div style={{fontSize:11,color:"rgba(255,255,255,0.55)",lineHeight:1.45}}>No games on the board for this sport yet. Auto-start would open Week 1 with an empty slate and lock your roster so nobody else could join. Start it yourself once the schedule is live.</div>
+   </div>}
    {(newLeagueStartMode==="scheduled")&&<div style={{marginBottom:16,background:"#111114",border:"0.5px solid rgba(191,90,242,0.3)",borderRadius:RAD.md,padding:"12px 13px"}}>
    <div style={{fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",color:"rgba(255,255,255,0.45)",marginBottom:8}}>Week 1 opens</div>
    <input type="datetime-local" value={newLeagueStartAt} onChange={e=>setNewLeagueStartAt(e.target.value)} style={{width:"100%",background:"#17171b",border:"0.5px solid #2c2c30",borderRadius:RAD.sm,padding:"11px 12px",color:"#fff",fontFamily:"Barlow,sans-serif",fontSize:14,colorScheme:"dark"}}/>
