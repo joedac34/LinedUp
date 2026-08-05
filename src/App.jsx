@@ -5401,6 +5401,11 @@ function App() {
  const setSoloSportPersist = (sp) => { setSoloSport(sp); try{localStorage.setItem("picklock_solo_sport",sp);}catch(e){} };
  const [showSoloSportPicker, setShowSoloSportPicker] = useState(false); // sport selector before building
  const activeLeague = isSoloMode ? {id:soloLeagueId||"solo",name:"Solo Mode",sport:soloSport,current_week:soloWeekNum(),season_weeks:99,max_members:1,target_size:1,isCommissioner:false} : ([...realLeagues].find(l=>l.id===activeLeagueId) || realLeagues[0] || {id:"",name:"",sport:"nfl",current_week:1,season_weeks:18,max_members:8,target_size:8,isCommissioner:false});
+ useEffect(()=>{
+   if(screen!=="home") return;
+   const t=setInterval(()=>setNowTick(Date.now()), 1000);
+   return ()=>clearInterval(t);
+ }, [screen]);
  // Single-elim leagues have no standings tab; "standings" is still the boot and
  // roll-over default for every other mode, so remap rather than change defaults.
  // MUST live below the activeLeague/activeLeagueId declarations: the dependency
@@ -5558,6 +5563,9 @@ function App() {
  // together are taller than a screen, and an accordion keeps the whole group
  // inside one thumb-reach. null = all collapsed, which is the landing state.
  const [profSec, setProfSec] = useState(null);
+ // 1s tick that drives the hero lock countdown. Gated on screen==="home" so no
+ // other screen pays for a per-second re-render of an 19k-line tree.
+ const [nowTick, setNowTick] = useState(()=>Date.now());
  const [gameSheet, setGameSheet] = useState(null); // { tickerGame, espnGame, detail }
  const [gcTab, setGcTab] = useState("ov");   // game sheet tab: Overview | Lineups | Odds | Plok
  const [gcDir, setGcDir] = useState(1);      // +1 moving right, -1 moving left
@@ -9244,6 +9252,10 @@ function App() {
     containers. They would mis-position for the duration of the animation. The lift can
     come back once those overlays are hoisted to the app root. */
  @keyframes pkScreenIn{from{opacity:0}to{opacity:1}}
+ /* Live dot on the home hero kicker. */
+ @keyframes pkPulseDot{0%,100%{opacity:1}50%{opacity:0.35}}
+ .pl-pulse-dot{animation:pkPulseDot 1.6s ease-in-out infinite;}
+ @media (prefers-reduced-motion: reduce){ .pl-pulse-dot{animation:none;} }
  .body,.lsx-scroll{animation:pkScreenIn .26s cubic-bezier(0.32,0.72,0,1) both;}
  @media (prefers-reduced-motion: reduce){ .body,.lsx-scroll{animation:none;} }
  /* Pull to refresh. The pill is built in JS and lives outside React, so no screen
@@ -10963,43 +10975,78 @@ function App() {
    const _val={fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:700,fontSize:25,lineHeight:1,marginTop:7};
    const _cta={marginLeft:"auto",display:"inline-flex",alignItems:"center",gap:7,background:"#0A84FF",color:"#fff",fontWeight:700,fontSize:14,padding:"10px 15px",borderRadius:RAD.md,border:"none",cursor:"pointer"};
    return (
-   <div className="pl-rise pl-d1" style={{position:"relative",border:"none",boxShadow:"0 14px 32px -18px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.06), 0 14px 40px rgba(0,0,0,0.4)",borderRadius:RAD.xl,overflow:"hidden",background:"radial-gradient(120% 140% at 0% 0%, rgba(10,132,255,0.10), transparent 55%), #0B0B10",margin:"0 0 10px"}}>
-   <div style={{position:"absolute",left:0,top:0,right:0,bottom:0,backgroundImage:"repeating-linear-gradient(0deg,rgba(255,255,255,0.025) 0px,rgba(255,255,255,0.025) 1px,transparent 1px,transparent 4px)",pointerEvents:"none",opacity:0.5}}/>
-   <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",position:"relative"}}>
-     <div style={{padding:"13px 12px 12px"}}>
-       <div style={_lab}>Seed</div>
-       <div style={_val}>{myRank>0?("#"+myRank):"—"}<span style={{fontSize:13,color:"rgba(255,255,255,0.3)",fontWeight:700}}> /{sorted.length}</span></div>
+   <div className="pl-rise pl-d1" style={{position:"relative",border:"0.5px solid rgba(120,150,255,0.16)",boxShadow:"0 14px 32px -18px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.06)",borderRadius:RAD.xl,overflow:"hidden",margin:"0 0 10px",
+     background:"radial-gradient(120% 90% at 85% -10%, rgba(59,111,224,0.32), transparent 55%), radial-gradient(90% 70% at -10% 110%, rgba(94,92,230,0.16), transparent 60%), linear-gradient(160deg,#15161E,#0B0B10 75%)"}}>
+   <div style={{position:"absolute",inset:0,backgroundImage:"repeating-linear-gradient(0deg,rgba(255,255,255,0.022) 0px,rgba(255,255,255,0.022) 1px,transparent 1px,transparent 4px)",pointerEvents:"none",opacity:0.5}}/>
+   <div style={{position:"relative",padding:"14px 14px 12px"}}>
+
+     {/* Kicker: week + what is actually happening right now. */}
+     <div style={{display:"flex",alignItems:"center",gap:6,fontSize:9.5,fontWeight:800,letterSpacing:"0.13em",textTransform:"uppercase",color:liveCount>0?"#64D2FF":IOS.label3}}>
+       {liveCount>0&&<span className="pl-pulse-dot" style={{width:6,height:6,borderRadius:"50%",background:IOS.green,boxShadow:"0 0 8px "+IOS.green,flexShrink:0}}/>}
+       <span>{"Week "+(activeLeague.current_week||activeLeague.week||1)}{liveCount>0?(" \u00B7 "+liveCount+" live"):""}</span>
      </div>
-     <div style={{padding:"13px 12px 12px",borderLeft:"1px solid rgba(255,255,255,0.08)"}}>
-       <div style={_lab}>Record</div>
-       <div style={{..._val,color:rec==="0-0"?"rgba(255,255,255,0.3)":"#fff"}}>{rec}</div>
+
+     <div style={{display:"flex",alignItems:"center",gap:14,marginTop:12}}>
+       {/* Progress ring = graded / slotted. Reads at a glance whether the week is
+           done, in flight, or untouched \u2014 the old strip never said. */}
+       {(()=>{ const _tot=Math.max(total,slotCount)||1; const _done=hit+myPicks.filter(p=>p.result==="L").length;
+         const R=37, C=2*Math.PI*R, off=C-(C*Math.min(1,_done/_tot));
+         return (
+       <div style={{width:86,height:86,flexShrink:0,position:"relative"}}>
+         <svg width="86" height="86" viewBox="0 0 86 86" style={{transform:"rotate(-90deg)"}}>
+           <defs><linearGradient id="pkRing" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#2E7CF6"/><stop offset="1" stopColor="#64D2FF"/></linearGradient></defs>
+           <circle cx="43" cy="43" r={R} fill="none" strokeWidth="7" stroke="rgba(255,255,255,0.09)"/>
+           <circle cx="43" cy="43" r={R} fill="none" strokeWidth="7" stroke="url(#pkRing)" strokeLinecap="round"
+                   strokeDasharray={C} strokeDashoffset={off} style={{transition:"stroke-dashoffset .6s cubic-bezier(0.4,0,0.2,1)"}}/>
+         </svg>
+         <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+           <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:22,fontWeight:800,letterSpacing:-0.5,lineHeight:1}}>{_done}/{_tot}</div>
+           <div style={{fontSize:8.5,fontWeight:800,color:"rgba(255,255,255,0.3)",letterSpacing:"0.08em",marginTop:2}}>GRADED</div>
+         </div>
+       </div>); })()}
+
+       {/* Four stats, two-up. "Riding" is new and is the one people open the app
+           for: points already banked this week. */}
+       <div style={{flex:1,minWidth:0,display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px 8px"}}>
+         <div><div style={_lab}>Week</div><div style={{..._val,fontSize:21,marginTop:2,color:rec==="0-0"?"rgba(255,255,255,0.3)":"#fff"}}>{hit}\u2013{myPicks.filter(p=>p.result==="L").length}</div></div>
+         <div><div style={_lab}>Riding</div><div style={{..._val,fontSize:21,marginTop:2,color:weekPts>0?IOS.green:"rgba(255,255,255,0.3)"}}>{weekPts>0?("+"+weekPts):"\u2014"}</div></div>
+         <div><div style={_lab}>Seed</div><div style={{..._val,fontSize:21,marginTop:2}}>{myRank>0?("#"+myRank):"\u2014"}<span style={{fontSize:12,color:"rgba(255,255,255,0.3)",fontWeight:700}}> /{sorted.length}</span></div></div>
+         <div><div style={_lab}>Net pts</div><div style={{..._val,fontSize:21,marginTop:2,color:seasonPts>0?"#64D2FF":"rgba(255,255,255,0.3)"}}>{seasonPts>0?<CountUp value={seasonPts}/>:"\u2014"}</div></div>
+       </div>
      </div>
-     <div style={{padding:"13px 12px 12px",borderLeft:"1px solid rgba(255,255,255,0.08)"}}>
-       <div style={_lab}>Net pts</div>
-       <div style={{..._val,color:seasonPts>0?"#64D2FF":"rgba(255,255,255,0.3)"}}>{seasonPts>0?<CountUp value={seasonPts}/>:"—"}</div>
-     </div>
-     <div style={{padding:"13px 12px 12px",borderLeft:"1px solid rgba(255,255,255,0.08)"}}>
-       <div style={_lab}>Slip</div>
-       {total>0?(<div style={{display:"flex",gap:5,marginTop:10,flexWrap:"wrap"}}>{_legLamps.map((c,i)=>(<span key={i} style={{width:7,height:7,borderRadius:"50%",background:c,boxShadow:c===COL.idle?"none":"0 0 8px "+c}}/>))}</div>):(<div style={{..._val,fontSize:18,marginTop:9,color:"rgba(255,255,255,0.3)"}}>0/{slotCount}</div>)}
-     </div>
-   </div>
-   {total===0?(
-     <div style={{display:"flex",alignItems:"center",gap:10,borderTop:"1px solid rgba(255,255,255,0.08)",padding:"11px 12px",background:"rgba(255,255,255,0.015)"}}>
-       <button onClick={()=>setScreen("picks")} className="pl-press pl-sheen" style={{..._cta,flex:1}}>{_buildLabel}</button>
-     </div>
-   ):(
-     <div style={{borderTop:"1px solid rgba(255,255,255,0.08)",background:"rgba(255,255,255,0.015)"}}>
-       <div style={{display:"flex",alignItems:"center",gap:9,padding:"11px 12px",fontSize:12.5,color:"rgba(255,255,255,0.6)",fontWeight:600}}>
+
+     {/* Leg lamps stay: one glance at every slot\u2019s state, including empties. */}
+     {total>0&&(
+       <div style={{display:"flex",gap:5,marginTop:12}}>
+         {_legLamps.map((c,i)=>(<span key={i} style={{width:7,height:7,borderRadius:"50%",background:c,boxShadow:c===COL.idle?"none":"0 0 8px "+c}}/>))}
+       </div>
+     )}
+
+     {/* Lock bar. The countdown is the whole point: nothing on the old home said
+         WHEN. Only shown when there is something to do and a game to do it before. */}
+     {(openSlots>0&&nextLockMs)&&(()=>{ const d=Math.max(0,nextLockMs-nowTick);
+       const hh=Math.floor(d/3600000), mm=Math.floor((d%3600000)/60000), ss=Math.floor((d%60000)/1000);
+       const urgent=d<3600000;
+       return (
+       <div style={{marginTop:13,background:"rgba(0,0,0,0.35)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:RAD.md,padding:"10px 12px",display:"flex",alignItems:"center",gap:10}}>
+         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={urgent?IOS.red:IOS.yellow} strokeWidth="2.1" strokeLinecap="round" style={{flexShrink:0}}><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+         <div style={{fontSize:12,fontWeight:700,color:"rgba(255,255,255,0.55)",minWidth:0}}><span style={{color:"#fff"}}>{_openLabel}</span> \u2014 first lock in</div>
+         <div style={{marginLeft:"auto",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:17,fontWeight:800,color:urgent?IOS.red:IOS.yellow,fontVariantNumeric:"tabular-nums",letterSpacing:"0.03em"}}>
+           {hh>0?(hh+":"+String(mm).padStart(2,"0")+":"+String(ss).padStart(2,"0")):(mm+":"+String(ss).padStart(2,"0"))}
+         </div>
+       </div>); })()}
+
+     {/* Status line when the slip is in and nothing is left to add. */}
+     {(total>0&&openSlots===0)&&(
+       <div style={{marginTop:12,display:"flex",alignItems:"center",gap:9,fontSize:12.5,color:"rgba(255,255,255,0.6)",fontWeight:600}}>
          <span style={{width:7,height:7,borderRadius:"50%",flexShrink:0,background:_stripDot,boxShadow:"0 0 8px "+_stripDot}}/>{_stripText}
        </div>
-       {(openSlots>0&&nextLockMs)&&(
-         <div style={{display:"flex",alignItems:"center",gap:10,padding:"0 12px 12px"}}>
-           <span style={{fontSize:12,color:"rgba(255,255,255,0.3)",fontWeight:600}}>{_openLabel}</span>
-           <button onClick={()=>setScreen("picks")} style={{..._cta,fontSize:13.5,padding:"10px 14px"}}>{_addLabel}</button>
-         </div>
-       )}
-     </div>
-   )}
+     )}
+
+     {openSlots>0&&(
+       <button onClick={()=>setScreen("picks")} className="pl-press pl-sheen" style={{..._cta,marginLeft:0,width:"100%",justifyContent:"center",marginTop:11,padding:"14px",fontSize:15}}>{total===0?_buildLabel:_addLabel}</button>
+     )}
+   </div>
    </div>
    );
  })()}
@@ -11236,43 +11283,55 @@ function App() {
  <>
  <div className="ios-section" style={{margin:"0 16px 6px"}}>
  <div className="ios-section-header" style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
- <span>Wk {activeLeague.current_week||activeLeague.week||1} Matchup · Live</span>
- <span onClick={()=>setScreen("matchup")} style={{color:IOS.blue,fontSize:13,textTransform:"none",fontWeight:500,letterSpacing:0,cursor:"pointer"}}>View Details</span>
+ <span>Your matchup</span>
+ <span onClick={()=>setScreen("matchup")} style={{color:IOS.blue,fontSize:13,textTransform:"none",fontWeight:500,letterSpacing:0,cursor:"pointer"}}>Full board</span>
  </div>
  </div>
- <div onClick={()=>setScreen("matchup")} style={{margin:"0 16px 10px",background:"#131318",borderRadius:RAD.lg,padding:"15px 16px",cursor:"pointer",position:"relative",overflow:"hidden",border:EDGE.hair}}>
- <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
- <div>
- <div style={{fontSize:18,fontWeight:800,letterSpacing:-0.5,color:IOS.blue}}>YOU</div>
- <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>{myTotal}pts</div>
- </div>
- <div style={{textAlign:"center"}}>
- <div style={{display:"flex",alignItems:"baseline",justifyContent:"center",gap:7,letterSpacing:-1}}>
-   <Roll value={myTotal} size={28} color="#fff"/>
-   <span style={{fontSize:16,color:IOS.label3,fontWeight:500}}>{"\u2013"}</span>
-   <Roll value={oppTotal} size={28} color="#fff"/>
- </div>
- <div style={{fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:isTied?IOS.blue:isWinning?IOS.green:IOS.red,marginTop:2}}>{isTied?"You're Tied":isWinning?"You're Leading":"You're Trailing"}</div>
- </div>
- <div style={{textAlign:"right"}}>
- <div onClick={()=>{ if(oppId) openUserProfile(oppId,{username:oppName}); }} style={{fontSize:18,fontWeight:800,letterSpacing:-0.5,color:"rgba(255,255,255,0.46)",cursor:oppId?"pointer":"default"}}>{oppName}</div>
- <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>{oppTotal}pts</div>
- </div>
- </div>
- <div style={{display:"flex",gap:6,marginTop:12,paddingTop:10,borderTop:`0.5px solid ${IOS.sep}`,alignItems:"center",justifyContent:"space-between"}}>
- <div style={{display:"flex",gap:5}}>
- {myPicks.map((p,i)=>(
- <div key={i} style={{width:28,height:28,borderRadius:RAD.sm,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,background:p.result==="W"?"rgba(48,209,88,0.15)":p.result==="L"?"rgba(255,69,58,0.12)":"rgba(255,255,255,0.06)",color:p.result==="W"?IOS.green:p.result==="L"?IOS.red:IOS.label3}}>
- {p.result==="W"?"W":p.result==="L"?"L":"·"}
- </div>
- ))}
- </div>
- <div style={{fontSize:12,color:IOS.label3,display:"flex",alignItems:"center",gap:4}}>
- {myPending>0&&<span style={{color:"rgba(255,255,255,0.46)",fontWeight:600}}>{myPending} pending</span>}
- <span style={{fontSize:16,color:IOS.label3}}>›</span>
- </div>
- </div>
- </div>
+ {(()=>{ const _sum=myTotal+oppTotal; const _share=_sum>0?Math.round((myTotal/_sum)*100):50;
+   const _myInit=String((userProfile&&userProfile.username)||"You").slice(0,2).toUpperCase();
+   const _opInit=String(oppName||"?").slice(0,2).toUpperCase();
+   return (
+ <div onClick={()=>setScreen("matchup")} style={{margin:"0 16px 10px",borderRadius:RAD.lg,overflow:"hidden",cursor:"pointer",border:"0.5px solid rgba(255,255,255,0.07)",
+   background:"radial-gradient(110% 90% at 50% -20%, "+(isTied?"rgba(59,111,224,0.16)":isWinning?"rgba(48,209,88,0.14)":"rgba(255,69,58,0.12)")+", transparent 60%), linear-gradient(160deg,#14151C,#0B0B10 80%)"}}>
+
+   {/* Faces, not text labels: an opponent with a name and an avatar is a person
+       you are beating or losing to, which is the entire emotional point. */}
+   <div style={{display:"flex",alignItems:"center",padding:"14px 14px 12px",gap:10}}>
+     <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:5}}>
+       <div style={{width:44,height:44,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800,background:"linear-gradient(140deg,#3B6FE0,#5E5CE6)",color:"#fff"}}>{_myInit}</div>
+       <div style={{fontSize:11.5,fontWeight:800,color:IOS.blue}}>YOU</div>
+       <Roll value={myTotal} size={26} color="#fff"/>
+     </div>
+     <div style={{fontSize:10,fontWeight:800,color:"rgba(255,255,255,0.3)",letterSpacing:"0.1em"}}>{"WK "+(activeLeague.current_week||activeLeague.week||1)}</div>
+     <div onClick={(e)=>{ e.stopPropagation(); if(oppId) openUserProfile(oppId,{username:oppName}); }} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:5,cursor:oppId?"pointer":"default"}}>
+       <div style={{width:44,height:44,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800,background:"linear-gradient(140deg,#3A3A44,#26262E)",color:"rgba(255,255,255,0.8)"}}>{_opInit}</div>
+       <div style={{fontSize:11.5,fontWeight:800,color:"rgba(255,255,255,0.46)",maxWidth:100,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{oppName||"Opponent"}</div>
+       <Roll value={oppTotal} size={26} color="#fff"/>
+     </div>
+   </div>
+
+   {/* Share bar. Deliberately NOT called win probability \u2014 there is no model behind
+       it; it is the split of points scored so far. */}
+   <div style={{margin:"0 14px",height:7,borderRadius:4,background:"#2A2A32",overflow:"hidden",display:"flex"}}>
+     <div style={{width:_share+"%",background:isTied?"linear-gradient(90deg,#2E7CF6,#64D2FF)":isWinning?"linear-gradient(90deg,#28A84A,#30D158)":"linear-gradient(90deg,#C4342B,#FF453A)",transition:"width .5s cubic-bezier(0.4,0,0.2,1)"}}/>
+   </div>
+   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 14px 12px",fontSize:10.5,fontWeight:800,color:"rgba(255,255,255,0.5)"}}>
+     <span style={{color:isTied?IOS.blue:isWinning?IOS.green:IOS.red}}>{_sum>0?(_share+"% points share"):"No points yet"}</span>
+     <span>{myPending>0?(myPending+" of yours still live"):"All your picks graded"}</span>
+   </div>
+
+   {/* Leg chips kept \u2014 the fastest read of how the week actually went. */}
+   <div style={{display:"flex",gap:5,padding:"0 14px 13px",alignItems:"center"}}>
+     {myPicks.map((p,i)=>(
+       <div key={i} style={{width:26,height:26,borderRadius:RAD.sm,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,
+         background:p.result==="W"?"rgba(48,209,88,0.16)":p.result==="L"?"rgba(255,69,58,0.14)":"rgba(255,255,255,0.06)",
+         color:p.result==="W"?IOS.green:p.result==="L"?IOS.red:"rgba(255,255,255,0.4)"}}>
+         {p.result==="W"?"W":p.result==="L"?"L":"\u00B7"}
+       </div>
+     ))}
+     <span style={{marginLeft:"auto",fontSize:16,color:IOS.label3}}>{"\u203A"}</span>
+   </div>
+ </div>); })()}
  </>
  );
  })()}
