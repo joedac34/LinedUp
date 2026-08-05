@@ -36,9 +36,22 @@ const REVOKE = new Set([
   'SUBSCRIPTION_PAUSED',
 ]);
 
+/* Grants MUST NOT fail silently. A Supabase update that matches zero rows is not
+   an error in postgrest — it returns success with an empty set. That is exactly how
+   a missing public.users row let paid subscriptions go ungranted without a trace.
+   Throwing here produces a non-2xx, which makes RevenueCat retry and surfaces the
+   failure in the webhook delivery log instead of burying it. */
 async function grantPro(userId) {
-  if (!userId) return;
-  await supabase.from('users').update({ is_pro: true }).eq('id', userId);
+  if (!userId) throw new Error('grantPro called with no app_user_id');
+  const { data, error } = await supabase
+    .from('users')
+    .update({ is_pro: true })
+    .eq('id', userId)
+    .select('id');
+  if (error) throw new Error(`grantPro failed for ${userId}: ${error.message}`);
+  if (!data || data.length === 0) {
+    throw new Error(`grantPro matched no users row for ${userId} — entitlement NOT granted`);
+  }
 }
 
 /* Revoking is the dangerous direction. A user can hold Pro from Stripe on the web

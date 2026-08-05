@@ -19,17 +19,47 @@ async function readRaw(req) {
   return Buffer.concat(chunks);
 }
 
+/* A postgrest update that matches zero rows returns success with an empty set —
+   it is not an error. That is how a missing public.users row let paid subscriptions
+   go ungranted silently. So grants throw when nothing was written, which returns a
+   non-2xx and makes Stripe retry the event instead of marking it delivered.
+   Revocations are allowed to no-op: if the row is already gone there is nothing to
+   take away, and throwing would make Stripe retry a cancellation forever. */
 async function setProById(userId, isPro, extra = {}) {
-  if (!userId) return;
-  await supabase.from('users').update({ is_pro: isPro, ...extra }).eq('id', userId);
+  if (!userId) {
+    if (isPro) throw new Error('setProById called with no userId on a grant');
+    return;
+  }
+  const { data, error } = await supabase
+    .from('users')
+    .update({ is_pro: isPro, ...extra })
+    .eq('id', userId)
+    .select('id');
+  if (error) throw new Error(`setProById failed for ${userId}: ${error.message}`);
+  if (isPro && (!data || data.length === 0)) {
+    throw new Error(`setProById matched no users row for ${userId} — Pro NOT granted`);
+  }
 }
 
 // Fallback when an event has no userId in metadata: match on stored customer id.
 async function setProByCustomer(customerId, isPro, subId) {
-  if (!customerId) return;
+  if (!customerId) {
+    if (isPro) throw new Error('setProByCustomer called with no customerId on a grant');
+    return;
+  }
   const { data } = await supabase.from('users').select('id').eq('stripe_customer_id', customerId).maybeSingle();
-  if (data && data.id) {
-    await supabase.from('users').update({ is_pro: isPro, stripe_subscription_id: subId || null }).eq('id', data.id);
+  if (!data || !data.id) {
+    if (isPro) throw new Error(`no users row for stripe_customer_id ${customerId} — Pro NOT granted`);
+    return;
+  }
+  const { data: updated, error } = await supabase
+    .from('users')
+    .update({ is_pro: isPro, stripe_subscription_id: subId || null })
+    .eq('id', data.id)
+    .select('id');
+  if (error) throw new Error(`setProByCustomer failed for ${customerId}: ${error.message}`);
+  if (isPro && (!updated || updated.length === 0)) {
+    throw new Error(`update matched no row for ${data.id} — Pro NOT granted`);
   }
 }
 
@@ -52,7 +82,12 @@ export default async function handler(req, res) {
         // À-la-carte one-time league unlock: flip that league to paid; do NOT set is_pro.
         if (s.metadata && s.metadata.kind === 'league') {
           const leagueId = s.metadata.leagueId;
-          if (leagueId) await supabase.from('leagues').update({ paid: true }).eq('id', leagueId);
+          if (leagueId) {
+            const { data: lg, error: lgErr } = await supabase
+              .from('leagues').update({ paid: true }).eq('id', leagueId).select('id');
+            if (lgErr) throw new Error(`league unlock failed for ${leagueId}: ${lgErr.message}`);
+            if (!lg || lg.length === 0) throw new Error(`league unlock matched no row for ${leagueId}`);
+          }
           break;
         }
         // Subscription checkout: grant Pro.
