@@ -8102,6 +8102,22 @@ function App() {
  try { localStorage.setItem("picklock_is_pro", val ? "true" : "false"); } catch(e) {}
  // is_pro is written ONLY by the Stripe webhook (server-side). Never from the client.
  };
+ /* After a native purchase the RevenueCat webhook needs a moment to write
+    users.is_pro. Until it does, client and server disagree: local state says Pro,
+    but server-gated features (Plok) still refuse. Poll until the row flips, then
+    refresh the profile. Deliberately never writes `false` — a slow webhook must
+    not bounce a paying user back to the paywall. */
+ const syncProFromServer = (attempt = 0) => {
+ if(!user || !user.id) return;
+ (async()=>{
+   try {
+     const {data} = await supabase.from("users").select("is_pro").eq("id", user.id).maybeSingle();
+     if(data && data.is_pro === true){ fetchUserProfile(user.id); return; }
+   } catch(e) {}
+   if(attempt < 6) setTimeout(()=>syncProFromServer(attempt + 1), 2500);
+ })();
+ };
+
  const startCheckout = async (plan) => {
  if(IS_NATIVE){
    // App Store build: Apple IAP via RevenueCat. Stripe is web-only (Guideline 3.1.1).
@@ -8119,6 +8135,7 @@ function App() {
        setIsPro(true);
        try { localStorage.setItem("picklock_is_pro","true"); } catch(e){}
        setShowPaywall(null);
+       syncProFromServer();
        return;
      }
      alert("That purchase didn't complete. You have not been charged.");
@@ -19220,7 +19237,7 @@ function App() {
              </div>
            </div>
           {IS_NATIVE && (
-             <button onClick={async()=>{ const r = await restorePurchases(); if(r&&r.isPro){ setIsPro(true); try{ localStorage.setItem("picklock_is_pro","true"); }catch(e){} setShowPaywall(null); alert("Your purchases have been restored."); } else { alert("No previous purchases found for this Apple ID."); } }} style={{display:"block",width:"100%",background:"none",border:"none",color:IOS.blue,fontSize:12.5,fontWeight:700,textAlign:"center",marginTop:12,cursor:"pointer",fontFamily:"Barlow,sans-serif",padding:4}}>
+             <button onClick={async()=>{ const r = await restorePurchases(); if(r&&r.isPro){ setIsPro(true); try{ localStorage.setItem("picklock_is_pro","true"); }catch(e){} setShowPaywall(null); syncProFromServer(); alert("Your purchases have been restored."); } else { alert("No previous purchases found for this Apple ID."); } }} style={{display:"block",width:"100%",background:"none",border:"none",color:IOS.blue,fontSize:12.5,fontWeight:700,textAlign:"center",marginTop:12,cursor:"pointer",fontFamily:"Barlow,sans-serif",padding:4}}>
                Restore purchases
              </button>
            )}
