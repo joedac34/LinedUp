@@ -1442,7 +1442,7 @@ const FAQS = [
  ["Can I change a pick after it locks?","No. A pick is final once its game starts. Before that you can swap freely."],
  ["Is this gambling?","No. There are no entry fees and no cash prizes. PickLock is played for bragging rights, and the betting lines shown are reference points only."],
  ["How do I leave a league?","Open the league and use its settings. Leaving mid-season forfeits your remaining matchups, so tell your commissioner first."],
- ["Why can I not subscribe in the iOS app?","Subscriptions are handled on the web. The iOS build does not sell anything."],
+ ["What is PickLock Pro?","A subscription that unlocks unlimited picks, custom league settings, multi-sport leagues, power-ups, and advanced stats. Your subscription is tied to your account, so it works everywhere you sign in."],
 ];
 function LegalDoc({doc}){
  const d = LEGAL[doc] || LEGAL.terms;
