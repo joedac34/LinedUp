@@ -1524,7 +1524,7 @@ const PROF_BIC = {
  flame:(c)=>(<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22c4.4 0 7-2.8 7-6.5 0-3-2-5-3.5-6.5C14 7.5 13 5.5 13 3c-3 2-5.5 5-5.5 8 0 1-1-.5-1.5-2C4.7 10.6 5 12.7 5 15.5 5 19.2 7.6 22 12 22z"/></svg>),
  stack:(c)=>(<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 12l10 5 10-5"/><path d="M2 17l10 5 10-5"/></svg>),
 };
-function ProfileSheet({view, data, loading, onClose, myId, globalRank}){
+function ProfileSheet({view, data, loading, onClose, myId, globalRank, onReport, onBlock, isBlocked}){
  const seed = (view&&view.seed)||{};
  const prof = (data&&data.profile)||{};
  const stats = (data&&data.stats)||null;
@@ -1641,6 +1641,14 @@ function ProfileSheet({view, data, loading, onClose, myId, globalRank}){
  </>}
  {(!stats||graded===0)&&!loading&&<div style={{textAlign:"center",color:IOS.label3,fontSize:12.5,padding:"22px 0 12px"}}>No graded picks yet.</div>}
  </>
+ )}
+ {/* Guideline 1.2: every profile other than your own needs a way to report
+     the user and a way to block them. */}
+ {myId && view && String(view.userId)!==String(myId) && (onReport||onBlock) && (
+   <div style={{display:"flex",gap:8,marginTop:18,paddingTop:14,borderTop:"0.5px solid rgba(255,255,255,0.07)"}}>
+     {onReport && <button onClick={()=>onReport(view.userId,name)} style={{flex:1,background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.10)",borderRadius:RAD.md,padding:"11px 0",fontSize:13,fontWeight:700,color:IOS.label2,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Report</button>}
+     {onBlock && <button onClick={()=>onBlock(view.userId,name,!!isBlocked)} style={{flex:1,background:"rgba(255,69,58,0.10)",border:"0.5px solid rgba(255,69,58,0.28)",borderRadius:RAD.md,padding:"11px 0",fontSize:13,fontWeight:700,color:"#FF6961",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>{isBlocked?"Unblock":"Block"}</button>}
+   </div>
  )}
  </div>
  </div>
@@ -7962,6 +7970,8 @@ function App() {
  // guards against a slow fetch for player A landing after the user tapped B
  // (same stale-closure class of bug as the fetchMyPicks boot flash).
  const [profileView, setProfileView] = useState(null);
+ // Set of user ids this user has blocked. Chat from these users is hidden.
+ const [blockedIds, setBlockedIds] = useState(()=>new Set());
  const [profileData, setProfileData] = useState(null);
  const [profileLoading, setProfileLoading] = useState(false);
  const profileReqRef = useRef(null);
@@ -8058,6 +8068,65 @@ function App() {
      setRollBusy(false); setLeagueTab("standings");
      alert("Season "+_next+" is live. Season "+data.archived_season+" is saved in league history.");
    }catch(e){ setRollBusy(false); alert("Could not reach the server. Please try again."); }
+ };
+
+ const fetchBlocks = async (uid) => {
+   if(!uid) return;
+   try{
+     const {data} = await supabase.from("user_blocks").select("blocked_id").eq("blocker_id", uid);
+     setBlockedIds(new Set((data||[]).map(r=>String(r.blocked_id))));
+   }catch(e){}
+ };
+
+ /* Reports are insert-only by RLS — the reporter can file one but cannot read
+    the table back. content_snapshot is stored because the message may be gone
+    by the time the report is triaged. */
+ const submitReport = async ({ kind, reportedUserId, messageId, leagueId, snapshot }) => {
+   if(!user || !user.id) return false;
+   try{
+     const {error} = await supabase.from("content_reports").insert({
+       reporter_id: user.id,
+       reported_user_id: reportedUserId || null,
+       kind,
+       message_id: messageId ? String(messageId) : null,
+       league_id: leagueId || null,
+       content_snapshot: snapshot ? String(snapshot).slice(0,2000) : null,
+     });
+     if(error) throw error;
+     return true;
+   }catch(e){ return false; }
+ };
+
+ const reportUser = async (targetId, targetName) => {
+   if(!window.confirm("Report "+(targetName||"this player")+" to PickLock? We review reports within 24 hours.")) return;
+   const ok = await submitReport({ kind:"profile", reportedUserId:targetId, snapshot:targetName });
+   alert(ok ? "Thanks — this has been reported and will be reviewed within 24 hours." : "Could not submit that report. Please try again.");
+ };
+
+ const reportMessage = async (msg) => {
+   if(!msg) return;
+   if(!window.confirm("Report this message to PickLock? We review reports within 24 hours.")) return;
+   const ok = await submitReport({ kind:"message", reportedUserId:msg.user_id, messageId:msg.id, leagueId:(activeLeague&&isUuid(activeLeague.id))?activeLeague.id:null, snapshot:msg.message||msg.text||null });
+   alert(ok ? "Thanks — this has been reported and will be reviewed within 24 hours." : "Could not submit that report. Please try again.");
+ };
+
+ const toggleBlock = async (targetId, targetName, currentlyBlocked) => {
+   if(!user || !user.id || !targetId) return;
+   const label = targetName || "this player";
+   if(currentlyBlocked){
+     if(!window.confirm("Unblock "+label+"?")) return;
+     try{
+       await supabase.from("user_blocks").delete().eq("blocker_id",user.id).eq("blocked_id",targetId);
+       setBlockedIds(prev=>{ const n=new Set(prev); n.delete(String(targetId)); return n; });
+     }catch(e){ alert("Could not unblock. Please try again."); }
+     return;
+   }
+   if(!window.confirm("Block "+label+"? You will no longer see their messages.")) return;
+   try{
+     const {error} = await supabase.from("user_blocks").insert({ blocker_id:user.id, blocked_id:targetId });
+     if(error) throw error;
+     setBlockedIds(prev=>{ const n=new Set(prev); n.add(String(targetId)); return n; });
+   }catch(e){ alert("Could not block. Please try again."); }
  };
 
  const openUserProfile = async (userId, seed) => {
@@ -8736,7 +8805,7 @@ function App() {
  supabase.auth.getSession().then(({data:{session}})=>{
  const u = session?.user??null;
  setUser(u);
- if(u) { fetchLeagues(u.id); fetchAllMyStats(u.id); fetchUserProfile(u.id); initPurchases(u.id); }
+ if(u) { fetchLeagues(u.id); fetchAllMyStats(u.id); fetchUserProfile(u.id); fetchBlocks(u.id); initPurchases(u.id); }
  });
  supabase.auth.onAuthStateChange((_e,session)=>{
  if(_e==="PASSWORD_RECOVERY"){ setRecoveryMode(true); }
@@ -8749,7 +8818,7 @@ function App() {
    lastAuthUidRef.current = u?.id ?? null;
  }
  setUser(u);
- if(u) { fetchLeagues(u.id); fetchAllMyStats(u.id); fetchUserProfile(u.id); initPurchases(u.id); } else { logOutPurchases(); try{ posthog.reset(); }catch(e){} }
+ if(u) { fetchLeagues(u.id); fetchAllMyStats(u.id); fetchUserProfile(u.id); fetchBlocks(u.id); initPurchases(u.id); } else { setBlockedIds(new Set()); logOutPurchases(); try{ posthog.reset(); }catch(e){} }
  });
  setTimeout(()=>setAnim(true),80);
  // (a 1s interval used to tick a countdown state here that nothing rendered —
@@ -18041,7 +18110,7 @@ function App() {
  </div>
  )}
  <div className="date-sep"><span>Today</span></div>
- {messages.map(msg=>{
+ {messages.filter(m=>!blockedIds.has(String(m.user_id))).map(msg=>{
  const isMe = msg.user_id === user?.id;
  const initial = (msg.username?.[0]||"?").toUpperCase();
  const timeStr = new Date(msg.created_at).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
@@ -18057,6 +18126,7 @@ function App() {
  {reactFor===msg.id&&(
  <div className="pk-react-picker" style={{position:"absolute",top:-44,[isMe?"right":"left"]:0,zIndex:80,background:"#1B1B21",border:EDGE.hair3,borderRadius:RAD.xl,padding:"6px 8px",display:"flex",gap:2,boxShadow:"0 12px 34px rgba(0,0,0,0.6)"}}>
  {REACTION_SET.map(em=>(<span key={em} onPointerUp={(e)=>{e.preventDefault();e.stopPropagation();toggleReaction(msg.id,em);}} onClick={(e)=>e.stopPropagation()} style={{fontSize:20,padding:"3px 5px",borderRadius:RAD.md,cursor:"pointer",userSelect:"none",WebkitUserSelect:"none",touchAction:"manipulation"}}>{em}</span>))}
+                     {!isMe && <span onPointerUp={(e)=>{e.preventDefault();e.stopPropagation();setReactFor(null);reportMessage(msg);}} onClick={(e)=>e.stopPropagation()} style={{fontSize:11.5,fontWeight:800,letterSpacing:"0.3px",padding:"3px 8px",marginLeft:2,borderLeft:"0.5px solid rgba(255,255,255,0.12)",color:"#FF6961",cursor:"pointer",userSelect:"none",WebkitUserSelect:"none",touchAction:"manipulation",alignSelf:"center"}}>REPORT</span>}
  </div>
  )}
  <div className={`bubble ${isMe?"me":"them"}`}
@@ -19959,6 +20029,7 @@ function App() {
  </div></div>
  </div>}
  {profileView && <ProfileSheet view={profileView} data={profileData} loading={profileLoading} myId={user&&user.id}
+  onReport={reportUser} onBlock={toggleBlock} isBlocked={blockedIds.has(String(profileView.userId))}
    onClose={()=>{ profileReqRef.current=null; setProfileView(null); setProfileData(null); setProfileLoading(false); }}
    globalRank={(()=>{ const rows=lbCache["all"]; if(!rows||!rows.length||!profileView) return null; const sx=[...rows].sort((a,b)=>(Number(b.points)||0)-(Number(a.points)||0)); const i=sx.findIndex(r=>String(r.user_id)===String(profileView.userId)); return i>=0?{rank:i+1,total:sx.length}:null; })()}/>}
  </div>
