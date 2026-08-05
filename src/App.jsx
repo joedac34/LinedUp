@@ -9252,6 +9252,39 @@ function App() {
     containers. They would mis-position for the duration of the animation. The lift can
     come back once those overlays are hoisted to the app root. */
  @keyframes pkScreenIn{from{opacity:0}to{opacity:1}}
+ /* ── AUTH SCREEN ─────────────────────────────────────────────────────────
+    Layer order matters: grid floor, then tickers, then the beam OVER them.
+    The beam pushing the tickers back is what stops them competing with the
+    lockup; the veil below guarantees the form stays legible regardless. */
+ .auth-grid{position:absolute;inset:0;pointer-events:none;background-image:
+   linear-gradient(rgba(255,255,255,0.05) 1px,transparent 1px),
+   linear-gradient(90deg,rgba(255,255,255,0.05) 1px,transparent 1px);
+   background-size:38px 38px;
+   -webkit-mask-image:radial-gradient(closest-side at 50% 20%,#000,transparent 80%);
+   mask-image:radial-gradient(closest-side at 50% 20%,#000,transparent 80%);}
+ .auth-tick{position:absolute;left:0;right:0;height:30px;display:flex;align-items:center;overflow:hidden;pointer-events:none;opacity:0;animation:pkScreenIn .9s .05s forwards;}
+ .auth-tick .run{display:flex;gap:24px;white-space:nowrap;font-family:'Barlow Semi Condensed',sans-serif;font-size:16px;font-weight:800;letter-spacing:0.02em;}
+ .auth-tick.r1 .run{animation:authSlideL 30s linear infinite;}
+ .auth-tick.r2 .run{animation:authSlideR 38s linear infinite;}
+ @keyframes authSlideL{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+ @keyframes authSlideR{from{transform:translateX(-50%)}to{transform:translateX(0)}}
+ .auth-beam{position:absolute;left:50%;top:-190px;width:520px;height:600px;transform:translateX(-50%);
+   background:radial-gradient(closest-side,rgba(59,111,224,0.42),transparent 70%);filter:blur(16px);
+   opacity:0;animation:pkScreenIn 1.3s .05s forwards;pointer-events:none;}
+ .auth-veil{position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(7,7,12,0.10) 0%,rgba(7,7,12,0.55) 16%,rgba(7,7,12,0.94) 30%,#07070C 42%);}
+ /* The lock closes: shackle drops and bounces, body seats, then it rings once. */
+ .auth-lock{width:52px;height:59px;position:relative;}
+ .auth-shackle{position:absolute;left:13px;top:0;width:26px;height:29px;border:4.5px solid #64D2FF;border-bottom:none;border-radius:13px 13px 0 0;animation:authShackle 1.05s cubic-bezier(0.34,1.56,0.64,1) .1s backwards;}
+ @keyframes authShackle{0%{transform:translateY(-30px);opacity:0}55%{transform:translateY(5px);opacity:1}78%{transform:translateY(-2px)}100%{transform:none}}
+ .auth-lbody{position:absolute;left:2px;top:27px;width:48px;height:32px;border-radius:9px;background:linear-gradient(160deg,#2E7CF6,#5E5CE6);animation:authSeat .5s cubic-bezier(0.16,1,0.3,1) .1s backwards, authRing 1.7s 1.0s ease-out;}
+ @keyframes authSeat{from{transform:scale(.7);opacity:0}to{transform:none;opacity:1}}
+ @keyframes authRing{0%{box-shadow:0 0 0 0 rgba(100,210,255,0.5)}100%{box-shadow:0 0 0 26px rgba(100,210,255,0)}}
+ @keyframes authRise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+ .auth-an{opacity:0;animation:authRise .55s cubic-bezier(0.16,1,0.3,1) forwards;}
+ @media (prefers-reduced-motion: reduce){
+   .auth-tick .run,.auth-shackle,.auth-lbody{animation:none;}
+   .auth-an{animation:none;opacity:1;}
+ }
  /* Live dot on the home hero kicker. */
  @keyframes pkPulseDot{0%,100%{opacity:1}50%{opacity:0.35}}
  .pl-pulse-dot{animation:pkPulseDot 1.6s ease-in-out infinite;}
@@ -9942,14 +9975,11 @@ function App() {
  @media (prefers-reduced-motion: reduce){ .tab-item, .tab-icon{transition:none;} }
 
  /* Auth screen */
- @keyframes authRise{0%{transform:translateY(0);opacity:0;}12%{opacity:0.55;}80%{opacity:0.5;}100%{transform:translateY(-130px);opacity:0;}}
- @keyframes authGlow{0%,100%{filter:drop-shadow(0 0 16px rgba(10,132,255,0.45));}50%{filter:drop-shadow(0 0 30px rgba(10,132,255,0.7));}}
  .auth-input{width:100%;background:rgba(255,255,255,0.045);border:0.5px solid rgba(255,255,255,0.12);border-radius:13px;padding:15px 16px;color:#fff;font-size:15px;font-family:'Barlow',sans-serif;outline:none;transition:border-color .18s, box-shadow .18s;box-sizing:border-box;}
  .auth-input::placeholder{color:rgba(255,255,255,0.32);}
  .auth-input:focus{border-color:rgba(10,132,255,0.7);box-shadow:0 0 0 3px rgba(10,132,255,0.14);}
  .auth-cta{width:100%;border:none;border-radius:13px;padding:16px;font-size:16px;font-weight:800;cursor:pointer;font-family:'Barlow',sans-serif;color:#fff;background:linear-gradient(135deg,#0A84FF,#5E5CE6);box-shadow:0 8px 26px rgba(10,132,255,0.4);transition:transform .12s, box-shadow .2s;letter-spacing:0.2px;}
  .auth-cta:active{transform:scale(0.985);box-shadow:0 4px 16px rgba(10,132,255,0.3);}
- .auth-chip{position:absolute;font-family:'Barlow',sans-serif;font-weight:800;font-size:13px;padding:6px 11px;border-radius:9px;white-space:nowrap;pointer-events:none;will-change:transform,opacity;}
  `;
 
  return (
@@ -10226,36 +10256,32 @@ function App() {
  {!user && (
  <div style={{position:"relative",width:"100%",maxWidth:480,margin:"0 auto",boxSizing:"border-box",minHeight:"100dvh",overflowY:"auto",overflowX:"hidden",background:"radial-gradient(120% 70% at 50% -10%, rgba(10,132,255,0.18), transparent 55%), radial-gradient(85% 50% at 85% 112%, rgba(94,92,230,0.16), transparent 60%), #07070C",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"calc(var(--sa-top) + 30px) 28px calc(var(--sa-bot) + 30px)",fontFamily:"'Barlow',sans-serif"}}>
 
- {/* Floating odds chips */}
- <div style={{position:"absolute",inset:0,overflow:"hidden",pointerEvents:"none"}}>
- {[
- {l:"+150",c:"#0A84FF",x:"7%",d:0,t:11},{l:"KC -3.5",c:"#30D158",x:"24%",d:2.5,t:13},
- {l:"O 47.5",c:"#FF9F0A",x:"68%",d:1,t:12},{l:"PARLAY x5",c:"#FF375F",x:"83%",d:4,t:14},
- {l:"-110",c:"#0A84FF",x:"50%",d:6,t:10},{l:"LAD ML",c:"#30D158",x:"37%",d:3,t:13},
- {l:"U 8.5",c:"#FF9F0A",x:"13%",d:7.5,t:12},{l:"+650",c:"#FF375F",x:"60%",d:5,t:15},
- {l:"27 PTS",c:"#FFD60A",x:"90%",d:2,t:11},{l:"BUF -7",c:"#30D158",x:"3%",d:8.5,t:14},
- {l:"+200",c:"#0A84FF",x:"76%",d:9.5,t:12},{l:"LOCK",c:"#FFD60A",x:"45%",d:10.5,t:13}
- ].map((c,i)=>(
- <div key={i} className="auth-chip" style={{left:c.x,bottom:"-8%",color:c.c,background:c.c+"1A",border:"0.5px solid "+c.c+"44",animation:"authRise "+c.t+"s ease-in-out "+c.d+"s infinite"}}>{c.l}</div>
- ))}
- </div>
+ {/* Grid floor \u2014 masked so it dissolves toward the edges. */}
+ <div className="auth-grid"/>
 
- {/* Scrolling odds ticker */}
- <div style={{position:"relative",width:"100%",marginBottom:22,overflow:"hidden",opacity:0.5,pointerEvents:"none",WebkitMaskImage:"linear-gradient(90deg,transparent,#000 14%,#000 86%,transparent)",maskImage:"linear-gradient(90deg,transparent,#000 14%,#000 86%,transparent)"}}>
- <div style={{display:"inline-flex",gap:24,whiteSpace:"nowrap",animation:"ticker-scroll 26s linear infinite"}}>
- {[{t:"NBA FINALS · NYK +120",c:"#0A84FF"},{t:"MLB · LAD -145",c:"#30D158"},{t:"NFL · KC -3.5",c:"#FF9F0A"},{t:"PARLAY HIT +1240",c:"#FF375F"},{t:"NHL · BOS ML -130",c:"#64D2FF"},{t:"O/U 47.5",c:"#FFD60A"},
- {t:"NBA FINALS · NYK +120",c:"#0A84FF"},{t:"MLB · LAD -145",c:"#30D158"},{t:"NFL · KC -3.5",c:"#FF9F0A"},{t:"PARLAY HIT +1240",c:"#FF375F"},{t:"NHL · BOS ML -130",c:"#64D2FF"},{t:"O/U 47.5",c:"#FFD60A"}
- ].map((s,i)=>(<span key={i} style={{fontSize:12,fontWeight:800,letterSpacing:"0.04em",color:s.c}}>{s.t}</span>))}
- </div>
- </div>
+ {/* Two ticker rows, opposite directions and speeds. The list is duplicated so
+     the -50% translate loops seamlessly. Decorative only: aria-hidden. */}
+ <div className="auth-tick r1" style={{top:58}} aria-hidden="true"><div className="run">
+   {[{t:"MLB \u00B7 SOX +1.5",c:"#30D158"},{t:"NFL \u00B7 KC \u22123.5",c:"rgba(255,255,255,0.2)"},{t:"PARLAY HIT +1240",c:"#FFD60A"},{t:"CFB \u00B7 UGA \u22127",c:"#64D2FF"},{t:"NBA \u00B7 LAL O 224.5",c:"#FF453A"},{t:"JUDGE 1+ HR",c:"#30D158"},{t:"MLB \u00B7 SOX +1.5",c:"#30D158"},{t:"NFL \u00B7 KC \u22123.5",c:"rgba(255,255,255,0.2)"},{t:"PARLAY HIT +1240",c:"#FFD60A"},{t:"CFB \u00B7 UGA \u22127",c:"#64D2FF"},{t:"NBA \u00B7 LAL O 224.5",c:"#FF453A"},{t:"JUDGE 1+ HR",c:"#30D158"}].map((s,i)=>(<span key={i} style={{color:s.c}}>{s.t}</span>))}
+ </div></div>
+ <div className="auth-tick r2" style={{top:96}} aria-hidden="true"><div className="run">
+   {[{t:"DODGERS ML \u2212152",c:"rgba(255,255,255,0.2)"},{t:"LONGSHOT +650",c:"#30D158"},{t:"O/U 8.5",c:"#64D2FF"},{t:"YANKEES \u22121.5",c:"rgba(255,255,255,0.2)"},{t:"3-LEG +410",c:"#FFD60A"},{t:"UNDER 47",c:"#FF453A"},{t:"DODGERS ML \u2212152",c:"rgba(255,255,255,0.2)"},{t:"LONGSHOT +650",c:"#30D158"},{t:"O/U 8.5",c:"#64D2FF"},{t:"YANKEES \u22121.5",c:"rgba(255,255,255,0.2)"},{t:"3-LEG +410",c:"#FFD60A"},{t:"UNDER 47",c:"#FF453A"}].map((s,i)=>(<span key={i} style={{color:s.c}}>{s.t}</span>))}
+ </div></div>
+
+ {/* Beam sits ABOVE the tickers on purpose \u2014 it is what makes them read as
+     distant activity instead of foreground noise. Veil then guarantees the
+     form below is legible no matter what is scrolling past. */}
+ <div className="auth-beam"/>
+ <div className="auth-veil"/>
 
  {/* Brand */}
- <div style={{position:"relative",textAlign:"center",marginBottom:30}}>
- <div style={{display:"inline-flex",alignItems:"center",gap:9,marginBottom:9}}>
- <svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{filter:"drop-shadow(0 0 10px rgba(10,132,255,0.6))"}}><rect x="3" y="11" width="18" height="11" rx="2.5"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
- <div style={{fontSize:40,fontWeight:900,letterSpacing:-1.5,lineHeight:1.1,display:"inline-block",padding:"6px 12px 12px",backgroundImage:"linear-gradient(135deg,#0A84FF,#64D2FF)",WebkitBackgroundClip:"text",backgroundClip:"text",WebkitTextFillColor:"transparent",animation:"authGlow 3.6s ease-in-out infinite"}}>PICKLOCK</div>
- </div>
- <div style={{fontSize:14,color:"rgba(255,255,255,0.5)",fontWeight:500}}>Real lines. Real bragging rights.</div>
+ <div className="auth-an" style={{position:"relative",textAlign:"center",marginBottom:26,animationDelay:".30s"}}>
+   <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:13}}>
+     <div className="auth-lock"><div className="auth-shackle"/><div className="auth-lbody"/></div>
+     <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:52,fontWeight:900,letterSpacing:-1.5,lineHeight:1,
+       backgroundImage:"linear-gradient(92deg,#8FC4FF,#ffffff 45%,#A9B6FF)",WebkitBackgroundClip:"text",backgroundClip:"text",WebkitTextFillColor:"transparent"}}>PICKLOCK</div>
+   </div>
+   <div style={{fontSize:13.5,color:"rgba(255,255,255,0.55)",fontWeight:600,marginTop:10}}>Real lines. Real bragging rights.</div>
  </div>
 
  {/* Glass form card */}
