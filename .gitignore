@@ -36,3 +36,5 @@ dist-ssr
 *_tests.mjs
 *probe*.mjs
 .vercel
+.env*
+rls_probe.mjs
