@@ -4,6 +4,12 @@ import { logUsage } from "./_usage.js";
 // is a quota-drain vector (and junk query params bust the edge cache per-URL).
 const SPORT_ALLOW = new Set(["baseball_mlb","americanfootball_nfl","americanfootball_ncaaf","basketball_nba"]);
 
+// The Odds API keeps NFL preseason on its own sport key. Regular-season lines are
+// already posted in August, so this is a MERGE, not a fallback: without it the HOF
+// game and every August preseason game is invisible while Week 1 lines show. Games
+// are tagged `preseason:true` and sort naturally to the front by commence_time.
+const PRESEASON_OF = { americanfootball_nfl: "americanfootball_nfl_preseason" };
+
 // In-memory per-sport throttle: no matter the request volume (or cache-busting),
 // this lambda instance calls the Odds API at most once per sport per window.
 const _mem = new Map(); // sport -> { at, payload }
@@ -154,6 +160,25 @@ export default async function handler(req, res) {
 
     let games = Array.isArray(data) ? data.filter(g => g.bookmakers?.length > 0).map(collapse) : [];
 
+    // Preseason merge. One extra upstream call, paid at most once per cache window
+    // (the CDN + _mem throttle above cover every user), and only for a sport that
+    // actually has a preseason key. Failure is swallowed: a missing preseason slate
+    // must never take down the regular-season one.
+    const preKey = PRESEASON_OF[sport];
+    if (preKey) {
+      try {
+        const preUrl = `https://api.the-odds-api.com/v4/sports/${preKey}/odds/?apiKey=${apiKey}&regions=us&markets=h2h,spreads,totals&bookmakers=${bookmakers}&dateFormat=iso&oddsFormat=american&commenceTimeFrom=${now}`;
+        const preRes = await fetch(preUrl);
+        if (preRes.ok) {
+          const preData = await preRes.json();
+          const preGames = Array.isArray(preData)
+            ? preData.filter(g => g.bookmakers?.length > 0).map(collapse).map(g => ({ ...g, preseason: true }))
+            : [];
+          games = games.concat(preGames);
+        }
+      } catch (e) { /* preseason is additive; never block the real slate on it */ }
+    }
+
     // Also pull the upcoming schedule (the /events endpoint is free and does NOT
     // count against quota) so we can show TOMORROW'S matchups the night before,
     // even before the books have posted lines. Any event within the next ~36h
@@ -182,7 +207,7 @@ export default async function handler(req, res) {
     // so ml/spread/ou picks always attach to the soonest game and grade on the right night.
     const _seenMatchup = new Set();
     games = games.filter(g => {
-      const k = (g.away_team || "") + "@" + (g.home_team || "");
+      const k = (g.preseason ? "PRE|" : "") + (g.away_team || "") + "@" + (g.home_team || "");
       if (_seenMatchup.has(k)) return false;
       _seenMatchup.add(k);
       return true;
