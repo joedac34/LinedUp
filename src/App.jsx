@@ -1384,7 +1384,12 @@ function GameCard({ g, gi, prevTime: _prevTime, sportKey: _sportKey, sportOdds: 
  {isLive&&<span style={{display:"inline-block",width:5,height:5,borderRadius:"50%",background:IOS.red,marginRight:6,verticalAlign:2}}/>}
  {isLive?(_gLiveTxt||"LIVE"):isDone?"FINAL":(isToday(g.time)?gameTime:`${new Date(g.time).toLocaleDateString([],{weekday:"short",month:"short",day:"numeric"})} \u00b7 ${gameTime}`)}
  </div>
- {hasPick&&<div style={{fontSize:9.5,fontWeight:800,color:IOS.blue,letterSpacing:0.5}}>MY PICK</div>}
+ <div style={{display:"flex",alignItems:"center",gap:7}}>
+  {/* The odds feed merges NFL preseason into the NFL slate; without a label an
+      August exhibition is indistinguishable from a Week 1 game. */}
+  {g.preseason&&<div style={{fontSize:8.5,fontWeight:900,letterSpacing:0.6,color:"#FF9F0A",background:"rgba(255,159,10,0.14)",border:"0.5px solid rgba(255,159,10,0.3)",borderRadius:5,padding:"2px 5px"}}>PRESEASON</div>}
+  {hasPick&&<div style={{fontSize:9.5,fontWeight:800,color:IOS.blue,letterSpacing:0.5}}>MY PICK</div>}
+ </div>
  </div>
  {[{name:g.away,abbr:_gAb,logo:(teamLogo(_sportKey,g.away)||espn?.awayLogo),score:_gaSc,record:espn?.awayRecord,ml:_mlA,ring:_gAcRaw},
  {name:g.home,abbr:_gHb,logo:(teamLogo(_sportKey,g.home)||espn?.homeLogo),score:_ghSc,record:espn?.homeRecord,ml:_mlH,ring:_gHcRaw}
@@ -5638,7 +5643,7 @@ function App() {
  odds: american,
  impliedOdds: o.price,
  edge: (o.edge!=null?o.edge:null),
- gameTime: game.commence_time, awayPitcher: game.away_pitcher||null, homePitcher: game.home_pitcher||null,
+ gameTime: game.commence_time, preseason: !!game.preseason, awayPitcher: game.away_pitcher||null, homePitcher: game.home_pitcher||null,
  eventId: game.id, marketKey: "h2h", outcome: o.name, point: null,
  selKey: `${game.id}|h2h|${o.name}|`,
  });
@@ -5655,7 +5660,7 @@ function App() {
  odds: american,
  impliedOdds: o.price,
  edge: (o.edge!=null?o.edge:null),
- gameTime: game.commence_time, awayPitcher: game.away_pitcher||null, homePitcher: game.home_pitcher||null,
+ gameTime: game.commence_time, preseason: !!game.preseason, awayPitcher: game.away_pitcher||null, homePitcher: game.home_pitcher||null,
  eventId: game.id, marketKey: "spreads", outcome: o.name, point: o.point,
  selKey: `${game.id}|spreads|${o.name}|${o.point}`,
  });
@@ -5671,7 +5676,7 @@ function App() {
  odds: american,
  impliedOdds: o.price,
  edge: (o.edge!=null?o.edge:null),
- gameTime: game.commence_time, awayPitcher: game.away_pitcher||null, homePitcher: game.home_pitcher||null,
+ gameTime: game.commence_time, preseason: !!game.preseason, awayPitcher: game.away_pitcher||null, homePitcher: game.home_pitcher||null,
  eventId: game.id, marketKey: "totals", outcome: o.name, point: o.point,
  selKey: `${game.id}|totals|${o.name}|${o.point}`,
  });
@@ -5702,7 +5707,7 @@ function App() {
  } catch(e) { console.warn("ESPN scoreboard fetch failed:", e); }
 
  // Store raw games for the ticker — merge by sport so one sport's fetch doesn't wipe another's
- setTickerGames(prev => { const _fresh = games.map(g => ({ away: g.away_team, home: g.home_team, time: g.commence_time, sport: sportId })); return [...(prev||[]).filter(x => x.sport !== sportId), ..._fresh]; });
+ setTickerGames(prev => { const _fresh = games.map(g => ({ away: g.away_team, home: g.home_team, time: g.commence_time, sport: sportId, preseason: !!g.preseason })); return [...(prev||[]).filter(x => x.sport !== sportId), ..._fresh]; });
 
  // A longshot is ANY bet priced +400 or longer — NOT just a moneyline. This was
  // collected inside the h2h loop only, so a +650 spread, a +900 total or a +1100 prop
