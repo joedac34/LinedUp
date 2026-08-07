@@ -1190,7 +1190,7 @@ export default async function handler(req, res) {
     const onlyLeagueId = req.body?.leagueId;
     const leagues = onlyLeagueId
       ? await sbGet(`leagues?id=eq.${onlyLeagueId}&select=id,sport,current_week,league_type,name`)
-      : await sbGet("leagues?select=id,sport,current_week,league_type,name");
+      : await sbGet("leagues?select=id,sport,current_week,league_type,name&is_demo=eq.false");
     if (!Array.isArray(leagues)) throw new Error("Failed to fetch leagues");
 
     for (const league of leagues) {

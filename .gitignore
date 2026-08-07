@@ -38,3 +38,7 @@ dist-ssr
 .vercel
 .env*
 rls_probe.mjs
+
+*.bak
+*.bak[0-9]
+apply_demo_*.py

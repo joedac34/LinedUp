@@ -5286,6 +5286,15 @@ function App() {
  const [usernameSaving, setUsernameSaving] = useState(false);
  const [usernameError, setUsernameError] = useState("");
  const [authScreen, setAuthScreen] = useState("login");
+ const [demoGate, setDemoGate] = useState(null);
+ const [demoBusy, setDemoBusy] = useState(false);
+ const [demoUpgrade, setDemoUpgrade] = useState(false);
+ const [duEmail, setDuEmail] = useState("");
+ const [duPass, setDuPass] = useState("");
+ const [duName, setDuName] = useState("");
+ const isDemo = !!(user && user.is_anonymous);
+ // Returns true (and opens the paywall sheet) when a guest tries to write.
+ const demoBlock = (what)=>{ if(isDemo){ setDemoGate(what||"do that"); return true; } return false; };
  const [recoveryMode, setRecoveryMode] = useState(false);
  // Forgot-password sheet. Its own overlay rather than an authScreen value, so the
  // sign-in card underneath is untouched and there is nothing to restore on close.
@@ -8685,6 +8694,22 @@ function App() {
 
  const fetchLeagues = async (uid) => {
  setLeaguesLoading(true);
+ // Guest session: not a member of anything, so load the demo league directly.
+ // Read anonymity from the client, not the closed-over flag: fetchLeagues runs
+ // from the auth effect before the isDemo render lands.
+ let _guest = false;
+ try{ const {data:_au} = await supabase.auth.getUser();
+      _guest = !!(_au && _au.user && _au.user.is_anonymous); }catch(e){}
+ if(_guest){
+  const {data:dl} = await supabase.from("leagues").select("*").eq("is_demo",true).limit(1);
+  if(dl && dl.length){
+   const lg = {...dl[0], isCommissioner:false};
+   setRealLeagues([lg]);
+   setActiveLeagueId(lg.id);
+   setIsSoloMode(false);
+  } else { setRealLeagues([]); }
+  setLeaguesLoading(false); return;
+ }
  const {data:members} = await supabase.from("league_members").select("league_id, is_commissioner").eq("user_id", uid);
  if(!members || members.length===0) { setRealLeagues([]); setLeaguesLoading(false); return; }
  const ids = [...new Set(members.map(m=>m.league_id))];
@@ -10463,6 +10488,40 @@ function App() {
   {authScreen==="signup"?<span>{". You must be 18+ to play."}</span>:<><span>{" · "}</span><span onClick={()=>setPreAuthPage("help")} style={{color:"#7EA4F2",fontWeight:700,cursor:"pointer"}}>Help</span></>}
  </div>
 
+ {/* Look around first — anonymous demo entry */}
+ <div style={{position:"relative",width:"100%",marginTop:18}}>
+  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+   <div style={{flex:1,height:1,background:"rgba(255,255,255,0.1)"}}/>
+   <div style={{fontSize:10,fontWeight:800,letterSpacing:1,color:"rgba(255,255,255,0.3)"}}>OR</div>
+   <div style={{flex:1,height:1,background:"rgba(255,255,255,0.1)"}}/>
+  </div>
+  <button disabled={demoBusy} onClick={async ()=>{
+   setDemoBusy(true);
+   try{
+    const { data, error } = await supabase.auth.signInAnonymously();
+    if(error){ alert("Couldn't start the demo: "+error.message); setDemoBusy(false); return; }
+    const uid = data && data.user && data.user.id;
+    if(uid){
+     try{ await supabase.from("users").upsert({id:uid, username:"guest"+uid.slice(0,4)}, {onConflict:"id"}); }catch(e){}
+     const { data: dl } = await supabase.from("leagues").select("id").eq("is_demo",true).limit(1);
+     const lid = dl && dl[0] && dl[0].id;
+     if(lid){ setIsSoloMode(false); setActiveLeagueId(lid); setScreen("home"); }
+     else { alert("The demo is unavailable right now \u2014 try again in a minute."); }
+    }
+   }catch(e){ alert("Couldn't start the demo."); }
+   setDemoBusy(false);
+  }} style={{width:"100%",padding:"14px",borderRadius:12,cursor:"pointer",
+   background:"rgba(255,255,255,0.05)",border:"1px solid rgba(59,111,224,0.5)",
+   color:"#fff",fontSize:15,fontWeight:800,fontFamily:"'Barlow',sans-serif",
+   display:"flex",alignItems:"center",justifyContent:"center",gap:9}}>
+   {demoBusy ? "Starting..." : "Look around first"}
+   {!demoBusy && <span style={{color:"#3B6FE0"}}>{"\u2192"}</span>}
+  </button>
+  <div style={{textAlign:"center",fontSize:11,color:"rgba(255,255,255,0.3)",marginTop:9}}>
+   Browse a live league. No account needed.
+  </div>
+ </div>
+
  {/* Trust line */}
  <div style={{position:"relative",marginTop:22,display:"flex",alignItems:"center",gap:8,fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.32)"}}>
  <span style={{width:6,height:6,borderRadius:"50%",background:"#30D158",boxShadow:"0 0 8px #30D158"}}/>NFL · NBA · MLB · NHL <span style={{color:"rgba(255,255,255,0.2)"}}>·</span> Free to play
@@ -10471,6 +10530,92 @@ function App() {
  )}
 
  {user && <div className="phone"><div className="app-glow"/><div className="app-grain"/><Confetti show={celebrate}/>
+ {isDemo && (
+  <div style={{background:"linear-gradient(90deg,rgba(59,111,224,0.24),rgba(94,92,230,0.16))",
+   borderBottom:"1px solid rgba(59,111,224,0.4)",padding:"8px 14px",display:"flex",
+   alignItems:"center",justifyContent:"space-between",gap:10,position:"relative",zIndex:60}}>
+   <div style={{display:"flex",alignItems:"center",gap:7,fontSize:11.5,fontWeight:800,color:"#cfe0ff"}}>
+    <span style={{width:7,height:7,borderRadius:"50%",background:"#3B6FE0"}}/>
+    DEMO {"\u2014"} you{"'"}re viewing a sample league
+   </div>
+   <button onClick={()=>setDemoGate("save your picks")} style={{background:"#fff",color:"#0b0c10",
+    border:"none",borderRadius:20,padding:"5px 12px",fontSize:11,fontWeight:900,
+    fontFamily:"'Barlow',sans-serif",cursor:"pointer",whiteSpace:"nowrap"}}>Sign up free</button>
+  </div>
+ )}
+ {demoUpgrade && (
+  <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",backdropFilter:"blur(4px)",
+   display:"flex",alignItems:"center",justifyContent:"center",zIndex:9100,padding:22}}>
+   <div style={{width:"100%",maxWidth:380,background:"linear-gradient(180deg,#191b21,#0d0e12)",
+    border:"1px solid rgba(255,255,255,0.14)",borderRadius:20,padding:22}}>
+    <div style={{fontSize:19,fontWeight:900,textAlign:"center"}}>Create your account</div>
+    <div style={{fontSize:12,color:"rgba(255,255,255,0.5)",textAlign:"center",marginTop:6,marginBottom:16}}>
+     Free. Takes about ten seconds.
+    </div>
+    <input value={duName} onChange={e=>setDuName(e.target.value)} placeholder="Username"
+     style={{width:"100%",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",
+      borderRadius:12,padding:"13px 14px",fontSize:14,color:"#fff",marginBottom:10,
+      fontFamily:"'Barlow',sans-serif",boxSizing:"border-box"}}/>
+    <input value={duEmail} onChange={e=>setDuEmail(e.target.value)} placeholder="Email" type="email"
+     style={{width:"100%",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",
+      borderRadius:12,padding:"13px 14px",fontSize:14,color:"#fff",marginBottom:10,
+      fontFamily:"'Barlow',sans-serif",boxSizing:"border-box"}}/>
+    <input value={duPass} onChange={e=>setDuPass(e.target.value)} placeholder="Password" type="password"
+     style={{width:"100%",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",
+      borderRadius:12,padding:"13px 14px",fontSize:14,color:"#fff",marginBottom:14,
+      fontFamily:"'Barlow',sans-serif",boxSizing:"border-box"}}/>
+    <button onClick={async ()=>{
+     if(!duName.trim()){ alert("Please enter a username."); return; }
+     if(!duEmail.trim() || !duPass){ alert("Email and password are required."); return; }
+     const { error } = await supabase.auth.updateUser({ email: duEmail.trim(), password: duPass });
+     if(error){ alert(error.message); return; }
+     try{
+      const myRef = Math.random().toString(36).substring(2,8).toUpperCase();
+      await supabase.from("users").upsert({id:user.id, email:duEmail.trim(),
+       username:duName.trim(), referral_code:myRef}, {onConflict:"id"});
+     }catch(e){}
+     try{ posthog.capture("demo_converted"); }catch(e){}
+     setDemoUpgrade(false);
+     alert("Account created. Check your email to confirm your address.");
+    }} style={{width:"100%",padding:14,borderRadius:12,border:"none",fontSize:15,fontWeight:800,
+     fontFamily:"'Barlow',sans-serif",cursor:"pointer",
+     background:"linear-gradient(135deg,#0A84FF,#5E5CE6)",color:"#fff"}}>Create account</button>
+    <div onClick={()=>setDemoUpgrade(false)} style={{textAlign:"center",fontSize:12.5,
+     color:"rgba(255,255,255,0.3)",marginTop:13,cursor:"pointer",fontWeight:700}}>Cancel</div>
+   </div>
+  </div>
+ )}
+ {demoGate && (
+  <div onClick={(e)=>{ if(e.target===e.currentTarget) setDemoGate(null); }}
+   style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.72)",backdropFilter:"blur(3px)",
+    display:"flex",alignItems:"flex-end",zIndex:9000}}>
+   <div style={{width:"100%",maxWidth:480,margin:"0 auto",
+    background:"linear-gradient(180deg,#191b21,#0d0e12)",borderTopLeftRadius:24,
+    borderTopRightRadius:24,borderTop:"1px solid rgba(255,255,255,0.14)",
+    padding:"10px 22px calc(env(safe-area-inset-bottom) + 30px)"}}>
+    <div style={{width:38,height:4,borderRadius:3,background:"rgba(255,255,255,0.22)",margin:"0 auto 16px"}}/>
+    <div style={{fontSize:20,fontWeight:900,textAlign:"center",letterSpacing:"-0.3px"}}>
+     Create an account to {demoGate}
+    </div>
+    <div style={{fontSize:13,color:"rgba(255,255,255,0.6)",textAlign:"center",marginTop:7,lineHeight:1.55}}>
+     You{"'"}re browsing a demo league. Sign up free to make picks that actually count.
+    </div>
+    <div style={{background:"rgba(48,209,88,0.09)",border:"1px solid rgba(48,209,88,0.28)",
+     borderRadius:12,padding:"11px 13px",marginTop:15,display:"flex",gap:9,alignItems:"flex-start"}}>
+     <span style={{color:"#30D158",fontSize:14}}>{"\u2713"}</span>
+     <div style={{fontSize:11.5,color:"#B8E6C4",lineHeight:1.5}}>
+      Everything you{"'"}ve looked at stays put {"\u2014"} same session, nothing to redo.
+     </div>
+    </div>
+    <button onClick={()=>{ setDemoGate(null); setDemoUpgrade(true); }}
+     style={{width:"100%",padding:14,borderRadius:12,border:"none",marginTop:15,
+      fontSize:15,fontWeight:800,fontFamily:"'Barlow',sans-serif",cursor:"pointer",
+      background:"linear-gradient(135deg,#0A84FF,#5E5CE6)",color:"#fff"}}>Create free account</button>
+    <div onClick={()=>setDemoGate(null)} style={{textAlign:"center",fontSize:12.5,
+     color:"rgba(255,255,255,0.3)",marginTop:13,cursor:"pointer",fontWeight:700}}>Keep looking around</div>
+   </div>
+  </div>
+ )}
  {isOffline && <div style={{position:"fixed",top:0,left:0,right:0,zIndex:9500,background:"rgba(255,159,10,0.14)",backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",borderBottom:"0.5px solid rgba(255,159,10,0.35)",padding:"calc(var(--sa-top) + 8px) 16px 8px",display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
   <span style={{width:6,height:6,borderRadius:"50%",background:IOS.orange,flexShrink:0}}/>
   <span style={{fontSize:11.5,fontWeight:700,color:IOS.orange}}>You’re offline — showing what we’ve got. We’ll reconnect automatically.</span>
@@ -11819,6 +11964,7 @@ function App() {
  if(slot.isParlay ? (slot.parlayLegs||[]).length<2 : !slot.bet) return;
  if(slotStarted(slot)){ alert("That game has already started — this pick can no longer be locked."); return; }
  if(!user){ alert("Sign in to lock picks."); return; }
+ if(demoBlock("lock this pick")) return;
  const rows = buildSlotRows(slot, idx, activePicks);
  const { data, error } = await supabase.from("picks").insert(rows).select("id");
  if(error){ alert("Couldn’t lock that pick: "+error.message); return; }
@@ -14662,6 +14808,7 @@ function App() {
    const nameOf=(x)=> x.sl.isParlay ? ((x.sl.parlayLegs||[]).length+"-leg parlay") : ((x.sl.bet&&x.sl.bet.pick)||"Pick");
    const lockAll = async ()=>{
      if(!user){ alert("Sign in to lock picks."); return; }
+     if(demoBlock("lock these picks")) return;
      const _tsz=activeLeague.target_size||activeLeague.max_members||8;
      if(!isSoloMode && leagueMembers.length>0 && leagueMembers.length<_tsz){ alert("Your league hasn't started yet \u2014 picks open once all "+_tsz+" seats are filled."); return; }
      const eligible = staged.filter(x=> x.sl.mult!=null && !slotStarted(x.sl));

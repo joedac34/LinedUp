@@ -63,7 +63,8 @@ export default async function handler(req, res) {
     const { data: leagues, error } = await supabase
       .from("leagues")
       .select("id, current_week, season_weeks, season_start, league_type, playoffs_enabled, playoff_size, champion_id")
-      .not("season_start", "is", null);
+      .not("season_start", "is", null)
+      .eq("is_demo", false);
     if (error) throw error;
 
     const advanced = [];
