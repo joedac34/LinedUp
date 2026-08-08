@@ -163,8 +163,8 @@ export default async function handler(req, res) {
   const rows = [];
   for (const p of picks) {
     const selkey = `${p.sport}|${p.game}|${p.label}`;
-    const body = `${p.game}: ${p.label} at ${p.bestOdds} — +${p.evPct}% edge (fair ${p.fairPct}%, ${p.bestBook})`;
-    const data = { selkey, selection: p.label, game: p.game, sport: p.sport, betType: p.betType, market: p.market, evPct: p.evPct, fairPct: p.fairPct, bestOdds: p.bestOdds, bestBook: p.bestBook, commence_time: p.commence_time };
+    const body = `${p.game}: ${p.label} at ${p.bestOdds} — +${p.evPct}% edge (fair ${p.fairPct}%)`;
+    const data = { selkey, selection: p.label, game: p.game, sport: p.sport, betType: p.betType, market: p.market, evPct: p.evPct, fairPct: p.fairPct, bestOdds: p.bestOdds, commence_time: p.commence_time };
     for (const uid of recipients) {
       if (sent.has(`${uid}|${selkey}`)) continue;
       rows.push({ user_id: uid, type: "plok_call", title: "Plok's Call", body, data, read_at: null, created_at: nowIso });

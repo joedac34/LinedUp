@@ -415,9 +415,9 @@ function fmtCand(c) {
   const sign = c.evPct >= 0 ? "+" : "";
   if (c.kind === "prop") {
     const basis = c.basis === "model" ? `model ${c.modelPct}% (proj ${c.mu} vs line ${c.line})` : "price-only";
-    return `- ${c.label} [PROP ${c.tier}]: EV ${sign}${c.evPct}% | ${basis} | market-fair ${c.fairPct}% | best ${c.bestOdds} (${c.bestBook}) | ${c.books} books${c.suspicious ? " | FLAG >6%" : ""}`;
+    return `- ${c.label} [PROP ${c.tier}]: EV ${sign}${c.evPct}% | ${basis} | market-fair ${c.fairPct}% | best ${c.bestOdds} | ${c.books} books${c.suspicious ? " | FLAG >6%" : ""}`;
   }
-  return `- ${c.label} [LINE]: EV ${sign}${c.evPct}% | fair ${c.fairPct}% | best ${c.bestOdds} (${c.bestBook}) | ${c.books} books${c.suspicious ? " | FLAG >6%" : ""}`;
+  return `- ${c.label} [LINE]: EV ${sign}${c.evPct}% | fair ${c.fairPct}% | best ${c.bestOdds} | ${c.books} books${c.suspicious ? " | FLAG >6%" : ""}`;
 }
 async function generate(game, cands) {
   const dataBlock = cands.length ? cands.map(fmtCand).join("\n") : "(no side cleared the value threshold across books)";

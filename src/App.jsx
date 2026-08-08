@@ -19210,7 +19210,7 @@ function App() {
 
 {gcTab==="od" && (<>
    {((odds.ml&&odds.ml.length>0)||(odds.spread&&odds.spread.length>0)||(odds.ou&&odds.ou.length>0))?(<>
-   <Sec t="DraftKings Odds"/>
+   <Sec t="Odds"/>
    <div style={{background:_card.background,border:_card.border,borderRadius:RAD.lg,overflow:"hidden",display:"flex"}}>
    {[{label:"Moneyline",items:(odds.ml||[]).slice(0,2)},{label:"Spread",items:(odds.spread||[]).slice(0,2)},{label:"Total",items:(odds.ou||[]).slice(0,2)}].map((col,ci)=>(
    <div key={ci} style={{flex:1,padding:"9px 4px 11px",borderLeft:ci>0?"0.5px solid rgba(255,255,255,0.06)":"none"}}>
