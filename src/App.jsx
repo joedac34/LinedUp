@@ -1082,6 +1082,11 @@ const ageFrom = (ymd) => {
   return age;
 };
 const MIN_AGE = 18;
+// Google OAuth client IDs. The iOS one is what the native SDK authenticates with;
+// the web one is what Supabase validates the token audience against. Both must be
+// listed in Supabase > Auth > Providers > Google > Client IDs or the token is rejected.
+const GOOGLE_IOS_CLIENT_ID = import.meta.env.VITE_GOOGLE_IOS_CLIENT_ID || "";
+const GOOGLE_WEB_CLIENT_ID = import.meta.env.VITE_GOOGLE_WEB_CLIENT_ID || "";
 const AGE_BLOCK_KEY = "picklock_age_block";
 
 const ordSuffix = (n)=> (n%100>=11&&n%100<=13) ? "th" : (n%10===1?"st":n%10===2?"nd":n%10===3?"rd":"th");
@@ -7114,6 +7119,51 @@ function App() {
    }catch(e){}
  };
 
+ const [oauthBusy, setOauthBusy] = useState("");
+ const _socialInit = useRef(false);
+ const oauthSignIn = async (provider) => {
+   if(oauthBusy) return;
+   setOauthBusy(provider);
+   try{
+     if(IS_NATIVE){
+       const SL = (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.SocialLogin) || null;
+       if(!SL) throw new Error("Social sign-in is unavailable in this build.");
+       // initialize() is idempotent but costs a bridge call, so it runs once per
+       // session. GOOGLE_IOS_CLIENT_ID must be the iOS OAuth client from Google
+       // Cloud (not the web one) \u2014 Google\u2019s native SDK rejects a web client ID.
+       if(!_socialInit.current){
+         await SL.initialize({
+           google:{ iOSClientId: GOOGLE_IOS_CLIENT_ID, webClientId: GOOGLE_WEB_CLIENT_ID },
+           apple:{ clientId: "com.dacunto.picklock" },
+         });
+         _socialInit.current = true;
+       }
+       const res = await SL.login({ provider, options:{ scopes:["email","profile"] } });
+       // Both providers surface an OIDC JWT at result.idToken (verified against
+       // definitions.d.ts). Google can also answer with an "offline" shape that
+       // carries only a serverAuthCode \u2014 no token to hand Supabase, so it is an error.
+       const tok = res && res.result && res.result.idToken;
+       if(!tok) throw new Error("No identity token was returned.");
+       const { error } = await supabase.auth.signInWithIdToken({ provider, token: tok });
+       if(error) throw error;
+     } else {
+       const { error } = await supabase.auth.signInWithOAuth({
+         provider,
+         options:{ redirectTo: window.location.origin },
+       });
+       if(error) throw error;
+       return; // web redirects away; nothing after this runs
+     }
+   }catch(e){
+     // A user tapping Cancel on the native sheet is not an error worth alerting on.
+     const m = String((e && (e.message || e.error)) || e || "");
+     if(!/cancel|1001|popup_closed|user_cancel/i.test(m)){
+       try{ console.error("[picklock] oauth " + provider, e); }catch(_){}
+       alert("Could not sign in with " + (provider==="apple"?"Apple":"Google") + ": " + m);
+     }
+   }finally{ setOauthBusy(""); }
+ };
+
  const subscribeToPushNative = async () => {
    const P = _pushPlugin();
    if(!P){ alert("Push isn\u2019t available in this build."); return false; }
@@ -10118,6 +10168,16 @@ function App() {
  .auth-input{width:100%;background:rgba(255,255,255,0.045);border:0.5px solid rgba(255,255,255,0.12);border-radius:13px;padding:15px 16px;color:#fff;font-size:15px;font-family:'Barlow',sans-serif;outline:none;transition:border-color .18s, box-shadow .18s;box-sizing:border-box;}
  .auth-input::placeholder{color:rgba(255,255,255,0.32);}
  .auth-input:focus{border-color:rgba(10,132,255,0.7);box-shadow:0 0 0 3px rgba(10,132,255,0.14);}
+ .auth-oauth{width:100%;border-radius:13px;padding:14px;font-size:15px;font-weight:800;cursor:pointer;
+   font-family:'Barlow',sans-serif;display:flex;align-items:center;justify-content:center;gap:9px;
+   transition:transform .12s,opacity .2s;}
+ .auth-oauth:active{transform:scale(0.985);}
+ .auth-oauth[disabled]{opacity:0.55;}
+ /* Apple's brand guidelines require their button be at least as prominent as any
+    other provider, in their own black/white styling. Google's likewise wants the
+    white treatment with their mark. */
+ .auth-oauth.apple{background:#fff;color:#000;border:none;}
+ .auth-oauth.google{background:#fff;color:#1F1F1F;border:none;}
  .auth-cta{width:100%;border:none;border-radius:13px;padding:16px;font-size:16px;font-weight:800;cursor:pointer;font-family:'Barlow',sans-serif;color:#fff;background:linear-gradient(135deg,#0A84FF,#5E5CE6);box-shadow:0 8px 26px rgba(10,132,255,0.4);transition:transform .12s, box-shadow .2s;letter-spacing:0.2px;}
  .auth-cta:active{transform:scale(0.985);box-shadow:0 4px 16px rgba(10,132,255,0.3);}
  `;
@@ -10430,6 +10490,22 @@ function App() {
  {["login","signup"].map(t=>(
  <div key={t} onClick={()=>setAuthScreen(t)} style={{flex:1,textAlign:"center",padding:"10px",borderRadius:RAD.sm,fontSize:14,fontWeight:800,cursor:"pointer",background:authScreen===t?"linear-gradient(135deg,rgba(10,132,255,0.95),rgba(94,92,230,0.85))":"transparent",color:authScreen===t?"#fff":"rgba(255,255,255,0.45)",boxShadow:authScreen===t?"0 4px 14px rgba(10,132,255,0.3)":"none",transition:"all .2s"}}>{t==="login"?"Sign In":"Sign Up"}</div>
  ))}
+ </div>
+ {/* Apple first by requirement: their HIG says Sign in with Apple must appear no
+     lower than other third-party options. Both sit ABOVE the email form so the
+     one-tap paths lead. */}
+ <button className="auth-oauth apple" disabled={!!oauthBusy} onClick={()=>{ haptic("select"); oauthSignIn("apple"); }} style={{marginBottom:9}}>
+   <svg width="16" height="16" viewBox="0 0 24 24" fill="#000" aria-hidden="true"><path d="M16.4 12.8c0-2.4 2-3.6 2.1-3.6-1.1-1.7-2.9-1.9-3.5-1.9-1.5-.2-2.9.9-3.6.9-.8 0-1.9-.9-3.1-.8-1.6 0-3 .9-3.8 2.3-1.7 2.9-.4 7.1 1.2 9.5.8 1.1 1.7 2.4 3 2.4 1.2 0 1.6-.8 3.1-.8s1.8.8 3.1.7c1.3 0 2.1-1.2 2.9-2.3.9-1.3 1.3-2.6 1.3-2.7-.1 0-2.6-1-2.7-3.7zM14 5.4c.7-.8 1.1-1.9 1-3-.9 0-2.1.6-2.8 1.4-.6.7-1.1 1.9-1 3 1 .1 2.1-.5 2.8-1.4z"/></svg>
+   {oauthBusy==="apple"?"Signing in\u2026":"Continue with Apple"}
+ </button>
+ <button className="auth-oauth google" disabled={!!oauthBusy} onClick={()=>{ haptic("select"); oauthSignIn("google"); }} style={{marginBottom:14}}>
+   <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true"><path fill="#4285F4" d="M45 24c0-1.6-.1-2.7-.4-4H24v7.5h12c-.2 2-1.6 5-4.5 7l6.9 5.3C42.5 36.2 45 30.6 45 24z"/><path fill="#34A853" d="M24 46c5.9 0 10.9-2 14.5-5.3l-6.9-5.3c-1.9 1.3-4.4 2.2-7.6 2.2-5.8 0-10.7-3.9-12.5-9.1l-7.1 5.5C8 41.1 15.4 46 24 46z"/><path fill="#FBBC05" d="M11.5 28.5c-.5-1.4-.7-2.9-.7-4.5s.3-3.1.7-4.5l-7.1-5.5C2.9 17 2 20.4 2 24s.9 7 2.4 10z"/><path fill="#EA4335" d="M24 10.5c3.3 0 6.2 1.1 8.5 3.3l6.1-6.1C34.9 4.3 29.9 2 24 2 15.4 2 8 6.9 4.4 14l7.1 5.5c1.8-5.2 6.7-9 12.5-9z"/></svg>
+   {oauthBusy==="google"?"Signing in\u2026":"Continue with Google"}
+ </button>
+ <div style={{display:"flex",alignItems:"center",gap:10,margin:"2px 0 14px"}}>
+   <div style={{flex:1,height:1,background:"rgba(255,255,255,0.1)"}}/>
+   <div style={{fontSize:10,fontWeight:800,letterSpacing:1,color:"rgba(255,255,255,0.3)"}}>OR</div>
+   <div style={{flex:1,height:1,background:"rgba(255,255,255,0.1)"}}/>
  </div>
  <input id="auth-email" className="auth-input" type="email" placeholder="Email" style={{marginBottom:11}}/>
  <input id="auth-password" className="auth-input" type="password" placeholder="Password" style={{marginBottom:11}}/>
