@@ -216,6 +216,18 @@ const WEEK_MS_C = 7*24*60*60*1000;
 // Slot types that need their OWN game each week (you cannot take both sides of one
 // game's line). Props/longshots/wildcards can share a game, so they only need 1.
 const DISTINCT_GAME_TYPES = ["ml","spread","ou","ml_h1","spread_h1","ou_h1","ml_f5","spread_f5","ou_f5","ml_f3","spread_f3","ou_f3","yrfi","nrfi"];
+// ── Season end / archive ──────────────────────────────────────────────────────
+// A league is COMPLETE when the server stamped leagues.completed_at (advance.js /
+// grade.js own that write; the client never sets it). A completed league stays in
+// the pills and switcher for a 14-day recap window, then moves to "Past leagues" —
+// or immediately if THIS member archived it (league_members.archived_at, per-member,
+// written through the archive_league RPC). realLeagues keeps every league so past
+// seasons stay openable read-only; day-to-day surfaces render the filtered view.
+const RECAP_MS = 14*24*60*60*1000;
+const lgCompleted = (l)=>!!(l&&l.completed_at);
+const lgPast = (l)=>lgCompleted(l)&&(!!l.archivedByMe || (Date.now()-Date.parse(l.completed_at))>RECAP_MS);
+const lgEndedLabel = (l)=>{ const t=Date.parse(l&&l.completed_at); if(isNaN(t)) return "Ended"; return "Ended "+new Date(t).toLocaleDateString(undefined,{month:"short",day:"numeric"}); };
+const ordinal = (n)=>{ const s=["th","st","nd","rd"], v=n%100; return n+(s[(v-20)%10]||s[v]||s[0]); };
 // Games available for a sport within a given week window.
 function gamesInWeekFor(sportId, wkStart, wkEnd){
   const phases = SEASON_WINDOWS[sportId] || [];
@@ -5411,7 +5423,7 @@ function App() {
   if(isSoloMode) return;
   if(!realLeagues || !realLeagues.length) return;
   if(realLeagues.some(l=>l.id===activeLeagueId)) return;
-  setActiveLeagueId(realLeagues[0].id);   // empty, stale or deleted -> first real league
+  setActiveLeagueId((realLeagues.find(l=>!lgPast(l))||realLeagues[0]).id);   // empty, stale or deleted -> first live league (past ones only by explicit tap)
  }, [realLeagues, activeLeagueId, isSoloMode]);
  // Which league+week the entry fetches have already run for, so the retry effect below
  // fires once and only once per league+week.
@@ -6893,6 +6905,8 @@ function App() {
  const [selectedGradeMember, setSelectedGradeMember] = useState(null); // userId of member being graded
  const [showLeaguesList, setShowLeaguesList] = useState(false);
  const [showNewLeague, setShowNewLeague] = useState(false);
+ const [pastOpen, setPastOpen] = useState(false);          // "Past leagues" group in the switcher
+ const [trophyRows, setTrophyRows] = useState(null);       // profile trophy case (null = not loaded)
  const [newLeagueSport, setNewLeagueSport] = useState(null); // kept for backwards compat
  const [newLeagueSports, setNewLeagueSports] = useState([]); // multi-sport array
  const toggleNewLeagueSport = (id) => {
@@ -8768,14 +8782,15 @@ function App() {
   } else { setRealLeagues([]); }
   setLeaguesLoading(false); return;
  }
- const {data:members} = await supabase.from("league_members").select("league_id, is_commissioner").eq("user_id", uid);
+ const {data:members} = await supabase.from("league_members").select("league_id, is_commissioner, archived_at").eq("user_id", uid);
  if(!members || members.length===0) { setRealLeagues([]); setLeaguesLoading(false); return; }
  const ids = [...new Set(members.map(m=>m.league_id))];
  const {data:leagues} = await supabase.from("leagues").select("*").in("id", ids);
  if(leagues && leagues.length > 0) {
  const mapped = leagues.filter(lg=>lg.league_type!=="solo").map(lg=>({
  ...lg,
- isCommissioner: members.find(m=>m.league_id===lg.id)?.is_commissioner||false
+ isCommissioner: members.find(m=>m.league_id===lg.id)?.is_commissioner||false,
+ archivedByMe: members.find(m=>m.league_id===lg.id)?.archived_at||null
  }));
  setRealLeagues(mapped);
  if(mapped.length>0){
@@ -8783,8 +8798,9 @@ function App() {
  // app re-focus was snapping the user back to whatever league sorted first).
  let savedId=null; try{ savedId=localStorage.getItem("picklock_active_league"); }catch(e){}
  const valid=(id)=>id&&mapped.some(l=>l.id===id);
+const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  setActiveLeagueId(prev=>{
- const target = valid(prev) ? prev : (valid(savedId) ? savedId : mapped[0].id);
+ const target = valid(prev) ? prev : (valid(savedId) ? savedId : _firstLive.id);
  const tl = mapped.find(l=>l.id===target) || mapped[0];
  fetchMyPicks(tl.id, tl.current_week||tl.week||1, uid, tl);
  return target;
@@ -8793,6 +8809,36 @@ function App() {
  } else { setRealLeagues([]); }
  setLeaguesLoading(false);
  };
+
+ useEffect(()=>{
+  if(screen!=="profile"||!user||!user.id){ return; }
+  const done=realLeagues.filter(l=>lgCompleted(l));
+  if(!done.length){ setTrophyRows([]); return; }
+  (async()=>{ try{
+   const ids=done.map(l=>l.id);
+   const [{data:_mem},{data:_wins},{data:_mus}] = await Promise.all([
+     supabase.from("league_members").select("league_id,user_id").in("league_id",ids),
+     supabase.from("picks").select("league_id,user_id,result,points_earned").in("league_id",ids),
+     supabase.from("matchups").select("league_id,winner_id,bracket_match_id").in("league_id",ids),
+   ]);
+   const rows=done.map(l=>{
+     const mem=(_mem||[]).filter(m=>m.league_id===l.id).map(m=>m.user_id);
+     const pts={}, myRec={w:0,l:0}; mem.forEach(id=>pts[id]=0);
+     for(const pk of (_wins||[])){ if(pk.league_id!==l.id) continue;
+       if(pk.result==="W"&&pts[pk.user_id]!=null) pts[pk.user_id]+=parseFloat(pk.points_earned||0);
+       if(pk.user_id===user.id){ if(pk.result==="W") myRec.w++; else if(pk.result==="L") myRec.l++; } }
+     const wins={}; mem.forEach(id=>wins[id]=0);
+     for(const m of (_mus||[])){ if(m.league_id!==l.id) continue; if(String(m.bracket_match_id||"").startsWith("PW")) continue; if(m.winner_id&&wins[m.winner_id]!=null) wins[m.winner_id]++; }
+     const byWins=(l.league_type||"h2h")==="h2h";
+     const order=mem.slice().sort((a,b)=> byWins ? ((wins[b]-wins[a])||(pts[b]-pts[a])) : (pts[b]-pts[a]));
+     const rank=order.indexOf(user.id)+1;
+     return { id:l.id, name:l.name, sport:l.sport, sports:l.sports, ended:l.completed_at,
+       isChamp:l.champion_id===user.id, rank:rank>0?rank:null, total:mem.length,
+       w:myRec.w, l:myRec.l, pts:parseFloat((pts[user.id]||0).toFixed(1)) };
+   }).sort((a,b)=>Date.parse(b.ended||0)-Date.parse(a.ended||0));
+   setTrophyRows(rows);
+  }catch(e){ setTrophyRows([]); } })();
+ }, [screen, user&&user.id, realLeagues]);
 
  const gradePickResult = (leagueId, memberIdx, pickIdx, result) => {
  setGradingData(prev => {
@@ -11256,7 +11302,7 @@ function App() {
  
  {/* League toggle - only show in leagues mode */}
  {homeMode==="leagues" && <div style={{display:"flex",gap:6,marginTop:0,marginBottom:2,overflowX:"auto",paddingBottom:2}}>
- {realLeagues.map(lg=>{
+ {realLeagues.filter(l=>!lgPast(l)).map(lg=>{
  const sp=SPORTS[lg.sport];
  const isActive=activeLeagueId===lg.id;
  return (
@@ -11274,7 +11320,7 @@ function App() {
  </div>
  <div>
  <div style={{fontSize:12,fontWeight:700,color:isActive?IOS.blue:"rgba(255,255,255,0.6)",letterSpacing:-0.2}}>{lg.name}</div>
- <div style={{fontSize:10,color:"rgba(255,255,255,0.35)",marginTop:1}}>Wk {lg.current_week||lg.week||1} · {sp.label}{lg.privacy==="public"?" · Public":""}</div>
+ <div style={{fontSize:10,color:lgCompleted(lg)?"rgba(255,214,10,0.75)":"rgba(255,255,255,0.35)",marginTop:1}}>{lgCompleted(lg)?"FINAL":("Wk "+(lg.current_week||lg.week||1))} · {sp.label}{lg.privacy==="public"?" · Public":""}</div>
  </div>
  {isActive&&<div style={{width:6,height:6,borderRadius:"50%",background:IOS.blue,marginLeft:2}}/>}
  </div>
@@ -12044,6 +12090,7 @@ function App() {
  const lockSlot = async (idx)=>{
  const slot = activePicks[idx];
  if(!slot||!slot.mult||slot.committed) return;
+ if(!isSoloMode && lgCompleted(activeLeague)){ alert("This season is complete \u2014 the league is read-only."); return; }
  { const _tsz=activeLeague.target_size||activeLeague.max_members||8; if(!isSoloMode && leagueMembers.length>0 && leagueMembers.length<_tsz){ alert("Your league hasn't started yet — it needs all "+_tsz+" players first. You can make picks in Solo Mode until then."); return; } }
  if(slot.isParlay ? (slot.parlayLegs||[]).length<2 : !slot.bet) return;
  if(slotStarted(slot)){ alert("That game has already started — this pick can no longer be locked."); return; }
@@ -13059,6 +13106,7 @@ function App() {
  // Solo is a full resubmit; leagues lock ADDITIVELY so already-locked picks
  // (whose games may have started/graded) are never wiped or re-graded.
  if(isSoloMode){ await supabase.from("picks").delete().eq("league_id", activeLeague.id).eq("user_id", user.id).eq("week", week); }
+ if(!isSoloMode && lgCompleted(activeLeague)){ alert("This season is complete \u2014 the league is read-only."); return; }
  const picksToSave = []; const lockedIdx = [];
  activePicks.forEach((slot, slotIdx)=>{
  if(!slot.mult) return;
@@ -14903,6 +14951,7 @@ function App() {
    const lockAll = async ()=>{
      if(!user){ alert("Sign in to lock picks."); return; }
      if(demoBlock("lock these picks")) return;
+     if(!isSoloMode && lgCompleted(activeLeague)){ alert("This season is complete \u2014 the league is read-only."); return; }
      const _tsz=activeLeague.target_size||activeLeague.max_members||8;
      if(!isSoloMode && leagueMembers.length>0 && leagueMembers.length<_tsz){ alert("Your league hasn't started yet \u2014 picks open once all "+_tsz+" seats are filled."); return; }
      const eligible = staged.filter(x=> x.sl.mult!=null && !slotStarted(x.sl));
@@ -16192,23 +16241,50 @@ function App() {
    {/* Dropdown list */}
    {leagueSubTab==="dropdown"&&(
    <div style={{background:IOS.bg2,border:`0.5px solid rgba(10,132,255,0.3)`,borderRadius:RAD.md,overflow:"hidden",marginTop:4}}>
-     {realLeagues.map((l,i)=>{
+     {realLeagues.filter(x=>!lgPast(x)).map((l,i,_arr)=>{
        const lsp=SPORTS[l.sport];
        const isSelected=l.id===activeLeagueId;
        return (
-       <div key={l.id} className="pl-reveal" onClick={()=>{ if(l.paid===false && user && l.commissioner_id===user.id){ startLeagueCheckout(l.id); return; } setActiveLeagueId(l.id);setLeagueSubTab("overview");setLmWeek(null);}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 14px",borderBottom:i<realLeagues.length-1?`0.5px solid ${IOS.sep}`:"none",background:isSelected?"rgba(10,132,255,0.08)":"transparent",cursor:"pointer"}}>
+       <div key={l.id} className="pl-reveal" onClick={()=>{ if(l.paid===false && user && l.commissioner_id===user.id){ startLeagueCheckout(l.id); return; } setActiveLeagueId(l.id);setLeagueSubTab("overview");setLmWeek(null);}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 14px",borderBottom:i<_arr.length-1?`0.5px solid ${IOS.sep}`:"none",background:isSelected?"rgba(10,132,255,0.08)":"transparent",cursor:"pointer"}}>
          <div>
            <div style={{display:"flex",alignItems:"center",gap:6}}>
              <div style={{fontSize:13,fontWeight:700,color:isSelected?IOS.blue:"#fff"}}>{l.name}</div>{unreadByLeague[l.id]>0&&<span style={{minWidth:16,height:16,borderRadius:RAD.sm,background:IOS.pink,color:"#fff",fontSize:10,fontWeight:800,display:"inline-flex",alignItems:"center",justifyContent:"center",padding:"0 4px"}}>{unreadByLeague[l.id]>9?"9+":unreadByLeague[l.id]}</span>}
              {l.privacy==="public"&&<div style={{fontSize:8,fontWeight:700,color:"#30D158",background:"rgba(48,209,88,0.1)",border:"0.5px solid rgba(48,209,88,0.25)",borderRadius:4,padding:"1px 5px",letterSpacing:.3}}>PUBLIC</div>}
              {l.privacy!=="public"&&<div style={{fontSize:8,fontWeight:700,color:"rgba(255,255,255,0.3)",background:"rgba(255,255,255,0.05)",border:EDGE.hair2,borderRadius:4,padding:"1px 5px",letterSpacing:.3}}>PRIVATE</div>}{l.paid===false&&<div style={{fontSize:8,fontWeight:800,color:"#FF9F0A",background:"rgba(255,159,10,0.14)",border:"0.5px solid rgba(255,159,10,0.35)",borderRadius:4,padding:"1px 5px",letterSpacing:.3}}>UNLOCK ${leaguePrice(l.season_weeks,(parseSlotConfig(l.slot_config)||[]).length)}</div>}
            </div>
-           <div style={{fontSize:10,color:IOS.label3,marginTop:1}}>{lsp.label} · Wk {l.current_week||1}</div>
+           <div style={{fontSize:10,color:IOS.label3,marginTop:1}}>{lsp.label} · {lgCompleted(l)?"FINAL":("Wk "+(l.current_week||1))}</div>
          </div>
          {isSelected&&<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
        </div>
        );
      })}
+     {(()=>{ const _past=realLeagues.filter(x=>lgPast(x)); if(!_past.length) return null; return (<>
+     <div onClick={()=>setPastOpen(v=>!v)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 14px",cursor:"pointer",background:"rgba(255,255,255,0.02)",borderTop:`0.5px solid ${IOS.sep}`}}>
+       <div style={{display:"flex",alignItems:"center",gap:7,fontSize:11,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:IOS.label3}}>
+         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+         <span>Past leagues</span>
+       </div>
+       <div style={{display:"flex",alignItems:"center",gap:8}}>
+         <span style={{minWidth:17,height:17,borderRadius:5,background:"rgba(255,255,255,0.08)",color:"rgba(255,255,255,0.5)",fontSize:10,fontWeight:800,display:"inline-flex",alignItems:"center",justifyContent:"center",padding:"0 4px"}}>{_past.length}</span>
+         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{transform:pastOpen?"rotate(180deg)":"none",transition:"transform .15s"}}><polyline points="6 9 12 15 18 9"/></svg>
+       </div>
+     </div>
+     {pastOpen&&_past.map((l,i)=>{
+       const lsp=SPORTS[l.sport]||{label:(l.sport||"").toUpperCase()};
+       const won=l.champion_id===(user&&user.id);
+       return (
+       <div key={l.id} onClick={()=>{ setActiveLeagueId(l.id); setLeagueSubTab("overview"); setLmWeek(null); }} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 14px",borderTop:`0.5px solid ${IOS.sep}`,opacity:0.85,cursor:"pointer"}}>
+         <div>
+           <div style={{fontSize:13,fontWeight:700,color:"#fff"}}>{l.name}</div>
+           <div style={{fontSize:10,color:IOS.label3,marginTop:1}}>{lsp.label} · {lgEndedLabel(l)}</div>
+         </div>
+         {won
+           ? <div style={{display:"flex",alignItems:"center",gap:5,fontSize:10,fontWeight:700,color:IOS.yellow}}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="6"/><path d="M9 13l-2 8 5-3 5 3-2-8"/></svg><span>Champ</span></div>
+           : <div style={{fontSize:8,fontWeight:700,color:IOS.purple,background:"rgba(191,90,242,0.12)",border:"0.5px solid rgba(191,90,242,0.35)",borderRadius:4,padding:"1px 5px",letterSpacing:.3}}>FINAL</div>}
+       </div>
+       );
+     })}
+     </>);})()}
    </div>
    )}
    </>
@@ -16229,6 +16305,52 @@ function App() {
  {/* ── OVERVIEW TAB ── */}
  {lg && leagueSubTab==="overview" && (
  <div style={{padding:"12px 16px 20px"}}>
+   {/* Season-complete banner: champion, recap of the read-only contract, and the
+       two season-end actions. Run it back is COMMISSIONER-ONLY (enforced again at
+       create time by the normal league-creation path). Archive is per-member and
+       goes through the archive_league RPC — lm_update RLS is commish-only, and a
+       member self-update policy would expose is_commissioner. */}
+   {lgCompleted(lg)&&(()=>{
+     const _champRow=(realStandings||[]).find(r=>r.userId===lg.champion_id);
+     const _isMe=lg.champion_id===(user&&user.id);
+     const _nm=_isMe?"You":((_champRow&&_champRow.name)||(((leagueMembers||[]).find(z=>z.userId===lg.champion_id)||{}).name)||"Champion");
+     const _sub=[_champRow&&_champRow.record, _champRow&&(_champRow.points!=null)&&(parseFloat(_champRow.points).toFixed(1)+" pts")].filter(Boolean).join(" \u00B7 ");
+     const _doArchive=async()=>{ const on=!lg.archivedByMe; try{
+       const {error}=await supabase.rpc("archive_league",{p_league_id:lg.id,p_archived:on});
+       if(error){ alert("Couldn\u2019t update: "+error.message); return; }
+       setRealLeagues(prev=>prev.map(x=>x.id===lg.id?{...x,archivedByMe:on?new Date().toISOString():null}:x));
+     }catch(e){} };
+     const _runItBack=()=>{ try{
+       setNewLeagueName((lg.name||"League").slice(0,40));
+       setNewLeagueSports(Array.isArray(lg.sports)&&lg.sports.length?lg.sports:[lg.sport].filter(Boolean));
+       setNewLeagueType(lg.league_type||"h2h");
+       setNewLeagueWeeks(Number(lg.season_weeks)||18);
+       setNewLeaguePrivacy(lg.privacy||"private");
+       const _cfg=parseSlotConfig(lg.slot_config); if(Array.isArray(_cfg)&&_cfg.length) setNewLeagueSlots(_cfg.map(s=>({...s})));
+     }catch(e){}
+     setShowNewLeague(true); };
+     return (
+     <div style={{position:"relative",overflow:"hidden",background:"linear-gradient(165deg,rgba(255,214,10,0.13),rgba(12,12,15,0.92) 55%)",border:"0.5px solid rgba(255,214,10,0.3)",borderRadius:RAD.md,padding:"14px",marginBottom:10}}>
+       <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:IOS.yellow}}>{"Season complete \u00B7 Final"}</div>
+       <div style={{fontSize:11,color:IOS.label3,marginTop:3}}>{lgEndedLabel(lg)}{" \u00B7 "}{Number(lg.season_weeks)||"?"}{" weeks"}</div>
+       <div style={{display:"flex",alignItems:"center",gap:11,marginTop:12}}>
+         <div style={{width:40,height:40,borderRadius:"50%",background:"linear-gradient(135deg,#FFD60A,#FF9F0A)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="6"/><path d="M9 13l-2 8 5-3 5 3-2-8"/></svg>
+         </div>
+         <div style={{minWidth:0}}>
+           <div style={{fontSize:15,fontWeight:800,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{_nm}</div>
+           <div style={{fontSize:11,color:"rgba(255,255,255,0.55)",marginTop:1}}>{"League champion"}{_sub?(" \u00B7 "+_sub):""}</div>
+         </div>
+       </div>
+       {lg.isCommissioner&&<div onClick={_runItBack} style={{marginTop:12,borderRadius:RAD.sm,padding:"12px",textAlign:"center",fontSize:14,fontWeight:800,color:"#fff",cursor:"pointer",background:"linear-gradient(90deg,#0A84FF,#5E5CE6)"}}>Run it back</div>}
+       <div onClick={_doArchive} style={{marginTop:8,borderRadius:RAD.sm,padding:"11px",textAlign:"center",fontSize:13,fontWeight:700,color:"rgba(255,255,255,0.75)",cursor:"pointer",background:"rgba(255,255,255,0.05)",border:`0.5px solid ${IOS.sep}`}}>{lg.archivedByMe?"Restore to my list":"Archive from my list"}</div>
+       <div style={{display:"flex",alignItems:"flex-start",gap:8,marginTop:10,background:"rgba(191,90,242,0.07)",border:"0.5px solid rgba(191,90,242,0.25)",borderRadius:RAD.sm,padding:"9px 11px",fontSize:11,color:"rgba(255,255,255,0.6)",lineHeight:1.45}}>
+         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={IOS.purple} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginTop:1}}><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+         <span>{"This season is final. Standings, slips and schedule stay browsable \u2014 chat is still open."}</span>
+       </div>
+     </div>
+     );
+   })()}
    {/* My rank card */}
    <div style={{background:`linear-gradient(135deg,rgba(10,132,255,0.1),rgba(94,92,230,0.07))`,border:`0.5px solid rgba(10,132,255,0.25)`,borderRadius:RAD.md,padding:"12px 14px",marginBottom:10}}>
      <div style={{fontSize:10,fontWeight:700,color:IOS.blue,letterSpacing:.5,textTransform:"uppercase",marginBottom:8}}>Your Rank — #{myRank} of {lg.target_size||lg.max_members||"?"}</div>
@@ -18791,9 +18913,9 @@ function App() {
  {isPro&&(
  <>
  {/* League toggle */}
- {realLeagues.length > 1 && (
+ {realLeagues.filter(l=>!lgCompleted(l)).length > 1 && (
  <div style={{overflowX:"auto",display:"flex",gap:8,padding:"10px 16px 4px",scrollbarWidth:"none"}}>
- {realLeagues.map(lg=>{
+ {realLeagues.filter(l=>!lgCompleted(l)).map(lg=>{
  const sp = SPORTS[lg.sport];
  const isSelected = (puLeagueId||activeLeagueId)===lg.id;
  return (
@@ -18861,6 +18983,47 @@ function App() {
  )}
  </div>
  )}
+
+ {/* ══ TROPHY CASE: finished seasons ══ */}
+ {Array.isArray(trophyRows)&&trophyRows.length>0&&(()=>{
+   const titles=trophyRows.filter(r=>r.isChamp).length;
+   const W=trophyRows.reduce((s,r)=>s+r.w,0), L=trophyRows.reduce((s,r)=>s+r.l,0);
+   const wr=(W+L)>0?((W/(W+L))*100).toFixed(1):null;
+   return (
+ <div style={{margin:"0 16px 12px"}}>
+  <div style={{fontSize:11,fontWeight:700,color:IOS.label3,letterSpacing:.5,textTransform:"uppercase",margin:"0 2px 8px"}}>Trophy case</div>
+  <div style={{display:"flex",gap:8,marginBottom:10}}>
+    {[{v:trophyRows.length,k:"Seasons",c:"#fff"},{v:titles,k:titles===1?"Title":"Titles",c:IOS.yellow},{v:W+"\u2013"+L,k:"All-time",c:"#fff"},{v:wr!=null?wr+"%":"\u2014",k:"Win rate",c:"#fff"}].map((s,i)=>(
+      <div key={i} style={{flex:1,background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:RAD.md,padding:"10px 6px",textAlign:"center"}}>
+        <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:17,fontWeight:900,color:s.c}}>{s.v}</div>
+        <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.05em",textTransform:"uppercase",color:IOS.label3,marginTop:2}}>{s.k}</div>
+      </div>
+    ))}
+  </div>
+  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+    {trophyRows.map(r=>{
+      const tier=r.isChamp?"gold":(r.rank===2?"silver":"plain");
+      const bd=tier==="gold"?"rgba(255,214,10,0.4)":tier==="silver"?"rgba(199,203,209,0.3)":IOS.sep;
+      const bg=tier==="gold"?"linear-gradient(165deg,rgba(255,214,10,0.10),#0C0C0F 60%)":tier==="silver"?"linear-gradient(165deg,rgba(199,203,209,0.08),#0C0C0F 60%)":"linear-gradient(165deg,#17171B,#0C0C0F)";
+      const pc=tier==="gold"?IOS.yellow:tier==="silver"?"#C7CBD1":IOS.label3;
+      const place=r.isChamp?"CHAMPION":(r.rank?(ordinal(r.rank).toUpperCase()+" OF "+r.total):"FINAL");
+      const spl=(Array.isArray(r.sports)&&r.sports.length?r.sports:[r.sport]).map(s=>(SPORTS[s]&&SPORTS[s].label)||String(s||"").toUpperCase()).join(" \u00B7 ");
+      return (
+      <div key={r.id} onClick={()=>{ setActiveLeagueId(r.id); setLeagueSubTab("overview"); setScreen("leagues"); }} style={{borderRadius:13,padding:"13px 12px 12px",background:bg,border:`0.5px solid ${bd}`,cursor:"pointer"}}>
+        <div style={{display:"flex",alignItems:"center",gap:6,fontSize:11,fontWeight:800,color:pc}}>
+          {(tier==="gold"||tier==="silver")&&<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="6"/><path d="M9 13l-2 8 5-3 5 3-2-8"/></svg>}
+          <span>{place}</span>
+        </div>
+        <div style={{fontSize:13.5,fontWeight:800,color:"#fff",marginTop:7,lineHeight:1.25}}>{r.name}</div>
+        <div style={{fontSize:10,color:IOS.label3,marginTop:4}}>{spl}{" \u00B7 "}{lgEndedLabel({completed_at:r.ended})}</div>
+        <div style={{fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.6)",marginTop:8}}>{r.w}{"\u2013"}{r.l}{" \u00B7 "}{r.pts}{" pts"}</div>
+      </div>
+      );
+    })}
+  </div>
+ </div>
+   );
+ })()}
 
  {/* ══ SETTINGS: three collapsible sections ══ */}
  {(()=>{ const _push=!!(userProfile&&userProfile.push_enabled);
