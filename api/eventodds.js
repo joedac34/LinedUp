@@ -15,6 +15,7 @@ const ODDS_KEY = process.env.ODDS_API_KEY;
 const CAT = {
   h2h_h1: "ml_h1", spreads_h1: "spread_h1", totals_h1: "ou_h1",
   h2h_1st_5_innings: "ml_f5", spreads_1st_5_innings: "spread_f5", totals_1st_5_innings: "ou_f5",
+  h2h_1st_3_innings: "ml_f3", spreads_1st_3_innings: "spread_f3", totals_1st_3_innings: "ou_f3",
   // totals_1st_1_innings is split into yrfi (Over 0.5) / nrfi (Under 0.5) below
 };
 
