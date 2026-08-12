@@ -316,7 +316,7 @@ async function settleBracketRound(league, week) {
       // Final round — single matchup. Its winner is the champion.
       const championId = winners[ms[0].bracket_match_id];
       if (championId) {
-        await sbPatch(`leagues?id=eq.${league.id}`, { champion_id: championId });
+        await sbPatch(`leagues?id=eq.${league.id}`, { champion_id: championId, completed_at: new Date().toISOString() });
         await sbPost("notifications", {
           user_id: championId, type: "champion",
           title: "You won the tournament",
@@ -1190,7 +1190,7 @@ export default async function handler(req, res) {
     const onlyLeagueId = req.body?.leagueId;
     const leagues = onlyLeagueId
       ? await sbGet(`leagues?id=eq.${onlyLeagueId}&select=id,sport,current_week,league_type,name`)
-      : await sbGet("leagues?select=id,sport,current_week,league_type,name&is_demo=eq.false");
+      : await sbGet("leagues?select=id,sport,current_week,league_type,name&is_demo=eq.false&completed_at=is.null");
     if (!Array.isArray(leagues)) throw new Error("Failed to fetch leagues");
 
     for (const league of leagues) {

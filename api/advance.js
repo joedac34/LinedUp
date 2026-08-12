@@ -62,7 +62,7 @@ export default async function handler(req, res) {
   try {
     const { data: leagues, error } = await supabase
       .from("leagues")
-      .select("id, current_week, season_weeks, season_start, league_type, playoffs_enabled, playoff_size, champion_id")
+      .select("id, current_week, season_weeks, season_start, league_type, playoffs_enabled, playoff_size, champion_id, completed_at")
       .not("season_start", "is", null)
       .eq("is_demo", false);
     if (error) throw error;
@@ -71,6 +71,7 @@ export default async function handler(req, res) {
     for (const lg of leagues || []) {
       const lt = lg.league_type || "h2h";
       if (lt === "bracket" || lt === "solo") continue; // bracket settles in grade.js; solo never advances
+      if (lg.completed_at) continue; // season stamped complete — no more work, ever
       const start = new Date(lg.season_start).getTime();
       if (isNaN(start)) continue;
 
@@ -90,6 +91,7 @@ export default async function handler(req, res) {
         await maybeSeedPlayoff(supabase, lg, cw);
         await advancePlayoffBracket(supabase, lg.id);
         await maybeCrownChampion(supabase, lg);
+        await maybeComplete(supabase, lg, target, seasonWeeks);
         continue;
       }
 
@@ -103,6 +105,7 @@ export default async function handler(req, res) {
       }
       await maybeSeedPlayoff(supabase, lg, Math.min(seasonWeeks, target));
       await maybeCrownChampion(supabase, lg);
+      await maybeComplete(supabase, lg, target, seasonWeeks);
 
       advanced.push({ league: lg.id, from: cw, to: Math.min(seasonWeeks, target) });
     }
@@ -279,6 +282,30 @@ async function maybeCrownChampion(supabase, league) {
   const lastWk = Math.max.apply(null, pw.map((m) => m.week));
   const finals = pw.filter((m) => m.week === lastWk);
   if (finals.length === 1 && finals[0].winner_id) {
-    await supabase.from("leagues").update({ champion_id: finals[0].winner_id }).eq("id", league.id);
+    await supabase.from("leagues").update({ champion_id: finals[0].winner_id, completed_at: new Date().toISOString() }).eq("id", league.id);
   }
+}
+
+// Stamp completed_at once a season is definitively over. Two paths end a season:
+// a playoff final resolves (maybeCrownChampion / settleBracketRound stamp it in the
+// same write as champion_id), or a league with NO playoff field runs out the clock
+// on its final week — that path is handled here, crowning the standings leader so
+// every finished league has a champion. Also backstops any league whose champion
+// was crowned before completed_at existed. Idempotent; once stamped, the top-of-loop
+// guard stops all future advance/grade/remind work on the league.
+async function maybeComplete(supabase, league, target, seasonWeeks) {
+  if (league.completed_at) return;
+  if (league.champion_id) {
+    await supabase.from("leagues").update({ completed_at: new Date().toISOString() }).eq("id", league.id);
+    return;
+  }
+  if (target <= seasonWeeks) return; // final week hasn't closed yet
+  const { data: mem } = await supabase.from("league_members").select("user_id").eq("league_id", league.id);
+  const field = playoffFieldFor(league, (mem || []).length);
+  if (field >= 2) return; // playoffs decide this league; the final's resolution stamps it
+  const top = await computeSeedOrder(supabase, league.id, league.league_type, 1);
+  await supabase.from("leagues").update({
+    champion_id: (top && top[0]) || null,
+    completed_at: new Date().toISOString(),
+  }).eq("id", league.id);
 }

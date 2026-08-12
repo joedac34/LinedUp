@@ -38,12 +38,13 @@ export default async function handler(req, res) {
   try {
     const { data: leagues } = await supabase
       .from('leagues')
-      .select('id, name, current_week, slot_config, season_start, league_type')
+      .select('id, name, current_week, slot_config, season_start, league_type, completed_at')
       .not('season_start', 'is', null)
       .neq('league_type', 'solo');
 
     for (const lg of leagues || []) {
       try {
+        if (lg.completed_at) continue; // season over — never nudge a dead league
         const week = lg.current_week || 1;
 
         // How long until this week ends? Only remind inside the final 72h.
