@@ -215,7 +215,7 @@ const SEASON_WINDOWS = {
 const WEEK_MS_C = 7*24*60*60*1000;
 // Slot types that need their OWN game each week (you cannot take both sides of one
 // game's line). Props/longshots/wildcards can share a game, so they only need 1.
-const DISTINCT_GAME_TYPES = ["ml","spread","ou","ml_h1","spread_h1","ou_h1","ml_f5","spread_f5","ou_f5","yrfi","nrfi"];
+const DISTINCT_GAME_TYPES = ["ml","spread","ou","ml_h1","spread_h1","ou_h1","ml_f5","spread_f5","ou_f5","ml_f3","spread_f3","ou_f3","yrfi","nrfi"];
 // Games available for a sport within a given week window.
 function gamesInWeekFor(sportId, wkStart, wkEnd){
   const phases = SEASON_WINDOWS[sportId] || [];
@@ -4676,10 +4676,10 @@ const trophySVG = (id, color="#fff") => {
   return icons[id] || <svg {...s}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>;
 };
 
-const PERIOD_MARKETS = { ml_h1:"h2h_h1", spread_h1:"spreads_h1", ou_h1:"totals_h1", ml_f5:"h2h_1st_5_innings", spread_f5:"spreads_1st_5_innings", ou_f5:"totals_1st_5_innings", yrfi:"totals_1st_1_innings", nrfi:"totals_1st_1_innings" };
-const PERIOD_CATS = ["ml_h1","spread_h1","ou_h1","ml_f5","spread_f5","ou_f5","yrfi","nrfi"];
+const PERIOD_MARKETS = { ml_h1:"h2h_h1", spread_h1:"spreads_h1", ou_h1:"totals_h1", ml_f5:"h2h_1st_5_innings", spread_f5:"spreads_1st_5_innings", ou_f5:"totals_1st_5_innings", ml_f3:"h2h_1st_3_innings", spread_f3:"spreads_1st_3_innings", ou_f3:"totals_1st_3_innings", yrfi:"totals_1st_1_innings", nrfi:"totals_1st_1_innings" };
+const PERIOD_CATS = ["ml_h1","spread_h1","ou_h1","ml_f5","spread_f5","ou_f5","ml_f3","spread_f3","ou_f3","yrfi","nrfi"];
 const PERIOD_SUBS_BY_SPORT = {
- mlb:[{id:"ml_f5",l:"F5 ML"},{id:"spread_f5",l:"F5 Spread"},{id:"ou_f5",l:"F5 O/U"},{id:"yrfi",l:"YRFI"},{id:"nrfi",l:"NRFI"}],
+ mlb:[{id:"ml_f5",l:"F5 ML"},{id:"spread_f5",l:"F5 Spread"},{id:"ou_f5",l:"F5 O/U"},{id:"ml_f3",l:"F3 ML"},{id:"spread_f3",l:"F3 Spread"},{id:"ou_f3",l:"F3 O/U"},{id:"yrfi",l:"YRFI"},{id:"nrfi",l:"NRFI"}],
  nfl:[{id:"ml_h1",l:"1H ML"},{id:"spread_h1",l:"1H Spread"},{id:"ou_h1",l:"1H O/U"}],
  ncaaf:[{id:"ml_h1",l:"1H ML"},{id:"spread_h1",l:"1H Spread"},{id:"ou_h1",l:"1H O/U"}],
  nba:[{id:"ml_h1",l:"1H ML"},{id:"spread_h1",l:"1H Spread"},{id:"ou_h1",l:"1H O/U"}],
@@ -6216,7 +6216,7 @@ function App() {
   const SLOT_OF = { ml:"ml", moneyline:"ml", spread:"spread", ou:"ou", total:"ou", prop:"prop", longshot:"longshot", parlay:"longshot" };
   // ─── PLOK SLOT BOARD ──────────────────────────────────────────────────────
   // Reads slot_config + flexPicks. A slot only ever offers bets it can legally take.
-  const PERIOD_TYPE_LABEL = { ml_h1:"1H Moneyline", spread_h1:"1H Spread", ou_h1:"1H Total", ml_f5:"F5 Moneyline", spread_f5:"F5 Spread", ou_f5:"F5 Total", yrfi:"YRFI", nrfi:"NRFI" };
+  const PERIOD_TYPE_LABEL = { ml_h1:"1H Moneyline", spread_h1:"1H Spread", ou_h1:"1H Total", ml_f5:"F5 Moneyline", spread_f5:"F5 Spread", ou_f5:"F5 Total", ml_f3:"F3 Moneyline", spread_f3:"F3 Spread", ou_f3:"F3 Total", yrfi:"YRFI", nrfi:"NRFI" };
   const plokCfg = parseSlotConfig(activeLeague && activeLeague.slot_config);
   const plokSlotMode = !isSoloMode && !!plokCfg;
   // Normalise the unicode minus (U+2212) FIRST — the strip regex would eat it and turn
@@ -6947,21 +6947,24 @@ function App() {
   {id:"ml",l:"Moneyline",scope:"Game line",color:"#0A84FF"},
   {id:"spread",l:"Spread",scope:"Game line",color:"#30D158"},
   {id:"ou",l:"Over / Under",scope:"Game line",color:"#FF9F0A"},
-  {id:"prop",l:"Player Prop",scope:"Props",color:"#FFD60A",
+  {id:"prop",l:"Player Prop",scope:"Any prop",color:"#FFD60A",
    // No ncaaf: /api/props has no market list for it (400), NCAAF player props are
    // banned in many states, and books post them thinly. Revisit only with a real
    // props.js entry AND a grading test. No nhl until that sport is wired end-to-end.
    sports:["nfl","nba","mlb"]},
   {id:"longshot",l:"Longshot / Parlay",scope:"Exotic",color:"#FF375F"},
-  {id:"wildcard",l:"Wildcard",scope:"Any pick type",color:"#BF5AF2"},
-  {id:"ml_h1",l:"1st Half ML",scope:"1st Half",color:"#64D2FF",sports:["nfl","ncaaf","nba"]},
-  {id:"spread_h1",l:"1st Half Spread",scope:"1st Half",color:"#64D2FF",sports:["nfl","ncaaf","nba"]},
-  {id:"ou_h1",l:"1st Half O / U",scope:"1st Half",color:"#64D2FF",sports:["nfl","ncaaf","nba"]},
-  {id:"ml_f5",l:"First 5 ML",scope:"First 5 innings",color:"#5E5CE6",sports:["mlb"]},
-  {id:"spread_f5",l:"First 5 Spread",scope:"First 5 innings",color:"#5E5CE6",sports:["mlb"]},
-  {id:"ou_f5",l:"First 5 O / U",scope:"First 5 innings",color:"#5E5CE6",sports:["mlb"]},
-  {id:"yrfi",l:"YRFI",scope:"Yes Run 1st Inning",color:"#FF9F0A",sports:["mlb"]},
-  {id:"nrfi",l:"NRFI",scope:"No Run 1st Inning",color:"#30D158",sports:["mlb"]},
+  {id:"wildcard",l:"Wildcard",scope:"Any type",color:"#BF5AF2"},
+  {id:"ml_h1",l:"1st Half ML",scope:"1st half",color:"#64D2FF",sports:["nfl","ncaaf","nba"]},
+  {id:"spread_h1",l:"1st Half Spread",scope:"1st half",color:"#64D2FF",sports:["nfl","ncaaf","nba"]},
+  {id:"ou_h1",l:"1st Half O / U",scope:"1st half",color:"#64D2FF",sports:["nfl","ncaaf","nba"]},
+  {id:"ml_f5",l:"First 5 ML",scope:"1st 5 inn",color:"#5E5CE6",sports:["mlb"]},
+  {id:"spread_f5",l:"First 5 Spread",scope:"1st 5 inn",color:"#5E5CE6",sports:["mlb"]},
+  {id:"ou_f5",l:"First 5 O / U",scope:"1st 5 inn",color:"#5E5CE6",sports:["mlb"]},
+  {id:"ml_f3",l:"First 3 ML",scope:"1st 3 inn",color:"#5E5CE6",sports:["mlb"]},
+  {id:"spread_f3",l:"First 3 Spread",scope:"1st 3 inn",color:"#5E5CE6",sports:["mlb"]},
+  {id:"ou_f3",l:"First 3 O / U",scope:"1st 3 inn",color:"#5E5CE6",sports:["mlb"]},
+  {id:"yrfi",l:"YRFI",scope:"1st inning",color:"#FF9F0A",sports:["mlb"]},
+  {id:"nrfi",l:"NRFI",scope:"1st inning",color:"#30D158",sports:["mlb"]},
  ];
  const PLOK_MODELS=[
   {id:"ev", name:"+EV Hunter", ready:true, color:IOS.green, desc:"Compares every book's price to the market consensus and flags the outliers.", icon:<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg>},
@@ -6970,9 +6973,9 @@ function App() {
   {id:"clv", name:"CLV Report Card", ready:false, color:IOS.purple, desc:"Did your locked picks beat the closing line? The pro's scorecard.", icon:<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={IOS.purple} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="6"/><path d="M9 13l-2 8 5-3 5 3-2-8"/></svg>},
  ];
  const PROP_SUBS_BY_SPORT = {
-  nfl:[{id:"all",l:"All"},{id:"pass",l:"Pass"},{id:"rush",l:"Rush"},{id:"rec",l:"Receiving"},{id:"td",l:"TDs"}],
+  nfl:[{id:"all",l:"All"},{id:"pass",l:"Pass"},{id:"rush",l:"Rush"},{id:"rec",l:"Receiving"},{id:"td",l:"TDs"},{id:"anytd",l:"Any TD"},{id:"passyds",l:"Pass Yds"},{id:"passtds",l:"Pass TDs"},{id:"rushyds",l:"Rush Yds"},{id:"rushtds",l:"Rush TDs"},{id:"recs",l:"Recs"},{id:"recyds",l:"Rec Yds"},{id:"rectds",l:"Rec TDs"}],
   nba:[{id:"all",l:"All"},{id:"pts",l:"Points"},{id:"reb",l:"Rebounds"},{id:"ast",l:"Assists"},{id:"3pt",l:"Threes"}],
-  mlb:[{id:"all",l:"All"},{id:"hr",l:"HR"},{id:"hits",l:"Hits"},{id:"bases",l:"Total Bases"},{id:"rbi",l:"RBIs"},{id:"runs",l:"Runs"},{id:"walks",l:"Walks"},{id:"sb",l:"SB"},{id:"doubles",l:"2B"},{id:"triples",l:"3B"},{id:"hrr",l:"H+R+RBI"},{id:"k",l:"K"},{id:"er",l:"ER"},{id:"hitsallowed",l:"Hits Alwd"},{id:"walksallowed",l:"BB Alwd"},{id:"outs",l:"Outs"}],
+  mlb:[{id:"all",l:"All"},{id:"hr",l:"HR"},{id:"hits",l:"Hits"},{id:"bases",l:"Total Bases"},{id:"rbi",l:"RBIs"},{id:"runs",l:"Runs"},{id:"walks",l:"Walks"},{id:"sb",l:"SB"},{id:"doubles",l:"2B"},{id:"triples",l:"3B"},{id:"singles",l:"1B"},{id:"hrr",l:"H+R+RBI"},{id:"k",l:"K"},{id:"er",l:"ER"},{id:"hitsallowed",l:"Hits Alwd"},{id:"walksallowed",l:"BB Alwd"},{id:"outs",l:"Outs"}],
  };
  // ─── LEAGUE LENGTH VALIDATION ────────────────────────────────────────────────
  // Which of the league's sports can actually fill a given slot?
@@ -13831,7 +13834,8 @@ function App() {
  td:["player_anytime_td","player_first_td","player_rush_tds","player_reception_tds","player_pass_tds"],
  pts:["player_points","player_points_rebounds_assists"], reb:["player_rebounds"], ast:["player_assists"], "3pt":["player_threes"],
  hr:["batter_home_runs","batter_home_runs_alternate"], hits:["batter_hits"], bases:["batter_total_bases"], rbi:["batter_rbis"], k:["pitcher_strikeouts"],
- runs:["batter_runs_scored"], walks:["batter_walks"], sb:["batter_stolen_bases"], doubles:["batter_doubles"], triples:["batter_triples"], hrr:["batter_hits_runs_rbis"], er:["pitcher_earned_runs"], hitsallowed:["pitcher_hits_allowed"], walksallowed:["pitcher_walks"], outs:["pitcher_outs"],
+ runs:["batter_runs_scored"], walks:["batter_walks"], sb:["batter_stolen_bases"], doubles:["batter_doubles"], triples:["batter_triples"], singles:["batter_singles"], hrr:["batter_hits_runs_rbis"], er:["pitcher_earned_runs"], hitsallowed:["pitcher_hits_allowed"], walksallowed:["pitcher_walks"], outs:["pitcher_outs"],
+ anytd:["player_anytime_td"], passyds:["player_pass_yds"], passtds:["player_pass_tds"], rushyds:["player_rush_yds"], rushtds:["player_rush_tds"], recs:["player_receptions"], recyds:["player_reception_yds"], rectds:["player_reception_tds"],
  };
  const mk = SUB_MK[gridPropSub];
  list = list.filter(b=>{
@@ -13860,6 +13864,15 @@ function App() {
  case "er": return s.includes("earned");
  case "hitsallowed": return s.includes("hits allowed")||s.includes("hits alwd");
  case "walksallowed": return s.includes("walks allowed")||s.includes("walks alwd");
+ case "singles": return s.includes("single");
+ case "anytd": return s.includes("anytime");
+ case "passyds": return s.includes("pass")&&s.includes("yds");
+ case "passtds": return s.includes("pass")&&s.includes("td");
+ case "rushyds": return s.includes("rush")&&s.includes("yds");
+ case "rushtds": return s.includes("rush")&&s.includes("td");
+ case "recs": return s.includes("reception");
+ case "recyds": return s.includes("rec")&&s.includes("yds");
+ case "rectds": return s.includes("rec")&&s.includes("td");
  default: return true;
  }
  });
@@ -15828,23 +15841,32 @@ function App() {
  <input value={slotSearch} onChange={e=>setSlotSearch(e.target.value)} placeholder="Search pick types" style={{flex:1,background:"transparent",border:0,outline:0,color:"#fff",fontFamily:"Barlow,sans-serif",fontSize:14}}/>
  </div>
  {(()=>{
- const cats=[{cat:"Game lines",ids:["ml","spread","ou"]},{cat:"Player props",ids:["prop"]},{cat:"Innings / periods",ids:["ml_f5","spread_f5","ou_f5","ml_h1","spread_h1","ou_h1","yrfi","nrfi"]},{cat:"Exotic",ids:["longshot","wildcard"]}];
+ const cats=[
+  {cat:"Game lines",rows:["ml","spread","ou"]},
+  {cat:"Player props",rows:[{...SLOT_TYPES.find(t=>t.id==="prop"),market:null}]},
+  {cat:"Batter props",rows:[["hr","Home Runs"],["hits","Hits"],["bases","Total Bases"],["rbi","RBIs"],["runs","Runs Scored"],["hrr","Hits + Runs + RBIs"],["singles","Singles"],["doubles","Doubles"],["triples","Triples"],["walks","Walks"],["sb","Stolen Bases"]].map(x=>({id:"prop",market:x[0],l:x[1],scope:"Batter",color:"#FFD60A",sports:["mlb"]}))},
+  {cat:"Pitcher props",rows:[["k","Strikeouts"],["outs","Outs Recorded"],["er","Earned Runs"],["hitsallowed","Hits Allowed"],["walksallowed","Walks Allowed"]].map(x=>({id:"prop",market:x[0],l:x[1],scope:"Pitcher",color:"#64D2FF",sports:["mlb"]}))},
+  {cat:"Football props",rows:[["anytd","Anytime TD","TD"],["passyds","Pass Yds","Pass"],["passtds","Pass TDs","Pass"],["rushyds","Rush Yds","Rush"],["rushtds","Rush TDs","Rush"],["recs","Receptions","Rec"],["recyds","Rec Yds","Rec"],["rectds","Rec TDs","Rec"]].map(x=>({id:"prop",market:x[0],l:x[1],scope:x[2],color:"#FFD60A",sports:["nfl"]}))},
+  {cat:"Innings / periods",rows:["ml_f5","spread_f5","ou_f5","ml_f3","spread_f3","ou_f3","ml_h1","spread_h1","ou_h1","yrfi","nrfi"]},
+  {cat:"Exotic",rows:["longshot","wildcard"]},
+ ];
  const q=(slotSearch||"").toLowerCase();
  const avail=(tp)=>!tp.sports||tp.sports.some(sp=>newLeagueSports.includes(sp));
  const match=(tp)=>!q||tp.l.toLowerCase().includes(q)||(tp.scope||"").toLowerCase().includes(q);
- const pickType=(id)=>{ if(slotSheetIdx===-1){setNewLeagueSlots(arr=>arr.map(p=>({...p,type:id,market:id==="prop"?p.market:null})));} else {setNewLeagueSlots(arr=>arr.map((p,j)=>j===slotSheetIdx?{...p,type:id,market:id==="prop"?p.market:null}:p));} setSlotSearch(""); setSlotSheetIdx(null); };
+ const pickType=(id,market)=>{ const m=(id==="prop")?(market||null):null; if(slotSheetIdx===-1){setNewLeagueSlots(arr=>arr.map(p=>({...p,type:id,market:m})));} else {setNewLeagueSlots(arr=>arr.map((p,j)=>j===slotSheetIdx?{...p,type:id,market:m}:p));} setSlotSearch(""); setSlotSheetIdx(null); };
  let any=false;
  const out=cats.map(g=>{
- const items=g.ids.map(id=>SLOT_TYPES.find(t=>t.id===id)).filter(Boolean).filter(tp=>avail(tp)&&match(tp));
+ const items=g.rows.map(r=>typeof r==="string"?SLOT_TYPES.find(t=>t.id===r):r).filter(Boolean).filter(tp=>avail(tp)&&match(tp));
  if(!items.length) return null; any=true;
+ const _cur=slotSheetIdx>=0?newLeagueSlots[slotSheetIdx]:null;
  return (<div key={g.cat}>
  <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(255,255,255,0.32)",margin:"12px 2px 6px"}}>{g.cat}</div>
- {items.map(tp=>{ const sel=slotSheetIdx>=0&&newLeagueSlots[slotSheetIdx]&&newLeagueSlots[slotSheetIdx].type===tp.id; return (
- <div key={tp.id} onClick={()=>pickType(tp.id)} style={{display:"flex",alignItems:"center",gap:11,background:sel?"rgba(10,132,255,0.1)":"transparent",border:"0.5px solid "+(sel?"rgba(10,132,255,0.4)":"transparent"),borderRadius:RAD.md,padding:"10px 11px",cursor:"pointer"}}>
- <span style={{width:9,height:9,borderRadius:"50%",background:tp.color,flexShrink:0}}/>
- <div style={{flex:1,fontSize:14.5,fontWeight:700,color:"#fff"}}>{tp.l}</div>
- <div style={{fontSize:11,color:"rgba(255,255,255,0.35)"}}>{tp.scope}</div>
- {sel&&<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+ {items.map(tp=>{ const sel=!!_cur&&_cur.type===tp.id&&(tp.id!=="prop"||((_cur.market||null)===(tp.market||null))); return (
+ <div key={tp.id+(tp.market||"")} onClick={()=>pickType(tp.id,tp.market)} style={{position:"relative",height:44,background:sel?"rgba(10,132,255,0.1)":"transparent",border:"0.5px solid "+(sel?"rgba(10,132,255,0.4)":"transparent"),borderRadius:RAD.md,cursor:"pointer"}}>
+ <span style={{position:"absolute",left:11,top:"50%",transform:"translateY(-50%)",width:9,height:9,borderRadius:"50%",background:tp.color}}/>
+ <div style={{position:"absolute",left:0,right:0,top:"50%",transform:"translateY(-50%)",textAlign:"center",padding:"0 78px",fontSize:14.5,fontWeight:700,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{tp.l}</div>
+ <div style={{position:"absolute",right:sel?34:12,top:"50%",transform:"translateY(-50%)",fontSize:11,color:"rgba(255,255,255,0.35)",whiteSpace:"nowrap"}}>{tp.scope}</div>
+ {sel&&<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{position:"absolute",right:11,top:"50%",transform:"translateY(-50%)"}}><polyline points="20 6 9 17 4 12"/></svg>}
  </div>
  );})}
  </div>);
