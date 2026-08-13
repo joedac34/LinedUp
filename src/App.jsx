@@ -4690,6 +4690,16 @@ const trophySVG = (id, color="#fff") => {
 
 const PERIOD_MARKETS = { ml_h1:"h2h_h1", spread_h1:"spreads_h1", ou_h1:"totals_h1", ml_f5:"h2h_1st_5_innings", spread_f5:"spreads_1st_5_innings", ou_f5:"totals_1st_5_innings", ml_f3:"h2h_1st_3_innings", spread_f3:"spreads_1st_3_innings", ou_f3:"totals_1st_3_innings", yrfi:"totals_1st_1_innings", nrfi:"totals_1st_1_innings" };
 const PERIOD_CATS = ["ml_h1","spread_h1","ou_h1","ml_f5","spread_f5","ou_f5","ml_f3","spread_f3","ou_f3","yrfi","nrfi"];
+const SUB_MK = {
+pass:["player_pass_yds","player_pass_tds"], rush:["player_rush_yds","player_rush_tds"],
+rec:["player_receptions","player_reception_yds","player_reception_tds"],
+td:["player_anytime_td","player_first_td","player_rush_tds","player_reception_tds","player_pass_tds"],
+pts:["player_points","player_points_rebounds_assists"], reb:["player_rebounds"], ast:["player_assists"], "3pt":["player_threes"],
+hr:["batter_home_runs","batter_home_runs_alternate"], hits:["batter_hits"], bases:["batter_total_bases"], rbi:["batter_rbis"], k:["pitcher_strikeouts"],
+runs:["batter_runs_scored"], walks:["batter_walks"], sb:["batter_stolen_bases"], doubles:["batter_doubles"], triples:["batter_triples"], singles:["batter_singles"], hrr:["batter_hits_runs_rbis"], er:["pitcher_earned_runs"], hitsallowed:["pitcher_hits_allowed"], walksallowed:["pitcher_walks"], outs:["pitcher_outs"],
+anytd:["player_anytime_td"], passyds:["player_pass_yds"], passtds:["player_pass_tds"], rushyds:["player_rush_yds"], rushtds:["player_rush_tds"], recs:["player_receptions"], recyds:["player_reception_yds"], rectds:["player_reception_tds"],
+};
+
 const PERIOD_SUBS_BY_SPORT = {
  mlb:[{id:"ml_f5",l:"F5 ML"},{id:"spread_f5",l:"F5 Spread"},{id:"ou_f5",l:"F5 O/U"},{id:"ml_f3",l:"F3 ML"},{id:"spread_f3",l:"F3 Spread"},{id:"ou_f3",l:"F3 O/U"},{id:"yrfi",l:"YRFI"},{id:"nrfi",l:"NRFI"}],
  nfl:[{id:"ml_h1",l:"1H ML"},{id:"spread_h1",l:"1H Spread"},{id:"ou_h1",l:"1H O/U"}],
@@ -6142,7 +6152,7 @@ function App() {
    const iv=setInterval(()=>{ if(document.visibilityState==="visible") fetchNotifs(); },30000);
    return ()=>{ document.removeEventListener("visibilitychange",onVis); clearInterval(iv); };
  },[user]);
- useEffect(()=>{ if(screen!=="browser"||isSoloMode) return; const _cfg=parseSlotConfig(activeLeague&&activeLeague.slot_config); if(!_cfg) return; const _allowed=[...new Set(_cfg.flatMap(s=>s.type==="wildcard"?WILDCARD_TYPES:[s.type]))]; const _ts=flexPicks[gridTargetSlot]; const _isWild=_ts&&(_ts.slotType||_ts.category)==="wildcard"; const _tgt=(gridTargetSlot!=null&&_ts&&_ts.locked&&!_isWild)?_ts.category:null; const _want=_tgt||(_allowed.includes(gridType)?gridType:_allowed[0]); if(_want&&_want!==gridType) setGridType(_want); const _mkt=(gridTargetSlot!=null&&_ts&&_ts.locked&&!_isWild&&_ts.category==="prop")?(_ts.market||"all"):null; if(_mkt!==null) setGridPropSub(_mkt); }, [screen, gridTargetSlot, activeLeagueId, gridType]);
+ useEffect(()=>{ if(screen!=="browser"||isSoloMode) return; const _cfg=parseSlotConfig(activeLeague&&activeLeague.slot_config); if(!_cfg) return; const _allowed=[...new Set(_cfg.flatMap(s=>s.type==="wildcard"?WILDCARD_TYPES:[s.type]))]; const _ts=flexPicks[gridTargetSlot]; const _isWild=_ts&&(_ts.slotType||_ts.category)==="wildcard"; const _tgt=(gridTargetSlot!=null&&_ts&&_ts.locked&&!_isWild)?_ts.category:null; const _want=_tgt||(_allowed.includes(gridType)?gridType:_allowed[0]); if(_want&&_want!==gridType) setGridType(_want); const _mkt=(gridTargetSlot!=null&&_ts&&_ts.locked&&!_isWild&&_ts.category==="prop")?(_ts.market||"all"):null; if(_mkt!==null) setGridPropSub(_mkt); if(_mkt&&_mkt!=="all"){ const _msp=(leagueSports||[]).find(s=>(PROP_SUBS_BY_SPORT[s]||[]).some(x=>x.id===_mkt)); if(_msp) setGridSport(_msp); } }, [screen, gridTargetSlot, activeLeagueId, gridType]);
 
  // When a custom league has period slots, lazily pull their odds for the slate's games.
  useEffect(()=>{
@@ -6157,9 +6167,14 @@ function App() {
  (leagueSports||[]).forEach(sp=>{
   const base = liveOdds[sp];
   if(!base || !base.ml || !base.ml.length) return; // wait for base odds (carries event IDs)
-  if(periodTypes.every(t=>Array.isArray(base[t]))) return; // already attempted
+  // Only this sport's own period markets: F5/F3/YRFI/NRFI never go to NFL, 1H never
+  // goes to MLB. One invalid market 422s the whole per-event call at the Odds API,
+  // killing the valid markets in the same request.
+  const _spTypes = periodTypes.filter(t=>(PERIOD_SUBS_BY_SPORT[sp]||[]).some(s=>s.id===t));
+  if(!_spTypes.length) return;
+  if(_spTypes.every(t=>Array.isArray(base[t]))) return; // already attempted
   const eventIds = [...new Set(base.ml.map(b=>b.eventId).filter(Boolean))].slice(0,30);
-  if(eventIds.length) fetchPeriodOdds(sp, eventIds, periodTypes);
+  if(eventIds.length) fetchPeriodOdds(sp, eventIds, _spTypes);
  });
  }, [activeLeagueId, isSoloMode, liveOdds, activeLeague&&activeLeague.slot_config]);
 
@@ -6359,7 +6374,7 @@ function App() {
     const baseSlots = freshSlots();
     const hasCfg = baseSlots.every(sl=>sl.category);
     const slotSpec = hasCfg
-      ? baseSlots.map((sl,i)=>({idx:i, category:sl.category, mult: sl.mult||null}))
+      ? baseSlots.map((sl,i)=>({idx:i, category:(sl.category==="prop"&&sl.market)?("prop:"+sl.market):sl.category, mult: sl.mult||null}))
       : [{idx:0,category:"ml",mult:null},{idx:1,category:"spread",mult:null},{idx:2,category:"ou",mult:null},{idx:3,category:"prop",mult:null},{idx:4,category:"longshot",mult:null}];
     const neededCats = [...new Set(slotSpec.map(z=>z.category))];
     // The league's REAL multiplier pool, from slot_config — 1,2,3,3,4,5,6,7 in the live
@@ -6382,13 +6397,18 @@ function App() {
           if(!added) break;
         }
         eligible[cat] = out;
+      } else if(cat.indexOf("prop:")===0){
+        // Singular prop slot ("Home Runs only"): the pool is ONLY that market's bets,
+        // so Plok cannot fill an HR slot with a strikeout prop.
+        const _mks = SUB_MK[cat.slice(5)]||[];
+        eligible[cat] = plokSortBets("prop", betsForSlotType("prop").filter(b=>b.market&&_mks.includes(b.market)));
       } else {
         eligible[cat] = plokSortBets(cat, betsForSlotType(cat));
       }
     });
     const candidates = {}; let haveAny = false;
     neededCats.forEach(cat=>{
-      const list = eligible[cat].slice(0,6).map(b=>({id:b.id, pick:b.pick, odds:b.odds, game:b.game}));
+      const list = eligible[cat].slice(0,6).map(b=>({id:b.id, pick:b.pick, odds:b.odds, game:b.game, sport:b._sport||null}));
       if(list.length) haveAny = true;
       candidates[cat] = list;
     });
@@ -6542,7 +6562,9 @@ function App() {
       else if(x.bet) taken.push({ category:x.category, id:x.bet.id, eventId:x.bet.eventId, game:x.bet.game, outcome:x.bet.outcome });
     });
     const usedSel = new Set(taken.map(t=>String(t.id)));
+    const _mks = (cat==="prop"&&sl.market) ? (SUB_MK[sl.market]||[]) : null;
     const list = plokSortBets(cat, betsForSlotType(cat))
+      .filter(b=> !_mks || (b.market&&_mks.includes(b.market)))
       .filter(b=> !usedSel.has(String(b.id)) && !lineConflict(b.category||cat, b, taken));
     if(!list.length){ setPlokSlotErr({ idx:slotIdx, msg:`Nothing legal left for this ${plokTypeLabel(cat).toLowerCase()} slot — everything on the board clashes with your other picks.` }); return; }
     setPlokSlotBusy(slotIdx); setPlokSlotErr(null);
@@ -6551,7 +6573,7 @@ function App() {
         sport:(leagueSports[0]||"nfl"), userId:user?.id, persona:plokPersona, userStats:plokUserStats(), leagueCtx:plokLeagueCtx(), strategy:"balanced",
         multPool: sl.mult ? [sl.mult] : null,
         slots: [{ idx:0, category:cat, mult: sl.mult||null }],
-        candidates: { [cat]: list.slice(0,6).map(b=>({id:b.id, pick:b.pick, odds:b.odds, game:b.game})) },
+        candidates: { [cat]: list.slice(0,6).map(b=>({id:b.id, pick:b.pick, odds:b.odds, game:b.game, sport:b._sport||null})) },
       })});
       const data = await r.json();
       const pk = r.ok && (data.picks||[])[0];
@@ -6749,7 +6771,7 @@ function App() {
     const item = { role:"ai", label:"Plok", bet:null, category:null, loading:true };
     setAiThread(prev=>[...prev, { role:"user", text:q }, item]);
     setAiBusy(true);
-    authHeaders().then(_h=>fetch(API_BASE+"/api/insight", { method:"POST", headers:_h, body: JSON.stringify({ sport:(leagueSports[0]||"nfl"), betType:"chat", selection:q, question:q, userId:user?.id, userStats:plokUserStats(), persona:plokPersona, leagueCtx:plokLeagueCtx() }) }))
+    authHeaders().then(_h=>fetch(API_BASE+"/api/insight", { method:"POST", headers:_h, body: JSON.stringify({ sport:(leagueSports[0]||"nfl"), sports:leagueSports, betType:"chat", selection:q, question:q, userId:user?.id, userStats:plokUserStats(), persona:plokPersona, leagueCtx:plokLeagueCtx() }) }))
       .then(async r=>{ const data=await r.json(); setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, data:r.ok?data:null, error:r.ok?null:(data.error||"Couldn't reach Plok")} : x)); })
       .catch(()=> setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, error:"Network error — try again"} : x)))
       .finally(()=> setAiBusy(false));
@@ -13779,7 +13801,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 
  // Resolve active sport (default to league's first sport)
  const sportsList = leagueSports && leagueSports.length ? leagueSports : ["nfl"];
- const gSport = isSoloMode ? (soloSport||sportsList[0]) : ((gridSport && sportsList.includes(gridSport)) ? gridSport : sportsList[0]);
+ const _canAll = !isSoloMode && sportsList.length>1 && (gridType==="ml"||gridType==="spread"||gridType==="ou"||gridType==="longshot");
+ const gSport = isSoloMode ? (soloSport||sportsList[0]) : ((gridSport && (sportsList.includes(gridSport) || (gridSport==="all" && _canAll))) ? gridSport : sportsList[0]);
 
  // Resolve which slot a tapped card fills
  const resolveTarget = () => {
@@ -13841,7 +13864,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  // ─── Build the bet list for the selected sport + type ───
  let list = []; let lsChips = [];
  if(gridType==="longshot") {
- list = gridBuildMode ? (ALL_BETS||[]).filter(b=> b._sport===gSport) : (ALL_BETS||[]).filter(b=> b._sport===gSport && b.impliedOdds>=400);
+ list = gridBuildMode ? (ALL_BETS||[]).filter(b=> gSport==="all"||b._sport===gSport) : (ALL_BETS||[]).filter(b=> (gSport==="all"||b._sport===gSport) && b.impliedOdds>=400);
  lsChips=[];
  if(gridType==="longshot"){
  const _seen=new Set();
@@ -13854,7 +13877,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const _psub = gridPeriodSub || ((PERIOD_SUBS_BY_SPORT[gSport]||[])[0]||{}).id;
  list = (BETS[_psub]||[]).filter(b=> b._sport===gSport);
  } else {
- list = (BETS[gridType]||[]).filter(b=> b._sport===gSport);
+ list = (BETS[gridType]||[]).filter(b=> gSport==="all"||b._sport===gSport);
  }
  { const _seen=new Set(); list = list.filter(b=>{ const k=(b.game||"")+"|"+(b.pick||b.label||b.id||""); if(_seen.has(k)) return false; _seen.add(k); return true; }); }
     // League weeks are 7-day windows from season_start — soloWeekOfDate numbers weeks from
@@ -13876,16 +13899,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const propSubsBySport = PROP_SUBS_BY_SPORT;
  const propSubs = propSubsBySport[gSport] || [{id:"all",l:"All"}];
  if(gridType==="prop" && gridPropSub!=="all") {
- const SUB_MK = {
- pass:["player_pass_yds","player_pass_tds"], rush:["player_rush_yds","player_rush_tds"],
- rec:["player_receptions","player_reception_yds","player_reception_tds"],
- td:["player_anytime_td","player_first_td","player_rush_tds","player_reception_tds","player_pass_tds"],
- pts:["player_points","player_points_rebounds_assists"], reb:["player_rebounds"], ast:["player_assists"], "3pt":["player_threes"],
- hr:["batter_home_runs","batter_home_runs_alternate"], hits:["batter_hits"], bases:["batter_total_bases"], rbi:["batter_rbis"], k:["pitcher_strikeouts"],
- runs:["batter_runs_scored"], walks:["batter_walks"], sb:["batter_stolen_bases"], doubles:["batter_doubles"], triples:["batter_triples"], singles:["batter_singles"], hrr:["batter_hits_runs_rbis"], er:["pitcher_earned_runs"], hitsallowed:["pitcher_hits_allowed"], walksallowed:["pitcher_walks"], outs:["pitcher_outs"],
- anytd:["player_anytime_td"], passyds:["player_pass_yds"], passtds:["player_pass_tds"], rushyds:["player_rush_yds"], rushtds:["player_rush_tds"], recs:["player_receptions"], recyds:["player_reception_yds"], rectds:["player_reception_tds"],
- };
- const mk = SUB_MK[gridPropSub];
+  const mk = SUB_MK[gridPropSub];
  list = list.filter(b=>{
  if(b.market && mk) return mk.includes(b.market);
  const s = ((b.pick||"")+" "+(b.game||"")).toLowerCase();
@@ -14440,9 +14454,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const nick = (nm="")=>{ const w=String(nm).trim().split(/\s+/); return w.length>1 ? w[w.length-1] : nm; };
  const _bg = {};
  const _ens = (g,t)=>{ if(!_bg[g]){ const pg=parseGame(g); _bg[g]={ game:g, away:pg.away, home:pg.home, time:t||"", ml:{}, spread:{}, ou:{} }; } if(t&&!_bg[g].time)_bg[g].time=t; return _bg[g]; };
- (BETS.ml||[]).filter(b=>b._sport===gSport).forEach(b=>{ const e=_ens(b.game,b.gameTime); if(b.awayPitcher&&!e.awayPitcher)e.awayPitcher=b.awayPitcher; if(b.homePitcher&&!e.homePitcher)e.homePitcher=b.homePitcher; const sd=sideOf(b.outcome||b.pick,b.game); if(sd==="AWAY")e.ml.away=b; else if(sd==="HOME")e.ml.home=b; });
- (BETS.spread||[]).filter(b=>b._sport===gSport).forEach(b=>{ const e=_ens(b.game,b.gameTime); if(b.awayPitcher&&!e.awayPitcher)e.awayPitcher=b.awayPitcher; if(b.homePitcher&&!e.homePitcher)e.homePitcher=b.homePitcher; const sd=sideOf(b.outcome||teamFromSpread(b.pick),b.game); if(sd==="AWAY")e.spread.away=b; else if(sd==="HOME")e.spread.home=b; });
- (BETS.ou||[]).filter(b=>b._sport===gSport).forEach(b=>{ const e=_ens(b.game,b.gameTime); if(b.awayPitcher&&!e.awayPitcher)e.awayPitcher=b.awayPitcher; if(b.homePitcher&&!e.homePitcher)e.homePitcher=b.homePitcher; const o=String(b.outcome||b.pick||"").toLowerCase(); if(o.indexOf("over")===0)e.ou.over=b; else if(o.indexOf("under")===0)e.ou.under=b; });
+ (BETS.ml||[]).filter(b=>gSport==="all"||b._sport===gSport).forEach(b=>{ const e=_ens(b.game,b.gameTime); if(b.awayPitcher&&!e.awayPitcher)e.awayPitcher=b.awayPitcher; if(b.homePitcher&&!e.homePitcher)e.homePitcher=b.homePitcher; const sd=sideOf(b.outcome||b.pick,b.game); if(sd==="AWAY")e.ml.away=b; else if(sd==="HOME")e.ml.home=b; });
+ (BETS.spread||[]).filter(b=>gSport==="all"||b._sport===gSport).forEach(b=>{ const e=_ens(b.game,b.gameTime); if(b.awayPitcher&&!e.awayPitcher)e.awayPitcher=b.awayPitcher; if(b.homePitcher&&!e.homePitcher)e.homePitcher=b.homePitcher; const sd=sideOf(b.outcome||teamFromSpread(b.pick),b.game); if(sd==="AWAY")e.spread.away=b; else if(sd==="HOME")e.spread.home=b; });
+ (BETS.ou||[]).filter(b=>gSport==="all"||b._sport===gSport).forEach(b=>{ const e=_ens(b.game,b.gameTime); if(b.awayPitcher&&!e.awayPitcher)e.awayPitcher=b.awayPitcher; if(b.homePitcher&&!e.homePitcher)e.homePitcher=b.homePitcher; const o=String(b.outcome||b.pick||"").toLowerCase(); if(o.indexOf("over")===0)e.ou.over=b; else if(o.indexOf("under")===0)e.ou.under=b; });
  let sheetGames = Object.values(_bg);
  if(gridSearch.trim()){ const q=gridSearch.toLowerCase().trim(); sheetGames=sheetGames.filter(g=>String(g.game).toLowerCase().includes(q)); }
  sheetGames.sort((a,b)=> (new Date(a.time||0)) - (new Date(b.time||0)) );
@@ -14702,12 +14716,12 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {/* Sport switcher */}
  {sportsList.length>1 && (
  <div className="gbx-scroll" style={{display:"flex",gap:7,padding:"2px 16px 8px",overflowX:"auto"}}>
- {sportsList.map(sp=>{
- const on = sp===gSport; const sc = SPORTS[sp]?.color || IOS.blue;
+ {(_canAll?["all",...sportsList]:sportsList).map(sp=>{
+ const on = sp===gSport; const sc = sp==="all" ? IOS.blue : (SPORTS[sp]?.color || IOS.blue);
  return (
  <div key={sp} onClick={()=>setGridSport(sp)} style={{...pillBase,
  background:on?`${sc}26`:"rgba(255,255,255,0.05)", borderColor:on?`${sc}80`:"rgba(255,255,255,0.1)", color:on?sc:"rgba(255,255,255,0.45)"}}>
- {SPORTS[sp]?.label || sp.toUpperCase()}
+ {sp==="all" ? "All" : (SPORTS[sp]?.label || sp.toUpperCase())}
  </div>
  );
  })}

@@ -650,7 +650,7 @@ async function generate(ctx, stats) {
       "You ALSO have the user's own PickLock betting history in the PROFILE block. Set 'yourAngle' to ONE short, specific sentence connecting THIS bet to their tendencies — especially their record in this exact bet type (the line marked 'most relevant') or their archetype/streak. Be a sharp, encouraging coach: flag when this is a spot they are historically weak or strong. You ALSO have the user's LEAGUE standing/matchup — when it is decisive for THIS bet, make yourAngle strategic: if they are trailing (in the matchup or standings) and this is a high-ceiling or plus-money play, frame it as the variance they need to catch up; if they are leading and this is a safe play, note that it protects the lead; on the FINAL WEEK while behind, push ceiling. Lead yourAngle with whichever of PROFILE or LEAGUE is more decisive for THIS bet. Use ONLY numbers from PROFILE, and return yourAngle as an empty string when PROFILE is absent or nothing is genuinely relevant. " +
       "Finally, give your verdict on taking THIS bet: set 'conviction' to an integer 0-100 for how strong a play it is based ONLY on DATA (records, scoring, line, odds) — be honest and use the full range, not just 50-70. Set 'verdict' to one of: 'strong' (a clear, well-supported play), 'lean' (mild edge), 'pass' (DATA is thin or there is no real edge — tell them to save their slip), or 'fade' (DATA points to the OTHER side). Never manufacture conviction; a real handicapper passes often. If DATA is largely missing, verdict must be 'pass' with low conviction.";
     user =
-      `BET\n- Sport: ${ctx.sport}\n- Type: ${ctx.betType}\n- Selection: ${ctx.selection}` +
+      `BET\n- Sport: ${(Array.isArray(ctx.sports)&&ctx.sports.length>1)?ctx.sports.join(" + "):ctx.sport}\n- Type: ${ctx.betType}\n- Selection: ${ctx.selection}` +
       (ctx.line != null ? `\n- Line: ${ctx.line}` : "") +
       (ctx.odds ? `\n- Odds: ${ctx.odds}` : "") +
       (ctx.game ? `\n- Game: ${ctx.game}` : "") +
@@ -760,7 +760,7 @@ export default async function handler(req, res) {
 
     const day = new Date().toISOString().slice(0, 10);
     const leagueSig = ctx.leagueCtx ? `${ctx.leagueCtx.myRank || ""}_${ctx.leagueCtx.matchupGap != null ? Math.round(ctx.leagueCtx.matchupGap) : ""}` : "";
-    const key = hashKey(["v7", ctx.sport, ctx.betType, ctx.selection, ctx.line, ctx.game, ctx.question || "", _uid || "", ctx.persona || "", leagueSig, day].join("|"));
+    const key = hashKey(["v8", ctx.sport, (Array.isArray(ctx.sports)?ctx.sports.join("+"):""), ctx.betType, ctx.selection, ctx.line, ctx.game, ctx.question || "", _uid || "", ctx.persona || "", leagueSig, day].join("|"));
 
     const cached = await getCached(key);
     if (cached) return res.status(200).json({ ...cached, cached: true });
