@@ -1189,8 +1189,8 @@ export default async function handler(req, res) {
     // league. The cron job (no leagueId) grades every league.
     const onlyLeagueId = req.body?.leagueId;
     const leagues = onlyLeagueId
-      ? await sbGet(`leagues?id=eq.${onlyLeagueId}&select=id,sport,current_week,league_type,name`)
-      : await sbGet("leagues?select=id,sport,current_week,league_type,name&is_demo=eq.false&completed_at=is.null");
+      ? await sbGet(`leagues?id=eq.${onlyLeagueId}&select=id,sport,sports,current_week,league_type,name`)
+      : await sbGet("leagues?select=id,sport,sports,current_week,league_type,name&is_demo=eq.false&completed_at=is.null");
     if (!Array.isArray(leagues)) throw new Error("Failed to fetch leagues");
 
     for (const league of leagues) {
@@ -1202,8 +1202,13 @@ export default async function handler(req, res) {
       // differently-worded nudges per week. Silent while it was bell-only; it would
       // have become two phone buzzes the moment push was wired in.
 
-      const espnMap = ESPN_MAP[league.sport];
-      if (!espnMap) continue;
+      // Multi-sport: a league carries sports[] (legacy .sport = first entry) and every
+      // pick row now records its own sport at lock time. Resolution is per-pick, with
+      // league.sport as the fallback for legacy rows, so a mixed NFL+MLB league grades
+      // both sides instead of silently stranding the second sport forever.
+      const _lgSports = (Array.isArray(league.sports) && league.sports.length ? league.sports : [league.sport]).filter((s) => ESPN_MAP[s]);
+      if (!_lgSports.length) continue;
+      const _spOf = (p) => (p && p.sport && ESPN_MAP[p.sport]) ? p.sport : (ESPN_MAP[league.sport] ? league.sport : _lgSports[0]);
 
       // Get all pending picks. Solo leagues are submit-driven and never advance
       // current_week (it stays 1), so grade EVERY pending week for solo — otherwise
@@ -1222,44 +1227,47 @@ export default async function handler(req, res) {
 
       // Fetch LIVE + recent scores from ESPN (free — does NOT touch the Odds API).
       // Cached per sport within this run so leagues sharing a sport don't refetch.
-      let games;
+      // Fetched for EVERY sport this league's pending picks actually reference.
+      const _needSports = [...new Set(picks.map((p) => _spOf(p)))];
       try {
-        if (!scoresCacheBySport[league.sport]) {
-          scoresCacheBySport[league.sport] = await fetchScoresESPN(league.sport);
+        for (const _sp of _needSports) {
+          if (!scoresCacheBySport[_sp]) {
+            scoresCacheBySport[_sp] = await fetchScoresESPN(_sp);
+          }
         }
-        games = scoresCacheBySport[league.sport];
       } catch (e) {
         results.errors.push(`${league.id}: scores fetch failed — ${e.message}`);
         continue;
       }
+      const _gamesFor = (p) => scoresCacheBySport[_spOf(p)] || [];
+      const _allGames = _needSports.flatMap((s) => scoresCacheBySport[s] || []);
 
-      // Build the player box-score index once per sport, only if props are pending.
-      const needProps = picks.some(p =>
+      // Build the player box-score index per sport, only for sports whose pending
+      // picks actually include props.
+      const _needsProp = (p) =>
         (p.slot||"").split("_")[0] === "prop"
         || (p.slot?.startsWith("longshot_") && (!((p.game || "").includes("@")) || !!parseProp(p.pick_name)))
-        || ((p.slot||"").split("_")[0] === "free" && parseProp(p.pick_name))
-      );
-      let playerIndex = {};
-      if (needProps) {
-        const em = ESPN_MAP[league.sport];
-        if (playerIndexCache[league.sport] === undefined) {
-          let idx;
-          if (league.sport === "mlb") {
-            try { idx = await buildMlbStatsApiIndex(); } catch (e) { idx = {}; }
-            if (!idx || Object.keys(idx).length === 0) { idx = em ? await buildPlayerStatIndex(em.sp, em.lg) : {}; }  // StatsAPI down -> ESPN fallback
-          } else {
-            idx = em ? await buildPlayerStatIndex(em.sp, em.lg) : {};
-          }
-          playerIndexCache[league.sport] = idx;
+        || ((p.slot||"").split("_")[0] === "free" && parseProp(p.pick_name));
+      const _propSports = [...new Set(picks.filter(_needsProp).map((p) => _spOf(p)))];
+      for (const _sp of _propSports) {
+        if (playerIndexCache[_sp] !== undefined) continue;
+        const em = ESPN_MAP[_sp];
+        let idx;
+        if (_sp === "mlb") {
+          try { idx = await buildMlbStatsApiIndex(); } catch (e) { idx = {}; }
+          if (!idx || Object.keys(idx).length === 0) { idx = em ? await buildPlayerStatIndex(em.sp, em.lg) : {}; }  // StatsAPI down -> ESPN fallback
+        } else {
+          idx = em ? await buildPlayerStatIndex(em.sp, em.lg) : {};
         }
-        playerIndex = playerIndexCache[league.sport];
+        playerIndexCache[_sp] = idx;
       }
+      const _indexFor = (p) => playerIndexCache[_spOf(p)] || {};
 
       // ── Diagnostics: what did the data sources actually return? ──
-      results.debug.scoresTotal += games.length;
-      const completedLabels = games.filter(g => g.completed).map(g => `${g.away_team} @ ${g.home_team}`);
+      results.debug.scoresTotal += _allGames.length;
+      const completedLabels = _allGames.filter(g => g.completed).map(g => `${g.away_team} @ ${g.home_team}`);
       results.debug.scoresCompleted = [...new Set([...results.debug.scoresCompleted, ...completedLabels])].slice(0, 25);
-      results.debug.indexedPlayers = Math.max(results.debug.indexedPlayers, Object.keys(playerIndex || {}).length);
+      results.debug.indexedPlayers = Math.max(results.debug.indexedPlayers, ..._propSports.map((s) => Object.keys(playerIndexCache[s] || {}).length), 0);
       const noteSkip = (pick, reason) => {
         results.reasons[reason] = (results.reasons[reason] || 0) + 1;
         if (results.samples.length < 14) results.samples.push({ slot: pick.slot, name: pick.pick_name, game: pick.game, reason });
@@ -1280,7 +1288,7 @@ export default async function handler(req, res) {
         if (isParlay) {
           // Grade each leg individually
           const legInfos = group.map(() => ({}));
-          const legResults = group.map((p, i) => gradePick(p, games, playerIndex, legInfos[i]));
+          const legResults = group.map((p, i) => gradePick(p, _gamesFor(p), _indexFor(p), legInfos[i]));
 
           // A voided leg (postponed/cancelled game) settles as "P" RIGHT AWAY so the user
           // gets the REPLACE button while the week is still open. Because the group query
@@ -1291,7 +1299,7 @@ export default async function handler(req, res) {
           // and anyLost both false and the parlay stalled as "skipped" forever.
           for (let i = 0; i < group.length; i++) {
             if (legResults[i] === "P") {
-              await sbPatch(`picks?id=eq.${group[i].id}`, { result: "P", points_earned: 0, ...(gameScoreFor(group[i], games) || {}) });
+              await sbPatch(`picks?id=eq.${group[i].id}`, { result: "P", points_earned: 0, ...(gameScoreFor(group[i], _gamesFor(group[i])) || {}) });
               results.graded++;
             }
           }
@@ -1315,7 +1323,7 @@ export default async function handler(req, res) {
             if (live[0].power_up_id === "double") totalPts *= 2;
             // First remaining leg gets the points, rest get 0
             for (let k = 0; k < live.length; k++) {
-              await sbPatch(`picks?id=eq.${live[k].id}`, { result: "W", points_earned: k === 0 ? totalPts : 0, ...(gameScoreFor(live[k], games) || {}) });
+              await sbPatch(`picks?id=eq.${live[k].id}`, { result: "W", points_earned: k === 0 ? totalPts : 0, ...(gameScoreFor(live[k], _gamesFor(live[k])) || {}) });
             }
             await notifyPick(live[0], league, "W", totalPts, live.length);
             results.graded += live.length;
@@ -1326,13 +1334,13 @@ export default async function handler(req, res) {
             let placed = false;
             for (const i of liveIdx) {
               const give = legResults[i] === "W" && !placed; if (give) placed = true;
-              await sbPatch(`picks?id=eq.${group[i].id}`, { result: legResults[i], points_earned: give ? insuredPts : 0, ...(gameScoreFor(group[i], games) || {}) });
+              await sbPatch(`picks?id=eq.${group[i].id}`, { result: legResults[i], points_earned: give ? insuredPts : 0, ...(gameScoreFor(group[i], _gamesFor(group[i])) || {}) });
             }
             await notifyPick(live[0], league, "W", insuredPts, live.length);
             results.graded += live.length;
           } else if (anyLost) {
             for (const p of live) {
-              await sbPatch(`picks?id=eq.${p.id}`, { result: "L", points_earned: 0, ...(gameScoreFor(p, games) || {}) });
+              await sbPatch(`picks?id=eq.${p.id}`, { result: "L", points_earned: 0, ...(gameScoreFor(p, _gamesFor(p)) || {}) });
             }
             await notifyPick(live[0], league, "L", 0, live.length);
             results.graded += live.length;
@@ -1347,7 +1355,7 @@ export default async function handler(req, res) {
             if (pick.parlay_legs && Array.isArray(pick.parlay_legs) && pick.parlay_legs.length) {
               const _legs = pick.parlay_legs;
               const _leg = (l) => ({ user_id: pick.user_id, week: pick.week, multiplier: pick.multiplier, slot: (l.category || "ml") + "_0", pick_name: l.pick, game: l.game || "", game_date: l.gameTime || null, implied_odds: l.impliedOdds, event_id: l.eventId || null, market_key: l.marketKey || null, outcome: l.outcome || null, outcome_point: (l.point != null ? l.point : null), sel_key: l.selKey || null });
-              const _res = _legs.map((l) => gradePick(_leg(l), games, playerIndex, {}));
+              const _res = _legs.map((l) => gradePick(_leg(l), _gamesFor(pick), _indexFor(pick), {}));
               if (_res.some((r) => r === null)) { results.skipped++; noteSkip(pick, "parlay_leg_pending"); continue; }
               const _kept = _legs.map((_, i) => i).filter((i) => _res[i] !== "P");   // drop voided/pushed legs
               let _pr, _oddsN = 0;
@@ -1361,13 +1369,13 @@ export default async function handler(req, res) {
               continue;
             }
             const info = {};
-            const result = gradePick(pick, games, playerIndex, info);
+            const result = gradePick(pick, _gamesFor(pick), _indexFor(pick), info);
             if (result === null) { results.skipped++; noteSkip(pick, info.reason || "unknown"); continue; }
 
             let pts = result === "W" ? calcPoints(pick.multiplier, pick.implied_odds) : 0;
             if (result === "W" && pick.power_up_id === "double") pts *= 2;
             if (result === "W" && pick.power_up_id === "second") pts = parseFloat((pts * 0.5).toFixed(1));
-            await sbPatch(`picks?id=eq.${pick.id}`, { result, points_earned: pts, ...(gameScoreFor(pick, games) || {}) });
+            await sbPatch(`picks?id=eq.${pick.id}`, { result, points_earned: pts, ...(gameScoreFor(pick, _gamesFor(pick)) || {}) });
             await notifyPick(pick, league, result, pts, 1);
             results.graded++;
           }
