@@ -78,18 +78,25 @@ export const maxDuration = 60;
 // API credits burned here. Capped + parallel to bound latency.
 const MAX_FORM_GAMES = 5;
 async function formBlock(sport, candidates) {
+  // Multi-sport slips: each candidate may carry its own `sport` (the client tags
+  // them from the odds feed). Resolve form per game from that tag; the top-level
+  // `sport` param is only the fallback for candidates without one.
   const games = [];
+  const sportOfGame = {};
   for (const list of Object.values(candidates || {})) {
     for (const b of (list || [])) {
-      if (b && b.game && !games.includes(b.game)) games.push(b.game);
+      if (!b || !b.game) continue;
+      if (!games.includes(b.game)) games.push(b.game);
+      if (b.sport && !sportOfGame[b.game]) sportOfGame[b.game] = String(b.sport).toLowerCase();
     }
   }
   const use = games.slice(0, MAX_FORM_GAMES);
   if (!use.length) return "";
   const rows = await Promise.all(use.map(async (g) => {
+    const gSport = sportOfGame[g] || sport;
     let form = null, pack = null;
-    try { form = await teamFormFor(sport, g); } catch { form = null; }
-    if (sport === "mlb") { try { pack = await buildMlbPack({ game: g }); } catch { pack = null; } }
+    try { form = await teamFormFor(gSport, g); } catch { form = null; }
+    if (gSport === "mlb") { try { pack = await buildMlbPack({ game: g }); } catch { pack = null; } }
     if (!form && !pack) return null;
     const bits = [];
     if (form) {
@@ -171,6 +178,7 @@ export default async function handler(req, res) {
       "For EACH slot, choose the single best candidate id listed under THAT SLOT'S OWN category. " +
       "A 'longshot' slot wants ONE id: every candidate there is already priced +400 or longer, so a single bet qualifies on its own. A longshot is a PRICE, not a parlay. Only return 2-3 ids for that slot if you deliberately want a parlay, and never chase a silly number — two legs is plenty, and a combined price beyond about +2500 is a lottery ticket, not a pick. " +
       "Use ONLY ids that appear under that slot's category in CANDIDATES — an id from another category is a hard error, because the pick would be graded as the slot's type and score wrong. " +
+      "A category like 'prop:hr' is a NARROWED prop slot (that one market only) — treat it as its own category and never borrow from plain 'prop' or any other narrowed prop category. " +
       "NEVER pick two bets that contradict each other within the same game: one team's moneyline and the OTHER team's spread, or both sides of a total. Treat each game as one side — if you back the Phillies moneyline, do not also take the Mets spread. A slip that hedges itself wins nothing. " +
       "If a slot's category has no candidates, omit that slot entirely rather than filling it from another category. " +
       `Assign multipliers from MULT POOL: [${poolLine}]. Use each entry in the pool EXACTLY once across the slots — the pool may contain duplicates, and a duplicate means that value is used that many times. Do not invent a multiplier outside the pool. UNLESS a slot has a fixed mult (then use it). Put your HIGHEST mult on your HIGHEST-conviction pick. ` +
