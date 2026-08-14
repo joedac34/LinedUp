@@ -42,3 +42,4 @@ rls_probe.mjs
 *.bak
 *.bak[0-9]
 apply_demo_*.py
+apple_secret.js

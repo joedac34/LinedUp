@@ -11314,7 +11314,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {!isPro && realLeagues.some(lg=>lg.isCommissioner) && (
    <div style={{margin:"10px 0 0",background:"rgba(10,132,255,0.08)",border:"0.5px solid rgba(10,132,255,0.2)",borderRadius:RAD.sm,padding:"9px 12px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}} onClick={()=>setShowPaywall("settings")}>
      <div>
-       <div style={{fontSize:12,fontWeight:600,color:IOS.blue}}>Unlock Commish Pro</div>
+       <div style={{fontSize:12,fontWeight:600,color:IOS.blue}}>Unlock PickLock Pro</div>
        <div style={{fontSize:11,color:"#555",marginTop:1}}>Custom picks, multi-sport, power-ups</div>
      </div>
      <div style={{fontSize:11,fontWeight:700,color:IOS.blue,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.25)",borderRadius:RAD.sm,padding:"4px 9px",whiteSpace:"nowrap"}}>$5/mo</div>
@@ -12477,7 +12477,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      <div style={{fontSize:13,color:"#555"}}>Add more picks</div>
      <div style={{display:"flex",alignItems:"center",gap:6,background:"rgba(10,132,255,0.1)",border:"0.5px solid rgba(10,132,255,0.25)",borderRadius:RAD.sm,padding:"3px 8px"}}>
        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-       <span style={{fontSize:10,fontWeight:700,color:IOS.blue}}>Commish Pro</span>
+       <span style={{fontSize:10,fontWeight:700,color:IOS.blue}}>PickLock Pro</span>
      </div>
    </div>
  )}
@@ -16126,7 +16126,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    {/* Commish Pro toggle */}
    <div style={{background:"#111",borderRadius:RAD.md,padding:"11px 13px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",border:"0.5px solid #1E1E1E"}}>
      <div>
-       <div style={{fontSize:13,fontWeight:600,color:"#fff"}}>Commish Pro</div>
+       <div style={{fontSize:13,fontWeight:600,color:"#fff"}}>PickLock Pro</div>
        <div style={{fontSize:11,color:"rgba(255,255,255,0.6)",marginTop:2}}>Custom picks, multi-sport, power-ups</div>
      </div>
      <div onClick={()=>isPro?setProStatus(false):setShowPaywall("settings")} style={{width:44,height:26,borderRadius:RAD.md,background:isPro?IOS.blue:"#2A2A2A",border:`1px solid ${isPro?IOS.blue:"#3A3A3A"}`,position:"relative",cursor:"pointer",transition:"background .2s"}}>
@@ -17069,7 +17069,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      </div>
      <div style={{position:"relative",display:"flex",alignItems:"center",gap:7,borderTop:_hair,padding:"9px 12px",fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.6)"}}>
        <span style={{width:6,height:6,borderRadius:"50%",background:isPro?IOS.green:"rgba(255,255,255,0.3)",boxShadow:isPro?"0 0 7px "+IOS.green:"none"}}/>
-       <span style={{color:"#fff"}}>Commish Pro</span>{isPro?" · full control":" · limited"}
+       <span style={{color:"#fff"}}>PickLock Pro</span>{isPro?" · full control":" · limited"}
        <span onClick={()=>isPro?setProStatus(false):setShowPaywall("settings")} style={{marginLeft:"auto",color:IOS.blue,fontWeight:700,cursor:"pointer"}}>{isPro?"Manage":"Unlock"}</span>
      </div>
    </div>
@@ -18918,7 +18918,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
      </div>
      <div style={{fontSize:16,fontWeight:700,color:"#fff",marginBottom:6}}>Power-ups are a Pro feature</div>
-     <div style={{fontSize:13,color:"#666",marginBottom:16,lineHeight:1.5}}>Upgrade to Commish Pro to unlock Double Down, Spread Enhancer, Insurance, and more.</div>
+     <div style={{fontSize:13,color:"#666",marginBottom:16,lineHeight:1.5}}>Upgrade to PickLock Pro to unlock Double Down, Spread Enhancer, Insurance, and more.</div>
      <button onClick={()=>setShowPaywall("powerups")} style={{background:IOS.blue,color:"#fff",border:"none",borderRadius:RAD.sm,padding:"12px 24px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
        Unlock Power-ups
      </button>
@@ -19806,10 +19806,10 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {showPaywall && (()=>{
    const configs = {
      ai:{icon:"star",title:"Unlock Plok + Pro",sub:"Plok is your AI pick analyst — data-backed reads on every game and prop, a +EV value finder, and unlimited insights.",features:["Plok AI analyst on every game & prop","+EV value finder","Recent form, splits, matchup & injuries","Multi-sport leagues & custom settings"]},
-     picks:{icon:"ti-plus",title:"Unlimited picks",sub:"Commish Pro lets you add as many pick slots as you want each week.",features:["Unlimited pick slots per week","Custom multipliers on any slot","NFL, NBA, MLB, NHL","Power-ups and custom pick types"]},
+     picks:{icon:"ti-plus",title:"Unlimited picks",sub:"PickLock Pro lets you add as many pick slots as you want each week.",features:["Unlimited pick slots per week","Custom multipliers on any slot","NFL, NBA, MLB, NHL","Power-ups and custom pick types"]},
      settings:{icon:"settings",title:"Custom league settings",sub:"Set your own pick counts, multiplier ranges, and allowed pick types.",features:["Custom pick count per week","Custom multiplier ranges","Restrict or expand pick types","Multi-sport leagues"]},
      sport:{icon:"world",title:"Multi-sport leagues",sub:"Run your league across NFL, NBA, MLB, and NHL — all in one place.",features:["NFL, NBA, MLB, NHL support","Custom pick counts and pick types","Custom multiplier ranges","Power-ups for your league"]},
-     powerups:{icon:"bolt",title:"Power-ups are a Pro feature",sub:"Double Down, Spread Enhancer, Insurance and more are unlocked with Commish Pro.",features:["All current and future power-ups","Unlimited picks and custom settings","Multi-sport league support"]},
+     powerups:{icon:"bolt",title:"Power-ups are a Pro feature",sub:"Double Down, Spread Enhancer, Insurance and more are unlocked with PickLock Pro.",features:["All current and future power-ups","Unlimited picks and custom settings","Multi-sport league support"]},
    };
    const cfg = configs[showPaywall]||configs.picks;
    // Same opt-in as the dev panel. Was a hardcoded user id, which shipped a real
@@ -19909,7 +19909,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
          <div style={{fontSize:18,fontWeight:700,color:"#fff",marginBottom:4}}>Your league is live</div>
          <div style={{fontSize:13,color:"#666",marginBottom:16,lineHeight:1.5}}>Want more control over how your league works?</div>
          <div style={{background:"#0A0A0A",border:"0.5px solid #1E1E1E",borderRadius:RAD.sm,padding:"12px",marginBottom:16}}>
-           <div style={{fontSize:10,fontWeight:700,color:IOS.blue,letterSpacing:.5,textTransform:"uppercase",marginBottom:10}}>Commish Pro unlocks</div>
+           <div style={{fontSize:10,fontWeight:700,color:IOS.blue,letterSpacing:.5,textTransform:"uppercase",marginBottom:10}}>PickLock Pro unlocks</div>
            {["Set custom pick counts per week","Add NBA, MLB, or NHL picks","Unlock power-ups for your league"].map((f,i)=>(
              <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:i<2?"0.5px solid #1A1A1A":"none"}}>
                <div style={{width:6,height:6,borderRadius:"50%",background:IOS.blue,flexShrink:0}}/>
@@ -19918,7 +19918,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
            ))}
          </div>
          <button onClick={()=>{setShowPostLeagueUpsell(false);setShowPaywall("ai");}} style={{display:"block",width:"100%",background:IOS.blue,color:"#fff",border:"none",borderRadius:RAD.sm,padding:13,fontSize:14,fontWeight:700,textAlign:"center",marginBottom:10,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
-           Upgrade to Commish Pro
+           Upgrade to PickLock Pro
          </button>
          <button onClick={()=>setShowPostLeagueUpsell(false)} style={{display:"block",width:"100%",background:"none",border:"none",color:"#555",fontSize:12,textAlign:"center",cursor:"pointer",fontFamily:"Barlow,sans-serif",padding:4}}>
            I'm good with free for now
