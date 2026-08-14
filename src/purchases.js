@@ -23,9 +23,9 @@ export async function initPurchases(supabaseUserId) {
   if (!isNative() || !supabaseUserId) return false;
 
   try {
-    // TEMP: debug logging on in all builds while verifying the RevenueCat chain.
-    // Revert to `if (import.meta.env.DEV) { ... }` before shipping to the App Store.
-    await Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG });
+    if (import.meta.env.DEV) {
+      await Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG });
+    }
     await Purchases.configure({
       apiKey: RC_IOS_API_KEY,
       appUserID: supabaseUserId,
@@ -122,26 +122,4 @@ export async function onProStatusChange(handler) {
 
 function hasProEntitlement(customerInfo) {
   return Boolean(customerInfo?.entitlements?.active?.[PRO_ENTITLEMENT]);
-}
-
-// TEMP DEBUG HANDLE — remove before shipping.
-// Lets you poke at RevenueCat from the Safari Web Inspector console:
-//   await window.__rc.packages()
-//   await window.__rc.status()
-if (typeof window !== 'undefined') {
-  window.__rc = {
-    packages: async () => {
-      const pkgs = await getProPackages();
-      const out = pkgs.map((p) => ({
-        id: p.identifier,
-        product: p.product?.identifier,
-        price: p.product?.priceString,
-      }));
-      console.log('PACKAGES:', out);
-      return out;
-    },
-    status: checkProStatus,
-    restore: restorePurchases,
-    isNative: isNative(),
-  };
 }
