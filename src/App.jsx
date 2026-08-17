@@ -15724,7 +15724,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div style={{padding:"20px 20px 0"}}>
  {/* Step indicator */}
  <div style={{display:"flex",gap:5,marginBottom:16}}>
-   {(isPro?[0,1,2]:[0,1]).map(i=><div key={i} style={{flex:1,height:3,borderRadius:2,background:newLeagueStep>=i?IOS.blue:"#1E1E1E",transition:"background .2s"}}/>)}
+   {[0,1,2].map(i=><div key={i} style={{flex:1,height:3,borderRadius:2,background:newLeagueStep>=i?IOS.blue:"#1E1E1E",transition:"background .2s"}}/>)}
  </div>
 
  {/* ── STEP 0: League type ── */}
@@ -15839,7 +15839,10 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 
  {(()=>{const ready=newLeagueSlots.every(s=>s.type)&&!creatingLeague;const tot=newLeaguePool.reduce((a,b)=>a+b,0);const uniq=new Set(newLeagueSlots.map(s=>s.type)).size;return (<>
  <div style={{textAlign:"center",fontSize:11,color:"#555",fontWeight:600,margin:"6px 0 9px"}}>{newLeagueSlots.length} picks · {tot} max multiplier{uniq===1&&newLeagueSlots.length>1?" · single-type league":""}</div>
- <button disabled={!ready} onClick={()=>{if(ready)createLeague(newLeagueName.trim(), newLeagueSports[0]);}} style={{width:"100%",background:ready?IOS.blue:"rgba(255,255,255,0.08)",border:"none",borderRadius:RAD.md,padding:"15px",fontFamily:"Barlow,sans-serif",fontSize:16,fontWeight:800,color:ready?"#fff":"rgba(255,255,255,0.25)",cursor:ready?"pointer":"default",marginBottom:4}}>{creatingLeague?"Creating...":"Create League"}</button>
+ <button disabled={!ready} onClick={()=>{if(ready)createLeague(newLeagueName.trim(), newLeagueSports[0]);}} style={{width:"100%",background:ready?IOS.blue:"rgba(255,255,255,0.08)",border:"none",borderRadius:RAD.md,padding:"15px",fontFamily:"Barlow,sans-serif",fontSize:16,fontWeight:800,color:ready?"#fff":"rgba(255,255,255,0.25)",cursor:ready?"pointer":"default",marginBottom:4}}>{(()=>{ if(creatingLeague) return "Creating...";
+   const _cl = newLeagueSlots.length===DEFAULT_SLOTS.length && newLeagueSlots.every((s,i)=>s.type===DEFAULT_SLOTS[i].type&&!s.market) && newLeaguePool.length===DEFAULT_SLOTS.length && newLeaguePool.every((m,i)=>Number(m)===i+1);
+   if(isPro||_cl) return "Create League";
+   return "Create \u00B7 $"+leaguePrice(newLeagueWeeks, newLeagueSlots.length)+" to unlock (or go Pro)"; })()}</button>
  </>);})()}
 
  {presetSheet&&(
@@ -16146,10 +16149,10 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    {/* Create button */}
    <button
      disabled={!newLeagueSports.length||!newLeagueName.trim()||creatingLeague}
-     onClick={()=>{ if(!newLeagueSports.length||!newLeagueName.trim()) return; if(isPro){ setNewLeagueStep(2); } else { createLeague(newLeagueName.trim(), newLeagueSports[0]); } }}
+     onClick={()=>{ if(!newLeagueSports.length||!newLeagueName.trim()) return; setNewLeagueStep(2); }}
      style={{width:"100%",background:newLeagueSports.length&&newLeagueName.trim()?IOS.blue:"rgba(255,255,255,0.08)",border:"none",borderRadius:RAD.md,padding:"13px",fontFamily:"Barlow,sans-serif",fontSize:15,fontWeight:700,color:newLeagueSports.length&&newLeagueName.trim()?"#fff":"rgba(255,255,255,0.25)",cursor:newLeagueSports.length&&newLeagueName.trim()?"pointer":"default",transition:"all .2s",marginBottom:4}}
    >
-     {isPro?"Continue →":(creatingLeague?"Creating...":"Create League")}
+     {"Continue \u2192"}
    </button>
    </>
  )}
