@@ -7277,7 +7277,7 @@ function App() {
  const weekCap = leagueMaxWeeks(new Date(), _lgSportsSel, newLeagueSlots, 18);
  useEffect(()=>{ if(weekCap.max>0 && newLeagueWeeks>weekCap.max) setNewLeagueWeeks(weekCap.max); }, [weekCap.max]);
  const leaguePrice = (weeks, slots) => { const raw = 2*(Number(weeks)||0) + 1*(Number(slots)||0); return Math.max(10, Math.min(50, Math.floor(raw/5)*5)); };
- const startLeagueCheckout = async (leagueId) => { if(IS_NATIVE) return; try { const r = await fetch(API_BASE+"/api/checkout",{method:"POST",headers:await authHeaders(),body:JSON.stringify({plan:"league",leagueId})}); const d = await r.json(); if(r.ok && d.url){ window.location.href=d.url; return; } alert("Couldn't start checkout: "+((d&&d.error)||"unknown")); } catch(e){ alert("Checkout failed."); } };
+ const startLeagueCheckout = async (leagueId) => { if(IS_NATIVE){ alert("Unlocking custom leagues isn\u2019t available in the iOS app yet."); return; } try { const r = await fetch(API_BASE+"/api/checkout",{method:"POST",headers:await authHeaders(),body:JSON.stringify({plan:"league",leagueId})}); const d = await r.json(); if(r.ok && d.url){ window.location.href=d.url; return; } alert("Couldn't start checkout: "+((d&&d.error)||"unknown")); } catch(e){ alert("Checkout failed."); } };
  const openBillingPortal = async () => { try { const r = await fetch(API_BASE+"/api/portal",{method:"POST",headers:await authHeaders()}); const d = await r.json(); if(r.ok && d.url){ window.location.href=d.url; return; } alert((d&&d.error==="no active subscription to manage") ? "No active subscription to manage." : ("Couldn't open billing: "+((d&&d.error)||"unknown"))); } catch(e){ alert("Couldn't open billing."); } };
  const createLeague = async (name, sportId) => {
  if(!user||!name||!sportId) return;
@@ -7285,12 +7285,21 @@ function App() {
  setCreatingLeague(true);
  const inviteCode = Math.random().toString(36).substring(2,8).toUpperCase();
  const bracketWeeks = {4:2,8:3,16:4,32:5};
- const sportsArr = newLeagueSports.length > 0 ? newLeagueSports : [sportId];
+ const _sportsRaw = newLeagueSports.length > 0 ? newLeagueSports : [sportId];
+ const sportsArr = isPro ? _sportsRaw : _sportsRaw.slice(0,1); // multi-sport is Pro; clamp regardless of how state got here
  // Safety net: never persist a league longer than its slots can actually be filled.
  const _capNow = leagueMaxWeeks(new Date(), sportsArr, newLeagueSlots, 18);
  const seasonWeeks = newLeagueType==='bracket' ? (bracketWeeks[newLeagueSize]||3) : (_capNow.max>0 ? Math.min(newLeagueWeeks, _capNow.max) : newLeagueWeeks);
- const _hasCustom = Array.isArray(newLeagueSlots) && newLeagueSlots.length && newLeagueSlots.every(s=>s.type);
+ const _typed = Array.isArray(newLeagueSlots) && newLeagueSlots.length>0 && newLeagueSlots.every(s=>s.type);
+ const _classic = _typed && newLeagueSlots.length===DEFAULT_SLOTS.length
+   && newLeagueSlots.every((s,i)=> s.type===DEFAULT_SLOTS[i].type && !s.market)
+   && (newLeaguePool||[]).length===DEFAULT_SLOTS.length && (newLeaguePool||[]).every((m,i)=>Number(m)===i+1);
+ const _hasCustom = _typed && !_classic;
  const _needsPaywall = !isPro && _hasCustom;
+ // Native can't sell the one-time unlock (no Stripe in the iOS app), so a free
+ // custom create routes to the Pro paywall (RevenueCat IAP) BEFORE any insert —
+ // never strand an unpaid league behind a modal that can't render.
+ if(_needsPaywall && IS_NATIVE){ setShowPaywall("settings"); setCreatingLeague(false); return; }
  const {data,error} = await supabase.from("leagues").insert({
    name, sport:sportsArr[0], sports:sportsArr, commissioner_id:user.id, invite_code:inviteCode,
    max_members:newLeagueSize, target_size:newLeagueSize, pick_deadline:"Sun 1PM ET",
@@ -11314,7 +11323,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {!isPro && realLeagues.some(lg=>lg.isCommissioner) && (
    <div style={{margin:"10px 0 0",background:"rgba(10,132,255,0.08)",border:"0.5px solid rgba(10,132,255,0.2)",borderRadius:RAD.sm,padding:"9px 12px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}} onClick={()=>setShowPaywall("settings")}>
      <div>
-       <div style={{fontSize:12,fontWeight:600,color:IOS.blue}}>Unlock PickLock Pro</div>
+       <div style={{fontSize:12,fontWeight:600,color:IOS.blue}}>Unlock Commish Pro</div>
        <div style={{fontSize:11,color:"#555",marginTop:1}}>Custom picks, multi-sport, power-ups</div>
      </div>
      <div style={{fontSize:11,fontWeight:700,color:IOS.blue,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.25)",borderRadius:RAD.sm,padding:"4px 9px",whiteSpace:"nowrap"}}>$5/mo</div>
@@ -12477,7 +12486,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      <div style={{fontSize:13,color:"#555"}}>Add more picks</div>
      <div style={{display:"flex",alignItems:"center",gap:6,background:"rgba(10,132,255,0.1)",border:"0.5px solid rgba(10,132,255,0.25)",borderRadius:RAD.sm,padding:"3px 8px"}}>
        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-       <span style={{fontSize:10,fontWeight:700,color:IOS.blue}}>PickLock Pro</span>
+       <span style={{fontSize:10,fontWeight:700,color:IOS.blue}}>Commish Pro</span>
      </div>
    </div>
  )}
@@ -15657,7 +15666,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
       // Step back through the flow first; only leave from the first step.
       if(newLeagueStep>0){ setNewLeagueStep(newLeagueStep-1); return; }
       setScreen("leagues"); setShowNewLeague(false);setNewLeagueSport(null);setNewLeagueSports([]);setNewLeagueName("");setNewLeagueSize(8);setNewLeagueType(null);setNewLeagueStep(0);setNewLeagueWeeks(18);
- setNewLeagueSlots(DEFAULT_SLOTS); setSlotSheetIdx(null);setNewLeaguePrivacy('private');setNewLeaguePlayoffs(true);setNewLeaguePlayoffSize(4);setNewLeagueStartMode('auto');
+ setNewLeagueSlots(DEFAULT_SLOTS); setNewLeaguePool([1,2,3,4,5]); setSlotSheetIdx(null);setNewLeaguePrivacy('private');setNewLeaguePlayoffs(true);setNewLeaguePlayoffSize(4);setNewLeagueStartMode('auto');
     }} style={{width:31,height:31,borderRadius:RAD.md,background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
     </div>
@@ -16126,7 +16135,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    {/* Commish Pro toggle */}
    <div style={{background:"#111",borderRadius:RAD.md,padding:"11px 13px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",border:"0.5px solid #1E1E1E"}}>
      <div>
-       <div style={{fontSize:13,fontWeight:600,color:"#fff"}}>PickLock Pro</div>
+       <div style={{fontSize:13,fontWeight:600,color:"#fff"}}>Commish Pro</div>
        <div style={{fontSize:11,color:"rgba(255,255,255,0.6)",marginTop:2}}>Custom picks, multi-sport, power-ups</div>
      </div>
      <div onClick={()=>isPro?setProStatus(false):setShowPaywall("settings")} style={{width:44,height:26,borderRadius:RAD.md,background:isPro?IOS.blue:"#2A2A2A",border:`1px solid ${isPro?IOS.blue:"#3A3A3A"}`,position:"relative",cursor:"pointer",transition:"background .2s"}}>
@@ -16336,11 +16345,11 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      }catch(e){} };
      const _runItBack=()=>{ try{
        setNewLeagueName((lg.name||"League").slice(0,40));
-       setNewLeagueSports(Array.isArray(lg.sports)&&lg.sports.length?lg.sports:[lg.sport].filter(Boolean));
+       { const _sp=Array.isArray(lg.sports)&&lg.sports.length?lg.sports:[lg.sport].filter(Boolean); setNewLeagueSports(isPro?_sp:_sp.slice(0,1)); }
        setNewLeagueType(lg.league_type||"h2h");
        setNewLeagueWeeks(Number(lg.season_weeks)||18);
        setNewLeaguePrivacy(lg.privacy||"private");
-       const _cfg=parseSlotConfig(lg.slot_config); if(Array.isArray(_cfg)&&_cfg.length) setNewLeagueSlots(_cfg.map(s=>({...s})));
+       const _cfg=parseSlotConfig(lg.slot_config); if(Array.isArray(_cfg)&&_cfg.length){ setNewLeagueSlots(_cfg.map(s=>({...s}))); setNewLeaguePool(_cfg.map(s=>Number(s.mult)||1)); }
      }catch(e){}
      setShowNewLeague(true); };
      return (
@@ -17069,7 +17078,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      </div>
      <div style={{position:"relative",display:"flex",alignItems:"center",gap:7,borderTop:_hair,padding:"9px 12px",fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.6)"}}>
        <span style={{width:6,height:6,borderRadius:"50%",background:isPro?IOS.green:"rgba(255,255,255,0.3)",boxShadow:isPro?"0 0 7px "+IOS.green:"none"}}/>
-       <span style={{color:"#fff"}}>PickLock Pro</span>{isPro?" · full control":" · limited"}
+       <span style={{color:"#fff"}}>Commish Pro</span>{isPro?" · full control":" · limited"}
        <span onClick={()=>isPro?setProStatus(false):setShowPaywall("settings")} style={{marginLeft:"auto",color:IOS.blue,fontWeight:700,cursor:"pointer"}}>{isPro?"Manage":"Unlock"}</span>
      </div>
    </div>
@@ -18918,7 +18927,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
      </div>
      <div style={{fontSize:16,fontWeight:700,color:"#fff",marginBottom:6}}>Power-ups are a Pro feature</div>
-     <div style={{fontSize:13,color:"#666",marginBottom:16,lineHeight:1.5}}>Upgrade to PickLock Pro to unlock Double Down, Spread Enhancer, Insurance, and more.</div>
+     <div style={{fontSize:13,color:"#666",marginBottom:16,lineHeight:1.5}}>Upgrade to Commish Pro to unlock Double Down, Spread Enhancer, Insurance, and more.</div>
      <button onClick={()=>setShowPaywall("powerups")} style={{background:IOS.blue,color:"#fff",border:"none",borderRadius:RAD.sm,padding:"12px 24px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
        Unlock Power-ups
      </button>
@@ -19806,10 +19815,10 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {showPaywall && (()=>{
    const configs = {
      ai:{icon:"star",title:"Unlock Plok + Pro",sub:"Plok is your AI pick analyst — data-backed reads on every game and prop, a +EV value finder, and unlimited insights.",features:["Plok AI analyst on every game & prop","+EV value finder","Recent form, splits, matchup & injuries","Multi-sport leagues & custom settings"]},
-     picks:{icon:"ti-plus",title:"Unlimited picks",sub:"PickLock Pro lets you add as many pick slots as you want each week.",features:["Unlimited pick slots per week","Custom multipliers on any slot","NFL, NBA, MLB, NHL","Power-ups and custom pick types"]},
+     picks:{icon:"ti-plus",title:"Unlimited picks",sub:"Commish Pro lets you add as many pick slots as you want each week.",features:["Unlimited pick slots per week","Custom multipliers on any slot","NFL, NBA, MLB, NHL","Power-ups and custom pick types"]},
      settings:{icon:"settings",title:"Custom league settings",sub:"Set your own pick counts, multiplier ranges, and allowed pick types.",features:["Custom pick count per week","Custom multiplier ranges","Restrict or expand pick types","Multi-sport leagues"]},
      sport:{icon:"world",title:"Multi-sport leagues",sub:"Run your league across NFL, NBA, MLB, and NHL — all in one place.",features:["NFL, NBA, MLB, NHL support","Custom pick counts and pick types","Custom multiplier ranges","Power-ups for your league"]},
-     powerups:{icon:"bolt",title:"Power-ups are a Pro feature",sub:"Double Down, Spread Enhancer, Insurance and more are unlocked with PickLock Pro.",features:["All current and future power-ups","Unlimited picks and custom settings","Multi-sport league support"]},
+     powerups:{icon:"bolt",title:"Power-ups are a Pro feature",sub:"Double Down, Spread Enhancer, Insurance and more are unlocked with Commish Pro.",features:["All current and future power-ups","Unlimited picks and custom settings","Multi-sport league support"]},
    };
    const cfg = configs[showPaywall]||configs.picks;
    // Same opt-in as the dev panel. Was a hardcoded user id, which shipped a real
@@ -19909,7 +19918,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
          <div style={{fontSize:18,fontWeight:700,color:"#fff",marginBottom:4}}>Your league is live</div>
          <div style={{fontSize:13,color:"#666",marginBottom:16,lineHeight:1.5}}>Want more control over how your league works?</div>
          <div style={{background:"#0A0A0A",border:"0.5px solid #1E1E1E",borderRadius:RAD.sm,padding:"12px",marginBottom:16}}>
-           <div style={{fontSize:10,fontWeight:700,color:IOS.blue,letterSpacing:.5,textTransform:"uppercase",marginBottom:10}}>PickLock Pro unlocks</div>
+           <div style={{fontSize:10,fontWeight:700,color:IOS.blue,letterSpacing:.5,textTransform:"uppercase",marginBottom:10}}>Commish Pro unlocks</div>
            {["Set custom pick counts per week","Add NBA, MLB, or NHL picks","Unlock power-ups for your league"].map((f,i)=>(
              <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:i<2?"0.5px solid #1A1A1A":"none"}}>
                <div style={{width:6,height:6,borderRadius:"50%",background:IOS.blue,flexShrink:0}}/>
@@ -19918,7 +19927,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
            ))}
          </div>
          <button onClick={()=>{setShowPostLeagueUpsell(false);setShowPaywall("ai");}} style={{display:"block",width:"100%",background:IOS.blue,color:"#fff",border:"none",borderRadius:RAD.sm,padding:13,fontSize:14,fontWeight:700,textAlign:"center",marginBottom:10,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
-           Upgrade to PickLock Pro
+           Upgrade to Commish Pro
          </button>
          <button onClick={()=>setShowPostLeagueUpsell(false)} style={{display:"block",width:"100%",background:"none",border:"none",color:"#555",fontSize:12,textAlign:"center",cursor:"pointer",fontFamily:"Barlow,sans-serif",padding:4}}>
            I'm good with free for now
