@@ -1094,6 +1094,36 @@ const ageFrom = (ymd) => {
   return age;
 };
 const MIN_AGE = 18;
+const DOB_MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+// Reads the three DOB selects (idPrefix + -m/-d/-y) into "YYYY-MM-DD", or "" if
+// any part is unset. Impossible dates compose here and are rejected by ageFrom.
+const readDob = (idPrefix) => {
+  const g=(s)=>{ const el=document.getElementById(idPrefix+s); return el?(+el.value||0):0; };
+  const m=g("-m"), dd=g("-d"), y=g("-y");
+  if(!m||!dd||!y) return "";
+  return y+"-"+String(m).padStart(2,"0")+"-"+String(dd).padStart(2,"0");
+};
+// Shared month/day/year picker row. Native selects on purpose: iOS renders the
+// system wheel, which is the one date UI nobody misreads.
+const DobSelects = ({idPrefix, marginBottom}) => (
+  <div style={{textAlign:"left",marginBottom:marginBottom==null?12:marginBottom}}>
+    <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",color:"rgba(255,255,255,0.45)",margin:"0 2px 7px"}}>Date of birth</div>
+    <div style={{display:"flex",gap:8}}>
+      <select id={idPrefix+"-m"} className="auth-input" defaultValue="" style={{flex:1.35,width:"auto",minWidth:0,marginBottom:0,WebkitAppearance:"none",appearance:"none",color:"#fff"}}>
+        <option value="" disabled>Month</option>
+        {DOB_MONTHS.map((mm,i)=>(<option key={mm} value={i+1}>{mm}</option>))}
+      </select>
+      <select id={idPrefix+"-d"} className="auth-input" defaultValue="" style={{flex:0.85,width:"auto",minWidth:0,marginBottom:0,WebkitAppearance:"none",appearance:"none",color:"#fff"}}>
+        <option value="" disabled>Day</option>
+        {Array.from({length:31},(_,i)=>(<option key={i+1} value={i+1}>{i+1}</option>))}
+      </select>
+      <select id={idPrefix+"-y"} className="auth-input" defaultValue="" style={{flex:1,width:"auto",minWidth:0,marginBottom:0,WebkitAppearance:"none",appearance:"none",color:"#fff"}}>
+        <option value="" disabled>Year</option>
+        {Array.from({length:100},(_,i)=>{ const yr=new Date().getFullYear()-i; return (<option key={yr} value={yr}>{yr}</option>); })}
+      </select>
+    </div>
+  </div>
+);
 // Google OAuth client IDs. The iOS one is what the native SDK authenticates with;
 // the web one is what Supabase validates the token audience against. Both must be
 // listed in Supabase > Auth > Providers > Google > Client IDs or the token is rejected.
@@ -5533,6 +5563,15 @@ function App() {
    </div>
  );
  const notStartedBody = (<div className="body" style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center",padding:"70px 30px",gap:11}}><div style={{width:56,height:56,borderRadius:"50%",background:"rgba(255,159,10,0.12)",display:"flex",alignItems:"center",justifyContent:"center"}}><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke={IOS.orange} strokeWidth="2.2"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg></div><div style={{fontSize:18,fontWeight:800,color:"#fff"}}>{(activeLeague&&activeLeague.season_start&&new Date(activeLeague.season_start).getTime()>Date.now())?("Starts "+new Date(activeLeague.season_start).toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"})):"Season hasn’t started"}</div><div style={{fontSize:13.5,color:IOS.label2,lineHeight:1.5,maxWidth:250}}>{(activeLeague&&activeLeague.season_start&&new Date(activeLeague.season_start).getTime()>Date.now())?("Week 1 opens "+new Date(activeLeague.season_start).toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"})+" — everyone’s picks stay locked until then."):((activeLeague&&activeLeague.isCommissioner)?"Open Week 1 from the Home tab when you’re ready.":"Picks open once the commissioner starts the season.")}</div><button onClick={async()=>{ applyMode(true); try{ const lid=await getOrCreateSoloLeague(); setActiveLeagueId(lid||"solo"); }catch(e){} try{fetchSoloWeeks();}catch(e){} setScreen("picks"); }} style={{marginTop:8,background:"rgba(191,90,242,0.12)",border:"0.5px solid "+(IOS.purple||"#BF5AF2")+"66",color:(IOS.purple||"#BF5AF2"),borderRadius:RAD.md,padding:"11px 22px",fontSize:13.5,fontWeight:800,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Make picks in Solo instead →</button></div>);
+ const seasonOverBody = (<div className="body" key="seasonover" style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center",padding:"70px 30px",gap:11}}>
+   <div style={{width:56,height:56,borderRadius:"50%",background:"rgba(255,214,10,0.12)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+     <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke={IOS.yellow} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="6"/><path d="M9 13l-2 8 5-3 5 3-2-8"/></svg>
+   </div>
+   <div style={{fontSize:18,fontWeight:800,color:"#fff"}}>{((activeLeague&&activeLeague.name)||"This league")+" is in the books"}</div>
+   <div style={{fontSize:13.5,color:IOS.label2,lineHeight:1.5,maxWidth:260}}>{"The season is final \u2014 standings, slips and chat are all still browsable from the league page."}</div>
+   <button onClick={()=>{ setLeagueSubTab("overview"); setScreen("leagues"); }} style={{marginTop:8,background:"linear-gradient(90deg,#0A84FF,#5E5CE6)",border:"none",color:"#fff",borderRadius:RAD.md,padding:"12px 24px",fontSize:13.5,fontWeight:800,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>View season recap</button>
+   <button onClick={()=>setScreen("profile")} style={{background:"rgba(255,255,255,0.05)",border:"0.5px solid rgba(255,255,255,0.12)",color:"rgba(255,255,255,0.75)",borderRadius:RAD.md,padding:"10px 22px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Trophy case</button>
+ </div>);
  const sport = SPORTS[activeLeague?.sport] || SPORTS["nfl"];
  const SLOTS = sport.slots;
 
@@ -10276,10 +10315,10 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
     </div>
     <div style={{fontSize:24,fontWeight:800,color:"#fff",letterSpacing:-0.5,marginBottom:8,textAlign:"center"}}>One quick thing</div>
     <div style={{fontSize:14,color:"rgba(255,255,255,0.5)",lineHeight:1.6,marginBottom:20,textAlign:"center"}}>PickLock has always been 18+. We need your date of birth on file to keep it that way.</div>
-    <input id="dob-backfill" className="auth-input" type="date" max={new Date().toISOString().slice(0,10)} style={{marginBottom:dobErr?7:16,colorScheme:"dark"}}/>
+    <DobSelects idPrefix="dob-backfill" marginBottom={dobErr?7:16}/>
     {dobErr?(<div style={{fontSize:12.5,fontWeight:600,color:IOS.red,margin:"0 2px 14px",lineHeight:1.45}}>{dobErr}</div>):null}
     <button className="auth-cta" disabled={dobBusy} style={dobBusy?{opacity:0.55,cursor:"default"}:undefined} onClick={async()=>{
-      const v=(document.getElementById("dob-backfill")?.value||"").trim();
+      const v=readDob("dob-backfill");
       const a=ageFrom(v);
       if(a===null){ setDobErr("Please enter your date of birth."); return; }
       if(a<0){ setDobErr("That date is in the future."); return; }
@@ -10595,7 +10634,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {/* Neutral entry — no minimum stated beside the field. Announcing "18+" here
      just tells someone which year to pick. */}
  {authScreen==="signup"&&<div style={{fontSize:11,fontWeight:700,letterSpacing:"0.04em",textTransform:"uppercase",color:"rgba(255,255,255,0.34)",margin:"2px 0 6px 4px"}}>Date of birth</div>}
- {authScreen==="signup"&&<input id="auth-dob" className="auth-input" type="date" max={new Date().toISOString().slice(0,10)} style={{marginBottom:12,colorScheme:"dark"}}/>}
+ {authScreen==="signup"&&<DobSelects idPrefix="auth-dob" marginBottom={12}/>}
  {authScreen==="signup"&&<input id="auth-referral" className="auth-input" type="text" placeholder="Friend's referral code (optional)" defaultValue={(new URLSearchParams(window.location.search).get("ref")||"").toUpperCase()} style={{marginBottom:6}}/>}
  {authScreen==="signup"&&<div style={{fontSize:11,color:"rgba(255,255,255,0.34)",margin:"0 2px 14px",lineHeight:1.4}}>Have a league code? Leave this blank — you’ll join your league after signing in, from Leagues → Join.</div>}
  {authScreen==="login"&&<div onClick={()=>{ setForgotEmail((document.getElementById("auth-email")?.value||"").trim()); setForgotSent(false); setForgotErr(""); setForgotOpen(true); }} style={{textAlign:"center",fontSize:13,fontWeight:600,color:IOS.blue,cursor:"pointer",margin:"2px 0 14px"}}>Forgot password?</div>}
@@ -10610,7 +10649,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  // otherwise the date field is a slot machine.
  let _blocked=null; try{ _blocked=localStorage.getItem(AGE_BLOCK_KEY); }catch(e){}
  if(_blocked){ alert("This device is not eligible to create a PickLock account. If this is a mistake, email joe@picklockapp.com."); return; }
- const dob=(document.getElementById("auth-dob")?.value||"").trim();
+ const dob=readDob("auth-dob");
  const _age=ageFrom(dob);
  if(_age===null){ alert("Please enter your date of birth."); return; }
  if(_age<0){ alert("That date is in the future."); return; }
@@ -11997,7 +12036,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  )}
 
  {/* ══ PICKS ══ */}
- {screen==="picks"&&!isSoloMode&&(()=>{ if(!_lgReady){ return leagueLoadingBody; } if(seasonNotStarted){ return notStartedBody; }
+ {screen==="picks"&&!isSoloMode&&(()=>{ if(!_lgReady){ return leagueLoadingBody; } if(lgCompleted(activeLeague)){ return seasonOverBody; } if(seasonNotStarted){ return notStartedBody; }
  // Playoffs running and the bracket has not arrived yet: elimination is unknowable,
  // so render a skeleton rather than a builder we may have to yank away.
  if(!isSoloMode && activeLeague && (activeLeague.league_type||"h2h")==="h2h"
@@ -15144,7 +15183,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  }
 
  {/* ══ MATCHUP ══ */}
- {screen==="matchup"&&(
+ {screen==="matchup"&&!isSoloMode&&lgCompleted(activeLeague)&&seasonOverBody}
+ {screen==="matchup"&&!(!isSoloMode&&lgCompleted(activeLeague))&&(
  <>
 {activeLeague&&activeLeague.league_type==="points" ? (()=>{
  const cw = activeLeague.current_week||activeLeague.week||1;
