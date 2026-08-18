@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Picklock Fantasy</string>
+    <string name="title_activity_main">Picklock Fantasy</string>
+    <string name="package_name">com.dacunto.picklock</string>
+    <string name="custom_url_scheme">com.dacunto.picklock</string>
+</resources>
