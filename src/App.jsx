@@ -7596,6 +7596,7 @@ function App() {
  // shared grading engine (no parlay, no forced 5 slots).
  const lockSoloFreeSlate = async () => {
  if(!user || !soloFreePicks.length) return;
+ if(demoBlock("lock these picks")) return;
  const lgId = soloLeagueId || await getOrCreateSoloLeague();
  if(!lgId){ alert("Couldn't open your solo league."); return; }
  const week = soloWeekNum();
@@ -10534,7 +10535,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 
  {/* ══ AUTH SCREEN ══ */}
  {!user && (
- <div style={{position:"relative",width:"100%",maxWidth:480,margin:"0 auto",boxSizing:"border-box",minHeight:"100dvh",overflowY:"auto",overflowX:"hidden",background:"radial-gradient(120% 70% at 50% -10%, rgba(10,132,255,0.18), transparent 55%), radial-gradient(85% 50% at 85% 112%, rgba(94,92,230,0.16), transparent 60%), #07070C",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"calc(var(--sa-top) + 30px) 28px calc(var(--sa-bot) + 30px)",fontFamily:"'Barlow',sans-serif"}}>
+ <div style={{position:"relative",width:"100%",maxWidth:480,margin:"0 auto",boxSizing:"border-box",height:"100dvh",overflowY:"auto",overflowX:"hidden",WebkitOverflowScrolling:"touch",paddingBottom:"calc(24px + env(safe-area-inset-bottom))",background:"radial-gradient(120% 70% at 50% -10%, rgba(10,132,255,0.18), transparent 55%), radial-gradient(85% 50% at 85% 112%, rgba(94,92,230,0.16), transparent 60%), #07070C",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"calc(var(--sa-top) + 30px) 28px calc(var(--sa-bot) + 30px)",fontFamily:"'Barlow',sans-serif"}}>
 
  {/* Grid floor \u2014 masked so it dissolves toward the edges. */}
  <div className="auth-grid"/>
@@ -13138,6 +13139,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  // (whose games may have started/graded) are never wiped or re-graded.
  if(isSoloMode){ await supabase.from("picks").delete().eq("league_id", activeLeague.id).eq("user_id", user.id).eq("week", week); }
  if(!isSoloMode && lgCompleted(activeLeague)){ alert("This season is complete \u2014 the league is read-only."); return; }
+ if(demoBlock("lock these picks")) return;
  const picksToSave = []; const lockedIdx = [];
  activePicks.forEach((slot, slotIdx)=>{
  if(!slot.mult) return;
