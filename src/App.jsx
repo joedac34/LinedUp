@@ -5936,7 +5936,7 @@ function App() {
  },[slipBarUp]);
  const [freeCat, setFreeCat] = useState("all");
  const parseSlotConfig=(raw)=>{ try{ const a=typeof raw==="string"?JSON.parse(raw):raw; return (Array.isArray(a)&&a.length)?a:null; }catch(e){ return null; } };
- const freshSlots=()=>{ const cfg = !isSoloMode ? parseSlotConfig(activeLeague&&activeLeague.slot_config) : null; return cfg ? cfg.map((c,i)=>({id:i,bet:null,mult:null,category:c.type,slotType:c.type,market:c.market||null,isParlay:false,parlayLegs:[],locked:true})) : EMPTY_FLEX.map(s=>({...s})); };
+ const freshSlots=()=>{ if(!isSoloMode && activeLeague && activeLeague.league_type==="survivor") return [{id:0,bet:null,mult:1,category:"prop",slotType:"prop",market:"anytd",isParlay:false,parlayLegs:[],locked:true}]; const cfg = !isSoloMode ? parseSlotConfig(activeLeague&&activeLeague.slot_config) : null; return cfg ? cfg.map((c,i)=>({id:i,bet:null,mult:null,category:c.type,slotType:c.type,market:c.market||null,isParlay:false,parlayLegs:[],locked:true})) : EMPTY_FLEX.map(s=>({...s})); };
  const draftReady = useRef(null); // "the draft for this league+week has been loaded"
  useEffect(()=>{ if(isSoloMode) return; const _wk=(activeLeague && (activeLeague.current_week||activeLeague.week))||1; const _key=`${activeLeagueId}_wk${_wk}`;
    // CRITICAL: this effect re-runs whenever activeLeague changes identity — which happens
@@ -6935,6 +6935,22 @@ function App() {
  const slotStarted = (slot)=>{ const gt=slotGameTime(slot); return !!gt && gt<=Date.now(); };
  const slotGraded = (slot)=>{ const r=slot&&(slot.result||(slot.bet&&slot.bet.result)); return r==="W"||r==="L"||r==="P"; };
  const slotLocked = (slot)=> slotStarted(slot) || slotGraded(slot);
+ // Survivor lock rules, called with the freshly built rows at every insert path.
+ // Returns true when the lock must be blocked (and has already told the user why).
+ const survivorBlocked = async (rows) => {
+   if (isSoloMode || !activeLeague || activeLeague.league_type!=="survivor" || !rows || !rows.length) return false;
+   if (activeLeague.myEliminatedWeek!=null){ alert("You\u2019re eliminated \u2014 you can watch, but the pool has moved on."); return true; }
+   const _wk = rows[0].week;
+   const _names = rows.map(r=>String(r.outcome||"").trim().toLowerCase()).filter(Boolean);
+   if (!_names.length) return false;
+   try {
+     const {data:_prior} = await supabase.from("picks").select("outcome").eq("league_id",activeLeague.id).eq("user_id",user.id).lt("week",_wk);
+     const _burned = new Set((_prior||[]).map(x=>String(x.outcome||"").trim().toLowerCase()).filter(Boolean));
+     const _dup = _names.find(n=>_burned.has(n));
+     if (_dup){ alert("You already burned "+_dup.replace(/\b\w/g,c=>c.toUpperCase())+" \u2014 survivor players are one and done. Pick someone new."); return true; }
+   } catch(e) {}
+   return false;
+ };
  const buildSlotRows = (slot, slotIdx, picksArr)=>{
    const _weekNum = (activeLeague&&(activeLeague.current_week||activeLeague.week))||1;
    const isCustomSlip = !!parseSlotConfig(activeLeague&&activeLeague.slot_config) || (picksArr||[]).some(p=>p.locked);
@@ -6995,6 +7011,7 @@ function App() {
  const [newLeagueStep, setNewLeagueStep] = useState(0); // 0=type, 1=details
  const [newLeaguePrivacy, setNewLeaguePrivacy] = useState('private');
  const [newLeaguePlayoffs, setNewLeaguePlayoffs] = useState(true);
+ const isDuel = newLeagueType==="duel"; // UI preset: h2h + 2 players + 1 week, stored as league_type h2h
  const [newLeagueStartMode, setNewLeagueStartMode] = useState('auto');
  /* Offseason guard for league creation. Auto-start is the right default in season and
     the wrong one out of it: a league that fills in August would open Week 1 with no
@@ -7343,9 +7360,10 @@ function App() {
    name, sport:sportsArr[0], sports:sportsArr, commissioner_id:user.id, invite_code:inviteCode,
    max_members:newLeagueSize, target_size:newLeagueSize, pick_deadline:"Sun 1PM ET",
    season_weeks:seasonWeeks, current_week:1, privacy:newLeaguePrivacy||"private",
-   scoring_type:"multiplier_odds", start_mode:newLeagueStartMode||"auto", league_type:newLeagueType||"h2h",
+   scoring_type:"multiplier_odds", start_mode:newLeagueStartMode||"auto", league_type:(newLeagueType==="duel"?"h2h":newLeagueType)||"h2h",
    ...(newLeagueStartMode==="scheduled" && newLeagueStartAt ? {season_start:new Date(newLeagueStartAt).toISOString()} : {}),
-   playoffs_enabled:(newLeagueType==='bracket')?false:!!newLeaguePlayoffs, playoff_size:(newLeagueType==='bracket'||!newLeaguePlayoffs)?0:Math.min(newLeaguePlayoffSize,([2,4,6,8].filter(v=>v<=newLeagueSize).pop()||2)),
+   playoffs_enabled:(newLeagueType==='bracket')?false:(!!newLeaguePlayoffs&&(()=>{const _f=Math.min(newLeaguePlayoffSize,([2,4,6,8].filter(v=>v<=newLeagueSize).pop()||2));return _f>=2&&seasonWeeks>Math.ceil(Math.log2(_f));})()),
+   playoff_size:(newLeagueType==='bracket'||!newLeaguePlayoffs)?0:(()=>{const _f=Math.min(newLeaguePlayoffSize,([2,4,6,8].filter(v=>v<=newLeagueSize).pop()||2));return (_f>=2&&seasonWeeks>Math.ceil(Math.log2(_f)))?_f:0;})(),
    paid: _needsPaywall ? false : true,
    power_ups_enabled: isPro ? !!newLeaguePowerUps : true,
  }).select().single();
@@ -8853,7 +8871,7 @@ function App() {
   } else { setRealLeagues([]); }
   setLeaguesLoading(false); return;
  }
- const {data:members} = await supabase.from("league_members").select("league_id, is_commissioner, archived_at").eq("user_id", uid);
+ const {data:members} = await supabase.from("league_members").select("league_id, is_commissioner, archived_at, eliminated_week").eq("user_id", uid);
  if(!members || members.length===0) { setRealLeagues([]); setLeaguesLoading(false); return; }
  const ids = [...new Set(members.map(m=>m.league_id))];
  const {data:leagues} = await supabase.from("leagues").select("*").in("id", ids);
@@ -8861,7 +8879,8 @@ function App() {
  const mapped = leagues.filter(lg=>lg.league_type!=="solo").map(lg=>({
  ...lg,
  isCommissioner: members.find(m=>m.league_id===lg.id)?.is_commissioner||false,
- archivedByMe: members.find(m=>m.league_id===lg.id)?.archived_at||null
+ archivedByMe: members.find(m=>m.league_id===lg.id)?.archived_at||null,
+ myEliminatedWeek: members.find(m=>m.league_id===lg.id)?.eliminated_week??null
  }));
  setRealLeagues(mapped);
  if(mapped.length>0){
@@ -12168,6 +12187,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  if(!user){ alert("Sign in to lock picks."); return; }
  if(demoBlock("lock this pick")) return;
  const rows = buildSlotRows(slot, idx, activePicks);
+ if(await survivorBlocked(rows)) return;
  const { data, error } = await supabase.from("picks").insert(rows).select("id");
  if(error){ alert("Couldn’t lock that pick: "+error.message); return; }
  try{ posthog.capture('pick_locked', { league_id: activeLeague.id, category: slot.category||null, multiplier: slot.mult||null }); }catch(e){}
@@ -13190,6 +13210,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  lockedIdx.push(slotIdx);
  });
  if(picksToSave.length) {
+ if(await survivorBlocked(picksToSave)) return;
  const {data:ins, error:insertError} = await supabase.from("picks").insert(picksToSave).select("id,multiplier");
  if(insertError) { alert("Error saving picks: " + insertError.message); return; }
  if(!isSoloMode){ setActivePicks(prev=>prev.map((p,i)=>{ if(!lockedIdx.includes(i)) return p; const mine=(ins||[]).filter(r=>r.multiplier===p.mult).map(r=>r.id); return {...p, committed:true, commitIds:mine}; })); }
@@ -15022,6 +15043,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      if(!eligible.length){ alert(allM ? "Those games have already started." : "Give every pick a multiplier first \u2014 tap its P-chip."); return; }
      const rowsPer = eligible.map(x=> buildSlotRows(x.sl, x.i, activePicks));
      const flat = rowsPer.flat();
+     if(await survivorBlocked(flat)) return;
      const { data, error } = await supabase.from("picks").insert(flat).select("id");
      if(error){ alert("Couldn\u2019t lock: "+error.message); return; }
      const ids=(data||[]).map(r=>r.id); let cur=0;
@@ -15766,7 +15788,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div style={{padding:"20px 20px 0"}}>
  {/* Step indicator */}
  <div style={{display:"flex",gap:5,marginBottom:16}}>
-   {[0,1,2].map(i=><div key={i} style={{flex:1,height:3,borderRadius:2,background:newLeagueStep>=i?IOS.blue:"#1E1E1E",transition:"background .2s"}}/>)}
+   {(newLeagueType==="survivor"?[0,1]:[0,1,2]).map(i=><div key={i} style={{flex:1,height:3,borderRadius:2,background:newLeagueStep>=i?IOS.blue:"#1E1E1E",transition:"background .2s"}}/>)}
  </div>
 
  {/* ── STEP 0: League type ── */}
@@ -15776,12 +15798,18 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    <div style={{fontSize:13,color:"#555",marginBottom:16}}>Choose a format for your league</div>
    {[
      {id:"h2h",icon:"ti-users",label:"Head-to-head",desc:"Weekly matchups + seeded playoffs"},
+     {id:"duel",icon:"ti-swords",label:"Duel",desc:"One week. One opponent. Winner takes the trophy.",badge:"1v1"},
+     {id:"survivor",icon:"ti-target",label:"Survivor",desc:"Pick one TD scorer each week. Score and live, miss and die. Never reuse a player.",badge:"NFL"},
      {id:"points",icon:"ti-chart-bar",label:"Total points",desc:"Everyone competes at once · cumulative points · top seeds make the playoff"},
      {id:"bracket",icon:"ti-tournament",label:"Tournament",desc:"Single-elimination bracket. 4, 8, 16, or 32 players only.",badge:"New"},
    ].map(t=>(
      <div key={t.id} onClick={()=>{
+       const _wasPreset = newLeagueType==="duel"||newLeagueType==="survivor";
        setNewLeagueType(t.id);
-       if(t.id==='h2h'&&![6,8,10,12].includes(newLeagueSize)) setNewLeagueSize(8);
+       if(t.id==="duel"){ setNewLeagueSize(2); setNewLeagueWeeks(1); setNewLeaguePlayoffs(false); }
+       else if(t.id==="survivor"){ setNewLeagueSports(["nfl"]); setNewLeagueWeeks(18); setNewLeaguePlayoffs(false); if(newLeagueSize<2||newLeagueSize>32) setNewLeagueSize(8); }
+       else if(_wasPreset){ setNewLeagueSize(8); setNewLeagueWeeks(18); setNewLeaguePlayoffs(true); } // leaving a preset restores defaults
+       if(t.id==='h2h'&&![2,6,8,10,12].includes(newLeagueSize)) setNewLeagueSize(8);
        if(t.id==='bracket'&&![4,8,16,32].includes(newLeagueSize)) setNewLeagueSize(8);
      }} style={{
        display:"flex",flexDirection:"column",alignItems:"center",textAlign:"center",
@@ -15791,7 +15819,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        border:`0.5px solid ${newLeagueType===t.id?"rgba(10,132,255,0.35)":"#1E1E1E"}`,
      }}>
        <div style={{width:40,height:40,borderRadius:RAD.md,background:newLeagueType===t.id?"rgba(10,132,255,0.15)":"#1A1A1A",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:10,transition:"background .15s"}}>
-         {t.id==="h2h"&&<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={newLeagueType===t.id?IOS.blue:"#555"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>}
+         {t.id==="duel"&&<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={newLeagueType===t.id?IOS.blue:"#555"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4l16 16M20 4L4 20"/><path d="M4 4l4 1-1-4zM20 4l-4 1 1-4zM20 20l-4-1 1 4zM4 20l4-1-1 4z"/></svg>}
+       {t.id==="survivor"&&<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={newLeagueType===t.id?IOS.blue:"#555"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/></svg>}
+       {t.id==="h2h"&&<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={newLeagueType===t.id?IOS.blue:"#555"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>}
          {t.id==="points"&&<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={newLeagueType===t.id?IOS.blue:"#555"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>}
          {t.id==="bracket"&&<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={newLeagueType===t.id?IOS.blue:"#555"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>}
        </div>
@@ -16015,8 +16045,10 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
         after both maps carry icehockey_nhl and a pick has graded end-to-end. */
    ].map(sp=>{
      const isSelected = newLeagueSports.includes(sp.id);
+     const _svLock = newLeagueType==="survivor"; // TD survivor is NFL-only (anytime TD market)
+     if(_svLock && sp.id!=="nfl") return null;
      return (
-     <div key={sp.id} onClick={()=>toggleNewLeagueSport(sp.id)}
+     <div key={sp.id} onClick={()=>{ if(!_svLock) toggleNewLeagueSport(sp.id); }}
      style={{padding:"7px 14px",borderRadius:RAD.sm,fontSize:12,fontWeight:600,cursor:"pointer",transition:"all .15s",
        background:isSelected?"rgba(10,132,255,0.12)":"#111",
        border:`0.5px solid ${isSelected?"rgba(10,132,255,0.4)":"#222"}`,
@@ -16048,11 +16080,21 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      style={{width:"100%",background:"#111",border:"0.5px solid #222",borderRadius:RAD.sm,padding:"11px 13px",color:"#fff",fontSize:14,fontFamily:"Barlow,sans-serif",outline:"none",marginBottom:16,boxSizing:"border-box"}}
    />
 
-   {/* Size */}
-   <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"rgba(255,255,255,0.6)",marginBottom:8}}>
-     {newLeagueType==="bracket"?"Tournament size":"League size"}
+   {/* Duel: fixed shape, no size/length controls */}
+   {isDuel&&(
+   <div style={{display:"flex",alignItems:"center",gap:10,background:"rgba(255,55,95,0.08)",border:"0.5px solid rgba(255,55,95,0.3)",borderRadius:RAD.md,padding:"12px 14px",marginBottom:4}}>
+     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#FF375F" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4l16 16M20 4L4 20"/></svg>
+     <div>
+       <div style={{fontSize:13.5,fontWeight:800,color:"#fff"}}>{"1 week \u00B7 you vs one opponent"}</div>
+       <div style={{fontSize:10.5,color:"rgba(255,255,255,0.5)",marginTop:2}}>{"League fills at 2 and starts. Winner takes the trophy \u2014 it lives on both profiles forever."}</div>
+     </div>
    </div>
-   {newLeagueType==="points"?(
+   )}
+   {/* Size */}
+   {!isDuel&&<div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"rgba(255,255,255,0.6)",marginBottom:8}}>
+     {newLeagueType==="bracket"?"Tournament size":"League size"}
+   </div>}
+   {!isDuel&&((newLeagueType==="points"||newLeagueType==="survivor")?(
      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
        <div onClick={()=>setNewLeagueSize(s=>Math.max(2,s-1))} style={{width:28,height:28,borderRadius:RAD.sm,background:"#1A1A1A",border:"0.5px solid #2A2A2A",color:"#ccc",fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>−</div>
        <div style={{fontSize:16,fontWeight:700,color:"#fff",minWidth:28,textAlign:"center"}}>{newLeagueSize}</div>
@@ -16061,7 +16103,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      </div>
    ):(
      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:4}}>
-     {(newLeagueType==="bracket"?[4,8,16,32]:[6,8,10,12]).map(sz=>(
+     {(newLeagueType==="bracket"?[4,8,16,32]:[2,6,8,10,12]).map(sz=>(
        <div key={sz} onClick={()=>setNewLeagueSize(sz)} style={{
          flex:1,minWidth:52,borderRadius:RAD.sm,padding:"10px 4px",textAlign:"center",cursor:"pointer",transition:"all .15s",
          background:newLeagueSize===sz?"rgba(10,132,255,0.12)":"#111",
@@ -16072,7 +16114,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        </div>
      ))}
      </div>
-   )}
+   ))}
    {newLeagueType==="bracket"&&(
      <div style={{background:"rgba(255,159,10,0.07)",border:"0.5px solid rgba(255,159,10,0.2)",borderRadius:RAD.sm,padding:"9px 12px",marginBottom:12,marginTop:8}}>
        <div style={{display:"flex",justifyContent:"space-between",fontSize:11,padding:"2px 0"}}><span style={{color:"rgba(255,159,10,0.7)"}}>Duration</span><span style={{fontWeight:700,color:"#FF9F0A"}}>{({4:2,8:3,16:4,32:5})[newLeagueSize]||3} weeks</span></div>
@@ -16095,13 +16137,13 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      <div style={{fontSize:11,color:"rgba(255,255,255,0.45)",marginBottom:8}}>{newLeaguePowerUps?"Members can win and play power-ups (Double Down, Spread boosts, Insurance).":"No power-ups — picks only, pure skill."}</div>
      </>
      )}
-     <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"rgba(255,255,255,0.6)",marginBottom:8,marginTop:12}}>Season length</div>
-     <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
+     {!isDuel&&<div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"rgba(255,255,255,0.6)",marginBottom:8,marginTop:12}}>Season length</div>}
+     {!isDuel&&<div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
        <div onClick={()=>setNewLeagueWeeks(w=>Math.max(1,w-1))} style={{width:28,height:28,borderRadius:RAD.sm,background:"#1A1A1A",border:"0.5px solid #2A2A2A",color:"#ccc",fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>−</div>
        <div style={{fontSize:16,fontWeight:700,color:"#fff",minWidth:28,textAlign:"center"}}>{newLeagueWeeks}</div>
        <div onClick={()=>setNewLeagueWeeks(w=>Math.min(weekCap.max>0?weekCap.max:30,w+1))} style={{width:28,height:28,borderRadius:RAD.sm,background:"#1A1A1A",border:"0.5px solid #2A2A2A",color:(weekCap.max>0&&newLeagueWeeks>=weekCap.max)?"#444":"#ccc",fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",cursor:(weekCap.max>0&&newLeagueWeeks>=weekCap.max)?"default":"pointer"}}>+</div>
        <div style={{fontSize:12,color:"rgba(255,255,255,0.6)",marginLeft:4}}>weeks</div>
-     </div>
+     </div>}
      <div style={{fontSize:11,color:"rgba(255,255,255,0.45)",marginBottom:16}}>{newLeagueType==="points"?"Ranked by total points at the end":"NFL regular season is 18 weeks"}</div>
      {weekCap.reason&&(<div style={{display:"flex",gap:7,alignItems:"flex-start",background:"rgba(255,159,10,0.10)",border:"0.5px solid rgba(255,159,10,0.3)",borderRadius:RAD.md,padding:"9px 11px",marginTop:-10,marginBottom:14}}>
        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FF9F0A" strokeWidth="2.2" strokeLinecap="round" style={{flexShrink:0,marginTop:1}}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
@@ -16191,10 +16233,10 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    {/* Create button */}
    <button
      disabled={!newLeagueSports.length||!newLeagueName.trim()||creatingLeague}
-     onClick={()=>{ if(!newLeagueSports.length||!newLeagueName.trim()) return; setNewLeagueStep(2); }}
+     onClick={()=>{ if(!newLeagueSports.length||!newLeagueName.trim()) return; if(newLeagueType==="survivor"){ createLeague(newLeagueName.trim(), newLeagueSports[0]); } else { setNewLeagueStep(2); } }}
      style={{width:"100%",background:newLeagueSports.length&&newLeagueName.trim()?IOS.blue:"rgba(255,255,255,0.08)",border:"none",borderRadius:RAD.md,padding:"13px",fontFamily:"Barlow,sans-serif",fontSize:15,fontWeight:700,color:newLeagueSports.length&&newLeagueName.trim()?"#fff":"rgba(255,255,255,0.25)",cursor:newLeagueSports.length&&newLeagueName.trim()?"pointer":"default",transition:"all .2s",marginBottom:4}}
    >
-     {"Continue \u2192"}
+     {newLeagueType==="survivor"?(creatingLeague?"Creating...":"Create Survivor Pool"):"Continue \u2192"}
    </button>
    </>
  )}
@@ -17192,7 +17234,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        <div style={{flex:1,minWidth:0}}><div style={_tt}>League size</div><div style={_dd}>{leagueMembers.length} of {_target}{leagueMembers.length>=_target?" · full":(" · "+(_target-leagueMembers.length)+" spots left")}</div></div>
      </div>
      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,padding:"0 14px 14px"}}>
-       {[6,8,10,12].map(sz=>{ const on=sz===_target; return (
+       {[2,6,8,10,12].map(sz=>{ const on=sz===_target; return (
          <div key={sz} onClick={async()=>{ if(sz===_target) return; if(!window.confirm("Change league size to "+sz+"? This will wipe the current schedule and regenerate it when the league fills.")) return; await supabase.from("leagues").update({target_size:sz,max_members:sz}).eq("id",activeLeague.id); await supabase.from("matchups").delete().eq("league_id",activeLeague.id); await fetchLeagues(user.id); }} style={{border:"1.5px solid "+(on?IOS.blue:"rgba(255,255,255,0.08)"),background:on?"rgba(10,132,255,0.12)":"rgba(255,255,255,0.04)",borderRadius:RAD.md,padding:"10px 4px",textAlign:"center",cursor:on?"default":"pointer"}}>
            <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:18,color:on?IOS.blue:"rgba(255,255,255,0.4)"}}>{sz}</div>
            <div style={{fontSize:9.5,color:on?IOS.blue:"rgba(255,255,255,0.3)",marginTop:2,fontWeight:600}}>players</div>

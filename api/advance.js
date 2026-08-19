@@ -62,7 +62,7 @@ export default async function handler(req, res) {
   try {
     const { data: leagues, error } = await supabase
       .from("leagues")
-      .select("id, current_week, season_weeks, season_start, league_type, playoffs_enabled, playoff_size, champion_id, completed_at")
+      .select("id, name, current_week, season_weeks, season_start, league_type, playoffs_enabled, playoff_size, champion_id, completed_at")
       .not("season_start", "is", null)
       .eq("is_demo", false);
     if (error) throw error;
@@ -72,6 +72,7 @@ export default async function handler(req, res) {
       const lt = lg.league_type || "h2h";
       if (lt === "bracket" || lt === "solo") continue; // bracket settles in grade.js; solo never advances
       if (lg.completed_at) continue; // season stamped complete — no more work, ever
+      if (lt === "survivor") { await advanceSurvivor(supabase, lg, Math.min(seasonWeeksOf(lg) + 1, weekTargetOf(lg)), seasonWeeksOf(lg)); continue; }
       const start = new Date(lg.season_start).getTime();
       if (isNaN(start)) continue;
 
@@ -308,4 +309,74 @@ async function maybeComplete(supabase, league, target, seasonWeeks) {
     champion_id: (top && top[0]) || null,
     completed_at: new Date().toISOString(),
   }).eq("id", league.id);
+}
+
+// ── Survivor ─────────────────────────────────────────────────────────────────
+const seasonWeeksOf = (lg) => Number(lg.season_weeks || 18);
+const weekTargetOf = (lg) => Math.floor((Date.now() - new Date(lg.season_start).getTime() - GRACE_MS) / WEEK_MS) + 1;
+
+async function sendElimination(userId, week, leagueName) {
+  if (!_notifyBase || !process.env.CRON_SECRET) return;
+  try {
+    await fetch(_notifyBase + "/api/notify", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + process.env.CRON_SECRET, "Content-Type": "application/json" },
+      body: JSON.stringify({ userIds: [userId], title: "You're out \u2014 Week " + week, body: (leagueName || "Your survivor pool") + " moved on without you. The Board remembers.", url: "/", category: "notif_results" }),
+    });
+  } catch (e) {}
+}
+
+// Weekly survivor settlement. Rules:
+//  - a member survives a closed week iff they have at least one W pick that week
+//  - no pick, or all losses -> eliminated_week = that week
+//  - FULL WIPEOUT: if every alive member busts the same week, nobody dies
+//  - any alive member still pending in a week HOLDS settlement (never eliminate
+//    on grading lag) — weeks settle strictly in order, retried every cron pass
+//  - champion: last one standing (season ends early), or best total points among
+//    the alive when the clock runs out; completed_at stamps in the same write
+// current_week still rolls on time so the next week's board opens regardless.
+async function advanceSurvivor(supabase, lg, target, seasonWeeks) {
+  const cw = lg.current_week || 1;
+  if (target > cw) {
+    await supabase.from("leagues").update({ current_week: Math.min(seasonWeeks, target) }).eq("id", lg.id);
+  }
+  const { data: mem } = await supabase.from("league_members").select("user_id, eliminated_week").eq("league_id", lg.id);
+  let alive = (mem || []).filter((m) => m.eliminated_week == null).map((m) => m.user_id);
+  if (!alive.length) return;
+
+  const lastClosed = Math.min(seasonWeeks, target - 1);
+  const { data: pk } = await supabase.from("picks").select("user_id, week, result, points_earned").eq("league_id", lg.id).lte("week", Math.max(1, lastClosed));
+  const byWeek = {};
+  for (const p of pk || []) {
+    const wRow = (byWeek[p.week] = byWeek[p.week] || {});
+    (wRow[p.user_id] = wRow[p.user_id] || []).push(p.result);
+  }
+
+  for (let w = 1; w <= lastClosed && alive.length > 1; w++) {
+    const wp = byWeek[w] || {};
+    if (alive.some((u) => (wp[u] || []).includes("pending"))) break; // grading lag: hold this and later weeks
+    const losers = alive.filter((u) => { const rs = wp[u] || []; return rs.length === 0 || !rs.includes("W"); });
+    if (!losers.length) continue;
+    if (losers.length === alive.length) continue; // full wipeout: nobody dies
+    for (const u of losers) {
+      const { data: upd } = await supabase.from("league_members")
+        .update({ eliminated_week: w }).eq("league_id", lg.id).eq("user_id", u)
+        .is("eliminated_week", null).select("user_id");
+      if (upd && upd.length) { try { await sendElimination(u, w, lg.name); } catch (e) {} }
+    }
+    alive = alive.filter((u) => !losers.includes(u));
+  }
+
+  if (lg.champion_id || lg.completed_at) return;
+  if (alive.length === 1) {
+    await supabase.from("leagues").update({ champion_id: alive[0], completed_at: new Date().toISOString() }).eq("id", lg.id);
+    return;
+  }
+  if (target > seasonWeeks && alive.length > 1) {
+    if ((pk || []).some((p) => p.result === "pending")) return; // settle everything first
+    const pts = {}; alive.forEach((u) => (pts[u] = 0));
+    for (const p of pk || []) if (p.result === "W" && pts[p.user_id] != null) pts[p.user_id] += parseFloat(p.points_earned || 0);
+    const top = alive.slice().sort((a, b) => pts[b] - pts[a])[0];
+    await supabase.from("leagues").update({ champion_id: top || null, completed_at: new Date().toISOString() }).eq("id", lg.id);
+  }
 }

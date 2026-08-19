@@ -59,6 +59,7 @@ export default async function handler(req, res) {
           const cfg = typeof lg.slot_config === 'string' ? JSON.parse(lg.slot_config) : lg.slot_config;
           slotCount = Array.isArray(cfg) ? cfg.length : 0;
         } catch (e) { slotCount = 0; }
+        if ((lg.league_type || '') === 'survivor') slotCount = 1; // survivor carries no slot_config; the slate is one scorer
         if (!slotCount) continue;
 
         // Filled slots per member (parlay legs collapsed to one slot).
@@ -74,7 +75,7 @@ export default async function handler(req, res) {
 
         const { data: members } = await supabase
           .from('league_members')
-          .select('user_id')
+          .select('user_id, eliminated_week')
           .eq('league_id', lg.id);
 
         const daysLeft = Math.max(1, Math.ceil(msLeft / (24 * 60 * 60 * 1000)));
@@ -83,6 +84,7 @@ export default async function handler(req, res) {
         // notification per distinct count (each body shows that count).
         const byLeft = {};
         for (const m of members || []) {
+          if (m.eliminated_week != null) continue; // the dead don't get nudged
           const filled = slotsByUser[m.user_id] ? slotsByUser[m.user_id].size : 0;
           const left = slotCount - filled;
           if (left <= 0) continue; // slip complete
