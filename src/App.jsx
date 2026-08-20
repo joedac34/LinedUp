@@ -8993,7 +8993,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const [svBurned, setSvBurned] = useState([]); // my scorers so far: {outcome, week, result}
  useEffect(()=>{
   if(isSoloMode||!user||!activeLeague||activeLeague.league_type!=="survivor"){ return; }
-  if(screen!=="picks"&&screen!=="matchup"&&screen!=="leagues"){ return; }
+  if(screen!=="picks"&&screen!=="matchup"&&screen!=="leagues"&&screen!=="home"){ return; }
   (async()=>{ try{
     const [{data:_all},{data:_mine}] = await Promise.all([
       supabase.from("picks").select("user_id, week, result, outcome, pick_name").eq("league_id",activeLeague.id),
@@ -9006,6 +9006,14 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  }, [screen, activeLeagueId, isSoloMode, user&&user.id, activeLeague&&activeLeague.league_type, activeLeague&&activeLeague.current_week]);
 
  const _svTitle=(s)=>String(s||"").replace(/\b\w/g,c=>c.toUpperCase());
+ // Sunday 1:00 PM ET is both the pick deadline and the reveal. Deadline and reveal
+ // MUST be the same instant: reveal earlier and a Monday-night holdout sees every
+ // pick before making theirs. Resolved through America/New_York so EDT->EST in
+ // November does not silently shift the lock by an hour mid-season.
+ const _etParts=(ms)=>{ try{ const f=new Intl.DateTimeFormat("en-US",{timeZone:"America/New_York",weekday:"short",hour:"numeric",hour12:false,minute:"numeric"}).formatToParts(new Date(ms)); const g=t=>(f.find(x=>x.type===t)||{}).value; return {wd:g("weekday"),h:Number(g("hour")),m:Number(g("minute"))}; }catch(e){ const d=new Date(ms); return {wd:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getUTCDay()],h:d.getUTCHours()-5,m:d.getUTCMinutes()}; } };
+ // First Sunday 1:00 PM ET at or after a week-window start. Scans forward in hours
+ // rather than doing offset arithmetic, so DST is handled by the formatter.
+ const _svRevealMs=(startMs)=>{ if(!startMs) return null; for(let i=0;i<=24*8;i++){ const t=startMs+i*3600000; const p=_etParts(t); if(p.wd==="Sun"&&p.h===13) return t-p.m*60000; } return startMs+6*86400000; };
  const [svReveal, setSvReveal] = useState(null); // {week, mode, dead:[{name,rode}], remain, myLine}
  useEffect(()=>{
   if(isSoloMode||!user||!activeLeague||activeLeague.league_type!=="survivor") return;
@@ -11760,6 +11768,83 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        <span>{"Week "+(activeLeague.current_week||activeLeague.week||1)}{liveCount>0?(" \u00B7 "+liveCount+" live"):""}</span>
      </div>
 
+     {_svHome ? (()=>{
+       const _p=(myPicks||[])[0]||null;
+       const _ml=activeLeague.survivor_config==="ml";
+       const _wkStart=activeLeague.season_start ? new Date(activeLeague.season_start).getTime()+(((activeLeague.current_week||1)-1)*7*86400000) : null;
+       const _reveal=_svRevealMs(_wkStart);
+       const _open=_reveal!=null && nowTick < _reveal;
+       const _kick=_p&&_p.game_date?new Date(_p.game_date).getTime():null;
+       // Settles estimate: kickoff + 3h15m is the NFL average once you count
+       // stoppages. Only shown while the game is actually in progress.
+       const _settle=_kick?_kick+11700000:null;
+       const _live=_p&&_p.result==="pending"&&_kick&&nowTick>=_kick;
+       const _won=_p&&_p.result==="W"; const _lost=_p&&_p.result==="L"; const _void=_p&&_p.result==="P";
+       const _nm=_svTitle(_p&&(_p.outcome||_p.pick_name)||"");
+       const _short=_nm.split(" ").slice(-1)[0]||_nm;
+       const _ini=_nm.split(" ").filter(Boolean).map(x=>x[0]).slice(0,_ml?3:2).join("").toUpperCase();
+       const _alv=(leagueMembers||[]).filter(m=>m.eliminatedWeek==null).length;
+       const _tot2=(leagueMembers||[]).length;
+       const _brn=(svBurned||[]).filter(x=>x.week<(activeLeague.current_week||1)).length;
+       // Overlap is revealed only after the lock. Before it, showing who is on whom
+       // would let a late picker fade the field.
+       const _riders=(!_open&&_p)?(svPicks||[]).filter(x=>x.week===(activeLeague.current_week||1)&&x.user_id!==(user&&user.id)&&_svTitle(x.outcome||x.pick_name||"")===_nm):[];
+       const _rn=_riders.length;
+       const _mem4=(uid)=>((leagueMembers||[]).find(m=>m.userId===uid)||{}).name||"?";
+       const _clk=(ms)=>{ const d=Math.max(0,ms-nowTick), h=Math.floor(d/3600000), m=Math.floor((d%3600000)/60000), x=Math.floor((d%60000)/1000); return h>0?(h+":"+String(m).padStart(2,"0")+":"+String(x).padStart(2,"0")):(m+":"+String(x).padStart(2,"0")); };
+       const _at=(ms)=>{ try{ return new Intl.DateTimeFormat("en-US",{timeZone:"America/New_York",hour:"numeric",minute:"2-digit"}).format(new Date(ms)); }catch(e){ return ""; } };
+       const _chip=_won?{t:"SURVIVED",c:IOS.green}:_lost?{t:"ELIMINATED",c:IOS.red}:_void?{t:"VOID",c:IOS.label2}:_live?{t:"LIVE",c:"#64D2FF"}:_p?{t:"LOCKED IN",c:IOS.blue}:{t:"PICK OPEN",c:IOS.yellow};
+       return (<>
+       <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",marginTop:-18,marginBottom:12}}>
+         <span style={{fontSize:9,fontWeight:900,letterSpacing:"0.07em",padding:"3px 8px",borderRadius:5,color:_chip.c,background:_chip.c+"1A",border:"1px solid "+_chip.c+"59"}}>{_chip.t}</span>
+       </div>
+       {_p ? (
+       <div style={{background:"rgba(0,0,0,0.4)",border:EDGE.hair,borderRadius:RAD.md,padding:13,marginBottom:12}}>
+         <div style={{fontSize:8.5,fontWeight:900,letterSpacing:"0.1em",color:"rgba(255,255,255,0.3)",marginBottom:7}}>{_ml?"YOUR TEAM":"YOUR SCORER"}</div>
+         <div style={{display:"flex",alignItems:"center",gap:11}}>
+           <div style={{width:38,height:38,borderRadius:10,background:"#1C1D22",border:EDGE.hair,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,color:"rgba(255,255,255,0.5)",flexShrink:0}}>{_ini}</div>
+           <div style={{minWidth:0,flex:1}}>
+             <div style={{fontSize:16.5,fontWeight:800,lineHeight:1.1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",textDecoration:_lost?"line-through":"none",textDecorationColor:"rgba(255,69,58,0.7)"}}>{_nm}</div>
+             <div style={{fontSize:11,color:"rgba(255,255,255,0.42)",fontWeight:600,marginTop:3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{(_p.game||"")+(_kick?(" \u00B7 "+_at(_kick)):"")}</div>
+           </div>
+           {_p.odds&&<div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:19,fontWeight:800,letterSpacing:"0.02em",flexShrink:0,color:String(_p.odds).trim().startsWith("-")?"#64D2FF":IOS.green}}>{_p.odds}</div>}
+         </div>
+       </div>
+       ) : (
+       <div style={{background:"rgba(0,0,0,0.4)",border:"0.5px dashed rgba(255,255,255,0.14)",borderRadius:RAD.md,padding:"18px 13px",marginBottom:12,textAlign:"center",fontSize:13,fontWeight:700,color:"rgba(255,255,255,0.45)"}}>{_ml?"Pick one team to win":"Pick one TD scorer"}</div>
+       )}
+       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"9px 10px",marginBottom:13}}>
+         <div><div style={_lab}>Status</div><div style={{..._val,fontSize:20,marginTop:1,color:activeLeague.myEliminatedWeek==null?IOS.green:IOS.red}}>{activeLeague.myEliminatedWeek==null?"Alive":("Out W"+activeLeague.myEliminatedWeek)}</div></div>
+         <div><div style={_lab}>Alive</div><div style={{..._val,fontSize:20,marginTop:1}}>{_tot2>0?_alv:"\u2014"}<span style={{fontSize:12,color:"rgba(255,255,255,0.3)",fontWeight:700}}>{_tot2>0?(" /"+_tot2):""}</span></div></div>
+         <div><div style={_lab}>Burned</div><div style={{..._val,fontSize:20,marginTop:1,color:_brn>0?"#fff":"rgba(255,255,255,0.3)"}}>{_brn}</div></div>
+         <div><div style={_lab}>Total pts</div><div style={{..._val,fontSize:20,marginTop:1,color:seasonPts>0?"#64D2FF":"rgba(255,255,255,0.3)"}}>{seasonPts>0?<CountUp value={seasonPts}/>:"\u2014"}</div>
+           <div style={{fontSize:8.5,color:"rgba(255,255,255,0.28)",fontWeight:700,marginTop:2}}>{"tiebreak if more than one survives"}</div></div>
+       </div>
+       {(_open&&_reveal!=null)&&(
+         <div style={{background:"rgba(0,0,0,0.35)",border:EDGE.hair,borderRadius:RAD.md,padding:"10px 12px",display:"flex",alignItems:"center",gap:10}}>
+           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={_p?"rgba(255,255,255,0.4)":IOS.yellow} strokeWidth="2.1" strokeLinecap="round" style={{flexShrink:0}}><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+           <div style={{fontSize:12,fontWeight:700,color:"rgba(255,255,255,0.55)",minWidth:0}}>{_p?<>{"Pool picks reveal at "}<span style={{color:"#fff",fontWeight:800}}>{"1:00 PM"}</span></>:<><span style={{color:"#fff",fontWeight:800}}>{"Pick open"}</span>{" \u2014 locks Sunday 1:00 PM"}</>}</div>
+           <div style={{marginLeft:"auto",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:17,fontWeight:800,color:(_reveal-nowTick)<3600000?IOS.red:IOS.yellow,fontVariantNumeric:"tabular-nums"}}>{_clk(_reveal)}</div>
+         </div>
+       )}
+       {(!_open&&_p)&&(
+         <div onClick={()=>setScreen("matchup")} style={{cursor:"pointer",background:_rn>0?"rgba(191,90,242,0.07)":"rgba(48,209,88,0.07)",border:"0.5px solid "+(_rn>0?"rgba(191,90,242,0.28)":"rgba(48,209,88,0.28)"),borderRadius:RAD.md,padding:"11px 12px",display:"flex",alignItems:"center",gap:10}}>
+           {_rn>0&&<div style={{display:"flex",flexShrink:0}}>{_riders.slice(0,3).map((r,i)=>(<div key={i} style={{width:23,height:23,borderRadius:"50%",border:"1.5px solid #0A0A0D",marginLeft:i?-7:0,background:["#0A84FF","#BF5AF2","#FF9F0A"][i%3],display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:900,color:"#fff"}}>{String(_mem4(r.user_id)).slice(0,2).toUpperCase()}</div>))}</div>}
+           <div style={{fontSize:12,fontWeight:700,color:"rgba(255,255,255,0.72)",lineHeight:1.3,minWidth:0}}>{_rn>0?<><span style={{color:"#fff",fontWeight:800}}>{_rn+(_rn===1?" other":" others")}</span>{" rode "+(_ml?("the "+_short):_short)}</>:<><span style={{color:"#fff",fontWeight:800}}>{"You\u2019re the only one"}</span>{" on "+(_ml?("the "+_short):_short)}</>}</div>
+           <div style={{marginLeft:"auto",color:_rn>0?IOS.purple:IOS.green,fontSize:15,fontWeight:800,flexShrink:0}}>{"\u203A"}</div>
+         </div>
+       )}
+       {_p&&(
+         <div style={{marginTop:12,display:"flex",alignItems:"center",gap:9,fontSize:12.5,color:"rgba(255,255,255,0.6)",fontWeight:600}}>
+           <span style={{width:7,height:7,borderRadius:"50%",flexShrink:0,background:_won?IOS.green:_lost?IOS.red:_live?"#64D2FF":IOS.label2,boxShadow:"0 0 8px "+(_won?IOS.green:_lost?IOS.red:_live?"#64D2FF":"transparent")}}/>
+           {_won?(_ml?("The "+_short+" got the win"):(_short+" found the end zone")):_lost?(_ml?("The "+_short+" lost"):(_short+" never got there")):_void?"Voided \u2014 you survive and get "+(_ml?"the team":"the player")+" back":_live?("Your pick is live"+(_settle?(" \u00B7 settles ~"+_at(_settle)):"")):"Locked in"}
+         </div>
+       )}
+       {!_p&&(
+         <button onClick={()=>setScreen("picks")} className="pl-press pl-sheen" style={{..._cta,marginLeft:0,width:"100%",justifyContent:"center",marginTop:11,padding:"14px",fontSize:15}}>{_buildLabel}</button>
+       )}
+       </>);
+     })() : (<>
      <div style={{display:"flex",alignItems:"center",gap:16,marginTop:11}}>
        {/* Progress ring = graded / slotted. Reads at a glance whether the week is
            done, in flight, or untouched \u2014 the old strip never said. */}
@@ -11827,6 +11912,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      {openSlots>0&&(
        <button onClick={()=>setScreen("picks")} className="pl-press pl-sheen" style={{..._cta,marginLeft:0,width:"100%",justifyContent:"center",marginTop:11,padding:"14px",fontSize:15}}>{total===0?_buildLabel:_addLabel}</button>
      )}
+     </>)}
    </div>
    </div>
    );
