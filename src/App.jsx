@@ -2496,7 +2496,7 @@ function drawCarnageCanvas(d){
   const _title=d.mode==="wipeout"?"Total carnage.":d.mode==="sweep"?"Everybody lives.":(d.dead.length+(d.dead.length===1?" didn\u2019t make it.":" didn\u2019t make it."));
   x.fillText(_title,P,P+250);
   let y=P+340;
-  if(d.mode==="wipeout"){ x.fillStyle=MUT; x.font="600 34px Barlow, system-ui, sans-serif"; x.fillText("Every scorer whiffed. Nobody dies. The pool plays on.",P,y); y+=70; }
+  if(d.mode==="wipeout"){ x.fillStyle=MUT; x.font="600 34px Barlow, system-ui, sans-serif"; x.fillText(d.ml?"Every team lost. Nobody dies. The pool plays on.":"Every scorer whiffed. Nobody dies. The pool plays on.",P,y); y+=70; }
   for(const dd of (d.dead||[]).slice(0,6)){
     x.fillStyle="rgba(255,55,95,.12)"; x.fillRect(P,y,W-2*P,104);
     x.strokeStyle="rgba(255,55,95,.45)"; x.lineWidth=2; x.strokeRect(P,y,W-2*P,104);
@@ -5978,7 +5978,7 @@ function App() {
  },[slipBarUp]);
  const [freeCat, setFreeCat] = useState("all");
  const parseSlotConfig=(raw)=>{ try{ const a=typeof raw==="string"?JSON.parse(raw):raw; return (Array.isArray(a)&&a.length)?a:null; }catch(e){ return null; } };
- const freshSlots=()=>{ if(!isSoloMode && activeLeague && activeLeague.league_type==="survivor") return [{id:0,bet:null,mult:1,category:"prop",slotType:"prop",market:"anytd",isParlay:false,parlayLegs:[],locked:true}]; const cfg = !isSoloMode ? parseSlotConfig(activeLeague&&activeLeague.slot_config) : null; return cfg ? cfg.map((c,i)=>({id:i,bet:null,mult:null,category:c.type,slotType:c.type,market:c.market||null,isParlay:false,parlayLegs:[],locked:true})) : EMPTY_FLEX.map(s=>({...s})); };
+ const freshSlots=()=>{ if(!isSoloMode && activeLeague && activeLeague.league_type==="survivor") return [ activeLeague.survivor_config==="ml" ? {id:0,bet:null,mult:1,category:"ml",slotType:"ml",market:null,isParlay:false,parlayLegs:[],locked:true} : {id:0,bet:null,mult:1,category:"prop",slotType:"prop",market:"anytd",isParlay:false,parlayLegs:[],locked:true} ]; const cfg = !isSoloMode ? parseSlotConfig(activeLeague&&activeLeague.slot_config) : null; return cfg ? cfg.map((c,i)=>({id:i,bet:null,mult:null,category:c.type,slotType:c.type,market:c.market||null,isParlay:false,parlayLegs:[],locked:true})) : EMPTY_FLEX.map(s=>({...s})); };
  const draftReady = useRef(null); // "the draft for this league+week has been loaded"
  useEffect(()=>{ if(isSoloMode) return; const _wk=(activeLeague && (activeLeague.current_week||activeLeague.week))||1; const _key=`${activeLeagueId}_wk${_wk}`;
    // CRITICAL: this effect re-runs whenever activeLeague changes identity — which happens
@@ -6234,6 +6234,15 @@ function App() {
    return ()=>{ document.removeEventListener("visibilitychange",onVis); clearInterval(iv); };
  },[user]);
  useEffect(()=>{ if(screen!=="browser"||isSoloMode) return; const _cfg=parseSlotConfig(activeLeague&&activeLeague.slot_config); if(!_cfg) return; const _allowed=[...new Set(_cfg.flatMap(s=>s.type==="wildcard"?WILDCARD_TYPES:[s.type]))]; const _ts=flexPicks[gridTargetSlot]; const _isWild=_ts&&(_ts.slotType||_ts.category)==="wildcard"; const _tgt=(gridTargetSlot!=null&&_ts&&_ts.locked&&!_isWild)?_ts.category:null; const _want=_tgt||(_allowed.includes(gridType)?gridType:_allowed[0]); if(_want&&_want!==gridType) setGridType(_want); const _mkt=(gridTargetSlot!=null&&_ts&&_ts.locked&&!_isWild&&_ts.category==="prop")?(_ts.market||"all"):null; if(_mkt!==null) setGridPropSub(_mkt); if(_mkt&&_mkt!=="all"){ const _msp=(leagueSports||[]).find(s=>(PROP_SUBS_BY_SPORT[s]||[]).some(x=>x.id===_mkt)); if(_msp) setGridSport(_msp); } }, [screen, gridTargetSlot, activeLeagueId, gridType]);
+
+ // Survivor pools: the browser is pinned to the pool's one market. Several generic
+ // openers call setGridType("ml") before navigating; without this, a TD pool opened
+ // on the moneyline grid and an ML pool could wander onto props.
+ useEffect(()=>{
+   if(screen!=="browser"||isSoloMode||!activeLeague||activeLeague.league_type!=="survivor") return;
+   const _want = activeLeague.survivor_config==="ml" ? "ml" : "prop";
+   if(gridType!==_want){ setGridType(_want); if(_want==="prop") setGridPropSub("all"); }
+ }, [screen, isSoloMode, activeLeagueId, gridType, activeLeague&&activeLeague.survivor_config]);
 
  // When a custom league has period slots, lazily pull their odds for the slate's games.
  useEffect(()=>{
@@ -6993,7 +7002,7 @@ function App() {
      // NULL/pending stays burned: an ungraded pick is a pick you actually used.
      const _burned = new Set((_prior||[]).filter(x=>x.result!=="P").map(x=>String(x.outcome||"").trim().toLowerCase()).filter(Boolean));
      const _dup = _names.find(n=>_burned.has(n));
-     if (_dup){ alert("You already burned "+_dup.replace(/\b\w/g,c=>c.toUpperCase())+" \u2014 survivor players are one and done. Pick someone new."); return true; }
+     if (_dup){ const _ml=activeLeague.survivor_config==="ml"; alert("You already burned "+_dup.replace(/\b\w/g,c=>c.toUpperCase())+" \u2014 survivor "+(_ml?"teams":"players")+" are one and done. Pick "+(_ml?"a new team":"someone new")+"."); return true; }
    } catch(e) {}
    return false;
  };
@@ -7047,6 +7056,7 @@ function App() {
  const [newLeagueCreated, setNewLeagueCreated] = useState(null); // holds created league data for invite code screen
  const [newLeagueSize, setNewLeagueSize] = useState(8);
  const [newLeagueType, setNewLeagueType] = useState(null);
+ const [newSvMode, setNewSvMode] = useState("anytd"); // survivor market: "anytd" | "ml"
  const [showBrowse, setShowBrowse] = useState(false);
  const [publicLeagues, setPublicLeagues] = useState([]);
  const [browseFilter, setBrowseFilter] = useState({sport:"all", size:"all", type:"all"});
@@ -7412,6 +7422,7 @@ function App() {
    playoff_size:(newLeagueType==='bracket'||!newLeaguePlayoffs)?0:(()=>{const _f=Math.min(newLeaguePlayoffSize,([2,4,6,8].filter(v=>v<=newLeagueSize).pop()||2));return (_f>=2&&seasonWeeks>Math.ceil(Math.log2(_f)))?_f:0;})(),
    paid: _needsPaywall ? false : true,
    power_ups_enabled: isPro ? !!newLeaguePowerUps : true,
+   ...(newLeagueType==="survivor" ? { survivor_config: newSvMode } : {}),
  }).select().single();
  if(error){alert(`leagues error: ${error.message} | code: ${error.code} | details: ${error.details}`);setCreatingLeague(false);return;}
  const {error:memberError} = await supabase.from("league_members").insert({league_id:data.id,user_id:user.id,is_commissioner:true});
@@ -7737,7 +7748,11 @@ function App() {
  const startReplace = (pick, league) => {
    if(!pick) return;
    const parts=String(pick.slot||"ml").split("_");
-   const _cat = parts.length>1 ? parts.slice(0,-1).join("_") : (parts[0]||"ml");
+   let _cat = parts.length>1 ? parts.slice(0,-1).join("_") : (parts[0]||"ml");
+   // Survivor: the replacement browses the POOL's market, not whatever the voided
+   // pick's slot string says; the survivor browser-pin effect then holds it there.
+   const _svLg = league ? realLeagues.find(l=>l.id===league.leagueId) : null;
+   if(_svLg && _svLg.league_type==="survivor") _cat = (_svLg.survivor_config==="ml" ? "ml" : "prop");
    setReplaceCtx({ voidId:pick.id, mult:pick.multiplier||1, week:pick.week, type:_cat, solo:!league, leagueId:league?league.leagueId:null, slot:pick.slot||null, returnScreen:league?(league.returnScreen||"leagues"):"home" });
    setBuildingSlip(true); setGridTargetSlot(null); setGridPropSub("all");
    setGridType(_cat && _cat.indexOf("_")>-1 ? "period" : _cat);
@@ -7780,6 +7795,13 @@ function App() {
        if(!(_rt >= _rss + (ctx.week-1)*_rwm && _rt < _rss + ctx.week*_rwm)){
          setPickConflict("Replacement must be a game in the same week as the voided pick."); setTimeout(()=>setPickConflict(""),3200); return;
        }
+     }
+     // Survivor replacement is still a survivor lock: the no-reuse guard must run
+     // here too (this insert path never called it), and a TD pool only accepts an
+     // anytime-TD replacement even if the constrained browser was sidestepped.
+     if(_rlg && _rlg.league_type==="survivor"){
+       if(_rlg.survivor_config!=="ml" && row.market_key!=="player_anytime_td" && !/anytime\s*td/i.test(row.pick_name||"")){ setPickConflict("Survivor replacement must be an anytime-TD scorer."); setTimeout(()=>setPickConflict(""),3200); return; }
+       if(await survivorBlocked([row])) return;
      }
      const { data:_ins, error } = await supabase.from("picks").insert({ ...row, league_id: lgId, slot: ctx.slot || (cat+"_0") }).select("id");
      if(error){ alert("Replace failed: " + error.message); return; }
@@ -8976,10 +8998,11 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
   let _seen=0; try{ _seen=parseInt(localStorage.getItem(_key)||"0",10)||0; }catch(e){}
   if(_seen>=_lastClosed) return;
   const _wkPicks=svPicks.filter(x=>x.week===_lastClosed);
+  const _mlPool=activeLeague.survivor_config==="ml";
   if(_wkPicks.some(x=>x.result==="pending")) return; // grading still settling
   const _dead=(leagueMembers||[]).filter(m=>m.eliminatedWeek===_lastClosed).map(m=>{
     const pk=_wkPicks.find(x=>x.user_id===m.userId);
-    return { name:m.name, rode: pk ? ("Rode "+_svTitle(pk.outcome||pk.pick_name||"a scorer")+" \u00B7 zero trips to the end zone") : "Never locked a scorer. The pool doesn\u2019t wait." };
+    return { name:m.name, rode: pk ? ("Rode "+_svTitle(pk.outcome||pk.pick_name||(_mlPool?"a team":"a scorer"))+" \u00B7 "+(_mlPool?"they lost":"zero trips to the end zone")) : ("Never locked a "+(_mlPool?"team":"scorer")+". The pool doesn\u2019t wait.") };
   });
   const _aliveM=(leagueMembers||[]).filter(m=>m.eliminatedWeek==null||m.eliminatedWeek>_lastClosed);
   let _mode="deaths";
@@ -8989,16 +9012,16 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
   }
   const _remain=(leagueMembers||[]).filter(m=>m.eliminatedWeek==null).length;
   const _mine=_wkPicks.find(x=>x.user_id===user.id&&x.result==="W");
-  const _myLine=(activeLeague.myEliminatedWeek==null&&_mine)?("You survived \u00B7 "+_svTitle(_mine.outcome||_mine.pick_name||"your scorer")+" found the end zone"):null;
+  const _myLine=(activeLeague.myEliminatedWeek==null&&_mine)?("You survived \u00B7 "+_svTitle(_mine.outcome||_mine.pick_name||(_mlPool?"your team":"your scorer"))+(_mlPool?" got the win":" found the end zone")):null;
   try{ localStorage.setItem(_key,String(_lastClosed)); }catch(e){}
   setSvReveal({ week:_lastClosed, mode:_mode, dead:_dead, remain:_remain, myLine:_myLine });
  }, [screen, activeLeagueId, leagueMembers, svPicks]);
 
  const shareCarnage = async ()=>{ if(!svReveal) return; try{
    if(document.fonts&&document.fonts.ready){ try{ await document.fonts.ready; }catch(e){} }
-   const c=drawCarnageCanvas({ poolName:activeLeague.name, week:svReveal.week, mode:svReveal.mode, dead:svReveal.dead, remain:svReveal.remain });
+   const c=drawCarnageCanvas({ poolName:activeLeague.name, week:svReveal.week, mode:svReveal.mode, dead:svReveal.dead, remain:svReveal.remain, ml:activeLeague.survivor_config==="ml" });
    const blob=await new Promise(res=>c.toBlob(res,"image/png"));
-   const text=(svReveal.mode==="wipeout"?"Total carnage in "+(activeLeague.name||"our survivor pool")+" \u2014 everyone whiffed, everyone lives.":svReveal.dead.map(x=>x.name).join(", ")+(svReveal.dead.length===1?" didn\u2019t survive":" didn\u2019t survive")+" Week "+svReveal.week+" of "+(activeLeague.name||"our survivor pool")+".")+" "+svReveal.remain+" remain. Think you\u2019d still be alive?";
+   const text=(svReveal.mode==="wipeout"?"Total carnage in "+(activeLeague.name||"our survivor pool")+" \u2014 "+(activeLeague.survivor_config==="ml"?"every team lost":"everyone whiffed")+", everyone lives.":svReveal.dead.map(x=>x.name).join(", ")+(svReveal.dead.length===1?" didn\u2019t survive":" didn\u2019t survive")+" Week "+svReveal.week+" of "+(activeLeague.name||"our survivor pool")+".")+" "+svReveal.remain+" remain. Think you\u2019d still be alive?";
    const url="https://app.picklockapp.com";
    const file=blob?new File([blob],"picklock-carnage.png",{type:"image/png"}):null;
    if(file&&navigator.canShare&&navigator.canShare({files:[file]})) await navigator.share({files:[file],text,title:"Survivor \u00B7 Week "+svReveal.week});
@@ -9021,19 +9044,19 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
          </div>
        ))}
      </div>
-     {_burn.length>0&&(
+     {(()=>{ const _mlH=activeLeague.survivor_config==="ml"; return _burn.length>0&&(
      <div style={{display:"flex",gap:8,overflowX:"auto",paddingTop:9,scrollbarWidth:"none"}}>
        {_burn.map((b,i)=>{ const won=b.result==="W"; const live=b.result==="pending";
          return (
          <div key={i} style={{minWidth:96,background:IOS.bg2,border:`0.5px solid ${won?"rgba(48,209,88,0.35)":live?"rgba(255,159,10,0.35)":"rgba(255,55,95,0.35)"}`,borderRadius:RAD.md,padding:"8px 10px",flexShrink:0}}>
            <div style={{fontSize:8.5,fontWeight:800,color:IOS.label3,letterSpacing:"0.05em"}}>{"WK "+b.week}</div>
            <div style={{fontSize:12,fontWeight:800,color:"#fff",marginTop:2,whiteSpace:"nowrap"}}>{_svTitle(b.outcome)}</div>
-           <div style={{fontSize:9.5,fontWeight:800,marginTop:2,color:won?IOS.green:live?IOS.orange:IOS.red}}>{won?"SCORED":live?"LIVE":"MISSED"}</div>
+           <div style={{fontSize:9.5,fontWeight:800,marginTop:2,color:won?IOS.green:live?IOS.orange:IOS.red}}>{won?(_mlH?"WON":"SCORED"):live?"LIVE":(_mlH?"LOST":"MISSED")}</div>
          </div>
          );})}
      </div>
-     )}
-     <div style={{fontSize:10.5,color:IOS.label3,fontWeight:700,textAlign:"center",padding:"9px 0 2px"}}>{"One anytime TD scorer \u00B7 every player is one and done \u00B7 no pick = elimination"}</div>
+     ); })()}
+     <div style={{fontSize:10.5,color:IOS.label3,fontWeight:700,textAlign:"center",padding:"9px 0 2px"}}>{activeLeague.survivor_config==="ml"?"One moneyline winner \u00B7 every team is one and done \u00B7 no pick = elimination":"One anytime TD scorer \u00B7 every player is one and done \u00B7 no pick = elimination"}</div>
    </div>
    );
  })();
@@ -9045,7 +9068,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={IOS.red} strokeWidth="2.2" strokeLinecap="round"><circle cx="12" cy="12" r="9"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>
    </div>
    <div style={{fontSize:18,fontWeight:800,color:"#fff"}}>{"You\u2019re out \u2014 Week "+(_ew||"?")}</div>
-   <div style={{fontSize:13.5,color:IOS.label2,lineHeight:1.5,maxWidth:260}}>{"Your scorer never found the end zone. You can watch the Board and talk your talk in chat \u2014 the pool plays on."}</div>
+   <div style={{fontSize:13.5,color:IOS.label2,lineHeight:1.5,maxWidth:260}}>{(activeLeague&&activeLeague.survivor_config==="ml")?"Your team lost. You can watch the Board and talk your talk in chat \u2014 the pool plays on.":"Your scorer never found the end zone. You can watch the Board and talk your talk in chat \u2014 the pool plays on."}</div>
    <button onClick={()=>setScreen("matchup")} style={{marginTop:8,background:"linear-gradient(90deg,#0A84FF,#5E5CE6)",border:"none",color:"#fff",borderRadius:RAD.md,padding:"12px 24px",fontSize:13.5,fontWeight:800,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>See the Board</button>
  </div>
    );
@@ -9102,7 +9125,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
          );})}
      </div>
    </div>
-   <div style={{fontSize:10.5,color:IOS.label3,textAlign:"center",lineHeight:1.6,paddingBottom:110}}>{"Green scored \u00B7 Red whiffed \u00B7 Orange locked and sweating"}</div>
+   <div style={{fontSize:10.5,color:IOS.label3,textAlign:"center",lineHeight:1.6,paddingBottom:110}}>{activeLeague.survivor_config==="ml"?"Green won \u00B7 Red lost \u00B7 Orange locked and sweating":"Green scored \u00B7 Red whiffed \u00B7 Orange locked and sweating"}</div>
  </div>
    );
  })();
@@ -14076,7 +14099,12 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const TYPE_LABELS = { ml:"Moneyline", spread:"Spread", ou:"Over/Under", prop:"Prop", longshot:"Longshot", ml_h1:"1H Moneyline", spread_h1:"1H Spread", ou_h1:"1H Over/Under", ml_f5:"F5 Moneyline", spread_f5:"F5 Spread", ou_f5:"F5 Over/Under", ml_f3:"F3 Moneyline", spread_f3:"F3 Spread", ou_f3:"F3 Over/Under", yrfi:"YRFI", nrfi:"NRFI", period:"Periods" };
  const acc = ACC[gridType] || IOS.blue;
  const gridCfg = !isSoloMode ? parseSlotConfig(activeLeague&&activeLeague.slot_config) : null;
- const allowedTypes = gridCfg ? [...new Set(gridCfg.flatMap(s=>s.type==="wildcard"?WILDCARD_TYPES:[s.type]))] : (isSoloMode ? ["ml","spread","ou","prop","period","longshot"] : ["ml","spread","ou","prop","longshot"]);
+ // Survivor pools browse exactly ONE market. This is not cosmetic: without it the
+ // type pills offered every market and the prop list was unfiltered \u2014 a survivor
+ // member could lock a pass-yards Over and "survive" on it. The slot's market chip
+ // at the top of the prop rail was UI-only and never filtered the list.
+ const svMode = (!isSoloMode && activeLeague && activeLeague.league_type==="survivor") ? (activeLeague.survivor_config==="ml" ? "ml" : "anytd") : null;
+ const allowedTypes = svMode ? [svMode==="ml"?"ml":"prop"] : (gridCfg ? [...new Set(gridCfg.flatMap(s=>s.type==="wildcard"?WILDCARD_TYPES:[s.type]))] : (isSoloMode ? ["ml","spread","ou","prop","period","longshot"] : ["ml","spread","ou","prop","longshot"]));
 
  // Resolve active sport (default to league's first sport)
  const sportsList = leagueSports && leagueSports.length ? leagueSports : ["nfl"];
@@ -14162,6 +14190,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  } else {
  list = (BETS[gridType]||[]).filter(b=> gSport==="all"||b._sport===gSport);
  }
+ // Survivor TD pools: only anytime-TD rows are lockable. props.js emits market
+ // player_anytime_td; the pick-string test covers older cached rows without it.
+ if(svMode==="anytd" && gridType==="prop") list = list.filter(b=> b.market==="player_anytime_td" || /anytime\s*td/i.test(b.pick||""));
  { const _seen=new Set(); list = list.filter(b=>{ const k=(b.game||"")+"|"+(b.pick||b.label||b.id||""); if(_seen.has(k)) return false; _seen.add(k); return true; }); }
     // League weeks are 7-day windows from season_start — soloWeekOfDate numbers weeks from
     // a different epoch entirely, which made every league replace claim "no open games left"
@@ -16012,11 +16043,12 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    {[
      {id:"h2h",icon:"ti-users",label:"Head-to-head",desc:"Weekly matchups + seeded playoffs"},
      {id:"duel",icon:"ti-swords",label:"Duel",desc:"One week. One opponent. Winner takes the trophy.",badge:"1v1"},
-     {id:"survivor",icon:"ti-target",label:"Survivor",desc:"Pick one TD scorer each week. Score and live, miss and die. Never reuse a player.",badge:"NFL"},
+     {id:"survivor",icon:"ti-target",label:"Survivor",desc:(newSvMode==="ml"?"Pick one team to win each week. Win and live, lose and die. Never reuse a team.":"Pick one TD scorer each week. Score and live, miss and die. Never reuse a player."),badge:"NFL"},
      {id:"points",icon:"ti-chart-bar",label:"Total points",desc:"Everyone competes at once · cumulative points · top seeds make the playoff"},
      {id:"bracket",icon:"ti-tournament",label:"Tournament",desc:"Single-elimination bracket. 4, 8, 16, or 32 players only.",badge:"New"},
    ].map(t=>(
-     <div key={t.id} onClick={()=>{
+     <Fragment key={t.id}>
+     <div onClick={()=>{
        const _wasPreset = newLeagueType==="duel"||newLeagueType==="survivor";
        setNewLeagueType(t.id);
        if(t.id==="duel"){ setNewLeagueSize(2); setNewLeagueWeeks(1); setNewLeaguePlayoffs(false); }
@@ -16046,6 +16078,26 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
          <div style={{fontSize:11,color:"#555",lineHeight:1.4,textAlign:"center"}}>{t.desc}</div>
        </div>
      </div>
+     {t.id==="survivor"&&newLeagueType==="survivor"&&(
+     <div style={{display:"flex",gap:8,marginBottom:8}}>
+       {[
+         {id:"anytd",l:"TD Scorer",d:"Pick one player to score a touchdown each week.",r:"Never reuse a player"},
+         {id:"ml",l:"Moneyline",d:"Pick one team to win outright each week.",r:"Never reuse a team"},
+       ].map(m=>{ const on=newSvMode===m.id; return (
+       <div key={m.id} onClick={(e)=>{ e.stopPropagation(); setNewSvMode(m.id); }} style={{flex:1,borderRadius:RAD.md,padding:"12px 10px",cursor:"pointer",transition:"all .15s",textAlign:"left",background:on?"rgba(10,132,255,0.08)":"#111",border:`0.5px solid ${on?"rgba(10,132,255,0.45)":"#1E1E1E"}`}}>
+         <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:6}}>
+           {m.id==="anytd"
+             ?<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={on?IOS.blue:"#555"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><ellipse cx="12" cy="12" rx="9" ry="6" transform="rotate(-30 12 12)"/><path d="M9.5 10l5 4M11 8.7l5 4M8 11.3l5 4"/></svg>
+             :<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={on?IOS.blue:"#555"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M8 21h8M12 21v-4M12 17a7 7 0 0 0 7-7V4H5v6a7 7 0 0 0 7 7z"/><path d="M5 6H2v2a4 4 0 0 0 3 3.87M19 6h3v2a4 4 0 0 1-3 3.87"/></svg>}
+           <span style={{fontSize:13,fontWeight:800,color:on?"#fff":"#888",transition:"color .15s"}}>{m.l}</span>
+         </div>
+         <div style={{fontSize:10.5,color:on?"rgba(255,255,255,0.55)":"#555",lineHeight:1.45,transition:"color .15s"}}>{m.d}</div>
+         <div style={{marginTop:7,fontSize:9,fontWeight:800,letterSpacing:"0.04em",textTransform:"uppercase",color:on?IOS.blue:"#3A3A3C",transition:"color .15s"}}>{m.r}</div>
+       </div>
+       );})}
+     </div>
+     )}
+     </Fragment>
    ))}
    <button
      disabled={!newLeagueType}
@@ -16258,7 +16310,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
         after both maps carry icehockey_nhl and a pick has graded end-to-end. */
    ].map(sp=>{
      const isSelected = newLeagueSports.includes(sp.id);
-     const _svLock = newLeagueType==="survivor"; // TD survivor is NFL-only (anytime TD market)
+     const _svLock = newLeagueType==="survivor"; // survivor is NFL-only in both modes (anytime-TD market / NFL moneylines)
      if(_svLock && sp.id!=="nfl") return null;
      return (
      <div key={sp.id} onClick={()=>{ if(!_svLock) toggleNewLeagueSport(sp.id); }}
@@ -20194,7 +20246,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
     <div style={{textAlign:"center"}}>
       <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:IOS.label3}}>{"Week "+svReveal.week+" \u00B7 Final"}</div>
       <div style={{fontSize:26,fontWeight:900,color:"#fff",letterSpacing:"-0.5px",marginTop:5}}>{svReveal.mode==="wipeout"?"Total carnage.":svReveal.mode==="sweep"?"Everybody lives.":(svReveal.dead.length+" didn\u2019t make it.")}</div>
-      <div style={{fontSize:12.5,color:IOS.label2,marginTop:4}}>{svReveal.mode==="wipeout"?"Every scorer whiffed. Nobody dies. The pool plays on.":svReveal.remain+" remain."}</div>
+      <div style={{fontSize:12.5,color:IOS.label2,marginTop:4}}>{svReveal.mode==="wipeout"?((activeLeague&&activeLeague.survivor_config==="ml")?"Every team lost. Nobody dies. The pool plays on.":"Every scorer whiffed. Nobody dies. The pool plays on."):svReveal.remain+" remain."}</div>
     </div>
     {svReveal.dead.map((dd,i)=>(
     <div key={i} style={{position:"relative",overflow:"hidden",marginTop:12,borderRadius:14,border:"0.5px solid rgba(255,55,95,0.45)",background:"linear-gradient(160deg,rgba(255,55,95,0.13),#0C0C0F 62%)",padding:"13px 14px"}}>
