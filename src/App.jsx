@@ -2186,7 +2186,7 @@ function PlayerCard({ data, IOS }){
     try{
       if(document.fonts&&document.fonts.ready){ try{ await document.fonts.ready; }catch(e){} }
       const canvas=pcDrawCard(data);
-      const url="https://lined-up-murex.vercel.app";
+      const url="https://app.picklockapp.com";
       const text=data.ovr+" OVR "+(data.tier||"").toUpperCase()+" — "+data.arch+". My PickLock card. Think you can beat me?";
       const blob=await new Promise(r=>canvas.toBlob(r,"image/png"));
       const file=blob?new File([blob],"picklock-card.png",{type:"image/png"}):null;
@@ -2371,7 +2371,7 @@ function soloDrawCard(d){
     x.fillStyle=MUT2; x.font="600 16px Barlow, system-ui, sans-serif"; x.fillText("No winning picks this slate — next one is yours.",P,y+10);
   }
   x.textBaseline="alphabetic"; x.textAlign="left"; x.fillStyle=MUT2; x.font="800 17px Barlow, system-ui, sans-serif"; x.fillText("PICKLOCK",P,H-44);
-  x.textAlign="right"; x.fillStyle=MUT2; x.font="600 15px Barlow, system-ui, sans-serif"; x.fillText("lined-up-murex.vercel.app",W-P,H-46);
+  x.textAlign="right"; x.fillStyle=MUT2; x.font="600 15px Barlow, system-ui, sans-serif"; x.fillText("app.picklockapp.com",W-P,H-46);
   return c;
 }
 // Season recap share card. Same 600x900 canvas contract as the solo and league cards.
@@ -2478,7 +2478,40 @@ function leagueDrawCard(d){
   x.textAlign="left"; x.fillStyle="rgba(255,255,255,.1)"; x.fillRect(P,y+4,W-2*P,1);
   x.fillStyle=MUT; x.font="600 18px Barlow, system-ui, sans-serif"; x.fillText("League hit "+d.hitPct+"%   ·   "+d.totalPicks+" picks this week",P,y+26);
   x.textBaseline="alphabetic"; x.fillStyle=MUT2; x.font="800 16px Barlow, system-ui, sans-serif"; x.fillText("PICKLOCK",P,H-42);
-  x.textAlign="right"; x.fillStyle=MUT2; x.font="600 14px Barlow, system-ui, sans-serif"; x.fillText("lined-up-murex.vercel.app",W-P,H-44);
+  x.textAlign="right"; x.fillStyle=MUT2; x.font="600 14px Barlow, system-ui, sans-serif"; x.fillText("app.picklockapp.com",W-P,H-44);
+  return c;
+}
+function drawCarnageCanvas(d){
+  // 1080x1350 share card: pool name, week verdict, the dead, the remain count.
+  const W=1080,H=1350,P=84;
+  const c=document.createElement("canvas"); c.width=W; c.height=H; const x=c.getContext("2d");
+  const MUT="rgba(255,255,255,.55)", MUT2="rgba(255,255,255,.34)";
+  const g=x.createLinearGradient(0,0,W,H); g.addColorStop(0,"#101a33"); g.addColorStop(.65,"#07070c"); x.fillStyle=g; x.fillRect(0,0,W,H);
+  const rg=x.createRadialGradient(W*.85,-.1*H,60,W*.85,-.1*H,W*.9); rg.addColorStop(0,"rgba(10,132,255,.32)"); rg.addColorStop(1,"rgba(10,132,255,0)"); x.fillStyle=rg; x.fillRect(0,0,W,H);
+  x.textBaseline="alphabetic";
+  x.fillStyle="#64D2FF"; x.font="900 34px Barlow, system-ui, sans-serif"; x.fillText("PICKLOCK",P,P+18);
+  x.fillStyle=MUT2; x.font="800 24px Barlow, system-ui, sans-serif"; x.fillText((d.poolName||"SURVIVOR").toUpperCase()+"  \u00B7  SURVIVOR",P,P+62);
+  x.fillStyle=MUT; x.font="800 26px Barlow, system-ui, sans-serif"; x.fillText("WEEK "+d.week+" \u00B7 FINAL",P,P+150);
+  x.fillStyle="#fff"; x.font="900 92px Barlow, system-ui, sans-serif";
+  const _title=d.mode==="wipeout"?"Total carnage.":d.mode==="sweep"?"Everybody lives.":(d.dead.length+(d.dead.length===1?" didn\u2019t make it.":" didn\u2019t make it."));
+  x.fillText(_title,P,P+250);
+  let y=P+340;
+  if(d.mode==="wipeout"){ x.fillStyle=MUT; x.font="600 34px Barlow, system-ui, sans-serif"; x.fillText("Every scorer whiffed. Nobody dies. The pool plays on.",P,y); y+=70; }
+  for(const dd of (d.dead||[]).slice(0,6)){
+    x.fillStyle="rgba(255,55,95,.12)"; x.fillRect(P,y,W-2*P,104);
+    x.strokeStyle="rgba(255,55,95,.45)"; x.lineWidth=2; x.strokeRect(P,y,W-2*P,104);
+    x.fillStyle="#fff"; x.font="800 38px Barlow, system-ui, sans-serif"; x.fillText(dd.name,P+34,y+46);
+    x.fillStyle=MUT; x.font="600 26px Barlow, system-ui, sans-serif"; x.fillText(dd.rode,P+34,y+84);
+    x.textAlign="right"; x.fillStyle="#FF375F"; x.font="900 24px Barlow, system-ui, sans-serif"; x.fillText("ELIMINATED",W-P-30,y+58); x.textAlign="left";
+    y+=124;
+  }
+  y=Math.max(y,H-360);
+  x.fillStyle="rgba(255,255,255,.1)"; x.fillRect(P,y,W-2*P,2);
+  x.fillStyle="#FFD60A"; x.font="900 120px 'Barlow Semi Condensed', Barlow, system-ui, sans-serif"; x.fillText(String(d.remain),P,y+150);
+  x.fillStyle=MUT; x.font="800 34px Barlow, system-ui, sans-serif"; x.fillText("REMAIN",P+((String(d.remain).length)*66)+26,y+150);
+  x.fillStyle=MUT2; x.font="800 26px Barlow, system-ui, sans-serif"; x.fillText("Think you\u2019d still be alive?",P,y+214);
+  x.textAlign="right"; x.fillStyle=MUT2; x.font="600 24px Barlow, system-ui, sans-serif"; x.fillText("app.picklockapp.com",W-P,H-60); x.textAlign="left";
+  x.fillStyle=MUT2; x.font="800 24px Barlow, system-ui, sans-serif"; x.fillText("PICKLOCK",P,H-60);
   return c;
 }
 function LeagueWeekRecap({ data, IOS, onClose }){
@@ -2498,7 +2531,7 @@ function LeagueWeekRecap({ data, IOS, onClose }){
       if(document.fonts&&document.fonts.ready){ try{ await document.fonts.ready; }catch(e){} }
       const payload={ leagueName:data.leagueName, week, rows:cur.rows, matchups:cur.matchups, mode:isH2H?"h2h":"points", winner:cur.winner, hitPct:cur.hitPct, totalPicks:cur.totalPicks };
       const cv=leagueDrawCard(payload);
-      const url="https://lined-up-murex.vercel.app";
+      const url="https://app.picklockapp.com";
       const text=data.leagueName+" — Week "+week+": "+w.name+(isH2H?" was top scorer with +":" took the week with +")+w.pts.toFixed(0)+" pts. "+cur.hitPct+"% league hit rate. My PickLock league.";
       const blob=await new Promise(r=>cv.toBlob(r,"image/png"));
       const file=blob?new File([blob],"picklock-league-week.png",{type:"image/png"}):null;
@@ -2601,7 +2634,7 @@ function WeeklyRecap({ data, picks, standings, league, stats, IOS, onClose, user
     try{
       if(document.fonts&&document.fonts.ready){ try{ await document.fonts.ready; }catch(e){} }
       const cv=wrecDrawCard({week:data.week,record:wins.length+"-"+losses.length,points:myPts,sup,name,rank,streakLabel});
-      const url="https://lined-up-murex.vercel.app";
+      const url="https://app.picklockapp.com";
       const text="Week "+data.week+": "+wins.length+"-"+losses.length+", "+(myPts>=0?"+":"")+myPts.toFixed(0)+" pts — "+sup.title+". My PickLock week.";
       const blob=await new Promise(r=>cv.toBlob(r,"image/png"));
       const file=blob?new File([blob],"picklock-week.png",{type:"image/png"}):null;
@@ -4353,7 +4386,7 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
       const bestPk = winsArr.length ? winsArr.reduce((a,b)=>(parseFloat(b.points_earned||0)>parseFloat(a.points_earned||0)?b:a)) : null;
       const slateWinPct=(w.wins+w.losses)>0?Math.round(w.wins/(w.wins+w.losses)*100):0;
       const cv = soloDrawCard({slate:soloWeekRange(w.week), points:w.pts, record:w.wins+"-"+w.losses, slateWinPct, streak:currentStreak, allTimeWinPct:winPct, picksN:(w.picks?w.picks.length:0), bestPick: bestPk?{name:bestPk.pick_name,odds:bestPk.odds,pts:parseFloat(bestPk.points_earned||0)}:null, topPct:soloTopPct, name:username||""});
-      const url="https://lined-up-murex.vercel.app";
+      const url="https://app.picklockapp.com";
       const text="Week "+soloWeekRange(w.week)+": "+w.wins+"-"+w.losses+", "+(w.pts>=0?"+":"")+Math.round(w.pts)+" pts"+(soloTopPct?(" — top "+soloTopPct+"% of all pickers"):"")+" on PickLock Solo.";
       const blob=await new Promise(r=>cv.toBlob(r,"image/png"));
       const file=blob?new File([blob],"picklock-slate.png",{type:"image/png"}):null;
@@ -8908,7 +8941,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
   if(screen!=="picks"&&screen!=="matchup"&&screen!=="leagues"){ return; }
   (async()=>{ try{
     const [{data:_all},{data:_mine}] = await Promise.all([
-      supabase.from("picks").select("user_id, week, result").eq("league_id",activeLeague.id),
+      supabase.from("picks").select("user_id, week, result, outcome, pick_name").eq("league_id",activeLeague.id),
       supabase.from("picks").select("outcome, week, result").eq("league_id",activeLeague.id).eq("user_id",user.id),
     ]);
     setSvPicks(_all||[]); setSvBurned((_mine||[]).filter(x=>x.outcome));
@@ -8916,6 +8949,48 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  }, [screen, activeLeagueId, isSoloMode, user&&user.id, activeLeague&&activeLeague.league_type, activeLeague&&activeLeague.current_week]);
 
  const _svTitle=(s)=>String(s||"").replace(/\b\w/g,c=>c.toUpperCase());
+ const [svReveal, setSvReveal] = useState(null); // {week, mode, dead:[{name,rode}], remain, myLine}
+ useEffect(()=>{
+  if(isSoloMode||!user||!activeLeague||activeLeague.league_type!=="survivor") return;
+  if(screen!=="picks"&&screen!=="matchup"&&screen!=="leagues") return;
+  if(!leagueMembers.length||!svPicks.length) return;
+  const _sw=Number(activeLeague.season_weeks)||18;
+  const _lastClosed=Math.min(_sw,(activeLeague.current_week||1)-1);
+  if(_lastClosed<1) return;
+  const _key="pk_sv_reveal_"+activeLeague.id;
+  let _seen=0; try{ _seen=parseInt(localStorage.getItem(_key)||"0",10)||0; }catch(e){}
+  if(_seen>=_lastClosed) return;
+  const _wkPicks=svPicks.filter(x=>x.week===_lastClosed);
+  if(_wkPicks.some(x=>x.result==="pending")) return; // grading still settling
+  const _dead=(leagueMembers||[]).filter(m=>m.eliminatedWeek===_lastClosed).map(m=>{
+    const pk=_wkPicks.find(x=>x.user_id===m.userId);
+    return { name:m.name, rode: pk ? ("Rode "+_svTitle(pk.outcome||pk.pick_name||"a scorer")+" \u00B7 zero trips to the end zone") : "Never locked a scorer. The pool doesn\u2019t wait." };
+  });
+  const _aliveM=(leagueMembers||[]).filter(m=>m.eliminatedWeek==null||m.eliminatedWeek>_lastClosed);
+  let _mode="deaths";
+  if(!_dead.length){
+    const _allBust=_aliveM.length>0&&_aliveM.every(m=>{ const rs=_wkPicks.filter(x=>x.user_id===m.userId); return rs.length===0||!rs.some(x=>x.result==="W"); });
+    _mode=_allBust?"wipeout":"sweep";
+  }
+  const _remain=(leagueMembers||[]).filter(m=>m.eliminatedWeek==null).length;
+  const _mine=_wkPicks.find(x=>x.user_id===user.id&&x.result==="W");
+  const _myLine=(activeLeague.myEliminatedWeek==null&&_mine)?("You survived \u00B7 "+_svTitle(_mine.outcome||_mine.pick_name||"your scorer")+" found the end zone"):null;
+  try{ localStorage.setItem(_key,String(_lastClosed)); }catch(e){}
+  setSvReveal({ week:_lastClosed, mode:_mode, dead:_dead, remain:_remain, myLine:_myLine });
+ }, [screen, activeLeagueId, leagueMembers, svPicks]);
+
+ const shareCarnage = async ()=>{ if(!svReveal) return; try{
+   if(document.fonts&&document.fonts.ready){ try{ await document.fonts.ready; }catch(e){} }
+   const c=drawCarnageCanvas({ poolName:activeLeague.name, week:svReveal.week, mode:svReveal.mode, dead:svReveal.dead, remain:svReveal.remain });
+   const blob=await new Promise(res=>c.toBlob(res,"image/png"));
+   const text=(svReveal.mode==="wipeout"?"Total carnage in "+(activeLeague.name||"our survivor pool")+" \u2014 everyone whiffed, everyone lives.":svReveal.dead.map(x=>x.name).join(", ")+(svReveal.dead.length===1?" didn\u2019t survive":" didn\u2019t survive")+" Week "+svReveal.week+" of "+(activeLeague.name||"our survivor pool")+".")+" "+svReveal.remain+" remain. Think you\u2019d still be alive?";
+   const url="https://app.picklockapp.com";
+   const file=blob?new File([blob],"picklock-carnage.png",{type:"image/png"}):null;
+   if(file&&navigator.canShare&&navigator.canShare({files:[file]})) await navigator.share({files:[file],text,title:"Survivor \u00B7 Week "+svReveal.week});
+   else if(navigator.share) await navigator.share({text,url,title:"Survivor \u00B7 Week "+svReveal.week});
+   else{ const a=document.createElement("a"); a.href=c.toDataURL("image/png"); a.download="picklock-carnage.png"; a.click(); }
+ }catch(e){} };
+
  const survivorHeader = (()=>{ if(isSoloMode||!activeLeague||activeLeague.league_type!=="survivor") return null;
    const _wk=activeLeague.current_week||1;
    const _alive=(leagueMembers||[]).filter(m=>m.eliminatedWeek==null).length;
@@ -20093,6 +20168,33 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  })()}
 
  {/* ══ POST LEAGUE UPSELL ══ */}
+ {svReveal&&!isSoloMode&&activeLeague&&activeLeague.league_type==="survivor"&&(
+ <div style={{position:"fixed",inset:0,zIndex:340,background:"rgba(0,0,0,0.78)",display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setSvReveal(null)}>
+  <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:480,maxHeight:"86dvh",overflowY:"auto",background:"#0C0C10",borderTopLeftRadius:22,borderTopRightRadius:22,border:"0.5px solid rgba(255,255,255,0.1)",padding:"12px 18px calc(28px + env(safe-area-inset-bottom))"}}>
+    <div style={{width:38,height:4,borderRadius:2,background:"rgba(255,255,255,0.2)",margin:"0 auto 16px"}}/>
+    <div style={{textAlign:"center"}}>
+      <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:IOS.label3}}>{"Week "+svReveal.week+" \u00B7 Final"}</div>
+      <div style={{fontSize:26,fontWeight:900,color:"#fff",letterSpacing:"-0.5px",marginTop:5}}>{svReveal.mode==="wipeout"?"Total carnage.":svReveal.mode==="sweep"?"Everybody lives.":(svReveal.dead.length+" didn\u2019t make it.")}</div>
+      <div style={{fontSize:12.5,color:IOS.label2,marginTop:4}}>{svReveal.mode==="wipeout"?"Every scorer whiffed. Nobody dies. The pool plays on.":svReveal.remain+" remain."}</div>
+    </div>
+    {svReveal.dead.map((dd,i)=>(
+    <div key={i} style={{position:"relative",overflow:"hidden",marginTop:12,borderRadius:14,border:"0.5px solid rgba(255,55,95,0.45)",background:"linear-gradient(160deg,rgba(255,55,95,0.13),#0C0C0F 62%)",padding:"13px 14px"}}>
+      <div style={{position:"absolute",top:11,right:13,fontSize:9,fontWeight:900,letterSpacing:"0.12em",color:IOS.red,border:"1px solid rgba(255,55,95,0.5)",borderRadius:4,padding:"2px 7px",transform:"rotate(6deg)"}}>ELIMINATED</div>
+      <div style={{fontSize:15.5,fontWeight:900,color:"#fff"}}>{dd.name}</div>
+      <div style={{fontSize:11.5,color:IOS.label2,marginTop:4,lineHeight:1.45}}>{dd.rode}</div>
+    </div>
+    ))}
+    {svReveal.myLine&&(
+    <div style={{display:"flex",alignItems:"center",gap:11,marginTop:12,borderRadius:14,border:"0.5px solid rgba(48,209,88,0.4)",background:"linear-gradient(160deg,rgba(48,209,88,0.12),#0C0C0F 62%)",padding:"12px 14px"}}>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M20 6L9 17l-5-5"/></svg>
+      <div style={{fontSize:13,fontWeight:800,color:"#fff"}}>{svReveal.myLine}</div>
+    </div>
+    )}
+    <div onClick={shareCarnage} style={{marginTop:14,background:"linear-gradient(90deg,#0A84FF,#5E5CE6)",borderRadius:12,padding:"13px",textAlign:"center",fontSize:14,fontWeight:900,color:"#fff",cursor:"pointer"}}>{svReveal.mode==="deaths"?"Share the carnage":"Share the card"}</div>
+    <div onClick={()=>setSvReveal(null)} style={{marginTop:8,textAlign:"center",fontSize:12,fontWeight:700,color:IOS.label3,padding:"7px",cursor:"pointer"}}>Close</div>
+  </div>
+ </div>
+ )}
  {!IS_NATIVE && showLeaguePaywall && (
    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:9999,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>setShowLeaguePaywall(null)}>
      <div className="pk-sheet" style={{background:"#0d0d12",padding:"0 18px calc(var(--sa-bot) + 24px)",border:"0.5px solid #1E1E1E"}} onClick={e=>e.stopPropagation()}>
