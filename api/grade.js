@@ -622,6 +622,7 @@ async function buildPlayerStatIndex(sp, lg) {
       if (!rr || !rr.players) continue;
       const evDate = rr.date ? Date.parse(rr.date) : NaN;
       const perGame = {}; // player -> merged stats for THIS game only
+      const teamOf = {};  // player -> which SIDE they played for (needed by D/ST)
       for (const teamBlock of rr.players) {
         for (const grp of (teamBlock.statistics || [])) {
           const names = (grp.names || grp.labels || []);
@@ -631,6 +632,7 @@ async function buildPlayerStatIndex(sp, lg) {
             const nm = normName(a.athlete?.displayName);
             if (!nm) continue;
             const st = perGame[nm] || (perGame[nm] = {});
+            if (teamBlock.team?.displayName) teamOf[nm] = teamBlock.team.displayName;
             (a.stats || []).forEach((val, idx) => {
               if (names[idx] != null && st[names[idx]] == null) st[names[idx]] = val;
               if (keys[idx] != null && st[keys[idx]] == null) st[keys[idx]] = val;
@@ -641,7 +643,7 @@ async function buildPlayerStatIndex(sp, lg) {
       // One entry PER GAME, tagged with that game's teams + date, so a prop can be
       // matched to its OWN game (by matchup) rather than the player's latest box score.
       for (const nm in perGame) {
-        (index[nm] || (index[nm] = [])).push({ date: evDate, home: rr.home, away: rr.away, stats: perGame[nm] });
+        (index[nm] || (index[nm] = [])).push({ date: evDate, home: rr.home, away: rr.away, team: teamOf[nm] || null, stats: perGame[nm] });
       }
     }
   }
@@ -664,11 +666,53 @@ function teamInGame(teamName, entry) {
   return hit(entry.home) || hit(entry.away);
 }
 
+// A defence/special-teams score is any TD by that team that isn't offensive.
+const DST_TD_KEYS = ["kickReturnTouchdowns", "puntReturnTouchdowns", "defensiveTouchdowns", "interceptionTouchdowns", "fumblesTouchdowns"];
+
+// Compare a feed team name against a box-score team name ("Seattle Seahawks").
+function sameTeamName(a, b) {
+  const x = normName(a), y = normName(b);
+  if (!x || !y) return false;
+  return x === y || x.includes(y) || y.includes(x) || x.split(" ").pop() === y.split(" ").pop();
+}
+
+// Settle "Seattle Seahawks D/ST - Anytime TD". These arrive inside the ordinary
+// player_anytime_td market, so without this they'd hit the player lookup, miss,
+// and get silently voided by the DNP path. A D/ST TD is any return or defensive
+// score by ANY player on that side — including a punt return by an offensive
+// player, which is how the books settle it.
+//
+// Only games present in the index are final, so an absent matchup stays PENDING
+// rather than grading a scoreless L on a game that hasn't been played.
+function gradeTeamDefenseTD(teamName, gameField, index, info = {}, gameDate = null) {
+  const teams = parseMatchupTeams(gameField);
+  if (!teams || teams.length !== 2) { info.reason = "dst_no_matchup"; return null; }
+  const want = gameDate ? Date.parse(gameDate) : NaN;
+  let sawGame = false, tds = 0;
+  for (const nm in index) {
+    for (const e of index[nm]) {
+      if (!teamInGame(teams[0], e) || !teamInGame(teams[1], e)) continue;
+      if (!isNaN(want) && (isNaN(e.date) || Math.abs(e.date - want) > 2 * 3600 * 1000)) continue;
+      sawGame = true;                                   // this game IS final
+      if (!e.team || !sameTeamName(e.team, teamName)) continue;
+      for (const k of DST_TD_KEYS) { const n = statNumber(e.stats?.[k]); if (n) tds += n; }
+    }
+  }
+  if (!sawGame) { info.reason = "dst_game_not_final"; return null; }
+  info.reason = "dst_tds_" + tds;
+  return tds >= 1 ? "W" : "L";
+}
+
 function gradeProp(pickName, gameField, index, info = {}, gameDate = null) {
   const parsed = parseProp(pickName);
   if (!parsed) { info.reason = "prop_unparsed"; return null; }
   // Standard props: player is in the pick_name and gameField is the matchup.
   // Longshot legs: no player in the name and gameField IS the player.
+  // "Seattle Seahawks D/ST" / "New England Patriots Defense" are teams, not athletes.
+  if (parsed.stat === "anytime td") {
+    const dst = String(parsed.player || "").match(/^(.*?)\s+(?:D\s*\/\s*ST|DST|Defense)$/i);
+    if (dst && dst[1]) return gradeTeamDefenseTD(dst[1], gameField, index, info, gameDate);
+  }
   const teams = parseMatchupTeams(gameField);
   const playerName = parsed.player || (teams ? null : gameField);
   const pl = normName(playerName);

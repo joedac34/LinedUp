@@ -157,8 +157,13 @@ export default async function handler(req, res) {
               // in .name, so accept either rather than assuming this shape everywhere.
               const nm = outcome.name || "";
               if (/^no$/i.test(nm)) return;   // the "will not score" side is not offered
-              const player = outcome.description || (/^yes$/i.test(nm) ? null : nm);
+              let player = outcome.description || (/^yes$/i.test(nm) ? null : nm);
               if (!player) return;            // no player attached -> unusable, never emit it
+              // Books disagree on how they write a team defence: DraftKings sends
+              // "Seattle Seahawks D/ST", another book sends "Seattle Seahawks Defense".
+              // Different strings meant the dedupe below never collided and the same
+              // defence appeared twice at two different prices. Normalise to one form.
+              player = player.replace(/\s+(?:D\s*\/\s*ST|DST|Defense)$/i, " D/ST");
               label = `${player} - ${marketLabel}`;
               dedupKey = `${market.key}|${player}`;
             } else {
