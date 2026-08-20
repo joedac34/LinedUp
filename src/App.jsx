@@ -5584,7 +5584,11 @@ function App() {
  // A league created with a scheduled start has season_start stamped at CREATION,
  // before anyone joins. The date alone is not a season — an unfilled league has
  // not started no matter what the calendar says.
- const seasonNotStarted = !isSoloMode && !!(activeLeague&&activeLeague.id) && _lgReady && (!leagueFull || !activeLeague.season_start || new Date(activeLeague.season_start).getTime() > Date.now());
+ // Survivor pools start on the commissioner's stamp with WHOEVER is in -- any
+ // count from 2 up. The leagueFull test below is right for h2h (a half-empty
+ // schedule is meaningless) and fatal here: a 3-of-8 pool would never start.
+ const _svStarted = !isSoloMode && activeLeague && activeLeague.league_type==="survivor" && activeLeague.season_start && new Date(activeLeague.season_start).getTime() <= Date.now();
+ const seasonNotStarted = !isSoloMode && !!(activeLeague&&activeLeague.id) && _lgReady && !_svStarted && (!leagueFull || !activeLeague.season_start || new Date(activeLeague.season_start).getTime() > Date.now());
  const leagueAwaitingStart = seasonNotStarted && leagueFull;
  // The ONLY way to change mode. Never call setIsSoloMode or setHomeMode directly.
  const applyMode = (solo, opts) => {
@@ -7058,6 +7062,7 @@ function App() {
  const [newLeagueSize, setNewLeagueSize] = useState(8);
  const [newLeagueType, setNewLeagueType] = useState(null);
  const [newSvMode, setNewSvMode] = useState("anytd"); // survivor market: "anytd" | "ml"
+ const [svStarting, setSvStarting] = useState(false); // commissioner start-pool in flight
  const [showBrowse, setShowBrowse] = useState(false);
  const [publicLeagues, setPublicLeagues] = useState([]);
  const [browseFilter, setBrowseFilter] = useState({sport:"all", size:"all", type:"all"});
@@ -7855,6 +7860,7 @@ function App() {
    const {data:currentMembers}=await supabase.from("league_members").select("user_id").eq("league_id",league.id);
    const targetSize = league.target_size||league.max_members||8;
    if(currentMembers && currentMembers.length >= targetSize){alert("This league is already full ("+targetSize+"/"+targetSize+").");return;}
+   if(league.league_type==="survivor" && league.season_start && new Date(league.season_start).getTime()<=Date.now()){ alert("This survivor pool already started \u2014 everyone starts Week 1 together. Ask the commissioner to run it back next season."); return; }
    const {data:_mine}=await supabase.from("league_members").select("user_id").eq("league_id",league.id).eq("user_id",user.id).maybeSingle();
    if(_mine){ applyMode(false,{leagueId:league.id}); await fetchLeagues(user.id); alert("You're already in "+league.name+" — opening it now."); return; }
    const {error:joinError}=await supabase.from("league_members").insert({league_id:league.id,user_id:user.id,is_commissioner:false});
@@ -7866,7 +7872,7 @@ function App() {
      if((league.league_type||"h2h")==="bracket") await generateBracket(league.id, memberIds);
      else if((league.league_type||"h2h")==="h2h") await generateSchedule(league.id, memberIds, regularSeasonWeeksFor(league, memberIds.length));
      else if(league.league_type==="points") await supabase.from("leagues").update({ season_start: new Date().toISOString(), current_week: 1 }).eq("id", league.id).is("season_start", null).or("start_mode.is.null,start_mode.neq.manual");
-     alert("Joined "+league.name+"! League is full"+((league.league_type||'h2h')==='points'?" — standings are live!":(league.league_type||'h2h')==='bracket'?" — bracket generated!":" — schedule generated."));
+     alert("Joined "+league.name+"! League is full"+(league.league_type==='survivor'?" — waiting on the commissioner to start the pool.":(league.league_type||'h2h')==='points'?" — standings are live!":(league.league_type||'h2h')==='bracket'?" — bracket generated!":" — schedule generated."));
    } else {
      alert("Joined "+league.name+"! "+(targetSize-allMembers.length)+" more needed.");
    }
@@ -7903,12 +7909,25 @@ function App() {
  setBrowseLoading(false);
  };
 
+ const startSurvivorPool = async () => {
+   if(!activeLeague || activeLeague.league_type!=="survivor" || !activeLeague.isCommissioner || svStarting) return;
+   if(((leagueMembers||[]).length)<2){ alert("Need at least 2 players before the pool can start."); return; }
+   if(!window.confirm("Start the pool? Everyone in right now plays Week 1 \u2014 entries close the moment it starts.")) return;
+   setSvStarting(true);
+   try{
+     await supabase.from("leagues").update({ season_start: new Date().toISOString(), current_week: 1 }).eq("id", activeLeague.id).is("season_start", null);
+     await fetchLeagues(user.id);
+     haptic("medium");
+   }catch(e){ alert("Couldn\u2019t start the pool \u2014 try again."); }
+   setSvStarting(false);
+ };
  const joinPublicLeague = async (league) => {
  if(joiningLeagueId) return;
  setJoiningLeagueId(league.id);
  try {
    const {data:currentMembers} = await supabase.from("league_members").select("user_id").eq("league_id",league.id);
    const targetSize = league.target_size||league.max_members||8;
+   if(league.league_type==="survivor" && league.season_start && new Date(league.season_start).getTime()<=Date.now()){ alert("This survivor pool already started \u2014 everyone starts Week 1 together."); setJoiningLeagueId(null); return; }
    if(currentMembers && currentMembers.length >= targetSize) {
      alert("This league just filled up!");
      setJoiningLeagueId(null);
@@ -9071,6 +9090,25 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    <div style={{fontSize:18,fontWeight:800,color:"#fff"}}>{"You\u2019re out \u2014 Week "+(_ew||"?")}</div>
    <div style={{fontSize:13.5,color:IOS.label2,lineHeight:1.5,maxWidth:260}}>{(activeLeague&&activeLeague.survivor_config==="ml")?"Your team lost. You can watch the Board and talk your talk in chat \u2014 the pool plays on.":"Your scorer never found the end zone. You can watch the Board and talk your talk in chat \u2014 the pool plays on."}</div>
    <button onClick={()=>setScreen("matchup")} style={{marginTop:8,background:"linear-gradient(90deg,#0A84FF,#5E5CE6)",border:"none",color:"#fff",borderRadius:RAD.md,padding:"12px 24px",fontSize:13.5,fontWeight:800,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>See the Board</button>
+ </div>
+   );
+ })();
+
+ const survivorAwaitBody = (()=>{ if(isSoloMode||!activeLeague||activeLeague.league_type!=="survivor") return null;
+   const _n=(leagueMembers||[]).length; const _isC=!!activeLeague.isCommissioner;
+   return (
+ <div className="body" key="svawait" style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center",padding:"70px 30px",gap:11}}>
+   <div style={{width:56,height:56,borderRadius:"50%",background:"rgba(10,132,255,0.1)",border:"0.5px solid rgba(10,132,255,0.3)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>
+   </div>
+   <div style={{fontSize:18,fontWeight:800,color:"#fff"}}>{"Pool hasn\u2019t started"}</div>
+   <div style={{fontSize:13.5,color:IOS.label2,lineHeight:1.5,maxWidth:270}}>{_isC
+     ? ((_n)+" in the pool. Everyone in right now plays Week 1 together \u2014 entries close the moment you start.")
+     : ((_n)+" in the pool. Waiting on the commissioner to fire the gun \u2014 everyone starts Week 1 together.")}</div>
+   {_isC && _n<2 && <div style={{fontSize:11.5,color:IOS.label3}}>{"Need at least 2 players \u2014 share the invite code."}</div>}
+   {_isC && (
+   <button onClick={startSurvivorPool} disabled={_n<2||svStarting} style={{marginTop:8,background:(_n<2||svStarting)?"rgba(255,255,255,0.08)":"linear-gradient(90deg,#0A84FF,#5E5CE6)",border:"none",color:(_n<2||svStarting)?"rgba(255,255,255,0.3)":"#fff",borderRadius:RAD.md,padding:"12px 26px",fontSize:13.5,fontWeight:800,cursor:(_n<2||svStarting)?"default":"pointer",fontFamily:"Barlow,sans-serif"}}>{svStarting?"Starting\u2026":"Start the pool"}</button>
+   )}
  </div>
    );
  })();
@@ -12298,7 +12336,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 
  {/* ══ PICKS ══ */}
  {screen==="picks"&&!isSoloMode&&_lgReady&&!lgCompleted(activeLeague)&&!seasonNotStarted&&activeLeague.league_type==="survivor"&&activeLeague.myEliminatedWeek==null&&survivorHeader}
- {screen==="picks"&&!isSoloMode&&(()=>{ if(!_lgReady){ return leagueLoadingBody; } if(lgCompleted(activeLeague)){ return seasonOverBody; } if(activeLeague.league_type==="survivor"&&activeLeague.myEliminatedWeek!=null){ return survivorDeadBody; } if(seasonNotStarted){ return notStartedBody; }
+ {screen==="picks"&&!isSoloMode&&(()=>{ if(!_lgReady){ return leagueLoadingBody; } if(lgCompleted(activeLeague)){ return seasonOverBody; } if(activeLeague.league_type==="survivor"&&activeLeague.myEliminatedWeek!=null){ return survivorDeadBody; } if(seasonNotStarted){ return activeLeague.league_type==="survivor" ? survivorAwaitBody : notStartedBody; }
  // Playoffs running and the bracket has not arrived yet: elimination is unknowable,
  // so render a skeleton rather than a builder we may have to yank away.
  if(!isSoloMode && activeLeague && (activeLeague.league_type||"h2h")==="h2h"
@@ -16570,7 +16608,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      await generateSchedule(league.id, memberIds, regularSeasonWeeksFor(league, memberIds.length));
    }
    // points-only: no schedule generated
- alert(`Joined ${league.name}! League is full${(league.league_type||'h2h')==='points'?' — standings are live!':(league.league_type||'h2h')==='bracket'?' — bracket generated!':' — schedule generated!'}`);
+ alert(`Joined ${league.name}! League is full${league.league_type==='survivor'?' — waiting on the commissioner to start the pool.':(league.league_type||'h2h')==='points'?' — standings are live!':(league.league_type||'h2h')==='bracket'?' — bracket generated!':' — schedule generated!'}`);
  } else {
  alert(`Joined ${league.name}! Welcome. ${targetSize-allMembers.length} more player${targetSize-allMembers.length!==1?"s":""} needed.`);
  }
@@ -17091,6 +17129,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      const {data:currentMems}=await supabase.from("league_members").select("user_id").eq("league_id",league.id);
      const targetSize=league.target_size||league.max_members||8;
      if(currentMems&&currentMems.length>=targetSize){alert("League is full.");return;}
+     if(league.league_type==="survivor" && league.season_start && new Date(league.season_start).getTime()<=Date.now()){ alert("This survivor pool already started \u2014 everyone starts Week 1 together."); return; }
      const {error:joinError}=await supabase.from("league_members").insert({league_id:league.id,user_id:user.id,is_commissioner:false});
      if(joinError){alert("Error joining.");return;}
      const {data:allMems2}=await supabase.from("league_members").select("user_id").eq("league_id",league.id);
@@ -17098,7 +17137,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        const memberIds = allMems2.map(m=>m.user_id);
        if((league.league_type||'h2h')==='bracket') await generateBracket(league.id, memberIds);
        else if((league.league_type||'h2h')==='h2h') await generateSchedule(league.id, memberIds, regularSeasonWeeksFor(league, memberIds.length));
-       alert("Joined "+league.name+"! League is full"+((league.league_type||'h2h')==='points'?" — standings are live!":(league.league_type||'h2h')==='bracket'?" — bracket generated!":" — schedule generated!"));
+       alert("Joined "+league.name+"! League is full"+(league.league_type==='survivor'?" — waiting on the commissioner to start the pool.":(league.league_type||'h2h')==='points'?" — standings are live!":(league.league_type||'h2h')==='bracket'?" — bracket generated!":" — schedule generated!"));
      } else {
        alert("Joined "+league.name+"!");
      }
