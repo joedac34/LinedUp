@@ -5532,7 +5532,6 @@ function App() {
  // MUST live below the activeLeague/activeLeagueId declarations: the dependency
  // array is read during render, and consts above their declaration are TDZ.
  useEffect(()=>{ if(activeLeague && activeLeague.league_type==="bracket" && (leagueTab==="standings"||leagueTab==="schedule"||leagueTab==="playoff")) setLeagueTab("bracket"); }, [activeLeagueId, leagueTab, activeLeague && activeLeague.league_type]);
- useEffect(()=>{ if(activeLeague && activeLeague.league_type==="survivor" && (leagueSubTab==="schedule"||leagueSubTab==="matchups"||leagueSubTab==="playoff")) setLeagueSubTab("overview"); }, [activeLeagueId, leagueSubTab, activeLeague && activeLeague.league_type]);
  // Eliminated: the playoffs are running, the bracket has rows for this week, and you
  // are in none of them. Same test the Matchup tab already uses for its eliminated
  // recap — that knowledge just never reached the slip builder, so a knocked-out
@@ -5663,6 +5662,10 @@ function App() {
  // No leagues yet -> route into the Solo lobby (never the phantom NFL league).
  useEffect(()=>{ if(!leaguesLoading && realLeagues.length===0 && !isSoloModeRef.current){ applyMode(true); } }, [leaguesLoading, realLeagues.length]);
  const [leagueSubTab, setLeagueSubTab] = useState("overview");
+ // Survivor pools have no schedule/matchups/playoff tab. This MUST sit below the
+ // leagueSubTab declaration: a dep array is evaluated during render, so referencing
+ // it above the const is a TDZ ReferenceError on every paint, not a lint warning.
+ useEffect(()=>{ if(activeLeague && activeLeague.league_type==="survivor" && (leagueSubTab==="schedule"||leagueSubTab==="matchups"||leagueSubTab==="playoff")) setLeagueSubTab("overview"); }, [activeLeagueId, leagueSubTab, activeLeague && activeLeague.league_type]);
  const [tickerGames, setTickerGames] = useState([]); // raw games for the ticker
  const [espnGames, setEspnGames] = useState([]); // ESPN scoreboard with IDs
  const [weekResult, setWeekResult] = useState(null);
