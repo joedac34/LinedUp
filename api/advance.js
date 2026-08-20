@@ -343,6 +343,11 @@ async function advanceSurvivor(supabase, lg, target, seasonWeeks) {
   const { data: mem } = await supabase.from("league_members").select("user_id, eliminated_week").eq("league_id", lg.id);
   let alive = (mem || []).filter((m) => m.eliminated_week == null).map((m) => m.user_id);
   if (!alive.length) return;
+  // A pool of one is not a pool. Without this, the "last one standing" branch below
+  // is true on the very first cron pass -- the sole member gets crowned champion and
+  // completed_at is stamped on a pool that never started, which the client then
+  // correctly renders as "in the books". Nobody has been eliminated; nobody has won.
+  if ((mem || []).length < 2) return;
 
   const lastClosed = Math.min(seasonWeeks, target - 1);
   const { data: pk } = await supabase.from("picks").select("user_id, week, result, points_earned").eq("league_id", lg.id).lte("week", Math.max(1, lastClosed));
@@ -373,7 +378,8 @@ async function advanceSurvivor(supabase, lg, target, seasonWeeks) {
   }
 
   if (lg.champion_id || lg.completed_at) return;
-  if (alive.length === 1) {
+  // Crown only if somebody actually got eliminated to produce this survivor.
+  if (alive.length === 1 && (mem || []).length > 1) {
     await supabase.from("leagues").update({ champion_id: alive[0], completed_at: new Date().toISOString() }).eq("id", lg.id);
     return;
   }
