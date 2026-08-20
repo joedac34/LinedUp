@@ -461,6 +461,14 @@ function parseProp(pickName) {
   return null;
 }
 
+// Every ESPN box-score key that represents a touchdown SCORED BY the player.
+// passingTouchdowns is deliberately absent: throwing one is not scoring one.
+const ANYTIME_TD_KEYS = [
+  "rushingTouchdowns", "receivingTouchdowns",
+  "kickReturnTouchdowns", "puntReturnTouchdowns",
+  "defensiveTouchdowns", "interceptionTouchdowns", "fumblesTouchdowns",
+];
+
 function resolveStatLabels(statText) {
   const t = (statText || "").toLowerCase();
   const entries = Object.entries(STAT_ALIASES).sort((a, b) => b[0].length - a[0].length);
@@ -722,9 +730,24 @@ function gradeProp(pickName, gameField, index, info = {}, gameDate = null) {
   const shas = (keys) => keys.some(k => stats[k] != null);
   let val;
   if (parsed.stat === "anytime td") {
-    const rush = sget(["rushingTouchdowns"]) || 0;
-    const rec  = sget(["receivingTouchdowns"]) || 0;
-    val = rush + rec;
+    // Anytime TD = ANY touchdown the player scores, which is how the books settle
+    // it. Offence-only (rush + rec) graded a punt-return score as a LOSS while the
+    // same ticket paid at the book, and in a survivor pool that is a wrongful,
+    // irreversible elimination.
+    //
+    // Key names verified against 16 real NFL box scores (espn_td_probe.mjs): 55
+    // touchdowns, zero gaps. ESPN exposes no fumbles-group TD column — defensive
+    // recoveries surface through defensiveTouchdowns — but fumblesTouchdowns is
+    // kept here so it starts counting for free if ESPN ever adds it.
+    //
+    // Read ONLY these camelCase keys, never the display label "TD": the label
+    // repeats across groups and buildPlayerStatIndex is first-write-wins, so "TD"
+    // resolves to whichever group happened to come first.
+    //
+    // A pick six can appear in BOTH defensiveTouchdowns and interceptionTouchdowns,
+    // so this sum can read 2 for one score. Harmless at over_eq 1, but any future
+    // "2+ TDs" market must not reuse it.
+    val = ANYTIME_TD_KEYS.reduce((n, k) => n + (sget([k]) || 0), 0);
   } else if (/total\s*bases?\b/.test(parsed.stat) || /^tb$/.test(parsed.stat.trim())) {
     // Total bases = 1B + 2B*2 + 3B*3 + HR*4 = H + 2B + 2*3B + 3*HR. ESPN's batting line
     // doesn't always carry doubles/triples; only grade when the components are actually
