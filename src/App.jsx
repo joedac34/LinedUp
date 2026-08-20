@@ -2724,7 +2724,7 @@ const OPPOSITE_TYPES = { yrfi:"nrfi", nrfi:"yrfi" };
 // Team-side bets — their "outcome" is a team, so two of them on different teams
 // in the same game is a hedge (e.g. Mets ML + Phillies -1.5).
 const SIDE_TYPES = ["ml","spread","ml_f5","spread_f5","ml_h1","spread_h1"];
-const TYPE_SHORT = { yrfi:"YRFI", nrfi:"NRFI", ml:"moneyline", spread:"spread", ou:"total", ml_f5:"First 5 moneyline", spread_f5:"First 5 spread", ou_f5:"First 5 total", ml_h1:"1st half moneyline", spread_h1:"1st half spread", ou_h1:"1st half total" };
+const TYPE_SHORT = { yrfi:"YRFI", nrfi:"NRFI", ml:"moneyline", spread:"spread", ou:"total", ml_f5:"First 5 moneyline", spread_f5:"First 5 spread", ou_f5:"First 5 total", ml_h1:"1st half moneyline", spread_h1:"1st half spread", ou_h1:"1st half total", ml_f3:"First 3 moneyline", spread_f3:"First 3 spread", ou_f3:"First 3 total" };
 // Returns a conflict message, or null if the bet is allowed.
 // `existing` items: { id, category, eventId, game, outcome }
 const lineConflict = (cat, bet, existing) => {
@@ -4763,6 +4763,15 @@ runs:["batter_runs_scored"], walks:["batter_walks"], sb:["batter_stolen_bases"],
 anytd:["player_anytime_td"], passyds:["player_pass_yds"], passtds:["player_pass_tds"], rushyds:["player_rush_yds"], rushtds:["player_rush_tds"], recs:["player_receptions"], recyds:["player_reception_yds"], rectds:["player_reception_tds"],
 };
 
+const PERIOD_VOCAB = {
+ mlb:{umbrella:"Innings",unit:"runs"},
+ nfl:{umbrella:"1st Half",unit:"points"},
+ ncaaf:{umbrella:"1st Half",unit:"points"},
+ nba:{umbrella:"1st Half",unit:"points"},
+};
+const periodUmbrella = (sp) => (PERIOD_VOCAB[sp]||{}).umbrella || "Periods";
+const periodUnit = (sp) => (PERIOD_VOCAB[sp]||{}).unit || "points";
+const periodCatLabel = (sps) => { const u=(sps||[]).map(x=>(PERIOD_VOCAB[x]||{}).umbrella); const inn=u.includes("Innings"); const half=u.some(x=>x==="1st Half"); return inn&&half?"Innings / halves":inn?"Innings":half?"Halves":"Periods"; };
 const PERIOD_SUBS_BY_SPORT = {
  mlb:[{id:"ml_f5",l:"F5 ML"},{id:"spread_f5",l:"F5 Spread"},{id:"ou_f5",l:"F5 O/U"},{id:"ml_f3",l:"F3 ML"},{id:"spread_f3",l:"F3 Spread"},{id:"ou_f3",l:"F3 O/U"},{id:"yrfi",l:"YRFI"},{id:"nrfi",l:"NRFI"}],
  nfl:[{id:"ml_h1",l:"1H ML"},{id:"spread_h1",l:"1H Spread"},{id:"ou_h1",l:"1H O/U"}],
@@ -6419,13 +6428,13 @@ function App() {
       return out;
     }catch(e){ return null; }
   };
-  const PERIOD_SCOPE = { ml_f5:"First 5", spread_f5:"First 5", ou_f5:"First 5", ml_h1:"1st Half", spread_h1:"1st Half", ou_h1:"1st Half", yrfi:"1st Inning", nrfi:"1st Inning" };
+  const PERIOD_SCOPE = { ml_f5:"First 5", spread_f5:"First 5", ou_f5:"First 5", ml_f3:"First 3", spread_f3:"First 3", ou_f3:"First 3", ml_h1:"1st Half", spread_h1:"1st Half", ou_h1:"1st Half", yrfi:"1st Inning", nrfi:"1st Inning" };
   const periodSelLabel = (bet) => {
     const c = bet.category||""; const scope = PERIOD_SCOPE[c]||"Period"; const pt = bet.point;
     if(c==="yrfi") return "YRFI — a run scored in the 1st inning";
     if(c==="nrfi") return "NRFI — no run in the 1st inning";
-    if(c==="ou_f5"||c==="ou_h1"){ const side=bet.outcome||bet.pick||""; return `${scope} total: ${side}${pt!=null?" "+pt:""} runs`; }
-    if(c==="spread_f5"||c==="spread_h1"){ const team=bet.outcome||bet.pick||""; const sign=pt!=null?(pt>=0?`+${pt}`:`${pt}`):""; return `${scope} spread: ${team} ${sign}`.trim(); }
+    if(c.indexOf("ou_")===0){ const side=bet.outcome||bet.pick||""; return `${scope} total: ${side}${pt!=null?" "+pt:""} ${periodUnit(bet._sport)}`; }
+    if(c.indexOf("spread_")===0){ const team=bet.outcome||bet.pick||""; const sign=pt!=null?(pt>=0?`+${pt}`:`${pt}`):""; return `${scope} spread: ${team} ${sign}`.trim(); }
     const team=bet.outcome||bet.pick||""; return `${scope} moneyline: ${team}`;
   };
   const buildBetCtx = (bet, category) => ({
@@ -14058,7 +14067,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 
  // Per-bet-type accent — the screen's accent shifts with the selected type
  const ACC = { ml:IOS.blue, spread:IOS.green, ou:IOS.orange, prop:IOS.yellow, longshot:IOS.pink, ml_h1:"#64D2FF", spread_h1:"#64D2FF", ou_h1:"#64D2FF", ml_f5:"#5E5CE6", spread_f5:"#5E5CE6", ou_f5:"#5E5CE6", yrfi:"#FF9F0A", nrfi:"#30D158", period:"#5E5CE6" };
- const TYPE_LABELS = { ml:"Moneyline", spread:"Spread", ou:"Over/Under", prop:"Prop", longshot:"Longshot", ml_h1:"1H Moneyline", spread_h1:"1H Spread", ou_h1:"1H Over/Under", ml_f5:"F5 Moneyline", spread_f5:"F5 Spread", ou_f5:"F5 Over/Under", yrfi:"YRFI", nrfi:"NRFI", period:"Innings" };
+ const TYPE_LABELS = { ml:"Moneyline", spread:"Spread", ou:"Over/Under", prop:"Prop", longshot:"Longshot", ml_h1:"1H Moneyline", spread_h1:"1H Spread", ou_h1:"1H Over/Under", ml_f5:"F5 Moneyline", spread_f5:"F5 Spread", ou_f5:"F5 Over/Under", ml_f3:"F3 Moneyline", spread_f3:"F3 Spread", ou_f3:"F3 Over/Under", yrfi:"YRFI", nrfi:"NRFI", period:"Periods" };
  const acc = ACC[gridType] || IOS.blue;
  const gridCfg = !isSoloMode ? parseSlotConfig(activeLeague&&activeLeague.slot_config) : null;
  const allowedTypes = gridCfg ? [...new Set(gridCfg.flatMap(s=>s.type==="wildcard"?WILDCARD_TYPES:[s.type]))] : (isSoloMode ? ["ml","spread","ou","prop","period","longshot"] : ["ml","spread","ou","prop","longshot"]);
@@ -14067,6 +14076,10 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const sportsList = leagueSports && leagueSports.length ? leagueSports : ["nfl"];
  const _canAll = !isSoloMode && sportsList.length>1 && (gridType==="ml"||gridType==="spread"||gridType==="ou"||gridType==="longshot");
  const gSport = isSoloMode ? (soloSport||sportsList[0]) : ((gridSport && (sportsList.includes(gridSport) || (gridSport==="all" && _canAll))) ? gridSport : sportsList[0]);
+ // "period" is an umbrella over sport-specific markets, so its label cannot be a
+ // constant: MLB browses innings, NFL/NCAAF/NBA browse halves. The old flat
+ // TYPE_LABELS.period="Innings" put "NFL / Innings" on the football browser.
+ const typeLabel = (t) => (t==="period" ? periodUmbrella(gSport) : (TYPE_LABELS[t]||t));
 
  // Resolve which slot a tapped card fills
  const resolveTarget = () => {
@@ -14336,7 +14349,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
   // NO cross-type fallback in a fixed-type league: a yrfi must land in a yrfi (or wildcard)
   // slot, never in whatever slot happens to be empty. The old "any open slot" line put a
   // YRFI into the OU slot and a NRFI into the SPREAD slot. Type slot -> wildcard -> block.
- if(idx===-1){ const _lbl=TYPE_LABELS[cat]||cat; setPickConflict("No open slot for another "+_lbl+" — your "+_lbl+" and wildcard slots are full. Remove one to swap."); setTimeout(()=>setPickConflict(""),3000); setGridJustAdded(null); return; }
+ if(idx===-1){ const _lbl=typeLabel(cat); setPickConflict("No open slot for another "+_lbl+" — your "+_lbl+" and wildcard slots are full. Remove one to swap."); setTimeout(()=>setPickConflict(""),3000); setGridJustAdded(null); return; }
  dest = idx;
  } else if(!isSoloMode && gridFlexMult!=null && cat!=="longshot"){
  // Flex league, multiplier-first: fill the chosen mult slot (replace if taken),
@@ -14430,7 +14443,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const ret = decReturn(bet.impliedOdds);
 
  // Header line + body vary by type
- let topLabel = `${gSport.toUpperCase()} · ${TYPE_LABELS[gridType]}`;
+ let topLabel = `${gSport.toUpperCase()} · ${typeLabel(gridType)}`;
  let title, subtitle, sideChip=null, formSeed=bet.id;
 
  if(gridType==="ml"){
@@ -14448,7 +14461,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  title = bet.game || bet.pick; subtitle = bet.pick; sideChip = bet.pick?.toLowerCase().includes("over")?"OVER":bet.pick?.toLowerCase().includes("under")?"UNDER":null; formSeed = (bet.game||"")+bet.pick;
  } else if(gridType==="period"){
  const c = bet.category || gridPeriodSub; const pt = bet.point;
- const scope = (c&&c.indexOf("_f5")>-1)?"First 5":(c&&c.indexOf("_h1")>-1)?"1st Half":"";
+ const scope = (c&&c.indexOf("_f5")>-1)?"First 5":(c&&c.indexOf("_f3")>-1)?"First 3":(c&&c.indexOf("_h1")>-1)?"1st Half":"";
  if(c==="yrfi"){ title=bet.game; subtitle="Yes run · 1st inning"; sideChip="YES"; formSeed=bet.game; }
  else if(c==="nrfi"){ title=bet.game; subtitle="No run · 1st inning"; sideChip="NO"; formSeed=bet.game; }
  else if(c==="ou_f5"||c==="ou_h1"){ const side=String(bet.outcome||bet.pick||""); title=bet.game; subtitle=`${scope} ${side}${pt!=null?" "+pt:""}`.trim(); sideChip=side.toLowerCase().startsWith("over")?"OVER":side.toLowerCase().startsWith("under")?"UNDER":null; formSeed=bet.game; }
@@ -14581,7 +14594,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    else if(gridType==="longshot"){ title=teamFromLongshot(bet.pick)||bet.pick; subtitle=""; }
    else if(gridType==="period"){
    const c=bet.category||gridPeriodSub; const pt=bet.point;
-   const scope=(c&&c.indexOf("_f5")>-1)?"First 5":(c&&c.indexOf("_h1")>-1)?"1st Half":"";
+   const scope=(c&&c.indexOf("_f5")>-1)?"First 5":(c&&c.indexOf("_f3")>-1)?"First 3":(c&&c.indexOf("_h1")>-1)?"1st Half":"";
    if(c==="yrfi"){ title=bet.game; subtitle="Yes run · 1st inning"; sideChip="YES"; }
    else if(c==="nrfi"){ title=bet.game; subtitle="No run · 1st inning"; sideChip="NO"; }
    else if(c==="ou_f5"||c==="ou_h1"){ const side=String(bet.outcome||bet.pick||""); title=bet.game; subtitle=(scope+" "+side+(pt!=null?(" "+pt):"")).trim(); const ls=side.toLowerCase(); sideChip=ls.startsWith("over")?"OVER":ls.startsWith("under")?"UNDER":null; }
@@ -14673,7 +14686,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    const groups={};
    list.forEach(b=>{ const g=b.game||"Other"; if(!groups[g]) groups[g]=[]; groups[g].push(b); });
    const keys=Object.keys(groups).sort((a,b)=> (new Date(groups[a][0].gameTime||0)) - (new Date(groups[b][0].gameTime||0)) );
-   const tag=(gSport?String(gSport).toUpperCase():"")+" · "+String(TYPE_LABELS[gridType]||"").toUpperCase();
+   const tag=(gSport?String(gSport).toUpperCase():"")+" · "+String(typeLabel(gridType)||"").toUpperCase();
    const _dec=(o)=>{ const n=Number(o); if(!n) return 1; return n>0?(1+n/100):(1+100/Math.abs(n)); };
    const _sortBets=(arr)=>{ const k=b=>(b.impliedOdds!=null?b.impliedOdds:Number(String(b.odds).replace("+",""))); if(gridSort==="long") return [...arr].sort((a,b)=>_dec(k(b))-_dec(k(a))); if(gridSort==="short") return [...arr].sort((a,b)=>_dec(k(a))-_dec(k(b))); return arr; };
    return (
@@ -14897,7 +14910,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div key={sl.i} onClick={()=>{ setGridTargetSlot(sl.i); if(sl.category) setGridType(sl.category); setShowMultPick(false); }} style={{display:"flex",alignItems:"center",gap:9,padding:"8px",borderRadius:RAD.md,cursor:"pointer",background:isT?(sc+"1f"):"transparent",border:"1px solid "+(isT?sc+"66":"transparent"),marginBottom:2}}>
  <span style={{minWidth:30,textAlign:"center",fontSize:13,fontWeight:900,color:sc}}>{sl.mult?(sl.mult+"×"):("P"+(sl.i+1))}</span>
  <div style={{flex:1,minWidth:0}}>
- <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.03em",color:sc,textTransform:"uppercase"}}>{sl.category?TYPE_LABELS[sl.category]:"Any type"}</div>
+ <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.03em",color:sc,textTransform:"uppercase"}}>{sl.category?typeLabel(sl.category):"Any type"}</div>
  <div style={{fontSize:11,fontWeight:600,color:filled?"rgba(255,255,255,0.7)":"rgba(255,255,255,0.3)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{nm}</div>
  </div>
  {filled && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
@@ -14962,7 +14975,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div key={M} onClick={()=>{ setGridFlexMult(M); setGridBuildMode(false); const mi=activePicks.findIndex(p=>!p.isParlay&&p.mult===M); const ei=activePicks.findIndex(p=>!p.isParlay&&p.bet===null); setGridTargetSlot(mi!==-1?mi:(ei!==-1?ei:0)); setShowMultPick(false); }} style={{display:"flex",alignItems:"center",gap:9,padding:"8px",borderRadius:RAD.md,cursor:"pointer",background:isT?(sc+"1f"):"transparent",border:"1px solid "+(isT?sc+"66":"transparent"),marginBottom:3}}>
  <span style={{minWidth:30,textAlign:"center",fontSize:13,fontWeight:900,color:sc}}>{M+"×"}</span>
  <div style={{flex:1,minWidth:0}}>
- <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.03em",color:sc,textTransform:"uppercase"}}>{slot&&slot.category?TYPE_LABELS[slot.category]:"Any type"}</div>
+ <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.03em",color:sc,textTransform:"uppercase"}}>{slot&&slot.category?typeLabel(slot.category):"Any type"}</div>
  <div style={{fontSize:11,fontWeight:600,color:filled?"rgba(255,255,255,0.7)":"rgba(255,255,255,0.3)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{nm}</div>
  </div>
  {filled && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
@@ -15038,7 +15051,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {(()=>{
  const _gl = allowedTypes.filter(t=>t==="ml"||t==="spread"||t==="ou");
  const _rest = allowedTypes.filter(t=>t!=="ml"&&t!=="spread"&&t!=="ou");
- const _pills = [...(_gl.length?[{key:"__gl__",label:"Game Lines",target:_gl[0],on:isGameLine,col:IOS.blue}]:[]), ..._rest.map(t=>({key:t,label:TYPE_LABELS[t],target:t,on:t===gridType,col:ACC[t]}))];
+ const _pills = [...(_gl.length?[{key:"__gl__",label:"Game Lines",target:_gl[0],on:isGameLine,col:IOS.blue}]:[]), ..._rest.map(t=>({key:t,label:typeLabel(t),target:t,on:t===gridType,col:ACC[t]}))];
  return _pills.map(p=>(
  <div key={p.key} onClick={()=>{ setGridType(p.target); setGridPropSub("all"); if(p.target==="period"){ const _ps=PERIOD_SUBS_BY_SPORT[gSport]; setGridPeriodSub(_ps&&_ps.length?_ps[0].id:""); } if(gridCfg){ const _st=(s)=>s?(s.slotType||s.category):null; const _cur=activePicks[gridTargetSlot]; const _onWild=_cur&&!_cur.isParlay&&_st(_cur)==="wildcard"&&_cur.bet===null; if(!_onWild){ let _i=activePicks.findIndex(x=>!x.isParlay && _st(x)===p.target && x.bet===null); if(_i===-1) _i=activePicks.findIndex(x=>!x.isParlay && _st(x)==="wildcard" && x.bet===null); setGridTargetSlot(_i!==-1?_i:null); } } }} style={{...pillBase,
  background:p.on?`${p.col}26`:"rgba(255,255,255,0.05)", borderColor:p.on?`${p.col}80`:"rgba(255,255,255,0.1)", color:p.on?p.col:"rgba(255,255,255,0.45)"}}>
@@ -15156,7 +15169,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  ) : isGameLine ? renderLineSheet() : list.length===0 ? (
  <div style={{padding:"50px 28px",textAlign:"center"}}>
  <div style={{fontSize:14,fontWeight:700,color:"rgba(255,255,255,0.45)",marginBottom:6}}>
- {gridType==="prop"?"No props live yet":`No ${TYPE_LABELS[gridType]} bets right now`}
+ {gridType==="prop"?"No props live yet":`No ${typeLabel(gridType)} bets right now`}
  </div>
  <div style={{fontSize:12,color:"rgba(255,255,255,0.25)",lineHeight:1.5}}>
  {gridType==="prop"?"Player props usually post 2–3 days out. Check back closer to game time."
@@ -16188,7 +16201,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
   {cat:"Batter props",rows:[["hr","Home Runs"],["hits","Hits"],["bases","Total Bases"],["rbi","RBIs"],["runs","Runs Scored"],["hrr","Hits + Runs + RBIs"],["singles","Singles"],["doubles","Doubles"],["triples","Triples"],["walks","Walks"],["sb","Stolen Bases"]].map(x=>({id:"prop",market:x[0],l:x[1],scope:"Batter",color:"#FFD60A",sports:["mlb"]}))},
   {cat:"Pitcher props",rows:[["k","Strikeouts"],["outs","Outs Recorded"],["er","Earned Runs"],["hitsallowed","Hits Allowed"],["walksallowed","Walks Allowed"]].map(x=>({id:"prop",market:x[0],l:x[1],scope:"Pitcher",color:"#64D2FF",sports:["mlb"]}))},
   {cat:"Football props",rows:[["anytd","Anytime TD","TD"],["passyds","Pass Yds","Pass"],["passtds","Pass TDs","Pass"],["rushyds","Rush Yds","Rush"],["rushtds","Rush TDs","Rush"],["recs","Receptions","Rec"],["recyds","Rec Yds","Rec"],["rectds","Rec TDs","Rec"]].map(x=>({id:"prop",market:x[0],l:x[1],scope:x[2],color:"#FFD60A",sports:["nfl"]}))},
-  {cat:"Innings / periods",rows:["ml_f5","spread_f5","ou_f5","ml_f3","spread_f3","ou_f3","ml_h1","spread_h1","ou_h1","yrfi","nrfi"]},
+  {cat:periodCatLabel(newLeagueSports),rows:["ml_f5","spread_f5","ou_f5","ml_f3","spread_f3","ou_f3","ml_h1","spread_h1","ou_h1","yrfi","nrfi"]},
   {cat:"Exotic",rows:["longshot","wildcard"]},
  ];
  const q=(slotSearch||"").toLowerCase();

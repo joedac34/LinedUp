@@ -354,8 +354,13 @@ async function advanceSurvivor(supabase, lg, target, seasonWeeks) {
 
   for (let w = 1; w <= lastClosed && alive.length > 1; w++) {
     const wp = byWeek[w] || {};
-    if (alive.some((u) => (wp[u] || []).includes("pending"))) break; // grading lag: hold this and later weeks
-    const losers = alive.filter((u) => { const rs = wp[u] || []; return rs.length === 0 || !rs.includes("W"); });
+    if (alive.some((u) => (wp[u] || []).some((r) => r == null || r === "pending"))) break; // grading lag (incl. NULL): hold this and later weeks
+    const losers = alive.filter((u) => {
+      const rs = wp[u] || [];
+      if (rs.includes("W")) return false;          // hit -> survive
+      if (rs.length && rs.every((r) => r === "P")) return false; // voided (scratch / cancelled) -> survive, never eliminate on a pick that could not win
+      return true;                                  // no pick, or a real miss
+    });
     if (!losers.length) continue;
     if (losers.length === alive.length) continue; // full wipeout: nobody dies
     for (const u of losers) {
@@ -373,7 +378,7 @@ async function advanceSurvivor(supabase, lg, target, seasonWeeks) {
     return;
   }
   if (target > seasonWeeks && alive.length > 1) {
-    if ((pk || []).some((p) => p.result === "pending")) return; // settle everything first
+    if ((pk || []).some((p) => p.result == null || p.result === "pending")) return; // settle everything first (NULL counts as ungraded)
     const pts = {}; alive.forEach((u) => (pts[u] = 0));
     for (const p of pk || []) if (p.result === "W" && pts[p.user_id] != null) pts[p.user_id] += parseFloat(p.points_earned || 0);
     const top = alive.slice().sort((a, b) => pts[b] - pts[a])[0];
