@@ -138,7 +138,20 @@ export default async function handler(req, res) {
             if (market.key === "batter_home_runs_alternate" && outcome.point !== 0.5) return;
             let label, dedupKey;
             if (isTD) {
-              const player = outcome.name;
+              // This market comes back YES/NO shaped: outcome.name is "Yes" and the
+              // player is in outcome.description. Reading .name gave every outcome the
+              // same label, so the dedupe set below collapsed a whole game's 46 TD
+              // outcomes (26 distinct players) into ONE row reading "Yes - Anytime TD"
+              // — which grade.js then tried to look up as a player named "Yes". This is
+              // why anytime TD had never settled a real pick, and why a survivor pool
+              // only ever had one selectable player per week.
+              // Verified against a live DraftKings + FanDuel payload: 46/46 outcomes
+              // name=Yes, 46/46 description=player. Some books may still put the player
+              // in .name, so accept either rather than assuming this shape everywhere.
+              const nm = outcome.name || "";
+              if (/^no$/i.test(nm)) return;   // the "will not score" side is not offered
+              const player = outcome.description || (/^yes$/i.test(nm) ? null : nm);
+              if (!player) return;            // no player attached -> unusable, never emit it
               label = `${player} - ${marketLabel}`;
               dedupKey = `${market.key}|${player}`;
             } else {
