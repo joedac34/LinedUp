@@ -95,7 +95,14 @@ export default async function handler(req, res) {
     if (!Array.isArray(events) || events.length === 0) return res.status(200).json({ props: [] });
 
     events.sort((a, b) => new Date(a.commence_time) - new Date(b.commence_time));
-    const cutoff = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    // Default 7 days. ?days=N widens it, which is the only way to see a sport whose
+    // entire slate sits beyond the window: in August the NFL feed's earliest game is
+    // ~21 days out (it carries no preseason), so the default filters all 272 events
+    // away and the endpoint returns an empty slate. Capped at 45 — every additional
+    // game inside the window is a metered odds call, so this is a testing lever, not
+    // something to leave widened.
+    const windowDays = Math.min(45, Math.max(1, Number(req.query.days) || 7));
+    const cutoff = new Date(Date.now() + windowDays * 24 * 60 * 60 * 1000);
     const upcomingEvents = events.filter(e => new Date(e.commence_time) <= cutoff);
 
     const props = [];
