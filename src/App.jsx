@@ -5532,6 +5532,7 @@ function App() {
  // MUST live below the activeLeague/activeLeagueId declarations: the dependency
  // array is read during render, and consts above their declaration are TDZ.
  useEffect(()=>{ if(activeLeague && activeLeague.league_type==="bracket" && (leagueTab==="standings"||leagueTab==="schedule"||leagueTab==="playoff")) setLeagueTab("bracket"); }, [activeLeagueId, leagueTab, activeLeague && activeLeague.league_type]);
+ useEffect(()=>{ if(activeLeague && activeLeague.league_type==="survivor" && (leagueSubTab==="schedule"||leagueSubTab==="matchups"||leagueSubTab==="playoff")) setLeagueSubTab("overview"); }, [activeLeagueId, leagueSubTab, activeLeague && activeLeague.league_type]);
  // Eliminated: the playoffs are running, the bracket has rows for this week, and you
  // are in none of them. Same test the Matchup tab already uses for its eliminated
  // recap — that knowledge just never reached the slip builder, so a knocked-out
@@ -11665,7 +11666,11 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    const lpts=leader?(leader.points||0):0;
    const fillPct=isLeader?100:(lpts>0?Math.max(8,Math.min(98,((me?.points||0)/lpts)*100)):8);
    const _cfg=parseSlotConfig(activeLeague&&activeLeague.slot_config);
-   const slotCount=_cfg?_cfg.length:5;
+   const _svHome = !isSoloMode && activeLeague && activeLeague.league_type==="survivor";
+   // Survivor carries NO slot_config by design (that is what keeps pools free), so
+   // the classic-default fallback read 5 here and the card said "0/5" and "5 slots
+   // open" on a one-pick-a-week pool.
+   const slotCount=_svHome?1:(_cfg?_cfg.length:5);
    const openSlots=Math.max(0,slotCount-total);
    const _now=Date.now();
    const _BUF={mlb:185,nba:140,nfl:190,nhl:150};
@@ -11680,7 +11685,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    const _legLamps=myPicks.map(p=>p.result==="W"?COL.win:(p.result==="L"?COL.loss:COL.pend)).concat(Array(Math.max(0,openSlots)).fill(COL.idle)).slice(0,10);
    const _stripDot=liveCount>0?"#64D2FF":(hit>0?"#30D158":"#FF453A");
    const _stripText=liveCount>0?(liveCount+" of "+slotCount+" legs live"+(settleMs?(" · settles ~"+fmtClk(settleMs)):"")+" · "+weekPts+" this week"):(hit+" of "+total+" hit · "+weekPts+" pts this week");
-   const _buildLabel=isSoloMode?"Build this week's slip":("Build Week "+(activeLeague.current_week||activeLeague.week||1)+" slip");
+   const _buildLabel=isSoloMode?"Build this week's slip":(_svHome?("Make your Week "+(activeLeague.current_week||activeLeague.week||1)+" pick"):("Build Week "+(activeLeague.current_week||activeLeague.week||1)+" slip"));
    if(!isSoloMode && activeLeague.champion_id) return (
      <div className="pl-reveal" style={{margin:"0 16px 14px",background:"linear-gradient(160deg,rgba(255,214,10,0.10),transparent 60%),linear-gradient(160deg,#141418,#0B0B0E 80%)",border:"0.5px solid rgba(255,214,10,0.28)",borderRadius:RAD.lg,padding:"16px"}}>
        <div style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:IOS.yellow}}>Season complete</div>
@@ -11700,8 +11705,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        <div onClick={()=>{ applyMode(true); setScreen("picks"); }} style={{marginTop:8,borderRadius:RAD.md,padding:"11px",textAlign:"center",fontSize:13,fontWeight:800,cursor:"pointer",color:IOS.label2,background:"rgba(255,255,255,0.05)",boxShadow:"inset 0 0 0 0.5px rgba(255,255,255,0.1)"}}>Keep picking in Solo {"\u2014"} still counts toward your career</div>
      </div>
    );
-   const _addLabel=openSlots===1?"Add a pick":("Add "+openSlots+" picks");
-   const _openLabel=openSlots+" slot"+(openSlots>1?"s":"")+" open";
+   const _addLabel=_svHome?"Make your pick":(openSlots===1?"Add a pick":("Add "+openSlots+" picks"));
+   const _openLabel=_svHome?"Pick open":(openSlots+" slot"+(openSlots>1?"s":"")+" open");
    const _lab={fontSize:9.5,letterSpacing:"0.12em",color:"rgba(255,255,255,0.3)",fontWeight:700,textTransform:"uppercase"};
    const _val={fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:700,fontSize:25,lineHeight:1,marginTop:7};
    const _cta={marginLeft:"auto",display:"inline-flex",alignItems:"center",gap:7,background:"#0A84FF",color:"#fff",fontWeight:700,fontSize:14,padding:"10px 15px",borderRadius:RAD.md,border:"none",cursor:"pointer"};
@@ -11739,10 +11744,17 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        {/* Four stats, two-up. Plain labels on purpose: "Net pts" meant nothing to a
            user and "Riding" was jargon nobody asked for. */}
        <div style={{flex:1,minWidth:0,display:"grid",gridTemplateColumns:"1fr 1fr",gap:"9px 10px"}}>
+         {_svHome ? (()=>{ const _out=activeLeague.myEliminatedWeek; const _alv=(leagueMembers||[]).filter(m=>m.eliminatedWeek==null).length; const _tot2=(leagueMembers||[]).length; return (<>
+         <div><div style={_lab}>Status</div><div style={{..._val,fontSize:20,marginTop:1,color:_out==null?IOS.green:IOS.red}}>{_out==null?"Alive":("Out W"+_out)}</div></div>
+         <div><div style={_lab}>Week pts</div><div style={{..._val,fontSize:20,marginTop:1,color:weekPts>0?IOS.green:"rgba(255,255,255,0.3)"}}>{weekPts>0?("+"+weekPts):"\u2014"}</div></div>
+         <div><div style={_lab}>Alive</div><div style={{..._val,fontSize:20,marginTop:1}}>{_tot2>0?_alv:"\u2014"}<span style={{fontSize:12,color:"rgba(255,255,255,0.3)",fontWeight:700}}>{_tot2>0?(" /"+_tot2):""}</span></div></div>
+         <div><div style={_lab}>Total pts</div><div style={{..._val,fontSize:20,marginTop:1,color:seasonPts>0?"#64D2FF":"rgba(255,255,255,0.3)"}}>{seasonPts>0?<CountUp value={seasonPts}/>:"\u2014"}</div></div>
+         </>); })() : (<>
          <div><div style={_lab}>Record</div><div style={{..._val,fontSize:20,marginTop:1,color:total===0?"rgba(255,255,255,0.3)":"#fff"}}>{hit+"\u2013"+myPicks.filter(p=>p.result==="L").length}</div></div>
          <div><div style={_lab}>Week pts</div><div style={{..._val,fontSize:20,marginTop:1,color:weekPts>0?IOS.green:"rgba(255,255,255,0.3)"}}>{weekPts>0?("+"+weekPts):"\u2014"}</div></div>
          <div><div style={_lab}>Seed</div><div style={{..._val,fontSize:20,marginTop:1}}>{myRank>0?("#"+myRank):"\u2014"}<span style={{fontSize:12,color:"rgba(255,255,255,0.3)",fontWeight:700}}> /{sorted.length}</span></div></div>
          <div><div style={_lab}>Total pts</div><div style={{..._val,fontSize:20,marginTop:1,color:seasonPts>0?"#64D2FF":"rgba(255,255,255,0.3)"}}>{seasonPts>0?<CountUp value={seasonPts}/>:"\u2014"}</div></div>
+         </>)}
        </div>
      </div>
 
@@ -12149,7 +12161,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
     border:`1px solid ${IOS.blue}6B`,fontWeight:800,
     boxShadow:`0 6px 22px -14px ${IOS.blue}D9, inset 0 1px 0 rgba(255,255,255,0.05)`}}>
   <span style={{width:7,height:7,borderRadius:"50%",background:sport.color,flexShrink:0}}/>
-  <span>Build Your {leagueSports.length > 1 ? "Multi-Sport" : sport.label} Slip</span>
+  <span>{(!isSoloMode&&activeLeague&&activeLeague.league_type==="survivor")?"Make Your Survivor Pick":("Build Your "+(leagueSports.length > 1 ? "Multi-Sport" : sport.label)+" Slip")}</span>
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{opacity:0.9}}><path d="M5 12h13"/><path d="M13 6l6 6-6 6"/></svg>
  </button>
  }
@@ -16598,7 +16610,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      <div>
        <div style={{fontSize:15,fontWeight:800,color:"#fff"}}>{lg.name}</div>
        <div style={{fontSize:10,color:IOS.label3,marginTop:2,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-         <span>{(lg.sports||[lg.sport]).map(s=>SPORTS[s]?.label||s.toUpperCase()).join(" · ")} · {(lg.league_type||"h2h")==="h2h"?"H2H":(lg.league_type||"h2h")==="bracket"?"Tournament":"Points"} · #{myRank} of {lg.target_size||lg.max_members||"?"}</span>
+         <span>{(lg.sports||[lg.sport]).map(s=>SPORTS[s]?.label||s.toUpperCase()).join(" · ")} · {(lg.league_type||"h2h")==="h2h"?"H2H":(lg.league_type||"h2h")==="bracket"?"Tournament":(lg.league_type==="survivor"?"Survivor":"Points")} · #{myRank} of {lg.target_size||lg.max_members||"?"}</span>
          {lg.privacy==="public"
            ? <span style={{fontSize:8,fontWeight:700,color:"#30D158",background:"rgba(48,209,88,0.1)",border:"0.5px solid rgba(48,209,88,0.25)",borderRadius:4,padding:"1px 5px",letterSpacing:.3}}>PUBLIC</span>
            : <span style={{fontSize:8,fontWeight:700,color:"rgba(255,255,255,0.3)",background:"rgba(255,255,255,0.05)",border:EDGE.hair2,borderRadius:4,padding:"1px 5px",letterSpacing:.3}}>PRIVATE</span>
@@ -16671,7 +16683,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {/* Sub-tabs - hide when dropdown is open */}
  {lg && leagueSubTab!=="dropdown" && (
  <div className="pk-rail" style={{margin:"10px 14px 0"}}>
-   {["overview","standings",...(((lg.league_type||"h2h")==="h2h")?["matchups"]:[]),(lg.league_type||"h2h")==="bracket"?"bracket":"schedule", ...(((lg.league_type||"h2h")!=="bracket" && (Number(lg.playoff_size)||0)>=2)?["playoff"]:[])].map(t=>(
+   {["overview","standings",...(((lg.league_type||"h2h")==="h2h")?["matchups"]:[]),...((lg.league_type||"h2h")==="bracket"?["bracket"]:(lg.league_type==="survivor"?[]:["schedule"])), ...(((lg.league_type||"h2h")!=="bracket" && (Number(lg.playoff_size)||0)>=2)?["playoff"]:[])].map(t=>(
      <div key={t} onClick={()=>setLeagueSubTab(t)} className={"pk-chip"+(leagueSubTab===t?" on":"")} style={{textTransform:"capitalize"}}><span>{t}</span></div>
    ))}
  </div>
@@ -16828,7 +16840,24 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  )}
 
  {/* ── STANDINGS TAB ── */}
- {lg && leagueSubTab==="standings" && (
+ {lg && leagueSubTab==="standings" && lg.league_type==="survivor" && (
+ <div style={{padding:"12px 16px 20px"}}>
+   <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:10}}>The Pool</div>
+   <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.md,overflow:"hidden"}}>
+     {(leagueMembers||[]).length===0 ? (
+       <div style={{padding:"20px",textAlign:"center",fontSize:12.5,color:IOS.label3}}>Nobody in the pool yet. Share the invite code.</div>
+     ) : (leagueMembers||[]).slice().sort((a,b)=>{ const ax=a.eliminatedWeek==null?0:1, bx=b.eliminatedWeek==null?0:1; if(ax!==bx) return ax-bx; if(ax===1) return (b.eliminatedWeek||0)-(a.eliminatedWeek||0); return String(a.name).localeCompare(String(b.name)); }).map((m,i)=>{ const dead=m.eliminatedWeek!=null; return (
+       <div key={m.userId||i} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 12px",borderBottom:`0.5px solid ${IOS.sep}`}}>
+         <div style={{width:26,height:26,borderRadius:"50%",background:m.isYou?IOS.blue:"#23242a",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9.5,fontWeight:800,color:m.isYou?"#fff":"rgba(255,255,255,0.62)",flexShrink:0}}>{String(m.name||"?").slice(0,2).toUpperCase()}</div>
+         <div style={{flex:1,minWidth:0,fontSize:13,fontWeight:700,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",textDecoration:dead?"line-through":"none",textDecorationColor:"rgba(255,55,95,0.7)"}}>{m.isYou?"You":(m.name||"Unknown")}</div>
+         <div style={{fontSize:9.5,fontWeight:900,letterSpacing:"0.08em",padding:"3px 9px",borderRadius:5,color:dead?IOS.red:IOS.green,border:`1px solid ${dead?"rgba(255,55,95,0.45)":"rgba(48,209,88,0.4)"}`,background:dead?"rgba(255,55,95,0.1)":"rgba(48,209,88,0.1)"}}>{dead?("OUT \u00B7 W"+m.eliminatedWeek):"ALIVE"}</div>
+       </div>
+     );})}
+   </div>
+   <div style={{fontSize:10.5,color:IOS.label3,textAlign:"center",marginTop:10,lineHeight:1.5}}>{"Week-by-week lives on The Board \u2014 the Matchup tab."}</div>
+ </div>
+ )}
+ {lg && leagueSubTab==="standings" && lg.league_type!=="survivor" && (
  <div style={{padding:"12px 16px 20px"}}>
    <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:10}}>Season Standings</div>
    <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.md,overflow:"hidden"}}>
@@ -16912,7 +16941,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  })()}
 
  {/* ── SCHEDULE TAB ── */}
- {lg && (leagueSubTab==="schedule"||leagueSubTab==="bracket") && (
+ {lg && lg.league_type!=="survivor" && (leagueSubTab==="schedule"||leagueSubTab==="bracket") && (
  <div style={{padding:"12px 16px 20px"}}>
    <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:10}}>Season Schedule</div>
    {(!scheduleLoaded && liveSchedule.length===0) ? (
