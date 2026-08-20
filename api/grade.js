@@ -434,6 +434,20 @@ function normName(s) {
     .replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
 }
 
+// Generational suffixes are matching noise: the odds feed and ESPN disagree on
+// them in BOTH directions ("Deebo Samuel" vs ESPN "Deebo Samuel Sr.", and
+// "Oronde Gadsden II" vs ESPN "Oronde Gadsden"). Verified across all 335 games of
+// the 2025 season: 16 real touchdowns never graded because of this, and it hit
+// every prop on those players, not just their TDs. Only strips while a real name
+// remains behind.
+const NAME_SUFFIXES = new Set(["jr", "sr", "ii", "iii", "iv", "v", "vi"]);
+function stripNameSuffix(n) {
+  const p = (n || "").split(" ");
+  while (p.length > 2 && NAME_SUFFIXES.has(p[p.length - 1])) p.pop();
+  if (p.length === 2 && NAME_SUFFIXES.has(p[1])) return p[0];
+  return p.join(" ");
+}
+
 // Parse "Over 2.5 Assists" | "Under 1.5 Assists" | "25+ Points" | "284.5+ Pass Yds"
 function parseProp(pickName) {
   // The player may be embedded in the name (either word order) or supplied separately
@@ -661,15 +675,28 @@ function gradeProp(pickName, gameField, index, info = {}, gameDate = null) {
   if (!pl || !index) { info.reason = "prop_no_player_name"; return null; }
 
   let entries = index[pl];
+  if (!entries) {
+    // Suffix-insensitive retry. UNIQUE match only: the Jets rostered Michael Carter
+    // and Michael Carter II simultaneously, and grading one man's prop off the other
+    // is far worse than leaving it pending. Ambiguity is never resolved by guessing.
+    const want = stripNameSuffix(pl);
+    const cands = Object.keys(index).filter(k => stripNameSuffix(k) === want);
+    if (cands.length === 1) entries = index[cands[0]];
+    else if (cands.length > 1) { info.reason = "prop_player_name_ambiguous"; return null; }
+  }
   if (!entries) {                                          // fallback: last name + first initial
-    const parts = pl.split(" ");
+    const parts = stripNameSuffix(pl).split(" ");
     const last = parts[parts.length - 1];
     const fi = parts[0]?.[0];
-    const hitKey = Object.keys(index).find(k => {
-      const kp = k.split(" ");
+    // Was .find() — first match won, so two players sharing a surname AND first
+    // initial (James Cook / Jared Cook) could grade off the wrong stat line with no
+    // signal that it happened. Unique or nothing.
+    const hits = Object.keys(index).filter(k => {
+      const kp = stripNameSuffix(k).split(" ");
       return kp[kp.length - 1] === last && (!fi || kp[0]?.[0] === fi);
     });
-    if (hitKey) entries = index[hitKey];
+    if (hits.length === 1) entries = index[hits[0]];
+    else if (hits.length > 1) { info.reason = "prop_player_name_ambiguous"; return null; }
   }
   if (!entries || !entries.length) {
     // Player absent from all fetched box scores. If a teammate from THIS matchup+date
