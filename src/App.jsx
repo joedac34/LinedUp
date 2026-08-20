@@ -6986,8 +6986,12 @@ function App() {
    const _names = rows.map(r=>String(r.outcome||"").trim().toLowerCase()).filter(Boolean);
    if (!_names.length) return false;
    try {
-     const {data:_prior} = await supabase.from("picks").select("outcome").eq("league_id",activeLeague.id).eq("user_id",user.id).lt("week",_wk);
-     const _burned = new Set((_prior||[]).map(x=>String(x.outcome||"").trim().toLowerCase()).filter(Boolean));
+     const {data:_prior} = await supabase.from("picks").select("outcome, result").eq("league_id",activeLeague.id).eq("user_id",user.id).lt("week",_wk);
+     // A void ("P" \u2014 late scratch, cancelled game) never had a chance to score, so it
+     // does not consume the player. advanceSurvivor already lets a voided week survive;
+     // leaving him burned here would still cost you that player for the whole pool.
+     // NULL/pending stays burned: an ungraded pick is a pick you actually used.
+     const _burned = new Set((_prior||[]).filter(x=>x.result!=="P").map(x=>String(x.outcome||"").trim().toLowerCase()).filter(Boolean));
      const _dup = _names.find(n=>_burned.has(n));
      if (_dup){ alert("You already burned "+_dup.replace(/\b\w/g,c=>c.toUpperCase())+" \u2014 survivor players are one and done. Pick someone new."); return true; }
    } catch(e) {}
@@ -8953,7 +8957,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
       supabase.from("picks").select("user_id, week, result, outcome, pick_name").eq("league_id",activeLeague.id),
       supabase.from("picks").select("outcome, week, result").eq("league_id",activeLeague.id).eq("user_id",user.id),
     ]);
-    setSvPicks(_all||[]); setSvBurned((_mine||[]).filter(x=>x.outcome));
+    // Voided picks are released, not burned \u2014 must match survivorBlocked above,
+    // or the rail would show a player the lock guard would happily let you re-use.
+    setSvPicks(_all||[]); setSvBurned((_mine||[]).filter(x=>x.outcome && x.result!=="P"));
   }catch(e){} })();
  }, [screen, activeLeagueId, isSoloMode, user&&user.id, activeLeague&&activeLeague.league_type, activeLeague&&activeLeague.current_week]);
 
