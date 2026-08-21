@@ -148,6 +148,43 @@ const PK_PICK = [
   { sel:".pk-t-mult", place:"below", t:"Set the multiplier", b:"Multiplier \u00d7 odds = your points when it hits. 1\u00d7 is safe money, 5\u00d7 is a statement. Tap one.", tap:true },
   { sel:".pk-t-lock", place:"above", t:"Now lock it", b:"Locked means it counts. No edits after kickoff \u2014 sweat it like the rest of us.", tap:true },
 ];
+// ── NFL calendar ─────────────────────────────────────────────────────────────
+// Survivor pools run on the league's weeks, not on "seven days from whenever the
+// roster happened to fill". A fill-anchored window slices the NFL week in half:
+// a pool that fills Saturday puts Sunday+Monday of one NFL week and the Wednesday/
+// Thursday openers of the NEXT one inside a single pool week, so the board sells
+// two different weeks under one number and the Sunday lock lands mid-window.
+//
+// The boundary is Tuesday 3:00 AM ET: after Monday Night Football, before any
+// opener. 2026 opens Wednesday Sept 9 (Labor Day fell as late as it can), with a
+// second Thursday game in Australia Sept 10 -- four game days in Week 1, which is
+// exactly the shape that breaks fill-anchored windows.
+//
+// Week 1's boundary is the Tuesday after Labor Day (first Monday of September).
+// That has held every season, including the Wednesday-opener years, so the anchor
+// derives itself instead of needing a hand-edited table each August.
+// 2026 check: Labor Day Mon Sept 7 -> anchor Tue Sept 8, 3:00 AM ET.
+const NFL_WEEK_MS = 7*24*60*60*1000;
+function nflSeasonYearOf(ms){
+  const d = new Date(ms);
+  // A season owns Sept through early Jan; Jan/Feb belong to the previous season.
+  return d.getUTCMonth() <= 1 ? d.getUTCFullYear()-1 : d.getUTCFullYear();
+}
+function nflWeek1AnchorMs(year){
+  // First Monday of September (Labor Day), then the Tuesday after it at 3:00 AM ET.
+  // Sept is always EDT (UTC-4), so 3:00 AM ET == 07:00 UTC.
+  let day = 1;
+  while (new Date(Date.UTC(year, 8, day)).getUTCDay() !== 1) day++;
+  return Date.UTC(year, 8, day + 1, 7, 0, 0);
+}
+// Start of the NFL week containing ms (Tuesday 3:00 AM ET). Before Week 1, returns
+// the Week 1 anchor: an offseason pool waits for real football instead of burning
+// weeks against an empty board.
+function nflWeekStartMs(ms){
+  const a = nflWeek1AnchorMs(nflSeasonYearOf(ms));
+  if (ms < a) return a;
+  return a + Math.floor((ms - a)/NFL_WEEK_MS)*NFL_WEEK_MS;
+}
 const IOS = {
  blue: "#3B6FE0",   // Deep — was iOS system #0A84FF
  green: "#30D158",
@@ -5961,7 +5998,8 @@ function App() {
    _autoStartRef.current[activeLeague.id]=true;
    (async()=>{
      try{
-       const { data:_upd } = await supabase.from("leagues").update({ season_start:new Date().toISOString(), current_week:1 }).eq("id",activeLeague.id).is("season_start",null).select("id");
+       const _svStart = (activeLeague.league_type==="survivor") ? new Date(svSeasonStartMs()).toISOString() : new Date().toISOString();
+       const { data:_upd } = await supabase.from("leagues").update({ season_start:_svStart, current_week:1 }).eq("id",activeLeague.id).is("season_start",null).select("id");
        if(_upd && _upd.length){
          try{ const {data:_mem}=await supabase.from("league_members").select("user_id").eq("league_id",activeLeague.id); const _ids=(_mem||[]).map(m=>m.user_id); fetch(API_BASE+"/api/notify",{method:"POST",headers:await authHeaders(),body:JSON.stringify({ userIds:_ids, title:(activeLeague.name||"Your league")+" is live!", body:"Week 1 is open — make your picks before they lock.", url:"/", category:"notif_league" })}); }catch(e){}
        }
@@ -7112,10 +7150,47 @@ function App() {
  const slotLocked = (slot)=> slotStarted(slot) || slotGraded(slot);
  // Survivor lock rules, called with the freshly built rows at every insert path.
  // Returns true when the lock must be blocked (and has already told the user why).
+ // Where a survivor pool's Week 1 should begin, given the moment it filled.
+ // Snapping season_start to the NFL boundary makes every existing consumer correct
+ // for free -- the client's 7-day math, the replace-window filter, the reveal clock
+ // and advance.js all read season_start, so aligning the anchor aligns all of them.
+ // If this week's lock has already passed when the roster fills, Week 1 opens NEXT
+ // week: starting inside a locked week would hand everyone an instant no-pick strike.
+ const svSeasonStartMs = (nowMs)=>{
+   const _now = nowMs || Date.now();
+   let _ws = nflWeekStartMs(_now);
+   const _lock = _svRevealMs(_ws);
+   if(_lock!=null && _now >= _lock) _ws = nflWeekStartMs(_ws + NFL_WEEK_MS + 60000);
+   return _ws;
+ };
+ // Hard deadline for a pool week: Sunday 1:00 PM ET, the same instant the board
+ // reveals everyone's picks. Past it the week is closed -- no new picks, no changes.
+ const svWeekLockMs = (lg, week)=>{
+   if(!lg || !lg.season_start) return null;
+   const _ss = new Date(lg.season_start).getTime();
+   if(isNaN(_ss)) return null;
+   return _svRevealMs(_ss + (Math.max(1, Number(week)||1) - 1)*NFL_WEEK_MS);
+ };
+
  const survivorBlocked = async (rows) => {
    if (isSoloMode || !activeLeague || activeLeague.league_type!=="survivor" || !rows || !rows.length) return false;
    if (activeLeague.myEliminatedWeek!=null){ alert("You\u2019re eliminated \u2014 you can watch, but the pool has moved on."); return true; }
    const _wk = rows[0].week;
+   // Hard lock. Enforced here because every survivor save path funnels through this
+   // guard; the countdown on the board is display, THIS is the rule.
+   const _lockMs = svWeekLockMs(activeLeague, _wk);
+   if (_lockMs!=null && Date.now() >= _lockMs){
+     alert("Week "+_wk+" locked at 1:00 PM ET Sunday. Picks are final \u2014 next week's board opens Tuesday.");
+     return true;
+   }
+   // A game already kicking is not pickable, even before the pool-wide lock. Week 1
+   // 2026 runs Wednesday through Monday, so a pool week can contain games that start
+   // days before Sunday's deadline.
+   const _late = rows.find(r=>{ const _t = r.game_date ? Date.parse(r.game_date) : NaN; return !isNaN(_t) && _t <= Date.now(); });
+   if (_late){
+     alert("That game already kicked off. Pick one that hasn\u2019t started yet.");
+     return true;
+   }
    const _names = rows.map(r=>String(r.outcome||"").trim().toLowerCase()).filter(Boolean);
    if (!_names.length) return false;
    try {
@@ -7542,7 +7617,7 @@ function App() {
    max_members:newLeagueSize, target_size:newLeagueSize, pick_deadline:"Sun 1PM ET",
    season_weeks:seasonWeeks, current_week:1, privacy:newLeaguePrivacy||"private",
    scoring_type:"multiplier_odds", start_mode:newLeagueStartMode||"auto", league_type:(newLeagueType==="duel"?"h2h":newLeagueType)||"h2h",
-   ...(newLeagueStartMode==="scheduled" && newLeagueStartAt ? {season_start:new Date(newLeagueStartAt).toISOString()} : {}),
+   ...(newLeagueStartMode==="scheduled" && newLeagueStartAt ? {season_start:new Date(newLeagueType==="survivor" ? svSeasonStartMs(new Date(newLeagueStartAt).getTime()) : new Date(newLeagueStartAt).getTime()).toISOString()} : {}),
    playoffs_enabled:(newLeagueType==='bracket')?false:(!!newLeaguePlayoffs&&(()=>{const _f=Math.min(newLeaguePlayoffSize,([2,4,6,8].filter(v=>v<=newLeagueSize).pop()||2));return _f>=2&&seasonWeeks>Math.ceil(Math.log2(_f));})()),
    playoff_size:(newLeagueType==='bracket'||!newLeaguePlayoffs)?0:(()=>{const _f=Math.min(newLeaguePlayoffSize,([2,4,6,8].filter(v=>v<=newLeagueSize).pop()||2));return (_f>=2&&seasonWeeks>Math.ceil(Math.log2(_f)))?_f:0;})(),
    paid: _needsPaywall ? false : true,
@@ -15398,7 +15473,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 
  // ── Deadline (display only — enforcement is the calendar build) ──
  const _ssMs = activeLeague.season_start?new Date(activeLeague.season_start).getTime():null;
- const _dlMs = _ssMs?_svRevealMs(_ssMs+(_wk-1)*_wm):null;
+ const _dlMs = svWeekLockMs(activeLeague, _wk);
  const _dlTxt = (_dlMs&&_dlMs>Date.now())?(()=>{ const m=Math.floor((_dlMs-Date.now())/60000); const d=Math.floor(m/1440); const h=Math.floor((m%1440)/60); return d>0?(d+"d "+h+"h"):(h>0?(h+"h "+(m%60)+"m"):(m+"m")); })():null;
 
  const _myBurns=(svBurned||[]).filter(x=>x.week<_wk&&x.outcome).sort((a,b)=>a.week-b.week);
