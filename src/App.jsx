@@ -8954,7 +8954,7 @@ function App() {
   if(!isUuid(leagueId)) return;   // a non-uuid makes Postgres 400 the whole query
  const {data} = await supabase
  .from("league_members")
- .select("user_id, is_commissioner, eliminated_week")
+ .select("user_id, is_commissioner, eliminated_week, survivor_strikes")
  .eq("league_id", leagueId);
  if(data){
  const _ids=data.map(m=>m.user_id);
@@ -8964,6 +8964,7 @@ function App() {
  userId: m.user_id,
  isCommissioner: m.is_commissioner,
  eliminatedWeek: m.eliminated_week??null,
+ strikes: m.survivor_strikes??0,
  name: (_pm[m.user_id]&&_pm[m.user_id].username) || "Unknown",
  isYou: m.user_id === uid,
  })));
@@ -9263,6 +9264,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    <div style={{padding:"14px 16px 4px"}}>
      <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:IOS.label3}}>{(activeLeague.name||"Survivor")+" \u00B7 The Board"}</div>
      <div style={{fontSize:26,fontWeight:900,color:"#fff",letterSpacing:"-0.5px",marginTop:2}}>{_alive+" remain."}</div>
+     {(Number(activeLeague.survivor_lives)||1)===2&&<div style={{fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.35)",marginTop:3}}>{"Two lives each \u2014 the first strike only burns one."}</div>}
    </div>
    <div style={{overflowX:"auto",padding:"6px 16px 20px",scrollbarWidth:"none"}}>
      <div style={{minWidth:120+_weeks.length*39}}>
@@ -9276,6 +9278,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
            <div style={{width:120,flexShrink:0,display:"flex",alignItems:"center",gap:7,minWidth:0}}>
              <div style={{width:24,height:24,borderRadius:"50%",background:m.isYou?"rgba(10,132,255,0.18)":"rgba(255,255,255,0.08)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,color:m.isYou?IOS.blue:"rgba(255,255,255,0.7)",flexShrink:0}}>{String(m.name||"?").slice(0,2).toUpperCase()}</div>
              <div style={{fontSize:11.5,fontWeight:800,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",textDecoration:dead?"line-through":"none",textDecorationColor:"rgba(255,55,95,0.7)"}}>{m.name}</div>
+             {(Number(activeLeague.survivor_lives)||1)===2&&!dead&&(m.strikes||0)>0&&<span style={{flexShrink:0,fontSize:8,fontWeight:800,color:IOS.orange,background:"rgba(255,159,10,0.12)",border:"0.5px solid rgba(255,159,10,0.3)",borderRadius:5,padding:"1px 5px",whiteSpace:"nowrap"}}>1 life</span>}
            </div>
            {_weeks.map(w=>{ const st=_cell(m.userId,w,m.eliminatedWeek);
              const bg=st==="w"?"rgba(48,209,88,0.13)":st==="l"||st==="miss"?"rgba(255,55,95,0.13)":st==="p"?"rgba(255,159,10,0.1)":"rgba(255,255,255,0.04)";
@@ -12086,7 +12089,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        <div style={{background:"rgba(0,0,0,0.4)",border:"0.5px dashed rgba(255,255,255,0.14)",borderRadius:RAD.md,padding:"18px 13px",marginBottom:12,textAlign:"center",fontSize:13,fontWeight:700,color:"rgba(255,255,255,0.45)"}}>{_ml?"Pick one team to win":"Pick one TD scorer"}</div>
        )}
        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"9px 10px",marginBottom:13}}>
-         <div><div style={_lab}>Status</div><div style={{..._val,fontSize:20,marginTop:1,color:activeLeague.myEliminatedWeek==null?IOS.green:IOS.red}}>{activeLeague.myEliminatedWeek==null?"Alive":("Out W"+activeLeague.myEliminatedWeek)}</div></div>
+         <div><div style={_lab}>Status</div><div style={{..._val,fontSize:20,marginTop:1,color:activeLeague.myEliminatedWeek==null?IOS.green:IOS.red}}>{activeLeague.myEliminatedWeek==null?"Alive":("Out W"+activeLeague.myEliminatedWeek)}</div>{(Number(activeLeague.survivor_lives)||1)===2&&activeLeague.myEliminatedWeek==null&&(()=>{ const _me=(leagueMembers||[]).find(m=>m.isYou); const _s=(_me&&_me.strikes)||0; return (<div style={{fontSize:8.5,color:_s>0?IOS.orange:"rgba(255,255,255,0.28)",fontWeight:700,marginTop:2}}>{_s>0?"1 life left":"2 lives"}</div>); })()}</div>
          <div><div style={_lab}>Alive</div><div style={{..._val,fontSize:20,marginTop:1}}>{_tot2>0?_alv:"\u2014"}<span style={{fontSize:12,color:"rgba(255,255,255,0.3)",fontWeight:700}}>{_tot2>0?(" /"+_tot2):""}</span></div></div>
          <div><div style={_lab}>Burned</div><div style={{..._val,fontSize:20,marginTop:1,color:_brn>0?"#fff":"rgba(255,255,255,0.3)"}}>{_brn}</div></div>
          <div><div style={_lab}>Total pts</div><div style={{..._val,fontSize:20,marginTop:1,color:seasonPts>0?"#64D2FF":"rgba(255,255,255,0.3)"}}>{seasonPts>0?<CountUp value={seasonPts}/>:"\u2014"}</div>
@@ -16948,7 +16951,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        const _wasPreset = newLeagueType==="duel"||newLeagueType==="survivor";
        setNewLeagueType(t.id);
        if(t.id==="duel"){ setNewLeagueSize(2); setNewLeagueWeeks(1); setNewLeaguePlayoffs(false); }
-       else if(t.id==="survivor"){ setNewLeagueSports(["nfl"]); setNewLeagueWeeks(18); setNewLeaguePlayoffs(false); if(newLeagueSize<2||newLeagueSize>32) setNewLeagueSize(8); }
+       else if(t.id==="survivor"){ setNewLeagueSports(["nfl"]); setNewLeagueWeeks(18); setNewLeaguePlayoffs(false); if(newLeagueSize<2||newLeagueSize>100) setNewLeagueSize(8); }
        else if(_wasPreset){ setNewLeagueSize(8); setNewLeagueWeeks(18); setNewLeaguePlayoffs(true); } // leaving a preset restores defaults
        if(t.id==='h2h'&&![2,6,8,10,12].includes(newLeagueSize)) setNewLeagueSize(8);
        if(t.id==='bracket'&&![4,8,16,32].includes(newLeagueSize)) setNewLeagueSize(8);
@@ -17259,8 +17262,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
        <div onClick={()=>setNewLeagueSize(s=>Math.max(2,s-1))} style={{width:28,height:28,borderRadius:RAD.sm,background:"#1A1A1A",border:"0.5px solid #2A2A2A",color:"#ccc",fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>−</div>
        <div style={{fontSize:16,fontWeight:700,color:"#fff",minWidth:28,textAlign:"center"}}>{newLeagueSize}</div>
-       <div onClick={()=>setNewLeagueSize(s=>Math.min(32,s+1))} style={{width:28,height:28,borderRadius:RAD.sm,background:"#1A1A1A",border:"0.5px solid #2A2A2A",color:"#ccc",fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>+</div>
-       <div style={{fontSize:12,color:"rgba(255,255,255,0.6)",marginLeft:4}}>players (2–32)</div>
+       <div onClick={()=>setNewLeagueSize(s=>Math.min(100,s+1))} style={{width:28,height:28,borderRadius:RAD.sm,background:"#1A1A1A",border:"0.5px solid #2A2A2A",color:"#ccc",fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>+</div>
+       <div style={{fontSize:12,color:"rgba(255,255,255,0.6)",marginLeft:4}}>players (2–100)</div>
      </div>
    ):(
      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:4}}>
@@ -18319,6 +18322,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    const _regWeeks=regularSeasonWeeksFor(activeLeague,_target);
    const _sc=parseSlotConfig(activeLeague&&activeLeague.slot_config);
    const _slotN=_sc?_sc.length:5;
+   const _isSv=(activeLeague.league_type||"")==="survivor";
+   const _svMl=activeLeague.survivor_config==="ml";
    const _tLabel=(t)=>({ml:"Moneyline",spread:"Spread",ou:"Total",prop:"Player prop",longshot:"Parlay",wildcard:"Wildcard"}[t]||(t?(""+t).toUpperCase():"Pick"));
    const _privacy=activeLeague.privacy||"private";
    const _code=activeLeague.invite_code||activeLeague.inviteCode||"";
@@ -18340,7 +18345,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        <div style={{padding:"13px 10px"}}><div style={_lbl9}>Week</div><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:700,fontSize:21,lineHeight:1,marginTop:6}}>{activeLeague.current_week||1}<span style={{color:"rgba(255,255,255,0.3)",fontSize:13}}> /{activeLeague.season_weeks||18}</span></div></div>
        <div style={{padding:"13px 10px",borderLeft:_hair}}><div style={_lbl9}>Members</div><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:700,fontSize:21,lineHeight:1,marginTop:6}}>{leagueMembers.length}<span style={{color:"rgba(255,255,255,0.3)",fontSize:13}}> /{_target}</span></div></div>
        <div style={{padding:"13px 10px",borderLeft:_hair}}><div style={_lbl9}>Sport</div><div style={{fontSize:15,fontWeight:700,marginTop:8}}>{_sportLbl}</div></div>
-       <div style={{padding:"13px 10px",borderLeft:_hair}}><div style={_lbl9}>Format</div><div style={{fontSize:15,fontWeight:700,marginTop:8}}>{_slotN} pick{_slotN===1?"":"s"}</div></div>
+       <div style={{padding:"13px 10px",borderLeft:_hair}}><div style={_lbl9}>Format</div><div style={{fontSize:15,fontWeight:700,marginTop:8}}>{_isSv?"Survivor":(_slotN+" pick"+(_slotN===1?"":"s"))}</div></div>
      </div>
      <div style={{position:"relative",display:"flex",alignItems:"center",gap:7,borderTop:_hair,padding:"9px 12px",fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.6)"}}>
        <span style={{width:6,height:6,borderRadius:"50%",background:isPro?IOS.green:"rgba(255,255,255,0.3)",boxShadow:isPro?"0 0 7px "+IOS.green:"none"}}/>
@@ -18370,14 +18375,14 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    <div style={_panel}>
      <div style={_crow}>
        <div style={_ic}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18M8 2v4M16 2v4"/></svg></div>
-       <div style={{flex:1,minWidth:0}}><div style={_tt}>Season length</div><div style={_dd}>Total weeks, playoffs included</div></div>
+       <div style={{flex:1,minWidth:0}}><div style={_tt}>Season length</div><div style={_dd}>{_isSv?"Total weeks in the pool":"Total weeks, playoffs included"}</div></div>
        <div style={{display:"flex",alignItems:"center",gap:10}}>
          <div onClick={async()=>{const nv=Math.min(52,Math.max(1,(activeLeague.season_weeks||18)-1));await supabase.from("leagues").update({season_weeks:nv}).eq("id",activeLeague.id);await fetchLeagues(user.id);}} style={_stepBtn}>{"\u2212"}</div>
          <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:20,color:IOS.blue,minWidth:24,textAlign:"center"}}>{activeLeague.season_weeks||18}</div>
          <div onClick={async()=>{const nv=Math.min(52,(activeLeague.season_weeks||18)+1);await supabase.from("leagues").update({season_weeks:nv}).eq("id",activeLeague.id);await fetchLeagues(user.id);}} style={_stepBtn}>+</div>
        </div>
      </div>
-     {!_isBracket&&(
+     {!_isBracket&&!_isSv&&(
      <div style={{borderTop:_hair}}>
        <div style={_crow}>
          <div style={_ic}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16v5a8 8 0 0 1-16 0z"/><path d="M12 17v3M8 21h8"/></svg></div>
@@ -18404,6 +18409,22 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        )}
      </div>
      )}
+     {_isSv&&(()=>{ const _lv=Math.max(1,Math.min(2,Number(activeLeague.survivor_lives)||1)); const _blood=(leagueMembers||[]).some(m=>m.eliminatedWeek!=null||(m.strikes||0)>0); return (
+     <div style={{borderTop:_hair}}>
+       <div style={_crow}>
+         <div style={_ic}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 21C7 16.5 3 13.2 3 8.8 3 6 5.2 4 7.8 4c1.6 0 3.1.8 4.2 2.2C13.1 4.8 14.6 4 16.2 4 18.8 4 21 6 21 8.8c0 4.4-4 7.7-9 12.2z"/></svg></div>
+         <div style={{flex:1,minWidth:0}}><div style={_tt}>Lives per player</div><div style={_dd}>{_blood?"Locked \u2014 blood\u2019s been drawn this season":"Two lives means one bad week doesn\u2019t end you"}</div></div>
+       </div>
+       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,padding:"0 14px 14px"}}>
+         {[{v:1,l:"1 life",d:"Sudden death"},{v:2,l:"2 lives",d:"One mulligan"}].map(o=>{ const on=o.v===_lv; return (
+           <div key={o.v} onClick={async()=>{ if(_blood||o.v===_lv) return; await supabase.from("leagues").update({survivor_lives:o.v}).eq("id",activeLeague.id); await fetchLeagues(user.id); }} style={{border:"1.5px solid "+(on?IOS.blue:"rgba(255,255,255,0.08)"),background:on?"rgba(10,132,255,0.12)":"rgba(255,255,255,0.04)",borderRadius:RAD.md,padding:"10px 4px",textAlign:"center",cursor:(_blood||on)?"default":"pointer",opacity:(_blood&&!on)?0.35:1}}>
+             <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:18,color:on?IOS.blue:"rgba(255,255,255,0.4)"}}>{o.l}</div>
+             <div style={{fontSize:9.5,color:on?IOS.blue:"rgba(255,255,255,0.3)",marginTop:2,fontWeight:600}}>{o.d}</div>
+           </div>
+         );})}
+       </div>
+     </div>
+     ); })()}
    </div>
 
    <div style={_eye}>Access {"&"} Members</div>
@@ -18412,6 +18433,14 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        <div style={_ic}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg></div>
        <div style={{flex:1,minWidth:0}}><div style={_tt}>League size</div><div style={_dd}>{leagueMembers.length} of {_target}{leagueMembers.length>=_target?" · full":(" · "+(_target-leagueMembers.length)+" spots left")}</div></div>
      </div>
+     {_isSv?(
+     <div style={{display:"flex",alignItems:"center",gap:12,padding:"0 14px 14px"}}>
+       <div onClick={async()=>{ const _floor=Math.max(2,leagueMembers.length); const nv=Math.max(_floor,_target-1); if(nv===_target) return; await supabase.from("leagues").update({target_size:nv,max_members:nv}).eq("id",activeLeague.id); await fetchLeagues(user.id); }} style={_stepBtn}>{"\u2212"}</div>
+       <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:22,color:IOS.blue,minWidth:44,textAlign:"center"}}>{_target}</div>
+       <div onClick={async()=>{ const nv=Math.min(100,_target+1); if(nv===_target) return; await supabase.from("leagues").update({target_size:nv,max_members:nv}).eq("id",activeLeague.id); await fetchLeagues(user.id); }} style={_stepBtn}>+</div>
+       <div style={{fontSize:11.5,color:"rgba(255,255,255,0.3)",fontWeight:600,lineHeight:1.4}}>2–100 players · grow or shrink any time, never below the {Math.max(2,leagueMembers.length)} already in</div>
+     </div>
+     ):(
      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,padding:"0 14px 14px"}}>
        {[2,6,8,10,12].map(sz=>{ const on=sz===_target; return (
          <div key={sz} onClick={async()=>{ if(sz===_target) return; if(!window.confirm("Change league size to "+sz+"? This will wipe the current schedule and regenerate it when the league fills.")) return; await supabase.from("leagues").update({target_size:sz,max_members:sz}).eq("id",activeLeague.id); await supabase.from("matchups").delete().eq("league_id",activeLeague.id); await fetchLeagues(user.id); }} style={{border:"1.5px solid "+(on?IOS.blue:"rgba(255,255,255,0.08)"),background:on?"rgba(10,132,255,0.12)":"rgba(255,255,255,0.04)",borderRadius:RAD.md,padding:"10px 4px",textAlign:"center",cursor:on?"default":"pointer"}}>
@@ -18420,6 +18449,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
          </div>
        );})}
      </div>
+     )}
      <div style={{...(_crow),borderTop:_hair}}>
        <div style={_ic}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
        <div style={{flex:1,minWidth:0}}><div style={_tt}>Who can join</div><div style={_dd}>Invite-only keeps it to your code</div></div>
@@ -18441,7 +18471,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    <div style={_panel}>
      <div style={_crow}>
        <div style={_ic}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></div>
-       <div style={{flex:1,minWidth:0}}><div style={_tt}>{_slotN} pick{_slotN===1?"":"s"} per week</div><div style={_dd}>Set in the League Builder</div></div>
+       <div style={{flex:1,minWidth:0}}><div style={_tt}>{_isSv?"1 pick per week":(_slotN+" pick"+(_slotN===1?"":"s")+" per week")}</div><div style={_dd}>{_isSv?(_svMl?"Survivor · one moneyline team, every team one-and-done":"Survivor · one TD scorer, every player one-and-done"):"Set in the League Builder"}</div></div>
      </div>
      {_sc&&(
      <div style={{display:"flex",flexWrap:"wrap",gap:6,padding:"0 14px 14px"}}>

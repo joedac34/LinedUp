@@ -62,7 +62,7 @@ export default async function handler(req, res) {
   try {
     const { data: leagues, error } = await supabase
       .from("leagues")
-      .select("id, name, current_week, season_weeks, season_start, league_type, playoffs_enabled, playoff_size, champion_id, completed_at")
+      .select("id, name, current_week, season_weeks, season_start, league_type, playoffs_enabled, playoff_size, champion_id, completed_at, survivor_lives")
       .not("season_start", "is", null)
       .eq("is_demo", false);
     if (error) throw error;
@@ -326,9 +326,23 @@ async function sendElimination(userId, week, leagueName) {
   } catch (e) {}
 }
 
+async function sendLifeBurned(userId, week, leagueName) {
+  if (!_notifyBase || !process.env.CRON_SECRET) return;
+  try {
+    await fetch(_notifyBase + "/api/notify", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + process.env.CRON_SECRET, "Content-Type": "application/json" },
+      body: JSON.stringify({ userIds: [userId], title: "Life burned \u2014 Week " + week, body: (leagueName || "Your survivor pool") + " took one of your two lives. One left \u2014 make it count.", url: "/", category: "notif_results" }),
+    });
+  } catch (e) {}
+}
+
 // Weekly survivor settlement. Rules:
 //  - a member survives a closed week iff they have at least one W pick that week
-//  - no pick, or all losses -> eliminated_week = that week
+//  - no pick, or all losses -> a STRIKE; eliminated_week lands the week strikes
+//    reach the pool's survivor_lives (1 = sudden death, 2 = one mulligan) --
+//    strikes are recomputed from picks every pass and persisted to
+//    league_members.survivor_strikes so the client never re-derives settlement
 //  - FULL WIPEOUT: if every alive member busts the same week, nobody dies
 //  - any alive member still pending in a week HOLDS settlement (never eliminate
 //    on grading lag) — weeks settle strictly in order, retried every cron pass
@@ -340,7 +354,7 @@ async function advanceSurvivor(supabase, lg, target, seasonWeeks) {
   if (target > cw) {
     await supabase.from("leagues").update({ current_week: Math.min(seasonWeeks, target) }).eq("id", lg.id);
   }
-  const { data: mem } = await supabase.from("league_members").select("user_id, eliminated_week").eq("league_id", lg.id);
+  const { data: mem } = await supabase.from("league_members").select("user_id, eliminated_week, survivor_strikes").eq("league_id", lg.id);
   let alive = (mem || []).filter((m) => m.eliminated_week == null).map((m) => m.user_id);
   if (!alive.length) return;
   // A pool of one is not a pool. Without this, the "last one standing" branch below
@@ -357,24 +371,44 @@ async function advanceSurvivor(supabase, lg, target, seasonWeeks) {
     (wRow[p.user_id] = wRow[p.user_id] || []).push(p.result);
   }
 
+  const lives = Math.max(1, Math.min(2, Number(lg.survivor_lives) || 1));
+  const prevStrikes = {}; (mem || []).forEach((m) => { prevStrikes[m.user_id] = Number(m.survivor_strikes) || 0; });
+  const strikes = {}; alive.forEach((u) => (strikes[u] = 0));
   for (let w = 1; w <= lastClosed && alive.length > 1; w++) {
     const wp = byWeek[w] || {};
     if (alive.some((u) => (wp[u] || []).some((r) => r == null || r === "pending"))) break; // grading lag (incl. NULL): hold this and later weeks
-    const losers = alive.filter((u) => {
+    const busted = alive.filter((u) => {
       const rs = wp[u] || [];
-      if (rs.includes("W")) return false;          // hit -> survive
-      if (rs.length && rs.every((r) => r === "P")) return false; // voided (scratch / cancelled) -> survive, never eliminate on a pick that could not win
+      if (rs.includes("W")) return false;          // hit -> survive clean
+      if (rs.length && rs.every((r) => r === "P")) return false; // voided (scratch / cancelled) -> survive, never charge a pick that could not win
       return true;                                  // no pick, or a real miss
     });
-    if (!losers.length) continue;
-    if (losers.length === alive.length) continue; // full wipeout: nobody dies
-    for (const u of losers) {
+    if (!busted.length) continue;
+    if (busted.length === alive.length) continue; // full wipeout: the week is a wash -- no strikes, nobody dies
+    const out = [];
+    for (const u of busted) {
+      strikes[u] = (strikes[u] || 0) + 1;
+      if (strikes[u] >= lives) out.push(u);        // final strike lands: eliminated THIS week
+    }
+    for (const u of out) {
       const { data: upd } = await supabase.from("league_members")
         .update({ eliminated_week: w }).eq("league_id", lg.id).eq("user_id", u)
         .is("eliminated_week", null).select("user_id");
       if (upd && upd.length) { try { await sendElimination(u, w, lg.name); } catch (e) {} }
     }
-    alive = alive.filter((u) => !losers.includes(u));
+    // Life-burned push for survivors of a strike -- only when the count INCREASED
+    // versus what a prior pass persisted, so cron re-runs never re-notify.
+    for (const u of busted) {
+      if (!out.includes(u) && strikes[u] > (prevStrikes[u] || 0)) { try { await sendLifeBurned(u, w, lg.name); } catch (e) {} }
+    }
+    alive = alive.filter((u) => !out.includes(u));
+  }
+  // Persist computed strikes where changed. Only members alive at loop start are in
+  // the map, so counts frozen at prior eliminations are never rewritten.
+  for (const u of Object.keys(strikes)) {
+    if (strikes[u] !== (prevStrikes[u] || 0)) {
+      await supabase.from("league_members").update({ survivor_strikes: strikes[u] }).eq("league_id", lg.id).eq("user_id", u);
+    }
   }
 
   if (lg.champion_id || lg.completed_at) return;
