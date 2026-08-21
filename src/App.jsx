@@ -118,6 +118,21 @@ const API_BASE = IS_NATIVE ? "https://app.picklockapp.com" : "";
  };
 
 // iOS System Colors
+// ── NFL team tiles: dark team-primary fills behind a white acronym. Muted well
+// below official brand values so a 32-color set can sit on the dark theme without
+// turning the board into a paint store. Keyed by getAcronym output.
+const NFL_TEAM_COLORS = {
+  KC:"#4A1015", PHI:"#0C3B37", SF:"#3A1114", DAL:"#1B2A3E", BUF:"#0B2A63", MIA:"#0B3C3C",
+  NE:"#101F3C", NYJ:"#0E2E1E", NYG:"#122A5C", LAR:"#14295C", LAC:"#0E3446", LV:"#232323",
+  SEA:"#0C2540", ARI:"#40101A", GB:"#12301C", CHI:"#2A1408", MIN:"#2A1748", DET:"#12384F",
+  ATL:"#3B1013", NO:"#2E2618", CAR:"#123A56", TB:"#3A1208", PIT:"#2E2A10", BAL:"#241A54",
+  CLE:"#3A2617", CIN:"#3B1A08", TEN:"#16334F", IND:"#12305C", HOU:"#0D1A2E", JAX:"#0B3335",
+  DEN:"#3A2008", WAS:"#3A1A10",
+};
+// Client-side twin of grade.js stripNameSuffix: the odds feed and ESPN disagree on
+// generational suffixes in both directions. Display attribution only — grading
+// stays server-side with the unique-match rule.
+const svbNorm = (x)=>String(x||"").toLowerCase().replace(/[.'\u2019]/g,"").replace(/\s+(jr|sr|ii|iii|iv|v)$/,"").replace(/\s+/g," ").trim();
 const IOS = {
  blue: "#3B6FE0",   // Deep — was iOS system #0A84FF
  green: "#30D158",
@@ -6252,6 +6267,92 @@ function App() {
    if(gridType!==_want){ setGridType(_want); if(_want==="prop") setGridPropSub("all"); }
  }, [screen, isSoloMode, activeLeagueId, gridType, activeLeague&&activeLeague.survivor_config]);
 
+ // ── Survivor dedicated pick screens: state + data caches ──────────────────────
+ // The pool browser replaces the generic grid (render branch lives in the browser
+ // IIFE). Schedules and rosters come straight from ESPN's public site API — the
+ // same host api/espn.js proxies — fetched lazily per slate team and cached for
+ // the session. Every fetch fails soft: a miss just means no form strip / an
+ // "Unlisted" position, never a hidden pickable row.
+ const [svbTab, setSvbTab] = useState("board");        // anytd: board | teams
+ const [svbTeam, setSvbTeam] = useState(null);          // anytd: drilled team acronym
+ const [svbPos, setSvbPos] = useState("all");           // anytd: RB|WR|TE|QB|DST|unk|all
+ const [svbSort, setSvbSort] = useState("likely");      // likely | kick | least
+ const [svbHideBurned, setSvbHideBurned] = useState(false);
+ const [svbSheet, setSvbSheet] = useState(null);        // {ab,title,sub,burnWk} schedule sheet
+ const [svbScheds, setSvbScheds] = useState({});        // ab -> {rows,recW,recL} | {err}
+ const [svbRosters, setSvbRosters] = useState({});      // ab -> {normName:pos} | {err}
+ const svbFetchRef = useRef({});
+ useEffect(()=>{ setSvbTab("board"); setSvbTeam(null); setSvbPos("all"); setSvbSheet(null); }, [activeLeagueId]);
+ // Bounce to the slip AFTER a pick lands from this browser — but never on entry,
+ // or reopening the browser with a pick already down becomes an instant trapdoor.
+ const svbHadBetRef = useRef(false);
+ useEffect(()=>{ if(screen!=="browser") return;
+   svbHadBetRef.current = !!(flexPicks&&flexPicks[0]&&flexPicks[0].bet);
+   // A game-sheet opener elsewhere seeds gridSearch with a team name. The generic
+   // grid shows that in its search box; the survivor ML board has no box, so a
+   // stale term would silently shrink the slate. Fresh entry, fresh board.
+   if(!isSoloMode&&activeLeague&&activeLeague.league_type==="survivor"&&gridSearch) setGridSearch("");
+ }, [screen]);
+ useEffect(()=>{
+   if(screen!=="browser"||isSoloMode||!activeLeague||activeLeague.league_type!=="survivor") return;
+   if(replaceCtx) return; // doReplaceSave navigates itself
+   const _p=flexPicks&&flexPicks[0];
+   if(_p&&_p.bet&&!svbHadBetRef.current){ const _t=setTimeout(()=>setScreen("picks"),520); return ()=>clearTimeout(_t); }
+ }, [screen, isSoloMode, activeLeagueId, flexPicks, replaceCtx]);
+ useEffect(()=>{
+   if(screen!=="browser"||isSoloMode||!activeLeague||activeLeague.league_type!=="survivor") return;
+   const _isMl = activeLeague.survivor_config==="ml";
+   const _rows = _isMl ? (BETS.ml||[]) : (BETS.prop||[]).filter(b=>b.market==="player_anytime_td"||/anytime\s*td/i.test(b.pick||""));
+   const _abs = new Set();
+   _rows.forEach(b=>{ const g=String(b.game||""); if(g.indexOf(" @ ")===-1) return; g.split(" @ ").forEach(t=>{ const a=getAcronym(String(t).trim(),false); if(a&&a!=="?"&&NFL_TEAM_COLORS[a]) _abs.add(a); }); });
+   const _slug = (ab)=> (ab==="WAS"?"wsh":ab.toLowerCase()); // ESPN's one NFL slug oddball
+   _abs.forEach(ab=>{
+     if(!svbFetchRef.current["s_"+ab]){
+       svbFetchRef.current["s_"+ab]=1;
+       fetch("https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/"+_slug(ab)+"/schedule?seasontype=2")
+         .then(r=>r.ok?r.json():null)
+         .then(d=>{
+           if(!d||!Array.isArray(d.events)){ setSvbScheds(p=>({...p,[ab]:{err:true}})); return; }
+           const rows=[]; let w=0, l=0;
+           d.events.forEach(e=>{ try{
+             const c=(e.competitions&&e.competitions[0])||{}; const comps=c.competitors||[];
+             const me=comps.find(x=>x.team&&String(x.team.abbreviation||"").toLowerCase()===_slug(ab));
+             const other=comps.find(x=>x!==me);
+             if(!me||!other) return;
+             const wk=e.week&&e.week.number; if(!wk) return;
+             const done=!!(c.status&&c.status.type&&c.status.type.completed);
+             const _sc=(x)=>{ const v=x&&x.score; if(v==null) return null; if(typeof v==="object") return Number(v.value!=null?v.value:v.displayValue); const n=Number(v); return isNaN(n)?null:n; };
+             const my=done?_sc(me):null, op=done?_sc(other):null;
+             let res=null; if(done){ if(me.winner===true) res="W"; else if(other.winner===true) res="L"; else if(my!=null&&op!=null) res=my>op?"W":(my<op?"L":"T"); }
+             if(res==="W") w++; else if(res==="L") l++;
+             rows.push({ wk, opp:String(other.team&&other.team.abbreviation||"").toUpperCase(), home:me.homeAway==="home", dateMs:Date.parse(e.date)||null, res, score:(my!=null&&op!=null)?(my+"-"+op):null });
+           }catch(_e){} });
+           rows.sort((a,b)=>a.wk-b.wk);
+           setSvbScheds(p=>({...p,[ab]:{rows, recW:w, recL:l}}));
+         })
+         .catch(()=> setSvbScheds(p=>({...p,[ab]:{err:true}})));
+     }
+     if(!_isMl && !svbFetchRef.current["r_"+ab]){
+       svbFetchRef.current["r_"+ab]=1;
+       fetch("https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/"+_slug(ab)+"/roster")
+         .then(r=>r.ok?r.json():null)
+         .then(d=>{
+           if(!d||!Array.isArray(d.athletes)){ setSvbRosters(p=>({...p,[ab]:{err:true}})); return; }
+           const map={};
+           d.athletes.forEach(gp=>{ (gp.items||gp.athletes||[]).forEach(a=>{ try{
+             const nm=svbNorm(a.fullName||a.displayName); if(!nm) return;
+             const pos=(a.position&&(a.position.abbreviation||a.position.name))||null;
+             // Same normalized name twice on ONE roster: keep the row pickable but drop
+             // the position rather than guessing — the Michael Carter rule, display edition.
+             if(Object.prototype.hasOwnProperty.call(map,nm) && map[nm]!==pos) map[nm]=null; else map[nm]=pos;
+           }catch(_e){} }); });
+           setSvbRosters(p=>({...p,[ab]:map}));
+         })
+         .catch(()=> setSvbRosters(p=>({...p,[ab]:{err:true}})));
+     }
+   });
+ }, [screen, isSoloMode, activeLeagueId, activeLeague&&activeLeague.survivor_config, BETS]);
+
  // When a custom league has period slots, lazily pull their odds for the slate's games.
  useEffect(()=>{
  if(isSoloMode) return;
@@ -8996,7 +9097,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const [svBurned, setSvBurned] = useState([]); // my scorers so far: {outcome, week, result}
  useEffect(()=>{
   if(isSoloMode||!user||!activeLeague||activeLeague.league_type!=="survivor"){ return; }
-  if(screen!=="picks"&&screen!=="matchup"&&screen!=="leagues"&&screen!=="home"){ return; }
+  if(screen!=="picks"&&screen!=="matchup"&&screen!=="leagues"&&screen!=="home"&&screen!=="browser"){ return; }
   (async()=>{ try{
     const [{data:_all},{data:_mine}] = await Promise.all([
       supabase.from("picks").select("user_id, week, result, outcome, pick_name").eq("league_id",activeLeague.id),
@@ -15037,6 +15138,493 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  </div>
  );
  };
+
+
+ // ─── SURVIVOR: dedicated pick screens ────────────────────────────────────────
+ // Replaces the generic grid for pools in BOTH modes. Selection still goes through
+ // addCard (so replaceCtx replacement and the slip lock path are untouched) and
+ // survivorBlocked stays the real guard at lock time — everything here is honest
+ // UI over the exact rows the pinned browser was already allowed to sell.
+ if(svMode){
+ const _wm = 7*24*60*60*1000;
+ const _wk = activeLeague.current_week||1;
+ const _members = leagueMembers||[];
+ const _aliveM = _members.filter(m=>m.eliminatedWeek==null);
+ const _aliveN = _aliveM.length || _members.length || 1;
+ const _aliveIds = new Set(_aliveM.map(m=>String(m.userId)));
+
+ // Base rows rebuilt from BETS: inherited prop-sub / search state left behind by
+ // other leagues' browser openers must never shrink a pool's board.
+ let svRowsRaw = svMode==="ml"
+   ? (BETS.ml||[]).filter(b=>(b._sport==="nfl"||!b._sport))
+   : (BETS.prop||[]).filter(b=>(b._sport==="nfl"||!b._sport)&&(b.market==="player_anytime_td"||/anytime\s*td/i.test(b.pick||"")));
+ { const _sn=new Set(); svRowsRaw=svRowsRaw.filter(b=>{ const k=(b.game||"")+"|"+(b.pick||b.id||""); if(_sn.has(k)) return false; _sn.add(k); return true; }); }
+ if(replaceCtx){
+   svRowsRaw = svRowsRaw.filter(b=>{
+     if(!b||!b.gameTime) return false;
+     const _t=Date.parse(b.gameTime); if(!(_t>Date.now())) return false;
+     const _lg=realLeagues.find(x=>x.id===replaceCtx.leagueId)||activeLeague;
+     const _ss=_lg&&_lg.season_start?new Date(_lg.season_start).getTime():NaN;
+     if(isNaN(_ss)) return true;
+     return _t>=_ss+(replaceCtx.week-1)*_wm && _t<_ss+replaceCtx.week*_wm;
+   });
+ }
+ if(gridSearch.trim()){ const _q=gridSearch.toLowerCase().trim(); svRowsRaw = svRowsRaw.filter(b=>((b.pick||"")+" "+(b.game||"")).toLowerCase().includes(_q)); }
+
+ // Burn ledgers. Mine matches the way survivorBlocked matches: lowercased outcome,
+ // voids already excluded at load, week === current week means "locked this week".
+ // Pool-mates count weeks BEFORE the live one ONLY — including the current week
+ // would leak live picks ahead of the 1:00 PM reveal — and only alive members.
+ const _burnMap={};
+ (svBurned||[]).forEach(x=>{ const k=svbNorm(x.outcome); if(!k) return;
+   if(x.week<_wk){ if(!(_burnMap[k]>0)||x.week<_burnMap[k]) _burnMap[k]=x.week; }
+   else if(x.week===_wk && _burnMap[k]==null) _burnMap[k]=-1; });
+ const _poolMap={};
+ (svPicks||[]).forEach(x=>{ if(!(x.week<_wk)||x.result==="P") return;
+   if(user&&String(x.user_id)===String(user.id)) return;
+   if(!_aliveIds.has(String(x.user_id))) return;
+   const k=svbNorm(x.outcome||x.pick_name); if(!k) return;
+   if(!_poolMap[k]) _poolMap[k]=new Set(); _poolMap[k].add(String(x.user_id)); });
+ const _poolOf=(k)=>(_poolMap[k]?_poolMap[k].size:0);
+ const _numOdds=(b)=> (b.impliedOdds!=null?Number(b.impliedOdds):Number(String(b.odds||"").replace("+","")))||0;
+ const _tc=(ab)=> NFL_TEAM_COLORS[ab]||"#26262B";
+ const _pcMl=(p)=> p>=72?IOS.green : p>=58?IOS.blue : p>=45?"rgba(255,255,255,0.72)" : IOS.orange;
+ const _pcTd=(p)=> p>=50?IOS.green : p>=35?IOS.blue : p>=22?"rgba(255,255,255,0.72)" : IOS.longshot;
+ const _bands = svMode==="ml"
+   ? [{n:"Locks",c:IOS.green,t:(p)=>p>=72},{n:"Favorites",c:IOS.blue,t:(p)=>p>=58&&p<72},{n:"Toss-ups",c:"rgba(255,255,255,0.35)",t:(p)=>p>=45&&p<58},{n:"Dogs",c:IOS.orange,t:(p)=>p<45}]
+   : [{n:"50%+ to score",c:IOS.green,t:(p)=>p>=50},{n:"35 to 49%",c:IOS.blue,t:(p)=>p>=35&&p<50},{n:"22 to 34%",c:"rgba(255,255,255,0.35)",t:(p)=>p>=22&&p<35},{n:"Under 22%",c:IOS.longshot,t:(p)=>p<22}];
+
+ // ── Enriched rows ──
+ const mlRows = svMode!=="ml" ? [] : svRowsRaw.map(b=>{
+   const side=sideOf(b.outcome||b.pick,b.game); const pg=parseGame(b.game);
+   const team=side==="HOME"?pg.home:side==="AWAY"?pg.away:String(b.outcome||b.pick||"");
+   const ab=getAcronym(team,false); const opp=side==="HOME"?pg.away:pg.home;
+   const k=svbNorm(team); const n=_numOdds(b); const pct=impliedPct(n);
+   return { b, team, ab, oppAb:getAcronym(opp,false), home:side==="HOME", k, n, pct,
+            burnedWk:(_burnMap[k]>0?_burnMap[k]:null), lockedNow:_burnMap[k]===-1, pool:_poolOf(k) };
+ });
+ const tdRows = svMode!=="anytd" ? [] : svRowsRaw.map(b=>{
+   const player=String(b.pick||"").split(" - ")[0].trim();
+   const pg=parseGame(b.game); const awayAb=getAcronym(pg.away,false), homeAb=getAcronym(pg.home,false);
+   const isDst=/\b(d\/st|defense|dst)\b/i.test(player);
+   let ab=null, pos=null;
+   if(isDst){ const tn=player.replace(/\s*(D\/ST|Defense|DST)\s*$/i,"").trim(); const ta=getAcronym(tn,false); if(ta!=="?"&&NFL_TEAM_COLORS[ta]) ab=ta; pos="D/ST"; }
+   else {
+     const nk=svbNorm(player);
+     const ra=svbRosters[awayAb], rh=svbRosters[homeAb];
+     const inA=!!(ra&&!ra.err&&Object.prototype.hasOwnProperty.call(ra,nk));
+     const inH=!!(rh&&!rh.err&&Object.prototype.hasOwnProperty.call(rh,nk));
+     // Unique-or-nothing: on both rosters (a real case — the Jets ran two Michael
+     // Carters) means no attribution rather than a coin flip.
+     if(inA&&!inH){ ab=awayAb; pos=ra[nk]||null; }
+     else if(inH&&!inA){ ab=homeAb; pos=rh[nk]||null; }
+   }
+   const k=svbNorm(player); const n=_numOdds(b); const pct=impliedPct(n);
+   return { b, player, isDst, ab, pos, awayAb, homeAb, home:(ab!=null&&ab===homeAb), oppAb:(ab?(ab===homeAb?awayAb:homeAb):null), k, n, pct,
+            burnedWk:(_burnMap[k]>0?_burnMap[k]:null), lockedNow:_burnMap[k]===-1, pool:_poolOf(k) };
+ });
+
+ // ── Deadline (display only — enforcement is the calendar build) ──
+ const _ssMs = activeLeague.season_start?new Date(activeLeague.season_start).getTime():null;
+ const _dlMs = _ssMs?_svRevealMs(_ssMs+(_wk-1)*_wm):null;
+ const _dlTxt = (_dlMs&&_dlMs>Date.now())?(()=>{ const m=Math.floor((_dlMs-Date.now())/60000); const d=Math.floor(m/1440); const h=Math.floor((m%1440)/60); return d>0?(d+"d "+h+"h"):(h>0?(h+"h "+(m%60)+"m"):(m+"m")); })():null;
+
+ const _myBurns=(svBurned||[]).filter(x=>x.week<_wk&&x.outcome).sort((a,b)=>a.week-b.week);
+ const _burnWord=(r)=> r==="W"?(svMode==="ml"?"WON":"SCORED"):r==="L"?(svMode==="ml"?"LOST":"MISSED"):"PENDING";
+ const _burnCol=(r)=> r==="W"?IOS.green:r==="L"?IOS.red:IOS.orange;
+
+ const _sortRows=(arr)=>{
+   const a=[...arr];
+   if(svbSort==="kick") a.sort((x,y)=> (Date.parse(x.b.gameTime||0)-Date.parse(y.b.gameTime||0)) || (x.n-y.n));
+   else if(svbSort==="least") a.sort((x,y)=> (x.pool-y.pool) || (x.n-y.n));
+   else a.sort((x,y)=> x.n-y.n);
+   return a;
+ };
+
+ const _openSheet=(ab,title,sub,burnWk)=>{ if(!ab||!NFL_TEAM_COLORS[ab]) return; haptic("select"); setSvbSheet({ab,title,sub,burnWk:burnWk||null}); };
+
+ // ── Shared atoms ──
+ const SvBadge = ({ab,size,round}) => (
+   <div style={{width:size||36,height:size||36,borderRadius:round?"50%":RAD.sm+2,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:(size||36)*0.36,letterSpacing:"-0.4px",color:"#fff",background:_tc(ab),border:EDGE.hair2,flexShrink:0}}>{ab||"?"}</div>
+ );
+ const SvChip = ({txt,col,bg,bd}) => (
+   <span style={{flexShrink:0,fontSize:8,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",borderRadius:5,padding:"2px 6px",color:col,background:bg,border:"0.5px solid "+bd,whiteSpace:"nowrap"}}>{txt}</span>
+ );
+ const _poolChip=(r)=> r.pool===0
+   ? <SvChip txt="Untouched" col={IOS.green} bg="rgba(48,209,88,0.1)" bd="rgba(48,209,88,0.28)"/>
+   : <SvChip txt={r.pool+" of "+_aliveN+" burned"} col={r.pool>=Math.max(2,Math.ceil(_aliveN*0.5))?IOS.orange:"rgba(255,255,255,0.6)"} bg={r.pool>=Math.max(2,Math.ceil(_aliveN*0.5))?"rgba(255,159,10,0.1)":"rgba(255,255,255,0.06)"} bd={r.pool>=Math.max(2,Math.ceil(_aliveN*0.5))?"rgba(255,159,10,0.28)":"rgba(255,255,255,0.12)"}/>;
+ const _stateChip=(r)=> r.burnedWk
+   ? <SvChip txt={"Burned wk "+r.burnedWk} col={IOS.red} bg="rgba(255,69,58,0.12)" bd="rgba(255,69,58,0.3)"/>
+   : (r.lockedNow ? <SvChip txt={"Locked · wk "+_wk} col={IOS.blue} bg="rgba(59,111,224,0.14)" bd="rgba(59,111,224,0.4)"/> : null);
+ const SvBand = ({n,c,count}) => (
+   <div style={{display:"flex",alignItems:"center",gap:9,padding:"15px 4px 7px"}}>
+     <span style={{width:3,height:12,borderRadius:2,background:c}}/>
+     <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:11,letterSpacing:"0.14em",textTransform:"uppercase",color:c}}>{n}</span>
+     <span style={{marginLeft:"auto",fontSize:10.5,fontWeight:700,color:"rgba(255,255,255,0.18)"}}>{count}</span>
+   </div>
+ );
+ const SvFormStrip = ({ab}) => { const sc=svbScheds[ab];
+   if(!sc) return <span style={{fontSize:10.5,fontWeight:600,color:"rgba(255,255,255,0.25)"}}>Loading form…</span>;
+   if(sc.err) return null;
+   const played=(sc.rows||[]).filter(x=>x.res).slice(-5);
+   if(!played.length) return <span style={{fontSize:10.5,fontWeight:600,color:"rgba(255,255,255,0.3)"}}>Week 1 — no results yet</span>;
+   return (<span style={{display:"flex",alignItems:"center",gap:4}}>
+     {played.map((x,i)=>(<span key={i} style={{width:17,height:17,borderRadius:5,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:10,fontWeight:800,background:x.res==="W"?"rgba(48,209,88,0.18)":"rgba(255,69,58,0.14)",color:x.res==="W"?IOS.green:IOS.red,border:"0.5px solid "+(x.res==="W"?"rgba(48,209,88,0.34)":"rgba(255,69,58,0.3)")}}>{x.res}</span>))}
+     <span style={{fontSize:10.5,fontWeight:800,color:"rgba(255,255,255,0.6)",marginLeft:3}}>{sc.recW+"-"+sc.recL}</span>
+   </span>);
+ };
+ const SvSchedBtn = ({onTap}) => (
+   <div onClick={(e)=>{e.stopPropagation(); onTap();}} style={{flexShrink:0,marginLeft:"auto",display:"flex",alignItems:"center",gap:5,fontSize:10.5,fontWeight:800,color:IOS.blue,background:"rgba(59,111,224,0.1)",border:"0.5px solid rgba(59,111,224,0.28)",borderRadius:RAD.sm,padding:"5px 9px",cursor:"pointer"}}>
+     Schedule<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.6" strokeLinecap="round"><path d="M9 6l6 6-6 6"/></svg>
+   </div>
+ );
+ const _kickTxt=(b)=> (dayLabel(b.gameTime)+" "+clockLabel(b.gameTime)).trim();
+ const _added=(b)=> gridJustAdded===b.id;
+ const SvAddedFlash = () => (
+   <div style={{position:"absolute",inset:0,background:"rgba(59,111,224,0.12)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2,borderRadius:RAD.lg}}>
+     <div style={{display:"flex",alignItems:"center",gap:5,background:IOS.blue,color:"#fff",borderRadius:RAD.pill,padding:"5px 12px",fontSize:11,fontWeight:800}}>
+       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>In your slip
+     </div>
+   </div>
+ );
+
+ // ── ML row ──
+ const SvMlRow = ({r}) => { const dead=!!r.burnedWk||r.lockedNow; const pc=_pcMl(r.pct);
+   return (
+   <div style={{position:"relative",borderRadius:RAD.lg,marginBottom:7,overflow:"hidden",background:dead?"#0F0F12":"linear-gradient(165deg,#161619,#121215)",border:EDGE.hair,opacity:dead?0.42:1}}>
+     {_added(r.b)&&<SvAddedFlash/>}
+     <div onClick={dead?undefined:()=>{ haptic("select"); addCard(r.b,"ml"); }} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 11px 9px",cursor:dead?"default":"pointer"}}>
+       <SvBadge ab={r.ab}/>
+       <div style={{flex:1,minWidth:0}}>
+         <div style={{display:"flex",alignItems:"center",gap:6}}>
+           <span style={{fontSize:14.5,fontWeight:800,letterSpacing:"-0.3px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",textDecoration:r.burnedWk?"line-through":"none",textDecorationColor:"rgba(255,255,255,0.45)"}}>{r.team}</span>
+           {_stateChip(r)}
+         </div>
+         <div style={{display:"flex",alignItems:"center",gap:5,marginTop:3,fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.6)",whiteSpace:"nowrap",overflow:"hidden"}}>
+           <span style={{color:"rgba(255,255,255,0.3)",fontWeight:700}}>{r.home?"vs":"at"}</span><span>{r.oppAb}</span>
+           <span style={{color:"rgba(255,255,255,0.18)"}}>·</span><span>{_kickTxt(r.b)}</span>
+           {!dead&&<span style={{color:"rgba(255,255,255,0.18)"}}>·</span>}{!dead&&_poolChip(r)}
+         </div>
+         <div style={{height:3,borderRadius:2,background:"rgba(255,255,255,0.07)",marginTop:6,overflow:"hidden"}}><div style={{height:"100%",width:Math.max(4,Math.min(100,r.pct))+"%",borderRadius:2,background:dead?"rgba(255,255,255,0.14)":pc}}/></div>
+       </div>
+       <div style={{flexShrink:0,textAlign:"right",minWidth:62}}>
+         <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:20,fontWeight:800,letterSpacing:"-0.5px",lineHeight:1,color:dead?"rgba(255,255,255,0.35)":pc}}>{r.b.odds}</div>
+         <div style={{fontSize:10,fontWeight:700,color:"rgba(255,255,255,0.3)",marginTop:2}}><b style={{color:"rgba(255,255,255,0.6)",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:12}}>{r.pct}%</b> implied</div>
+       </div>
+     </div>
+     <div style={{display:"flex",alignItems:"center",gap:9,padding:"7px 11px 8px",borderTop:EDGE.hair,background:"rgba(255,255,255,0.018)"}}>
+       <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:9,letterSpacing:"0.12em",textTransform:"uppercase",color:"rgba(255,255,255,0.18)",fontWeight:700}}>Form</span>
+       <SvFormStrip ab={r.ab}/>
+       <SvSchedBtn onTap={()=>_openSheet(r.ab, r.team, null, r.burnedWk)}/>
+     </div>
+   </div>);
+ };
+
+ // ── TD row ──
+ const SvTdRow = ({r,showTeam}) => { const dead=!!r.burnedWk||r.lockedNow; const pc=_pcTd(r.pct);
+   const label = r.isDst&&r.ab ? (r.ab+" D/ST") : r.player;
+   const gameTag = r.ab ? ((r.home?"vs ":"at ")+r.oppAb) : (r.awayAb+" @ "+r.homeAb);
+   return (
+   <div style={{position:"relative",borderRadius:RAD.lg,marginBottom:7,overflow:"hidden",background:dead?"#0F0F12":"linear-gradient(165deg,#161619,#121215)",border:EDGE.hair,opacity:dead?0.42:1}}>
+     {_added(r.b)&&<SvAddedFlash/>}
+     <div onClick={dead?undefined:()=>{ haptic("select"); addCard(r.b,"prop"); }} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 11px 9px",cursor:dead?"default":"pointer"}}>
+       {!dead&&<button onClick={(e)=>{ e.stopPropagation(); askFromBet(r.b,"prop"); }} aria-label="Plok read" style={{flexShrink:0,width:27,height:27,borderRadius:RAD.sm,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(59,111,224,0.1)",border:"1px solid rgba(59,111,224,0.2)",color:IOS.blue,cursor:"pointer"}}><svg width="12" height="12" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg></button>}
+       <div style={{position:"relative",flexShrink:0}}>
+         <SvBadge ab={r.ab||"?"} size={34} round={!r.isDst}/>
+         <span style={{position:"absolute",bottom:-4,left:"50%",transform:"translateX(-50%)",fontFamily:"'Barlow Condensed',sans-serif",fontSize:8.5,fontWeight:700,letterSpacing:"0.06em",padding:"1px 4px",borderRadius:4,background:"#1C1C1E",border:EDGE.hair3,color:"rgba(255,255,255,0.6)",whiteSpace:"nowrap"}}>{r.isDst?"D/ST":(r.pos||"—")}</span>
+       </div>
+       <div style={{flex:1,minWidth:0}}>
+         <div style={{display:"flex",alignItems:"center",gap:6}}>
+           <span style={{fontSize:14,fontWeight:800,letterSpacing:"-0.3px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",textDecoration:r.burnedWk?"line-through":"none",textDecorationColor:"rgba(255,255,255,0.45)"}}>{label}</span>
+           {_stateChip(r)}
+           {!dead&&!r.isDst&&!r.pos&&<SvChip txt="Unlisted" col={IOS.orange} bg="rgba(255,159,10,0.1)" bd="rgba(255,159,10,0.26)"/>}
+         </div>
+         <div style={{display:"flex",alignItems:"center",gap:5,marginTop:3,fontSize:10.5,fontWeight:600,color:"rgba(255,255,255,0.6)",whiteSpace:"nowrap",overflow:"hidden"}}>
+           {showTeam&&r.ab&&<span style={{fontWeight:800}}>{r.ab}</span>}{showTeam&&r.ab&&<span style={{color:"rgba(255,255,255,0.18)"}}>·</span>}
+           <span>{gameTag}</span><span style={{color:"rgba(255,255,255,0.18)"}}>·</span><span>{_kickTxt(r.b)}</span>
+           {!dead&&r.pool>0&&<span style={{color:"rgba(255,255,255,0.18)"}}>·</span>}{!dead&&r.pool>0&&_poolChip(r)}
+         </div>
+       </div>
+       <div style={{flexShrink:0,textAlign:"right",minWidth:58}}>
+         <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:19,fontWeight:800,letterSpacing:"-0.5px",lineHeight:1,color:dead?"rgba(255,255,255,0.35)":pc}}>{r.b.odds}</div>
+         <div style={{fontSize:9.5,fontWeight:700,color:"rgba(255,255,255,0.3)",marginTop:2}}><b style={{color:"rgba(255,255,255,0.6)",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:11.5}}>{r.pct}%</b> to score</div>
+       </div>
+     </div>
+     {r.ab&&(
+     <div style={{display:"flex",alignItems:"center",gap:9,padding:"7px 11px 8px",borderTop:EDGE.hair,background:"rgba(255,255,255,0.018)"}}>
+       <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:9,letterSpacing:"0.12em",textTransform:"uppercase",color:"rgba(255,255,255,0.18)",fontWeight:700}}>{r.ab} form</span>
+       <SvFormStrip ab={r.ab}/>
+       <SvSchedBtn onTap={()=>_openSheet(r.ab, label, (r.isDst?null:((r.pos?r.pos+" · ":"")+r.ab)), r.burnedWk)}/>
+     </div>)}
+   </div>);
+ };
+
+ // ── Sections (bands + burned tail) ──
+ const _renderSections=(rows, Row, rowProps)=>{
+   let live=rows.filter(r=>!r.burnedWk), burned=rows.filter(r=>!!r.burnedWk);
+   if(svbHideBurned) burned=[];
+   const out=[];
+   if(svbSort==="likely"){
+     _bands.forEach(bd=>{ const seg=_sortRows(live).filter(r=>bd.t(r.pct)); if(!seg.length) return;
+       out.push(<SvBand key={"b_"+bd.n} n={bd.n} c={bd.c} count={seg.length}/>);
+       seg.forEach(r=>out.push(<Row key={r.b.id} r={r} {...rowProps}/>)); });
+   } else {
+     const seg=_sortRows(live);
+     out.push(<SvBand key="b_flat" n={svbSort==="kick"?"Kickoff order":"Least used in this pool"} c={IOS.blue} count={seg.length}/>);
+     seg.forEach(r=>out.push(<Row key={r.b.id} r={r} {...rowProps}/>));
+   }
+   if(burned.length){
+     out.push(<SvBand key="b_burn" n="Already burned" c={IOS.red} count={burned.length}/>);
+     _sortRows(burned).forEach(r=>out.push(<Row key={r.b.id} r={r} {...rowProps}/>));
+   }
+   return out;
+ };
+
+ const _sortSeg = (
+   <div style={{display:"flex",alignItems:"center",gap:8,padding:"12px 16px 8px"}}>
+     <div style={{display:"flex",background:"#121216",border:EDGE.hair,borderRadius:RAD.sm+2,padding:2,flex:1}}>
+       {[["likely","Most likely"],["kick","Kickoff"],["least","Least used"]].map(x=>(
+         <div key={x[0]} onClick={()=>setSvbSort(x[0])} style={{flex:1,textAlign:"center",fontSize:11.5,fontWeight:700,padding:"6px 4px",borderRadius:RAD.sm,color:svbSort===x[0]?IOS.blue:"rgba(255,255,255,0.3)",background:svbSort===x[0]?"rgba(59,111,224,0.18)":"transparent",cursor:"pointer",whiteSpace:"nowrap"}}>{x[1]}</div>
+       ))}
+     </div>
+     <div onClick={()=>setSvbHideBurned(v=>!v)} style={{flexShrink:0,display:"flex",alignItems:"center",gap:6,fontSize:11,fontWeight:700,color:svbHideBurned?IOS.blue:"rgba(255,255,255,0.3)",background:svbHideBurned?"rgba(59,111,224,0.12)":"#121216",border:"0.5px solid "+(svbHideBurned?"rgba(59,111,224,0.45)":"rgba(255,255,255,0.08)"),borderRadius:RAD.sm+2,padding:"7px 10px",cursor:"pointer",whiteSpace:"nowrap"}}>
+       <span style={{width:12,height:12,borderRadius:3.5,border:"1.4px solid currentColor",display:"flex",alignItems:"center",justifyContent:"center"}}>{svbHideBurned&&<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>}</span>
+       Hide burned
+     </div>
+   </div>
+ );
+
+ const _burnRail = _myBurns.length>0 && (
+   <div style={{padding:"11px 16px 0"}}>
+     <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",marginBottom:8}}>
+       <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:10.5,letterSpacing:"0.14em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)"}}>{svMode==="ml"?"Teams you’ve burned":"Players you’ve burned"}</span>
+       <span style={{fontSize:10.5,fontWeight:700,color:"rgba(255,255,255,0.18)"}}>tap for their season</span>
+     </div>
+     <div className="gbx-scroll" style={{display:"flex",gap:7,overflowX:"auto",paddingBottom:2}}>
+       {_myBurns.map((x,i)=>{ const nm=_svTitle(x.outcome); const isDst=/\b(d\/st|defense|dst)\b/i.test(nm);
+         const ab = svMode==="ml" ? getAcronym(nm,false) : (isDst?getAcronym(nm.replace(/\s*(D\/ST|Defense|DST)\s*$/i,"").trim(),false):(tdRows.find(r=>r.k===svbNorm(x.outcome))||{}).ab||null);
+         return (
+         <div key={i} onClick={()=>{ if(ab&&NFL_TEAM_COLORS[ab]) _openSheet(ab, nm, null, x.week); }} style={{flexShrink:0,minWidth:92,background:"#1C1C1E",borderRadius:RAD.md,padding:"7px 9px",border:"0.5px solid "+(x.result==="W"?"rgba(48,209,88,0.35)":x.result==="L"?"rgba(255,69,58,0.35)":"rgba(255,159,10,0.35)"),cursor:(ab&&NFL_TEAM_COLORS[ab])?"pointer":"default"}}>
+           <div style={{fontSize:8.5,fontWeight:800,color:"rgba(255,255,255,0.3)",letterSpacing:"0.05em"}}>WK {x.week}</div>
+           <div style={{fontSize:12,fontWeight:800,marginTop:2,whiteSpace:"nowrap"}}>{nm}</div>
+           <div style={{fontSize:9.5,fontWeight:800,marginTop:2,color:_burnCol(x.result)}}>{_burnWord(x.result)}</div>
+         </div>); })}
+     </div>
+   </div>
+ );
+
+ // ── anytd: team grid + attribution buckets ──
+ const _byGame={};
+ tdRows.forEach(r=>{ const g=r.b.game||"?"; if(!_byGame[g]) _byGame[g]={ rows:[], time:r.b.gameTime, awayAb:r.awayAb, homeAb:r.homeAb }; _byGame[g].rows.push(r); if(!_byGame[g].time) _byGame[g].time=r.b.gameTime; });
+ const _gameKeys=Object.keys(_byGame).sort((a,b)=>Date.parse(_byGame[a].time||0)-Date.parse(_byGame[b].time||0));
+ const _teamRows=(ab)=> tdRows.filter(r=>r.ab===ab);
+ const _looseRows=(g)=> (_byGame[g]?_byGame[g].rows.filter(r=>!r.ab):[]);
+ const _leftFor=(ab)=> _teamRows(ab).filter(r=>!r.burnedWk).length;
+ const _burnedFor=(ab)=> _teamRows(ab).filter(r=>!!r.burnedWk).length;
+ const _tdLeftTotal = tdRows.filter(r=>!r.burnedWk).length;
+ const _tdBurnedTotal = tdRows.length-_tdLeftTotal;
+
+ // ── anytd: position pills (from live rows of the active scope) ──
+ const _posScope = (svbTab==="teams"&&svbTeam) ? _teamRows(svbTeam) : tdRows;
+ const _posLive = _posScope.filter(r=>!r.burnedWk);
+ const _posCounts={}; ["RB","WR","TE","QB"].forEach(p=>{ _posCounts[p]=_posLive.filter(r=>r.pos===p).length; });
+ const _unkN=_posLive.filter(r=>!r.isDst&&!r.pos).length;
+ const _dstN=_posLive.filter(r=>r.isDst).length;
+ const _posMatch=(r)=>{ if(svbPos==="all") return true; if(svbPos==="DST") return r.isDst; if(svbPos==="unk") return !r.isDst&&!r.pos; return r.pos===svbPos; };
+ const _posPills = svMode==="anytd" && (
+   <div className="gbx-scroll" style={{display:"flex",gap:7,overflowX:"auto",padding:"2px 16px 10px"}}>
+     {[["all","All",_posLive.length]].concat(["RB","WR","TE","QB"].filter(p=>_posCounts[p]>0).map(p=>[p,p,_posCounts[p]])).concat(_dstN>0?[["DST","D/ST",_dstN]]:[]).concat(_unkN>0?[["unk","Unlisted",_unkN]]:[]).map(x=>(
+       <div key={x[0]} onClick={()=>setSvbPos(x[0])} style={{flexShrink:0,fontSize:12,fontWeight:700,padding:"7px 13px",borderRadius:RAD.sm+2,background:svbPos===x[0]?"rgba(59,111,224,0.16)":"#121216",border:"0.5px solid "+(svbPos===x[0]?"rgba(59,111,224,0.45)":"rgba(255,255,255,0.08)"),color:svbPos===x[0]?IOS.blue:"rgba(255,255,255,0.3)",cursor:"pointer",whiteSpace:"nowrap"}}>
+         {x[1]}{x[2]!=null&&<span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,opacity:0.75,marginLeft:4}}>{x[2]}</span>}
+       </div>
+     ))}
+   </div>
+ );
+
+ const _emptyBoard = (
+   <div style={{textAlign:"center",padding:"46px 30px",color:"rgba(255,255,255,0.3)",fontSize:13,lineHeight:1.6}}>
+     {gridSearch.trim()?"Nothing matches that search.":replaceCtx?("No open games left in Week "+(replaceCtx.week||_wk)+" — cancel and wait for next week."):("No Week "+_wk+" lines on the board yet — NFL lines land inside the odds window as kickoff approaches.")}
+   </div>
+ );
+
+ // ── Schedule sheet ──
+ const _sheetJsx = svbSheet && (()=>{ const sc=svbScheds[svbSheet.ab]; const _now=Date.now();
+   const rowsBy={}; ((sc&&sc.rows)||[]).forEach(x=>{ rowsBy[x.wk]=x; });
+   const nextWk = ((sc&&sc.rows)||[]).filter(x=>x.dateMs&&x.dateMs>_now-6*3600000).map(x=>x.wk).sort((a,b)=>a-b)[0]||null;
+   const rodeWin = (svbSheet.burnWk&&_ssMs)?[_ssMs+(svbSheet.burnWk-1)*_wm,_ssMs+svbSheet.burnWk*_wm]:null;
+   const leftN = ((sc&&sc.rows)||[]).filter(x=>x.dateMs&&x.dateMs>_now).length;
+   const byes=[]; for(let w=1;w<=18;w++){ if(!rowsBy[w]) byes.push(w); }
+   return (
+   <div style={{position:"fixed",inset:0,zIndex:99998}}>
+     <div onClick={()=>setSvbSheet(null)} style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.66)",backdropFilter:"blur(3px)"}}/>
+     <div style={{position:"absolute",left:0,right:0,bottom:0,maxWidth:440,margin:"0 auto",background:"#131317",borderTopLeftRadius:RAD.xl+2,borderTopRightRadius:RAD.xl+2,borderTop:EDGE.hair2,padding:"8px 18px calc(20px + env(safe-area-inset-bottom))"}}>
+       <div style={{width:34,height:4,borderRadius:3,background:"rgba(255,255,255,0.18)",margin:"0 auto 14px"}}/>
+       <div style={{display:"flex",alignItems:"center",gap:11,marginBottom:4}}>
+         <SvBadge ab={svbSheet.ab} size={38}/>
+         <div style={{flex:1,minWidth:0}}>
+           <div style={{fontSize:17,fontWeight:800,letterSpacing:"-0.4px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{svbSheet.title}</div>
+           <div style={{fontSize:11.5,color:"rgba(255,255,255,0.6)",fontWeight:700,marginTop:2}}>{(svbSheet.sub?svbSheet.sub+" · ":"")+(sc&&!sc.err&&(sc.recW+sc.recL)>0?(sc.recW+"-"+sc.recL+" · "):"")+"2026 season"}</div>
+         </div>
+       </div>
+       {sc&&!sc.err&&(
+       <div style={{display:"flex",gap:7,margin:"13px 0 11px"}}>
+         {[[((sc.recW+sc.recL)>0?(sc.recW+"-"+sc.recL):"—"),"Record",((sc.recW+sc.recL)>0?(sc.recW>=sc.recL?IOS.green:IOS.red):"rgba(255,255,255,0.3)")],[byes.length===1?("WK "+byes[0]):"—","Bye","#fff"],[String(leftN),"Left to play","#fff"]].map((t,i)=>(
+           <div key={i} style={{flex:1,background:"rgba(255,255,255,0.04)",border:EDGE.hair,borderRadius:RAD.md-1,padding:"9px 6px",textAlign:"center"}}>
+             <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:17,fontWeight:900,color:t[2]}}>{t[0]}</div>
+             <div style={{fontSize:8.5,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)",marginTop:2}}>{t[1]}</div>
+           </div>
+         ))}
+       </div>)}
+       <div className="gbx-scroll" style={{maxHeight:"44vh",overflowY:"auto",WebkitOverflowScrolling:"touch"}}>
+         {!sc&&<div style={{textAlign:"center",padding:"26px 0",color:"rgba(255,255,255,0.3)",fontSize:12.5,fontWeight:600}}>Loading the season…</div>}
+         {sc&&sc.err&&<div style={{textAlign:"center",padding:"26px 0",color:"rgba(255,255,255,0.3)",fontSize:12.5,fontWeight:600,lineHeight:1.6}}>Couldn’t load the schedule right now.<br/>The pick screen works without it.</div>}
+         {sc&&!sc.err&&Array.from({length:18},(_,i)=>i+1).map(w=>{ const x=rowsBy[w];
+           if(!x) return (<div key={w} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 10px",borderRadius:RAD.md-1,border:EDGE.hair,background:"rgba(255,255,255,0.025)",marginBottom:5,opacity:0.5}}><div style={{width:34,flexShrink:0,fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:800,color:"rgba(255,255,255,0.3)"}}>{w}</div><div style={{flex:1,fontSize:13,fontWeight:700}}>Bye week</div></div>);
+           const isNext=x.wk===nextWk&&!x.res;
+           const rode=rodeWin&&x.dateMs&&x.dateMs>=rodeWin[0]&&x.dateMs<rodeWin[1];
+           return (
+           <div key={w} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 10px",borderRadius:RAD.md-1,border:"0.5px solid "+(isNext?"rgba(59,111,224,0.5)":rode?"rgba(255,159,10,0.32)":"rgba(255,255,255,0.08)"),background:isNext?"rgba(59,111,224,0.1)":"rgba(255,255,255,0.025)",marginBottom:5}}>
+             <div style={{width:34,flexShrink:0,fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:800,color:isNext?IOS.blue:"rgba(255,255,255,0.3)"}}>{w}</div>
+             <div style={{flex:1,minWidth:0,fontSize:13,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+               <span style={{color:"rgba(255,255,255,0.3)",marginRight:3}}>{x.home?"vs":"at"}</span>{x.opp}
+               <span style={{display:"block",fontSize:10,color:"rgba(255,255,255,0.3)",fontWeight:600,marginTop:2}}>{x.res?"Final":(x.dateMs?(new Date(x.dateMs).toLocaleDateString([],{weekday:"short",month:"short",day:"numeric"})+" · "+new Date(x.dateMs).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})):"")}</span>
+             </div>
+             <div style={{flexShrink:0,display:"flex",alignItems:"center",gap:7}}>
+               {rode&&<SvChip txt="You rode them" col={IOS.orange} bg="rgba(255,159,10,0.12)" bd="rgba(255,159,10,0.3)"/>}
+               {x.res
+                 ? (<span style={{display:"flex",alignItems:"center",gap:7}}><span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:12,fontWeight:800,width:19,height:19,borderRadius:5,display:"flex",alignItems:"center",justifyContent:"center",background:x.res==="W"?"rgba(48,209,88,0.18)":"rgba(255,69,58,0.14)",color:x.res==="W"?IOS.green:IOS.red}}>{x.res}</span><span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:12.5,fontWeight:700,color:"rgba(255,255,255,0.6)",minWidth:42,textAlign:"right"}}>{x.score||""}</span></span>)
+                 : (isNext?<SvChip txt="Next up" col={IOS.blue} bg="rgba(59,111,224,0.14)" bd="rgba(59,111,224,0.34)"/>:<span style={{fontSize:12.5,fontWeight:700,color:"rgba(255,255,255,0.3)"}}>—</span>)}
+             </div>
+           </div>); })}
+       </div>
+       <div onClick={()=>setSvbSheet(null)} style={{marginTop:13,borderRadius:RAD.md,padding:"13px 0",fontSize:14,fontWeight:800,textAlign:"center",background:"rgba(255,255,255,0.07)",color:"rgba(255,255,255,0.6)",cursor:"pointer"}}>Close</div>
+     </div>
+   </div>); })();
+
+ // ── Assemble ──
+ const _headSub = replaceCtx ? "Replacing your voided pick" : ((activeLeague.name||"Survivor pool")+" · "+_aliveN+" alive");
+ const _mlLeft = 32 - Object.keys(_burnMap).filter(k=>_burnMap[k]>0).length;
+ return (
+ <div className="body" style={{background:"#08080A",zIndex:"auto"}}>
+   <style>{`.gbx-scroll::-webkit-scrollbar{ display:none; }`}</style>
+   <div style={{position:"sticky",top:0,zIndex:10,background:"#08080A",boxShadow:"0 8px 16px -8px rgba(0,0,0,0.7)"}}>
+     <div style={{display:"flex",alignItems:"center",gap:11,padding:"10px 16px 8px"}}>
+       <div onClick={()=>setScreen("picks")} style={{width:34,height:34,borderRadius:RAD.md,background:"rgba(255,255,255,0.06)",border:EDGE.hair2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:18,flexShrink:0}}>‹</div>
+       <div style={{flex:1,minWidth:0}}>
+         <div style={{fontSize:21,fontWeight:800,letterSpacing:"-0.6px",color:"#fff",lineHeight:1}}>Week {_wk} pick</div>
+         <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{_headSub}</div>
+       </div>
+       {svMode==="anytd"&&(
+         <div style={{display:"flex",background:"#121216",border:EDGE.hair,borderRadius:RAD.sm+2,padding:2,flexShrink:0}}>
+           {[["board","Board"],["teams","By team"]].map(x=>(
+             <div key={x[0]} onClick={()=>{ setSvbTab(x[0]); setSvbTeam(null); }} style={{fontSize:11.5,fontWeight:800,padding:"6px 11px",borderRadius:RAD.sm,color:svbTab===x[0]?IOS.blue:"rgba(255,255,255,0.3)",background:svbTab===x[0]?"rgba(59,111,224,0.18)":"transparent",cursor:"pointer"}}>{x[1]}</div>
+           ))}
+         </div>)}
+     </div>
+     {!replaceCtx&&(
+     <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 16px",background:"rgba(255,159,10,0.07)",borderTop:EDGE.hair,borderBottom:EDGE.hair}}>
+       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={IOS.orange} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+       <div style={{flex:1,fontSize:11.5,fontWeight:700,color:"rgba(255,255,255,0.6)"}}>{svMode==="ml"?"One team. Win and live. ":"One scorer. Any touchdown counts. "}<b style={{color:IOS.orange}}>No pick eliminates you.</b></div>
+       {_dlTxt&&<div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:14,fontWeight:800,color:IOS.orange,flexShrink:0}}>{_dlTxt}</div>}
+     </div>)}
+   </div>
+   {replaceCtx && (<div style={{margin:"10px 16px 0",padding:"9px 12px",borderRadius:RAD.md,background:"rgba(59,111,224,0.12)",border:"0.5px solid rgba(59,111,224,0.35)",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+     <div style={{fontSize:11.5,fontWeight:700,color:"#fff",minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{svRowsRaw.length===0?"No open games left this week — cancel and wait":("Replacing your voided "+(svMode==="ml"?"team":"scorer")+" — same week only")}</div>
+     <div onClick={()=>{ setReplaceCtx(null); setScreen("home"); }} style={{fontSize:11,fontWeight:800,color:IOS.blue,cursor:"pointer",flexShrink:0}}>Cancel</div>
+   </div>)}
+
+   {svMode==="ml"&&(<>
+     {_burnRail}
+     {_myBurns.length>0&&<div style={{padding:"6px 16px 0",fontSize:11.5,fontWeight:700,color:"rgba(255,255,255,0.6)",display:"flex",justifyContent:"flex-end"}}><span><b style={{color:IOS.green,fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:14}}>{_mlLeft}</b> teams still yours</span></div>}
+     {_sortSeg}
+     <div style={{padding:"0 12px 28px"}}>
+       {mlRows.length===0 ? _emptyBoard : _renderSections(mlRows, SvMlRow, {})}
+     </div>
+   </>)}
+
+   {svMode==="anytd"&&svbTab==="board"&&(<>
+     <div style={{margin:"12px 14px 2px",background:"linear-gradient(150deg,rgba(59,111,224,0.15),#101014 72%)",border:"0.5px solid rgba(59,111,224,0.32)",borderRadius:RAD.lg,padding:"12px 14px"}}>
+       <div style={{display:"flex",alignItems:"baseline",gap:9}}>
+         <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:30,fontWeight:900,letterSpacing:"-1px",lineHeight:1}}>{_tdLeftTotal}</div>
+         <div style={{fontSize:12,fontWeight:700,color:"rgba(255,255,255,0.6)",lineHeight:1.3}}>scorers left on this week’s board{_tdBurnedTotal>0&&(<span><br/><b style={{color:"#fff"}}>{_tdBurnedTotal}</b> already burned by you</span>)}</div>
+       </div>
+       {_myBurns.length>0&&(<div style={{display:"flex",gap:3,marginTop:11}}>{Array.from({length:Math.max(1,Number(activeLeague.season_weeks)||18)},(_,i)=>(<span key={i} style={{flex:1,height:5,borderRadius:3,background:i<_myBurns.length?"rgba(255,255,255,0.11)":"rgba(59,111,224,0.55)"}}/>))}</div>)}
+       {_myBurns.length>0&&<div style={{fontSize:10.5,color:"rgba(255,255,255,0.3)",fontWeight:600,marginTop:8}}>{_myBurns.length} of {Number(activeLeague.season_weeks)||18} weeks spent</div>}
+     </div>
+     {_burnRail}
+     {_sortSeg}
+     {_posPills}
+     <div style={{padding:"0 12px 4px"}}>
+       <input value={gridSearch} onChange={(e)=>setGridSearch(e.target.value)} placeholder="Search a player or team" style={{width:"100%",boxSizing:"border-box",background:"#121216",border:EDGE.hair,borderRadius:RAD.sm+2,padding:"9px 12px",fontSize:13,fontWeight:600,color:"#fff",outline:"none",fontFamily:"Barlow,sans-serif"}}/>
+     </div>
+     <div style={{padding:"0 12px 28px"}}>
+       {tdRows.length===0 ? _emptyBoard : _renderSections(tdRows.filter(_posMatch), SvTdRow, {showTeam:true})}
+     </div>
+   </>)}
+
+   {svMode==="anytd"&&svbTab==="teams"&&!svbTeam&&(<>
+     {_burnRail}
+     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 16px 8px"}}>
+       <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:10.5,letterSpacing:"0.14em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)"}}>Pick a team first</span>
+       <span style={{fontSize:10.5,fontWeight:700,color:"rgba(255,255,255,0.18)"}}>{_gameKeys.length} games</span>
+     </div>
+     <div style={{padding:"0 12px 28px"}}>
+       {_gameKeys.length===0 && _emptyBoard}
+       {_gameKeys.map(g=>{ const gi=_byGame[g]; const loose=_looseRows(g).filter(r=>!r.burnedWk).length;
+         const halves=[gi.awayAb,gi.homeAb];
+         const totalLeft=halves.reduce((a,ab)=>a+_leftFor(ab),0)+loose;
+         return (
+         <div key={g} style={{background:"linear-gradient(165deg,#161619,#111114)",border:EDGE.hair,borderRadius:RAD.lg-1,marginBottom:9,overflow:"hidden"}}>
+           <div style={{display:"flex",alignItems:"center",gap:7,padding:"7px 12px",background:"rgba(255,255,255,0.03)",borderBottom:EDGE.hair}}>
+             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2.2" strokeLinecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+             <span style={{fontSize:10.5,fontWeight:700,color:"rgba(255,255,255,0.6)"}}>{(dayLabel(gi.time)+" "+clockLabel(gi.time)).trim()}</span>
+             <span style={{marginLeft:"auto",fontSize:10,fontWeight:700,color:"rgba(255,255,255,0.3)"}}>{totalLeft} scorers left{loose>0?(" · "+loose+" unplaced"):""}</span>
+           </div>
+           <div style={{display:"flex"}}>
+             {halves.map((ab,hi)=>{ const lf=_leftFor(ab), bd=_burnedFor(ab); const any=lf>0||loose>0;
+               return (
+               <div key={ab} onClick={any?()=>{ setSvbTeam(ab); setSvbPos("all"); }:undefined} style={{flex:1,display:"flex",alignItems:"center",gap:9,padding:11,cursor:any?"pointer":"default",minWidth:0,opacity:any?1:0.34,borderLeft:hi===1?EDGE.hair:"none"}}>
+                 <SvBadge ab={ab} size={34}/>
+                 <div style={{flex:1,minWidth:0}}>
+                   <div style={{fontSize:13.5,fontWeight:800,letterSpacing:"-0.3px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{ab}</div>
+                   <div style={{fontSize:10.5,fontWeight:700,color:"rgba(255,255,255,0.6)",marginTop:2,whiteSpace:"nowrap"}}>{lf>0?(lf+" left"):(<span style={{color:"rgba(255,255,255,0.3)"}}>{loose>0?"see game":"none left"}</span>)}{bd>0&&<span style={{color:IOS.red}}> · {bd} burned</span>}</div>
+                 </div>
+                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" style={{flexShrink:0,opacity:0.4}}><path d="M9 6l6 6-6 6"/></svg>
+               </div>); })}
+           </div>
+         </div>); })}
+     </div>
+   </>)}
+
+   {svMode==="anytd"&&svbTab==="teams"&&svbTeam&&(()=>{ const _tr=_teamRows(svbTeam);
+     const _loose=tdRows.filter(r=>!r.ab&&(r.awayAb===svbTeam||r.homeAb===svbTeam));
+     const sc=svbScheds[svbTeam];
+     return (<>
+     <div style={{display:"flex",alignItems:"center",gap:11,margin:"12px 14px 2px",background:"linear-gradient(160deg,#17171B,#101013)",border:EDGE.hair,borderRadius:RAD.lg-1,padding:"11px 12px"}}>
+       <div onClick={()=>setSvbTeam(null)} style={{width:30,height:30,borderRadius:RAD.sm+1,background:"rgba(255,255,255,0.06)",border:EDGE.hair2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:16,flexShrink:0}}>‹</div>
+       <SvBadge ab={svbTeam} size={34}/>
+       <div style={{flex:1,minWidth:0}}>
+         <div style={{fontSize:15,fontWeight:800,letterSpacing:"-0.3px"}}>{svbTeam}</div>
+         <div style={{fontSize:11,color:"rgba(255,255,255,0.6)",fontWeight:700,marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{(sc&&!sc.err&&(sc.recW+sc.recL)>0?(sc.recW+"-"+sc.recL+" · "):"")+_leftFor(svbTeam)+" scorers left"}</div>
+       </div>
+       <div onClick={()=>_openSheet(svbTeam, svbTeam, null, null)} style={{flexShrink:0,display:"flex",alignItems:"center",gap:5,fontSize:10.5,fontWeight:800,color:IOS.blue,background:"rgba(59,111,224,0.1)",border:"0.5px solid rgba(59,111,224,0.28)",borderRadius:RAD.sm,padding:"6px 9px",cursor:"pointer"}}>Season</div>
+     </div>
+     {_sortSeg}
+     {_posPills}
+     <div style={{padding:"0 12px 28px"}}>
+       {_tr.length===0&&_loose.length===0 && _emptyBoard}
+       {_renderSections(_tr.filter(_posMatch), SvTdRow, {showTeam:false})}
+       {_loose.length>0&&svbPos!=="DST"&&(<>
+         <SvBand n="In this game — couldn’t place on a roster" c={IOS.orange} count={_loose.length}/>
+         {_sortRows(_loose.filter(r=>!r.burnedWk)).map(r=><SvTdRow key={r.b.id} r={r} showTeam={false}/>)}
+       </>)}
+     </div>
+   </>); })()}
+
+   {_sheetJsx}
+ </div>
+ );
+ }
 
  const pillBase = {padding:"7px 13px",borderRadius:RAD.pill,fontSize:12,fontWeight:700,whiteSpace:"nowrap",cursor:"pointer",border:"1px solid",transition:"all .15s",flexShrink:0};
 
