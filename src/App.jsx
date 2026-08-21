@@ -9346,7 +9346,11 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const [pkTourIdx, setPkTourIdx] = useState(0);
  const [pkTourRect, setPkTourRect] = useState(null);
  const [pkTourTick, setPkTourTick] = useState(0);
- const pkTourEnd = () => { setPkTour(null); setPkTourIdx(0); setPkTourRect(null); try{ localStorage.setItem("picklock_tour_done","1"); localStorage.setItem("picklock_onboarded","true"); }catch(e){} };
+ // Completion is PER ACCOUNT, not per device: localStorage is shared across every
+ // account on the phone, and the legacy slide tutorial already wrote a global
+ // "picklock_onboarded" — reading device-wide flags is exactly what ate the tour
+ // for a brand-new account on an old device.
+ const pkTourEnd = () => { setPkTour(null); setPkTourIdx(0); setPkTourRect(null); try{ if(user&&user.id) localStorage.setItem("picklock_tour_done_"+user.id,"1"); }catch(e){} };
  const pkTourMultTap = () => { setPkTourTick(x=>x+1); };
  // Fresh-account gate. Fires once for anyone with no leagues on record and no
  // completed tour on this device \u2014 which is what covers OAuth signups, since
@@ -9355,7 +9359,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  useEffect(()=>{
    if(!user || pkTour || tutorialStep>=0 || leaguesLoading) return;
    if(user.is_anonymous) return;
-   try{ if(localStorage.getItem("picklock_tour_done")||localStorage.getItem("picklock_onboarded")) return; }catch(e){}
+   try{ if(localStorage.getItem("picklock_tour_done_"+user.id)) return; }catch(e){}
    if((realLeagues||[]).length>0) return;
    setPkTour("welcome");
  }, [user, pkTour, tutorialStep, leaguesLoading, realLeagues]);
