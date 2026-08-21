@@ -133,6 +133,21 @@ const NFL_TEAM_COLORS = {
 // generational suffixes in both directions. Display attribution only — grading
 // stays server-side with the unique-match rule.
 const svbNorm = (x)=>String(x||"").toLowerCase().replace(/[.'\u2019]/g,"").replace(/\s+(jr|sr|ii|iii|iv|v)$/,"").replace(/\s+/g," ").trim();
+// ── Guided first run: coach-mark step definitions. Selectors point at marker
+// classes on real controls; the lap narrates, the pick tour advances only when
+// the user actually does the thing.
+const PK_LAP = [
+  { sel:".pk-t-mode", place:"below", t:"Two ways to play", b:"Solo is just you against the lines. Leagues are you and your people. This switch flips between them any time." },
+  { sel:".pk-t-create", place:"below", t:"This is where leagues are born", b:"You pick the format \u2014 classic, survivor, or a 1v1 duel \u2014 and friends join with a single code." },
+  { sel:".pk-t-join", place:"below", t:"Already got a crew?", b:"Join with a friend\u2019s code, or browse public leagues and jump into one that\u2019s filling up." },
+  { sel:".pk-t-pickstab", place:"above", t:"Your slip lives in Picks", b:"Every pick you make lands here. Set your multipliers, lock before kickoff, then watch it all settle live.", last:true },
+];
+const PK_PICK = [
+  { sel:".pk-t-firstbet", place:"below", t:"Tap any line", b:"That\u2019s the whole move. Tap a team and it\u2019s on your slip.", tap:true },
+  { sel:".pk-t-back", place:"below", t:"Now check your slip", b:"Your pick landed. Head back to your slate to set the multiplier.", tap:true },
+  { sel:".pk-t-mult", place:"below", t:"Set the multiplier", b:"Multiplier \u00d7 odds = your points when it hits. 1\u00d7 is safe money, 5\u00d7 is a statement. Tap one.", tap:true },
+  { sel:".pk-t-lock", place:"above", t:"Now lock it", b:"Locked means it counts. No edits after kickoff \u2014 sweat it like the rest of us.", tap:true },
+];
 const IOS = {
  blue: "#3B6FE0",   // Deep — was iOS system #0A84FF
  green: "#30D158",
@@ -4437,10 +4452,10 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
           ))}
           <span style={{marginLeft:8,fontSize:11.5,color:IOS.label2,fontWeight:600}}>matchups · playoffs · trophies</span>
         </div>
-        <button onClick={()=>{setScreen("leagues");setShowNewLeague(true);setNewLeagueStep(0);}} style={{position:"relative",marginTop:16,width:"100%",background:"linear-gradient(180deg,#0a84ff,#0066d6)",border:"none",borderRadius:RAD.md,padding:"15px",fontSize:15.5,fontWeight:800,color:"#fff",fontFamily:"Barlow,sans-serif",cursor:"pointer",boxShadow:"0 8px 24px -8px rgba(10,132,255,0.8)",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+        <button onClick={()=>{setScreen("leagues");setShowNewLeague(true);setNewLeagueStep(0);}} className="pk-t-create" style={{position:"relative",marginTop:16,width:"100%",background:"linear-gradient(180deg,#0a84ff,#0066d6)",border:"none",borderRadius:RAD.md,padding:"15px",fontSize:15.5,fontWeight:800,color:"#fff",fontFamily:"Barlow,sans-serif",cursor:"pointer",boxShadow:"0 8px 24px -8px rgba(10,132,255,0.8)",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Create a league
         </button>
-        <div style={{position:"relative",display:"flex",gap:9,marginTop:9}}>
+        <div className="pk-t-join" style={{position:"relative",display:"flex",gap:9,marginTop:9}}>
           <div onClick={()=>{setShowBrowse(true);fetchPublicLeagues();}} style={{flex:1,background:"rgba(255,255,255,0.07)",border:EDGE.hair3,borderRadius:RAD.md,padding:"12px",fontSize:13.5,fontWeight:800,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>Browse public
           </div>
@@ -9323,6 +9338,59 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const [savedPicks, setSavedPicks] = useState(null);
  const [picksLoading, setPicksLoading] = useState(false);
  const [buildingSlip, setBuildingSlip] = useState(false); // user is actively editing/adding to their slip
+ // ── Guided first run: state + gates + watchers ──────────────────────────────
+ // pkTour: null | "welcome" | "lap" | "fork" | "pick" | "done". The lap narrates
+ // stable home-screen controls; the pick tour rides the REAL solo flow and only
+ // advances when the user does the thing (add, navigate, set mult, lock).
+ const [pkTour, setPkTour] = useState(null);
+ const [pkTourIdx, setPkTourIdx] = useState(0);
+ const [pkTourRect, setPkTourRect] = useState(null);
+ const [pkTourTick, setPkTourTick] = useState(0);
+ const pkTourEnd = () => { setPkTour(null); setPkTourIdx(0); setPkTourRect(null); try{ localStorage.setItem("picklock_tour_done","1"); localStorage.setItem("picklock_onboarded","true"); }catch(e){} };
+ const pkTourMultTap = () => { setPkTourTick(x=>x+1); };
+ // Fresh-account gate. Fires once for anyone with no leagues on record and no
+ // completed tour on this device \u2014 which is what covers OAuth signups, since
+ // they never pass through the email-signup trigger. Anonymous demo sessions
+ // are excluded outright.
+ useEffect(()=>{
+   if(!user || pkTour || tutorialStep>=0 || leaguesLoading) return;
+   if(user.is_anonymous) return;
+   try{ if(localStorage.getItem("picklock_tour_done")||localStorage.getItem("picklock_onboarded")) return; }catch(e){}
+   if((realLeagues||[]).length>0) return;
+   setPkTour("welcome");
+ }, [user, pkTour, tutorialStep, leaguesLoading, realLeagues]);
+ // Pick-tour advancement: watch the real state the user is changing.
+ useEffect(()=>{
+   if(pkTour!=="pick") return;
+   if(pkTourIdx===0 && (soloFreePicks||[]).length>0){ setPkTourIdx(1); return; }
+   if(pkTourIdx===1 && screen==="picks"){ setPkTourIdx(2); return; }
+   if(pkTourIdx===3 && soloSubmitted){ setPkTour("done"); setPkTourIdx(0); return; }
+ }, [pkTour, pkTourIdx, soloFreePicks, screen, soloSubmitted]);
+ useEffect(()=>{ if(pkTour==="pick" && pkTourIdx===2 && pkTourTick>0) setPkTourIdx(3); }, [pkTour, pkTourIdx, pkTourTick]);
+ // Measure the current step's target. Retries cover async mounts; a miss leaves
+ // rect null and the tip renders without a spotlight rather than trapping anyone.
+ useEffect(()=>{
+   if(pkTour!=="lap" && pkTour!=="pick"){ setPkTourRect(null); return; }
+   const _steps = pkTour==="lap" ? PK_LAP : PK_PICK;
+   const _st = _steps[pkTourIdx]; if(!_st){ setPkTourRect(null); return; }
+   let _tries=0, _tm=null, _dead=false;
+   const _meas = ()=>{
+     if(_dead) return;
+     const el = document.querySelector(_st.sel);
+     if(el){
+       if(pkTour==="lap" && (pkTourIdx===1||pkTourIdx===2)){ try{ el.scrollIntoView({block:"center"}); }catch(e){} }
+       const r = el.getBoundingClientRect();
+       if(r.width>0 && r.height>0){ setPkTourRect({x:r.left, y:r.top, w:r.width, h:r.height}); return; }
+     }
+     _tries++;
+     if(_tries<10){ _tm=setTimeout(_meas, 250); } else { setPkTourRect(null); }
+   };
+   setPkTourRect(null);
+   _meas();
+   const _onR = ()=>{ _tries=0; _meas(); };
+   window.addEventListener("resize", _onR);
+   return ()=>{ _dead=true; window.removeEventListener("resize", _onR); if(_tm) clearTimeout(_tm); };
+ }, [pkTour, pkTourIdx, screen, homeMode, soloFreePicks, pkTourTick]);
  // Entering the builder ALWAYS hydrates it from the locked snapshot and drops the
  // read-only view. That used to live only on the "Add picks"/"Edit" buttons — which are
  // hidden while buildingSlip is true — so arriving from the Bet Browser with a partly
@@ -10840,7 +10908,103 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
   </div>
 </div>
 )}
- {user && tutorialStep >= 0 && (()=>{
+ {pkTour && user && (()=>{
+ // ── Guided first run: coach layer + cards ──
+ const _mark = pkTour==="lap" || pkTour==="pick";
+ const _steps = pkTour==="lap" ? PK_LAP : PK_PICK;
+ const _st = _mark ? _steps[pkTourIdx] : null;
+ const _r = pkTourRect;
+ const _vh = (typeof window!=="undefined" ? window.innerHeight : 844);
+ const _startLap = ()=>{ applyMode(true); setScreen("home"); setPkTour("lap"); setPkTourIdx(0); };
+ const _openFork = ()=>{ setPkTour("fork"); setPkTourIdx(0); };
+ const _lapNext = ()=>{ if(pkTourIdx+1 < PK_LAP.length) setPkTourIdx(pkTourIdx+1); else _openFork(); };
+ const _startPick = ()=>{ applyMode(true); setBuildingSlip(true); setGridTargetSlot(null); setGridType("ml"); setGridPropSub("all"); setScreen("browser"); setPkTour("pick"); setPkTourIdx(0); };
+ const _startLeague = ()=>{ pkTourEnd(); setScreen("leagues"); setShowNewLeague(true); setNewLeagueCreated(null); setNewLeagueSport(null); setNewLeagueName(""); setNewLeagueSize(8); setNewLeagueStep(0); };
+ const _card = (inner)=>(
+   <div style={{position:"fixed",inset:0,zIndex:99991,background:"rgba(2,3,6,0.8)",display:"flex",alignItems:"flex-end",fontFamily:"Barlow,sans-serif"}}>
+     <div style={{width:"100%",background:"#131317",borderTopLeftRadius:22,borderTopRightRadius:22,borderTop:EDGE.hair2,padding:"10px 20px calc(30px + env(safe-area-inset-bottom))"}}>{inner}</div>
+   </div>
+ );
+ const _kicker = (txt)=>(<div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:10.5,letterSpacing:"0.14em",textTransform:"uppercase",color:IOS.blue,fontWeight:700,textAlign:"center",marginBottom:7}}>{txt}</div>);
+ const _quiet = (txt,fn)=>(<div onClick={fn} style={{textAlign:"center",fontSize:12.5,fontWeight:700,color:"rgba(255,255,255,0.3)",padding:"13px 0 0",cursor:"pointer"}}>{txt}</div>);
+
+ if(pkTour==="welcome") return _card(<>
+   {_kicker("First run")}
+   <div style={{fontSize:23,fontWeight:900,letterSpacing:"-0.6px",textAlign:"center",lineHeight:1.15}}>Sixty seconds to<br/>your first pick</div>
+   <div style={{fontSize:13,color:IOS.label2,fontWeight:600,textAlign:"center",lineHeight:1.55,marginTop:7}}>Real lines, zero money, all bragging rights.<br/>Quick lap around the app, then you pick.</div>
+   <div onClick={_startLap} style={{marginTop:12,borderRadius:14,padding:"15px 14px",background:IOS.blue,textAlign:"center",fontSize:15,fontWeight:900,cursor:"pointer"}}>Show me around</div>
+   {_quiet("I\u2019ll find my own way", pkTourEnd)}
+ </>);
+
+ if(pkTour==="fork") return _card(<>
+   {_kicker("That\u2019s the lap")}
+   <div style={{fontSize:23,fontWeight:900,letterSpacing:"-0.6px",textAlign:"center",lineHeight:1.15}}>Now make it count</div>
+   <div style={{fontSize:13,color:IOS.label2,fontWeight:600,textAlign:"center",lineHeight:1.55,marginTop:7}}>Fastest way to get it: lock one real pick in solo.</div>
+   <div onClick={_startPick} style={{marginTop:12,borderRadius:14,padding:"15px 14px",background:IOS.green,color:"#04180a",display:"flex",alignItems:"center",gap:12,cursor:"pointer"}}>
+     <div style={{width:38,height:38,borderRadius:11,background:"rgba(0,0,0,0.14)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#04180a" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg></div>
+     <div><div style={{fontSize:15,fontWeight:900,letterSpacing:"-0.2px"}}>Make my first pick</div><div style={{fontSize:11,fontWeight:600,marginTop:2,opacity:0.75}}>Tonight’s board · takes a minute</div></div>
+   </div>
+   <div onClick={_startLeague} style={{marginTop:10,borderRadius:14,padding:"15px 14px",background:"rgba(59,111,224,0.14)",border:"0.5px solid rgba(59,111,224,0.45)",display:"flex",alignItems:"center",gap:12,cursor:"pointer"}}>
+     <div style={{width:38,height:38,borderRadius:11,background:"rgba(59,111,224,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+     <div><div style={{fontSize:15,fontWeight:900,letterSpacing:"-0.2px",color:IOS.blue}}>Create a league</div><div style={{fontSize:11,fontWeight:600,marginTop:2,color:IOS.label2}}>Two minutes · friends join with a code</div></div>
+   </div>
+   {_quiet("I\u2019ll just look around", pkTourEnd)}
+ </>);
+
+ if(pkTour==="done") return _card(<>
+   <div style={{width:58,height:58,borderRadius:18,background:"rgba(48,209,88,0.13)",border:"0.5px solid rgba(48,209,88,0.4)",display:"flex",alignItems:"center",justifyContent:"center",margin:"2px auto 12px"}}>
+     <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+   </div>
+   <div style={{fontSize:23,fontWeight:900,letterSpacing:"-0.6px",textAlign:"center",lineHeight:1.15}}>First pick locked</div>
+   <div style={{fontSize:13,color:IOS.label2,fontWeight:600,textAlign:"center",lineHeight:1.55,marginTop:7}}>That’s the move — the multiplier times the odds is your score when it hits. It settles when the game goes final.</div>
+   <div onClick={_startLeague} style={{marginTop:12,borderRadius:14,padding:"15px 14px",background:"rgba(59,111,224,0.14)",border:"0.5px solid rgba(59,111,224,0.45)",textAlign:"center",fontSize:15,fontWeight:900,color:IOS.blue,cursor:"pointer"}}>Now create a league for the crew</div>
+   {_quiet("Take me to my slip", ()=>{ pkTourEnd(); setScreen("picks"); })}
+ </>);
+
+ // ── lap / pick coach layer ──
+ if(!_st) return null;
+ const _isTap = !!_st.tap;
+ const _below = _st.place==="below";
+ const _tipTop = _r ? (_below ? (_r.y+_r.h+46) : null) : null;
+ const _tipBot = _r ? (_below ? null : (_vh - _r.y + 38)) : 24;
+ return (
+ <div style={{position:"fixed",inset:0,zIndex:99990,pointerEvents:_isTap?"none":"auto",fontFamily:"Barlow,sans-serif"}}>
+   <style>{"@keyframes pkRing{0%{box-shadow:0 0 0 0 rgba(59,111,224,0.55)}70%{box-shadow:0 0 0 13px rgba(59,111,224,0)}100%{box-shadow:0 0 0 0 rgba(59,111,224,0)}}@keyframes pkBobD{0%,100%{transform:translateY(0)}50%{transform:translateY(7px)}}@keyframes pkBobU{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}"}</style>
+   {_r ? (
+     <div style={{position:"fixed",left:_r.x-7,top:_r.y-7,width:_r.w+14,height:_r.h+14,borderRadius:16,boxShadow:"0 0 0 2000px rgba(2,3,6,0.8)",pointerEvents:"none",transition:"all .3s ease"}}>
+       <div style={{position:"absolute",inset:-3,borderRadius:"inherit",border:"2px solid "+IOS.blue,animation:"pkRing 1.6s ease-out infinite"}}/>
+     </div>
+   ) : (
+     !_isTap && <div style={{position:"fixed",inset:0,background:"rgba(2,3,6,0.8)",pointerEvents:"none"}}/>
+   )}
+   {_r && (
+     <div style={{position:"fixed",left:_r.x+_r.w/2-13,top:_below?(_r.y+_r.h+12):(_r.y-38),width:26,height:26,pointerEvents:"none",animation:(_below?"pkBobU":"pkBobD")+" 1.1s ease-in-out infinite"}}>
+       {_below
+         ? <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke={IOS.blue} strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20V6M6 12l6-6 6 6"/></svg>
+         : <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke={IOS.blue} strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v14M6 12l6 6 6-6"/></svg>}
+     </div>
+   )}
+   <div style={{position:"fixed",left:18,right:18,top:_tipTop!=null?_tipTop:"auto",bottom:_tipBot!=null?_tipBot:"auto",background:"#15161B",border:"0.5px solid rgba(59,111,224,0.4)",borderRadius:16,padding:"14px 15px 12px",boxShadow:"0 18px 44px rgba(0,0,0,0.6)",pointerEvents:"auto",transition:"all .3s ease"}}>
+     <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:10,letterSpacing:"0.14em",textTransform:"uppercase",color:IOS.blue,fontWeight:700,marginBottom:5}}>{(pkTour==="lap"?"The lap":"Do it live")+" \u00b7 "+(pkTourIdx+1)+" of "+_steps.length}</div>
+     <div style={{fontSize:16,fontWeight:800,letterSpacing:"-0.3px",lineHeight:1.2}}>{_st.t}</div>
+     <div style={{fontSize:12.5,color:IOS.label2,fontWeight:600,lineHeight:1.5,marginTop:5}}>{_st.b}</div>
+     <div style={{display:"flex",alignItems:"center",marginTop:12,gap:8}}>
+       <div style={{display:"flex",gap:4,marginRight:"auto"}}>
+         {_steps.map((x,i)=>(<span key={i} style={{width:i===pkTourIdx?18:6,height:6,borderRadius:3,background:i===pkTourIdx?IOS.blue:"rgba(255,255,255,0.15)",transition:"all .25s"}}/>))}
+       </div>
+       {_isTap && (
+         <div style={{fontSize:11,fontWeight:800,color:IOS.green,display:"flex",alignItems:"center",gap:5}}>
+           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="2.6" strokeLinecap="round"><path d="M9 11.5V5a1.7 1.7 0 0 1 3.4 0v5"/><path d="M12.4 10V8.2a1.7 1.7 0 0 1 3.4 0V12"/><path d="M15.8 11.6a1.7 1.7 0 0 1 3.2.9c0 4.6-2.2 8.5-6.6 8.5-3.4 0-4.8-1.5-6.6-4.8L4 13.6a1.6 1.6 0 0 1 2.7-1.7L9 14.5"/></svg>Tap it to continue
+         </div>
+       )}
+       <div onClick={()=>{ if(pkTour==="lap") _openFork(); else pkTourEnd(); }} style={{fontSize:12,fontWeight:700,color:"rgba(255,255,255,0.35)",cursor:"pointer",padding:"8px 10px"}}>Skip</div>
+       {!_isTap && <div onClick={_lapNext} style={{background:IOS.blue,borderRadius:10,padding:"9px 16px",fontSize:13,fontWeight:800,cursor:"pointer"}}>{_st.last?"Got it":"Next"}</div>}
+     </div>
+   </div>
+ </div>
+ );
+})()}
+{user && tutorialStep >= 0 && (()=>{
  const isLast = tutorialStep === 3;
  const dismissOnboard = () => { setTutorialStep(-1); try{localStorage.setItem("picklock_onboarded","true");}catch(e){} };
  const SCREENS = [
@@ -11074,7 +11238,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  await supabase.from("users").upsert({id:uid, email, username, referral_code:myRef, referred_by:refCode, birth_date:dob}, {onConflict:"id"});
  }
  if(uid && !data?.session){ alert("Account created! Check your email to confirm your address, then sign in."); setAuthScreen("login"); return; }
- setTutorialStep(0);
+ setPkTour("welcome");
  }}}>{authScreen==="login"?"Sign In":"Create Account"}</button>
  <div onClick={()=>setAuthScreen(authScreen==="login"?"signup":"login")} style={{textAlign:"center",fontSize:13,color:"rgba(255,255,255,0.4)",cursor:"pointer",marginTop:16}}>{authScreen==="login"?"No account? Sign up":"Already have an account? Sign in"}</div>
  </div>
@@ -11748,7 +11912,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
  <div className="nav-title-large">PICKLOCK</div>
  <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
- <div style={{display:"flex",background:"rgba(255,255,255,0.08)",borderRadius:RAD.sm,padding:2}}>
+ <div className="pk-t-mode" style={{display:"flex",background:"rgba(255,255,255,0.08)",borderRadius:RAD.sm,padding:2}}>
  {[{id:"leagues",label:"Leagues"},{id:"solo",label:"Solo"}].map(m=>(
  <div key={m.id} onClick={()=>{applyMode(m.id==="solo");setScreen("home");}}
  style={{padding:"5px 11px",borderRadius:RAD.sm,fontSize:11.5,fontWeight:700,cursor:"pointer",transition:"all .15s",whiteSpace:"nowrap",
@@ -13790,7 +13954,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
            return (
            <SwipeRow key={b.id||i} onDelete={()=>setSoloFreePicks(soloFreePicks.filter(x=>x.id!==b.id))}>
            <SlateRow b={b}
-             onMult={(m)=>setSoloFreePicks(prev=>prev.map(x=>x.id===b.id?{...x,mult:m}:x))}
+             onMult={(m)=>{ setSoloFreePicks(prev=>prev.map(x=>x.id===b.id?{...x,mult:m}:x)); pkTourMultTap(); }}
              readOnly={false} settled={false} started={false}
              timeText={""} showState={false} scorePick={null}
              openLegs={openLegs} setOpenLegs={setOpenLegs}/>
@@ -13927,13 +14091,14 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
            const per=ptsFor(b.impliedOdds);
            const n=b.mult||1;
            return (
-           <SwipeRow key={b.id} onDelete={()=>setSoloFreePicks(soloFreePicks.filter(x=>x.id!==b.id))}>
+           <div key={b.id} className={i===0?"pk-t-mult":undefined}>
+           <SwipeRow onDelete={()=>setSoloFreePicks(soloFreePicks.filter(x=>x.id!==b.id))}>
            <SlateRow b={b}
-             onMult={(m)=>setSoloFreePicks(prev=>prev.map(x=>x.id===b.id?{...x,mult:m}:x))}
+             onMult={(m)=>{ setSoloFreePicks(prev=>prev.map(x=>x.id===b.id?{...x,mult:m}:x)); pkTourMultTap(); }}
              readOnly={false} settled={false} started={false}
              timeText={""} showState={false} scorePick={null}
              openLegs={openLegs} setOpenLegs={setOpenLegs}/>
-           </SwipeRow>);
+           </SwipeRow></div>);
          })}
 
          {/* The add row IS the last row of the slate. */}
@@ -13963,7 +14128,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 
        {/* Blue, not green. Green means a result in this app; a button that means "go"
            cannot also be the colour that means "you won". */}
-       <button onClick={lockSoloFreeSlate} disabled={soloFreePicks.length===0}
+       <button className="pk-t-lock" onClick={lockSoloFreeSlate} disabled={soloFreePicks.length===0}
          style={{width:"100%",border:"none",borderRadius:13,padding:"15px",fontSize:15.5,fontWeight:800,color:"#fff",fontFamily:"Barlow,sans-serif",
            cursor:soloFreePicks.length?"pointer":"default",
            background:soloFreePicks.length?"linear-gradient(120deg,#0A84FF,#5E5CE6)":"rgba(255,255,255,0.08)",
@@ -15071,7 +15236,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const totPt=(g.ou.over&&g.ou.over.point!=null)?g.ou.over.point:((g.ou.under&&g.ou.under.point!=null)?g.ou.under.point:"");
  const gv = isVal(g.ml.away,g._ov.ml)||isVal(g.ml.home,g._ov.ml)||isVal(g.spread.away,g._ov.spread)||isVal(g.spread.home,g._ov.spread)||isVal(g.ou.over,g._ov.ou)||isVal(g.ou.under,g._ov.ou);
  return (
- <div key={g.game}>
+ <div key={g.game} className={(isSoloMode&&gi===0)?"pk-t-firstbet":undefined}>
  {showHead && (
  <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 2px 7px",background:"#08080A"}}>
  <span style={{width:6,height:6,borderRadius:"50%",background:headFirst?IOS.orange:"rgba(255,255,255,0.3)",boxShadow:headFirst?"0 0 7px "+IOS.orange:"none"}}/>
@@ -15640,7 +15805,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {/* Header */}
  <div style={{position:"sticky",top:0,zIndex:10,background:"#08080A",paddingBottom:6,boxShadow:"0 8px 16px -8px rgba(0,0,0,0.7)"}}>
  <div style={{display:"flex",alignItems:"center",gap:11,padding:"10px 16px 8px"}}>
- <div onClick={()=>setScreen("picks")} style={{width:34,height:34,borderRadius:RAD.md,background:"rgba(255,255,255,0.06)",border:EDGE.hair2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:acc,fontSize:18,flexShrink:0}}>‹</div>
+ <div onClick={()=>setScreen("picks")} style={{width:34,height:34,borderRadius:RAD.md,background:"rgba(255,255,255,0.06)",border:EDGE.hair2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:acc,fontSize:18,flexShrink:0}} className="pk-t-back">‹</div>
  <div style={{flex:1,minWidth:0}}>
  <div style={{fontSize:21,fontWeight:800,letterSpacing:"-0.6px",color:"#fff",lineHeight:1}}>Pick Browser</div>
  <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:3,display:"flex",alignItems:"center",gap:5}}>
@@ -21623,7 +21788,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  profile:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
  };
  return (
- <div key={t.id} className={"tab-item "+(isOn?"on":"")} onClick={()=>{ if(isOn){ if(scrollActiveToTop()) haptic("light"); return; } haptic("select"); setScreen(t.id); }}>
+ <div key={t.id} className={"tab-item "+(isOn?"on":"")+(t.id==="picks"?" pk-t-pickstab":"")} onClick={()=>{ if(isOn){ if(scrollActiveToTop()) haptic("light"); return; } haptic("select"); setScreen(t.id); }}>
  {_lamp && <span className="tab-lamp"/>}
  {_anyLive && isOn && <span className="tab-lamp tab-lamp-sm"/>}
  <div className="tab-icon" style={{display:"flex",alignItems:"center",justifyContent:"center"}}>{svgs[t.icon]}</div>
