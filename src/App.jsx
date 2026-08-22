@@ -197,6 +197,39 @@ const LADDER_MARKETS = [
   { key:"player_pass_tds",      label:"Pass TDs",   unit:"td"  },
 ];
 const LADDER_RUNGS = 5;
+// Where each ladder market lives in an ESPN boxscore. The stat column is found by
+// LABEL rather than index: ESPN reorders columns between categories and seasons,
+// and a hardcoded index would silently read the wrong number.
+const LADDER_ESPN = {
+  player_rush_yds:      { cat:"rushing",   label:"YDS" },
+  player_reception_yds: { cat:"receiving", label:"YDS" },
+  player_receptions:    { cat:"receiving", label:"REC" },
+  player_pass_yds:      { cat:"passing",   label:"YDS" },
+  player_pass_tds:      { cat:"passing",   label:"TD"  },
+};
+// Pull one athlete’s stat out of an ESPN summary payload. Returns null when the
+// category has not been posted yet, which reads as "no snaps" rather than zero.
+function ladderStatFrom(summary, market, playerName){
+  const spec = LADDER_ESPN[market]; if(!spec || !summary) return null;
+  const want = svbNorm(playerName); if(!want) return null;
+  const teams = (summary.boxscore && summary.boxscore.players) || [];
+  for(const t of teams){
+    for(const grp of (t.statistics||[])){
+      if(String(grp.name||"").toLowerCase() !== spec.cat) continue;
+      const labels = (grp.labels||[]).map(x=>String(x||"").toUpperCase());
+      const idx = labels.indexOf(spec.label);
+      if(idx < 0) continue;
+      for(const a of (grp.athletes||[])){
+        const nm = (a.athlete && (a.athlete.displayName || a.athlete.fullName)) || "";
+        if(svbNorm(nm) !== want) continue;
+        const raw = (a.stats||[])[idx];
+        const n = Number(String(raw==null?"":raw).replace(/[^0-9.-]/g,""));
+        return isFinite(n) ? n : null;
+      }
+    }
+  }
+  return null;
+}
 // Every ladder is cut to the SAME five implied-probability targets, snapped to
 // whichever real alternate line sits nearest each one. That is what makes a
 // workhorse back and a slot receiver comparable: their yardages differ wildly,
@@ -6161,6 +6194,8 @@ function App() {
  };
  useEffect(()=>{ setLadPicks([]); setLadOpen(null); }, [activeLeagueId]);
  const [ladMult, setLadMult] = useState({});        // ladder key -> multiplier
+ const [ladLive, setLadLive] = useState({});        // "market|player" -> {v, state}
+ const ladLiveRef = useRef({});
  const [ladLocking, setLadLocking] = useState(false);
  const [ladSaved, setLadSaved] = useState(null);     // this week's locked ladders, rebuilt from picks
  // Load whatever this member has already locked for the week and fold the rung rows
@@ -6191,6 +6226,45 @@ function App() {
    if(screen!=="picks" && screen!=="browser") return;
    loadLadders(activeLeague.id, activeLeague.current_week||1);
  }, [screen, isSoloMode, activeLeagueId, activeLeague&&activeLeague.current_week]);
+ // Live rung progress. One ESPN summary call per distinct game (at most a handful),
+ // matched through the scoreboard the app already loads, polled while anything is
+ // in progress. Fails soft everywhere: no stat just means the track shows no fill.
+ useEffect(()=>{
+   if(isSoloMode || !activeLeague || activeLeague.league_type!=="ladder") return;
+   if(screen!=="picks") return;
+   if(!ladSaved || !ladSaved.length) return;
+   let dead=false, timer=null;
+   const run = async ()=>{
+     const games = {};
+     ladSaved.forEach(L=>{ if(L.game) games[L.game] = (games[L.game]||[]).concat([L]); });
+     let anyLive=false;
+     for(const g of Object.keys(games)){
+       const parts = g.includes(" @ ") ? g.split(" @ ") : [g];
+       const ev = matchEspnGame(espnGames, (parts[0]||"").trim(), (parts[1]||"").trim());
+       if(!ev || !ev.id) continue;
+       try {
+         const r = await fetch("https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event="+ev.id, {cache:"no-store"});
+         if(!r.ok) continue;
+         const d = await r.json();
+         const st = (d.header && d.header.competitions && d.header.competitions[0] && d.header.competitions[0].status) || null;
+         const done = !!(st && st.type && st.type.completed);
+         const inProg = !!(st && st.type && st.type.state === "in");
+         if(inProg) anyLive = true;
+         const clock = (st && st.type && (st.type.shortDetail || st.type.detail)) || "";
+         games[g].forEach(L=>{
+           const v = ladderStatFrom(d, L.market, L.player);
+           const key = L.market+"|"+svbNorm(L.player);
+           ladLiveRef.current[key] = { v, done, inProg, clock };
+         });
+       } catch(e){ /* fail soft */ }
+     }
+     if(dead) return;
+     setLadLive({...ladLiveRef.current});
+     if(anyLive) timer = setTimeout(run, 45000);
+   };
+   run();
+   return ()=>{ dead=true; if(timer) clearTimeout(timer); };
+ }, [screen, isSoloMode, activeLeagueId, ladSaved, espnGames]);
  useEffect(()=>{ setLadMult({}); }, [activeLeagueId]);
  // Lock: every rung becomes an ordinary pick row. Same market_key, same player, a
  // different `point` each -- which is exactly the shape the alt sheet already writes
@@ -9042,7 +9116,10 @@ function App() {
  streakByUser[uid] = {count, type:last};
  });
 
- const isCume = (((realLeagues||[]).find(l=>l.id===leagueId))||activeLeague||{}).league_type==="points";
+ const _lgT = (((realLeagues||[]).find(l=>l.id===leagueId))||activeLeague||{}).league_type;
+ // Ladder leagues have no matchups: the table is a cumulative points race, so the
+ // record column shows pick W-L rather than a matchup record that does not exist.
+ const isCume = _lgT==="points" || _lgT==="ladder";
  const standings = userIds.map(uid=>{
  const u = users?.find(x=>x.id===uid);
  const s = statsByUser[uid]||{wins:0,losses:0,points:0};
@@ -12969,15 +13046,27 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 
    // Locked: show the ladders as they stand, with results once they grade.
    if(ladSaved && ladSaved.length){
-     const _tot = ladSaved.reduce((t,L)=> t + (L.rungs||[]).reduce((a,r)=> a + (Number(r.pts)||0), 0), 0);
-     const _clr = ladSaved.reduce((t,L)=> t + (L.rungs||[]).filter(r=>r.result==="W").length, 0);
+     // A rung is "cleared" the moment the live stat passes it, even before the grader
+     // settles it -- that is the whole point of the screen. Graded points still come
+     // from points_earned, so the number never disagrees with the ledger.
+     const _liveOf = (L)=> ladLive[L.market+"|"+svbNorm(L.player)] || null;
+     const _statOf = (L)=>{ const x=_liveOf(L); return (x && x.v!=null) ? x.v : null; };
+     const _clearedNow = (L)=>{ const v=_statOf(L); if(v==null) return (L.rungs||[]).filter(r=>r.result==="W").length; return (L.rungs||[]).filter(r=>v>=Number(r.point)).length; };
+     const _bankOf = (L)=>{
+       const graded=(L.rungs||[]).some(r=>r.result==="W"||r.result==="L");
+       if(graded) return (L.rungs||[]).reduce((a,r)=>a+(Number(r.pts)||0),0);
+       const v=_statOf(L); if(v==null) return 0;
+       return (L.rungs||[]).filter(r=>v>=Number(r.point)).reduce((a,r)=>a+calcPickPoints(L.mult||1, r.px, "W"), 0);
+     };
+     const _tot = ladSaved.reduce((t,L)=> t + _bankOf(L), 0);
+     const _clr = ladSaved.reduce((t,L)=> t + _clearedNow(L), 0);
      const _all = ladSaved.reduce((t,L)=> t + (L.rungs||[]).length, 0);
      return (
      <div className="body" style={{paddingTop:14,paddingBottom:110}}>
        <div style={{display:"flex",alignItems:"flex-end",gap:10,padding:"0 16px 12px"}}>
          <div style={{flex:1,minWidth:0}}>
            <div style={{fontSize:22,fontWeight:800,letterSpacing:"-0.6px",lineHeight:1}}>Your ladders</div>
-           <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:4}}>{"Week "+_wk+" \u00b7 locked"}</div>
+           <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:4}}>{"Week "+_wk+" \u00b7 "+(ladSaved.some(L=>{const x=_liveOf(L); return x&&x.inProg;})?"live":"locked")}</div>
          </div>
          <div style={{flexShrink:0,textAlign:"right"}}>
            <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:26,fontWeight:900,letterSpacing:"-0.7px",color:_tot>0?IOS.green:"#fff"}}>{Math.round(_tot*10)/10}</div>
@@ -12986,7 +13075,14 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        </div>
        {ladSaved.map((L,i)=>{
          const ab=_acr(L.game,false), hb=_acr(L.game,true);
-         const bank=(L.rungs||[]).reduce((a,r)=>a+(Number(r.pts)||0),0);
+         const bank=_bankOf(L);
+         const live=_liveOf(L); const stat=_statOf(L);
+         const unit=(LADDER_MARKETS.find(m=>m.key===L.market)||{}).unit||"";
+         const cleared=_clearedNow(L);
+         const nextI = cleared < (L.rungs||[]).length ? cleared : -1;
+         const prevPt = nextI>0 ? Number(L.rungs[nextI-1].point) : 0;
+         const need = nextI>-1 ? (Number(L.rungs[nextI].point) - (stat==null?0:stat)) : 0;
+         const frac = (nextI>-1 && stat!=null) ? Math.max(0, Math.min(1, (stat-prevPt)/(Number(L.rungs[nextI].point)-prevPt))) : 0;
          return (
          <div key={i} style={{margin:"0 14px 9px",borderRadius:RAD.lg,background:"linear-gradient(165deg,#161619,#111114)",border:EDGE.hair,overflow:"hidden"}}>
            <div style={{display:"flex",alignItems:"center",gap:10,padding:"11px 12px 9px"}}>
@@ -12996,18 +13092,37 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
                <div style={{fontSize:10.5,color:"rgba(255,255,255,0.6)",fontWeight:600,marginTop:2}}>{(LADDER_MARKETS.find(m=>m.key===L.market)||{}).label||L.market}{ab&&hb?(" \u00b7 "+ab+" @ "+hb):""}</div>
              </div>
              <div style={{flexShrink:0,fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:900,color:IOS.blue,background:"rgba(59,111,224,0.14)",border:"0.5px solid rgba(59,111,224,0.4)",borderRadius:8,padding:"3px 8px"}}>{L.mult+"\u00d7"}</div>
-             <div style={{flexShrink:0,fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:17,fontWeight:900,minWidth:44,textAlign:"right",color:bank>0?IOS.green:"rgba(255,255,255,0.35)"}}>{bank>0?("+"+(Math.round(bank*10)/10)):"0.0"}</div>
+             <div style={{flexShrink:0,textAlign:"right",minWidth:52}}>
+               <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:22,fontWeight:900,letterSpacing:"-0.6px",lineHeight:1,color:stat!=null&&cleared>0?IOS.green:(stat!=null?"#fff":"rgba(255,255,255,0.25)")}}>{stat!=null?stat:"\u2014"}</div>
+               <div style={{fontSize:8.5,letterSpacing:"0.1em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)",fontWeight:700,marginTop:1}}>{unit}</div>
+             </div>
            </div>
-           <div style={{display:"flex",gap:3,padding:"0 12px 11px"}}>
+           <div style={{display:"flex",gap:3,padding:"0 12px 8px"}}>
              {(L.rungs||[]).map((r,j)=>{
                const won=r.result==="W", lost=r.result==="L", voided=r.result==="P";
+               const hit = won || (stat!=null && stat>=Number(r.point));
+               const isNext = j===nextI && !won && !lost;
                return (
-               <div key={j} style={{flex:1,height:28,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:11,fontWeight:800,
-                 background:won?"rgba(48,209,88,0.16)":lost?"rgba(255,69,58,0.1)":"rgba(255,255,255,0.035)",
-                 border:"0.5px solid "+(won?"rgba(48,209,88,0.42)":lost?"rgba(255,69,58,0.28)":"rgba(255,255,255,0.09)"),
-                 color:won?IOS.green:lost?"rgba(255,255,255,0.25)":voided?IOS.orange:"rgba(255,255,255,0.5)",
-                 textDecoration:lost?"line-through":"none"}}>{r.point}</div>);
+               <div key={j} style={{flex:1,height:28,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",position:"relative",overflow:"hidden",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:11,fontWeight:800,
+                 background:hit?"rgba(48,209,88,0.16)":lost?"rgba(255,69,58,0.1)":"rgba(255,255,255,0.035)",
+                 border:"0.5px solid "+(hit?"rgba(48,209,88,0.42)":lost?"rgba(255,69,58,0.28)":isNext?"rgba(59,111,224,0.5)":"rgba(255,255,255,0.09)"),
+                 color:hit?IOS.green:lost?"rgba(255,255,255,0.25)":voided?IOS.orange:isNext?"#fff":"rgba(255,255,255,0.5)",
+                 textDecoration:lost?"line-through":"none"}}>
+                 {isNext && frac>0 && <div style={{position:"absolute",left:0,top:0,bottom:0,width:Math.round(frac*100)+"%",background:"rgba(59,111,224,0.28)"}}/>}
+                 <span style={{position:"relative",zIndex:1}}>{r.point}</span>
+               </div>);
              })}
+           </div>
+           <div style={{display:"flex",alignItems:"center",gap:8,padding:"0 12px 11px",fontSize:10.5,fontWeight:700,color:"rgba(255,255,255,0.6)"}}>
+             {live && live.inProg
+               ? (<span style={{display:"flex",alignItems:"center",gap:5,flexShrink:0,fontSize:9.5,color:"rgba(255,255,255,0.3)"}}><span style={{width:6,height:6,borderRadius:"50%",background:IOS.red,boxShadow:"0 0 6px "+IOS.red}}/>{live.clock||"Live"}</span>)
+               : (<span style={{flexShrink:0,fontSize:9.5,color:"rgba(255,255,255,0.3)"}}>{live&&live.done?"FINAL":"Not started"}</span>)}
+             <span style={{minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+               {nextI>-1 && stat!=null && need>0
+                 ? (need+" "+unit+" to rung "+(nextI+1)+" (+"+(Math.round(calcPickPoints(L.mult||1, L.rungs[nextI].px, "W")*10)/10)+")")
+                 : (nextI===-1 ? "Ladder topped out" : (cleared+" of "+(L.rungs||[]).length+" rungs"))}
+             </span>
+             <span style={{marginLeft:"auto",flexShrink:0,fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:16,fontWeight:900,color:bank>0?IOS.green:"rgba(255,255,255,0.25)"}}>{bank>0?("+"+(Math.round(bank*10)/10)):"0.0"}</span>
            </div>
          </div>);
        })}
