@@ -6160,6 +6160,78 @@ function App() {
    } finally { delete ladReqRef.current[key]; }
  };
  useEffect(()=>{ setLadPicks([]); setLadOpen(null); }, [activeLeagueId]);
+ const [ladMult, setLadMult] = useState({});        // ladder key -> multiplier
+ const [ladLocking, setLadLocking] = useState(false);
+ const [ladSaved, setLadSaved] = useState(null);     // this week's locked ladders, rebuilt from picks
+ // Load whatever this member has already locked for the week and fold the rung rows
+ // back into ladders. The picks table is the source of truth -- never a local
+ // snapshot -- so a reinstall or a second device shows the same slip.
+ const loadLadders = async (lgId, wk) => {
+   if(!lgId || !user) return;
+   try {
+     const {data} = await supabase.from("picks")
+       .select("slot,multiplier,pick_name,game,odds,implied_odds,game_date,event_id,market_key,outcome,outcome_point,result,points_earned")
+       .eq("league_id", lgId).eq("user_id", user.id).eq("week", wk).like("slot","ladder\\_%");
+     if(!data || !data.length){ setLadSaved(null); return; }
+     const groups = {};
+     data.forEach(r=>{
+       const m = String(r.slot||"").match(/^ladder_(\d+)_r(\d+)$/);
+       if(!m) return;
+       const gi = m[1];
+       if(!groups[gi]) groups[gi] = { idx:Number(gi), mult:r.multiplier, market:r.market_key, game:r.game, gameTime:r.game_date, player:String(r.pick_name||"").split(/ Over /i)[0].trim(), rungs:[] };
+       groups[gi].rungs.push({ n:Number(m[2]), point:r.outcome_point, odds:r.odds, px:r.implied_odds, result:r.result, pts:r.points_earned });
+     });
+     const out = Object.values(groups).sort((a,b)=>a.idx-b.idx);
+     out.forEach(g=>g.rungs.sort((a,b)=>a.n-b.n));
+     setLadSaved(out.length?out:null);
+   } catch(e){ /* fail soft: the builder still renders */ }
+ };
+ useEffect(()=>{
+   if(isSoloMode || !activeLeague || activeLeague.league_type!=="ladder") { setLadSaved(null); return; }
+   if(screen!=="picks" && screen!=="browser") return;
+   loadLadders(activeLeague.id, activeLeague.current_week||1);
+ }, [screen, isSoloMode, activeLeagueId, activeLeague&&activeLeague.current_week]);
+ useEffect(()=>{ setLadMult({}); }, [activeLeagueId]);
+ // Lock: every rung becomes an ordinary pick row. Same market_key, same player, a
+ // different `point` each -- which is exactly the shape the alt sheet already writes
+ // and the grader already settles. That is what makes ladder grading free.
+ const lockLadders = async (picks, need) => {
+   if(ladLocking) return;
+   if(!picks || picks.length!==need) return;
+   const _wk = (activeLeague&&(activeLeague.current_week||activeLeague.week))||1;
+   const rows = [];
+   picks.forEach((L, i)=>{
+     const mult = ladMult[L.key];
+     (L.rungs||[]).forEach((rg, j)=>{
+       rows.push({
+         league_id: activeLeague.id, user_id: user.id, week: _wk,
+         sport: (L.bet&&(L.bet._sport||L.bet.sport)) || "nfl",
+         slot: "ladder_"+i+"_r"+(j+1),
+         multiplier: mult,
+         pick_name: (L.player+" Over "+rg.point+" "+L.label).replace(/\s+/g," ").trim(),
+         game: L.game||"", odds: rg.odds, implied_odds: rg.px,
+         game_date: L.gameTime||null, event_id: (L.bet&&L.bet.eventId)||null,
+         market_key: L.market, outcome: "Over", outcome_point: rg.point,
+         sel_key: ((L.bet&&L.bet.eventId)||"")+"|"+L.market+"|Over|"+rg.point,
+         result: "pending", points_earned: 0,
+       });
+     });
+   });
+   if(!rows.length) return;
+   setLadLocking(true);
+   try {
+     // Idempotent by construction: clear this week's ladder rows first, so a retry
+     // after a partial failure can never double-bank a rung.
+     await supabase.from("picks").delete().eq("league_id",activeLeague.id).eq("user_id",user.id).eq("week",_wk).like("slot","ladder\\_%");
+     const {error} = await supabase.from("picks").insert(rows);
+     if(error){ alert("Could not lock your ladders: "+error.message); setLadLocking(false); return; }
+     haptic("success");
+     try{ posthog.capture("slip_locked", {league_id:activeLeague.id, type:"ladder", ladders:picks.length, rungs:rows.length}); }catch(e){}
+     setLadPicks([]); setLadMult({}); setLadOpen(null);
+     await loadLadders(activeLeague.id, _wk);
+   } catch(e){ alert("Could not lock your ladders."); }
+   setLadLocking(false);
+ };
  const [altSheet, setAltSheet] = useState(null);
  const [checkoutLoading, setCheckoutLoading] = useState(null);
  const [showPostLeagueUpsell, setShowPostLeagueUpsell] = useState(false);
@@ -12881,6 +12953,159 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    </div>
  ); }
  if(!buildingSlip && picksLoading && !(savedPicks&&savedPicks.flexPicks)) return (<SkelGroup style={{padding:"18px 16px"}}><Skel w={150} h={24} r={8}/><div style={{display:"flex",gap:9,margin:"16px 0 18px"}}>{[0,1,2].map(i=><Skel key={i} h={62} r={13} style={{flex:1,width:"auto"}}/>)}</div>{[0,1,2].map(i=>(<div key={i} style={{background:"#131318",border:EDGE.hair,borderRadius:RAD.lg,padding:"14px 15px",marginBottom:10}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:11}}><Skel w={92} h={10}/><Skel w={46} h={14}/></div><Skel w="68%" h={16} style={{marginBottom:8}}/><Skel w="44%" h={11} style={{marginBottom:13}}/><div style={{display:"flex",gap:8}}><Skel w={31} h={24}/><Skel w={92} h={24}/></div></div>))}</SkelGroup>);
+ // ─── LADDER: the slip ────────────────────────────────────────────────────────
+ if(!isSoloMode && activeLeague && activeLeague.league_type==="ladder"){
+   const _need = ladCount();
+   const _wk = activeLeague.current_week||1;
+   const _lock = svWeekLockMs(activeLeague, _wk);
+   const _past = (_lock!=null && Date.now()>=_lock);
+   const _ptsOf = (px,m)=> calcPickPoints(m||1, px, "W");
+   // parseGame lives inside the browser IIFE, not here -- same two-line split, local copy.
+   const _acr = (g,home)=>{ const _g=String(g||""); const parts=_g.includes(" @ ")?_g.split(" @ "):(_g.includes(" vs ")?_g.split(" vs "):[_g]); const nm=(home?(parts[1]||""):(parts[0]||"")).trim(); const a=getAcronym(nm,false); return (a&&a!=="?")?a:""; };
+   const _poolVals = (()=>{ const a=[]; for(let i=1;i<=_need;i++) a.push(i); return a; })();
+   const _holder = (v)=>{ for(const k in ladMult){ if(ladMult[k]===v) return k; } return null; };
+   const _setMult = (k,v)=>{ setLadMult(prev=>{ const nx={...prev}; if(nx[k]===v){ delete nx[k]; return nx; } const h=_holder(v); if(h&&h!==k) delete nx[h]; nx[k]=v; return nx; }); };
+   const _allSet = ladPicks.length===_need && ladPicks.every(p=>!!ladMult[p.key]);
+
+   // Locked: show the ladders as they stand, with results once they grade.
+   if(ladSaved && ladSaved.length){
+     const _tot = ladSaved.reduce((t,L)=> t + (L.rungs||[]).reduce((a,r)=> a + (Number(r.pts)||0), 0), 0);
+     const _clr = ladSaved.reduce((t,L)=> t + (L.rungs||[]).filter(r=>r.result==="W").length, 0);
+     const _all = ladSaved.reduce((t,L)=> t + (L.rungs||[]).length, 0);
+     return (
+     <div className="body" style={{paddingTop:14,paddingBottom:110}}>
+       <div style={{display:"flex",alignItems:"flex-end",gap:10,padding:"0 16px 12px"}}>
+         <div style={{flex:1,minWidth:0}}>
+           <div style={{fontSize:22,fontWeight:800,letterSpacing:"-0.6px",lineHeight:1}}>Your ladders</div>
+           <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:4}}>{"Week "+_wk+" \u00b7 locked"}</div>
+         </div>
+         <div style={{flexShrink:0,textAlign:"right"}}>
+           <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:26,fontWeight:900,letterSpacing:"-0.7px",color:_tot>0?IOS.green:"#fff"}}>{Math.round(_tot*10)/10}</div>
+           <div style={{fontSize:9,letterSpacing:"0.1em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)",fontWeight:700}}>{_clr+" of "+_all+" rungs"}</div>
+         </div>
+       </div>
+       {ladSaved.map((L,i)=>{
+         const ab=_acr(L.game,false), hb=_acr(L.game,true);
+         const bank=(L.rungs||[]).reduce((a,r)=>a+(Number(r.pts)||0),0);
+         return (
+         <div key={i} style={{margin:"0 14px 9px",borderRadius:RAD.lg,background:"linear-gradient(165deg,#161619,#111114)",border:EDGE.hair,overflow:"hidden"}}>
+           <div style={{display:"flex",alignItems:"center",gap:10,padding:"11px 12px 9px"}}>
+             <div style={{width:34,height:34,borderRadius:RAD.sm+2,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:12,color:"#fff",background:(NFL_TEAM_COLORS[ab]||"#26262B"),border:EDGE.hair2,flexShrink:0}}>{ab||"?"}</div>
+             <div style={{flex:1,minWidth:0}}>
+               <div style={{fontSize:14.5,fontWeight:800,letterSpacing:"-0.3px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{L.player}</div>
+               <div style={{fontSize:10.5,color:"rgba(255,255,255,0.6)",fontWeight:600,marginTop:2}}>{(LADDER_MARKETS.find(m=>m.key===L.market)||{}).label||L.market}{ab&&hb?(" \u00b7 "+ab+" @ "+hb):""}</div>
+             </div>
+             <div style={{flexShrink:0,fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:900,color:IOS.blue,background:"rgba(59,111,224,0.14)",border:"0.5px solid rgba(59,111,224,0.4)",borderRadius:8,padding:"3px 8px"}}>{L.mult+"\u00d7"}</div>
+             <div style={{flexShrink:0,fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:17,fontWeight:900,minWidth:44,textAlign:"right",color:bank>0?IOS.green:"rgba(255,255,255,0.35)"}}>{bank>0?("+"+(Math.round(bank*10)/10)):"0.0"}</div>
+           </div>
+           <div style={{display:"flex",gap:3,padding:"0 12px 11px"}}>
+             {(L.rungs||[]).map((r,j)=>{
+               const won=r.result==="W", lost=r.result==="L", voided=r.result==="P";
+               return (
+               <div key={j} style={{flex:1,height:28,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:11,fontWeight:800,
+                 background:won?"rgba(48,209,88,0.16)":lost?"rgba(255,69,58,0.1)":"rgba(255,255,255,0.035)",
+                 border:"0.5px solid "+(won?"rgba(48,209,88,0.42)":lost?"rgba(255,69,58,0.28)":"rgba(255,255,255,0.09)"),
+                 color:won?IOS.green:lost?"rgba(255,255,255,0.25)":voided?IOS.orange:"rgba(255,255,255,0.5)",
+                 textDecoration:lost?"line-through":"none"}}>{r.point}</div>);
+             })}
+           </div>
+         </div>);
+       })}
+     </div>);
+   }
+
+   // Builder
+   return (
+   <div className="body" style={{paddingTop:14,paddingBottom:130}}>
+     <div style={{display:"flex",alignItems:"flex-end",gap:10,padding:"0 16px 12px"}}>
+       <div style={{flex:1,minWidth:0}}>
+         <div style={{fontSize:22,fontWeight:800,letterSpacing:"-0.6px",lineHeight:1}}>Your ladders</div>
+         <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:4}}>{"Week "+_wk+" \u00b7 multiplier each \u00b7 tap a ladder for rungs"}</div>
+       </div>
+       <div style={{flexShrink:0,textAlign:"right"}}>
+         <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:26,fontWeight:900,letterSpacing:"-0.7px",color:IOS.blue}}>{Math.round(ladPicks.reduce((t,L)=> t + (L.rungs||[]).reduce((a,r)=>a+_ptsOf(r.px, ladMult[L.key]||0),0), 0)*10)/10}</div>
+         <div style={{fontSize:9,letterSpacing:"0.1em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)",fontWeight:700}}>max pts</div>
+       </div>
+     </div>
+
+     {ladPicks.length===0 && (
+       <div style={{margin:"6px 14px 0",borderRadius:RAD.lg,border:"0.5px dashed rgba(255,255,255,0.14)",padding:"34px 22px",textAlign:"center"}}>
+         <div style={{fontSize:14,fontWeight:800,marginBottom:5}}>{"No ladders yet"}</div>
+         <div style={{fontSize:12,color:"rgba(255,255,255,0.4)",lineHeight:1.5,marginBottom:14}}>{"Pick "+_need+" players. Each one carries a five-rung ladder and you bank every rung they clear."}</div>
+         <div onClick={()=>{ setBuildingSlip(true); setScreen("browser"); }} style={{display:"inline-block",borderRadius:RAD.md,padding:"12px 22px",fontSize:14,fontWeight:800,cursor:"pointer",background:IOS.blue,color:"#fff"}}>Open the board</div>
+       </div>
+     )}
+
+     {ladPicks.map((L)=>{
+       const m=ladMult[L.key]; const ab=_acr(L.game,false), hb=_acr(L.game,true);
+       const open=ladOpen===L.key;
+       const mx=(L.rungs||[]).reduce((a,r)=>a+_ptsOf(r.px,m||1),0);
+       return (
+       <div key={L.key} style={{margin:"0 14px 9px",borderRadius:RAD.lg,background:"linear-gradient(165deg,#161619,#111114)",border:EDGE.hair,overflow:"hidden"}}>
+         <div style={{display:"flex",alignItems:"center",gap:10,padding:"11px 12px 9px"}}>
+           <div style={{width:34,height:34,borderRadius:RAD.sm+2,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:12,color:"#fff",background:(NFL_TEAM_COLORS[ab]||"#26262B"),border:EDGE.hair2,flexShrink:0}}>{ab||"?"}</div>
+           <div style={{flex:1,minWidth:0}}>
+             <div style={{fontSize:14.5,fontWeight:800,letterSpacing:"-0.3px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{L.player}</div>
+             <div style={{fontSize:10.5,color:"rgba(255,255,255,0.6)",fontWeight:600,marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{L.label+(ab&&hb?(" \u00b7 "+ab+" @ "+hb):"")}</div>
+           </div>
+           <div onClick={()=>setLadPicks(ps=>ps.filter(p=>p.key!==L.key))} style={{flexShrink:0,width:26,height:26,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(255,255,255,0.05)",cursor:"pointer"}}>
+             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2.6" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+           </div>
+           <div style={{flexShrink:0,textAlign:"right",minWidth:52}}>
+             <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:17,fontWeight:800,letterSpacing:"-0.4px",color:m?IOS.blue:"rgba(255,255,255,0.35)"}}>{Math.round(mx*10)/10}</div>
+             <div style={{fontSize:9,color:"rgba(255,255,255,0.3)",fontWeight:700,marginTop:1}}>{m?("max at "+m+"\u00d7"):"max pts"}</div>
+           </div>
+         </div>
+         <div onClick={()=>setLadOpen(open?null:L.key)} style={{display:"flex",alignItems:"flex-end",gap:4,padding:"0 12px 9px",cursor:"pointer"}}>
+           {(L.rungs||[]).map((r,i)=>(
+             <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+               <div style={{width:"100%",height:4,borderRadius:3,background:IOS.blue,opacity:(0.22+i*0.17)}}/>
+               <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:10,fontWeight:800,color:"rgba(255,255,255,0.3)"}}>{r.point}</span>
+             </div>
+           ))}
+           <div style={{flexShrink:0,width:18,display:"flex",alignItems:"center",justifyContent:"center",color:open?IOS.blue:"rgba(255,255,255,0.3)",paddingBottom:1,transform:open?"rotate(180deg)":"none",transition:"transform .2s"}}>
+             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M6 9l6 6 6-6"/></svg>
+           </div>
+         </div>
+         {open && (
+           <div style={{padding:"0 12px 10px"}}>
+             {(L.rungs||[]).map((r,i)=>(
+               <div key={i} style={{display:"flex",alignItems:"center",gap:9,padding:"6px 9px",borderRadius:8,marginBottom:4,background:"rgba(255,255,255,0.03)",border:EDGE.hair}}>
+                 <div style={{width:14,flexShrink:0,fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:11,fontWeight:800,color:"rgba(255,255,255,0.18)",textAlign:"center"}}>{i+1}</div>
+                 <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13.5,fontWeight:800,letterSpacing:"-0.3px"}}>{r.point+"+ "+L.unit}</div>
+                 <div style={{marginLeft:"auto",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:12.5,fontWeight:700,color:"rgba(255,255,255,0.6)"}}>{r.odds}</div>
+                 <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13.5,fontWeight:800,minWidth:46,textAlign:"right",color:IOS.blue}}>{(m?"+":"")+(Math.round(_ptsOf(r.px,m||1)*10)/10)}</div>
+               </div>
+             ))}
+           </div>
+         )}
+         <div style={{display:"flex",gap:5,padding:"0 12px 11px"}}>
+           {_poolVals.map(v=>{ const mine=m===v; const taken=!!_holder(v)&&!mine; return (
+             <div key={v} onClick={()=>_setMult(L.key,v)} style={{flex:1,textAlign:"center",padding:"8px 0",borderRadius:9,fontSize:12,fontWeight:800,cursor:"pointer",
+               color:mine?IOS.blue:"rgba(255,255,255,0.3)",background:mine?"rgba(59,111,224,0.17)":"rgba(255,255,255,0.04)",
+               border:"0.5px solid "+(mine?"rgba(59,111,224,0.55)":"rgba(255,255,255,0.1)"),opacity:taken?0.28:1}}>{v+"\u00d7"}</div>
+           );})}
+         </div>
+       </div>);
+     })}
+
+     {ladPicks.length>0 && ladPicks.length<_need && (
+       <div onClick={()=>{ setBuildingSlip(true); setScreen("browser"); }} style={{margin:"0 14px",borderRadius:RAD.lg,border:"0.5px dashed rgba(59,111,224,0.4)",padding:"15px",textAlign:"center",fontSize:13.5,fontWeight:800,color:IOS.blue,cursor:"pointer"}}>{"Add "+(_need-ladPicks.length)+" more ladder"+((_need-ladPicks.length)===1?"":"s")}</div>
+     )}
+
+     <div style={{margin:"12px 16px 0",fontSize:11,color:"rgba(255,255,255,0.3)",fontWeight:600,lineHeight:1.5}}>{"Every ladder scores the rungs it clears, five rungs each. Multipliers run 1\u00d7 to "+_need+"\u00d7, one each."}</div>
+
+     <div style={{position:"fixed",left:14,right:14,bottom:"calc(20px + env(safe-area-inset-bottom))",maxWidth:412,margin:"0 auto",borderRadius:RAD.lg,background:_allSet?"#0E1A12":"#12151C",border:"0.5px solid "+(_allSet?"rgba(48,209,88,0.5)":"rgba(59,111,224,0.5)"),padding:"12px 14px",display:"flex",alignItems:"center",gap:10,zIndex:60,boxShadow:"0 14px 34px rgba(0,0,0,0.55)"}}>
+       <div style={{minWidth:0}}>
+         <div style={{fontSize:13.5,fontWeight:800}}>{_past?"Week locked":(ladPicks.length<_need?("Pick "+(_need-ladPicks.length)+" more"):(_allSet?"Ready to lock":"Set every multiplier"))}</div>
+         <div style={{fontSize:10.5,color:"rgba(255,255,255,0.6)",fontWeight:600,marginTop:2}}>{_past?"Picks were final at 1:00 PM ET Sunday":"Locks Sunday 1:00 PM ET"}</div>
+       </div>
+       <div onClick={()=>{ if(_allSet && !_past && !ladLocking) lockLadders(ladPicks, _need); }} style={{marginLeft:"auto",flexShrink:0,borderRadius:RAD.md-1,padding:"11px 18px",fontSize:13.5,fontWeight:900,cursor:(_allSet&&!_past)?"pointer":"default",
+         background:(_allSet&&!_past)?IOS.green:"rgba(255,255,255,0.07)",color:(_allSet&&!_past)?"#04180a":"rgba(255,255,255,0.3)"}}>{ladLocking?"Locking\u2026":"Lock it in"}</div>
+     </div>
+   </div>);
+ }
+
  // Use separate state for solo mode vs league mode
  const activePicks = isSoloMode ? soloFlexPicks : flexPicks;
  const setActivePicks = isSoloMode ? setSoloFlexPicks : setFlexPicks;
