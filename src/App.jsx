@@ -7256,6 +7256,10 @@ function App() {
  const [newLeagueSize, setNewLeagueSize] = useState(8);
  const [newLeagueType, setNewLeagueType] = useState(null);
  const [newSvMode, setNewSvMode] = useState("anytd"); // survivor market: "anytd" | "ml"
+ // Ladder leagues: how many players each member picks per week. Rung count is NOT
+ // configurable -- five rungs is the shared scoring shape, and a league that changed
+ // it could not be compared to any other. Free runs 4; Pro commissioners size it.
+ const [newLadderCount, setNewLadderCount] = useState(4);
  const [svStarting, setSvStarting] = useState(false); // commissioner start-pool in flight
  const [showBrowse, setShowBrowse] = useState(false);
  const [publicLeagues, setPublicLeagues] = useState([]);
@@ -7618,11 +7622,12 @@ function App() {
    season_weeks:seasonWeeks, current_week:1, privacy:newLeaguePrivacy||"private",
    scoring_type:"multiplier_odds", start_mode:newLeagueStartMode||"auto", league_type:(newLeagueType==="duel"?"h2h":newLeagueType)||"h2h",
    ...(newLeagueStartMode==="scheduled" && newLeagueStartAt ? {season_start:new Date(newLeagueType==="survivor" ? svSeasonStartMs(new Date(newLeagueStartAt).getTime()) : new Date(newLeagueStartAt).getTime()).toISOString()} : {}),
-   playoffs_enabled:(newLeagueType==='bracket')?false:(!!newLeaguePlayoffs&&(()=>{const _f=Math.min(newLeaguePlayoffSize,([2,4,6,8].filter(v=>v<=newLeagueSize).pop()||2));return _f>=2&&seasonWeeks>Math.ceil(Math.log2(_f));})()),
-   playoff_size:(newLeagueType==='bracket'||!newLeaguePlayoffs)?0:(()=>{const _f=Math.min(newLeaguePlayoffSize,([2,4,6,8].filter(v=>v<=newLeagueSize).pop()||2));return (_f>=2&&seasonWeeks>Math.ceil(Math.log2(_f)))?_f:0;})(),
+   playoffs_enabled:(newLeagueType==='bracket'||newLeagueType==='ladder')?false:(!!newLeaguePlayoffs&&(()=>{const _f=Math.min(newLeaguePlayoffSize,([2,4,6,8].filter(v=>v<=newLeagueSize).pop()||2));return _f>=2&&seasonWeeks>Math.ceil(Math.log2(_f));})()),
+   playoff_size:(newLeagueType==='bracket'||newLeagueType==='ladder'||!newLeaguePlayoffs)?0:(()=>{const _f=Math.min(newLeaguePlayoffSize,([2,4,6,8].filter(v=>v<=newLeagueSize).pop()||2));return (_f>=2&&seasonWeeks>Math.ceil(Math.log2(_f)))?_f:0;})(),
    paid: _needsPaywall ? false : true,
    power_ups_enabled: isPro ? !!newLeaguePowerUps : true,
    ...(newLeagueType==="survivor" ? { survivor_config: newSvMode } : {}),
+   ...(newLeagueType==="ladder" ? { ladder_count: (isPro ? Math.max(3, Math.min(6, newLadderCount)) : 4) } : {}),
  }).select().single();
  if(error){alert(`leagues error: ${error.message} | code: ${error.code} | details: ${error.details}`);setCreatingLeague(false);return;}
  const {error:memberError} = await supabase.from("league_members").insert({league_id:data.id,user_id:user.id,is_commissioner:true});
@@ -17018,6 +17023,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      {id:"h2h",icon:"ti-users",label:"Head-to-head",desc:"Weekly matchups + seeded playoffs"},
      {id:"duel",icon:"ti-swords",label:"Duel",desc:"One week. One opponent. Winner takes the trophy.",badge:"1v1"},
      {id:"survivor",icon:"ti-target",label:"Survivor",desc:(newSvMode==="ml"?"Pick one team to win each week. Win and live, lose and die. Never reuse a team.":"Pick one TD scorer each week. Score and live, miss and die. Never reuse a player."),badge:"NFL"},
+     {id:"ladder",icon:"ti-stairs",label:"Ladder",desc:("Pick "+newLadderCount+" players a week. Each has a five-rung yardage ladder — bank every rung they clear."),badge:"NFL"},
      {id:"points",icon:"ti-chart-bar",label:"Total points",desc:"Everyone competes at once · cumulative points · top seeds make the playoff"},
      {id:"bracket",icon:"ti-tournament",label:"Tournament",desc:"Single-elimination bracket. 4, 8, 16, or 32 players only.",badge:"New"},
    ].map(t=>(
@@ -17027,6 +17033,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        setNewLeagueType(t.id);
        if(t.id==="duel"){ setNewLeagueSize(2); setNewLeagueWeeks(1); setNewLeaguePlayoffs(false); }
        else if(t.id==="survivor"){ setNewLeagueSports(["nfl"]); setNewLeagueWeeks(18); setNewLeaguePlayoffs(false); if(newLeagueSize<2||newLeagueSize>100) setNewLeagueSize(8); }
+       // Ladder is NFL-only (alt yardage ladders live in NFL player props) and scores on
+       // cumulative points, so no bracket and no matchup schedule.
+       else if(t.id==="ladder"){ setNewLeagueSports(["nfl"]); setNewLeagueWeeks(18); setNewLeaguePlayoffs(false); if(!isPro) setNewLadderCount(4); if(newLeagueSize<2||newLeagueSize>100) setNewLeagueSize(8); }
        else if(_wasPreset){ setNewLeagueSize(8); setNewLeagueWeeks(18); setNewLeaguePlayoffs(true); } // leaving a preset restores defaults
        if(t.id==='h2h'&&![2,6,8,10,12].includes(newLeagueSize)) setNewLeagueSize(8);
        if(t.id==='bracket'&&![4,8,16,32].includes(newLeagueSize)) setNewLeagueSize(8);
@@ -17039,6 +17048,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      }}>
        <div style={{width:40,height:40,borderRadius:RAD.md,background:newLeagueType===t.id?"rgba(10,132,255,0.15)":"#1A1A1A",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:10,transition:"background .15s"}}>
          {t.id==="duel"&&<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={newLeagueType===t.id?IOS.blue:"#555"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4l16 16M20 4L4 20"/><path d="M4 4l4 1-1-4zM20 4l-4 1 1-4zM20 20l-4-1 1 4zM4 20l4-1-1 4z"/></svg>}
+       {t.id==="ladder"&&<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={newLeagueType===t.id?IOS.blue:"#555"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M7 3v18M17 3v18"/><path d="M7 7h10M7 12h10M7 17h10"/></svg>}
        {t.id==="survivor"&&<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={newLeagueType===t.id?IOS.blue:"#555"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/></svg>}
        {t.id==="h2h"&&<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={newLeagueType===t.id?IOS.blue:"#555"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>}
          {t.id==="points"&&<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={newLeagueType===t.id?IOS.blue:"#555"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>}
@@ -17052,6 +17062,23 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
          <div style={{fontSize:11,color:"#555",lineHeight:1.4,textAlign:"center"}}>{t.desc}</div>
        </div>
      </div>
+     {t.id==="ladder"&&newLeagueType==="ladder"&&(
+     <div style={{marginBottom:8,borderRadius:RAD.md,padding:"12px 12px 10px",background:"#111",border:"0.5px solid #1E1E1E"}}>
+       <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:3}}>
+         <span style={{fontSize:13,fontWeight:800,color:"#fff"}}>Ladders per week</span>
+         {!isPro&&<span style={{display:"inline-flex",alignItems:"center",background:"rgba(191,90,242,0.14)",border:"0.5px solid rgba(191,90,242,0.35)",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:800,color:IOS.purple}}>PRO</span>}
+       </div>
+       <div style={{fontSize:10.5,color:"#555",lineHeight:1.45,marginBottom:10}}>{isPro?"How many players each member picks. Multipliers run 1x through this number, one each.":"Free leagues run four ladders a week. Go Pro to size your own."}</div>
+       <div style={{display:"flex",gap:6}}>
+         {[3,4,5,6].map(n=>{ const on=newLadderCount===n; const locked=!isPro&&n!==4; return (
+         <div key={n} onClick={(e)=>{ e.stopPropagation(); if(locked){ setShowPaywall("settings"); return; } setNewLadderCount(n); }} style={{flex:1,borderRadius:RAD.sm+2,padding:"10px 4px",textAlign:"center",cursor:"pointer",transition:"all .15s",background:on?"rgba(10,132,255,0.1)":"#0C0C0C",border:"0.5px solid "+(on?"rgba(10,132,255,0.45)":"#1E1E1E"),opacity:locked?0.4:1}}>
+           <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:18,color:on?IOS.blue:"#888"}}>{n}</div>
+           <div style={{fontSize:9,color:on?IOS.blue:"#555",fontWeight:700,marginTop:1}}>{"1x-"+n+"x"}</div>
+         </div>
+         );})}
+       </div>
+     </div>
+     )}
      {t.id==="survivor"&&newLeagueType==="survivor"&&(
      <div style={{display:"flex",gap:8,marginBottom:8}}>
        {[
