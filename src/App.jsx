@@ -185,6 +185,49 @@ function nflWeekStartMs(ms){
   if (ms < a) return a;
   return a + Math.floor((ms - a)/NFL_WEEK_MS)*NFL_WEEK_MS;
 }
+// ── Ladder leagues ───────────────────────────────────────────────────────────
+// Only markets that actually publish alternate lines can carry a ladder. Anytime
+// TD is binary and has no alternates, so it can never be a ladder -- same rule as
+// everywhere else: never ship a pick type that cannot be graded.
+const LADDER_MARKETS = [
+  { key:"player_rush_yds",      label:"Rush Yds",   unit:"yds" },
+  { key:"player_reception_yds", label:"Rec Yds",    unit:"yds" },
+  { key:"player_receptions",    label:"Receptions", unit:"rec" },
+  { key:"player_pass_yds",      label:"Pass Yds",   unit:"yds" },
+  { key:"player_pass_tds",      label:"Pass TDs",   unit:"td"  },
+];
+const LADDER_RUNGS = 5;
+// Every ladder is cut to the SAME five implied-probability targets, snapped to
+// whichever real alternate line sits nearest each one. That is what makes a
+// workhorse back and a slot receiver comparable: their yardages differ wildly,
+// but rung 3 is a coin flip on both boards and pays the same.
+const LADDER_TARGETS = [0.80, 0.62, 0.42, 0.22, 0.11];
+function ladderImplied(px){ const n = Number(px); if(!isFinite(n)||n===0) return 0; return n>0 ? 100/(n+100) : Math.abs(n)/(Math.abs(n)+100); }
+// Pick five strictly-ascending lines nearest the targets. Walks the targets in
+// order and never reuses a line, so a thin ladder degrades to fewer rungs rather
+// than repeating one -- a duplicated rung would double-pay the same outcome.
+function buildLadder(lines){
+  const src = (lines||[])
+    .filter(l => l && l.point!=null && isFinite(Number(l.impliedOdds)))
+    .map(l => ({ point:Number(l.point), odds:l.odds, px:Number(l.impliedOdds), p:ladderImplied(l.impliedOdds) }))
+    .sort((a,b)=> a.point - b.point);
+  if(!src.length) return [];
+  const out = [];
+  let floor = -Infinity;
+  for(const t of LADDER_TARGETS){
+    let best = null, bestD = Infinity;
+    for(const l of src){
+      if(l.point <= floor) continue;              // strictly ascending
+      if(out.some(o => o.point === l.point)) continue;
+      const d = Math.abs(l.p - t);
+      if(d < bestD){ bestD = d; best = l; }
+    }
+    if(!best) break;
+    out.push(best);
+    floor = best.point;
+  }
+  return out;
+}
 const IOS = {
  blue: "#3B6FE0",   // Deep — was iOS system #0A84FF
  green: "#30D158",
@@ -6083,6 +6126,40 @@ function App() {
  const [showPaywall, setShowPaywall] = useState(null);
  // Live StoreKit prices on iOS (web keeps its hardcoded Stripe copy).
  const [nativePrices, setNativePrices] = useState(null);
+ // ── Ladder league: board state ──
+ // ladPicks: [{ key, player, market, label, unit, bet, rungs:[{point,odds,px}] }]
+ // Rungs are fetched per player on tap -- /api/altlines groups prop outcomes by
+ // Over/Under, not by athlete, so it can only answer for one named player at a
+ // time. That is a feature here: the board itself costs zero extra calls (it is
+ // built from the props feed already in memory) and a ladder is only pulled when
+ // someone actually opens it.
+ const [ladMkt, setLadMkt] = useState("player_rush_yds");
+ const [ladPicks, setLadPicks] = useState([]);
+ const [ladOpen, setLadOpen] = useState(null);      // player key whose rungs are shown
+ const [ladCache, setLadCache] = useState({});      // key -> {loading}|{rungs}|{err}
+ const ladReqRef = useRef({});
+ const ladKeyOf = (player, market, eventId) => (String(eventId||"")+"|"+String(market||"")+"|"+String(player||"").toLowerCase());
+ const ladCount = () => { const n = Number(activeLeague && activeLeague.ladder_count); return (n>=3 && n<=6) ? n : 4; };
+ const fetchLadder = async (bet, player, market) => {
+   const key = ladKeyOf(player, market, bet && bet.eventId);
+   if(ladReqRef.current[key]) return;
+   ladReqRef.current[key] = 1;
+   setLadCache(c => ({...c, [key]:{loading:true}}));
+   try {
+     const _spk = {mlb:"baseball_mlb",nfl:"americanfootball_nfl",nba:"basketball_nba",nhl:"icehockey_nhl",ncaaf:"americanfootball_ncaaf"};
+     const _raw = (bet && (bet._sport||bet.sport)) || "nfl";
+     const q = new URLSearchParams({ sport:(_spk[_raw]||_raw||"americanfootball_nfl"), event:(bet&&bet.eventId)||"", market:market, player:player });
+     const r = await fetch(API_BASE+"/api/altlines?"+q.toString(), { cache:"no-store", headers: await authHeaders() });
+     const d = await r.json().catch(()=>({sides:[]}));
+     // Ladders are always the OVER side: a rung is a floor the player clears.
+     const over = (d.sides||[]).find(x => String(x.name||"").toLowerCase()==="over") || (d.sides||[])[0];
+     const rungs = buildLadder(over && over.lines);
+     setLadCache(c => ({...c, [key]: rungs.length ? {rungs} : {err:true}}));
+   } catch(e){
+     setLadCache(c => ({...c, [key]:{err:true}}));
+   } finally { delete ladReqRef.current[key]; }
+ };
+ useEffect(()=>{ setLadPicks([]); setLadOpen(null); }, [activeLeagueId]);
  const [altSheet, setAltSheet] = useState(null);
  const [checkoutLoading, setCheckoutLoading] = useState(null);
  const [showPostLeagueUpsell, setShowPostLeagueUpsell] = useState(false);
@@ -15874,6 +15951,143 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    </>); })()}
 
    {_sheetJsx}
+ </div>
+ );
+ }
+
+
+ // ─── LADDER: pick board ──────────────────────────────────────────────────────
+ // Replaces the generic grid for ladder leagues. Rows come from the props feed
+ // already loaded (no extra API calls); a player's rungs are pulled on tap.
+ const _ladMode = (!isSoloMode && activeLeague && activeLeague.league_type==="ladder");
+ if(_ladMode){
+ const _need = ladCount();
+ const _mkt = LADDER_MARKETS.find(m=>m.key===ladMkt) || LADDER_MARKETS[0];
+ const _mktOf = (k)=> LADDER_MARKETS.find(m=>m.key===k) || LADDER_MARKETS[0];
+
+ // Board rows: one per player for the active market. The props feed carries a
+ // row per line, so collapse to the player and keep the row nearest the middle
+ // of their range as the representative (its eventId is what altlines needs).
+ const _rowsRaw = (BETS.prop||[]).filter(b => b && b.market===ladMkt && / Over /i.test(String(b.pick||"")));
+ const _byPlayer = {};
+ _rowsRaw.forEach(b=>{
+   const nm = String(b.pick||"").split(/ Over /i)[0].trim();
+   if(!nm) return;
+   const k = ladKeyOf(nm, ladMkt, b.eventId);
+   if(!_byPlayer[k]) _byPlayer[k] = { key:k, player:nm, market:ladMkt, bet:b, game:b.game, gameTime:b.gameTime };
+ });
+ let _rows = Object.values(_byPlayer);
+ if(gridSearch.trim()){ const q=gridSearch.toLowerCase().trim(); _rows = _rows.filter(r => (r.player+" "+(r.game||"")).toLowerCase().includes(q)); }
+ _rows.sort((a,b)=> (Date.parse(a.gameTime||0)-Date.parse(b.gameTime||0)) || a.player.localeCompare(b.player));
+
+ const _picked = (k)=> ladPicks.some(p=>p.key===k);
+ const _rungsOf = (k)=> { const c = ladCache[k]; return (c && c.rungs) ? c.rungs : null; };
+ const _maxPts = (rungs)=> (rungs||[]).reduce((t,r)=> t + calcPickPoints(1, r.px, "W"), 0);
+ const _teamOf = (r)=>{ const pg = parseGame(r.game); const a=getAcronym(pg.away,false), h=getAcronym(pg.home,false); return {a,h}; };
+
+ const _toggle = (r)=>{
+   if(_picked(r.key)){ setLadPicks(ps=>ps.filter(p=>p.key!==r.key)); return; }
+   if(ladPicks.length >= _need) return;
+   const rungs = _rungsOf(r.key);
+   if(!rungs){ return; }   // never bank a ladder we could not price
+   haptic("select");
+   setLadPicks(ps=>[...ps, { key:r.key, player:r.player, market:r.market, label:_mktOf(r.market).label, unit:_mktOf(r.market).unit, bet:r.bet, game:r.game, gameTime:r.gameTime, rungs }]);
+ };
+ const _openRow = (r)=>{
+   if(ladOpen===r.key){ _toggle(r); return; }
+   setLadOpen(r.key);
+   if(!ladCache[r.key]) fetchLadder(r.bet, r.player, r.market);
+ };
+
+ return (
+ <div className="body" style={{background:"#08080A",zIndex:"auto"}}>
+   <style>{`.lad-scroll::-webkit-scrollbar{ display:none; }`}</style>
+   <div style={{position:"sticky",top:0,zIndex:10,background:"#08080A",boxShadow:"0 8px 16px -8px rgba(0,0,0,0.7)"}}>
+     <div style={{display:"flex",alignItems:"flex-end",gap:10,padding:"10px 16px 8px"}}>
+       <div onClick={()=>setScreen("picks")} style={{width:34,height:34,borderRadius:RAD.md,background:"rgba(255,255,255,0.06)",border:EDGE.hair2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:18,flexShrink:0}}>{"\u2039"}</div>
+       <div style={{flex:1,minWidth:0}}>
+         <div style={{fontSize:21,fontWeight:800,letterSpacing:"-0.6px",lineHeight:1}}>Ladders</div>
+         <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:3}}>{"Week "+(activeLeague.current_week||1)+" \u00b7 pick "+_need+" players"}</div>
+       </div>
+       <div style={{flexShrink:0,textAlign:"right"}}>
+         <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:22,fontWeight:900,letterSpacing:"-0.5px",color:ladPicks.length===_need?IOS.green:"#fff"}}>{ladPicks.length}</div>
+         <div style={{fontSize:9,letterSpacing:"0.1em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)",fontWeight:700}}>{"of "+_need+" set"}</div>
+       </div>
+     </div>
+     <div className="lad-scroll" style={{display:"flex",gap:6,overflowX:"auto",padding:"2px 16px 10px"}}>
+       {LADDER_MARKETS.map(m=>{ const on=m.key===ladMkt; return (
+         <div key={m.key} onClick={()=>{ setLadMkt(m.key); setLadOpen(null); }} style={{flexShrink:0,padding:"7px 12px",borderRadius:RAD.pill,fontSize:11.5,fontWeight:700,whiteSpace:"nowrap",cursor:"pointer",background:on?"rgba(59,111,224,0.14)":"#121216",border:"1px solid "+(on?"rgba(59,111,224,0.55)":"rgba(255,255,255,0.1)"),color:on?IOS.blue:"rgba(255,255,255,0.3)"}}>{m.label}</div>
+       );})}
+     </div>
+     <div style={{padding:"0 14px 8px"}}>
+       <input value={gridSearch} onChange={(e)=>setGridSearch(e.target.value)} placeholder="Search a player or team" style={{width:"100%",boxSizing:"border-box",background:"#121216",border:EDGE.hair,borderRadius:RAD.sm+2,padding:"9px 12px",fontSize:13,fontWeight:600,color:"#fff",outline:"none",fontFamily:"Barlow,sans-serif"}}/>
+     </div>
+   </div>
+
+   <div style={{padding:"4px 12px 120px"}}>
+     {_rows.length===0 && (
+       <div style={{textAlign:"center",padding:"46px 30px",color:"rgba(255,255,255,0.3)",fontSize:13,lineHeight:1.6}}>
+         {gridSearch.trim() ? "Nothing matches that search." : (_mkt.label+" lines aren\u2019t on the board yet. NFL props land inside the odds window as kickoff approaches.")}
+       </div>
+     )}
+     {_rows.map(r=>{
+       const on=_picked(r.key), open=ladOpen===r.key;
+       const c=ladCache[r.key]; const rungs=_rungsOf(r.key);
+       const t=_teamOf(r);
+       return (
+       <div key={r.key} style={{position:"relative",borderRadius:RAD.lg,marginBottom:7,overflow:"hidden",background:on?"linear-gradient(165deg,#141A28,#101318)":"linear-gradient(165deg,#161619,#121215)",border:"0.5px solid "+(on?"rgba(59,111,224,0.65)":"rgba(255,255,255,0.08)")}}>
+         <div onClick={()=>_openRow(r)} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 11px",cursor:"pointer"}}>
+           <div style={{width:36,height:36,borderRadius:RAD.sm+2,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:12.5,color:"#fff",background:(NFL_TEAM_COLORS[t.a]||"#26262B"),border:EDGE.hair2,flexShrink:0}}>{t.a||"?"}</div>
+           <div style={{flex:1,minWidth:0}}>
+             <div style={{fontSize:14.5,fontWeight:800,letterSpacing:"-0.3px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.player}</div>
+             <div style={{display:"flex",alignItems:"center",gap:5,marginTop:3,fontSize:10.5,fontWeight:600,color:"rgba(255,255,255,0.6)",whiteSpace:"nowrap",overflow:"hidden"}}>
+               <span>{_mktOf(r.market).label}</span><span style={{color:"rgba(255,255,255,0.18)"}}>{"\u00b7"}</span>
+               <span>{(t.a&&t.h)?(t.a+" @ "+t.h):(r.game||"")}</span>
+               <span style={{color:"rgba(255,255,255,0.18)"}}>{"\u00b7"}</span><span>{(dayLabel(r.gameTime)+" "+clockLabel(r.gameTime)).trim()}</span>
+             </div>
+           </div>
+           <div style={{flexShrink:0,textAlign:"right",minWidth:56}}>
+             {rungs
+               ? (<><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:18,fontWeight:800,letterSpacing:"-0.4px",color:on?IOS.blue:"#fff"}}>{Math.round(_maxPts(rungs)*10)/10}</div>
+                    <div style={{fontSize:9,color:"rgba(255,255,255,0.3)",fontWeight:700,marginTop:1}}>max pts</div></>)
+               : (c&&c.loading)
+                 ? <div style={{fontSize:10.5,color:"rgba(255,255,255,0.3)",fontWeight:700}}>Loading</div>
+                 : (c&&c.err)
+                   ? <div style={{fontSize:10.5,color:IOS.orange,fontWeight:700}}>No ladder</div>
+                   : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2.4" strokeLinecap="round"><path d="M9 6l6 6-6 6"/></svg>}
+           </div>
+         </div>
+         {open && (
+           <div style={{padding:"0 11px 11px"}}>
+             {(c&&c.loading) && <div style={{textAlign:"center",padding:"14px 0",fontSize:12,color:"rgba(255,255,255,0.3)",fontWeight:600}}>Pulling the ladder…</div>}
+             {(c&&c.err) && <div style={{textAlign:"center",padding:"14px 0",fontSize:12,color:"rgba(255,255,255,0.3)",fontWeight:600,lineHeight:1.5}}>{"No alternate lines posted for this player yet."}</div>}
+             {rungs && rungs.map((rg,i)=>(
+               <div key={i} style={{display:"flex",alignItems:"center",gap:9,padding:"6px 8px",borderRadius:9,marginBottom:4,background:"rgba(255,255,255,0.025)",border:EDGE.hair}}>
+                 <div style={{width:15,flexShrink:0,fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:11,fontWeight:800,color:"rgba(255,255,255,0.18)",textAlign:"center"}}>{i+1}</div>
+                 <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:14,fontWeight:800,letterSpacing:"-0.3px",minWidth:58}}>{rg.point+"+ "+_mktOf(r.market).unit}</div>
+                 <div style={{flex:1,height:3,borderRadius:2,background:"rgba(255,255,255,0.07)",overflow:"hidden",margin:"0 2px"}}><div style={{height:"100%",width:Math.round((i+1)/LADDER_RUNGS*100)+"%",background:"rgba(59,111,224,0.55)",borderRadius:2}}/></div>
+                 <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:12.5,fontWeight:700,color:"rgba(255,255,255,0.6)",minWidth:40,textAlign:"right"}}>{rg.odds}</div>
+                 <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13.5,fontWeight:800,minWidth:40,textAlign:"right"}}>{Math.round(calcPickPoints(1, rg.px, "W")*10)/10}</div>
+               </div>
+             ))}
+             {rungs && (
+               <div onClick={()=>_toggle(r)} style={{marginTop:7,borderRadius:RAD.md,padding:"11px 0",textAlign:"center",fontSize:13.5,fontWeight:800,cursor:"pointer",background:on?"rgba(255,69,58,0.12)":((ladPicks.length>=_need)?"rgba(255,255,255,0.05)":IOS.blue),color:on?IOS.red:((ladPicks.length>=_need)?"rgba(255,255,255,0.3)":"#fff"),border:on?"0.5px solid rgba(255,69,58,0.35)":"none"}}>
+                 {on ? "Remove from your slip" : (ladPicks.length>=_need ? ("Slip full \u2014 "+_need+" ladders") : "Add this ladder")}
+               </div>
+             )}
+           </div>
+         )}
+       </div>);
+     })}
+   </div>
+
+   <div style={{position:"fixed",left:14,right:14,bottom:"calc(20px + env(safe-area-inset-bottom))",maxWidth:412,margin:"0 auto",borderRadius:RAD.lg,background:"#12151C",border:"0.5px solid rgba(59,111,224,0.5)",padding:"12px 14px",display:"flex",alignItems:"center",gap:10,zIndex:60,boxShadow:"0 14px 34px rgba(0,0,0,0.55)"}}>
+     <div style={{minWidth:0}}>
+       <div style={{fontSize:13.5,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{ladPicks.length===0?("Pick "+_need+" ladders"):(ladPicks.length+" of "+_need+" picked")}</div>
+       <div style={{fontSize:10.5,color:"rgba(255,255,255,0.6)",fontWeight:600,marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{ladPicks.length?ladPicks.map(p=>p.player.split(" ").slice(-1)[0]).join(" \u00b7 "):"Tap a player to see their rungs"}</div>
+     </div>
+     <div onClick={()=>{ if(ladPicks.length===_need) setScreen("picks"); }} style={{marginLeft:"auto",flexShrink:0,borderRadius:RAD.md-1,padding:"11px 17px",fontSize:13.5,fontWeight:900,cursor:ladPicks.length===_need?"pointer":"default",background:ladPicks.length===_need?IOS.blue:"rgba(255,255,255,0.07)",color:ladPicks.length===_need?"#fff":"rgba(255,255,255,0.3)"}}>Review</div>
+   </div>
  </div>
  );
  }
