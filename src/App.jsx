@@ -5729,7 +5729,7 @@ function App() {
  // Survivor pools start on the commissioner's stamp with WHOEVER is in -- any
  // count from 2 up. The leagueFull test below is right for h2h (a half-empty
  // schedule is meaningless) and fatal here: a 3-of-8 pool would never start.
- const _svStarted = !isSoloMode && activeLeague && activeLeague.league_type==="survivor" && activeLeague.season_start && new Date(activeLeague.season_start).getTime() <= Date.now();
+ const _svStarted = !isSoloMode && activeLeague && activeLeague.league_type==="survivor" && !!activeLeague.season_start && (leagueFull || new Date(activeLeague.season_start).getTime() <= Date.now());
  const seasonNotStarted = !isSoloMode && !!(activeLeague&&activeLeague.id) && _lgReady && !_svStarted && (!leagueFull || !activeLeague.season_start || new Date(activeLeague.season_start).getTime() > Date.now());
  const leagueAwaitingStart = seasonNotStarted && leagueFull;
  // The ONLY way to change mode. Never call setIsSoloMode or setHomeMode directly.
@@ -15828,6 +15828,14 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    ? (BETS.ml||[]).filter(b=>(b._sport==="nfl"||!b._sport))
    : (BETS.prop||[]).filter(b=>(b._sport==="nfl"||!b._sport)&&(b.market==="player_anytime_td"||/anytime\s*td/i.test(b.pick||"")));
  { const _sn=new Set(); svRowsRaw=svRowsRaw.filter(b=>{ const k=(b.game||"")+"|"+(b.pick||b.id||""); if(_sn.has(k)) return false; _sn.add(k); return true; }); }
+ // Bind the board to the pool's current week. season_start is snapped to the NFL
+ // Tuesday-3AM boundary, so this window is exactly Wed->Mon of the right NFL week:
+ // preseason falls outside it, and so does every future week.
+ { const _wsMs = activeLeague.season_start ? new Date(activeLeague.season_start).getTime() : NaN;
+   if(!isNaN(_wsMs)){
+     const _a = _wsMs + (_wk-1)*_wm, _b = _wsMs + _wk*_wm;
+     svRowsRaw = svRowsRaw.filter(b=>{ const t = b && b.gameTime ? Date.parse(b.gameTime) : NaN; return !isNaN(t) && t >= _a && t < _b; });
+   } }
  if(replaceCtx){
    svRowsRaw = svRowsRaw.filter(b=>{
      if(!b||!b.gameTime) return false;
