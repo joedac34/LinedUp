@@ -7483,6 +7483,7 @@ function App() {
  // configurable -- five rungs is the shared scoring shape, and a league that changed
  // it could not be compared to any other. Free runs 4; Pro commissioners size it.
  const [newLadderCount, setNewLadderCount] = useState(4);
+ const [newStartWeek, setNewStartWeek] = useState(1);
  const [svStarting, setSvStarting] = useState(false); // commissioner start-pool in flight
  const [showBrowse, setShowBrowse] = useState(false);
  const [publicLeagues, setPublicLeagues] = useState([]);
@@ -7813,7 +7814,10 @@ function App() {
 
  // Longest league that stays fillable, given the sports + slots chosen right now.
  const _lgSportsSel = (newLeagueSports && newLeagueSports.length) ? newLeagueSports : [];
- const weekCap = leagueMaxWeeks(new Date(), _lgSportsSel, newLeagueSlots, 18);
+ // Ladder and survivor carry no slip: their weekly pick is a format rule, not a
+ // slot list, so the slot-capacity check does not apply to them.
+ const _noSlots = newLeagueType==="ladder" || newLeagueType==="survivor";
+ const weekCap = _noSlots ? { max:18, reason:"" } : leagueMaxWeeks(new Date(), _lgSportsSel, newLeagueSlots, 18);
  useEffect(()=>{ if(weekCap.max>0 && newLeagueWeeks>weekCap.max) setNewLeagueWeeks(weekCap.max); }, [weekCap.max]);
  const leaguePrice = (weeks, slots) => { const raw = 2*(Number(weeks)||0) + 1*(Number(slots)||0); return Math.max(10, Math.min(50, Math.floor(raw/5)*5)); };
  const startLeagueCheckout = async (leagueId) => { if(IS_NATIVE){ alert("Unlocking custom leagues isn\u2019t available in the iOS app yet."); return; } try { const r = await fetch(API_BASE+"/api/checkout",{method:"POST",headers:await authHeaders(),body:JSON.stringify({plan:"league",leagueId})}); const d = await r.json(); if(r.ok && d.url){ window.location.href=d.url; return; } alert("Couldn't start checkout: "+((d&&d.error)||"unknown")); } catch(e){ alert("Checkout failed."); } };
@@ -7827,7 +7831,7 @@ function App() {
  const _sportsRaw = newLeagueSports.length > 0 ? newLeagueSports : [sportId];
  const sportsArr = isPro ? _sportsRaw : _sportsRaw.slice(0,1); // multi-sport is Pro; clamp regardless of how state got here
  // Safety net: never persist a league longer than its slots can actually be filled.
- const _capNow = leagueMaxWeeks(new Date(), sportsArr, newLeagueSlots, 18);
+ const _capNow = (newLeagueType==="ladder"||newLeagueType==="survivor") ? { max:18, reason:"" } : leagueMaxWeeks(new Date(), sportsArr, newLeagueSlots, 18);
  const seasonWeeks = newLeagueType==='bracket' ? (bracketWeeks[newLeagueSize]||3) : (_capNow.max>0 ? Math.min(newLeagueWeeks, _capNow.max) : newLeagueWeeks);
  const _typed = Array.isArray(newLeagueSlots) && newLeagueSlots.length>0 && newLeagueSlots.every(s=>s.type);
  const _classic = _typed && newLeagueSlots.length===DEFAULT_SLOTS.length
@@ -7845,6 +7849,11 @@ function App() {
    season_weeks:seasonWeeks, current_week:1, privacy:newLeaguePrivacy||"private",
    scoring_type:"multiplier_odds", start_mode:newLeagueStartMode||"auto", league_type:(newLeagueType==="duel"?"h2h":newLeagueType)||"h2h",
    ...(newLeagueStartMode==="scheduled" && newLeagueStartAt ? {season_start:new Date(newLeagueType==="survivor" ? svSeasonStartMs(new Date(newLeagueStartAt).getTime()) : new Date(newLeagueStartAt).getTime()).toISOString()} : {}),
+   // NFL-anchored formats stamp their anchor at create time: Week 1 of the league
+   // IS the chosen NFL week, so the board and advance.js agree from row one.
+   ...((newLeagueType==="ladder"||newLeagueType==="survivor") && newLeagueStartMode!=="scheduled"
+     ? { season_start: new Date(nflWeek1AnchorMs(nflSeasonYearOf(Date.now())) + (Math.max(1,Number(newStartWeek)||1)-1)*NFL_WEEK_MS).toISOString() }
+     : {}),
    playoffs_enabled:(newLeagueType==='bracket'||newLeagueType==='ladder')?false:(!!newLeaguePlayoffs&&(()=>{const _f=Math.min(newLeaguePlayoffSize,([2,4,6,8].filter(v=>v<=newLeagueSize).pop()||2));return _f>=2&&seasonWeeks>Math.ceil(Math.log2(_f));})()),
    playoff_size:(newLeagueType==='bracket'||newLeagueType==='ladder'||!newLeaguePlayoffs)?0:(()=>{const _f=Math.min(newLeaguePlayoffSize,([2,4,6,8].filter(v=>v<=newLeagueSize).pop()||2));return (_f>=2&&seasonWeeks>Math.ceil(Math.log2(_f)))?_f:0;})(),
    paid: _needsPaywall ? false : true,
@@ -17573,7 +17582,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div style={{padding:"20px 20px 0"}}>
  {/* Step indicator */}
  <div style={{display:"flex",gap:5,marginBottom:16}}>
-   {(newLeagueType==="survivor"?[0,1]:[0,1,2]).map(i=><div key={i} style={{flex:1,height:3,borderRadius:2,background:newLeagueStep>=i?IOS.blue:"#1E1E1E",transition:"background .2s"}}/>)}
+   {((newLeagueType==="survivor"||newLeagueType==="ladder")?[0,1]:[0,1,2]).map(i=><div key={i} style={{flex:1,height:3,borderRadius:2,background:newLeagueStep>=i?IOS.blue:"#1E1E1E",transition:"background .2s"}}/>)}
  </div>
 
  {/* ── STEP 0: League type ── */}
@@ -17585,7 +17594,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      {id:"h2h",icon:"ti-users",label:"Head-to-head",desc:"Weekly matchups + seeded playoffs"},
      {id:"duel",icon:"ti-swords",label:"Duel",desc:"One week. One opponent. Winner takes the trophy.",badge:"1v1"},
      {id:"survivor",icon:"ti-target",label:"Survivor",desc:(newSvMode==="ml"?"Pick one team to win each week. Win and live, lose and die. Never reuse a team.":"Pick one TD scorer each week. Score and live, miss and die. Never reuse a player."),badge:"NFL"},
-     {id:"ladder",icon:"ti-stairs",label:"Ladder",desc:("Pick "+newLadderCount+" players a week. Each has a five-rung yardage ladder — bank every rung they clear."),badge:"NFL"},
+     {id:"ladder",icon:"ti-stairs",label:"Ladder",desc:("Pick "+newLadderCount+" players a week. Each carries a five-rung ladder on their stat — bank every rung they clear."),badge:"NFL"},
      {id:"points",icon:"ti-chart-bar",label:"Total points",desc:"Everyone competes at once · cumulative points · top seeds make the playoff"},
      {id:"bracket",icon:"ti-tournament",label:"Tournament",desc:"Single-elimination bracket. 4, 8, 16, or 32 players only.",badge:"New"},
    ].map(t=>(
@@ -17630,7 +17639,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
          <span style={{fontSize:13,fontWeight:800,color:"#fff"}}>Ladders per week</span>
          {!isPro&&<span style={{display:"inline-flex",alignItems:"center",background:"rgba(191,90,242,0.14)",border:"0.5px solid rgba(191,90,242,0.35)",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:800,color:IOS.purple}}>PRO</span>}
        </div>
-       <div style={{fontSize:10.5,color:"#555",lineHeight:1.45,marginBottom:10}}>{isPro?"How many players each member picks. Multipliers run 1x through this number, one each.":"Free leagues run four ladders a week. Go Pro to size your own."}</div>
+       <div style={{fontSize:10.5,color:"#555",lineHeight:1.45,marginBottom:10}}>{isPro?"How many players each member picks. Rushing, receiving, receptions, passing \u2014 whatever they post a ladder for. Multipliers run 1x through this number, one each.":"Free leagues run four ladders a week. Go Pro to size your own."}</div>
        <div style={{display:"flex",gap:6}}>
          {[3,4,5,6].map(n=>{ const on=newLadderCount===n; const locked=!isPro&&n!==4; return (
          <div key={n} onClick={(e)=>{ e.stopPropagation(); if(locked){ setShowPaywall("settings"); return; } setNewLadderCount(n); }} style={{flex:1,borderRadius:RAD.sm+2,padding:"10px 4px",textAlign:"center",cursor:"pointer",transition:"all .15s",background:on?"rgba(10,132,255,0.1)":"#0C0C0C",border:"0.5px solid "+(on?"rgba(10,132,255,0.45)":"#1E1E1E"),opacity:locked?0.4:1}}>
@@ -17862,8 +17871,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 
    {/* Sports */}
    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-     <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"rgba(255,255,255,0.6)"}}>Sport{isPro?" (select all that apply)":""}</div>
-     {isPro && <div style={{fontSize:9,fontWeight:700,color:IOS.blue,background:"rgba(10,132,255,0.1)",border:"0.5px solid rgba(10,132,255,0.25)",borderRadius:4,padding:"2px 6px"}}>MULTI-SPORT</div>}
+     <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"rgba(255,255,255,0.6)"}}>{"Sport"+((isPro&&newLeagueType!=="survivor"&&newLeagueType!=="ladder")?" (select all that apply)":"")}</div>
+     {isPro && newLeagueType!=="survivor" && newLeagueType!=="ladder" && <div style={{fontSize:9,fontWeight:700,color:IOS.blue,background:"rgba(10,132,255,0.1)",border:"0.5px solid rgba(10,132,255,0.25)",borderRadius:4,padding:"2px 6px"}}>MULTI-SPORT</div>}
    </div>
    <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:isPro?4:16}}>
    {[
@@ -17873,7 +17882,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
         after both maps carry icehockey_nhl and a pick has graded end-to-end. */
    ].map(sp=>{
      const isSelected = newLeagueSports.includes(sp.id);
-     const _svLock = newLeagueType==="survivor"; // survivor is NFL-only in both modes (anytime-TD market / NFL moneylines)
+     const _svLock = newLeagueType==="survivor" || newLeagueType==="ladder"; // NFL-only: anytime-TD / NFL moneylines / NFL alt-yardage ladders
      if(_svLock && sp.id!=="nfl") return null;
      return (
      <div key={sp.id} onClick={()=>{ if(!_svLock) toggleNewLeagueSport(sp.id); }}
@@ -17918,11 +17927,35 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      </div>
    </div>
    )}
+   {(newLeagueType==="ladder"||newLeagueType==="survivor")&&(()=>{
+     // Which NFL week does Week 1 land on. Anything already locked is unpickable:
+     // opening inside a closed week hands everyone a no-pick week they never saw.
+     const _a = nflWeek1AnchorMs(nflSeasonYearOf(Date.now()));
+     const _cur = Math.max(1, Math.floor((Date.now()-_a)/NFL_WEEK_MS)+1);
+     const _first = (()=>{ const ws=_a+(_cur-1)*NFL_WEEK_MS; const lk=_svRevealMs(ws); return (lk!=null && Date.now()>=lk) ? _cur+1 : _cur; })();
+     const _weeks = []; for(let w=Math.max(1,_first); w<=Math.min(18,_first+5); w++) _weeks.push(w);
+     if(!_weeks.length) return null;
+     const _sel = Math.max(_weeks[0], Math.min(_weeks[_weeks.length-1], newStartWeek));
+     const _fmt = (w)=>{ const t=_a+(w-1)*NFL_WEEK_MS+2*86400000; return new Date(t).toLocaleDateString([], {month:"short", day:"numeric"}); };
+     return (
+     <>
+     <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"rgba(255,255,255,0.6)",marginTop:18,marginBottom:8}}>Starts on NFL week</div>
+     <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:6}}>
+       {_weeks.map(w=>{ const on=w===_sel; return (
+       <div key={w} onClick={()=>setNewStartWeek(w)} style={{flex:"1 1 62px",borderRadius:RAD.sm,padding:"9px 4px",textAlign:"center",cursor:"pointer",transition:"all .15s",
+         background:on?"rgba(10,132,255,0.1)":"#111",border:"0.5px solid "+(on?"rgba(10,132,255,0.45)":"#1E1E1E")}}>
+         <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:16,color:on?IOS.blue:"#888"}}>{"Wk "+w}</div>
+         <div style={{fontSize:9,color:on?IOS.blue:"#555",fontWeight:700,marginTop:1}}>{_fmt(w)}</div>
+       </div>);})}
+     </div>
+     <div style={{fontSize:10.5,color:"#555",lineHeight:1.45,marginBottom:16}}>{"Week 1 of your league is NFL Week "+_sel+". Weeks that already locked can\u2019t be picked."}</div>
+     </>);
+   })()}
    {/* Size */}
    {!isDuel&&<div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"rgba(255,255,255,0.6)",marginBottom:8}}>
      {newLeagueType==="bracket"?"Tournament size":"League size"}
    </div>}
-   {!isDuel&&((newLeagueType==="points"||newLeagueType==="survivor")?(
+   {!isDuel&&((newLeagueType==="points"||newLeagueType==="survivor"||newLeagueType==="ladder")?(
      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
        <div onClick={()=>setNewLeagueSize(s=>Math.max(2,s-1))} style={{width:28,height:28,borderRadius:RAD.sm,background:"#1A1A1A",border:"0.5px solid #2A2A2A",color:"#ccc",fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>−</div>
        <div style={{fontSize:16,fontWeight:700,color:"#fff",minWidth:28,textAlign:"center"}}>{newLeagueSize}</div>
@@ -18061,10 +18094,10 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    {/* Create button */}
    <button
      disabled={!newLeagueSports.length||!newLeagueName.trim()||creatingLeague}
-     onClick={()=>{ if(!newLeagueSports.length||!newLeagueName.trim()) return; if(newLeagueType==="survivor"){ createLeague(newLeagueName.trim(), newLeagueSports[0]); } else { setNewLeagueStep(2); } }}
+     onClick={()=>{ if(!newLeagueSports.length||!newLeagueName.trim()) return; if(newLeagueType==="survivor"||newLeagueType==="ladder"){ createLeague(newLeagueName.trim(), newLeagueSports[0]); } else { setNewLeagueStep(2); } }}
      style={{width:"100%",background:newLeagueSports.length&&newLeagueName.trim()?IOS.blue:"rgba(255,255,255,0.08)",border:"none",borderRadius:RAD.md,padding:"13px",fontFamily:"Barlow,sans-serif",fontSize:15,fontWeight:700,color:newLeagueSports.length&&newLeagueName.trim()?"#fff":"rgba(255,255,255,0.25)",cursor:newLeagueSports.length&&newLeagueName.trim()?"pointer":"default",transition:"all .2s",marginBottom:4}}
    >
-     {newLeagueType==="survivor"?(creatingLeague?"Creating...":"Create Survivor Pool"):"Continue \u2192"}
+     {newLeagueType==="survivor"?(creatingLeague?"Creating...":"Create Survivor Pool"):newLeagueType==="ladder"?(creatingLeague?"Creating...":"Create Ladder League"):"Continue \u2192"}
    </button>
    </>
  )}
