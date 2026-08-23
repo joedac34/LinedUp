@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Delete Your Account — PickLock</title>
+<meta name="description" content="How to delete your PickLock account and what happens to your data.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --blue:#3B6FE0; --red:#FF453A; --green:#30D158;
+    --l2:rgba(255,255,255,0.62); --l3:rgba(255,255,255,0.34);
+    --hair:0.5px solid rgba(255,255,255,0.10);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#08080A;color:#fff;font-family:'Barlow',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+       line-height:1.6;padding:0 20px 80px;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:720px;margin:0 auto}
+  header{padding:52px 0 30px;border-bottom:var(--hair);margin-bottom:34px}
+  .brand{font-size:13px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--blue);margin-bottom:12px}
+  h1{font-size:34px;font-weight:900;letter-spacing:-1px;line-height:1.12}
+  .sub{font-size:15px;color:var(--l2);font-weight:500;margin-top:12px}
+  h2{font-size:20px;font-weight:800;letter-spacing:-.4px;margin:36px 0 12px}
+  p{font-size:15px;color:var(--l2);margin-bottom:14px}
+  strong{color:#fff;font-weight:700}
+  ol,ul{margin:0 0 16px 20px}
+  li{font-size:15px;color:var(--l2);margin-bottom:9px}
+  .card{background:#121216;border:var(--hair);border-radius:14px;padding:18px 20px;margin-bottom:16px}
+  .row{display:flex;gap:12px;padding:11px 0;border-bottom:var(--hair)}
+  .row:last-child{border-bottom:none;padding-bottom:0}
+  .row:first-child{padding-top:0}
+  .mark{flex-shrink:0;width:20px;height:20px;border-radius:6px;display:flex;align-items:center;justify-content:center;
+        font-size:12px;font-weight:800;margin-top:2px}
+  .del{background:rgba(255,69,58,0.14);color:var(--red)}
+  .keep{background:rgba(255,255,255,0.07);color:var(--l3)}
+  .row .t{font-size:14.5px;font-weight:700;color:#fff}
+  .row .d{font-size:13px;color:var(--l3);margin-top:2px}
+  .warn{background:rgba(255,69,58,0.08);border:0.5px solid rgba(255,69,58,0.28);border-radius:12px;
+        padding:15px 18px;margin:22px 0;font-size:14.5px;color:rgba(255,255,255,0.82);font-weight:600}
+  a{color:var(--blue);text-decoration:none}
+  a:hover{text-decoration:underline}
+  footer{margin-top:52px;padding-top:24px;border-top:var(--hair);font-size:13px;color:var(--l3)}
+  .steps{counter-reset:s;list-style:none;margin-left:0}
+  .steps li{counter-increment:s;position:relative;padding-left:38px;margin-bottom:13px;font-size:15px;color:var(--l2)}
+  .steps li::before{content:counter(s);position:absolute;left:0;top:0;width:26px;height:26px;border-radius:8px;
+    background:rgba(59,111,224,0.14);border:0.5px solid rgba(59,111,224,0.34);color:var(--blue);
+    font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">PickLock</div>
+    <h1>Delete your account</h1>
+    <div class="sub">How to delete your PickLock account, and exactly what happens to your data when you do.</div>
+  </header>
+
+  <p>PickLock is published by <strong>PickLock LLC</strong>. You can delete your PickLock account at any time, directly inside the app. You do not need to contact us first.</p>
+
+  <h2>Delete your account in the app</h2>
+  <ol class="steps">
+    <li>Open the PickLock app and sign in.</li>
+    <li>Tap <strong>Profile</strong> in the bottom navigation bar.</li>
+    <li>Scroll to the bottom and tap <strong>Delete Account</strong>.</li>
+    <li>Follow the three confirmation steps and confirm the deletion.</li>
+  </ol>
+
+  <div class="warn">Deletion is permanent. It cannot be undone, and there is no grace period or recovery window.</div>
+
+  <h2>Request deletion by email</h2>
+  <p>If you can no longer access the app or your account, email <a href="mailto:picklockapp@gmail.com">picklockapp@gmail.com</a> from the email address on the account, with the subject line <strong>Delete my account</strong>. We will verify ownership of the account and complete the deletion within 30 days.</p>
+
+  <h2>What gets deleted</h2>
+  <div class="card">
+    <div class="row"><div class="mark del">&times;</div><div><div class="t">Your login</div><div class="d">Email address, password, and any connected sign-in method (Apple or Google)</div></div></div>
+    <div class="row"><div class="mark del">&times;</div><div><div class="t">Your profile</div><div class="d">Username, badges, founding member status, and your global leaderboard entry</div></div></div>
+    <div class="row"><div class="mark del">&times;</div><div><div class="t">Your subscription</div><div class="d">PickLock Pro is cancelled immediately. No refund is issued for the current billing period.</div></div></div>
+    <div class="row"><div class="mark del">&times;</div><div><div class="t">Your messages</div><div class="d">Your chat messages are removed from every league you belonged to</div></div></div>
+    <div class="row"><div class="mark del">&times;</div><div><div class="t">Your notification tokens</div><div class="d">Push notification registrations are removed and no further notifications are sent</div></div></div>
+  </div>
+
+  <h2>What is kept, and why</h2>
+  <div class="card">
+    <div class="row"><div class="mark keep">&checkmark;</div><div><div class="t">Your past picks, anonymised</div><div class="d">Slips you already locked stay attached to the weeks they were made, credited to &ldquo;Former player&rdquo; with your name and account removed. They are no longer linked to you or to any identifying information.</div></div></div>
+  </div>
+  <p>We keep past picks in anonymised form because deleting them outright would silently rewrite the results and standings of every other player who competed against you in those weeks. Anonymising rather than erasing protects the integrity of other people&rsquo;s league history while removing every link between those records and you.</p>
+
+  <h2>Retention period</h2>
+  <p>Your personal data is removed from our live systems immediately when you confirm deletion. Anonymised pick records are retained indefinitely as part of league history, and cannot be re-associated with you. Encrypted database backups may hold residual copies of deleted data for up to <strong>30 days</strong> before they roll off automatically. Records we are legally required to retain, such as payment and tax records for completed subscription transactions, are kept for as long as the law requires.</p>
+
+  <h2>Questions</h2>
+  <p>For anything else about your data, see our <a href="/privacy.html">Privacy Policy</a> and <a href="/terms.html">Terms of Service</a>, or email <a href="mailto:picklockapp@gmail.com">picklockapp@gmail.com</a>.</p>
+
+  <footer>
+    PickLock LLC &middot; <a href="mailto:picklockapp@gmail.com">picklockapp@gmail.com</a><br>
+    Last updated August 2026
+  </footer>
+
+</div>
+</body>
+</html>

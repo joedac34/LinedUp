@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1091195598938",
+    "project_id": "picklock-a3e39",
+    "storage_bucket": "picklock-a3e39.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1091195598938:android:ad1539acdf9a9eae4bc063",
+        "android_client_info": {
+          "package_name": "com.dacunto.picklock"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD3x6MKcExKOWrQGXtB3FELxslQQz9FE88"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
