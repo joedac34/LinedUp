@@ -8874,8 +8874,17 @@ function App() {
    if(profileReqRef.current===id) setProfileLoading(false);
  };
  const fetchUserProfile = async (uid) => {
- const {data} = await supabase.from("users").select("id,username,email,is_pro,push_enabled,notif_results,notif_grades,notif_reminder,notif_league,notif_plok,referral_code,referred_by,birth_date,is_founder,founder_number").eq("id",uid).maybeSingle();
+ let {data} = await supabase.from("users").select("id,username,email,is_pro,push_enabled,notif_results,notif_grades,notif_reminder,notif_league,notif_plok,referral_code,referred_by,birth_date,is_founder,founder_number").eq("id",uid).maybeSingle();
  if(data) {
+ // Signup collects DOB pre-account; with email confirmation on (or if the signup-time
+ // upsert raced/failed) the row can exist with birth_date null even though the user
+ // already passed the gate. The DOB rides in auth metadata \u2014 heal the row from it
+ // instead of re-prompting a user who already answered.
+ if(!data.birth_date){ try{
+   const {data:_au}=await supabase.auth.getUser();
+   const _mdob=_au&&_au.user&&_au.user.user_metadata&&_au.user.user_metadata.birth_date;
+   if(_mdob){ await supabase.from("users").update({birth_date:_mdob}).eq("id",uid); data={...data, birth_date:_mdob}; }
+ }catch(e){} }
  setUserProfile(data);
  // DB is source of truth for pro status
  const proVal = data.is_pro === true;
@@ -11552,12 +11561,16 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const {data:existing}=await supabase.from("public_profiles").select("id").eq("username",username).maybeSingle();
  if(existing){ alert("That username is taken. Try another."); return; }
  const refCode=((document.getElementById("auth-referral")?.value||"").trim().toUpperCase())||null;
- const {data,error}=await supabase.auth.signUp({email,password,options:{data:{username, referred_by:refCode}}});
+ const {data,error}=await supabase.auth.signUp({email,password,options:{data:{username, referred_by:refCode, birth_date:dob}}});
  if(error){ alert(error.message); return; }
  const uid = data?.user?.id;
  if(uid && data?.session){
  const myRef=Math.random().toString(36).substring(2,8).toUpperCase();
  await supabase.from("users").upsert({id:uid, email, username, referral_code:myRef, referred_by:refCode, birth_date:dob}, {onConflict:"id"});
+ // fetchUserProfile (fired by onAuthStateChange) races this upsert. If its read won,
+ // local userProfile has birth_date:null and the DOB backfill overlay re-prompts a
+ // brand-new signup. The DOB was collected seconds ago \u2014 set it locally too.
+ setUserProfile(prev=>({...(prev||{}), birth_date:dob}));
  }
  if(uid && !data?.session){ alert("Account created! Check your email to confirm your address, then sign in."); setAuthScreen("login"); return; }
  setPkTour("welcome");
@@ -13337,7 +13350,12 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const rows = buildSlotRows(slot, idx, activePicks);
  if(await survivorBlocked(rows)) return;
  const { data, error } = await supabase.from("picks").insert(rows).select("id");
- if(error){ alert("Couldn’t lock that pick: "+error.message); return; }
+ if(error){
+ // 23505 = picks_unique_slot: the server already holds a live pick for this slot,
+ // so the local slip is stale (poisoned snapshot / second device). Resync to server
+ // truth instead of surfacing a raw Postgres constraint string.
+ if(String(error.code)==="23505"){ alert("Your slip was out of sync with your locked picks \u2014 reloading them now."); try{ await fetchMyPicks(activeLeague.id, _weekNum, user.id, activeLeague); fetchWeekPicks(activeLeague.id, _weekNum); }catch(e){} return; }
+ alert("Couldn’t lock that pick: "+error.message); return; }
  try{ posthog.capture('pick_locked', { league_id: activeLeague.id, category: slot.category||null, multiplier: slot.mult||null }); }catch(e){}
  const ids = (data||[]).map(r=>r.id);
  setActivePicks(prev=>prev.map((p,i)=> i===idx ? {...p, committed:true, commitIds:ids} : p));
@@ -13353,6 +13371,16 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    const { data:_chk } = await supabase.from("picks").select("result").in("id", ids);
    if((_chk||[]).some(r=>r.result==="W"||r.result==="L"||r.result==="P")){ alert("This pick has already been graded — it can’t be changed."); return; }
    const { error } = await supabase.from("picks").delete().in("id", ids); if(error){ alert("Couldn’t unlock: "+error.message); return; }
+ } else {
+   // Safety net: committed with NO commitIds is the poisoned-snapshot state. Skipping
+   // the server delete here left a ghost row that blocked every re-lock on this slot
+   // (picks_unique_slot). Delete by the slot’s saved name instead; result=pending
+   // keeps graded rows untouchable, and slotLocked() above already blocked started games.
+   const _isC = !!parseSlotConfig(activeLeague&&activeLeague.slot_config) || activePicks.some(p=>p.locked);
+   let _q = supabase.from("picks").delete().eq("league_id",activeLeague.id).eq("user_id",user.id).eq("week",_weekNum).eq("result","pending");
+   if(slot.isParlay){ _q = _isC ? _q.like("slot","longshot_"+idx+"_%") : _q.like("slot","longshot_%"); }
+   else { _q = _q.eq("slot", _isC ? ((slot.category||"ml")+"_"+idx) : (slot.category||"ml")); }
+   const { error } = await _q; if(error){ alert("Couldn’t unlock: "+error.message); return; }
  }
  setActivePicks(prev=>prev.map((p,i)=> i===idx ? {...p, committed:false, commitIds:[]} : p));
  try{ fetchWeekPicks(activeLeague.id, _weekNum); }catch(e){}
@@ -14340,6 +14368,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  if(!leagueIsFull) return null;
  return allFlexFilled && (hasParlay||isCustomSlip)
  ? <button className="ios-btn green" onClick={async()=>{
+ let _snapPicks = activePicks;
  if(user) {
  const week = activeLeague.current_week||activeLeague.week||1;
  // Solo is a full resubmit; leagues lock ADDITIVELY so already-locked picks
@@ -14347,29 +14376,51 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  if(isSoloMode){ await supabase.from("picks").delete().eq("league_id", activeLeague.id).eq("user_id", user.id).eq("week", week); }
  if(!isSoloMode && lgCompleted(activeLeague)){ alert("This season is complete \u2014 the league is read-only."); return; }
  if(demoBlock("lock these picks")) return;
- const picksToSave = []; const lockedIdx = [];
+ const picksToSave = []; const lockedIdx = []; const rowNamesBySlot = {};
  activePicks.forEach((slot, slotIdx)=>{
  if(!slot.mult) return;
  if(!isSoloMode && slot.committed) return; // already locked
  const filledOk = slot.isParlay ? (slot.parlayLegs||[]).length>=2 : !!slot.bet;
  if(!filledOk) return;
  if(!isSoloMode && slotStarted(slot)) return; // can’t lock a started game
- buildSlotRows(slot, slotIdx).forEach(r=>picksToSave.push(r));
+ const _rs = buildSlotRows(slot, slotIdx);
+ rowNamesBySlot[slotIdx] = _rs.map(r=>r.slot);
+ _rs.forEach(r=>picksToSave.push(r));
  lockedIdx.push(slotIdx);
  });
+ // The snapshot written below must be the POST-lock picks. Reading activePicks after a
+ // queued setActivePicks reads the stale closure — committed:false, commitIds:[] — and
+ // restoring that snapshot via Edit picks let users "edit" server-locked picks: deletes
+ // silently no-oped and every re-lock hit picks_unique_slot (the Olson duel bug).
  if(picksToSave.length) {
  if(await survivorBlocked(picksToSave)) return;
- const {data:ins, error:insertError} = await supabase.from("picks").insert(picksToSave).select("id,multiplier");
- if(insertError) { alert("Error saving picks: " + insertError.message); return; }
- if(!isSoloMode){ setActivePicks(prev=>prev.map((p,i)=>{ if(!lockedIdx.includes(i)) return p; const mine=(ins||[]).filter(r=>r.multiplier===p.mult).map(r=>r.id); return {...p, committed:true, commitIds:mine}; })); }
+ const {data:ins, error:insertError} = await supabase.from("picks").insert(picksToSave).select("id,slot,multiplier");
+ if(insertError) {
+ if(String(insertError.code)==="23505"){ alert("Your slip was out of sync with your locked picks \u2014 reloading them now."); try{ await fetchMyPicks(activeLeague.id, week, user.id, activeLeague); fetchWeekPicks(activeLeague.id, week); }catch(e){} return; }
+ alert("Error saving picks: " + insertError.message); return; }
+ if(!isSoloMode){
+ // Match inserted rows back to slots by SLOT NAME (+mult for the bare-name flex
+ // format), consuming each row once. Matching by multiplier alone cross-wired
+ // commitIds whenever two slots shared a mult — unlock on one deleted the other.
+ const _pool = (ins||[]).slice();
+ const _next = activePicks.map((p,i)=>{
+ if(!lockedIdx.includes(i)) return p;
+ const _names = rowNamesBySlot[i]||[];
+ const mine = [];
+ _names.forEach(nm=>{ const j=_pool.findIndex(r=>r.slot===nm && r.multiplier===p.mult); if(j>-1){ mine.push(_pool[j].id); _pool.splice(j,1); } });
+ return {...p, committed:true, commitIds:mine};
+ });
+ setActivePicks(_next);
+ _snapPicks = _next;
+ }
  }
  if(isSoloMode){ const _slid = soloLeagueId || activeLeague.id; if(_slid && _slid!=="solo"){ try{ await supabase.from("leagues").update({sport: soloSport}).eq("id", _slid); }catch(e){} } }
  }
  const weekNum = activeLeague.current_week||activeLeague.week||1;
- const locked = {flexPicks: activePicks, lockedAt: new Date().toISOString()};
+ const locked = {flexPicks: _snapPicks, lockedAt: new Date().toISOString()};
  const storageKey = `linedup_picks_${activeLeague.id}_wk${weekNum}`;
  try { localStorage.setItem(storageKey, JSON.stringify(locked)); } catch(e) {}
- if(isSoloMode) { setSoloSavedPicks(locked); setSoloSubmitted(true); try{ localStorage.setItem("picklock_solo_locked", JSON.stringify({flexPicks:activePicks, lockedAt:locked.lockedAt, week:weekNum})); }catch(e){} }
+ if(isSoloMode) { setSoloSavedPicks(locked); setSoloSubmitted(true); try{ localStorage.setItem("picklock_solo_locked", JSON.stringify({flexPicks:_snapPicks, lockedAt:locked.lockedAt, week:weekNum})); }catch(e){} }
  else { setActiveSavedPicks(locked); setActiveSubmitted(true); setBuildingSlip(false); } try{ localStorage.removeItem(`linedup_draft_${activeLeague.id}_wk${weekNum}`); }catch(e){}
  try{ posthog.capture('slip_locked', { league_id: activeLeague.id, week: weekNum, num_picks: activePicks.filter(p=>p.mult!=null&&(p.isParlay?(p.parlayLegs||[]).length>0:!!p.bet)).length, solo: isSoloMode }); }catch(e){}
  haptic("success");
