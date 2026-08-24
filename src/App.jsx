@@ -4457,7 +4457,241 @@ function PickRow({ p, pi, groupKey, isLast, openLegs, setOpenLegs, liveGames, on
                         );
 }
 
-function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeague, setNewLeagueStep, setShowBrowse, fetchPublicLeagues, setIsSoloMode, setActiveLeagueId, getOrCreateSoloLeague, soloSavedPicks, setSoloSavedPicks, soloFlexPicks, setSoloFlexPicks, soloSport, setSoloSport, setShowSoloSportPicker, soloSubmitted, setSoloSubmitted, username, soloTopPct, onDeleteSlate, onJoinCode, setShowPaywall, tickerGames=[], espnGames=[], globalRank=null, onOpenLeaderboard, liveGames=[], onOpenGamecast, onReplace}) {
+// ── THE DAILY LOCK ── one pick a day, streak game. Picks are normal rows in a
+// fixed solo-type league with week = day number since the anchor, so the
+// picks_unique_slot index enforces one-per-day and grade.js settles them free.
+// Board rule: moneylines only, priced -200 OR BETTER (no heavier favorites) —
+// nobody farms a 40-day streak on -450 chalk.
+const DAILY_LOCK_ID = "00000000-0000-4000-a000-00000000da11";
+const DL_ANCHOR_MS = Date.parse("2026-01-01T08:00:00Z");
+const dlDayOf = (ms)=>Math.floor((ms-DL_ANCHOR_MS)/86400000)+1;
+const dlOddsNum = (o)=>{ const n=parseInt(String(o==null?"":o).replace(/[^-+0-9]/g,""),10); return isNaN(n)?null:n; };
+function DailyLockCard({ user, bets, sport }){
+  const [mine,setMine]=useState(null);    // recent DL picks, week desc
+  const [sel,setSel]=useState(null);
+  const [busy,setBusy]=useState(false);
+  const today=dlDayOf(Date.now());
+  const load=async()=>{ try{
+    const {data}=await supabase.from("picks").select("week,result,points_earned,pick_name,game_date").eq("league_id",DAILY_LOCK_ID).eq("user_id",user.id).gte("week",today-45).order("week",{ascending:false});
+    setMine(data||[]);
+  }catch(e){ setMine([]); } };
+  useEffect(()=>{ if(user&&user.id) load(); },[user&&user.id]);
+  if(!user||mine===null) return null;
+  const todays=mine.find(r=>r.week===today)||null;
+  // Current streak: walk back day by day from yesterday (or today if graded W).
+  // Any missed day or loss ends the walk — same rule the leaderboard RPC applies.
+  const streak=(()=>{ const by={}; mine.forEach(r=>{ if(r.result==="W"||r.result==="L") by[r.week]=r.result; });
+    let n=0, d=(by[today]==="W")?today:today-1;
+    while(by[d]==="W"){ n++; d--; }
+    if(by[today]==="L") return 0;
+    return n; })();
+  const boardEnd=DL_ANCHOR_MS+today*86400000;
+  const board=(bets||[]).filter(b=>{ const n=dlOddsNum(b.odds); if(n==null||n<-200) return false;
+    const t=b.gameTime?new Date(b.gameTime).getTime():null;
+    return t!=null && t>Date.now() && t<boardEnd; }).sort((x,y)=>new Date(x.gameTime)-new Date(y.gameTime)).slice(0,6);
+  const lock=async()=>{
+    if(!sel||busy) return; setBusy(true);
+    try{
+      // Membership first (picks insert RLS requires it); 23505 = already a member.
+      const {error:me}=await supabase.from("league_members").insert({league_id:DAILY_LOCK_ID,user_id:user.id,is_commissioner:false});
+      if(me&&me.code!=="23505"&&String(me.code)!=="409"){ /* proceed — insert below surfaces real failures */ }
+      const n=dlOddsNum(sel.odds);
+      const imp=n==null?null:(n>0?Math.round(100/(n+100)*1000)/10:Math.round(-n/(-n+100)*1000)/10);
+      const {error}=await supabase.from("picks").insert({
+        league_id:DAILY_LOCK_ID, user_id:user.id, week:today, slot:"daily", multiplier:1,
+        sport:sport||sel.sport||"mlb", pick_name:sel.pick, game:sel.game,
+        odds:sel.odds, implied_odds:imp, game_date:sel.gameTime, event_id:sel.eventId||null,
+        market_key:"h2h", outcome:(sel.selKey?sel.selKey.split("|")[2]:null), outcome_point:null,
+        sel_key:sel.selKey||null, result:"pending", points_earned:0 });
+      if(error&&error.code==="23505"){ await load(); setBusy(false); return; }   // raced a second device
+      if(error){ alert("Couldn’t lock it — try again."); setBusy(false); return; }
+      try{ posthog.capture("daily_lock_made",{ odds:sel.odds }); }catch(e2){}
+      setSel(null); await load();
+    }catch(e){}
+    setBusy(false);
+  };
+  const kick=(t,c)=>(<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6}}><span style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.13em",textTransform:"uppercase",color:c}}>{t}</span><span style={{textAlign:"center"}}><span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:20,color:streak>0?IOS.orange:"rgba(255,255,255,0.35)",lineHeight:1}}>{streak}</span><span style={{fontSize:8,fontWeight:800,letterSpacing:"0.07em",color:"rgba(255,255,255,0.4)",marginLeft:4}}>DAY STREAK</span></span></div>);
+  return (
+  <div className="pl-rise" style={{margin:"0 16px 12px",position:"relative",border:"0.5px solid rgba(255,159,10,0.3)",borderRadius:RAD.lg,overflow:"hidden",boxShadow:"0 10px 26px -14px rgba(0,0,0,0.8)",background:"radial-gradient(120% 90% at 80% -10%, rgba(255,159,10,0.16), transparent 55%), linear-gradient(160deg,#16130E,#0B0B10 75%)"}}>
+  <div style={{padding:"13px 14px"}}>
+  {todays?(<>
+  {kick(todays.result==="pending"?"The Daily Lock · riding":"The Daily Lock · "+(todays.result==="W"?"survived":"streak down"),todays.result==="W"?IOS.green:todays.result==="L"?IOS.red:IOS.orange)}
+  <div style={{fontSize:13.5,fontWeight:800,marginTop:9}}>{todays.pick_name}</div>
+  <div style={{fontSize:10.5,color:"rgba(255,255,255,0.45)",marginTop:3}}>{todays.result==="pending"?("Locked · streak’s on the line tonight"):(todays.result==="W"?("Cashed. Back tomorrow to keep it alive."):"It happens. New streak starts tomorrow.")}</div>
+  </>):board.length?(<>
+  {kick("The Daily Lock · today’s board",IOS.orange)}
+  <div style={{fontSize:10.5,color:"rgba(255,255,255,0.45)",margin:"8px 0 9px"}}>{"One pick. Moneylines -200 or better. Miss a day or miss the pick — streak dies."}</div>
+  <div style={{display:"flex",flexDirection:"column",gap:6}}>
+  {board.map((b,i)=>{ const on=sel&&sel.selKey===b.selKey&&sel.pick===b.pick; return (
+  <div key={(b.selKey||b.pick)+i} onClick={()=>setSel(on?null:b)} style={{display:"flex",alignItems:"center",gap:9,borderRadius:10,padding:"9px 11px",cursor:"pointer",transition:"background .15s,border-color .15s",background:on?"rgba(255,159,10,0.13)":"rgba(255,255,255,0.04)",border:on?"1px solid rgba(255,159,10,0.55)":"1px solid rgba(255,255,255,0.09)"}}>
+  <div style={{flex:1,minWidth:0}}><div style={{fontSize:12.5,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{b.pick}</div><div style={{fontSize:9.5,color:"rgba(255,255,255,0.4)",marginTop:1}}>{(b.game||"")+" · "+(b.gameTime?new Date(b.gameTime).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}):"")}</div></div>
+  <span style={{fontSize:11.5,fontWeight:800,color:dlOddsNum(b.odds)>0?IOS.green:"rgba(255,255,255,0.65)",flexShrink:0}}>{b.odds}</span>
+  </div>); })}
+  </div>
+  <div onClick={lock} style={{display:"block",textAlign:"center",background:sel?"linear-gradient(120deg,#FF9F0A,#FF6B2C)":"rgba(255,255,255,0.06)",color:sel?"#141414":"rgba(255,255,255,0.35)",fontWeight:800,fontSize:13.5,padding:"11px",borderRadius:RAD.md,marginTop:10,cursor:sel?"pointer":"default",opacity:busy?0.6:1}}>{busy?"Locking…":(sel?("Lock "+sel.pick):"Pick one to lock")}</div>
+  </>):(<>
+  {kick("The Daily Lock",IOS.orange)}
+  <div style={{fontSize:11.5,color:"rgba(255,255,255,0.45)",marginTop:8}}>{"No board right now — today’s eligible games are done or haven’t posted. Check back."}</div>
+  </>)}
+  </div></div>);
+}
+
+// ── THE GAUNTLET ── one global NFL survivor pool at a fixed uuid. Joins stay open
+// until season_start (Tue Sep 8 2026 3 AM ET — the survivor_join_lock trigger
+// enforces it server-side); the pool starts by clock. Card stats come from the
+// get_gauntlet_stats RPC — aggregates only, so a 10,000-entrant pool costs the
+// same to render as a 10-entrant one.
+const GAUNTLET_ID = "00000000-0000-4000-a000-000000000777";
+const GAUNTLET_START_MS = Date.parse("2026-09-08T07:00:00Z");
+function GauntletCard({ user, onEnter, onJoin }){
+  const [st,setSt]=useState(null);        // rpc stats
+  const [mem,setMem]=useState(undefined); // undefined=loading, null=not member, row=member
+  const [busy,setBusy]=useState(false);
+  useEffect(()=>{
+    if(!user||!user.id) return;
+    (async()=>{ try{
+      const [{data:stats},{data:rows}]=await Promise.all([
+        supabase.rpc("get_gauntlet_stats"),
+        supabase.from("league_members").select("eliminated_week").eq("league_id",GAUNTLET_ID).eq("user_id",user.id).limit(1),
+      ]);
+      setSt(stats||null); setMem(rows&&rows.length?rows[0]:null);
+    }catch(e){ setMem(null); } })();
+  },[user&&user.id]);
+  const started=Date.now()>=GAUNTLET_START_MS;
+  const daysLeft=Math.max(0,Math.ceil((GAUNTLET_START_MS-Date.now())/86400000));
+  const join=async()=>{
+    if(busy||!user) return; setBusy(true);
+    try{
+      const {error}=await supabase.from("league_members").insert({league_id:GAUNTLET_ID,user_id:user.id,is_commissioner:false});
+      if(error&&error.code!=="23505"){ alert(error.message.indexOf("closed")>-1?"Entries are closed — the pool already started.":"Couldn’t join right now. Try again."); setBusy(false); return; }
+      try{ posthog.capture("gauntlet_joined"); }catch(e2){}
+      setMem({eliminated_week:null});
+      if(onJoin) await onJoin();
+    }catch(e){}
+    setBusy(false);
+  };
+  if(mem===undefined) return null;   // no skeleton flash on home
+  const entrants=(st&&st.entrants)||0, alive=(st&&st.alive)||0;
+  const out=mem&&mem.eliminated_week!=null;
+  return (
+  <div className="pl-rise" style={{margin:"0 16px 12px",position:"relative",border:"0.5px solid rgba(191,90,242,0.28)",borderRadius:RAD.lg,overflow:"hidden",boxShadow:"0 10px 26px -14px rgba(0,0,0,0.8)",background:"radial-gradient(120% 90% at 85% -10%, rgba(191,90,242,0.2), transparent 55%), linear-gradient(160deg,#141018,#0B0B10 75%)"}}>
+  <div style={{padding:"13px 14px"}}>
+  <div style={{display:"flex",alignItems:"center",gap:6,fontSize:9.5,fontWeight:800,letterSpacing:"0.13em",textTransform:"uppercase",color:"#BF5AF2"}}>
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#BF5AF2" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3v6c0 3.3 2.7 6 6 6s6-2.7 6-6V3"/><path d="M6 5H3v2a4 4 0 0 0 3 3.9M18 5h3v2a4 4 0 0 1-3 3.9"/><path d="M12 15v4M8 21h8"/></svg>
+  <span>{"The Gauntlet · global survivor"}</span></div>
+  {!mem&&!started&&(<>
+  <div style={{fontSize:14.5,fontWeight:800,marginTop:9,letterSpacing:"-0.2px"}}>All of PickLock. One pick a week. Last one standing.</div>
+  <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",marginTop:4}}>{"Free entry · "+(entrants>0?(entrants+" in already · "):"")+"doors close in "+daysLeft+" day"+(daysLeft===1?"":"s")+" · NFL Week 1"}</div>
+  <div onClick={join} style={{display:"block",textAlign:"center",background:"linear-gradient(120deg,#BF5AF2,#8E4BD0)",color:"#fff",fontWeight:800,fontSize:13.5,padding:"11px",borderRadius:RAD.md,marginTop:11,cursor:"pointer",opacity:busy?0.6:1}}>{busy?"Joining…":"Step in"}</div>
+  </>)}
+  {!mem&&started&&(<div style={{fontSize:11.5,color:"rgba(255,255,255,0.5)",marginTop:9}}>{"Entries closed · "+alive+" of "+entrants+" still standing"}</div>)}
+  {mem&&!started&&(<>
+  <div style={{fontSize:13.5,fontWeight:800,marginTop:9,color:"#30D158"}}>{"You’re in."}</div>
+  <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",marginTop:3}}>{entrants+" entered · first pick opens with the season · "+daysLeft+" day"+(daysLeft===1?"":"s")+" out"}</div>
+  <div onClick={onEnter} style={{display:"block",textAlign:"center",background:"rgba(255,255,255,0.06)",boxShadow:"inset 0 0 0 0.5px rgba(255,255,255,0.14)",color:"rgba(255,255,255,0.8)",fontWeight:800,fontSize:12.5,padding:"10px",borderRadius:RAD.md,marginTop:11,cursor:"pointer"}}>Scout the pool</div>
+  </>)}
+  {mem&&started&&!out&&(<>
+  <div style={{display:"flex",alignItems:"baseline",gap:8,marginTop:9}}><span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:22,color:"#30D158"}}>Alive</span><span style={{fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.5)"}}>{alive+" of "+entrants+" left · Week "+((st&&st.week)||1)}</span></div>
+  <div onClick={onEnter} style={{display:"block",textAlign:"center",background:"linear-gradient(120deg,#BF5AF2,#8E4BD0)",color:"#fff",fontWeight:800,fontSize:13.5,padding:"11px",borderRadius:RAD.md,marginTop:11,cursor:"pointer"}}>Make your pick</div>
+  </>)}
+  {mem&&started&&out&&(<>
+  <div style={{display:"flex",alignItems:"baseline",gap:8,marginTop:9}}><span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:22,color:"rgba(255,255,255,0.45)"}}>{"Out · Wk "+mem.eliminated_week}</span><span style={{fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.5)"}}>{alive+" still alive"}</span></div>
+  <div onClick={onEnter} style={{display:"block",textAlign:"center",background:"rgba(255,255,255,0.06)",boxShadow:"inset 0 0 0 0.5px rgba(255,255,255,0.14)",color:"rgba(255,255,255,0.8)",fontWeight:800,fontSize:12.5,padding:"10px",borderRadius:RAD.md,marginTop:11,cursor:"pointer"}}>Watch the carnage</div>
+  </>)}
+  </div></div>);
+}
+
+// ── YOU VS THE BOTS ── weekly race against the persona bots. Each bot posts one
+// shared 10-pick slate (api/botslate cron, 2 picks at every 1x-5x multiplier) into
+// the Bot Colosseum league; your race truncates each slate chronologically to YOUR
+// solo pick count for the week, so volumes always match. Bot metadata lives here,
+// keyed by the fixed uuids seeded in the bot_roster_seed migration.
+const BOTS_LEAGUE_ID = "00000000-0000-4000-a000-0000000b0750";
+const BOTS_ANCHOR_MS = Date.parse("2026-01-05T07:00:00Z");
+const botWeekOf = (ms)=>Math.floor((ms-BOTS_ANCHOR_MS)/(7*86400000))+1;
+const BOT_META = {
+ "00000000-0000-4000-b000-000000000001":{ name:"CHALKY", bio:"Only picks favorites. Never sweats.", color:"#30D158", face:"smug" },
+ "00000000-0000-4000-b000-000000000002":{ name:"BIG DOG", bio:"Underdogs only, the uglier the better.", color:"#FF453A", face:"wild" },
+ "00000000-0000-4000-b000-000000000003":{ name:"HOMER", bio:"Home team, every time. No exceptions.", color:"#0A84FF", face:"happy" },
+ "00000000-0000-4000-b000-000000000004":{ name:"COIN FLIP", bio:"Pure chaos. Sometimes chaos wins.", color:"#BF5AF2", face:"dizzy" },
+ "00000000-0000-4000-b000-000000000005":{ name:"THE TRAITOR", bio:"Road teams only. Hates a home crowd.", color:"#FF9F0A", face:"shifty" },
+ "00000000-0000-4000-b000-000000000006":{ name:"OVERLORD", bio:"Overs only. Every night's a career night.", color:"#64D2FF", face:"visor" },
+};
+const BotFace = ({face,color,size=22})=>(
+ <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round">
+  <rect x="5" y="7" width="14" height="12" rx="3"/><path d="M12 7V4M9 4h6"/>
+  {face==="smug"&&<><path d="M8.3 12h2.4M13.3 12h2.4"/><path d="M9.3 15.5c1 .8 4.4 .8 5.4 0"/></>}
+  {face==="wild"&&<><path d="M8.5 11l2 2m0-2l-2 2M13.5 11l2 2m0-2l-2 2"/></>}
+  {face==="happy"&&<><circle cx="9.5" cy="12" r="1.2" fill={color} stroke="none"/><circle cx="14.5" cy="12" r="1.2" fill={color} stroke="none"/><path d="M9 15c.6 1 1.8 1.5 3 1.5s2.4-.5 3-1.5"/></>}
+  {face==="dizzy"&&<><path d="M8.4 11.2a1.3 1.3 0 1 0 1.9 1.6M13.7 11.2a1.3 1.3 0 1 0 1.9 1.6"/><path d="M9.5 16h5"/></>}
+  {face==="shifty"&&<><path d="M8 12h2.6M13.4 12h2.6"/><path d="M9.5 15.6h4l1-1"/></>}
+  {face==="visor"&&<><path d="M7.5 11.6h9" strokeWidth="2.6"/><path d="M10 15.6h4"/></>}
+ </svg>);
+function BotRaceCard({ user, isSolo }){
+  const [race,setRace]=useState(null);   // {week,myN,myPts,myW,myL,rows:[{id,pts,w,l,n}]}
+  const [open,setOpen]=useState(false);
+  const reqRef=useRef(0);
+  useEffect(()=>{
+    if(!user||!user.id||!isSolo) return;
+    const tick=++reqRef.current;
+    (async()=>{ try{
+      const wk=botWeekOf(Date.now());
+      const ws=new Date(BOTS_ANCHOR_MS+(wk-1)*7*86400000).toISOString();
+      const we=new Date(BOTS_ANCHOR_MS+wk*7*86400000).toISOString();
+      const {data:solo}=await supabase.from("leagues").select("id").eq("commissioner_id",user.id).eq("league_type","solo").limit(1);
+      const sid=solo&&solo[0]&&solo[0].id;
+      let mine=[];
+      if(sid){ const {data:mp}=await supabase.from("picks").select("result,points_earned,created_at").eq("league_id",sid).eq("user_id",user.id).neq("result","P").gte("game_date",ws).lt("game_date",we); mine=mp||[]; }
+      const {data:bp}=await supabase.from("picks").select("user_id,result,points_earned,created_at").eq("league_id",BOTS_LEAGUE_ID).eq("week",wk).order("created_at",{ascending:true});
+      if(reqRef.current!==tick) return;
+      const myN=mine.length;
+      const myPts=parseFloat(mine.filter(r=>r.result==="W").reduce((a,r)=>a+parseFloat(r.points_earned||0),0).toFixed(1));
+      const rows=Object.keys(BOT_META).map(id=>{
+        const all=(bp||[]).filter(r=>r.user_id===id);
+        const cut=all.slice(0,myN);   // the race rule: bot volume matches yours
+        return { id, n:cut.length,
+          pts:parseFloat(cut.filter(r=>r.result==="W").reduce((a,r)=>a+parseFloat(r.points_earned||0),0).toFixed(1)),
+          w:cut.filter(r=>r.result==="W").length, l:cut.filter(r=>r.result==="L").length, total:all.length };
+      });
+      setRace({ week:wk, myN, myPts, myW:mine.filter(r=>r.result==="W").length, myL:mine.filter(r=>r.result==="L").length, rows });
+    }catch(e){} })();
+  },[user&&user.id,isSolo]);
+  if(!isSolo||!race) return null;
+  const ranked=[{id:"me",pts:race.myPts,w:race.myW,l:race.myL},...race.rows].sort((a,b)=>b.pts-a.pts);
+  const myRank=ranked.findIndex(r=>r.id==="me")+1;
+  return (
+  <div style={{margin:"0 16px 12px",position:"relative",border:"0.5px solid rgba(120,150,255,0.16)",borderRadius:RAD.lg,overflow:"hidden",background:"linear-gradient(160deg,#15161E,#0B0B10 75%)",boxShadow:"0 10px 26px -14px rgba(0,0,0,0.8)"}}>
+  <div onClick={()=>setOpen(o=>!o)} style={{padding:"13px 14px",cursor:"pointer"}}>
+  <div style={{display:"flex",alignItems:"center",gap:8}}>
+  <span style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.13em",textTransform:"uppercase",color:"#64D2FF",flex:1}}>You vs The Bots · this week</span>
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2.4" style={{transform:open?"rotate(180deg)":"none",transition:"transform .18s"}}><polyline points="6 9 12 15 18 9"/></svg>
+  </div>
+  {race.myN===0
+  ? <div style={{fontSize:12.5,color:"rgba(255,255,255,0.5)",marginTop:8,lineHeight:1.5}}>Four bots posted their slates. Make a solo pick and the race is on — every bot gets scored on the same number of picks as you.</div>
+  : <div style={{display:"flex",alignItems:"baseline",gap:8,marginTop:8}}><span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:24,color:myRank===1?IOS.green:"#fff"}}>{myRank===1?"1st":(myRank+(myRank===2?"nd":myRank===3?"rd":"th"))}</span><span style={{fontSize:11.5,fontWeight:700,color:"rgba(255,255,255,0.5)"}}>{"of "+ranked.length+" · "+race.myPts.toFixed(1)+" pts on "+race.myN+" pick"+(race.myN===1?"":"s")}</span></div>}
+  </div>
+  {open&&<div style={{borderTop:"1px solid rgba(255,255,255,0.07)"}}>
+  {ranked.map((r,i)=>{ const me=r.id==="me"; const m=me?null:BOT_META[r.id]; return (
+  <div key={r.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderTop:i>0?"1px solid rgba(255,255,255,0.05)":"none",background:me?"rgba(10,132,255,0.06)":"transparent"}}>
+  <span style={{fontSize:11,fontWeight:900,color:"rgba(255,255,255,0.35)",width:16}}>{i+1}</span>
+  {me
+  ? <div style={{width:30,height:30,borderRadius:"50%",background:"rgba(10,132,255,0.18)",border:"1px solid rgba(10,132,255,0.45)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,color:IOS.blue,flexShrink:0}}>{"YOU"}</div>
+  : <div style={{width:30,height:30,borderRadius:"50%",background:m.color+"1f",border:"1px solid "+m.color+"55",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><BotFace face={m.face} color={m.color} size={17}/></div>}
+  <div style={{flex:1,minWidth:0}}>
+  <div style={{fontSize:12.5,fontWeight:800}}>{me?"You":m.name}</div>
+  {!me&&<div style={{fontSize:9.5,color:"rgba(255,255,255,0.4)",marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{m.bio}</div>}
+  </div>
+  <div style={{textAlign:"right",flexShrink:0}}>
+  <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:i===0?IOS.green:"#fff"}}>{r.pts.toFixed(1)}</div>
+  <div style={{fontSize:9,fontWeight:700,color:"rgba(255,255,255,0.4)"}}>{r.w+"-"+r.l}</div>
+  </div>
+  </div>); })}
+  <div style={{padding:"9px 14px 12px",fontSize:9.5,color:"rgba(255,255,255,0.35)",lineHeight:1.5}}>{"Bots post 10 picks a week, two at every multiplier. Your race scores each bot's first "+race.myN+" pick"+(race.myN===1?"":"s")+" — same volume as you, always."}</div>
+  </div>}
+  </div>);
+}
+
+function SoloHome({raceUser, soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeague, setNewLeagueStep, setShowBrowse, fetchPublicLeagues, setIsSoloMode, setActiveLeagueId, getOrCreateSoloLeague, soloSavedPicks, setSoloSavedPicks, soloFlexPicks, setSoloFlexPicks, soloSport, setSoloSport, setShowSoloSportPicker, soloSubmitted, setSoloSubmitted, username, soloTopPct, onDeleteSlate, onJoinCode, setShowPaywall, tickerGames=[], espnGames=[], globalRank=null, onOpenLeaderboard, liveGames=[], onOpenGamecast, onReplace}) {
   const [shareToast,setShareToast]=useState("");
   const [openSlate,setOpenSlate]=useState(null);
   const [openDays,setOpenDays]=useState({});
@@ -4611,6 +4845,9 @@ function SoloHome({soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeag
           <div style={{fontSize:18,fontWeight:800,color:"#fff"}}>{totalPts.toFixed(1)}</div>
         </div>
       </div>
+
+      {/* You vs The Bots — weekly race vs the persona roster */}
+      <div style={{margin:"0 -16px 0"}}><BotRaceCard user={raceUser} isSolo={true}/></div>
 
       {/* Plok's Play of the Day */}
       {featGame && ((dayPlay && dayPlay.data) ? (
@@ -5766,6 +6003,8 @@ function App() {
  const [lbCache, setLbCache] = useState({});
  const [lbTf, setLbTf] = useState("all");
  const [lbTab, setLbTab] = useState("points");
+ const [dlStreaks, setDlStreaks] = useState(null);   // Daily Lock streak leaderboard rows
+ const fetchDlStreaks = async ()=>{ try{ const {data}=await supabase.rpc("get_daily_streaks"); setDlStreaks(data||[]); }catch(e){ setDlStreaks([]); } };
  const [lbLoading, setLbLoading] = useState(false);
  const [leagueTrophies, setLeagueTrophies] = useState([]);
  // solo weeks must be declared before activeLeague since activeLeague uses soloWeeks.length
@@ -9450,7 +9689,8 @@ function App() {
  .from("picks")
  .select("*")
  .eq("league_id", leagueId)
- .eq("week", week);
+ .eq("week", week)
+ .limit(leagueId===GAUNTLET_ID?400:5000);   // Gauntlet week rows are a sample; the RPC carries the real counts
  if(!picks||!picks.length){ setWeekPicks([]); setWeekPicksFor(_own); return; }
  const userIds = [...new Set(picks.map(p=>p.user_id))];
  const {data:users} = await supabase
@@ -9469,7 +9709,8 @@ function App() {
  const {data} = await supabase
  .from("league_members")
  .select("user_id, is_commissioner, eliminated_week, survivor_strikes")
- .eq("league_id", leagueId);
+ .eq("league_id", leagueId)
+ .limit(leagueId===GAUNTLET_ID?60:1000);   // the Gauntlet renders from aggregate RPC stats, not a member scan
  if(data){
  const _ids=data.map(m=>m.user_id);
  const {data:_profs}=await supabase.from("public_profiles").select("id,username").in("id", _ids.length?_ids:["00000000-0000-0000-0000-000000000000"]);
@@ -12820,8 +13061,19 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  })()}
  </div>
 
+ {/* Leagueless home order: pinned build-a-league banner → Daily Lock → Gauntlet → solo content */}
+ {screen==="home" && homeMode==="solo" && (
+ <div style={{margin:"0 16px 10px",display:"flex",alignItems:"center",gap:10,background:"rgba(59,111,224,0.08)",border:"0.5px dashed rgba(59,111,224,0.4)",borderRadius:RAD.md,padding:"9px 12px"}}>
+   <div style={{flex:1,minWidth:0}}><span style={{fontSize:11.5,fontWeight:800}}>This app peaks with your group.</span><span style={{fontSize:11,color:"rgba(255,255,255,0.45)",marginLeft:5}}>One link, endless trash talk.</span></div>
+   <div onClick={()=>{ setNewLeagueStep(1); setShowNewLeague(true); }} style={{background:IOS.blue,borderRadius:8,padding:"7px 12px",fontSize:11.5,fontWeight:800,cursor:"pointer",flexShrink:0}}>Start a league</div>
+ </div>)}
+ {screen==="home" && homeMode==="solo" && <DailyLockCard user={user} bets={(liveOdds[soloSport||"mlb"]||{}).ml||[]} sport={soloSport||"mlb"}/>}
+
+ {/* The Gauntlet — global survivor pool, both home modes */}
+ {screen==="home" && <GauntletCard user={user} onEnter={()=>{ applyMode(false); setActiveLeagueId(GAUNTLET_ID); }} onJoin={async()=>{ if(user){ await fetchLeagues(user.id); } applyMode(false); setActiveLeagueId(GAUNTLET_ID); }}/>}
+
  {/* ══ SOLO MODE HOME SCREEN ══ */}
- {homeMode==="solo" && <SoloHome soloWeeks={soloWeeks} soloLoading={soloLoading} isPro={isPro} IOS={IOS} setScreen={setScreen} setShowNewLeague={setShowNewLeague} setNewLeagueStep={setNewLeagueStep} setShowBrowse={setShowBrowse} fetchPublicLeagues={fetchPublicLeagues} setIsSoloMode={applyMode} setActiveLeagueId={setActiveLeagueId} getOrCreateSoloLeague={getOrCreateSoloLeague} soloSavedPicks={soloSavedPicks} setSoloSavedPicks={setSoloSavedPicks} soloFlexPicks={soloFlexPicks} setSoloFlexPicks={setSoloFlexPicks} soloSport={soloSport} setSoloSport={setSoloSportPersist} setShowSoloSportPicker={setShowSoloSportPicker} soloSubmitted={soloSubmitted} setSoloSubmitted={setSoloSubmitted} username={userProfile?.username||""} soloTopPct={soloTopPct} onDeleteSlate={deleteSoloSlate} onJoinCode={handleJoinCode} setShowPaywall={setShowPaywall} tickerGames={tickerGames} espnGames={espnGames} globalRank={(()=>{ const rows=lbCache["all"]; if(!rows||!rows.length) return null; const sx=[...rows].sort((a,b)=>(Number(b.points)||0)-(Number(a.points)||0)); const i=sx.findIndex(r=>String(r.user_id)===String(user?.id)); return i>=0?{rank:i+1,total:sx.length}:null; })()} onOpenLeaderboard={()=>{ fetchLeaderboard("all"); setScreen("leaderboard"); }} liveGames={liveGames} onOpenGamecast={openGamecast} onReplace={startReplace}/>}
+ {homeMode==="solo" && <SoloHome raceUser={user} soloWeeks={soloWeeks} soloLoading={soloLoading} isPro={isPro} IOS={IOS} setScreen={setScreen} setShowNewLeague={setShowNewLeague} setNewLeagueStep={setNewLeagueStep} setShowBrowse={setShowBrowse} fetchPublicLeagues={fetchPublicLeagues} setIsSoloMode={applyMode} setActiveLeagueId={setActiveLeagueId} getOrCreateSoloLeague={getOrCreateSoloLeague} soloSavedPicks={soloSavedPicks} setSoloSavedPicks={setSoloSavedPicks} soloFlexPicks={soloFlexPicks} setSoloFlexPicks={setSoloFlexPicks} soloSport={soloSport} setSoloSport={setSoloSportPersist} setShowSoloSportPicker={setShowSoloSportPicker} soloSubmitted={soloSubmitted} setSoloSubmitted={setSoloSubmitted} username={userProfile?.username||""} soloTopPct={soloTopPct} onDeleteSlate={deleteSoloSlate} onJoinCode={handleJoinCode} setShowPaywall={setShowPaywall} tickerGames={tickerGames} espnGames={espnGames} globalRank={(()=>{ const rows=lbCache["all"]; if(!rows||!rows.length) return null; const sx=[...rows].sort((a,b)=>(Number(b.points)||0)-(Number(a.points)||0)); const i=sx.findIndex(r=>String(r.user_id)===String(user?.id)); return i>=0?{rank:i+1,total:sx.length}:null; })()} onOpenLeaderboard={()=>{ fetchLeaderboard("all"); setScreen("leaderboard"); }} liveGames={liveGames} onOpenGamecast={openGamecast} onReplace={startReplace}/>}
        {homeMode==="solo" && screen==="home" && (()=>{
          const SP=["mlb","nfl","nba","ncaaf"];
          const games=(tickerGames||[]).filter(g=>g&&g.sport===soloSport);
@@ -15315,6 +15567,40 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    const PAL=[IOS.blue,IOS.green,IOS.orange,IOS.purple,"#64D2FF","#FF375F"];
    const valFor=(r)=> lbTab==="points"?(Number(r.points).toLocaleString()) : lbTab==="hit"?((r.picks?Math.round(r.wins/r.picks*100):0)+"%") : Number(r.longshot_pts).toLocaleString();
    const medalC=(rk)=> rk===1?"#FFD60A":rk===2?"#AEB6C2":rk===3?"#E8995A":null;
+   // Streaks tab is its own board: Daily Lock current + longest streaks from the
+   // get_daily_streaks RPC. Timeframe pills don’t apply — a streak IS a timeframe.
+   if(lbTab==="streaks"){
+   const sRows=dlStreaks||[];
+   const myS=sRows.find(r=>String(r.user_id)===String(user?.id))||null;
+   return (
+   <div className="body">
+     <div style={{display:"flex",alignItems:"center",gap:12,padding:"6px 2px 14px"}}>
+       <div onClick={()=>setScreen("home")} style={{cursor:"pointer",width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:RAD.md,background:"rgba(255,255,255,0.06)"}}>
+         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+       </div>
+       <div><div style={{fontSize:24,fontWeight:800,letterSpacing:-0.5}}>Leaderboard</div><div style={{fontSize:12,color:IOS.label3,fontWeight:600}}>{"Daily Lock streaks · "+sRows.length+" ranked"}</div></div>
+     </div>
+     <div style={{display:"flex",gap:3,background:"#161619",border:EDGE.hair,borderRadius:RAD.md,padding:4,marginBottom:11}}>
+       {[["points","Points"],["hit","Hit Rate"],["ls","Longshots"],["streaks","Streaks"]].map(([k,lab])=>(
+         <div key={k} onClick={()=>{ setLbTab(k); if(k==="streaks"&&dlStreaks===null) fetchDlStreaks(); }} style={{flex:1,textAlign:"center",padding:"9px 4px",borderRadius:RAD.sm,fontSize:12.5,fontWeight:800,cursor:"pointer",background:lbTab===k?IOS.blue:"transparent",color:lbTab===k?"#fff":"rgba(255,255,255,0.38)"}}>{lab}</div>
+       ))}
+     </div>
+     {myS&&<div style={{marginBottom:14,background:"linear-gradient(135deg,rgba(255,159,10,0.14),#161619)",border:"0.5px solid rgba(255,159,10,0.4)",borderRadius:RAD.lg,padding:"11px 13px",display:"flex",alignItems:"center",gap:11}}>
+       <div style={{flex:1,fontSize:12.5,fontWeight:800}}>Your streak</div>
+       <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:20,color:IOS.orange}}>{myS.current_streak}</div>
+       <div style={{fontSize:10,fontWeight:700,color:"rgba(255,255,255,0.45)"}}>{"best "+myS.longest_streak}</div>
+     </div>}
+     {dlStreaks===null?(<div style={{textAlign:"center",padding:"40px 20px",color:"rgba(255,255,255,0.4)",fontSize:12.5}}>Loading streaks…</div>)
+     :!sRows.length?(<div style={{textAlign:"center",padding:"40px 20px",color:"rgba(255,255,255,0.45)",fontSize:12.5,lineHeight:1.6}}>{"Nobody’s on a run yet. Make today’s Lock and start one."}</div>)
+     :sRows.map((r2,i)=>(
+     <div key={r2.user_id} style={{display:"flex",alignItems:"center",gap:11,padding:"10px 13px",borderRadius:RAD.md,marginBottom:6,background:String(r2.user_id)===String(user?.id)?"rgba(255,159,10,0.08)":"#131316",border:"0.5px solid "+(String(r2.user_id)===String(user?.id)?"rgba(255,159,10,0.35)":"rgba(255,255,255,0.06)")}}>
+       <div style={{width:26,textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:14,color:medalC(i+1)||"rgba(255,255,255,0.4)"}}>{i+1}</div>
+       <div style={{flex:1,minWidth:0,fontSize:13,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r2.username||"Player"}</div>
+       <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:17,color:r2.current_streak>0?IOS.orange:"rgba(255,255,255,0.35)"}}>{r2.current_streak}</div>
+       <div style={{fontSize:9.5,fontWeight:700,color:"rgba(255,255,255,0.4)",width:44,textAlign:"right"}}>{"best "+r2.longest_streak}</div>
+     </div>))}
+   </div>);
+   }
    return (
    <div className="body">
      <div style={{display:"flex",alignItems:"center",gap:12,padding:"6px 2px 14px"}}>
@@ -15324,8 +15610,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        <div><div style={{fontSize:24,fontWeight:800,letterSpacing:-0.5}}>Leaderboard</div><div style={{fontSize:12,color:IOS.label3,fontWeight:600}}>{(lbTab==="hit"?"Qualified players":"Top players")+" · "+rows.length+" ranked"}</div></div>
      </div>
      <div style={{display:"flex",gap:3,background:"#161619",border:EDGE.hair,borderRadius:RAD.md,padding:4,marginBottom:11}}>
-       {[["points","Points"],["hit","Hit Rate"],["ls","Longshots"]].map(([k,lab])=>(
-         <div key={k} onClick={()=>setLbTab(k)} style={{flex:1,textAlign:"center",padding:"9px 4px",borderRadius:RAD.sm,fontSize:12.5,fontWeight:800,cursor:"pointer",background:lbTab===k?IOS.blue:"transparent",color:lbTab===k?"#fff":"rgba(255,255,255,0.38)"}}>{lab}</div>
+       {[["points","Points"],["hit","Hit Rate"],["ls","Longshots"],["streaks","Streaks"]].map(([k,lab])=>(
+         <div key={k} onClick={()=>{ setLbTab(k); if(k==="streaks"&&dlStreaks===null) fetchDlStreaks(); }} style={{flex:1,textAlign:"center",padding:"9px 4px",borderRadius:RAD.sm,fontSize:12.5,fontWeight:800,cursor:"pointer",background:lbTab===k?IOS.blue:"transparent",color:lbTab===k?"#fff":"rgba(255,255,255,0.38)"}}>{lab}</div>
        ))}
      </div>
      <div style={{display:"flex",gap:7,marginBottom:12}}>
