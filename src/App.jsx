@@ -6470,6 +6470,41 @@ function App() {
  // Device-level flag; any Plok tap or a tap on the tip itself dismisses it for good.
  const [plokTipSeen, setPlokTipSeen] = useState(()=>{ try{ return localStorage.getItem("picklock_plok_tip")==="1"; }catch(e){ return true; } });
  const markPlokTipSeen = ()=>{ setPlokTipSeen(true); try{ localStorage.setItem("picklock_plok_tip","1"); }catch(e){} };
+ // ── THE CROWD ── global consensus per selection, from the get_crowd_counts RPC.
+ // Aggregate counts only (no ids leave the DB). Keyed by sel_key — the same key
+ // buildSlotRows writes — with event|market|pick as the props fallback. Gates:
+ // a market group needs 20+ picks before a percentage renders; 3-19 shows a raw
+ // count; below 3 the chip stays silent. n=1 can never read as "100%".
+ const [crowdMap, setCrowdMap] = useState(null);   // sel -> n
+ const crowdFetchedRef = useRef(0);
+ const fetchCrowd = async ()=>{
+   if(Date.now()-crowdFetchedRef.current < 5*60*1000) return;   // 5-min TTL
+   crowdFetchedRef.current = Date.now();
+   try{
+     const { data } = await supabase.rpc("get_crowd_counts");
+     const m={}; (data||[]).forEach(rw=>{ if(rw&&rw.sel) m[rw.sel]=Number(rw.n)||0; });
+     setCrowdMap(m);
+   }catch(e){}
+ };
+ const crowdKeyOf = (b)=> b ? (b.selKey || ((b.eventId&&b.marketKey&&b.pick) ? (b.eventId+"|"+b.marketKey+"|"+b.pick) : null)) : null;
+ // % is share of the whole event+market group, so spreads pair correctly even
+ // though the two sides carry mirrored points, and alt lines share one pool.
+ const crowdFor = (b)=>{
+   if(!crowdMap) return null;
+   const k=crowdKeyOf(b); if(!k) return null;
+   const parts=k.split("|"); if(parts.length<2) return null;
+   const pref=parts[0]+"|"+parts[1]+"|";
+   let group=0; Object.keys(crowdMap).forEach(kk=>{ if(kk.indexOf(pref)===0) group+=crowdMap[kk]; });
+   const mine=crowdMap[k]||0;
+   if(group>=20) return { pct:Math.round(mine/group*100), n:mine, group, mode:"pct" };
+   if(mine>=3) return { n:mine, group, mode:"count" };
+   return null;
+ };
+ const CrowdChip = ({b})=>{ const c=crowdFor(b); if(!c) return null;
+   return (<span style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:8.5,fontWeight:800,letterSpacing:"0.04em",borderRadius:5,padding:"2px 6px",color:"#64D2FF",background:"rgba(100,210,255,0.09)",border:"1px solid rgba(100,210,255,0.26)",whiteSpace:"nowrap"}}>
+   <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#64D2FF" strokeWidth="2.6" strokeLinecap="round"><circle cx="9" cy="7" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 4a3.2 3.2 0 0 1 0 6.4M21 20c0-2.6-1.6-4.8-3.9-5.7"/></svg>
+   {c.mode==="pct" ? (c.pct+"% \u00B7 "+c.group+" in") : (c.n+" lock"+(c.n===1?"":"s"))}
+   </span>); };
  const [gridOpenGames, setGridOpenGames] = useState({}); // bet-browser game accordion: {gameName:true}
  const [sheetExpanded, setSheetExpanded] = useState(null); // line-sheet expanded game key
  const [lineMoves, setLineMoves] = useState({}); // opening line per sel_key (from /api/linemoves)
@@ -10109,6 +10144,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
     fetchMyPicks(activeLeagueId, week, user.id, lg2);
     fetchSchedule(activeLeagueId, user.id);
     fetchLeaguePowerUps(activeLeagueId, user.id);
+    fetchCrowd();
     try{
       const stored = localStorage.getItem(`linedup_picks_${activeLeagueId}_wk${week}`);
       if(stored) setSavedPicks(JSON.parse(stored));
@@ -10124,6 +10160,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
     const lg2 = realLeagues.find(l=>l.id===activeLeagueId);
     const sports = lg2?.sports || (lg2?.sport ? [lg2.sport] : (activeLeague?.sport ? [activeLeague.sport] : null));
     if(sports) sports.forEach(sp => fetchLiveOdds(sp));
+ if(screen==="browser"&&user){ fetchCrowd(); }
   }, [activeLeagueId, user, isSoloMode, realLeagues.length, screen==="browser"]);
 
   // Odds are safe to (re)fetch whenever you enter a league OR open the bet browser — they
@@ -15781,7 +15818,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <Meter pct={pct}/>
  <div style={{fontSize:12,fontWeight:800,color:"#fff",flexShrink:0,minWidth:30,textAlign:"right"}}>{pct}%</div>
  </div>
- <div style={{fontSize:10,fontWeight:700,color:read.c,marginBottom:10}}>{read.t}</div>
+ <div style={{fontSize:10,fontWeight:700,color:read.c,marginBottom:10,display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}><span>{read.t}</span><CrowdChip b={bet}/></div>
 
  {isSoloMode && selected && (<>
  <StatLabel>Multiplier · units</StatLabel>
@@ -15894,6 +15931,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    <div style={{flex:1,minWidth:0}}>
    <div style={{display:"flex",alignItems:"center",gap:7}}>
    <span style={{fontSize:13.5,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",letterSpacing:"-0.2px"}}>{primary}</span>
+   <CrowdChip b={bet}/>
    {sideChip && <span style={{flexShrink:0,fontSize:8,fontWeight:800,letterSpacing:"0.05em",borderRadius:4,padding:"1px 6px",color:chipBn?acc:"rgba(255,255,255,0.5)",background:chipBn?(acc+"1f"):"rgba(255,255,255,0.06)"}}>{sideChip}</span>}
    </div>
    <div style={{display:"flex",alignItems:"center",gap:7,marginTop:4}}>
@@ -15953,6 +15991,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    <div style={{display:"flex",alignItems:"center",gap:6,marginTop:6}}>
    <span style={{width:44,height:4,borderRadius:2,background:"rgba(255,255,255,0.1)",overflow:"hidden",flexShrink:0}}><span style={{display:"block",height:"100%",width:Math.max(0,Math.min(100,leanPct))+"%",background:acc}}/></span>
    <span style={{fontSize:10.5,fontWeight:700,color:leanRead.c,whiteSpace:"nowrap"}}>{leanPct}% {leanRead.t}</span>
+   <CrowdChip b={over||under||single}/>
    </div>
    </div>
    <div style={{display:"flex",alignItems:"stretch",gap:6,flexShrink:0}}>{sideBtn(over,"OVER",favOver)}{sideBtn(under,"UNDER",!favOver)}{canAlt((over||under||{}).market) && <div onClick={(e)=>{e.stopPropagation(); const _b=over||under; openAltLines(_b,{player:player, label:String(rest||"").replace(/^[0-9.]+\s*/,""), side:(over?"Over":"Under")}); }} style={{display:"flex",alignItems:"center",justifyContent:"center",border:"1px solid #64D2FF",color:"#64D2FF",background:"rgba(100,210,255,0.1)",borderRadius:RAD.md,padding:"0 8px",fontSize:10,fontWeight:800,cursor:"pointer"}}>Alt</div>}</div>
