@@ -369,6 +369,13 @@ const DISTINCT_GAME_TYPES = ["ml","spread","ou","ml_h1","spread_h1","ou_h1","ml_
 const RECAP_MS = 14*24*60*60*1000;
 const lgCompleted = (l)=>!!(l&&l.completed_at);
 const lgPast = (l)=>lgCompleted(l)&&(!!l.archivedByMe || (Date.now()-Date.parse(l.completed_at))>RECAP_MS);
+// Day-mode duel window end: season_start + duration_days, snapped to the next 3 AM ET
+// (whole-hour offset, so zeroing minutes at the matched hour lands on :00 ET exactly).
+// Mirrors duelEndAt in api/advance.js — the two must agree on when a window closes.
+const duelEndMs = (lg)=>{ if(!lg||!Number(lg.duration_days)||!lg.season_start) return null;
+  const base=new Date(lg.season_start).getTime()+Number(lg.duration_days)*86400000;
+  for(let i=0;i<48;i++){ const t=base+i*3600000; try{ const h=Number(new Intl.DateTimeFormat("en-US",{timeZone:"America/New_York",hour:"numeric",hour12:false}).format(new Date(t))); if(h===3){ const d=new Date(t); d.setMinutes(0,0,0); return d.getTime(); } }catch(e){ return base; } }
+  return base; };
 const lgEndedLabel = (l)=>{ const t=Date.parse(l&&l.completed_at); if(isNaN(t)) return "Ended"; return "Ended "+new Date(t).toLocaleDateString(undefined,{month:"short",day:"numeric"}); };
 const ordinal = (n)=>{ const s=["th","st","nd","rd"], v=n%100; return n+(s[(v-20)%10]||s[v]||s[0]); };
 // Games available for a sport within a given week window.
@@ -7612,6 +7619,9 @@ function App() {
  const [newLeagueName, setNewLeagueName] = useState("");
  const [newLeagueCreated, setNewLeagueCreated] = useState(null); // holds created league data for invite code screen
  const [newLeagueSize, setNewLeagueSize] = useState(8);
+ // Duel duration picker: days 1-7 or weeks 1-18. Weeks=1 stores duration_days=7 —
+ // two doors into the same room. Weeks 2+ is plain multi-week h2h series play.
+ const [newLeagueDuration, setNewLeagueDuration] = useState({mode:"days", days:2, weeks:1});
  const [newLeagueType, setNewLeagueType] = useState(null);
  const [newSvMode, setNewSvMode] = useState("anytd"); // survivor market: "anytd" | "ml"
  // Ladder leagues: how many players each member picks per week. Rung count is NOT
@@ -7960,6 +7970,13 @@ function App() {
  const createLeague = async (name, sportId) => {
  if(!user||!name||!sportId) return;
  if(newLeagueStartMode==="scheduled" && !newLeagueStartAt){ alert("Choose a start date & time for a scheduled league."); return; }
+ if(newLeagueType==="duel" && newLeagueDuration.mode==="days"){
+   // Day-mode duel with zero games on the board = a dead duel. Block at create.
+   const _dEnd=Date.now()+Math.max(1,Math.min(7,Number(newLeagueDuration.days)||1))*86400000;
+   const _dSps=newLeagueSports.length?newLeagueSports:[sportId];
+   const _dCnt=(tickerGames||[]).filter(g=>_dSps.includes(g.sport)&&g.time&&(()=>{const t=new Date(g.time).getTime(); return !isNaN(t)&&t>=Date.now()&&t<_dEnd;})()).length;
+   if(_dCnt===0){ alert("No games on the board in that window \u2014 widen the duel or wait for lines to post."); return; }
+ }
  setCreatingLeague(true);
  const inviteCode = Math.random().toString(36).substring(2,8).toUpperCase();
  const bracketWeeks = {4:2,8:3,16:4,32:5};
@@ -7995,6 +8012,9 @@ function App() {
    power_ups_enabled: isPro ? !!newLeaguePowerUps : true,
    ...(newLeagueType==="survivor" ? { survivor_config: newSvMode } : {}),
    ...(newLeagueType==="ladder" ? { ladder_count: (isPro ? Math.max(3, Math.min(6, newLadderCount)) : 4) } : {}),
+   // Duel duration: day mode stores 1-7; a 1-week duel stores 7 (same window, two doors).
+   // Multi-week duels store null and ride the normal week machinery as a series.
+   ...(newLeagueType==="duel" ? { duration_days: (newLeagueDuration.mode==="days" ? Math.max(1,Math.min(7,Number(newLeagueDuration.days)||1)) : ((Number(newLeagueDuration.weeks)||1)===1 ? 7 : null)) } : {}),
  }).select().single();
  if(error){alert(`leagues error: ${error.message} | code: ${error.code} | details: ${error.details}`);setCreatingLeague(false);return;}
  const {error:memberError} = await supabase.from("league_members").insert({league_id:data.id,user_id:user.id,is_commissioner:true});
@@ -12500,7 +12520,11 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    const _anyGraded = _myRows.concat(_oppRows).some(r=>r.result==="W"||r.result==="L");
    const _anyStarted = _myRows.concat(_oppRows).some(r=>r.result==="pending"&&r.game_date&&new Date(r.game_date).getTime()<=_now);
    const _dLive = !_dFinal && (_anyGraded || _anyStarted);
-   const _iWin = _dFinal && (activeLeague.champion_id ? activeLeague.champion_id===(user&&user.id) : _myPts>=_oppPts);
+   // Dead heat: advance stamps completed_at with champion_id NULL when the full
+   // tiebreak chain (wins \u2192 total points \u2192 best week) still ties.
+   const _drawn = _dFinal && !activeLeague.champion_id && Math.abs(_myPts-_oppPts)<1e-9;
+   const _iWin = _dFinal && !_drawn && (activeLeague.champion_id ? activeLeague.champion_id===(user&&user.id) : _myPts>=_oppPts);
+   const _oppWin = _dFinal && !_drawn && !_iWin;
    const _gap=parseFloat(Math.abs(_myPts-_oppPts).toFixed(1));
    const _pct=(_myPts+_oppPts)>0?Math.max(4,Math.min(96,Math.round(_myPts/(_myPts+_oppPts)*100))):50;
    const _lampRow=(lamps,right)=>(<div style={{display:"flex",gap:3,marginTop:8,height:5,justifyContent:right?"flex-end":"flex-start"}}>{lamps.map((c,i)=>(<span key={i} style={{flex:"1 1 0",maxWidth:16,minWidth:4,borderRadius:3,background:c}}/>))}</div>);
@@ -12513,6 +12537,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      setNewLeagueType(activeLeague.league_type||"h2h");
      setNewLeagueWeeks(Number(activeLeague.season_weeks)||1);
      setNewLeaguePrivacy(activeLeague.privacy||"private");
+     setNewLeagueDuration(Number(activeLeague.duration_days)?{mode:"days",days:Math.max(1,Math.min(7,Number(activeLeague.duration_days))),weeks:1}:{mode:"weeks",days:2,weeks:Math.max(1,Math.min(18,Number(activeLeague.season_weeks)||1))});
      const _cfg2=parseSlotConfig(activeLeague.slot_config); if(Array.isArray(_cfg2)&&_cfg2.length){ setNewLeagueSlots(_cfg2.map(x=>({...x}))); setNewLeaguePool(_cfg2.map(x=>Number(x.mult)||1)); }
    }catch(e){} setShowNewLeague(true); };
    // Locked = a live row in the DB. Server truth, and this component has no slip state.
@@ -12522,7 +12547,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    const _beat=(()=>{ if(_myPts===_oppPts) return "dead even \u00B7 next cash takes the lead"; const trailMine=_myPts<_oppPts; const t=_pendTop(trailMine?_myRows:_oppRows); if(t) return (trailMine?("your "+t.pick_name+" could flip it"):("their "+t.pick_name+" could flip it")); return trailMine?"no live legs left on your side":"no live legs left on their side"; })();
    const _dagRow=(()=>{ const src=_iWin?_myRows:_oppRows; const w=src.filter(r=>r.result==="W").sort((a,b)=>parseFloat(b.points_earned||0)-parseFloat(a.points_earned||0))[0]; return w||null; })();
    const _dag=_dagRow?((_iWin?"your ":"their ")+(_dagRow.multiplier?(_dagRow.multiplier+"x "):"")+_dagRow.pick_name+(_iWin?" was the dagger":" did the damage")):null;
-   const _sideHdr=(mine)=>(<div style={{display:"flex",alignItems:"center",gap:8,justifyContent:mine?"flex-start":"flex-end"}}>{mine&&<div style={_dFinal&&_iWin?{..._avSty(true),background:"linear-gradient(135deg,#FFD60A,#FF9F0A)",border:"none",color:"#1a1a1a"}:_avSty(true)}>{_ini(userProfile&&userProfile.username)}</div>}{!mine&&<div style={{textAlign:"right"}}><div style={{fontSize:9.5,letterSpacing:"0.12em",color:"rgba(255,255,255,0.3)",fontWeight:700,textTransform:"uppercase"}}>{_dOppName}</div><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:26,lineHeight:1,marginTop:4,color:_dFinal?(!_iWin?IOS.yellow:"rgba(255,255,255,0.55)"):"#fff"}}>{_oppPts.toFixed(1)}</div></div>}{mine&&<div><div style={{fontSize:9.5,letterSpacing:"0.12em",color:_dFinal&&_iWin?IOS.yellow:"rgba(255,255,255,0.3)",fontWeight:700,textTransform:"uppercase"}}>{_dFinal&&_iWin?"Winner":"You"}</div><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:26,lineHeight:1,marginTop:4,color:_dFinal?(_iWin?IOS.yellow:"rgba(255,255,255,0.55)"):(_myPts>=_oppPts?COL.win:"#fff")}}>{_myPts.toFixed(1)}</div></div>}{!mine&&<div style={_dFinal&&!_iWin?{..._avSty(false),background:"linear-gradient(135deg,#FFD60A,#FF9F0A)",border:"none",color:"#1a1a1a"}:_avSty(false)}>{_ini(_dOppName)}</div>}</div>);
+   const _sideHdr=(mine)=>(<div style={{display:"flex",alignItems:"center",gap:8,justifyContent:mine?"flex-start":"flex-end"}}>{mine&&<div style={_dFinal&&_iWin?{..._avSty(true),background:"linear-gradient(135deg,#FFD60A,#FF9F0A)",border:"none",color:"#1a1a1a"}:_avSty(true)}>{_ini(userProfile&&userProfile.username)}</div>}{!mine&&<div style={{textAlign:"right"}}><div style={{fontSize:9.5,letterSpacing:"0.12em",color:"rgba(255,255,255,0.3)",fontWeight:700,textTransform:"uppercase"}}>{_dOppName}</div><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:26,lineHeight:1,marginTop:4,color:_dFinal?(_oppWin?IOS.yellow:(_drawn?"#fff":"rgba(255,255,255,0.55)")):"#fff"}}>{_oppPts.toFixed(1)}</div></div>}{mine&&<div><div style={{fontSize:9.5,letterSpacing:"0.12em",color:_dFinal&&_iWin?IOS.yellow:"rgba(255,255,255,0.3)",fontWeight:700,textTransform:"uppercase"}}>{_dFinal&&_iWin?"Winner":"You"}</div><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:26,lineHeight:1,marginTop:4,color:_dFinal?(_iWin?IOS.yellow:(_drawn?"#fff":"rgba(255,255,255,0.55)")):(_myPts>=_oppPts?COL.win:"#fff")}}>{_myPts.toFixed(1)}</div></div>}{!mine&&<div style={_oppWin?{..._avSty(false),background:"linear-gradient(135deg,#FFD60A,#FF9F0A)",border:"none",color:"#1a1a1a"}:_avSty(false)}>{_ini(_dOppName)}</div>}</div>);
    if(!_dLive && !_dFinal){
    const _mineLockedAll=slotCount>0&&_myLockedSlots>=slotCount;
    const _oppLockedAll=slotCount>0&&_oppLockedSlots>=slotCount;
@@ -12530,7 +12555,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    <div className="pl-rise pl-d1" style={_cardSty(false)}>
    <div style={{position:"absolute",inset:0,backgroundImage:"repeating-linear-gradient(0deg,rgba(255,255,255,0.022) 0px,rgba(255,255,255,0.022) 1px,transparent 1px,transparent 4px)",pointerEvents:"none",opacity:0.5}}/>
    <div style={{position:"relative",padding:"13px 14px 13px"}}>
-   <div style={{display:"flex",alignItems:"center",gap:6,fontSize:9.5,fontWeight:800,letterSpacing:"0.13em",textTransform:"uppercase",color:IOS.orange}}><span>{"Duel"+(nextLockMs?(" \u00B7 locks at first game \u00B7 "+fmtCd(nextLockMs)):"")}</span></div>
+   <div style={{display:"flex",alignItems:"center",gap:6,fontSize:9.5,fontWeight:800,letterSpacing:"0.13em",textTransform:"uppercase",color:IOS.orange}}><span>{"Duel"+(nextLockMs?(" \u00B7 locks at first game \u00B7 "+fmtCd(nextLockMs)):"")+(( )=>{ const _e=duelEndMs(activeLeague); return _e?(" \u00B7 ends "+new Date(_e).toLocaleDateString([], {weekday:"short"})+" 3 AM ET"):""; })()}</span></div>
    <div style={{display:"flex",alignItems:"center",gap:10,marginTop:12}}>
    <div style={{flex:1,minWidth:0}}><div style={{display:"flex",alignItems:"center",gap:8}}><div style={_avSty(true)}>{_ini(userProfile&&userProfile.username)}</div><div><div style={{fontSize:9.5,letterSpacing:"0.12em",color:"rgba(255,255,255,0.3)",fontWeight:700,textTransform:"uppercase"}}>You</div><div style={{fontSize:13,fontWeight:800,marginTop:3}}>{(userProfile&&userProfile.username)||"You"}</div></div></div><div style={{marginTop:8}}><span style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.06em",borderRadius:6,padding:"3px 8px",display:"inline-block",color:_mineLockedAll?COL.win:IOS.orange,background:_mineLockedAll?"rgba(48,209,88,0.12)":"rgba(255,159,10,0.1)",border:_mineLockedAll?"1px solid rgba(48,209,88,0.3)":"1px solid rgba(255,159,10,0.3)"}}>{_mineLockedAll?"SLIP LOCKED":(_myLockedSlots+"/"+slotCount+" LOCKED")}</span></div></div>
    <div style={{textAlign:"center",flexShrink:0}}><div style={{fontSize:11,fontWeight:900,letterSpacing:"0.16em",color:"rgba(255,255,255,0.35)"}}>VS</div></div>
@@ -12560,13 +12585,13 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    <div className="pl-rise pl-d1" style={_cardSty(true)}>
    <div style={{position:"absolute",inset:0,backgroundImage:"repeating-linear-gradient(0deg,rgba(255,255,255,0.022) 0px,rgba(255,255,255,0.022) 1px,transparent 1px,transparent 4px)",pointerEvents:"none",opacity:0.5}}/>
    <div style={{position:"relative",padding:"13px 14px 13px"}}>
-   <div style={{display:"flex",alignItems:"center",gap:6,fontSize:9.5,fontWeight:800,letterSpacing:"0.13em",textTransform:"uppercase",color:IOS.yellow}}><span>{"Final \u00B7 "+(_iWin?"you win the duel":(_dOppName+" takes it"))}</span></div>
+   <div style={{display:"flex",alignItems:"center",gap:6,fontSize:9.5,fontWeight:800,letterSpacing:"0.13em",textTransform:"uppercase",color:IOS.yellow}}><span>{"Final \u00B7 "+(_drawn?"dead heat":(_iWin?"you win the duel":(_dOppName+" takes it")))}</span></div>
    <div style={{display:"flex",alignItems:"center",gap:10,marginTop:12}}>
    <div style={{flex:1,minWidth:0}}>{_sideHdr(true)}{_lampRow(_myLamps,false)}</div>
    <div style={{textAlign:"center",flexShrink:0}}><div style={{fontSize:11,fontWeight:900,letterSpacing:"0.16em",color:"rgba(255,255,255,0.35)"}}>VS</div></div>
    <div style={{flex:1,minWidth:0}}>{_sideHdr(false)}{_lampRow(_oppLamps,true)}</div>
    </div>
-   <div style={{fontSize:10,fontWeight:700,color:"rgba(255,255,255,0.45)",marginTop:11,textAlign:"center"}}>{(_iWin?"Won by ":"Lost by ")+_gap+(_dag?(" \u00B7 "+_dag):"")}</div>
+   <div style={{fontSize:10,fontWeight:700,color:"rgba(255,255,255,0.45)",marginTop:11,textAlign:"center"}}>{_drawn?("Tied at "+_myPts.toFixed(1)+" \u00B7 every tiebreak came up even \u2014 run it back to settle it"):((_iWin?"Won by ":"Lost by ")+_gap+(_dag?(" \u00B7 "+_dag):""))}</div>
    {activeLeague.isCommissioner&&<div onClick={_runBack} style={{..._ctaSty,background:"linear-gradient(120deg,#FFD60A,#FF9F0A)",color:"#141414"}}>Run it back</div>}
    <div onClick={()=>setScreen("matchup")} style={{..._ctaSty,background:"rgba(255,255,255,0.05)",boxShadow:"inset 0 0 0 0.5px rgba(255,255,255,0.12)",color:"rgba(255,255,255,0.75)",fontSize:13,padding:"10px",marginTop:activeLeague.isCommissioner?8:12}}>See the full breakdown</div>
    </div></div>);
@@ -13583,6 +13608,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  if(slotStarted(slot)){ alert("That game has already started — this pick can no longer be locked."); return; }
  if(!user){ alert("Sign in to lock picks."); return; }
  if(demoBlock("lock this pick")) return;
+ if(activeLeague && Number(activeLeague.duration_days)){ const _de=duelEndMs(activeLeague); if(_de && Date.now()>=_de){ alert("This duel\u2019s window has closed \u2014 no new picks."); return; } }
  const rows = buildSlotRows(slot, idx, activePicks);
  if(await survivorBlocked(rows)) return;
  const { data, error } = await supabase.from("picks").insert(rows).select("id");
@@ -14629,6 +14655,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  // restoring that snapshot via Edit picks let users "edit" server-locked picks: deletes
  // silently no-oped and every re-lock hit picks_unique_slot (the Olson duel bug).
  if(picksToSave.length) {
+ if(!isSoloMode && activeLeague && Number(activeLeague.duration_days)){ const _de=duelEndMs(activeLeague); if(_de && Date.now()>=_de){ alert("This duel\u2019s window has closed \u2014 no new picks."); return; } }
  if(await survivorBlocked(picksToSave)) return;
  const {data:ins, error:insertError} = await supabase.from("picks").insert(picksToSave).select("id,slot,multiplier");
  if(insertError) {
@@ -15459,6 +15486,13 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  });
  }
 
+ // Day-mode duel: the board only shows games inside the duel window. Bets with no
+ // parseable game time stay visible rather than silently vanishing.
+ if(!isSoloMode && activeLeague && Number(activeLeague.duration_days) && activeLeague.season_start){
+   const _dws=new Date(activeLeague.season_start).getTime();
+   const _dwe=duelEndMs(activeLeague);
+   if(_dwe){ list = list.filter(b=>{ if(!b.gameTime) return true; const t=new Date(b.gameTime).getTime(); return isNaN(t) || (t>=_dws && t<_dwe); }); }
+ }
  if(gridSearch.trim()){ const _q=gridSearch.toLowerCase().trim(); list = list.filter(b=>((b.pick||"")+" "+(b.game||"")).toLowerCase().includes(_q)); }
  // ── Folded parlay (flex leagues): one multiplier holds a parlay built right here ──
  const _parIdx = activePicks.findIndex(p=>p.isParlay);
@@ -17380,7 +17414,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div className="pk-cbar" style={{paddingLeft:20,paddingRight:20}}><div className="pk-cbar-t">Matchup</div></div>
  <div className="pk-hdr" style={{textAlign:"left",padding:"10px 20px 14px",background:"radial-gradient(120% 90% at 90% -10%, rgba(10,132,255,0.18), transparent 55%), linear-gradient(180deg,#0B1A2E 0%,#000 80%)"}}>
  <div className="pk-hdr-sub" style={{fontSize:11,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(255,255,255,0.42)"}}>Week {activeLeague.current_week||activeLeague.week||1} · {activeLeague.name} · Live</div>
- {activeLeague.season_start && (()=>{ const _wm=7*24*60*60*1000; const _end=new Date(new Date(activeLeague.season_start).getTime()+(activeLeague.current_week||activeLeague.week||1)*_wm+10800000); const _ms=_end.getTime()-Date.now(); const _d=Math.floor(_ms/86400000); const _h=Math.floor((_ms%86400000)/3600000); return <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.4)",marginTop:3}}>Week ends {_end.toLocaleDateString(undefined,{month:"short",day:"numeric"})}{_ms>0?" · "+(_d>0?_d+"d ":"")+_h+"h left":" · closing…"}</div>; })()}
+ {activeLeague.season_start && (()=>{ const _wm=7*24*60*60*1000; const _de=duelEndMs(activeLeague); const _end=_de?new Date(_de):new Date(new Date(activeLeague.season_start).getTime()+(activeLeague.current_week||activeLeague.week||1)*_wm+10800000); const _ms=_end.getTime()-Date.now(); const _d=Math.floor(_ms/86400000); const _h=Math.floor((_ms%86400000)/3600000); return <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.4)",marginTop:3}}>Week ends {_end.toLocaleDateString(undefined,{month:"short",day:"numeric"})}{_ms>0?" · "+(_d>0?_d+"d ":"")+_h+"h left":" · closing…"}</div>; })()}
  <div style={{fontSize:30,fontWeight:800,letterSpacing:"-0.7px",color:"#fff",lineHeight:1.05,marginTop:2}}>Matchup</div>
  </div>
  {(activeLeague.league_type||"h2h")==="h2h" && (()=>{
@@ -17895,7 +17929,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      <div onClick={()=>{
        const _wasPreset = newLeagueType==="duel"||newLeagueType==="survivor";
        setNewLeagueType(t.id);
-       if(t.id==="duel"){ setNewLeagueSize(2); setNewLeagueWeeks(1); setNewLeaguePlayoffs(false); }
+       if(t.id==="duel"){ setNewLeagueSize(2); setNewLeagueWeeks(1); setNewLeaguePlayoffs(false); setNewLeagueDuration({mode:"days",days:2,weeks:1}); }
        else if(t.id==="survivor"){ setNewLeagueSports(["nfl"]); setNewLeagueWeeks(18); setNewLeaguePlayoffs(false); if(newLeagueSize<2||newLeagueSize>100) setNewLeagueSize(8); }
        // Ladder is NFL-only (alt yardage ladders live in NFL player props) and scores on
        // cumulative points, so no bracket and no matchup schedule.
@@ -18210,16 +18244,43 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      style={{width:"100%",background:"#111",border:"0.5px solid #222",borderRadius:RAD.sm,padding:"11px 13px",color:"#fff",fontSize:14,fontFamily:"Barlow,sans-serif",outline:"none",marginBottom:16,boxSizing:"border-box"}}
    />
 
-   {/* Duel: fixed shape, no size/length controls */}
-   {isDuel&&(
-   <div style={{display:"flex",alignItems:"center",gap:10,background:"rgba(255,55,95,0.08)",border:"0.5px solid rgba(255,55,95,0.3)",borderRadius:RAD.md,padding:"12px 14px",marginBottom:4}}>
+   {/* Duel: opponent line + duration picker (days 1-7, or weeks for series play) */}
+   {isDuel&&(()=>{
+   const _dd=newLeagueDuration;
+   const _setD=(patch)=>{ const nx={..._dd,...patch}; setNewLeagueDuration(nx); setNewLeagueWeeks(nx.mode==="weeks"?Math.max(1,Math.min(18,Number(nx.weeks)||1)):1); };
+   // Live count of games inside the day window, from the odds ticker for the picked sports.
+   const _cnt=(()=>{ if(_dd.mode!=="days") return null; const _end=Date.now()+Math.max(1,Math.min(7,Number(_dd.days)||1))*86400000; const _sps=newLeagueSports.length?newLeagueSports:["mlb"]; return (tickerGames||[]).filter(g=>_sps.includes(g.sport)&&g.time&&(()=>{const t=new Date(g.time).getTime(); return !isNaN(t)&&t>=Date.now()&&t<_end;})()).length; })();
+   const _endPrev=(()=>{ if(_dd.mode!=="days") return null; const d=new Date(Date.now()+Math.max(1,Math.min(7,Number(_dd.days)||1))*86400000); return d.toLocaleDateString([], {weekday:"short",month:"short",day:"numeric"}); })();
+   return (<>
+   <div style={{display:"flex",alignItems:"center",gap:10,background:"rgba(255,55,95,0.08)",border:"0.5px solid rgba(255,55,95,0.3)",borderRadius:RAD.md,padding:"12px 14px",marginBottom:12}}>
      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#FF375F" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4l16 16M20 4L4 20"/></svg>
      <div>
-       <div style={{fontSize:13.5,fontWeight:800,color:"#fff"}}>{"1 week \u00B7 you vs one opponent"}</div>
+       <div style={{fontSize:13.5,fontWeight:800,color:"#fff"}}>{"You vs one opponent"}</div>
        <div style={{fontSize:10.5,color:"rgba(255,255,255,0.5)",marginTop:2}}>{"League fills at 2 and starts. Winner takes the trophy \u2014 it lives on both profiles forever."}</div>
      </div>
    </div>
-   )}
+   <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"rgba(255,255,255,0.6)",marginBottom:8}}>Duration</div>
+   <div style={{display:"flex",background:"#1c1c22",borderRadius:RAD.md,padding:3,marginBottom:10}}>
+     {["days","weeks"].map(m=>(<div key={m} onClick={()=>_setD({mode:m})} style={{flex:1,textAlign:"center",padding:"9px 0",borderRadius:9,fontSize:13,fontWeight:800,cursor:"pointer",transition:"background .18s,color .18s",background:_dd.mode===m?"#2d2d31":"transparent",color:_dd.mode===m?"#fff":"rgba(255,255,255,0.5)"}}>{m==="days"?"Days":"Weeks"}</div>))}
+   </div>
+   {_dd.mode==="days"?(<>
+   <div style={{display:"flex",gap:6}}>
+     {[1,2,3,4,5,6,7].map(n=>{ const on=Number(_dd.days)===n; return (<div key={n} onClick={()=>_setD({days:n})} style={{flex:1,textAlign:"center",padding:"12px 0 9px",borderRadius:11,cursor:"pointer",transition:"background .16s,border-color .16s",background:on?"rgba(10,132,255,0.16)":"rgba(255,255,255,0.04)",border:on?"1px solid rgba(10,132,255,0.55)":"1px solid rgba(255,255,255,0.09)"}}><div style={{fontSize:16,fontWeight:900,color:on?IOS.blue:"#fff"}}>{n}</div><div style={{fontSize:8,fontWeight:800,letterSpacing:"0.06em",color:on?"rgba(10,132,255,0.8)":"rgba(255,255,255,0.4)",marginTop:1}}>{n===1?"DAY":"DAYS"}</div></div>); })}
+   </div>
+   <div style={{display:"flex",alignItems:"center",gap:8,marginTop:12,background:_cnt===0?"rgba(255,69,58,0.08)":"rgba(48,209,88,0.08)",border:_cnt===0?"1px solid rgba(255,69,58,0.3)":"1px solid rgba(48,209,88,0.25)",borderRadius:11,padding:"10px 13px",fontSize:12,fontWeight:700,color:_cnt===0?IOS.red:IOS.green,transition:"background .2s,border-color .2s,color .2s"}}>{_cnt===0?"No games on the board in this window \u2014 widen it or wait for lines to post":(_cnt+" game"+(_cnt===1?"":"s")+" on the board in this window")}</div>
+   <div style={{fontSize:10.5,color:"rgba(255,255,255,0.38)",marginTop:9,marginBottom:16,paddingLeft:2}}>{"Ends "+_endPrev+" at 3:00 AM ET \u2014 late games on the last day still count."}</div>
+   </>):(<>
+   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.09)",borderRadius:RAD.md,padding:"10px 12px"}}>
+     <div onClick={()=>_setD({weeks:Math.max(1,(Number(_dd.weeks)||1)-1)})} style={{width:36,height:36,borderRadius:10,background:"#1c1c22",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:19,fontWeight:800,userSelect:"none"}}>{"\u2212"}</div>
+     <div style={{fontSize:17,fontWeight:900}}>{(Number(_dd.weeks)||1)}<span style={{fontSize:10,fontWeight:700,color:"rgba(255,255,255,0.4)",marginLeft:5}}>{(Number(_dd.weeks)||1)===1?"week":"weeks"}</span></div>
+     <div onClick={()=>_setD({weeks:Math.min(18,(Number(_dd.weeks)||1)+1)})} style={{width:36,height:36,borderRadius:10,background:"#1c1c22",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:19,fontWeight:800,userSelect:"none"}}>+</div>
+   </div>
+   <div style={{fontSize:10.5,color:"rgba(255,255,255,0.45)",marginTop:9,lineHeight:1.5,paddingLeft:2}}>{(Number(_dd.weeks)||1)===1?"One standard week \u2014 same as picking 7 days.":"One matchup per week. Win the week, take the point. Most weekly wins takes the duel."}</div>
+   {(Number(_dd.weeks)||1)>1&&<div style={{fontSize:10,color:"rgba(255,255,255,0.32)",marginTop:5,marginBottom:16,lineHeight:1.5,paddingLeft:2}}>{"Split series? Total points across every week decides it. Still dead even after that: highest single week, then it\u2019s a draw \u2014 run it back."}</div>}
+   {(Number(_dd.weeks)||1)===1&&<div style={{marginBottom:16}}/>}
+   </>)}
+   </>);
+   })()}
    {(newLeagueType==="ladder"||newLeagueType==="survivor")&&(()=>{
      // Which NFL week does Week 1 land on. Anything already locked is unpickable:
      // opening inside a closed week hands everyone a no-pick week they never saw.
@@ -18587,7 +18648,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      const _runItBack=()=>{ try{
        setNewLeagueName((lg.name||"League").slice(0,40));
        { const _sp=Array.isArray(lg.sports)&&lg.sports.length?lg.sports:[lg.sport].filter(Boolean); setNewLeagueSports(isPro?_sp:_sp.slice(0,1)); }
-       setNewLeagueType(lg.league_type||"h2h");
+       const _isDuelLg=(lg.league_type||"h2h")==="h2h"&&Number(lg.target_size||lg.max_members||0)===2;
+       setNewLeagueType(_isDuelLg?"duel":(lg.league_type||"h2h"));
+       if(_isDuelLg){ setNewLeagueSize(2); setNewLeaguePlayoffs(false); setNewLeagueDuration(Number(lg.duration_days)?{mode:"days",days:Math.max(1,Math.min(7,Number(lg.duration_days))),weeks:1}:{mode:"weeks",days:2,weeks:Math.max(1,Math.min(18,Number(lg.season_weeks)||1))}); }
        setNewLeagueWeeks(Number(lg.season_weeks)||18);
        setNewLeaguePrivacy(lg.privacy||"private");
        const _cfg=parseSlotConfig(lg.slot_config); if(Array.isArray(_cfg)&&_cfg.length){ setNewLeagueSlots(_cfg.map(s=>({...s}))); setNewLeaguePool(_cfg.map(s=>Number(s.mult)||1)); }

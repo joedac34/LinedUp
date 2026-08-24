@@ -62,7 +62,7 @@ export default async function handler(req, res) {
   try {
     const { data: leagues, error } = await supabase
       .from("leagues")
-      .select("id, name, current_week, season_weeks, season_start, league_type, playoffs_enabled, playoff_size, champion_id, completed_at, survivor_lives")
+      .select("id, name, current_week, season_weeks, season_start, league_type, playoffs_enabled, playoff_size, champion_id, completed_at, survivor_lives, duration_days, target_size")
       .not("season_start", "is", null)
       .eq("is_demo", false);
     if (error) throw error;
@@ -79,10 +79,15 @@ export default async function handler(req, res) {
       const seasonWeeks = Number(lg.season_weeks || 18);
       // target may reach seasonWeeks+1 so the loop finalizes the FINAL week too;
       // current_week itself is always clamped to seasonWeeks.
-      const target = Math.min(
-        seasonWeeks + 1,
-        Math.floor((Date.now() - start - GRACE_MS) / WEEK_MS) + 1
-      );
+      // Day-mode duels (duration_days set): the single "week" is duration_days long,
+      // closing at the next 3:00 AM ET after start + N days so late West-Coast finals
+      // settle inside the window. No extra grace: the 3 AM snap IS the grace.
+      const target = Number(lg.duration_days)
+        ? (Date.now() >= duelEndAt(start, lg.duration_days) ? seasonWeeks + 1 : 1)
+        : Math.min(
+            seasonWeeks + 1,
+            Math.floor((Date.now() - start - GRACE_MS) / WEEK_MS) + 1
+          );
       const cw = lg.current_week || 1;
 
       if (target <= cw) {
@@ -304,11 +309,74 @@ async function maybeComplete(supabase, league, target, seasonWeeks) {
   const { data: mem } = await supabase.from("league_members").select("user_id").eq("league_id", league.id);
   const field = playoffFieldFor(league, (mem || []).length);
   if (field >= 2) return; // playoffs decide this league; the final's resolution stamps it
+  // 2-player duels settle by their own chain: weekly wins -> total points -> highest
+  // single week -> dead heat (completed with champion_id NULL; client prompts a
+  // run-it-back). Weekly wins are recomputed from stored matchup POINTS, not
+  // winner_id: finalizeWeek hands genuine ties to seat 1 for bracket bookkeeping,
+  // and a tied week must award NO series point here.
+  if ((mem || []).length === 2) {
+    const champ = await duelOutcome(supabase, league.id, (mem || []).map((m) => m.user_id));
+    await supabase.from("leagues").update({
+      champion_id: champ,
+      completed_at: new Date().toISOString(),
+    }).eq("id", league.id);
+    return;
+  }
   const top = await computeSeedOrder(supabase, league.id, league.league_type, 1);
   await supabase.from("leagues").update({
     champion_id: (top && top[0]) || null,
     completed_at: new Date().toISOString(),
   }).eq("id", league.id);
+}
+
+// Next instant at/after `ms` where it is exactly 3:00 AM in America/New_York.
+// ET offsets are whole hours, so zeroing minutes at the matched hour lands on :00 ET.
+function snap3amET(ms) {
+  for (let i = 0; i < 48; i++) {
+    const t = ms + i * 3600000;
+    const h = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", hour12: false }).format(new Date(t)));
+    if (h === 3) { const d = new Date(t); d.setMinutes(0, 0, 0); return d.getTime(); }
+  }
+  return ms;
+}
+function duelEndAt(startMs, days) {
+  return snap3amET(startMs + Number(days) * 24 * 60 * 60 * 1000);
+}
+
+// 2-player settlement chain. Returns the champion's id, or null for a dead heat.
+async function duelOutcome(supabase, leagueId, ids) {
+  const a = ids[0], b = ids[1];
+  const { data: ms } = await supabase
+    .from("matchups").select("user1_id, user2_id, user1_points, user2_points, bracket_match_id, winner_id")
+    .eq("league_id", leagueId);
+  const wins = {}; wins[a] = 0; wins[b] = 0;
+  (ms || []).forEach((m) => {
+    if (String(m.bracket_match_id || "").startsWith("PW")) return;
+    if (m.winner_id == null) return; // week not finalized
+    const p1 = parseFloat(m.user1_points || 0), p2 = parseFloat(m.user2_points || 0);
+    if (p1 === p2) return; // tied week: no series point to either side
+    const w = p1 > p2 ? m.user1_id : m.user2_id;
+    if (wins[w] != null) wins[w]++;
+  });
+  if (wins[a] !== wins[b]) return wins[a] > wins[b] ? a : b;
+
+  const { data: picks } = await supabase
+    .from("picks").select("user_id, week, points_earned")
+    .eq("league_id", leagueId).eq("result", "W");
+  const tot = {}; tot[a] = 0; tot[b] = 0; const byWk = {};
+  (picks || []).forEach((p) => {
+    const v = parseFloat(p.points_earned || 0);
+    if (tot[p.user_id] != null) tot[p.user_id] += v;
+    const k = p.user_id + "|" + p.week;
+    byWk[k] = (byWk[k] || 0) + v;
+  });
+  if (Math.abs(tot[a] - tot[b]) > 1e-9) return tot[a] > tot[b] ? a : b;
+
+  const best = (id) => Object.keys(byWk).filter((k) => k.indexOf(id + "|") === 0)
+    .reduce((mx, k) => Math.max(mx, byWk[k]), 0);
+  const ba = best(a), bb = best(b);
+  if (Math.abs(ba - bb) > 1e-9) return ba > bb ? a : b;
+  return null; // dead heat
 }
 
 // ── Survivor ─────────────────────────────────────────────────────────────────
