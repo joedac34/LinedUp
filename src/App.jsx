@@ -5176,6 +5176,129 @@ const washAccent = (pickStr, isParlay) => {
   return n===1 ? brightAccent(teamAccent(found)) : null;
 };
 
+// ── PROP HISTORY SHEET ── last-10 game log vs the tapped line. Data via /api/prophist
+// (MLB StatsAPI / NFL ESPN, proxied server-side for CORS). Tabs are driven by which
+// markets the stat map can actually compute for the player’s group — a tab never
+// exists that can’t fill its chart (same rule as "never ship an ungradeable pick").
+const _ipOuts=(ip)=>{ const s2=String(ip==null?"":ip); const m=s2.match(/^(\d+)(?:\.(\d))?/); if(!m) return 0; return (parseInt(m[1],10)||0)*3+(parseInt(m[2]||"0",10)||0); };
+const _phN=(v)=>{ const n=parseFloat(v); return isNaN(n)?0:n; };
+const PROP_HIST_MAP={
+ batter_total_bases:{label:"Total Bases",g:"hitting",f:(x)=>_phN(x.totalBases)},
+ batter_hits:{label:"Hits",g:"hitting",f:(x)=>_phN(x.hits)},
+ batter_home_runs:{label:"Home Runs",g:"hitting",f:(x)=>_phN(x.homeRuns)},
+ batter_home_runs_alternate:{label:"Home Runs",g:"hitting",f:(x)=>_phN(x.homeRuns)},
+ batter_rbis:{label:"RBIs",g:"hitting",f:(x)=>_phN(x.rbi)},
+ batter_runs_scored:{label:"Runs",g:"hitting",f:(x)=>_phN(x.runs)},
+ batter_stolen_bases:{label:"Stolen Bases",g:"hitting",f:(x)=>_phN(x.stolenBases)},
+ batter_walks:{label:"Walks",g:"hitting",f:(x)=>_phN(x.baseOnBalls)},
+ batter_doubles:{label:"Doubles",g:"hitting",f:(x)=>_phN(x.doubles)},
+ batter_triples:{label:"Triples",g:"hitting",f:(x)=>_phN(x.triples)},
+ batter_singles:{label:"Singles",g:"hitting",f:(x)=>Math.max(0,_phN(x.hits)-_phN(x.doubles)-_phN(x.triples)-_phN(x.homeRuns))},
+ batter_hits_runs_rbis:{label:"H+R+RBI",g:"hitting",f:(x)=>_phN(x.hits)+_phN(x.runs)+_phN(x.rbi)},
+ pitcher_strikeouts:{label:"Strikeouts",g:"pitching",f:(x)=>_phN(x.strikeOuts)},
+ pitcher_earned_runs:{label:"Earned Runs",g:"pitching",f:(x)=>_phN(x.earnedRuns)},
+ pitcher_hits_allowed:{label:"Hits Allowed",g:"pitching",f:(x)=>_phN(x.hits)},
+ pitcher_walks:{label:"Walks Allowed",g:"pitching",f:(x)=>_phN(x.baseOnBalls)},
+ pitcher_outs:{label:"Outs",g:"pitching",f:(x)=>(_phN(x.outs)||_ipOuts(x.inningsPitched))},
+ player_pass_yds:{label:"Pass Yards",g:"nfl",f:(x)=>_phN(x.passingYards)},
+ player_pass_tds:{label:"Pass TDs",g:"nfl",f:(x)=>_phN(x.passingTouchdowns)},
+ player_rush_yds:{label:"Rush Yards",g:"nfl",f:(x)=>_phN(x.rushingYards)},
+ player_rush_tds:{label:"Rush TDs",g:"nfl",f:(x)=>_phN(x.rushingTouchdowns)},
+ player_receptions:{label:"Receptions",g:"nfl",f:(x)=>_phN(x.receptions)},
+ player_reception_yds:{label:"Rec Yards",g:"nfl",f:(x)=>_phN(x.receivingYards)},
+ player_reception_tds:{label:"Rec TDs",g:"nfl",f:(x)=>_phN(x.receivingTouchdowns)},
+ player_anytime_td:{label:"Anytime TD",g:"nfl",f:(x)=>_phN(x.rushingTouchdowns)+_phN(x.receivingTouchdowns),defLine:0.5},
+};
+// Tab order per group: tapped market moves to the front, capped at 6.
+const PROP_HIST_TABS={ hitting:["batter_total_bases","batter_hits","batter_home_runs","batter_rbis","batter_runs_scored","batter_stolen_bases"], pitching:["pitcher_strikeouts","pitcher_outs","pitcher_earned_runs","pitcher_hits_allowed","pitcher_walks"], nfl:["player_pass_yds","player_rush_yds","player_reception_yds","player_receptions","player_anytime_td"] };
+const _phCache={};
+function PropHistorySheet({ ctx, onClose }){
+  const [vis,setVis]=useState(false);
+  const [data,setData]=useState(null);
+  const [err,setErr]=useState(false);
+  const [tab,setTab]=useState(null);
+  const [paneIn,setPaneIn]=useState(false);
+  const [barsGo,setBarsGo]=useState(false);
+  const [hitN,setHitN]=useState(0);
+  const closingRef=useRef(false);
+  const player=ctx&&ctx.player, sport=ctx&&ctx.sport, market=ctx&&ctx.market;
+  useEffect(()=>{
+    let dead=false; closingRef.current=false;
+    setVis(false); setData(null); setErr(false); setPaneIn(false); setBarsGo(false);
+    const t0=setTimeout(()=>{ if(!dead) setVis(true); },20);   // entrance after mount
+    const key=String(sport)+"|"+String(player);
+    const seed=(d)=>{ if(dead) return; setData(d);
+      const grp=(d.groups&&d.groups.hitting&&(!PROP_HIST_MAP[market]||PROP_HIST_MAP[market].g==="hitting"))?"hitting":(d.groups&&d.groups.pitching&&PROP_HIST_MAP[market]&&PROP_HIST_MAP[market].g==="pitching")?"pitching":(d.groups&&d.groups.nfl)?"nfl":(d.groups&&Object.keys(d.groups)[0])||null;
+      const order=(PROP_HIST_TABS[grp]||[]).slice();
+      if(market&&PROP_HIST_MAP[market]&&PROP_HIST_MAP[market].g===grp){ const i=order.indexOf(market); if(i>-1) order.splice(i,1); order.unshift(market); }
+      setTab(order[0]||null); setPaneIn(true);
+    };
+    if(_phCache[key]){ seed(_phCache[key]); }
+    else{
+      const sp=(String(sport||"").indexOf("nfl")>-1||String(sport||"")==="americanfootball_nfl")?"nfl":"mlb";
+      fetch(API_BASE+"/api/prophist?sport="+sp+"&name="+encodeURIComponent(player||""))
+        .then(r=>{ if(!r.ok) throw new Error("bad"); return r.json(); })
+        .then(d=>{ _phCache[key]=d; seed(d); })
+        .catch(()=>{ if(!dead) setErr(true); });
+    }
+    return ()=>{ dead=true; clearTimeout(t0); };
+  },[player,sport,market]);
+  // Stagger the bars + draw the line once the pane is showing a tab.
+  useEffect(()=>{ setBarsGo(false); if(!paneIn||!tab) return; const t=setTimeout(()=>setBarsGo(true),60); return ()=>clearTimeout(t); },[paneIn,tab]);
+  const grpOf=(mk)=>((PROP_HIST_MAP[mk]||{}).g)||null;
+  const games=(()=>{ if(!data||!tab) return []; const g=grpOf(tab); return ((data.groups&&data.groups[g])||[]).slice(0,10); })();
+  const line=(()=>{ if(!tab) return null; if(ctx&&tab===ctx.market&&ctx.line!=null&&!isNaN(ctx.line)) return ctx.line; const dl=(PROP_HIST_MAP[tab]||{}).defLine; return (dl!=null)?dl:null; })();
+  const vals=games.map(gm=>PROP_HIST_MAP[tab]?PROP_HIST_MAP[tab].f(gm.stats||{}):0);
+  const overs=(line!=null)?vals.filter(v=>v>line).length:0;
+  const avg=vals.length?(vals.reduce((a,b)=>a+b,0)/vals.length):0;
+  // Hit chip counts up; plain avg chip when this tab has no line to grade against.
+  useEffect(()=>{ setHitN(0); if(line==null||!vals.length) return; let n=0; const iv=setInterval(()=>{ n++; setHitN(n); if(n>=overs) clearInterval(iv); },70); return ()=>clearInterval(iv); },[tab,line,overs,games.length]);
+  const doClose=()=>{ if(closingRef.current) return; closingRef.current=true; setVis(false); setTimeout(onClose,400); };
+  const swapTab=(k)=>{ if(k===tab) return; setPaneIn(false); setTimeout(()=>{ setTab(k); setPaneIn(true); },240); };
+  const tabsFor=(()=>{ if(!data) return []; const grp=tab?grpOf(tab):null; if(!grp) return []; const order=(PROP_HIST_TABS[grp]||[]).slice(); if(ctx&&ctx.market&&grpOf(ctx.market)===grp){ const i=order.indexOf(ctx.market); if(i>-1) order.splice(i,1); order.unshift(ctx.market); } return order.filter(mk=>PROP_HIST_MAP[mk]).slice(0,6); })();
+  const _ini2=String(player||"?").split(" ").map(w=>w.charAt(0)).join("").slice(0,2).toUpperCase();
+  const max=Math.max.apply(null,[1].concat(vals).concat(line!=null?[line]:[]))+0.6;
+  const usable=100;
+  const cold=line!=null&&overs<=4;
+  const emptyNfl=data&&tab&&grpOf(tab)==="nfl"&&!games.length;
+  return (
+  <div style={{position:"fixed",inset:0,zIndex:8500}}>
+  <style>{`.ph-veil{position:absolute;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);opacity:0;transition:opacity .28s ease;} .ph-veil.on{opacity:1;} .ph-sheet{position:absolute;left:0;right:0;bottom:0;background:#141418;border-radius:22px 22px 0 0;border:0.5px solid rgba(255,255,255,0.1);border-bottom:none;transform:translateY(104%);transition:transform .38s cubic-bezier(0.32,0.72,0.24,1);box-shadow:0 -18px 50px rgba(0,0,0,0.7);padding-bottom:calc(18px + var(--sa-bot,0px));} .ph-sheet.on{transform:translateY(0);} .ph-fade{opacity:0;transform:translateY(6px);transition:opacity .26s ease,transform .26s ease;} .ph-fade.in{opacity:1;transform:none;} .ph-fill{border-radius:5px 5px 2px 2px;transform-origin:bottom;transform:scaleY(0);transition:transform .45s cubic-bezier(0.34,1.3,0.5,1);} .ph-fill.go{transform:scaleY(1);} .ph-line{position:absolute;left:0;right:0;border-top:1.5px dashed rgba(255,214,10,0.65);z-index:2;transform-origin:left;transform:scaleX(0);transition:transform .5s cubic-bezier(0.32,0.72,0.24,1) .3s;} .ph-line.go{transform:scaleX(1);} @keyframes phPulse{0%,100%{opacity:0.35}50%{opacity:0.14}} .ph-skel{animation:phPulse 1.2s ease infinite;}`}</style>
+  <div className={"ph-veil"+(vis?" on":"")} onClick={doClose}/>
+  <div className={"ph-sheet"+(vis?" on":"")}>
+  <div onClick={doClose} style={{width:36,height:4,borderRadius:2,background:"rgba(255,255,255,0.2)",margin:"12px auto 0",cursor:"pointer"}}/>
+  <div style={{display:"flex",alignItems:"center",gap:11,padding:"14px 18px 4px"}}>
+  <div style={{width:40,height:40,borderRadius:"50%",background:"rgba(10,132,255,0.16)",border:"1px solid rgba(10,132,255,0.4)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:IOS.blue,flexShrink:0}}>{_ini2}</div>
+  <div style={{minWidth:0}}><div style={{fontSize:17,fontWeight:800,letterSpacing:"-0.3px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{(data&&data.player&&data.player.name)||player}</div><div style={{fontSize:10.5,color:"rgba(255,255,255,0.4)",fontWeight:700,marginTop:1}}>{(data&&data.player&&data.player.position)||""}{data&&data.player&&data.player.position?" \u00B7 ":""}{"last 10 games"}</div></div>
+  <div onClick={doClose} style={{marginLeft:"auto",width:30,height:30,borderRadius:"50%",background:"rgba(255,255,255,0.1)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></div>
+  </div>
+  {tabsFor.length>1&&<div style={{display:"flex",gap:6,padding:"12px 18px 2px",overflowX:"auto"}}>{tabsFor.map(mk=>(<div key={mk} onClick={()=>swapTab(mk)} style={{flexShrink:0,fontSize:11,fontWeight:800,letterSpacing:"0.03em",padding:"7px 13px",borderRadius:16,cursor:"pointer",transition:"background .18s,color .18s,border-color .18s",background:tab===mk?"rgba(10,132,255,0.16)":"rgba(255,255,255,0.05)",border:tab===mk?"1px solid rgba(10,132,255,0.5)":"1px solid rgba(255,255,255,0.1)",color:tab===mk?IOS.blue:"rgba(255,255,255,0.55)"}}>{PROP_HIST_MAP[mk].label}</div>))}</div>}
+  <div style={{padding:"6px 18px 4px",minHeight:190}}>
+  {err?(<div style={{textAlign:"center",padding:"44px 20px",color:"rgba(255,255,255,0.45)",fontSize:13,lineHeight:1.6}}>{"Couldn\u2019t load game history right now. Try again in a minute."}</div>)
+  :!data?(<div style={{display:"flex",alignItems:"flex-end",gap:6,height:130,marginTop:26,paddingBottom:26}}>{[38,64,50,80,44,70,56,88,48,60].map((h,i)=>(<div key={i} className="ph-skel" style={{flex:1,height:h,borderRadius:5,background:"rgba(255,255,255,0.28)",animationDelay:(i*0.07)+"s"}}/>))}</div>)
+  :emptyNfl?(<div style={{textAlign:"center",padding:"44px 20px",color:"rgba(255,255,255,0.45)",fontSize:13,lineHeight:1.6}}>Game-by-game history lands when the season does.</div>)
+  :!games.length?(<div style={{textAlign:"center",padding:"44px 20px",color:"rgba(255,255,255,0.45)",fontSize:13,lineHeight:1.6}}>No recent game logs for this player.</div>)
+  :(<div className={"ph-fade"+(paneIn?" in":"")}>
+  <div style={{display:"flex",alignItems:"center",gap:8,margin:"8px 0 2px"}}>
+  {line!=null?(<span style={{fontSize:11,fontWeight:900,letterSpacing:"0.02em",borderRadius:8,padding:"4px 10px",background:cold?"rgba(255,69,58,0.12)":"rgba(48,209,88,0.13)",border:cold?"1px solid rgba(255,69,58,0.35)":"1px solid rgba(48,209,88,0.35)",color:cold?IOS.red:IOS.green}}>{hitN+" of "+games.length+" over "+line}</span>):(<span style={{fontSize:11,fontWeight:900,borderRadius:8,padding:"4px 10px",background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.14)",color:"rgba(255,255,255,0.7)"}}>{"avg "+avg.toFixed(1)+" per game"}</span>)}
+  <span style={{fontSize:10.5,fontWeight:700,color:"rgba(255,255,255,0.45)"}}>{"avg "+avg.toFixed(1)+(line!=null?(" \u00B7 line "+line):"")}</span>
+  </div>
+  <div style={{position:"relative",height:130,marginTop:14,display:"flex",alignItems:"flex-end",gap:6,paddingBottom:26}}>
+  {line!=null&&<div className={"ph-line"+(barsGo?" go":"")} style={{bottom:(26+line/max*usable)+"px"}}><span style={{position:"absolute",right:0,top:-16,fontSize:9,fontWeight:800,color:"#FFD60A",letterSpacing:"0.04em"}}>{"LINE "+line}</span></div>}
+  {games.slice().reverse().map((gm,i)=>{ const v=vals.slice().reverse()[i]; const h=Math.max(4,v/max*usable); const over=line!=null&&v>line; return (
+  <div key={i} style={{flex:1,position:"relative",display:"flex",flexDirection:"column",justifyContent:"flex-end",height:"100%"}}>
+  <span style={{position:"absolute",left:0,right:0,textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:11,fontWeight:800,bottom:(h+4)+"px",color:over?IOS.green:"rgba(255,255,255,0.5)"}}>{v}</span>
+  <div className={"ph-fill"+(barsGo?" go":"")} style={{height:h+"px",background:over?"linear-gradient(180deg,#30D158,#1f9e46)":"rgba(255,255,255,0.16)",transitionDelay:(0.06*i+0.08)+"s"}}/>
+  <span style={{position:"absolute",left:0,right:0,bottom:-24,textAlign:"center",fontSize:8,fontWeight:700,color:"rgba(255,255,255,0.35)",lineHeight:1.25}}>{(gm.home?"":"@")+(gm.opp||"")}<br/>{gm.date?new Date(gm.date).toLocaleDateString([], {month:"numeric",day:"numeric"}):""}</span>
+  </div>); })}
+  </div>
+  <div style={{fontSize:10,color:"rgba(255,255,255,0.35)",paddingTop:14,lineHeight:1.5}}>{"Most recent on the right \u00B7 green cleared the line"+(line!=null&&ctx&&tab===ctx.market?"":" \u00B7 switch back to your market for the line read")}</div>
+  </div>)}
+  </div>
+  </div>
+  </div>);
+}
+
 function GamecastSheet({ game, pick, onClose }){
   // Top performers is the ONLY thing the gamecast needs that /api/livescores can't give
   // us — everything else (inning, outs, bases, at-bat, pitching, decisions) rides along
@@ -5830,6 +5953,7 @@ function App() {
  // other screen pays for a per-second re-render of an 19k-line tree.
  const [nowTick, setNowTick] = useState(()=>Date.now());
  const [gameSheet, setGameSheet] = useState(null); // { tickerGame, espnGame, detail }
+ const [propHist, setPropHist] = useState(null); // { player, sport, market, line } for the prop history sheet
  const [gcTab, setGcTab] = useState("ov");   // game sheet tab: Overview | Lineups | Odds | Plok
  const [gcDir, setGcDir] = useState(1);      // +1 moving right, -1 moving left
  const gcScrollRef = useRef(null);
@@ -6335,6 +6459,10 @@ function App() {
  const [slipPoolIdx, setSlipPoolIdx] = useState(-1);    // which slip row shows its multiplier pool
  const [slipToast, setSlipToast] = useState("");
  const [gridSearch, setGridSearch] = useState("");
+ // One-time teach for the Plok chip: the bare star read as "favorite", not "AI writeup".
+ // Device-level flag; any Plok tap or a tap on the tip itself dismisses it for good.
+ const [plokTipSeen, setPlokTipSeen] = useState(()=>{ try{ return localStorage.getItem("picklock_plok_tip")==="1"; }catch(e){ return true; } });
+ const markPlokTipSeen = ()=>{ setPlokTipSeen(true); try{ localStorage.setItem("picklock_plok_tip","1"); }catch(e){} };
  const [gridOpenGames, setGridOpenGames] = useState({}); // bet-browser game accordion: {gameName:true}
  const [sheetExpanded, setSheetExpanded] = useState(null); // line-sheet expanded game key
  const [lineMoves, setLineMoves] = useState({}); // opening line per sel_key (from /api/linemoves)
@@ -7164,6 +7292,7 @@ function App() {
     }finally{ setAiBusy(false); }
   };
   const askFromBet = (bet, category) => {
+    if(!plokTipSeen) markPlokTipSeen();
     if(!isPro){ setShowPaywall("ai"); return; }
     setAiReturn(prev => screen==="ai" ? prev : screen); setScreen("ai");
     // Period bets (F5 / YRFI / NRFI / 1H): the EV screener does not price these, but the
@@ -12346,6 +12475,102 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    const _stripDot=liveCount>0?"#64D2FF":(hit>0?"#30D158":"#FF453A");
    const _stripText=liveCount>0?(liveCount+" of "+slotCount+" legs live"+(settleMs?(" · settles ~"+fmtClk(settleMs)):"")+" · "+weekPts+" this week"):(hit+" of "+total+" hit · "+weekPts+" pts this week");
    const _buildLabel=isSoloMode?"Build this week's slip":(_svHome?("Make your Week "+(activeLeague.current_week||activeLeague.week||1)+" pick"):("Build Week "+(activeLeague.current_week||activeLeague.week||1)+" slip"));
+   // ── DUEL COMMAND CENTER ── tale-of-the-tape card replaces the generic league card
+   // for 2-player 1-week h2h leagues. Three states: pre-lock, live, final. Renders
+   // BEFORE the champion_id season card so a finished duel gets the duel final, not
+   // the generic season-complete banner. Lamp tracks are flex so 3 or 10 picks fit.
+   const _duel = !isSoloMode && (activeLeague.league_type||"h2h")==="h2h" && Number(activeLeague.target_size||activeLeague.max_members||0)===2 && Number(activeLeague.season_weeks||0)===1;
+   if(_duel){
+   const _dOpp=(leagueMembers||[]).find(m=>m.userId!==(user&&user.id))||null;
+   const _dOppName=(_dOpp&&_dOpp.name)||"Opponent";
+   const _ini=(nm)=>String(nm||"?").replace(/[^a-zA-Z0-9]/g,"").slice(0,2).toUpperCase()||"?";
+   const _slotKey=(sl)=>{ const m=String(sl||"").match(/^longshot_(\d+)_/); return m?("longshot_"+m[1]):String(sl||""); };
+   const _rowsOf=(uid)=>(weekPicks||[]).filter(pp=>pp.user_id===uid && pp.result!=="P");
+   const _myRows=_rowsOf(user&&user.id), _oppRows=_dOpp?_rowsOf(_dOpp.userId):[];
+   const _ptsOf=(rows)=>parseFloat(rows.filter(r=>r.result==="W").reduce((a,r)=>a+parseFloat(r.points_earned||0),0).toFixed(1));
+   const _myPts=_ptsOf(_myRows), _oppPts=_ptsOf(_oppRows);
+   // Per-slot lamp state: parlays collapse to one lamp (any leg pending=pend, any L=loss, else win).
+   const _slotLamps=(rows)=>{ const g={}; rows.forEach(r=>{ const k=_slotKey(r.slot); (g[k]=g[k]||[]).push(r); }); return Object.keys(g).map(k=>{ const rs=g[k]; if(rs.some(r=>r.result==="pending")) return COL.pend; if(rs.some(r=>r.result==="L")) return COL.loss; return COL.win; }); };
+   const _mySlotLamps=_slotLamps(_myRows), _oppSlotLamps=_slotLamps(_oppRows);
+   const _myLamps=_mySlotLamps.concat(Array(Math.max(0,slotCount-_mySlotLamps.length)).fill(COL.idle)).slice(0,10);
+   const _oppLamps=_oppSlotLamps.concat(Array(Math.max(0,slotCount-_oppSlotLamps.length)).fill(COL.idle)).slice(0,10);
+   const _cnt=(rows,lamps)=>({ w:rows.filter(r=>r.result==="W").length, l:rows.filter(r=>r.result==="L").length, live:rows.filter(r=>r.result==="pending"&&r.game_date&&new Date(r.game_date).getTime()<=_now).length, idle:lamps.filter(c=>c===COL.idle).length });
+   const _mc=_cnt(_myRows,_myLamps), _oc=_cnt(_oppRows,_oppLamps);
+   const _dFinal = !!activeLeague.champion_id || lgCompleted(activeLeague);
+   const _anyGraded = _myRows.concat(_oppRows).some(r=>r.result==="W"||r.result==="L");
+   const _anyStarted = _myRows.concat(_oppRows).some(r=>r.result==="pending"&&r.game_date&&new Date(r.game_date).getTime()<=_now);
+   const _dLive = !_dFinal && (_anyGraded || _anyStarted);
+   const _iWin = _dFinal && (activeLeague.champion_id ? activeLeague.champion_id===(user&&user.id) : _myPts>=_oppPts);
+   const _gap=parseFloat(Math.abs(_myPts-_oppPts).toFixed(1));
+   const _pct=(_myPts+_oppPts)>0?Math.max(4,Math.min(96,Math.round(_myPts/(_myPts+_oppPts)*100))):50;
+   const _lampRow=(lamps,right)=>(<div style={{display:"flex",gap:3,marginTop:8,height:5,justifyContent:right?"flex-end":"flex-start"}}>{lamps.map((c,i)=>(<span key={i} style={{flex:"1 1 0",maxWidth:16,minWidth:4,borderRadius:3,background:c}}/>))}</div>);
+   const _avSty=(mine)=>({width:34,height:34,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,flexShrink:0, background:mine?"rgba(10,132,255,0.18)":"rgba(255,255,255,0.08)", border:mine?"1px solid rgba(10,132,255,0.45)":"1px solid rgba(255,255,255,0.2)", color:mine?IOS.blue:"rgba(255,255,255,0.7)"});
+   const _ctaSty={display:"block",textAlign:"center",background:IOS.blue,color:"#fff",fontWeight:800,fontSize:14,padding:"11px",borderRadius:RAD.md,marginTop:12,cursor:"pointer"};
+   const _cardSty=(gold)=>({position:"relative",border:gold?"0.5px solid rgba(255,214,10,0.28)":"0.5px solid rgba(120,150,255,0.16)",boxShadow:"0 14px 32px -18px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.06)",borderRadius:RAD.xl,overflow:"hidden",margin:"0 0 10px", background:"radial-gradient(120% 90% at 85% -10%, rgba(59,111,224,0.32), transparent 55%), radial-gradient(90% 70% at -10% 110%, rgba(94,92,230,0.16), transparent 60%), linear-gradient(160deg,#15161E,#0B0B10 75%)"});
+   const _runBack=()=>{ try{
+     setNewLeagueName((activeLeague.name||"Duel").slice(0,40));
+     { const _sp=Array.isArray(activeLeague.sports)&&activeLeague.sports.length?activeLeague.sports:[activeLeague.sport].filter(Boolean); setNewLeagueSports(isPro?_sp:_sp.slice(0,1)); }
+     setNewLeagueType(activeLeague.league_type||"h2h");
+     setNewLeagueWeeks(Number(activeLeague.season_weeks)||1);
+     setNewLeaguePrivacy(activeLeague.privacy||"private");
+     const _cfg2=parseSlotConfig(activeLeague.slot_config); if(Array.isArray(_cfg2)&&_cfg2.length){ setNewLeagueSlots(_cfg2.map(x=>({...x}))); setNewLeaguePool(_cfg2.map(x=>Number(x.mult)||1)); }
+   }catch(e){} setShowNewLeague(true); };
+   // Locked = a live row in the DB. Server truth, and this component has no slip state.
+   const _myLockedSlots=new Set(_myRows.map(r=>_slotKey(r.slot))).size;
+   const _oppLockedSlots=new Set((weekPicks||[]).filter(pp=>_dOpp&&pp.user_id===_dOpp.userId&&pp.result!=="P").map(r=>_slotKey(r.slot))).size;
+   const _pendTop=(rows)=>{ const ps=rows.filter(r=>r.result==="pending").sort((a,b)=>(Number(b.multiplier)||0)-(Number(a.multiplier)||0)); return ps[0]||null; };
+   const _beat=(()=>{ if(_myPts===_oppPts) return "dead even \u00B7 next cash takes the lead"; const trailMine=_myPts<_oppPts; const t=_pendTop(trailMine?_myRows:_oppRows); if(t) return (trailMine?("your "+t.pick_name+" could flip it"):("their "+t.pick_name+" could flip it")); return trailMine?"no live legs left on your side":"no live legs left on their side"; })();
+   const _dagRow=(()=>{ const src=_iWin?_myRows:_oppRows; const w=src.filter(r=>r.result==="W").sort((a,b)=>parseFloat(b.points_earned||0)-parseFloat(a.points_earned||0))[0]; return w||null; })();
+   const _dag=_dagRow?((_iWin?"your ":"their ")+(_dagRow.multiplier?(_dagRow.multiplier+"x "):"")+_dagRow.pick_name+(_iWin?" was the dagger":" did the damage")):null;
+   const _sideHdr=(mine)=>(<div style={{display:"flex",alignItems:"center",gap:8,justifyContent:mine?"flex-start":"flex-end"}}>{mine&&<div style={_dFinal&&_iWin?{..._avSty(true),background:"linear-gradient(135deg,#FFD60A,#FF9F0A)",border:"none",color:"#1a1a1a"}:_avSty(true)}>{_ini(userProfile&&userProfile.username)}</div>}{!mine&&<div style={{textAlign:"right"}}><div style={{fontSize:9.5,letterSpacing:"0.12em",color:"rgba(255,255,255,0.3)",fontWeight:700,textTransform:"uppercase"}}>{_dOppName}</div><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:26,lineHeight:1,marginTop:4,color:_dFinal?(!_iWin?IOS.yellow:"rgba(255,255,255,0.55)"):"#fff"}}>{_oppPts.toFixed(1)}</div></div>}{mine&&<div><div style={{fontSize:9.5,letterSpacing:"0.12em",color:_dFinal&&_iWin?IOS.yellow:"rgba(255,255,255,0.3)",fontWeight:700,textTransform:"uppercase"}}>{_dFinal&&_iWin?"Winner":"You"}</div><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:26,lineHeight:1,marginTop:4,color:_dFinal?(_iWin?IOS.yellow:"rgba(255,255,255,0.55)"):(_myPts>=_oppPts?COL.win:"#fff")}}>{_myPts.toFixed(1)}</div></div>}{!mine&&<div style={_dFinal&&!_iWin?{..._avSty(false),background:"linear-gradient(135deg,#FFD60A,#FF9F0A)",border:"none",color:"#1a1a1a"}:_avSty(false)}>{_ini(_dOppName)}</div>}</div>);
+   if(!_dLive && !_dFinal){
+   const _mineLockedAll=slotCount>0&&_myLockedSlots>=slotCount;
+   const _oppLockedAll=slotCount>0&&_oppLockedSlots>=slotCount;
+   return (
+   <div className="pl-rise pl-d1" style={_cardSty(false)}>
+   <div style={{position:"absolute",inset:0,backgroundImage:"repeating-linear-gradient(0deg,rgba(255,255,255,0.022) 0px,rgba(255,255,255,0.022) 1px,transparent 1px,transparent 4px)",pointerEvents:"none",opacity:0.5}}/>
+   <div style={{position:"relative",padding:"13px 14px 13px"}}>
+   <div style={{display:"flex",alignItems:"center",gap:6,fontSize:9.5,fontWeight:800,letterSpacing:"0.13em",textTransform:"uppercase",color:IOS.orange}}><span>{"Duel"+(nextLockMs?(" \u00B7 locks at first game \u00B7 "+fmtCd(nextLockMs)):"")}</span></div>
+   <div style={{display:"flex",alignItems:"center",gap:10,marginTop:12}}>
+   <div style={{flex:1,minWidth:0}}><div style={{display:"flex",alignItems:"center",gap:8}}><div style={_avSty(true)}>{_ini(userProfile&&userProfile.username)}</div><div><div style={{fontSize:9.5,letterSpacing:"0.12em",color:"rgba(255,255,255,0.3)",fontWeight:700,textTransform:"uppercase"}}>You</div><div style={{fontSize:13,fontWeight:800,marginTop:3}}>{(userProfile&&userProfile.username)||"You"}</div></div></div><div style={{marginTop:8}}><span style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.06em",borderRadius:6,padding:"3px 8px",display:"inline-block",color:_mineLockedAll?COL.win:IOS.orange,background:_mineLockedAll?"rgba(48,209,88,0.12)":"rgba(255,159,10,0.1)",border:_mineLockedAll?"1px solid rgba(48,209,88,0.3)":"1px solid rgba(255,159,10,0.3)"}}>{_mineLockedAll?"SLIP LOCKED":(_myLockedSlots+"/"+slotCount+" LOCKED")}</span></div></div>
+   <div style={{textAlign:"center",flexShrink:0}}><div style={{fontSize:11,fontWeight:900,letterSpacing:"0.16em",color:"rgba(255,255,255,0.35)"}}>VS</div></div>
+   <div style={{flex:1,minWidth:0}}><div style={{display:"flex",alignItems:"center",gap:8,justifyContent:"flex-end"}}><div style={{textAlign:"right"}}><div style={{fontSize:9.5,letterSpacing:"0.12em",color:"rgba(255,255,255,0.3)",fontWeight:700,textTransform:"uppercase"}}>Them</div><div style={{fontSize:13,fontWeight:800,marginTop:3}}>{_dOppName}</div></div><div style={_avSty(false)}>{_ini(_dOppName)}</div></div><div style={{marginTop:8,textAlign:"right"}}><span style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.06em",borderRadius:6,padding:"3px 8px",display:"inline-block",color:_oppLockedAll?COL.win:IOS.orange,background:_oppLockedAll?"rgba(48,209,88,0.12)":"rgba(255,159,10,0.1)",border:_oppLockedAll?"1px solid rgba(48,209,88,0.3)":"1px solid rgba(255,159,10,0.3)"}}>{_oppLockedAll?"SLIP LOCKED":(_oppLockedSlots+"/"+slotCount+" LOCKED")}</span></div></div>
+   </div>
+   <div style={{fontSize:10,fontWeight:700,color:"rgba(255,255,255,0.4)",marginTop:11,textAlign:"center"}}>{(_oppLockedAll&&!_mineLockedAll)?("They\u2019re locked and waiting. "+(openSlots===1?"One slot left on your slip.":(openSlots+" slots left on your slip."))):(_mineLockedAll?"You\u2019re locked in. Waiting on them.":"Both slips still open. Lock yours first and apply the pressure.")}</div>
+   <div onClick={()=>{ if(_mineLockedAll){ setScreen("matchup"); } else { setBuildingSlip(true); setScreen("picks"); } }} style={_ctaSty}>{_mineLockedAll?"Scout the matchup":("Finish your slip"+(openSlots>0?(" \u00B7 "+openSlots+" left"):""))}</div>
+   </div></div>);
+   }
+   if(_dLive){
+   return (
+   <div className="pl-rise pl-d1" style={_cardSty(false)}>
+   <div style={{position:"absolute",inset:0,backgroundImage:"repeating-linear-gradient(0deg,rgba(255,255,255,0.022) 0px,rgba(255,255,255,0.022) 1px,transparent 1px,transparent 4px)",pointerEvents:"none",opacity:0.5}}/>
+   <div style={{position:"relative",padding:"13px 14px 13px"}}>
+   <div style={{display:"flex",alignItems:"center",gap:6,fontSize:9.5,fontWeight:800,letterSpacing:"0.13em",textTransform:"uppercase",color:"#64D2FF"}}>{(_mc.live+_oc.live)>0&&<span className="pl-pulse-dot" style={{width:6,height:6,borderRadius:"50%",background:COL.win,boxShadow:"0 0 8px "+COL.win,flexShrink:0}}/>}<span>{"Duel \u00B7 "+(_mc.live+_oc.live)+" legs live"+(settleMs?(" \u00B7 settles ~"+fmtClk(settleMs)):"")}</span></div>
+   <div style={{display:"flex",alignItems:"center",gap:10,marginTop:12}}>
+   <div style={{flex:1,minWidth:0}}>{_sideHdr(true)}{_lampRow(_myLamps,false)}<div style={{fontSize:8.5,fontWeight:700,color:"rgba(255,255,255,0.35)",marginTop:4}}>{_mc.w+"W \u00B7 "+_mc.l+"L \u00B7 "+_mc.live+" live \u00B7 "+_mc.idle+" idle"}</div></div>
+   <div style={{textAlign:"center",flexShrink:0}}><div style={{fontSize:11,fontWeight:900,letterSpacing:"0.16em",color:"rgba(255,255,255,0.35)"}}>VS</div>{_gap>0&&<div style={{fontSize:9,fontWeight:800,color:_myPts>=_oppPts?COL.win:COL.loss,marginTop:3}}>{(_myPts>=_oppPts?"+":"\u2212")+_gap}</div>}</div>
+   <div style={{flex:1,minWidth:0}}>{_sideHdr(false)}{_lampRow(_oppLamps,true)}<div style={{fontSize:8.5,fontWeight:700,color:"rgba(255,255,255,0.35)",marginTop:4,textAlign:"right"}}>{_oc.w+"W \u00B7 "+_oc.l+"L \u00B7 "+_oc.live+" live \u00B7 "+_oc.idle+" idle"}</div></div>
+   </div>
+   <div style={{height:6,borderRadius:3,background:"rgba(255,255,255,0.07)",marginTop:11,overflow:"hidden",display:"flex"}}><div style={{width:_pct+"%",background:"linear-gradient(90deg,#0A84FF,#30D158)"}}/></div>
+   <div style={{display:"flex",justifyContent:"space-between",gap:8,fontSize:9.5,fontWeight:700,color:"rgba(255,255,255,0.35)",marginTop:5}}><span style={{color:_myPts>_oppPts?COL.win:(_oppPts>_myPts?COL.loss:"rgba(255,255,255,0.5)"),flexShrink:0}}>{_myPts>_oppPts?("You lead by "+_gap):(_oppPts>_myPts?("Down "+_gap):"Tied up")}</span><span style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{_beat}</span></div>
+   <div onClick={()=>setScreen("matchup")} style={_ctaSty}>Watch it live</div>
+   </div></div>);
+   }
+   return (
+   <div className="pl-rise pl-d1" style={_cardSty(true)}>
+   <div style={{position:"absolute",inset:0,backgroundImage:"repeating-linear-gradient(0deg,rgba(255,255,255,0.022) 0px,rgba(255,255,255,0.022) 1px,transparent 1px,transparent 4px)",pointerEvents:"none",opacity:0.5}}/>
+   <div style={{position:"relative",padding:"13px 14px 13px"}}>
+   <div style={{display:"flex",alignItems:"center",gap:6,fontSize:9.5,fontWeight:800,letterSpacing:"0.13em",textTransform:"uppercase",color:IOS.yellow}}><span>{"Final \u00B7 "+(_iWin?"you win the duel":(_dOppName+" takes it"))}</span></div>
+   <div style={{display:"flex",alignItems:"center",gap:10,marginTop:12}}>
+   <div style={{flex:1,minWidth:0}}>{_sideHdr(true)}{_lampRow(_myLamps,false)}</div>
+   <div style={{textAlign:"center",flexShrink:0}}><div style={{fontSize:11,fontWeight:900,letterSpacing:"0.16em",color:"rgba(255,255,255,0.35)"}}>VS</div></div>
+   <div style={{flex:1,minWidth:0}}>{_sideHdr(false)}{_lampRow(_oppLamps,true)}</div>
+   </div>
+   <div style={{fontSize:10,fontWeight:700,color:"rgba(255,255,255,0.45)",marginTop:11,textAlign:"center"}}>{(_iWin?"Won by ":"Lost by ")+_gap+(_dag?(" \u00B7 "+_dag):"")}</div>
+   {activeLeague.isCommissioner&&<div onClick={_runBack} style={{..._ctaSty,background:"linear-gradient(120deg,#FFD60A,#FF9F0A)",color:"#141414"}}>Run it back</div>}
+   <div onClick={()=>setScreen("matchup")} style={{..._ctaSty,background:"rgba(255,255,255,0.05)",boxShadow:"inset 0 0 0 0.5px rgba(255,255,255,0.12)",color:"rgba(255,255,255,0.75)",fontSize:13,padding:"10px",marginTop:activeLeague.isCommissioner?8:12}}>See the full breakdown</div>
+   </div></div>);
+   }
    if(!isSoloMode && activeLeague.champion_id) return (
      <div className="pl-reveal" style={{margin:"0 16px 14px",background:"linear-gradient(160deg,rgba(255,214,10,0.10),transparent 60%),linear-gradient(160deg,#141418,#0B0B0E 80%)",border:"0.5px solid rgba(255,214,10,0.28)",borderRadius:RAD.lg,padding:"16px"}}>
        <div style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:IOS.yellow}}>Season complete</div>
@@ -15534,7 +15759,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  </>)}
  {/* Bottom row: recent form + reward */}
  <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:6}}>
- <button onClick={(e)=>{e.stopPropagation(); askFromBet(bet, gridType==="longshot"?"longshot":gridType);}} aria-label="Ask AI" style={{display:"inline-flex",alignItems:"center",gap:4,padding:"4px 8px",borderRadius:RAD.sm,background:`${acc}1a`,border:`1px solid ${acc}33`,color:acc,fontSize:9.5,fontWeight:800,cursor:"pointer",flexShrink:0,alignSelf:"flex-end"}}><svg width="11" height="11" viewBox="0 0 24 24" fill={acc}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg>AI</button>
+ <button onClick={(e)=>{e.stopPropagation(); askFromBet(bet, gridType==="longshot"?"longshot":gridType);}} aria-label="Ask AI" style={{display:"inline-flex",alignItems:"center",gap:4,padding:"4px 8px",borderRadius:RAD.sm,background:`${acc}1a`,border:`1px solid ${acc}33`,color:acc,fontSize:9.5,fontWeight:800,cursor:"pointer",flexShrink:0,alignSelf:"flex-end"}}><svg width="11" height="11" viewBox="0 0 24 24" fill={acc}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg>PLOK</button>
  <div>
  
  {(()=>{ const _rec=recordFor(formSeed, bet.game); return _rec ? (<><StatLabel>Record</StatLabel><div style={{fontSize:12.5,fontWeight:800,color:"#fff",lineHeight:1}}>{_rec}</div></>) : null; })()}
@@ -15597,7 +15822,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    addCard(altBet, a.bet.category);
    setAltSheet(null);
    };
-   const renderRow = (bet, idx, isFirst) => {
+   const renderRow = (bet, idx, isFirst, showPlokTip) => {
    const selected = isSoloMode ? (bet.id!=null && soloFreePicks.some(p=>p.id!=null && String(p.id)===String(bet.id))) : (activePicks.some(p=>p.bet&&p.bet.id===bet.id) || isLeg(bet));
    const added = gridJustAdded===bet.id;
    const pct = impliedPct(bet.impliedOdds);
@@ -15625,7 +15850,13 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    const chipBn=sideChip==="HOME"||sideChip==="OVER"||sideChip==="YES";
    return (
    <div key={bet.id} onClick={()=>addCard(bet)} style={{position:"relative",display:"flex",alignItems:"center",gap:11,padding:"11px 13px",borderTop:isFirst?"none":"1px solid rgba(255,255,255,0.07)",cursor:"pointer",background:(selected||added)?(acc+"14"):"transparent",transition:"background .13s"}}>
-   <button onClick={(e)=>{ e.stopPropagation(); askFromBet(bet, gridType==="longshot"?"longshot":gridType); }} aria-label="Ask AI" style={{flexShrink:0,width:27,height:27,borderRadius:RAD.sm,display:"flex",alignItems:"center",justifyContent:"center",background:acc+"1a",border:"1px solid "+acc+"33",color:acc,cursor:"pointer"}}><svg width="12" height="12" viewBox="0 0 24 24" fill={acc}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg></button>
+   {showPlokTip && (
+   <div onClick={(e)=>{ e.stopPropagation(); markPlokTipSeen(); }} style={{position:"absolute",top:-30,left:8,zIndex:6,display:"flex",alignItems:"center",gap:7,whiteSpace:"nowrap",background:"#1e1e25",border:"1px solid rgba(10,132,255,0.45)",borderRadius:9,padding:"7px 10px",fontSize:10.5,fontWeight:700,color:"#fff",boxShadow:"0 8px 20px rgba(0,0,0,0.6)",cursor:"pointer"}}>
+   <span><span style={{color:IOS.blue}}>{"Plok\u2019s AI read"}</span>{" \u2014 tap for a writeup on this pick"}</span>
+   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth="2.4" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+   </div>
+   )}
+   <button onClick={(e)=>{ e.stopPropagation(); askFromBet(bet, gridType==="longshot"?"longshot":gridType); }} aria-label="Plok AI read" style={{flexShrink:0,height:27,padding:"0 9px",borderRadius:RAD.sm,display:"inline-flex",alignItems:"center",gap:5,background:acc+"1a",border:"1px solid "+acc+"33",color:acc,cursor:"pointer",fontSize:10,fontWeight:800,letterSpacing:"0.02em",fontFamily:"Barlow,sans-serif"}}><svg width="11" height="11" viewBox="0 0 24 24" fill={acc}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg><span>PLOK</span></button>
    <div style={{flex:1,minWidth:0}}>
    <div style={{display:"flex",alignItems:"center",gap:7}}>
    <span style={{fontSize:13.5,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",letterSpacing:"-0.2px"}}>{primary}</span>
@@ -15681,9 +15912,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    };
    return (
    <div key={pr.baseKey} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 13px",borderTop:isFirst?"none":"1px solid rgba(255,255,255,0.07)"}}>
-   <button onClick={(e)=>{e.stopPropagation(); askFromBet(over||under,"prop");}} aria-label="Ask AI" style={{flexShrink:0,width:27,height:27,borderRadius:RAD.sm,display:"flex",alignItems:"center",justifyContent:"center",background:acc+"1a",border:"1px solid "+acc+"33",color:acc,cursor:"pointer"}}><svg width="12" height="12" viewBox="0 0 24 24" fill={acc}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg></button>
+   <button onClick={(e)=>{e.stopPropagation(); askFromBet(over||under,"prop");}} aria-label="Plok AI read" style={{flexShrink:0,height:27,padding:"0 9px",borderRadius:RAD.sm,display:"inline-flex",alignItems:"center",gap:5,background:acc+"1a",border:"1px solid "+acc+"33",color:acc,cursor:"pointer",fontSize:10,fontWeight:800,letterSpacing:"0.02em",fontFamily:"Barlow,sans-serif"}}><svg width="11" height="11" viewBox="0 0 24 24" fill={acc}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg><span>PLOK</span></button>
    <div style={{flex:1,minWidth:0}}>
-   <div style={{fontSize:14,fontWeight:800,letterSpacing:"-0.2px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{player}</div>
+   <div onClick={(e)=>{ e.stopPropagation(); const _b=over||under||single; const _ln=(()=>{ const m=String(rest||"").match(/^([0-9]+(?:\.[0-9]+)?)/); return m?parseFloat(m[1]):null; })(); try{ posthog.capture("prop_history_opened",{ sport:gSport, market:(_b&&_b.market)||null }); }catch(e2){} setPropHist({ player, sport:gSport, market:(_b&&_b.market)||null, line:_ln }); }} style={{fontSize:14,fontWeight:800,letterSpacing:"-0.2px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",cursor:"pointer",display:"flex",alignItems:"center",gap:5}}><span style={{overflow:"hidden",textOverflow:"ellipsis"}}>{player}</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.4" strokeLinecap="round" style={{flexShrink:0,opacity:0.7}}><path d="M3 17l6-6 4 4 7-7"/><path d="M14 8h6v6"/></svg></div>
    <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.42)",marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{rest}</div>
    <div style={{display:"flex",alignItems:"center",gap:6,marginTop:6}}>
    <span style={{width:44,height:4,borderRadius:2,background:"rgba(255,255,255,0.1)",overflow:"hidden",flexShrink:0}}><span style={{display:"block",height:"100%",width:Math.max(0,Math.min(100,leanPct))+"%",background:acc}}/></span>
@@ -15733,7 +15964,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    </div>
    ); })()}
    </div>
-   {gridOpenGames[gk] && <div style={{borderTop:"1px solid rgba(255,255,255,0.07)"}}>{gridType==="prop" ? renderPropPairs(bets) : (gridType==="longshot"?_sortBets(bets):bets).map((bet,idx)=>renderRow(bet,idx,idx===0))}</div>}
+   {gridOpenGames[gk] && <div style={{borderTop:"1px solid rgba(255,255,255,0.07)"}}>{gridType==="prop" ? renderPropPairs(bets) : (gridType==="longshot"?_sortBets(bets):bets).map((bet,idx)=>renderRow(bet,idx,idx===0, idx===0 && !plokTipSeen && gk===keys.find(k=>gridOpenGames[k])))}</div>}
    </div>
    );
    })}
@@ -16076,7 +16307,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    <div style={{position:"relative",borderRadius:RAD.lg,marginBottom:7,overflow:"hidden",background:dead?"#0F0F12":"linear-gradient(165deg,#161619,#121215)",border:EDGE.hair,opacity:dead?0.42:1}}>
      {_added(r.b)&&<SvAddedFlash/>}
      <div onClick={dead?undefined:()=>{ haptic("select"); addCard(r.b,"prop"); }} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 11px 9px",cursor:dead?"default":"pointer"}}>
-       {!dead&&<button onClick={(e)=>{ e.stopPropagation(); askFromBet(r.b,"prop"); }} aria-label="Plok read" style={{flexShrink:0,width:27,height:27,borderRadius:RAD.sm,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(59,111,224,0.1)",border:"1px solid rgba(59,111,224,0.2)",color:IOS.blue,cursor:"pointer"}}><svg width="12" height="12" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg></button>}
+       {!dead&&<button onClick={(e)=>{ e.stopPropagation(); askFromBet(r.b,"prop"); }} aria-label="Plok AI read" style={{flexShrink:0,height:27,padding:"0 9px",borderRadius:RAD.sm,display:"inline-flex",alignItems:"center",gap:5,background:"rgba(59,111,224,0.1)",border:"1px solid rgba(59,111,224,0.2)",color:IOS.blue,cursor:"pointer",fontSize:10,fontWeight:800,letterSpacing:"0.02em",fontFamily:"Barlow,sans-serif"}}><svg width="11" height="11" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg><span>PLOK</span></button>}
        <div style={{position:"relative",flexShrink:0}}>
          <SvBadge ab={r.ab||"?"} size={34} round={!r.isDst}/>
          <span style={{position:"absolute",bottom:-4,left:"50%",transform:"translateX(-50%)",fontFamily:"'Barlow Condensed',sans-serif",fontSize:8.5,fontWeight:700,letterSpacing:"0.06em",padding:"1px 4px",borderRadius:4,background:"#1C1C1E",border:EDGE.hair3,color:"rgba(255,255,255,0.6)",whiteSpace:"nowrap"}}>{r.isDst?"D/ST":(r.pos||"—")}</span>
@@ -21279,6 +21510,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
       {leagueRecap && <LeagueWeekRecap data={leagueRecap} IOS={IOS} onClose={()=>setLeagueRecap(null)}/>}
 
       {/* ══ GAME DETAIL SHEET ══ */}
+ {propHist && <PropHistorySheet ctx={propHist} onClose={()=>setPropHist(null)}/>}
+
  {gameSheet && (
  <div style={{position:"fixed",inset:0,zIndex:8000,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>setGameSheet(null)}>
  <div className="pk-veil" style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.6)",backdropFilter:"blur(4px)"}}/>
