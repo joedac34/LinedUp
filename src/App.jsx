@@ -3045,8 +3045,8 @@ function SeasonRecap({ league, me, total, arc, leader, topScorer, bestWk, hit, g
   </>
   );
 }
-function BracketView({ matchups, members, uid, IOS, onOpenMatch, live, onChampion }){
-  const nameOf = (id)=>{ if(!id) return null; const m=(members||[]).find(x=>x.userId===id); return m?m.name:"Player"; };
+function BracketView({ matchups, members, uid, IOS, onOpenMatch, live, onChampion, names }){
+  const nameOf = (id)=>{ if(!id) return null; const m=(members||[]).find(x=>x.userId===id); return (m&&m.name) || (names&&names[id]) || "Player"; };
   const byWeek = {};
   (matchups||[]).forEach(m=>{ (byWeek[m.week]=byWeek[m.week]||[]).push(m); });
   const weeks = Object.keys(byWeek).map(Number).sort((a,b)=>a-b);
@@ -5598,6 +5598,12 @@ function App() {
  // explainer flashes before the real bracket swaps in — and switching leagues
  // briefly showed the PREVIOUS league's bracket.
  const [bracketFor, setBracketFor] = useState(null);
+ // id -> username for everyone appearing in bracketMatchups, loaded WITH the bracket.
+ // BracketView used to rely solely on leagueMembers, which is cleared on every league
+ // switch and skipped entirely in solo mode — a finished league’s bracket could render
+ // with an empty members list and label every seat "Player". Names now ride with the
+ // bracket fetch itself, so the bracket is never dependent on another fetch’s timing.
+ const [bracketNames, setBracketNames] = useState({});
  const bracketReqRef = useRef(null);
  const [bracketDetail, setBracketDetail] = useState(null);
  const [matchupView, setMatchupView] = useState("mine");
@@ -9304,6 +9310,11 @@ function App() {
  // A slow response for the league we just navigated away from must not land.
  if(bracketReqRef.current !== lid) return;
  setBracketMatchups(ms); setBracketFor(lid);
+ try{
+ const _uids=[...new Set(ms.flatMap(m=>[m.user1_id,m.user2_id]).filter(Boolean))];
+ if(_uids.length){ const {data:_bp}=await supabase.from("public_profiles").select("id,username").in("id",_uids); if(bracketReqRef.current===lid){ const _nm={}; (_bp||[]).forEach(pp=>{ if(pp.username) _nm[pp.id]=pp.username; }); setBracketNames(_nm); } }
+ else if(bracketReqRef.current===lid) setBracketNames({});
+ }catch(e){}
  const wks = [...new Set(ms.map(m=>m.week))].sort((a,b)=>a-b);
  const fin = ms.filter(m=>m.week===wks[wks.length-1]);
  const champ = (fin.length===1)?fin[0].winner_id:null;
@@ -9333,7 +9344,7 @@ function App() {
  mine.filter(r=>r.result==="P" && !r.replaced_by).forEach(r=>{ const o = mapPick(r); o.voidedUnreplaced = true; ps.push(o); });
  const computed = ps.reduce((a,pk)=>a+(pk.res==="W"?pk.pts:0),0);
  const mem = leagueMembers.find(x=>x.userId===id);
- return { name: mem?mem.name:"Player", you:id===(user&&user.id), total:(mu.winner_id!=null && storedPts!=null)?Number(storedPts):computed, picks:ps };
+ return { name: (mem&&mem.name)||(bracketNames&&bracketNames[id])||"Player", you:id===(user&&user.id), total:(mu.winner_id!=null && storedPts!=null)?Number(storedPts):computed, picks:ps };
  };
  const rn = brkRoundName(((bracketMatchups||[]).filter(x=>x.week===mu.week)).length||1);
  setBracketDetail({ round: (labelOverride||(rn+" · Week "+mu.week)), week:mu.week, winnerId:mu.winner_id, u1, u2, a:build(u1, mu.user1_points), b:build(u2, mu.user2_points) });
@@ -9359,7 +9370,7 @@ function App() {
  mine.filter(r=>r.result==="P" && !r.replaced_by).forEach(r=>{ const o = mapPick(r); o.voidedUnreplaced = true; ps.push(o); });
        const computed = ps.reduce((a,pk)=>a+(pk.res==="W"?pk.pts:0),0);
        const mem = leagueMembers.find(x=>x.userId===id);
-       return { name: mem?mem.name:"Player", you:id===(user&&user.id), total:(winnerId!=null && storedPts!=null)?Number(storedPts):computed, picks:ps };
+       return { name: (mem&&mem.name)||(bracketNames&&bracketNames[id])||"Player", you:id===(user&&user.id), total:(winnerId!=null && storedPts!=null)?Number(storedPts):computed, picks:ps };
      };
      const slides = ms.map(mu=>({ week:mu.week, winnerId:mu.winner_id, u1:mu.user1_id, u2:mu.user2_id, a:build(mu.user1_id, mu.user1_points, mu.winner_id), b:build(mu.user2_id, mu.user2_points, mu.winner_id) }));
      let si = tappedIdx||0; if(si<0) si=0; if(si>=slides.length) si=slides.length-1;
@@ -18663,7 +18674,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    if(playoffMs.length) return (
      <div style={{padding:"12px 16px 20px"}}>
        <div style={{margin:"0 0 12px",fontSize:11,fontWeight:800,letterSpacing:".5px",textTransform:"uppercase",color:IOS.yellow}}>Top {N} seeds · single-elim · Wk {startWeek}–{sw}</div>
-       <BracketView matchups={playoffMs} members={leagueMembers} uid={user&&user.id} IOS={IOS} onOpenMatch={openBracketMatch} live={bracketLive} onChampion={(id,nm)=>setChampCelebrate(champPayload(id,nm))}/>
+       <BracketView matchups={playoffMs} members={leagueMembers} names={bracketNames} uid={user&&user.id} IOS={IOS} onOpenMatch={openBracketMatch} live={bracketLive} onChampion={(id,nm)=>setChampCelebrate(champPayload(id,nm))}/>
        {bracketDetail && <BracketMatchSheet d={bracketDetail} IOS={IOS} onClose={()=>setBracketDetail(null)} liveGames={liveGames} onOpenGamecast={openGamecast}/>}
        {champCelebrate && <ChampCelebrate name={champCelebrate.name} leagueName={champCelebrate.leagueName} isYou={champCelebrate.isYou} members={champCelebrate.members} record={champCelebrate.record} points={champCelebrate.points} runnerUp={champCelebrate.runnerUp} IOS={IOS} onClose={()=>setChampCelebrate(null)} onShare={()=>champShare(champCelebrate.name, champCelebrate.leagueName)}/>}
      </div>
@@ -19541,7 +19552,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  );
  return (<>
  {bracketMatchups.some(mm=>mm.week===bracketLive.week && !mm.winner_id) && <div style={{margin:"0 16px 10px",display:"flex",alignItems:"center",justifyContent:"center",gap:7,background:"rgba(48,209,88,.1)",border:"1px solid rgba(48,209,88,.3)",borderRadius:RAD.md,padding:"9px 14px"}}><span className="brk-livedot"/><span style={{fontSize:11,fontWeight:900,letterSpacing:".12em",color:IOS.green}}>WIN OR GO HOME · LIVE ROUND</span></div>}
- <BracketView matchups={bracketMatchups} members={leagueMembers} uid={user&&user.id} IOS={IOS} onOpenMatch={openBracketMatch} live={bracketLive} onChampion={(id,nm)=>setChampCelebrate(champPayload(id,nm))}/>
+ <BracketView matchups={bracketMatchups} members={leagueMembers} names={bracketNames} uid={user&&user.id} IOS={IOS} onOpenMatch={openBracketMatch} live={bracketLive} onChampion={(id,nm)=>setChampCelebrate(champPayload(id,nm))}/>
  </>);
  })()}
  {bracketDetail && <BracketMatchSheet d={bracketDetail} IOS={IOS} onClose={()=>setBracketDetail(null)} liveGames={liveGames} onOpenGamecast={openGamecast}/>}
@@ -19580,7 +19591,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      <>
        {playoffMs.some(mm=>mm.week===bracketLive.week && !mm.winner_id) && <div style={{margin:"0 16px 10px",display:"flex",alignItems:"center",justifyContent:"center",gap:7,background:"rgba(48,209,88,.1)",border:"1px solid rgba(48,209,88,.3)",borderRadius:RAD.md,padding:"9px 14px"}}><span className="brk-livedot"/><span style={{fontSize:11,fontWeight:900,letterSpacing:".12em",color:IOS.green}}>PLAYOFFS · LIVE ROUND</span></div>}
        <div style={{margin:"0 16px 12px",fontSize:11,fontWeight:800,letterSpacing:".5px",textTransform:"uppercase",color:IOS.yellow}}>Top {N} seeds · single-elim · Wk {startWeek}–{sw}</div>
-       <BracketView matchups={playoffMs} members={leagueMembers} uid={user&&user.id} IOS={IOS} onOpenMatch={openBracketMatch} live={bracketLive} onChampion={(id,nm)=>setChampCelebrate(champPayload(id,nm))}/>
+       <BracketView matchups={playoffMs} members={leagueMembers} names={bracketNames} uid={user&&user.id} IOS={IOS} onOpenMatch={openBracketMatch} live={bracketLive} onChampion={(id,nm)=>setChampCelebrate(champPayload(id,nm))}/>
        {bracketDetail && <BracketMatchSheet d={bracketDetail} IOS={IOS} onClose={()=>setBracketDetail(null)} liveGames={liveGames} onOpenGamecast={openGamecast}/>}
        {champCelebrate && <ChampCelebrate name={champCelebrate.name} leagueName={champCelebrate.leagueName} isYou={champCelebrate.isYou} members={champCelebrate.members} record={champCelebrate.record} points={champCelebrate.points} runnerUp={champCelebrate.runnerUp} IOS={IOS} onClose={()=>setChampCelebrate(null)} onShare={()=>champShare(champCelebrate.name, champCelebrate.leagueName)}/>}
      </>
@@ -21583,7 +21594,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 {gcTab==="od" && (<>
    {/* Footer CTA */}
    <div style={{padding:"16px 16px calc(20px + var(--sa-bot))"}}>
-   <div onClick={()=>{ setGameSheet(null); setScreen("picks"); }} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"linear-gradient(135deg,"+IOS.blue+",#5e5ce6)",borderRadius:RAD.lg,padding:14,fontWeight:800,fontSize:15,color:"#fff",cursor:"pointer",boxShadow:"0 10px 26px -8px rgba(10,132,255,0.6)"}}>
+   <div onClick={()=>{ setGameSheet(null); setBuildingSlip(true); setGridTargetSlot(null); setGridType("ml"); setGridPropSub("all"); setGridSearch(((tg&&tg.away)||away||"")); setScreen("browser"); }} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"linear-gradient(135deg,"+IOS.blue+",#5e5ce6)",borderRadius:RAD.lg,padding:14,fontWeight:800,fontSize:15,color:"#fff",cursor:"pointer",boxShadow:"0 10px 26px -8px rgba(10,132,255,0.6)"}}>
    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg> Add a pick from this game
    </div>
    </div>
