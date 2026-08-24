@@ -27,12 +27,13 @@ const BOTS = [
   { id: "00000000-0000-4000-b000-000000000006", key: "overlord", props: true },
 ];
 
-// MLB-only for v1: the stale grade.js reference keys score fetches off league.sport,
-// so cross-sport picks in this mlb league may not grade. Flip NFL on after the
-// current grade.js confirms per-pick sport resolution (or before Week 1 regardless,
-// once verified). The league row already carries sports=['mlb','nfl'].
+// Verified against the live grade.js: sport resolves PER PICK (`_spOf` reads
+// p.sport first) and scores are fetched for every sport the pending picks
+// reference, so NFL rows grade correctly inside this mlb-labelled league. Every
+// row below writes its own `sport`, which is what makes that work.
 const SPORTS = [
   { odds: "baseball_mlb", app: "mlb" },
+  { odds: "americanfootball_nfl", app: "nfl" },
 ];
 
 // OVERLORD's market menu + labels. pick_name must read exactly like a user prop row
