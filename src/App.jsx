@@ -12991,6 +12991,33 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      </div>
 
      {_svHome ? (()=>{
+       // Ownership gate. myPicks is derived from weekPicks, which is shared state:
+       // solo mode loads YOUR SOLO league's week into it, so an ungated read here
+       // rendered a solo MLB pick as this pool's survivor team, complete with an
+       // ELIMINATED chip from a loss in a completely different league.
+       const _svWk=activeLeague.current_week||activeLeague.week||1;
+       const _svReady = weekPicksFor===(activeLeague.id+":"+_svWk);
+       if(!_svReady) return (
+         <div style={{background:"rgba(0,0,0,0.4)",border:EDGE.hair,borderRadius:RAD.md,padding:13,marginBottom:12}}>
+           <div style={{height:9,width:90,borderRadius:5,background:"rgba(255,255,255,0.07)"}}/>
+           <div style={{display:"flex",alignItems:"center",gap:11,marginTop:11}}>
+             <div style={{width:38,height:38,borderRadius:10,background:"rgba(255,255,255,0.06)",flexShrink:0}}/>
+             <div style={{flex:1}}><div style={{height:14,width:150,borderRadius:6,background:"rgba(255,255,255,0.06)"}}/><div style={{height:10,width:110,borderRadius:5,background:"rgba(255,255,255,0.04)",marginTop:6}}/></div>
+           </div>
+         </div>);
+       // Pre-season: the pool has a start date in the future, so there is no week to
+       // show yet. Without this a pool that opens in September rendered a live Week 1
+       // card counting down to a reveal three weeks out.
+       const _svStartMs=activeLeague.season_start?new Date(activeLeague.season_start).getTime():null;
+       if(_svStartMs && nowTick < _svStartMs){
+         const _dLeft=Math.max(0,Math.ceil((_svStartMs-nowTick)/86400000));
+         const _svEntrants=(leagueMembers||[]).length;
+         return (
+         <div style={{background:"rgba(0,0,0,0.4)",border:EDGE.hair,borderRadius:RAD.md,padding:14,marginBottom:12,textAlign:"center"}}>
+           <div style={{fontSize:15.5,fontWeight:800,color:"#fff"}}>{"Doors are open. The pool isn\u2019t."}</div>
+           <div style={{fontSize:11.5,color:"rgba(255,255,255,0.5)",marginTop:5,lineHeight:1.5}}>{"First pick opens "+new Date(_svStartMs).toLocaleDateString([], {weekday:"long",month:"short",day:"numeric"})+" \u00B7 "+_dLeft+" day"+(_dLeft===1?"":"s")+" out"+(_svEntrants>0?(" \u00B7 "+_svEntrants+" entered"):"")}</div>
+         </div>);
+       }
        const _p=(myPicks||[])[0]||null;
        const _ml=activeLeague.survivor_config==="ml";
        const _wkStart=activeLeague.season_start ? new Date(activeLeague.season_start).getTime()+(((activeLeague.current_week||1)-1)*7*86400000) : null;
