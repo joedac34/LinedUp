@@ -5999,6 +5999,9 @@ function App() {
  const [membersFor, setMembersFor] = useState(null);   // which league leagueMembers belongs to
  const [weekPicksFor, setWeekPicksFor] = useState(null); // "<leagueId>:<week>" weekPicks belongs to
  const standingsReqRef = useRef(null);
+ const scheduleReqRef = useRef(null);   // liveSchedule ownership — without it a slow
+ const trophiesReqRef = useRef(null);   // fetch for the PREVIOUS league lands and paints
+                                        // its matchup/trophies over the league you switched to
  const [allMyStats, setAllMyStats] = useState(null);
  const [lbCache, setLbCache] = useState({});
  const [lbTf, setLbTf] = useState("all");
@@ -8310,12 +8313,14 @@ function App() {
  };
 
  const fetchSchedule = async (leagueId, userId) => {
+ scheduleReqRef.current = leagueId;
  const {data} = await supabase
  .from("matchups")
  .select("*")
  .eq("league_id", leagueId)
  .or(`user1_id.eq.${userId},user2_id.eq.${userId}`)
  .order("week", {ascending: true});
+ if(scheduleReqRef.current !== leagueId) return;   // superseded by a newer league
  if(!data || !data.length) { setLiveSchedule([]); setScheduleLoaded(true); return; }
  const userIds = [...new Set([...data.map(m=>m.user1_id), ...data.map(m=>m.user2_id)])];
  const {data:users} = await supabase.from("public_profiles").select("id,username").in("id",userIds);
@@ -8338,6 +8343,7 @@ function App() {
  myPts, oppPts, result, matchupId: m.id,
  };
  });
+ if(scheduleReqRef.current !== leagueId) return;
  setLiveSchedule(schedule); setScheduleLoaded(true);
  };
 
@@ -9033,14 +9039,17 @@ function App() {
  };
 
  const fetchLeagueTrophies = async (leagueId) => {
+ trophiesReqRef.current = leagueId;
  const {data:picks} = await supabase
  .from("picks")
  .select("*")
  .eq("league_id", leagueId)
  .neq("result", "pending");
+ if(trophiesReqRef.current !== leagueId) return;
  if(!picks||!picks.length) { setLeagueTrophies([]); return; }
 
  const {data:members} = await supabase.from("league_members").select("user_id").eq("league_id", leagueId);
+ if(trophiesReqRef.current !== leagueId) return;
  if(!members||!members.length) { setLeagueTrophies([]); return; }
  const userIds = members.map(m=>m.user_id);
  const {data:users} = await supabase.from("public_profiles").select("id,username").in("id",userIds);
@@ -9073,6 +9082,7 @@ function App() {
  });
 
  const uids = Object.keys(stats);
+ if(trophiesReqRef.current !== leagueId) return;
  if(!uids.length) { setLeagueTrophies([]); return; }
 
  const byPoints = [...uids].sort((a,b)=>stats[b].points-stats[a].points);
@@ -9105,6 +9115,7 @@ function App() {
   mkT("hot","Hot Hand","Longest win streak",IOS.orange,byStreak,(u)=>stats[u]?stats[u].maxStreak:0,"int"),   /* maxStreak here is win-only, see loop above */
   mkT("longshot","Longshot King","Most points from longshots",IOS.pink,byLongshot,(u)=>stats[u]?stats[u].longshotPts:0,"pts"),
  ];
+ if(trophiesReqRef.current !== leagueId) return;
  setLeagueTrophies(trophies);
  };
 
@@ -9802,17 +9813,55 @@ function App() {
      setBracketDetail({ round: label, week, slides, index: si });
    } catch(e) {}
  };
+ // Run it back: prefill the league builder from an existing league and open it.
+ // Shared so the duel home card, the matchup screen and the league screen can all
+ // offer it without three copies of the mapping drifting apart.
+ const prefillRunItBack = (lg)=>{
+   if(!lg) return;
+   try{
+     setNewLeagueName((lg.name||"Duel").slice(0,40));
+     const _sp=Array.isArray(lg.sports)&&lg.sports.length?lg.sports:[lg.sport].filter(Boolean);
+     setNewLeagueSports(isPro?_sp:_sp.slice(0,1));
+     const _isDuelLg=(lg.league_type||"h2h")==="h2h" && Number(lg.target_size||lg.max_members||0)===2;
+     setNewLeagueType(_isDuelLg?"duel":(lg.league_type||"h2h"));
+     if(_isDuelLg){ setNewLeagueSize(2); setNewLeaguePlayoffs(false); }
+     setNewLeagueWeeks(Number(lg.season_weeks)||1);
+     setNewLeaguePrivacy(lg.privacy||"private");
+     setNewLeagueDuration(Number(lg.duration_days)
+       ? {mode:"days", days:Math.max(1,Math.min(7,Number(lg.duration_days))), weeks:1}
+       : {mode:"weeks", days:2, weeks:Math.max(1,Math.min(18,Number(lg.season_weeks)||1))});
+     const _cfg=parseSlotConfig(lg.slot_config);
+     if(Array.isArray(_cfg)&&_cfg.length){ setNewLeagueSlots(_cfg.map(x=>({...x}))); setNewLeaguePool(_cfg.map(x=>Number(x.mult)||1)); }
+   }catch(e){}
+   setNewLeagueStep(1);
+   setShowNewLeague(true);
+ };
+
  const fetchAllMatchups = async (leagueId) => {
    matchupsReqRef.current = leagueId;
    try{
      const { data } = await supabase.from("matchups").select("*").eq("league_id", leagueId);
      if(matchupsReqRef.current !== leagueId) return;   // user already switched leagues
      setAllMatchups(data||[]); setMatchupsFor(leagueId);
+     // Names for every seat in these matchups. The matchup sheets fall back to
+     // bracketNames before "Player", and leagueMembers can be empty or belong to
+     // the league you just left — which is exactly how a real opponent rendered
+     // as "Player". Loading them here makes that fallback authoritative.
+     const _ids=[...new Set((data||[]).flatMap(m=>[m.user1_id,m.user2_id]).filter(Boolean))];
+     if(_ids.length){
+       const { data:_pf } = await supabase.from("public_profiles").select("id,username").in("id",_ids);
+       if(matchupsReqRef.current !== leagueId) return;
+       const _nm={}; (_pf||[]).forEach(pp=>{ if(pp.username) _nm[pp.id]=pp.username; });
+       setBracketNames(prev=>({ ...(prev||{}), ..._nm }));
+     }
    }catch(e){}
  };
- useEffect(()=>{ if((screen==="matchup"||screen==="picks") && activeLeague && (activeLeague.league_type||"h2h")==="h2h" && activeLeague.id){ fetchAllMatchups(activeLeague.id); fetchWeekPicks(activeLeague.id, activeLeague.current_week||activeLeague.week||1); setMWeek(activeLeague.current_week||activeLeague.week||1); setBracketDetail(null); setMatchupView("mine"); } }, [screen, activeLeagueId]);
+ // realLeagues.length is a dep on purpose: navigating here before the league row
+ // lands used to no-op forever (activeLeague was null, nothing re-ran), which is
+ // what left the matchup and picks tabs sitting on skeletons that never resolved.
+ useEffect(()=>{ if((screen==="matchup"||screen==="picks") && activeLeague && (activeLeague.league_type||"h2h")==="h2h" && activeLeague.id){ fetchAllMatchups(activeLeague.id); fetchWeekPicks(activeLeague.id, activeLeague.current_week||activeLeague.week||1); setMWeek(activeLeague.current_week||activeLeague.week||1); setBracketDetail(null); setMatchupView("mine"); } }, [screen, activeLeagueId, realLeagues.length]);
 
- useEffect(()=>{ if(screen==="leagues" && leagueSubTab==="matchups" && activeLeague && activeLeague.id){ fetchAllMatchups(activeLeague.id); fetchWeekPicks(activeLeague.id, activeLeague.current_week||activeLeague.week||1); setBracketDetail(null); } }, [screen, leagueSubTab, activeLeagueId]);
+ useEffect(()=>{ if(screen==="leagues" && leagueSubTab==="matchups" && activeLeague && activeLeague.id){ fetchAllMatchups(activeLeague.id); fetchWeekPicks(activeLeague.id, activeLeague.current_week||activeLeague.week||1); setBracketDetail(null); } }, [screen, leagueSubTab, activeLeagueId, realLeagues.length]);
 
  useEffect(()=>{
  if(activeLeague && ((screen==="league" && ((activeLeague.league_type==="bracket" && (leagueTab==="bracket"||leagueTab==="schedule")) || leagueTab==="playoff")) || (screen==="leagues" && leagueSubTab==="playoff"))){
@@ -10333,12 +10382,20 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  useEffect(()=>{
  if(!activeLeagueId||!user) return;
  if(isSoloMode) return; // solo mode - no league data to fetch
- // Clear stale data immediately when league switches
+ // Clear stale data immediately when league switches. The ownership flags reset
+ // alongside the arrays: a flag still pointing at the previous league makes every
+ // "is this mine" gate answer yes about data that was just emptied.
  setWeekPicks([]);
  setLeagueMembers([]);
  setRealStandings([]);
  setLeagueTrophies([]);
  setSavedPicks(null);
+ setLiveSchedule([]);
+ setScheduleLoaded(false);
+ setStandingsFor(null);
+ setMembersFor(null);
+ setWeekPicksFor(null);
+ setMatchupsFor(null);
  fetchLeagueMembers(activeLeagueId, user.id);
  fetchStandings(activeLeagueId);
  fetchLeagueTrophies(activeLeagueId);
@@ -10472,7 +10529,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  if(isSoloMode) return;
  const lg = realLeagues.find(l=>l.id===activeLeagueId);
  if(lg) fetchWeekPicks(activeLeagueId, lg.current_week||lg.week||1);
- },[activeLeagueId, user, screen]);
+ },[activeLeagueId, user, screen, realLeagues.length]);
 
  useEffect(()=>{if(chatRef.current)chatRef.current.scrollTop=chatRef.current.scrollHeight;},[messages]);
 
@@ -12779,6 +12836,20 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    // the generic season-complete banner. Lamp tracks are flex so 3 or 10 picks fit.
    const _duel = !isSoloMode && (activeLeague.league_type||"h2h")==="h2h" && Number(activeLeague.target_size||activeLeague.max_members||0)===2 && Number(activeLeague.season_weeks||0)===1;
    if(_duel){
+   // Ownership gate. leagueMembers and weekPicks are shared state: mid-switch they
+   // can still hold the league you just left, which is how this card once showed a
+   // stranger as your opponent and 0/3 locked while your slip was full.
+   const _dWk=activeLeague.current_week||activeLeague.week||1;
+   const _dReady = membersFor===activeLeague.id && weekPicksFor===(activeLeague.id+":"+_dWk);
+   if(!_dReady) return (
+     <div style={{position:"relative",border:"0.5px solid rgba(120,150,255,0.16)",borderRadius:RAD.xl,overflow:"hidden",margin:"0 0 10px",background:"linear-gradient(160deg,#15161E,#0B0B10 75%)",padding:"13px 14px"}}>
+       <div style={{height:9,width:120,borderRadius:5,background:"rgba(255,255,255,0.07)"}}/>
+       <div style={{display:"flex",alignItems:"center",gap:10,marginTop:14}}>
+         <div style={{flex:1,display:"flex",alignItems:"center",gap:8}}><div style={{width:34,height:34,borderRadius:"50%",background:"rgba(255,255,255,0.06)"}}/><div style={{height:12,width:80,borderRadius:6,background:"rgba(255,255,255,0.06)"}}/></div>
+         <div style={{flex:1,display:"flex",alignItems:"center",gap:8,justifyContent:"flex-end"}}><div style={{height:12,width:80,borderRadius:6,background:"rgba(255,255,255,0.06)"}}/><div style={{width:34,height:34,borderRadius:"50%",background:"rgba(255,255,255,0.06)"}}/></div>
+       </div>
+       <div style={{height:38,borderRadius:RAD.md,background:"rgba(255,255,255,0.05)",marginTop:14}}/>
+     </div>);
    const _dOpp=(leagueMembers||[]).find(m=>m.userId!==(user&&user.id))||null;
    const _dOppName=(_dOpp&&_dOpp.name)||"Opponent";
    const _ini=(nm)=>String(nm||"?").replace(/[^a-zA-Z0-9]/g,"").slice(0,2).toUpperCase()||"?";
@@ -12794,7 +12865,18 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    const _oppLamps=_oppSlotLamps.concat(Array(Math.max(0,slotCount-_oppSlotLamps.length)).fill(COL.idle)).slice(0,10);
    const _cnt=(rows,lamps)=>({ w:rows.filter(r=>r.result==="W").length, l:rows.filter(r=>r.result==="L").length, live:rows.filter(r=>r.result==="pending"&&r.game_date&&new Date(r.game_date).getTime()<=_now).length, idle:lamps.filter(c=>c===COL.idle).length });
    const _mc=_cnt(_myRows,_myLamps), _oc=_cnt(_oppRows,_oppLamps);
-   const _dFinal = !!activeLeague.champion_id || lgCompleted(activeLeague);
+   // Locked = a live row in the DB. Server truth, and this component has no slip state.
+   const _myLockedSlots=new Set(_myRows.map(r=>_slotKey(r.slot))).size;
+   const _oppLockedSlots=new Set((weekPicks||[]).filter(pp=>_dOpp&&pp.user_id===_dOpp.userId&&pp.result!=="P").map(r=>_slotKey(r.slot))).size;
+   // A duel is DECIDED the moment both slips are full and every leg has graded \u2014
+   // nothing can move after that. advance stamps champion_id at the window close,
+   // which can be days later, so the card would otherwise sit on "live" with zero
+   // live legs. _dStamped tracks whether the server has made it official yet.
+   const _dStamped = !!activeLeague.champion_id || lgCompleted(activeLeague);
+   const _allSettled = (_myRows.length+_oppRows.length)>0 && !_myRows.concat(_oppRows).some(r=>r.result==="pending");
+   const _bothFull = slotCount>0 && _myLockedSlots>=slotCount && _oppLockedSlots>=slotCount;
+   const _decided = _allSettled && _bothFull;
+   const _dFinal = _dStamped || _decided;
    const _anyGraded = _myRows.concat(_oppRows).some(r=>r.result==="W"||r.result==="L");
    const _anyStarted = _myRows.concat(_oppRows).some(r=>r.result==="pending"&&r.game_date&&new Date(r.game_date).getTime()<=_now);
    const _dLive = !_dFinal && (_anyGraded || _anyStarted);
@@ -12809,18 +12891,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    const _avSty=(mine)=>({width:34,height:34,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,flexShrink:0, background:mine?"rgba(10,132,255,0.18)":"rgba(255,255,255,0.08)", border:mine?"1px solid rgba(10,132,255,0.45)":"1px solid rgba(255,255,255,0.2)", color:mine?IOS.blue:"rgba(255,255,255,0.7)"});
    const _ctaSty={display:"block",textAlign:"center",background:IOS.blue,color:"#fff",fontWeight:800,fontSize:14,padding:"11px",borderRadius:RAD.md,marginTop:12,cursor:"pointer"};
    const _cardSty=(gold)=>({position:"relative",border:gold?"0.5px solid rgba(255,214,10,0.28)":"0.5px solid rgba(120,150,255,0.16)",boxShadow:"0 14px 32px -18px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.06)",borderRadius:RAD.xl,overflow:"hidden",margin:"0 0 10px", background:"radial-gradient(120% 90% at 85% -10%, rgba(59,111,224,0.32), transparent 55%), radial-gradient(90% 70% at -10% 110%, rgba(94,92,230,0.16), transparent 60%), linear-gradient(160deg,#15161E,#0B0B10 75%)"});
-   const _runBack=()=>{ try{
-     setNewLeagueName((activeLeague.name||"Duel").slice(0,40));
-     { const _sp=Array.isArray(activeLeague.sports)&&activeLeague.sports.length?activeLeague.sports:[activeLeague.sport].filter(Boolean); setNewLeagueSports(isPro?_sp:_sp.slice(0,1)); }
-     setNewLeagueType(activeLeague.league_type||"h2h");
-     setNewLeagueWeeks(Number(activeLeague.season_weeks)||1);
-     setNewLeaguePrivacy(activeLeague.privacy||"private");
-     setNewLeagueDuration(Number(activeLeague.duration_days)?{mode:"days",days:Math.max(1,Math.min(7,Number(activeLeague.duration_days))),weeks:1}:{mode:"weeks",days:2,weeks:Math.max(1,Math.min(18,Number(activeLeague.season_weeks)||1))});
-     const _cfg2=parseSlotConfig(activeLeague.slot_config); if(Array.isArray(_cfg2)&&_cfg2.length){ setNewLeagueSlots(_cfg2.map(x=>({...x}))); setNewLeaguePool(_cfg2.map(x=>Number(x.mult)||1)); }
-   }catch(e){} setShowNewLeague(true); };
-   // Locked = a live row in the DB. Server truth, and this component has no slip state.
-   const _myLockedSlots=new Set(_myRows.map(r=>_slotKey(r.slot))).size;
-   const _oppLockedSlots=new Set((weekPicks||[]).filter(pp=>_dOpp&&pp.user_id===_dOpp.userId&&pp.result!=="P").map(r=>_slotKey(r.slot))).size;
+   const _runBack=()=>prefillRunItBack(activeLeague);
    const _pendTop=(rows)=>{ const ps=rows.filter(r=>r.result==="pending").sort((a,b)=>(Number(b.multiplier)||0)-(Number(a.multiplier)||0)); return ps[0]||null; };
    const _beat=(()=>{ if(_myPts===_oppPts) return "dead even \u00B7 next cash takes the lead"; const trailMine=_myPts<_oppPts; const t=_pendTop(trailMine?_myRows:_oppRows); if(t) return (trailMine?("your "+t.pick_name+" could flip it"):("their "+t.pick_name+" could flip it")); return trailMine?"no live legs left on your side":"no live legs left on their side"; })();
    const _dagRow=(()=>{ const src=_iWin?_myRows:_oppRows; const w=src.filter(r=>r.result==="W").sort((a,b)=>parseFloat(b.points_earned||0)-parseFloat(a.points_earned||0))[0]; return w||null; })();
@@ -12870,6 +12941,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    <div style={{flex:1,minWidth:0}}>{_sideHdr(false)}{_lampRow(_oppLamps,true)}</div>
    </div>
    <div style={{fontSize:10,fontWeight:700,color:"rgba(255,255,255,0.45)",marginTop:11,textAlign:"center"}}>{_drawn?("Tied at "+_myPts.toFixed(1)+" \u00B7 every tiebreak came up even \u2014 run it back to settle it"):((_iWin?"Won by ":"Lost by ")+_gap+(_dag?(" \u00B7 "+_dag):""))}</div>
+  {!_dStamped&&<div style={{fontSize:9,fontWeight:700,color:"rgba(255,255,255,0.28)",marginTop:5,textAlign:"center"}}>{"Every leg is in \u00B7 the trophy stamps at the window close"}</div>}
    {activeLeague.isCommissioner&&<div onClick={_runBack} style={{..._ctaSty,background:"linear-gradient(120deg,#FFD60A,#FF9F0A)",color:"#141414"}}>Run it back</div>}
    <div onClick={()=>setScreen("matchup")} style={{..._ctaSty,background:"rgba(255,255,255,0.05)",boxShadow:"inset 0 0 0 0.5px rgba(255,255,255,0.12)",color:"rgba(255,255,255,0.75)",fontSize:13,padding:"10px",marginTop:activeLeague.isCommissioner?8:12}}>See the full breakdown</div>
    </div></div>);
@@ -17750,8 +17822,27 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    // Empty is only meaningful once these matchups belong to this league.
    const _mReady = matchupsFor === (activeLeague && activeLeague.id);
    const weekMs = _mReady ? (allMatchups||[]).filter(m=>m.week===wkSel) : [];
-   const nameOf = (id)=>{ const m=leagueMembers.find(x=>x.userId===id); return id===(user&&user.id)?"You":(m?m.name:"Player"); };
+   const nameOf = (id)=>{ const m=leagueMembers.find(x=>x.userId===id); return id===(user&&user.id)?"You":((m&&m.name)||(bracketNames&&bracketNames[id])||"Player"); };
+   // Duel over? Offer the rematch right here. A duel counts as over once both slips
+   // are full and every leg has graded, which lands days before advance stamps the
+   // trophy at the window close.
+   const _mDuel = activeLeague && (activeLeague.league_type||"h2h")==="h2h" && Number(activeLeague.target_size||activeLeague.max_members||0)===2;
+   const _mWkRows = _mDuel ? (weekPicks||[]).filter(r=>r.result!=="P") : [];
+   const _mSlots = (uid)=>new Set(_mWkRows.filter(r=>r.user_id===uid).map(r=>{ const mm=String(r.slot||"").match(/^longshot_(\d+)_/); return mm?("longshot_"+mm[1]):String(r.slot||""); })).size;
+   const _mCfg = _mDuel ? parseSlotConfig(activeLeague&&activeLeague.slot_config) : null;
+   const _mNeed = _mCfg ? _mCfg.length : 5;
+   const _mOppId = _mDuel ? ((leagueMembers||[]).find(m=>m.userId!==(user&&user.id))||{}).userId : null;
+   const _mOver = _mDuel && weekPicksFor===(activeLeague.id+":"+(activeLeague.current_week||activeLeague.week||1))
+     && (!!activeLeague.champion_id || lgCompleted(activeLeague)
+        || (_mWkRows.length>0 && !_mWkRows.some(r=>r.result==="pending")
+            && _mOppId && _mSlots(user&&user.id)>=_mNeed && _mSlots(_mOppId)>=_mNeed));
    return (<>
+     {_mOver && activeLeague.isCommissioner && (
+       <div onClick={()=>prefillRunItBack(activeLeague)} style={{margin:"0 16px 8px",display:"flex",alignItems:"center",gap:10,background:"linear-gradient(120deg,rgba(255,214,10,0.14),rgba(255,159,10,0.08))",border:"0.5px solid rgba(255,214,10,0.35)",borderRadius:RAD.md,padding:"11px 13px",cursor:"pointer"}}>
+         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFD60A" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+         <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:800,color:"#fff"}}>Run it back</div><div style={{fontSize:10.5,color:"rgba(255,255,255,0.5)",marginTop:1}}>{"This duel is done \u2014 same shape, same opponent, new week."}</div></div>
+         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2.4" strokeLinecap="round"><path d="M9 6l6 6-6 6"/></svg>
+       </div>)}
      <div style={{display:"flex",background:IOS.bg2,borderRadius:RAD.md,padding:3,margin:"0 16px 8px"}}>
        <div onClick={()=>setMatchupView("mine")} style={{flex:1,textAlign:"center",padding:"9px 0",borderRadius:RAD.sm,fontSize:14,fontWeight:800,cursor:"pointer",background:matchupView==="mine"?"#2d2d31":"transparent",color:matchupView==="mine"?"#fff":IOS.label2}}>My Matchup</div>
        <div onClick={()=>{ setMatchupView("league"); setMWeek(mWeek||(activeLeague.current_week||1)); }} style={{flex:1,textAlign:"center",padding:"9px 0",borderRadius:RAD.sm,fontSize:14,fontWeight:800,cursor:"pointer",background:matchupView==="league"?"#2d2d31":"transparent",color:matchupView==="league"?"#fff":IOS.label2}}>League</div>
@@ -18844,7 +18935,10 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  /* ── VERSION B: Dropdown + sub-tabs leagues tab ── */
  const lg = realLeagues.find(l=>l.id===activeLeagueId) || realLeagues[0];
  const sp = lg ? SPORTS[lg.sport] : {label:"NFL",color:IOS.blue};
- const myStanding = realStandings.find(s=>s.isYou);
+ // Gate on ownership: realStandings may still hold the league you just left.
+ const _stReady = standingsFor === (lg && lg.id);
+ const _stand = _stReady ? realStandings : [];
+ const myStanding = _stand.find(s=>s.isYou);
  const myRank = myStanding?.rank||"—";
  const myRecord = myStanding?.record||"—";
  const myPts = myStanding?.points||0;
@@ -19068,7 +19162,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    {/* Standings mini */}
    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
      <div style={{fontSize:9,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5}}>Standings</div>
-     {realStandings.length>0 && <button onClick={()=>openLeagueRecap()} disabled={leagueRecapLoading} style={{display:"flex",alignItems:"center",gap:5,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.3)",color:IOS.blue,fontSize:10,fontWeight:700,padding:"4px 9px",borderRadius:RAD.sm,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg>{leagueRecapLoading?"…":"Week recap"}</button>}
+     {_stand.length>0 && <button onClick={()=>openLeagueRecap()} disabled={leagueRecapLoading} style={{display:"flex",alignItems:"center",gap:5,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.3)",color:IOS.blue,fontSize:10,fontWeight:700,padding:"4px 9px",borderRadius:RAD.sm,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg>{leagueRecapLoading?"…":"Week recap"}</button>}
    </div>
    <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.md,overflow:"hidden",marginBottom:10}}>
      {/* Same rows as the Standings tab — the preview is a slice of it, not a lookalike. */}
@@ -19078,18 +19172,18 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        <div style={{width:36,fontSize:8,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4,textAlign:"right"}}>W/L</div>
        <div style={{width:56,fontSize:8,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4,textAlign:"right"}}>Total Pts</div>
      </div>
-     {realStandings.slice(0,4).map((s,i)=>(
-        <div key={s.userId||i} onClick={()=>{ if(s.userId) openUserProfile(s.userId,{username:s.isYou?((userProfile&&userProfile.username)||"You"):(s.name||s.username)}); }} className={"pk-strow"+(s.isYou?" me":"")} style={{cursor:"pointer",borderBottom:i<Math.min(realStandings.length,4)-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
+     {_stand.slice(0,4).map((s,i)=>(
+        <div key={s.userId||i} onClick={()=>{ if(s.userId) openUserProfile(s.userId,{username:s.isYou?((userProfile&&userProfile.username)||"You"):(s.name||s.username)}); }} className={"pk-strow"+(s.isYou?" me":"")} style={{cursor:"pointer",borderBottom:i<Math.min(_stand.length,4)-1?"0.5px solid rgba(255,255,255,0.05)":"none"}}>
           <span className="pk-stpos">{i+1}</span>
           <span className="pk-stav" style={{background:s.isYou?IOS.blue:"#23242a",color:s.isYou?"#fff":"rgba(255,255,255,0.62)"}}>{String(s.isYou?"You":(s.name||s.username||"?")).slice(0,2).toUpperCase()}</span>
           <span className="pk-stnm">{s.isYou?"You":(s.name||s.username||"Unknown")}</span>
           {/* Bar scales against the FULL table so the preview matches the standings page. */}
-          <span className="pk-stbar"><i style={{width:(()=>{ const m=Math.max.apply(null,[0,...realStandings.map(x=>parseFloat(x.points)||0)]); return (m>0?Math.max(4,Math.round((parseFloat(s.points)||0)/m*100)):0)+"%"; })()}}/></span>
+          <span className="pk-stbar"><i style={{width:(()=>{ const m=Math.max.apply(null,[0,..._stand.map(x=>parseFloat(x.points)||0)]); return (m>0?Math.max(4,Math.round((parseFloat(s.points)||0)/m*100)):0)+"%"; })()}}/></span>
           <span className="pk-stwl">{s.record}</span>
           <span className="pk-stpts" style={{color:s.isYou?"#fff":"rgba(255,255,255,0.78)"}}>{parseFloat(s.points||0).toFixed(1)}</span>
         </div>
      ))}
-     {realStandings.length>4&&(
+     {_stand.length>4&&(
        <div onClick={()=>setLeagueSubTab("standings")} style={{padding:"8px 12px",textAlign:"center",borderTop:`0.5px solid ${IOS.sep}`,cursor:"pointer"}}>
          <div style={{fontSize:10,color:IOS.blue,fontWeight:600}}>See full standings</div>
        </div>

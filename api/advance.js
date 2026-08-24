@@ -62,7 +62,7 @@ export default async function handler(req, res) {
   try {
     const { data: leagues, error } = await supabase
       .from("leagues")
-      .select("id, name, current_week, season_weeks, season_start, league_type, playoffs_enabled, playoff_size, champion_id, completed_at, survivor_lives, duration_days, target_size")
+      .select("id, name, current_week, season_weeks, season_start, league_type, playoffs_enabled, playoff_size, champion_id, completed_at, survivor_lives, duration_days, target_size, slot_config")
       .not("season_start", "is", null)
       .eq("is_demo", false);
     if (error) throw error;
@@ -82,12 +82,24 @@ export default async function handler(req, res) {
       // Day-mode duels (duration_days set): the single "week" is duration_days long,
       // closing at the next 3:00 AM ET after start + N days so late West-Coast finals
       // settle inside the window. No extra grace: the 3 AM snap IS the grace.
-      const target = Number(lg.duration_days)
-        ? (Date.now() >= duelEndAt(start, lg.duration_days) ? seasonWeeks + 1 : 1)
-        : Math.min(
-            seasonWeeks + 1,
-            Math.floor((Date.now() - start - GRACE_MS) / WEEK_MS) + 1
-          );
+      // A one-window duel is over the moment both slips are full and every leg has
+      // graded — waiting on the calendar leaves a settled duel sitting "live" for
+      // days. Rather than a separate completion path, this just advances the target
+      // past the final week so the normal machinery below finalizes and stamps it.
+      // season_weeks===1 only: a multi-week series has full graded slips at the end
+      // of EVERY week and must keep playing them.
+      const duelDone = Number(lg.target_size) === 2
+        && (lg.league_type || "h2h") === "h2h"
+        && Number(lg.season_weeks || 0) === 1
+        && await duelSettled(supabase, lg);
+      const target = duelDone
+        ? (seasonWeeks + 1)
+        : (Number(lg.duration_days)
+            ? (Date.now() >= duelEndAt(start, lg.duration_days) ? seasonWeeks + 1 : 1)
+            : Math.min(
+                seasonWeeks + 1,
+                Math.floor((Date.now() - start - GRACE_MS) / WEEK_MS) + 1
+              ));
       const cw = lg.current_week || 1;
 
       if (target <= cw) {
@@ -327,6 +339,34 @@ async function maybeComplete(supabase, league, target, seasonWeeks) {
     champion_id: (top && top[0]) || null,
     completed_at: new Date().toISOString(),
   }).eq("id", league.id);
+}
+
+// True when a duel can no longer change: both seats have a full slip and no pick
+// is still pending. Slot count comes from slot_config, matching the client's
+// `_cfg ? _cfg.length : 5` default so the two agree on what "full" means.
+async function duelSettled(supabase, lg) {
+  try {
+    const { data: mem } = await supabase
+      .from("league_members").select("user_id").eq("league_id", lg.id);
+    if (!mem || mem.length !== 2) return false;
+    const { data: picks } = await supabase
+      .from("picks").select("user_id, slot, result").eq("league_id", lg.id);
+    const live = (picks || []).filter((p) => p.result !== "P");
+    if (!live.length) return false;
+    if (live.some((p) => p.result === "pending")) return false;
+    let cfg = lg.slot_config;
+    if (typeof cfg === "string") { try { cfg = JSON.parse(cfg); } catch (e) { cfg = null; } }
+    const need = Array.isArray(cfg) && cfg.length ? cfg.length : 5;
+    const slotKey = (sl) => {
+      const m = String(sl || "").match(/^longshot_(\d+)_/);
+      return m ? "longshot_" + m[1] : String(sl || "");
+    };
+    for (const m of mem) {
+      const n = new Set(live.filter((p) => p.user_id === m.user_id).map((p) => slotKey(p.slot))).size;
+      if (n < need) return false;
+    }
+    return true;
+  } catch (e) { return false; }
 }
 
 // Next instant at/after `ms` where it is exactly 3:00 AM in America/New_York.
