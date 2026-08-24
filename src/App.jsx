@@ -5963,7 +5963,7 @@ function App() {
  useEffect(()=>{ if(activeLeagueId && activeLeagueId!=="lg1" && activeLeagueId!=="solo"){ try{ localStorage.setItem("picklock_active_league", activeLeagueId); }catch(e){} } }, [activeLeagueId]);
  const [realLeagues, setRealLeagues] = useState([]);
  const [leaguesLoading, setLeaguesLoading] = useState(true);
- const [leagueMembers, setLeagueMembers] = useState([]);
+ const [leagueMembersRaw, setLeagueMembers] = useState([]);   // read the gated `leagueMembers` below, not this
  const [bracketMatchups, setBracketMatchups] = useState([]);
  // Which league bracketMatchups actually holds. Without this, an empty array
  // reads as "no bracket yet" during the first fetch and the pre-playoff
@@ -5990,7 +5990,7 @@ function App() {
  const [bracketLive, setBracketLive] = useState({week:0,totals:{}});
  const [champCelebrate, setChampCelebrate] = useState(null);
  const champSeenRef = useRef("");
- const [weekPicks, setWeekPicks] = useState([]);
+ const [weekPicksRaw, setWeekPicks] = useState([]);   // read the gated `weekPicks` below, not this
  const [liveSchedule, setLiveSchedule] = useState([]);
  // liveSchedule is empty both when there is no schedule AND while one is loading. Without
  // this the Schedule tab flashed its empty state on every visit — and that empty state
@@ -6048,6 +6048,21 @@ function App() {
  const setSoloSportPersist = (sp) => { setSoloSport(sp); try{localStorage.setItem("picklock_solo_sport",sp);}catch(e){} };
  const [showSoloSportPicker, setShowSoloSportPicker] = useState(false); // sport selector before building
  const activeLeague = isSoloMode ? {id:soloLeagueId||"solo",name:"Solo Mode",sport:soloSport,current_week:soloWeekNum(),season_weeks:99,max_members:1,target_size:1,isCommissioner:false} : ([...realLeagues].find(l=>l.id===activeLeagueId) || realLeagues[0] || {id:"",name:"",sport:"nfl",current_week:1,season_weeks:18,max_members:8,target_size:8,isCommissioner:false});
+ // ── OWNERSHIP GATES ── weekPicks and leagueMembers are single shared arrays that
+ // every screen reads, but they are filled per league. Mid-switch — or in solo mode,
+ // which loads YOUR SOLO league into the same arrays — they hold rows belonging to a
+ // different league, and any consumer that reads them straight renders another
+ // league's data as this one's. That produced a stranger as your duel opponent, a
+ // solo MLB pick shown as a survivor team, and an ELIMINATED chip from a loss in an
+ // unrelated league. Gating here, at the source, means every consumer inherits the
+ // check and a new one cannot forget it.
+ //
+ // League-scoped, not week-scoped on purpose: screens like the matchup pager
+ // deliberately fetch a week other than current_week, and blanking those would be a
+ // regression. Cross-LEAGUE bleed is the bug; cross-week within a league is intent.
+ const _ownLeagueId = (activeLeague && activeLeague.id) || "";
+ const weekPicks = (_ownLeagueId && String(weekPicksFor||"").indexOf(_ownLeagueId+":")===0) ? weekPicksRaw : [];
+ const leagueMembers = (_ownLeagueId && membersFor===_ownLeagueId) ? leagueMembersRaw : [];
  useEffect(()=>{
    if(screen!=="home") return;
    const t=setInterval(()=>setNowTick(Date.now()), 1000);
