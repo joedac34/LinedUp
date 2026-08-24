@@ -10,7 +10,10 @@ import { createClient } from "@supabase/supabase-js";
 // tier across a full week, deterministic and identical for every user's race.
 
 const BOTS_LEAGUE = "00000000-0000-4000-a000-0000000b0750";
-const ANCHOR_MS = Date.parse("2026-01-05T07:00:00Z"); // Monday ~3 AM ET
+// Must match SOLO_WEEK_ANCHOR in the client: solo weeks are Tue ~6am ET buckets,
+// and a bot week that is out of phase with them makes the race board compare
+// different windows than the solo card the user is reading.
+const ANCHOR_MS = Date.UTC(2025, 8, 2, 10, 0, 0); // Tue Sep 2 2025 ~6 AM ET
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const MULT_PATTERN = [1, 2, 3, 4, 5, 1, 2, 3, 4, 5];
 const SLATE_SIZE = 10;

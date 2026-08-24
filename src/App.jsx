@@ -4607,8 +4607,10 @@ function GauntletCard({ user, onEnter, onJoin }){
 // solo pick count for the week, so volumes always match. Bot metadata lives here,
 // keyed by the fixed uuids seeded in the bot_roster_seed migration.
 const BOTS_LEAGUE_ID = "00000000-0000-4000-a000-0000000b0750";
-const BOTS_ANCHOR_MS = Date.parse("2026-01-05T07:00:00Z");
-const botWeekOf = (ms)=>Math.floor((ms-BOTS_ANCHOR_MS)/(7*86400000))+1;
+// Same anchor and buckets as solo weeks — the race window must match the week the
+// user is looking at, or the points on the two cards never reconcile.
+const BOTS_ANCHOR_MS = SOLO_WEEK_ANCHOR;
+const botWeekOf = (ms)=>Math.floor((ms-BOTS_ANCHOR_MS)/SOLO_WEEK_MS)+1;
 const BOT_META = {
  "00000000-0000-4000-b000-000000000001":{ name:"CHALKY", bio:"Only picks favorites. Never sweats.", color:"#30D158", face:"smug" },
  "00000000-0000-4000-b000-000000000002":{ name:"BIG DOG", bio:"Underdogs only, the uglier the better.", color:"#FF453A", face:"wild" },
@@ -4636,8 +4638,8 @@ function BotRaceCard({ user, isSolo }){
     const tick=++reqRef.current;
     (async()=>{ try{
       const wk=botWeekOf(Date.now());
-      const ws=new Date(BOTS_ANCHOR_MS+(wk-1)*7*86400000).toISOString();
-      const we=new Date(BOTS_ANCHOR_MS+wk*7*86400000).toISOString();
+      const ws=new Date(BOTS_ANCHOR_MS+(wk-1)*SOLO_WEEK_MS).toISOString();
+      const we=new Date(BOTS_ANCHOR_MS+wk*SOLO_WEEK_MS).toISOString();
       const {data:solo}=await supabase.from("leagues").select("id").eq("commissioner_id",user.id).eq("league_type","solo").limit(1);
       const sid=solo&&solo[0]&&solo[0].id;
       let mine=[];
@@ -4884,7 +4886,7 @@ function SoloHome({raceUser, soloWeeks, soloLoading, isPro, IOS, setScreen, setS
           <div style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.14em",textTransform:"uppercase",color:IOS.label3}}>Riding on this week</div>
           <div style={{display:"flex",alignItems:"baseline",gap:9,marginTop:6}}>
             <span style={{fontSize:38,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,lineHeight:0.9,color:"#fff"}}>{curRiding.toFixed(1)}</span>
-            <span style={{fontSize:12,color:IOS.label3,fontWeight:700}}>{curGraded>0?"pts \u00b7 "+curPts.toFixed(1)+" banked":"pts if everything hits"}</span>
+            <span style={{fontSize:12,color:IOS.label3,fontWeight:700}}>{curGraded>0?"pts":"pts if everything hits"}</span>
           </div>
           <div style={{fontSize:11.5,color:IOS.label2,marginTop:8,lineHeight:1.45}}>
             {_cur.length} pick{_cur.length!==1?"s":""} locked
