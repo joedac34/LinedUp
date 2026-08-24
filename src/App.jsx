@@ -4657,6 +4657,9 @@ function BotRaceCard({ user, isSolo }){
     }catch(e){} })();
   },[user&&user.id,isSolo]);
   if(!isSolo||!race) return null;
+  // No slates on the board yet (cron hasn’t run, or the day’s games are done):
+  // render nothing rather than an empty leaderboard or a claim that isn’t true.
+  if(!race.rows.some(r=>r.total>0)) return null;
   const ranked=[{id:"me",pts:race.myPts,w:race.myW,l:race.myL},...race.rows].sort((a,b)=>b.pts-a.pts);
   const myRank=ranked.findIndex(r=>r.id==="me")+1;
   return (
@@ -4667,7 +4670,7 @@ function BotRaceCard({ user, isSolo }){
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2.4" style={{transform:open?"rotate(180deg)":"none",transition:"transform .18s"}}><polyline points="6 9 12 15 18 9"/></svg>
   </div>
   {race.myN===0
-  ? <div style={{fontSize:12.5,color:"rgba(255,255,255,0.5)",marginTop:8,lineHeight:1.5}}>Four bots posted their slates. Make a solo pick and the race is on — every bot gets scored on the same number of picks as you.</div>
+  ? <div style={{fontSize:12.5,color:"rgba(255,255,255,0.5)",marginTop:8,lineHeight:1.5}}>{race.rows.filter(r=>r.total>0).length+" bots posted their slates. Make a solo pick and the race is on \u2014 every bot gets scored on the same number of picks as you."}</div>
   : <div style={{display:"flex",alignItems:"baseline",gap:8,marginTop:8}}><span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:24,color:myRank===1?IOS.green:"#fff"}}>{myRank===1?"1st":(myRank+(myRank===2?"nd":myRank===3?"rd":"th"))}</span><span style={{fontSize:11.5,fontWeight:700,color:"rgba(255,255,255,0.5)"}}>{"of "+ranked.length+" · "+race.myPts.toFixed(1)+" pts on "+race.myN+" pick"+(race.myN===1?"":"s")}</span></div>}
   </div>
   {open&&<div style={{borderTop:"1px solid rgba(255,255,255,0.07)"}}>
@@ -9833,6 +9836,9 @@ function App() {
      const _cfg=parseSlotConfig(lg.slot_config);
      if(Array.isArray(_cfg)&&_cfg.length){ setNewLeagueSlots(_cfg.map(x=>({...x}))); setNewLeaguePool(_cfg.map(x=>Number(x.mult)||1)); }
    }catch(e){}
+   // The builder modal lives inside the leagues screen; opening it from anywhere
+   // else without switching screens sets a flag nothing is rendering.
+   setScreen("leagues");
    setNewLeagueStep(1);
    setShowNewLeague(true);
  };
@@ -13135,9 +13141,13 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 
  {/* Leagueless home order: pinned build-a-league banner → Daily Lock → Gauntlet → solo content */}
  {screen==="home" && homeMode==="solo" && (
- <div style={{margin:"0 16px 10px",display:"flex",alignItems:"center",gap:10,background:"rgba(59,111,224,0.08)",border:"0.5px dashed rgba(59,111,224,0.4)",borderRadius:RAD.md,padding:"9px 12px"}}>
-   <div style={{flex:1,minWidth:0}}><span style={{fontSize:11.5,fontWeight:800}}>This app peaks with your group.</span><span style={{fontSize:11,color:"rgba(255,255,255,0.45)",marginLeft:5}}>One link, endless trash talk.</span></div>
-   <div onClick={()=>{ setNewLeagueStep(1); setShowNewLeague(true); }} style={{background:IOS.blue,borderRadius:8,padding:"7px 12px",fontSize:11.5,fontWeight:800,cursor:"pointer",flexShrink:0}}>Start a league</div>
+ <div style={{margin:"0 16px 10px",background:"rgba(59,111,224,0.08)",border:"0.5px dashed rgba(59,111,224,0.4)",borderRadius:RAD.md,padding:"10px 12px"}}>
+   <div style={{fontSize:11.5,fontWeight:800}}>This app peaks with your group.</div>
+   <div style={{fontSize:11,color:"rgba(255,255,255,0.45)",marginTop:2}}>{"Start one and send a link, or jump into someone else\u2019s."}</div>
+   <div style={{display:"flex",gap:7,marginTop:9}}>
+     <div onClick={()=>{ setScreen("leagues"); setNewLeagueStep(0); setShowNewLeague(true); }} style={{flex:1,textAlign:"center",background:IOS.blue,borderRadius:8,padding:"9px 12px",fontSize:12,fontWeight:800,cursor:"pointer",color:"#fff"}}>Start a league</div>
+     <div onClick={()=>{ try{ fetchPublicLeagues(); }catch(e){} setShowBrowse(true); }} style={{flex:1,textAlign:"center",background:"rgba(255,255,255,0.06)",boxShadow:"inset 0 0 0 0.5px rgba(255,255,255,0.16)",borderRadius:8,padding:"9px 12px",fontSize:12,fontWeight:800,cursor:"pointer",color:"rgba(255,255,255,0.8)"}}>Join a league</div>
+   </div>
  </div>)}
  {screen==="home" && homeMode==="solo" && <DailyLockCard user={user} bets={(liveOdds[soloSport||"mlb"]||{}).ml||[]} sport={soloSport||"mlb"}/>}
 
