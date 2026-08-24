@@ -40,7 +40,11 @@ const PROP_LABELS = {
   batter_total_bases: "Total Bases", batter_hits: "Hits", batter_home_runs: "Home Runs",
   batter_rbis: "RBIs", pitcher_strikeouts: "Strikeouts",
 };
-const PROP_EVENTS_PER_RUN = 3; // per-event props calls are metered; keep the daily pull bounded
+// Per-event props calls are metered, so this is a real cost knob — but at 3 the bot
+// took three days to reach a full slate, and the race truncates every bot to the
+// user's pick count, which quietly handicapped him the whole time. 8 fills him in a
+// single run for a handful of extra calls a day.
+const PROP_EVENTS_PER_RUN = 8;
 
 const weekOf = (ms) => Math.floor((ms - ANCHOR_MS) / WEEK_MS) + 1;
 
