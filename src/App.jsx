@@ -4465,9 +4465,11 @@ function PickRow({ p, pi, groupKey, isLast, openLegs, setOpenLegs, liveGames, on
 const DAILY_LOCK_ID = "00000000-0000-4000-a000-00000000da11";
 const DL_ANCHOR_MS = Date.parse("2026-01-01T08:00:00Z");
 const dlDayOf = (ms)=>Math.floor((ms-DL_ANCHOR_MS)/86400000)+1;
+const DL_MK = { h2h:["ML","#0A84FF","rgba(10,132,255,0.15)"], spreads:["SPREAD","#30D158","rgba(48,209,88,0.15)"], totals:["TOTAL","#FF9F0A","rgba(255,159,10,0.15)"] };
 const dlOddsNum = (o)=>{ const n=parseInt(String(o==null?"":o).replace(/[^-+0-9]/g,""),10); return isNaN(n)?null:n; };
-function DailyLockCard({ user, bets, sport }){
+function DailyLockCard({ user }){
   const [mine,setMine]=useState(null);    // recent DL picks, week desc
+  const [board,setBoard]=useState(null);  // server-curated options for today
   const [sel,setSel]=useState(null);
   const [busy,setBusy]=useState(false);
   const today=dlDayOf(Date.now());
@@ -4475,37 +4477,43 @@ function DailyLockCard({ user, bets, sport }){
     const {data}=await supabase.from("picks").select("week,result,points_earned,pick_name,game_date").eq("league_id",DAILY_LOCK_ID).eq("user_id",user.id).gte("week",today-45).order("week",{ascending:false});
     setMine(data||[]);
   }catch(e){ setMine([]); } };
-  useEffect(()=>{ if(user&&user.id) load(); },[user&&user.id]);
-  if(!user||mine===null) return null;
+  // The board is built once a day by api/dailylock across every sport, so a thin
+  // slate goes deep on one game\u2019s markets instead of showing a single option, and
+  // every user picks from the identical set \u2014 which is what makes the streak
+  // leaderboard comparable.
+  const loadBoard=async()=>{ try{
+    const {data}=await supabase.from("daily_lock_board").select("*").eq("day",today).order("ord",{ascending:true});
+    setBoard(data||[]);
+  }catch(e){ setBoard([]); } };
+  useEffect(()=>{ if(user&&user.id){ load(); loadBoard(); } },[user&&user.id]);
+  if(!user||mine===null||board===null) return null;
   const todays=mine.find(r=>r.week===today)||null;
   // Current streak: walk back day by day from yesterday (or today if graded W).
   // Any missed day or loss ends the walk — same rule the leaderboard RPC applies.
-  const streak=(()=>{ const by={}; mine.forEach(r=>{ if(r.result==="W"||r.result==="L") by[r.week]=r.result; });
-    let n=0, d=(by[today]==="W")?today:today-1;
-    while(by[d]==="W"){ n++; d--; }
+  // Void-neutral: a postponed pick is a BRIDGE. The day neither breaks the streak
+  // nor extends it, and nothing is owed \u2014 tomorrow picks up where you left off.
+  // A day with no pick at all still ends the run.
+  const streak=(()=>{ const by={}; mine.forEach(r=>{ if(r.result==="W"||r.result==="L"||r.result==="P") by[r.week]=r.result; });
     if(by[today]==="L") return 0;
+    let n=0, d=(by[today]==="W"||by[today]==="P")?today:today-1;
+    while(by[d]==="W"||by[d]==="P"){ if(by[d]==="W") n++; d--; }
     return n; })();
-  const boardEnd=DL_ANCHOR_MS+today*86400000;
-  const board=(bets||[]).filter(b=>{ const n=dlOddsNum(b.odds); if(n==null||n<-200) return false;
-    const t=b.gameTime?new Date(b.gameTime).getTime():null;
-    return t!=null && t>Date.now() && t<boardEnd; }).sort((x,y)=>new Date(x.gameTime)-new Date(y.gameTime)).slice(0,6);
+  const live=(board||[]).filter(b=>b.game_date && new Date(b.game_date).getTime()>Date.now());
   const lock=async()=>{
     if(!sel||busy) return; setBusy(true);
     try{
       // Membership first (picks insert RLS requires it); 23505 = already a member.
       const {error:me}=await supabase.from("league_members").insert({league_id:DAILY_LOCK_ID,user_id:user.id,is_commissioner:false});
       if(me&&me.code!=="23505"&&String(me.code)!=="409"){ /* proceed — insert below surfaces real failures */ }
-      const n=dlOddsNum(sel.odds);
-      const imp=n==null?null:(n>0?Math.round(100/(n+100)*1000)/10:Math.round(-n/(-n+100)*1000)/10);
       const {error}=await supabase.from("picks").insert({
         league_id:DAILY_LOCK_ID, user_id:user.id, week:today, slot:"daily", multiplier:1,
-        sport:sport||sel.sport||"mlb", pick_name:sel.pick, game:sel.game,
-        odds:sel.odds, implied_odds:imp, game_date:sel.gameTime, event_id:sel.eventId||null,
-        market_key:"h2h", outcome:(sel.selKey?sel.selKey.split("|")[2]:null), outcome_point:null,
-        sel_key:sel.selKey||null, result:"pending", points_earned:0 });
+        sport:sel.sport, pick_name:sel.pick_name, game:sel.game,
+        odds:sel.odds, implied_odds:sel.implied_odds, game_date:sel.game_date, event_id:sel.event_id,
+        market_key:sel.market_key, outcome:sel.outcome, outcome_point:sel.outcome_point,
+        sel_key:sel.sel_key, result:"pending", points_earned:0 });
       if(error&&error.code==="23505"){ await load(); setBusy(false); return; }   // raced a second device
       if(error){ alert("Couldn’t lock it — try again."); setBusy(false); return; }
-      try{ posthog.capture("daily_lock_made",{ odds:sel.odds }); }catch(e2){}
+      try{ posthog.capture("daily_lock_made",{ odds:sel.odds, market:sel.market_key, sport:sel.sport }); }catch(e2){}
       setSel(null); await load();
     }catch(e){}
     setBusy(false);
@@ -4514,21 +4522,28 @@ function DailyLockCard({ user, bets, sport }){
   return (
   <div className="pl-rise" style={{margin:"0 16px 12px",position:"relative",border:"0.5px solid rgba(255,159,10,0.3)",borderRadius:RAD.lg,overflow:"hidden",boxShadow:"0 10px 26px -14px rgba(0,0,0,0.8)",background:"radial-gradient(120% 90% at 80% -10%, rgba(255,159,10,0.16), transparent 55%), linear-gradient(160deg,#16130E,#0B0B10 75%)"}}>
   <div style={{padding:"13px 14px"}}>
-  {todays?(<>
+  {todays&&todays.result==="P"?(<>
+  {kick("The Daily Lock · voided","rgba(255,255,255,0.45)")}
+  <div style={{fontSize:13.5,fontWeight:800,marginTop:9}}>{todays.pick_name}</div>
+  <div style={{fontSize:10.5,color:"rgba(255,255,255,0.45)",marginTop:3,lineHeight:1.5}}>{"No result, so the day doesn’t count either way. Your streak is safe and picks back up tomorrow."}</div>
+  </>):todays?(<>
   {kick(todays.result==="pending"?"The Daily Lock · riding":"The Daily Lock · "+(todays.result==="W"?"survived":"streak down"),todays.result==="W"?IOS.green:todays.result==="L"?IOS.red:IOS.orange)}
   <div style={{fontSize:13.5,fontWeight:800,marginTop:9}}>{todays.pick_name}</div>
   <div style={{fontSize:10.5,color:"rgba(255,255,255,0.45)",marginTop:3}}>{todays.result==="pending"?("Locked · streak’s on the line tonight"):(todays.result==="W"?("Cashed. Back tomorrow to keep it alive."):"It happens. New streak starts tomorrow.")}</div>
-  </>):board.length?(<>
+  </>):live.length?(<>
   {kick("The Daily Lock · today’s board",IOS.orange)}
-  <div style={{fontSize:10.5,color:"rgba(255,255,255,0.45)",margin:"8px 0 9px"}}>{"One pick. Moneylines -200 or better. Miss a day or miss the pick — streak dies."}</div>
+  <div style={{fontSize:10.5,color:"rgba(255,255,255,0.45)",margin:"8px 0 9px"}}>{(new Set(live.map(x=>x.event_id)).size===1)?"Everything on the board is one game tonight. Pick your angle.":"One pick. Nothing shorter than -200. Miss a day or miss the pick — streak dies."}</div>
   <div style={{display:"flex",flexDirection:"column",gap:6}}>
-  {board.map((b,i)=>{ const on=sel&&sel.selKey===b.selKey&&sel.pick===b.pick; return (
-  <div key={(b.selKey||b.pick)+i} onClick={()=>setSel(on?null:b)} style={{display:"flex",alignItems:"center",gap:9,borderRadius:10,padding:"9px 11px",cursor:"pointer",transition:"background .15s,border-color .15s",background:on?"rgba(255,159,10,0.13)":"rgba(255,255,255,0.04)",border:on?"1px solid rgba(255,159,10,0.55)":"1px solid rgba(255,255,255,0.09)"}}>
-  <div style={{flex:1,minWidth:0}}><div style={{fontSize:12.5,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{b.pick}</div><div style={{fontSize:9.5,color:"rgba(255,255,255,0.4)",marginTop:1}}>{(b.game||"")+" · "+(b.gameTime?new Date(b.gameTime).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}):"")}</div></div>
+  {live.map((b,i)=>{ const on=sel&&sel.id===b.id; const mk=DL_MK[b.market_key]||DL_MK.h2h; return (
+  <div key={b.id||i} onClick={()=>setSel(on?null:b)} style={{display:"flex",alignItems:"center",gap:9,borderRadius:10,padding:"9px 11px",cursor:"pointer",transition:"background .15s,border-color .15s",background:on?"rgba(255,159,10,0.13)":"rgba(255,255,255,0.04)",border:on?"1px solid rgba(255,159,10,0.55)":"1px solid rgba(255,255,255,0.09)"}}>
+  <div style={{flex:1,minWidth:0}}>
+  <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0}}><span style={{fontSize:12.5,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{b.pick_name}</span><span style={{fontSize:8,fontWeight:800,letterSpacing:"0.06em",padding:"2px 5px",borderRadius:4,flexShrink:0,color:mk[1],background:mk[2]}}>{mk[0]}</span></div>
+  <div style={{fontSize:9.5,color:"rgba(255,255,255,0.4)",marginTop:1}}>{(b.game||"")+" · "+(b.game_date?new Date(b.game_date).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}):"")}</div>
+  </div>
   <span style={{fontSize:11.5,fontWeight:800,color:dlOddsNum(b.odds)>0?IOS.green:"rgba(255,255,255,0.65)",flexShrink:0}}>{b.odds}</span>
   </div>); })}
   </div>
-  <div onClick={lock} style={{display:"block",textAlign:"center",background:sel?"linear-gradient(120deg,#FF9F0A,#FF6B2C)":"rgba(255,255,255,0.06)",color:sel?"#141414":"rgba(255,255,255,0.35)",fontWeight:800,fontSize:13.5,padding:"11px",borderRadius:RAD.md,marginTop:10,cursor:sel?"pointer":"default",opacity:busy?0.6:1}}>{busy?"Locking…":(sel?("Lock "+sel.pick):"Pick one to lock")}</div>
+  <div onClick={lock} style={{display:"block",textAlign:"center",background:sel?"linear-gradient(120deg,#FF9F0A,#FF6B2C)":"rgba(255,255,255,0.06)",color:sel?"#141414":"rgba(255,255,255,0.35)",fontWeight:800,fontSize:13.5,padding:"11px",borderRadius:RAD.md,marginTop:10,cursor:sel?"pointer":"default",opacity:busy?0.6:1}}>{busy?"Locking…":(sel?("Lock "+sel.pick_name):"Pick one to lock")}</div>
   </>):(<>
   {kick("The Daily Lock",IOS.orange)}
   <div style={{fontSize:11.5,color:"rgba(255,255,255,0.45)",marginTop:8}}>{"No board right now — today’s eligible games are done or haven’t posted. Check back."}</div>
@@ -4673,7 +4688,7 @@ function BotRaceCard({ user, isSolo }){
   </div>
   {race.myN===0
   ? <div style={{fontSize:12.5,color:"rgba(255,255,255,0.5)",marginTop:8,lineHeight:1.5}}>{race.rows.filter(r=>r.total>0).length+" bots posted their slates. Make a solo pick and the race is on \u2014 every bot gets scored on the same number of picks as you."}</div>
-  : <div style={{display:"flex",alignItems:"baseline",gap:8,marginTop:8}}><span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:24,color:myRank===1?IOS.green:"#fff"}}>{myRank===1?"1st":(myRank+(myRank===2?"nd":myRank===3?"rd":"th"))}</span><span style={{fontSize:11.5,fontWeight:700,color:"rgba(255,255,255,0.5)"}}>{"of "+ranked.length+" · "+race.myPts.toFixed(1)+" pts on "+race.myN+" pick"+(race.myN===1?"":"s")}</span></div>}
+  : <div style={{display:"flex",alignItems:"baseline",gap:8,marginTop:8}}><span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:24,color:myRank===1?IOS.green:"#fff"}}>{myRank===1?"1st":(myRank+(myRank===2?"nd":myRank===3?"rd":"th"))}</span><span style={{fontSize:11.5,fontWeight:700,color:"rgba(255,255,255,0.5)"}}>{"of "+ranked.length+" · "+race.myPts.toFixed(1)+" pts on "+race.myN+" pick"+(race.myN===1?"":"s")+" this week"}</span></div>}
   </div>
   {open&&<div style={{borderTop:"1px solid rgba(255,255,255,0.07)"}}>
   {ranked.map((r,i)=>{ const me=r.id==="me"; const m=me?null:BOT_META[r.id]; return (
@@ -4691,12 +4706,12 @@ function BotRaceCard({ user, isSolo }){
   <div style={{fontSize:9,fontWeight:700,color:"rgba(255,255,255,0.4)"}}>{r.w+"-"+r.l}</div>
   </div>
   </div>); })}
-  <div style={{padding:"9px 14px 12px",fontSize:9.5,color:"rgba(255,255,255,0.35)",lineHeight:1.5}}>{"Bots post 10 picks a week, two at every multiplier. Your race scores each bot's first "+race.myN+" pick"+(race.myN===1?"":"s")+" — same volume as you, always."}</div>
+  <div style={{padding:"9px 14px 12px",fontSize:9.5,color:"rgba(255,255,255,0.35)",lineHeight:1.5}}>{"Fair fight: you’ve locked "+race.myN+" pick"+(race.myN===1?"":"s")+" this week, so each bot only gets credit for its first "+race.myN+" — their volume always matches yours. Lock more picks and more of their slate counts. Bots fill up to 10 a week."}</div>
   </div>}
   </div>);
 }
 
-function SoloHome({raceUser, soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeague, setNewLeagueStep, setShowBrowse, fetchPublicLeagues, setIsSoloMode, setActiveLeagueId, getOrCreateSoloLeague, soloSavedPicks, setSoloSavedPicks, soloFlexPicks, setSoloFlexPicks, soloSport, setSoloSport, setShowSoloSportPicker, soloSubmitted, setSoloSubmitted, username, soloTopPct, onDeleteSlate, onJoinCode, setShowPaywall, tickerGames=[], espnGames=[], globalRank=null, onOpenLeaderboard, liveGames=[], onOpenGamecast, onReplace}) {
+function SoloHome({raceUser, gauntletSlot, soloWeeks, soloLoading, isPro, IOS, setScreen, setShowNewLeague, setNewLeagueStep, setShowBrowse, fetchPublicLeagues, setIsSoloMode, setActiveLeagueId, getOrCreateSoloLeague, soloSavedPicks, setSoloSavedPicks, soloFlexPicks, setSoloFlexPicks, soloSport, setSoloSport, setShowSoloSportPicker, soloSubmitted, setSoloSubmitted, username, soloTopPct, onDeleteSlate, onJoinCode, setShowPaywall, tickerGames=[], espnGames=[], globalRank=null, onOpenLeaderboard, liveGames=[], onOpenGamecast, onReplace}) {
   const [shareToast,setShareToast]=useState("");
   const [openSlate,setOpenSlate]=useState(null);
   const [openDays,setOpenDays]=useState({});
@@ -4790,95 +4805,7 @@ function SoloHome({raceUser, soloWeeks, soloLoading, isPro, IOS, setScreen, setS
 
   return (
     <div style={{padding:"0 16px 40px"}}>
-      {!heroCollapsed ? (
-      <div style={{position:"relative",borderRadius:RAD.xl,padding:"20px 18px 18px",overflow:"hidden",marginBottom:12,background:"radial-gradient(130% 120% at 8% -10%, rgba(10,132,255,0.4), rgba(94,92,230,0.16) 42%, rgba(12,12,16,0) 72%),linear-gradient(160deg,#10204a 0%,#0a0a12 78%)",border:"1px solid rgba(10,132,255,0.32)",boxShadow:"0 22px 60px -26px rgba(10,132,255,0.7)"}}>
-        <div style={{position:"absolute",top:-50,right:-40,width:200,height:200,borderRadius:"50%",background:IOS.indigo,filter:"blur(70px)",opacity:0.34}}/>
-        <div onClick={collapseHero} style={{position:"absolute",top:12,right:12,width:28,height:28,borderRadius:"50%",background:"rgba(255,255,255,0.1)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",zIndex:2}}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2.4" strokeLinecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
-        </div>
-        <div style={{position:"relative",display:"inline-flex",alignItems:"center",gap:6,background:"rgba(255,255,255,0.1)",border:EDGE.hair3,borderRadius:RAD.pill,padding:"4px 11px",fontSize:10.5,fontWeight:800,letterSpacing:0.4,color:"#fff"}}>
-          <span style={{width:6,height:6,borderRadius:"50%",background:IOS.green,boxShadow:`0 0 8px ${IOS.green}`}}/>{(tickerGames||[]).length>0?`${(tickerGames||[]).length} games on the board`:"Live odds, every game"}
-        </div>
-        {_hotWk ? (
-          <div style={{position:"relative",marginTop:13,fontSize:24,fontWeight:900,letterSpacing:-0.5,lineHeight:1.06}}>You just went {_hotWk.wins}-{_hotWk.losses}.<br/><span style={{color:"#64D2FF"}}>Put it on the line.</span></div>
-        ) : (
-          <div style={{position:"relative",marginTop:13,fontSize:26,fontWeight:900,letterSpacing:-0.6,lineHeight:1.04}}>PickLock's better<br/>with <span style={{color:"#64D2FF"}}>your crew</span>.</div>
-        )}
-        <div style={{position:"relative",fontSize:13.5,color:"rgba(255,255,255,0.72)",lineHeight:1.5,marginTop:7,maxWidth:300}}>Run a league with your group — weekly matchups, playoff brackets, and a season of bragging rights.</div>
-        <div style={{position:"relative",display:"flex",alignItems:"center",marginTop:14}}>
-          {[["MK",IOS.orange],["SR",IOS.pink],["TP",IOS.indigo],["DV",IOS.green]].map((a,i)=>(
-            <div key={i} style={{width:30,height:30,borderRadius:"50%",border:"2px solid #0c1430",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,color:"#06101f",background:`linear-gradient(150deg,${a[1]},${a[1]}bb)`,marginLeft:i?-9:0}}>{a[0]}</div>
-          ))}
-          <span style={{marginLeft:8,fontSize:11.5,color:IOS.label2,fontWeight:600}}>matchups · playoffs · trophies</span>
-        </div>
-        <button onClick={()=>{setScreen("leagues");setShowNewLeague(true);setNewLeagueStep(0);}} className="pk-t-create" style={{position:"relative",marginTop:16,width:"100%",background:"linear-gradient(180deg,#0a84ff,#0066d6)",border:"none",borderRadius:RAD.md,padding:"15px",fontSize:15.5,fontWeight:800,color:"#fff",fontFamily:"Barlow,sans-serif",cursor:"pointer",boxShadow:"0 8px 24px -8px rgba(10,132,255,0.8)",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Create a league
-        </button>
-        <div className="pk-t-join" style={{position:"relative",display:"flex",gap:9,marginTop:9}}>
-          <div onClick={()=>{setShowBrowse(true);fetchPublicLeagues();}} style={{flex:1,background:"rgba(255,255,255,0.07)",border:EDGE.hair3,borderRadius:RAD.md,padding:"12px",fontSize:13.5,fontWeight:800,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>Browse public
-          </div>
-          <div onClick={()=>{ const c=(window.prompt("Enter invite code")||"").trim(); if(c&&onJoinCode) onJoinCode(c); }} style={{flex:1,background:"rgba(255,255,255,0.07)",border:EDGE.hair3,borderRadius:RAD.md,padding:"12px",fontSize:13.5,fontWeight:800,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>Join code
-          </div>
-        </div>
-      </div>
-      ) : (
-      <div onClick={expandHero} style={{display:"flex",alignItems:"center",gap:10,background:"linear-gradient(180deg,#12203f,#0b0f1c)",border:"0.5px solid rgba(10,132,255,0.28)",borderRadius:RAD.md,padding:"11px 14px",marginBottom:12,cursor:"pointer"}}>
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2"><circle cx="9" cy="8" r="3.2"/><circle cx="17" cy="9" r="2.6"/><path d="M3 20c0-3 3-5 6-5s6 2 6 5"/></svg>
-        <div style={{flex:1,minWidth:0,fontSize:13,fontWeight:800,color:"#fff"}}>PickLock's better with friends</div>
-        <div onClick={(e)=>{e.stopPropagation();setScreen("leagues");setShowNewLeague(true);setNewLeagueStep(0);}} style={{fontSize:12,fontWeight:800,color:IOS.blue,background:"rgba(10,132,255,0.14)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:RAD.sm,padding:"6px 12px",cursor:"pointer"}}>Create</div>
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2.4" strokeLinecap="round"><polyline points="6 9 12 15 18 9"/></svg>
-      </div>
-      )}
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",margin:"4px 4px 10px"}}>
-        <div style={{fontSize:13,fontWeight:800,color:IOS.label2,textTransform:"uppercase",letterSpacing:0.5}}>{heroCollapsed?"Your solo season":"Warm up solo"}</div>
-        <div style={{fontSize:11,color:IOS.label3,fontWeight:600}}>{heroCollapsed?"just you vs the line":"sharpen up while the league fills"}</div>
-      </div>
-      {/* Stats row */}
-      <div style={{display:"flex",gap:8,marginBottom:12}}>
-        <div style={{flex:1,background:IOS.bg2,borderRadius:RAD.md,padding:"10px 12px",border:EDGE.hair}}>
-          <div style={{fontSize:10,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:3}}>Record</div>
-          <div style={{fontSize:18,fontWeight:800,color:IOS.blue}}>{totalWins}-{totalLosses}</div>
-        </div>
-        <div style={{flex:1,background:IOS.bg2,borderRadius:RAD.md,padding:"10px 12px",border:EDGE.hair}}>
-          <div style={{fontSize:10,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:3}}>Win %</div>
-          <div style={{fontSize:18,fontWeight:800,color:winPct>=60?IOS.green:winPct>=40?IOS.yellow:IOS.red}}>{winPct}%</div>
-        </div>
-        <div style={{flex:1,background:IOS.bg2,borderRadius:RAD.md,padding:"10px 12px",border:EDGE.hair}}>
-          <div style={{fontSize:10,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:3}}>Total Pts</div>
-          <div style={{fontSize:18,fontWeight:800,color:"#fff"}}>{totalPts.toFixed(1)}</div>
-        </div>
-      </div>
-
-      {/* You vs The Bots — weekly race vs the persona roster */}
-      <div style={{margin:"0 -16px 0"}}><BotRaceCard user={raceUser} isSolo={true}/></div>
-
-      {/* Plok's Play of the Day */}
-      {featGame && ((dayPlay && dayPlay.data) ? (
-        <div style={{background:"linear-gradient(135deg,rgba(10,132,255,0.14),rgba(94,92,230,0.08))",border:"0.5px solid rgba(10,132,255,0.32)",borderRadius:RAD.md,padding:"12px 14px",marginBottom:12}}>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg>
-            <span style={{fontSize:11,fontWeight:800,letterSpacing:1.2,textTransform:"uppercase",color:IOS.blue,flex:1}}>Plok's Play of the Day</span>
-            {dayPlay.data.verdict && dayPlay.data.verdict!=="none" && <span style={{fontSize:9,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:dayPlay.data.verdict==="strong"?IOS.green:dayPlay.data.verdict==="fade"?IOS.red:IOS.blue,background:"rgba(255,255,255,0.06)",borderRadius:RAD.sm,padding:"3px 7px"}}>{dayPlay.data.verdict==="strong"?"Strong lean":dayPlay.data.verdict==="lean"?"Lean":dayPlay.data.verdict==="fade"?"Fade":"Pass"}</span>}
-          </div>
-          <div style={{fontSize:11,fontWeight:700,color:IOS.label2,marginBottom:6}}>{(featGame.away||"").split(" ").pop()} @ {(featGame.home||"").split(" ").pop()}</div>
-          <div style={{fontSize:13,lineHeight:1.5,color:"rgba(255,255,255,0.88)"}}>{dayPlay.data.summary}</div>
-          <div onClick={async()=>{ if(setIsSoloMode) setIsSoloMode(true); const lgId=await getOrCreateSoloLeague(); if(setActiveLeagueId) setActiveLeagueId(lgId||"solo"); setScreen("picks"); }} style={{marginTop:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6,fontSize:11,fontWeight:800,color:IOS.blue,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:RAD.sm,padding:"7px",cursor:"pointer"}}>Build today's slate →</div>
-        </div>
-      ) : (
-        <div onClick={async()=>{ if(!isPro){ if(setShowPaywall) setShowPaywall("ai"); return; } if(dayPlay&&dayPlay.loading) return; setDayPlay({loading:true}); fetch(API_BASE+"/api/findbet",{method:"POST",headers: await authHeaders(),body:JSON.stringify({sport:soloSport, game:(featGame.away+" @ "+featGame.home)})}).then(async r=>{ const d=await r.json().catch(()=>null); setDayPlay((r.ok&&d&&d.summary)?{data:d}:{error:true}); }).catch(()=>setDayPlay({error:true})); }} style={{display:"flex",alignItems:"center",gap:12,background:"linear-gradient(135deg,rgba(10,132,255,0.16),rgba(94,92,230,0.10))",border:"0.5px solid rgba(10,132,255,0.35)",borderRadius:RAD.md,padding:"12px 14px",marginBottom:12,cursor:"pointer"}}>
-          <div style={{width:34,height:34,borderRadius:RAD.md,background:"rgba(10,132,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-            {dayPlay&&dayPlay.loading ? <div style={{display:"flex",gap:3}}><span className="ai-dot"/><span className="ai-dot" style={{animationDelay:"0.15s"}}/><span className="ai-dot" style={{animationDelay:"0.3s"}}/></div> : <svg width="18" height="18" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg>}
-          </div>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{fontSize:13.5,fontWeight:800,color:"#fff"}}>Plok's Play of the Day</div>
-            <div style={{fontSize:11,color:IOS.label2,marginTop:1}}>{dayPlay&&dayPlay.loading?"Reading the matchup…":dayPlay&&dayPlay.error?"Couldn't load — tap to retry":("Plok's lean on "+((featGame.away||"").split(" ").pop())+" @ "+((featGame.home||"").split(" ").pop())+(isPro?"":" · Pro"))}</div>
-          </div>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={IOS.label3} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6"/></svg>
-        </div>
-      ))}
-
+      {/* Your week — the core of solo mode, so it leads the scroll */}
       {/* This Week — expansive live tracker */}
       <div style={{background:"linear-gradient(180deg,#15151a,#0e0e12)",border:EDGE.hair,borderRadius:14,overflow:"hidden",marginBottom:16}}>
         {weekHasPicks && (
@@ -4967,6 +4894,55 @@ function SoloHome({raceUser, soloWeeks, soloLoading, isPro, IOS, setScreen, setS
             </span>
           </div>
         </>)}
+      </div>
+
+      {/* You vs The Bots — weekly race vs the persona roster */}
+      <div style={{margin:"0 -16px 0"}}><BotRaceCard user={raceUser} isSolo={true}/></div>
+      {gauntletSlot||null}
+
+      {/* Plok's Play of the Day */}
+      {featGame && ((dayPlay && dayPlay.data) ? (
+        <div style={{background:"linear-gradient(135deg,rgba(10,132,255,0.14),rgba(94,92,230,0.08))",border:"0.5px solid rgba(10,132,255,0.32)",borderRadius:RAD.md,padding:"12px 14px",marginBottom:12}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg>
+            <span style={{fontSize:11,fontWeight:800,letterSpacing:1.2,textTransform:"uppercase",color:IOS.blue,flex:1}}>Plok's Play of the Day</span>
+            {dayPlay.data.verdict && dayPlay.data.verdict!=="none" && <span style={{fontSize:9,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:dayPlay.data.verdict==="strong"?IOS.green:dayPlay.data.verdict==="fade"?IOS.red:IOS.blue,background:"rgba(255,255,255,0.06)",borderRadius:RAD.sm,padding:"3px 7px"}}>{dayPlay.data.verdict==="strong"?"Strong lean":dayPlay.data.verdict==="lean"?"Lean":dayPlay.data.verdict==="fade"?"Fade":"Pass"}</span>}
+          </div>
+          <div style={{fontSize:11,fontWeight:700,color:IOS.label2,marginBottom:6}}>{(featGame.away||"").split(" ").pop()} @ {(featGame.home||"").split(" ").pop()}</div>
+          <div style={{fontSize:13,lineHeight:1.5,color:"rgba(255,255,255,0.88)"}}>{dayPlay.data.summary}</div>
+          <div onClick={async()=>{ if(setIsSoloMode) setIsSoloMode(true); const lgId=await getOrCreateSoloLeague(); if(setActiveLeagueId) setActiveLeagueId(lgId||"solo"); setScreen("picks"); }} style={{marginTop:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6,fontSize:11,fontWeight:800,color:IOS.blue,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:RAD.sm,padding:"7px",cursor:"pointer"}}>Build today's slate →</div>
+        </div>
+      ) : (
+        <div onClick={async()=>{ if(!isPro){ if(setShowPaywall) setShowPaywall("ai"); return; } if(dayPlay&&dayPlay.loading) return; setDayPlay({loading:true}); fetch(API_BASE+"/api/findbet",{method:"POST",headers: await authHeaders(),body:JSON.stringify({sport:soloSport, game:(featGame.away+" @ "+featGame.home)})}).then(async r=>{ const d=await r.json().catch(()=>null); setDayPlay((r.ok&&d&&d.summary)?{data:d}:{error:true}); }).catch(()=>setDayPlay({error:true})); }} style={{display:"flex",alignItems:"center",gap:12,background:"linear-gradient(135deg,rgba(10,132,255,0.16),rgba(94,92,230,0.10))",border:"0.5px solid rgba(10,132,255,0.35)",borderRadius:RAD.md,padding:"12px 14px",marginBottom:12,cursor:"pointer"}}>
+          <div style={{width:34,height:34,borderRadius:RAD.md,background:"rgba(10,132,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            {dayPlay&&dayPlay.loading ? <div style={{display:"flex",gap:3}}><span className="ai-dot"/><span className="ai-dot" style={{animationDelay:"0.15s"}}/><span className="ai-dot" style={{animationDelay:"0.3s"}}/></div> : <svg width="18" height="18" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg>}
+          </div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:13.5,fontWeight:800,color:"#fff"}}>Plok's Play of the Day</div>
+            <div style={{fontSize:11,color:IOS.label2,marginTop:1}}>{dayPlay&&dayPlay.loading?"Reading the matchup…":dayPlay&&dayPlay.error?"Couldn't load — tap to retry":("Plok's lean on "+((featGame.away||"").split(" ").pop())+" @ "+((featGame.home||"").split(" ").pop())+(isPro?"":" · Pro"))}</div>
+          </div>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={IOS.label3} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+        </div>
+      ))}
+
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",margin:"4px 4px 10px"}}>
+        <div style={{fontSize:13,fontWeight:800,color:IOS.label2,textTransform:"uppercase",letterSpacing:0.5}}>{"Your solo season"}</div>
+        <div style={{fontSize:11,color:IOS.label3,fontWeight:600}}>{"just you vs the line"}</div>
+      </div>
+      {/* Stats row */}
+      <div style={{display:"flex",gap:8,marginBottom:12}}>
+        <div style={{flex:1,background:IOS.bg2,borderRadius:RAD.md,padding:"10px 12px",border:EDGE.hair}}>
+          <div style={{fontSize:10,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:3}}>Record</div>
+          <div style={{fontSize:18,fontWeight:800,color:IOS.blue}}>{totalWins}-{totalLosses}</div>
+        </div>
+        <div style={{flex:1,background:IOS.bg2,borderRadius:RAD.md,padding:"10px 12px",border:EDGE.hair}}>
+          <div style={{fontSize:10,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:3}}>Win %</div>
+          <div style={{fontSize:18,fontWeight:800,color:winPct>=60?IOS.green:winPct>=40?IOS.yellow:IOS.red}}>{winPct}%</div>
+        </div>
+        <div style={{flex:1,background:IOS.bg2,borderRadius:RAD.md,padding:"10px 12px",border:EDGE.hair}}>
+          <div style={{fontSize:10,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:3}}>Total Pts</div>
+          <div style={{fontSize:18,fontWeight:800,color:"#fff"}}>{totalPts.toFixed(1)}</div>
+        </div>
       </div>
 
        {/* Upcoming picks (locked-ahead future weeks) */}
@@ -5077,21 +5053,6 @@ function SoloHome({raceUser, soloWeeks, soloLoading, isPro, IOS, setScreen, setS
         </div>
       )}
 
-      {/* Convert to league CTA */}
-      {!heroCollapsed && (
-        <div style={{marginTop:12,background:"rgba(10,132,255,0.08)",border:"0.5px solid rgba(10,132,255,0.2)",borderRadius:RAD.md,padding:"14px"}}>
-          <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:4}}>{(totalWins+totalLosses)>0 ? `You’re picking at ${winPct}%` : "Solo’s just practice"}</div>
-          <div style={{fontSize:11,color:IOS.label3,marginBottom:12,lineHeight:1.5}}>{(totalWins+totalLosses)>0 ? "The real fun is beating people you know. Put that record on the line." : "Round up your group and make it count — weekly matchups and a playoff."}</div>
-          <div style={{display:"flex",gap:8}}>
-            <button onClick={()=>{setScreen("leagues");setShowNewLeague(true);setNewLeagueStep(0);}} style={{flex:1,background:IOS.blue,border:"none",borderRadius:RAD.sm,padding:"10px",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Create League</button>
-            <button onClick={()=>{setShowBrowse(true);fetchPublicLeagues();}} style={{flex:1,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:RAD.sm,padding:"10px",fontSize:12,fontWeight:700,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Browse Leagues</button>
-          </div>
-          <div style={{display:"flex",gap:8,marginTop:8}}>
-            <input value={joinCode} onChange={e=>setJoinCode(e.target.value)} placeholder="Join with code" style={{flex:1,background:"rgba(255,255,255,0.05)",border:EDGE.hair2,borderRadius:RAD.sm,padding:"10px",color:"#fff",fontFamily:"Barlow,sans-serif",fontSize:13,fontWeight:700,letterSpacing:1.5,textTransform:"uppercase",outline:"none"}}/>
-            <button onClick={async()=>{ const c=(joinCode||"").trim(); if(!c) return; if(onJoinCode) await onJoinCode(c); setJoinCode(""); }} style={{background:joinCode.trim()?IOS.blue:"rgba(255,255,255,0.08)",border:"none",borderRadius:RAD.sm,padding:"0 18px",fontSize:13,fontWeight:800,color:joinCode.trim()?"#fff":"rgba(255,255,255,0.35)",cursor:joinCode.trim()?"pointer":"default",fontFamily:"Barlow,sans-serif"}}>Join</button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -13193,13 +13154,13 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      <div onClick={()=>{ try{ fetchPublicLeagues(); }catch(e){} setShowBrowse(true); }} style={{flex:1,textAlign:"center",background:"rgba(255,255,255,0.06)",boxShadow:"inset 0 0 0 0.5px rgba(255,255,255,0.16)",borderRadius:8,padding:"9px 12px",fontSize:12,fontWeight:800,cursor:"pointer",color:"rgba(255,255,255,0.8)"}}>Join a league</div>
    </div>
  </div>)}
- {screen==="home" && homeMode==="solo" && <DailyLockCard user={user} bets={(liveOdds[soloSport||"mlb"]||{}).ml||[]} sport={soloSport||"mlb"}/>}
+ {screen==="home" && homeMode==="solo" && <DailyLockCard user={user}/>}
 
  {/* The Gauntlet — global survivor pool, both home modes */}
- {screen==="home" && <GauntletCard user={user} onEnter={()=>{ applyMode(false); setActiveLeagueId(GAUNTLET_ID); }} onJoin={async()=>{ if(user){ await fetchLeagues(user.id); } applyMode(false); setActiveLeagueId(GAUNTLET_ID); }}/>}
+ {screen==="home" && homeMode!=="solo" && <GauntletCard user={user} onEnter={()=>{ applyMode(false); setActiveLeagueId(GAUNTLET_ID); }} onJoin={async()=>{ if(user){ await fetchLeagues(user.id); } applyMode(false); setActiveLeagueId(GAUNTLET_ID); }}/>}
 
  {/* ══ SOLO MODE HOME SCREEN ══ */}
- {homeMode==="solo" && <SoloHome raceUser={user} soloWeeks={soloWeeks} soloLoading={soloLoading} isPro={isPro} IOS={IOS} setScreen={setScreen} setShowNewLeague={setShowNewLeague} setNewLeagueStep={setNewLeagueStep} setShowBrowse={setShowBrowse} fetchPublicLeagues={fetchPublicLeagues} setIsSoloMode={applyMode} setActiveLeagueId={setActiveLeagueId} getOrCreateSoloLeague={getOrCreateSoloLeague} soloSavedPicks={soloSavedPicks} setSoloSavedPicks={setSoloSavedPicks} soloFlexPicks={soloFlexPicks} setSoloFlexPicks={setSoloFlexPicks} soloSport={soloSport} setSoloSport={setSoloSportPersist} setShowSoloSportPicker={setShowSoloSportPicker} soloSubmitted={soloSubmitted} setSoloSubmitted={setSoloSubmitted} username={userProfile?.username||""} soloTopPct={soloTopPct} onDeleteSlate={deleteSoloSlate} onJoinCode={handleJoinCode} setShowPaywall={setShowPaywall} tickerGames={tickerGames} espnGames={espnGames} globalRank={(()=>{ const rows=lbCache["all"]; if(!rows||!rows.length) return null; const sx=[...rows].sort((a,b)=>(Number(b.points)||0)-(Number(a.points)||0)); const i=sx.findIndex(r=>String(r.user_id)===String(user?.id)); return i>=0?{rank:i+1,total:sx.length}:null; })()} onOpenLeaderboard={()=>{ fetchLeaderboard("all"); setScreen("leaderboard"); }} liveGames={liveGames} onOpenGamecast={openGamecast} onReplace={startReplace}/>}
+ {homeMode==="solo" && <SoloHome raceUser={user} gauntletSlot={screen==="home" ? <GauntletCard user={user} onEnter={()=>{ applyMode(false); setActiveLeagueId(GAUNTLET_ID); }} onJoin={async()=>{ if(user){ await fetchLeagues(user.id); } applyMode(false); setActiveLeagueId(GAUNTLET_ID); }}/> : null} soloWeeks={soloWeeks} soloLoading={soloLoading} isPro={isPro} IOS={IOS} setScreen={setScreen} setShowNewLeague={setShowNewLeague} setNewLeagueStep={setNewLeagueStep} setShowBrowse={setShowBrowse} fetchPublicLeagues={fetchPublicLeagues} setIsSoloMode={applyMode} setActiveLeagueId={setActiveLeagueId} getOrCreateSoloLeague={getOrCreateSoloLeague} soloSavedPicks={soloSavedPicks} setSoloSavedPicks={setSoloSavedPicks} soloFlexPicks={soloFlexPicks} setSoloFlexPicks={setSoloFlexPicks} soloSport={soloSport} setSoloSport={setSoloSportPersist} setShowSoloSportPicker={setShowSoloSportPicker} soloSubmitted={soloSubmitted} setSoloSubmitted={setSoloSubmitted} username={userProfile?.username||""} soloTopPct={soloTopPct} onDeleteSlate={deleteSoloSlate} onJoinCode={handleJoinCode} setShowPaywall={setShowPaywall} tickerGames={tickerGames} espnGames={espnGames} globalRank={(()=>{ const rows=lbCache["all"]; if(!rows||!rows.length) return null; const sx=[...rows].sort((a,b)=>(Number(b.points)||0)-(Number(a.points)||0)); const i=sx.findIndex(r=>String(r.user_id)===String(user?.id)); return i>=0?{rank:i+1,total:sx.length}:null; })()} onOpenLeaderboard={()=>{ fetchLeaderboard("all"); setScreen("leaderboard"); }} liveGames={liveGames} onOpenGamecast={openGamecast} onReplace={startReplace}/>}
        {homeMode==="solo" && screen==="home" && (()=>{
          const SP=["mlb","nfl","nba","ncaaf"];
          const games=(tickerGames||[]).filter(g=>g&&g.sport===soloSport);
