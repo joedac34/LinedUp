@@ -5,7 +5,8 @@
     { "path": "/api/closing", "schedule": "*/2 * * * *" },
     { "path": "/api/mlbsync?days=2", "schedule": "0 11 * * *" },
     { "path": "/api/plokcalls?sports=mlb", "schedule": "0 16 * * *" },
-    { "path": "/api/botslate", "schedule": "0 19 * * *" }
+    { "path": "/api/botslate", "schedule": "0 19 * * *" },
+    { "path": "/api/dailylock", "schedule": "0 14 * * *" }
   ],
 "headers": [
     {
