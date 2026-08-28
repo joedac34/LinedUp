@@ -1004,110 +1004,12 @@ try{ if(typeof window!=="undefined" && typeof document!=="undefined" && !window.
   }
 } }catch(e){}
 
-// ── Pull to refresh ───────────────────────────────────────
-// Threshold 72px (approved). Fires pk:refresh; React does the work and answers with
-// pk:refresh-done. A 10s cooldown protects Odds API quota — each pull costs 3 units per
-// sport — and a 6s ceiling stops the spinner hanging if a fetch never settles.
-//
-// window.__pkGesture arbitrates with the edge-swipe driver: whichever claims the touch
-// first owns it, so a diagonal drag near the top-left corner cannot run both.
-try{ if(typeof document!=="undefined" && typeof window!=="undefined" && !window.__pkPull){
-  window.__pkPull = 1;
-  const THRESH = 72, MAXPULL = 128, DAMP = 0.55, COOLDOWN = 10000, SPIN_MAX = 6000;
-  let el=null, sy=0, sx=0, dy=0, live=false, busy=false, decided=false, lastRun=0, spinT=0;
-  let wrap=null, label=null;
-
-  const build = ()=>{
-    if(wrap) return;
-    wrap = document.createElement("div"); wrap.className = "pk-ptr";
-    const pill = document.createElement("div"); pill.className = "pk-ptr-pill";
-    pill.innerHTML = '<svg class="pk-ptr-ring" viewBox="0 0 16 16">'
-      + '<circle class="trk" cx="8" cy="8" r="6"></circle>'
-      + '<circle class="arc" cx="8" cy="8" r="6"></circle></svg>'
-      + '<span class="pk-ptr-t"></span>';
-    wrap.appendChild(pill); document.body.appendChild(wrap);
-    label = pill.querySelector(".pk-ptr-t");
-  };
-  const setArc = (p)=>{ try{ wrap.querySelector(".arc").style.strokeDashoffset = String(38 - 38*Math.min(1,Math.max(0,p))); }catch(e){} };
-  const say = (t)=>{ if(label) label.textContent = t; };
-  const slide = (px, animate)=>{
-    if(!el) return;
-    el.style.transition = animate ? "transform .3s cubic-bezier(0.32,0.72,0,1)" : "none";
-    el.style.transform = px ? ("translateY("+px+"px)") : "";
-  };
-  const finish = ()=>{
-    busy = false; if(spinT){ clearTimeout(spinT); spinT = 0; }
-    if(wrap) wrap.classList.remove("busy","armed");
-    slide(0, true); setArc(0); say("Pull to refresh");
-    setTimeout(()=>{ if(el){ el.style.transition=""; el.style.transform=""; } el=null; }, 320);
-  };
-  try{ window.addEventListener("pk:refresh-done", finish); }catch(e){}
-
-  const unbind = ()=>{
-    try{ document.removeEventListener("touchmove", onMove); }catch(e){}
-    try{ document.removeEventListener("touchend", onEnd); }catch(e){}
-    try{ document.removeEventListener("touchcancel", onEnd); }catch(e){}
-  };
-  function onMove(e){
-    if(!live) return;
-    const t = e.touches && e.touches[0]; if(!t) return;
-    const ddy = t.clientY - sy, ddx = t.clientX - sx;
-    if(!decided){
-      if(Math.abs(ddy) < 12 && Math.abs(ddx) < 12) return;
-      // A mostly-horizontal drag belongs to the swipe-back driver. Stand down.
-      if(Math.abs(ddx) > Math.abs(ddy)){ live=false; window.__pkGesture=null; unbind(); return; }
-      decided = true;
-    }
-    if(ddy <= 0){ dy = 0; slide(0,false); if(wrap) wrap.classList.remove("armed"); setArc(0); return; }
-    if(e.cancelable) e.preventDefault();
-    dy = Math.min(MAXPULL, ddy * DAMP);
-    slide(dy, false);
-    build();
-    if(wrap) wrap.classList.toggle("armed", dy > 6);
-    setArc(dy / THRESH);
-    say(dy >= THRESH ? "Release to refresh" : "Pull to refresh");
-  }
-  function onEnd(){
-    if(!live){ unbind(); return; }
-    live = false; window.__pkGesture = null; unbind();
-    if(dy >= THRESH){
-      const now = Date.now();
-      if(now - lastRun < COOLDOWN){
-        say("Up to date"); haptic("light");
-        slide(0, true);
-        setTimeout(()=>{ if(wrap) wrap.classList.remove("armed"); setArc(0); say("Pull to refresh");
-          if(el){ el.style.transform=""; } el=null; }, 900);
-        dy = 0; return;
-      }
-      lastRun = now; busy = true;
-      haptic("medium");
-      if(wrap){ wrap.classList.add("busy"); }
-      say("Updating");
-      slide(52, true);
-      try{ window.dispatchEvent(new CustomEvent("pk:refresh")); }catch(e){}
-      spinT = setTimeout(finish, SPIN_MAX);
-    } else {
-      slide(0, true); if(wrap) wrap.classList.remove("armed"); setArc(0);
-      setTimeout(()=>{ if(el){ el.style.transition=""; el.style.transform=""; } el=null; }, 320);
-    }
-    dy = 0;
-  }
-  document.addEventListener("touchstart", function(e){
-    if(live || busy || window.__pkGesture) return;
-    const t = e.touches && e.touches[0]; if(!t) return;
-    // Same reason as the sheet driver: a touch that starts on a text field
-    // belongs to the field. This handler preventDefaults on move.
-    try{ if(e.target && e.target.closest && e.target.closest("input, textarea, select, [contenteditable='true']")) return; }catch(err){}
-    let sc = null;
-    try{ sc = e.target && e.target.closest ? (e.target.closest(".body") || e.target.closest(".lsx-scroll")) : null; }catch(err){}
-    if(!sc || (sc.scrollTop || 0) > 0) return;
-    el = sc; sy = t.clientY; sx = t.clientX; dy = 0; live = true; decided = false;
-    window.__pkGesture = "pull";
-    document.addEventListener("touchmove", onMove, {passive:false});
-    document.addEventListener("touchend", onEnd);
-    document.addEventListener("touchcancel", onEnd);
-  }, {passive:true});
-} }catch(e){}
+// ── Pull to refresh ── REMOVED ─────────────────────────
+// The gesture fought normal scrolling: it claimed any touch starting at scrollTop 0
+// and preventDefaulted the move, so a flick upward from the top of a list stalled.
+// Not worth the tradeoff — screens already refetch on entry and on the 30s poll, so
+// nothing depended on a manual pull. The pk:refresh listener in React stays wired,
+// it just has no gesture firing it now.
 
 // ── Edge swipe back ────────────────────────────────────────
 // Drag from the left edge to go back. React owns the history and sets
@@ -9295,7 +9197,7 @@ function App() {
    if(profileReqRef.current===id) setProfileLoading(false);
  };
  const fetchUserProfile = async (uid) => {
- let {data} = await supabase.from("users").select("id,username,email,is_pro,push_enabled,notif_results,notif_grades,notif_reminder,notif_league,notif_plok,referral_code,referred_by,birth_date,is_founder,founder_number").eq("id",uid).maybeSingle();
+ let {data} = await supabase.from("users").select("id,username,created_at,email,is_pro,push_enabled,notif_results,notif_grades,notif_reminder,notif_league,notif_plok,referral_code,referred_by,birth_date,is_founder,founder_number").eq("id",uid).maybeSingle();
  if(data) {
  // Signup collects DOB pre-account; with email confirmation on (or if the signup-time
  // upsert raced/failed) the row can exist with birth_date null even though the user
@@ -9305,6 +9207,20 @@ function App() {
    const {data:_au}=await supabase.auth.getUser();
    const _mdob=_au&&_au.user&&_au.user.user_metadata&&_au.user.user_metadata.birth_date;
    if(_mdob){ await supabase.from("users").update({birth_date:_mdob}).eq("id",uid); data={...data, birth_date:_mdob}; }
+ }catch(e){} }
+ // Identical story for the username. It is typed at signup and rides in auth
+ // metadata, but the signup-time insert can run before the session exists and drop
+ // it, leaving the row with username null. That is why people who already picked a
+ // name got asked for one again 30s later, on top of the tutorial highlight. Heal
+ // the row from metadata rather than re-prompting someone who already answered.
+ if(!data.username){ try{
+   const {data:_au}=await supabase.auth.getUser();
+   const _mu=_au&&_au.user&&_au.user.user_metadata&&_au.user.user_metadata.username;
+   const _mun=(typeof _mu==="string")?_mu.trim():"";
+   if(_mun){
+     const {error:_ue}=await supabase.from("users").update({username:_mun}).eq("id",uid);
+     if(!_ue) data={...data, username:_mun};
+   }
  }catch(e){} }
  setUserProfile(data);
  // DB is source of truth for pro status
