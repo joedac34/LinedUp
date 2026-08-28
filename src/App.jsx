@@ -4364,6 +4364,30 @@ function PickRow({ p, pi, groupKey, isLast, openLegs, setOpenLegs, liveGames, on
 // picks_unique_slot index enforces one-per-day and grade.js settles them free.
 // Board rule: moneylines only, priced -200 OR BETTER (no heavier favorites) —
 // nobody farms a 40-day streak on -450 chalk.
+// Derive a username for people who were never asked for one. Apple and Google
+// sign-in skip the username step entirely, so those rows land with username null
+// and the blocking "Welcome to PickLock" modal fires at them later, on top of the
+// tutorial. Deriving a sane name up front means most of them never see it.
+// Order: an explicitly chosen name, then the provider's real name, then the email
+// local part. Apple private-relay addresses are random strings, so they are skipped
+// rather than turned into a username like "mztgv8ykv8".
+function deriveUsername(meta, email){
+  const m = meta || {};
+  const pick = (v)=> (typeof v === "string" && v.trim()) ? v.trim() : "";
+  const clean = (v)=> String(v||"").replace(/[^A-Za-z0-9_]/g, "").slice(0, 18);
+  let cand = pick(m.username);
+  if(!cand){
+    const nm = pick(m.full_name) || pick(m.name) || pick(m.preferred_username)
+            || [pick(m.given_name), pick(m.family_name)].filter(Boolean).join("");
+    if(nm) cand = clean(nm);
+  }
+  if(!cand && email && !/@privaterelay\.appleid\.com$/i.test(email)){
+    cand = clean(String(email).split("@")[0]);
+  }
+  cand = clean(cand);
+  return cand.length >= 3 ? cand : "";
+}
+
 const DAILY_LOCK_ID = "00000000-0000-4000-a000-00000000da11";
 const DL_ANCHOR_MS = Date.parse("2026-01-01T08:00:00Z");
 const dlDayOf = (ms)=>Math.floor((ms-DL_ANCHOR_MS)/86400000)+1;
@@ -8030,6 +8054,19 @@ function App() {
        if(!tok) throw new Error("No identity token was returned.");
        const { error } = await supabase.auth.signInWithIdToken({ provider, token: tok });
        if(error) throw error;
+       // Apple returns the real name ONCE, in the authorization response, and never
+       // in the ID token. Unstashed, it is gone for good and the user ends up staring
+       // at the blocking username modal. Google is redundant here but harmless.
+       // Failure is non-fatal: the modal stays as the fallback.
+       try{
+         const _pf=(res&&res.result&&(res.result.profile||res.result.user))||{};
+         const _nm=deriveUsername({
+           full_name:_pf.name||_pf.displayName||"",
+           given_name:_pf.givenName||_pf.given_name||"",
+           family_name:_pf.familyName||_pf.family_name||"",
+         }, "");
+         if(_nm) await supabase.auth.updateUser({ data:{ username:_nm } });
+       }catch(e2){}
      } else {
        const { error } = await supabase.auth.signInWithOAuth({
          provider,
@@ -9215,11 +9252,21 @@ function App() {
  // the row from metadata rather than re-prompting someone who already answered.
  if(!data.username){ try{
    const {data:_au}=await supabase.auth.getUser();
-   const _mu=_au&&_au.user&&_au.user.user_metadata&&_au.user.user_metadata.username;
-   const _mun=(typeof _mu==="string")?_mu.trim():"";
-   if(_mun){
-     const {error:_ue}=await supabase.from("users").update({username:_mun}).eq("id",uid);
-     if(!_ue) data={...data, username:_mun};
+   const _u=_au&&_au.user;
+   const _base=deriveUsername(_u&&_u.user_metadata, _u&&_u.email);
+   if(_base){
+     // One query for everything sharing the prefix, then take the first free
+     // variant. A unique-constraint race just leaves username null and the prompt
+     // does its job, which is the safe direction to fail.
+     let _pick=_base;
+     try{
+       const {data:_taken}=await supabase.from("users").select("username").ilike("username",_base+"%");
+       const _set=new Set((_taken||[]).map(r=>String(r.username||"").toLowerCase()));
+       let _n=1;
+       while(_set.has(_pick.toLowerCase()) && _n<60){ _pick=_base.slice(0,15)+_n; _n++; }
+     }catch(e2){}
+     const {error:_ue}=await supabase.from("users").update({username:_pick}).eq("id",uid);
+     if(!_ue) data={...data, username:_pick};
    }
  }catch(e){} }
  setUserProfile(data);
