@@ -13,6 +13,7 @@ const SPORT_KEYS = {
   nba: "basketball_nba",
   mlb: "baseball_mlb",
   ncaaf: "americanfootball_ncaaf",
+  nhl: "icehockey_nhl",
 };
 
 // ── Supabase REST helpers ─────────────────────────────────────────────────────
@@ -393,6 +394,10 @@ const ESPN_MAP = {
   nba: { sp: "basketball", lg: "nba" },
   mlb: { sp: "baseball",   lg: "mlb" },
   ncaaf: { sp: "football", lg: "college-football" },
+  // Moneylines settle on the final score INCLUDING overtime/shootout — ESPN's
+  // scoreboard final already reflects that, so no special handling needed. P1
+  // picks grade via periodIndices (_p1) off linescores like every period market.
+  nhl: { sp: "hockey", lg: "nhl" },
 };
 
 // Map the stat words in a prop pick_name to ESPN's stat labels/keys.

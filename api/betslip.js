@@ -15,7 +15,7 @@
  */
 
 const ODDS = process.env.ODDS_API_KEY;
-const SPORT_KEYS = { nfl: "americanfootball_nfl", ncaaf: "americanfootball_ncaaf", nba: "basketball_nba", mlb: "baseball_mlb" };
+const SPORT_KEYS = { nfl: "americanfootball_nfl", ncaaf: "americanfootball_ncaaf", nba: "basketball_nba", mlb: "baseball_mlb", nhl: "icehockey_nhl" };
 
 const PROVIDER = "oddsapi"; // "oddsapi" | "metabet"
 

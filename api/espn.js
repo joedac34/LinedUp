@@ -9,6 +9,7 @@ const SPORT_MAP = {
   // no team records, no probables. Odds still rendered (those come from the Odds API),
   // which is why the gap was invisible on the surface.
   americanfootball_ncaaf: { sport: "football", league: "college-football" },
+  icehockey_nhl: { sport: "hockey", league: "nhl" },
 };
 
 // Season "tape" stats, by ESPN standings stat name (present for every sport in

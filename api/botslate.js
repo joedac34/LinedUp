@@ -34,6 +34,7 @@ const BOTS = [
 const SPORTS = [
   { odds: "baseball_mlb", app: "mlb" },
   { odds: "americanfootball_nfl", app: "nfl" },
+  { odds: "icehockey_nhl", app: "nhl" },
 ];
 
 // OVERLORD's market menu + labels. pick_name must read exactly like a user prop row

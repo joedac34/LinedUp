@@ -186,6 +186,7 @@ const ESPN_MAP = {
   // api/espn.js and api/grade.js. Without this entry every Plok read on a CFB
   // game ran with no stats context and the model padded around missing DATA.
   ncaaf: { sp: "football", lg: "college-football" },
+  nhl: { sp: "hockey", lg: "nhl" },
   nba: { sp: "basketball", lg: "nba" },
   mlb: { sp: "baseball",   lg: "mlb" },
 };
@@ -582,6 +583,13 @@ async function generate(ctx, stats) {
     if (L.opponent) lines.push(`- This week vs ${L.opponent}: ${L.myWeekPts} - ${L.oppWeekPts}` + (L.matchupGap > 0 ? ` (you are UP ${L.matchupGap})` : L.matchupGap < 0 ? ` (you are DOWN ${Math.abs(L.matchupGap)})` : " (even)"));
     return "\n\nLEAGUE (the user's standing/matchup — use for strategy)\n" + lines.join("\n");
   })() : "";
+  // Plok's own graded record on the backed team — fetched in the handler,
+  // attached as ctx._plokRec so generate() stays a pure prompt-builder.
+  const plokBlock = ctx._plokRec && (ctx._plokRec.w + ctx._plokRec.l) >= 2 ? (
+    "\n\nPLOK RECORD (your own graded calls on this team — a cold run is a caution flag, not a dip to buy)" +
+    `\n- You backing ${ctx._plokRec.team} (last 30 days): ${ctx._plokRec.w}-${ctx._plokRec.l}` +
+    (ctx._plokRec.coldRun ? `\n- Your last two calls on ${ctx._plokRec.team} both LOST. Do not raise conviction on a story that just lost twice; your verdict on this team is capped at lean until it wins one.` : "")
+  ) : "";
   if (ctx.betType === "chat") {
     system = personaLine +
       "You are Plok, PickLock's friendly betting analyst, chatting with a user. " +
@@ -648,7 +656,7 @@ async function generate(ctx, stats) {
       "ALWAYS return keyStats as an EMPTY array — the app renders factual stats separately. Never imply a metric that is not an explicit number in DATA. " +
       "Be analytical, not a guarantee. Entertainment, not financial advice. " +
       "You ALSO have the user's own PickLock betting history in the PROFILE block. Set 'yourAngle' to ONE short, specific sentence connecting THIS bet to their tendencies — especially their record in this exact bet type (the line marked 'most relevant') or their archetype/streak. Be a sharp, encouraging coach: flag when this is a spot they are historically weak or strong. You ALSO have the user's LEAGUE standing/matchup — when it is decisive for THIS bet, make yourAngle strategic: if they are trailing (in the matchup or standings) and this is a high-ceiling or plus-money play, frame it as the variance they need to catch up; if they are leading and this is a safe play, note that it protects the lead; on the FINAL WEEK while behind, push ceiling. Lead yourAngle with whichever of PROFILE or LEAGUE is more decisive for THIS bet. Use ONLY numbers from PROFILE, and return yourAngle as an empty string when PROFILE is absent or nothing is genuinely relevant. " +
-      "Finally, give your verdict on taking THIS bet: set 'conviction' to an integer 0-100 for how strong a play it is based ONLY on DATA (records, scoring, line, odds) — be honest and use the full range, not just 50-70. Set 'verdict' to one of: 'strong' (a clear, well-supported play), 'lean' (mild edge), 'pass' (DATA is thin or there is no real edge — tell them to save their slip), or 'fade' (DATA points to the OTHER side). Never manufacture conviction; a real handicapper passes often. If DATA is largely missing, verdict must be 'pass' with low conviction.";
+      "Finally, give your verdict on taking THIS bet: set 'conviction' to an integer 0-100 for how strong a play it is based ONLY on DATA (records, scoring, line, odds) — be honest and use the full range, not just 50-70. Set 'verdict' to one of: 'strong' (a clear, well-supported play), 'lean' (mild edge), 'pass' (DATA is thin or there is no real edge — tell them to save their slip), or 'fade' (DATA points to the OTHER side). Never manufacture conviction; a real handicapper passes often. If DATA is largely missing, verdict must be 'pass' with low conviction. On any pick priced longer than +130, cap yourself: maximum verdict is 'lean' and maximum conviction is 65 — plus-money past that range is a variance play no matter how good the story looks. When DATA contains a starter's recent form (an 'SP recent' line), weigh it ABOVE his season-long line — a starter's last three starts predict the first inning far better than his season ERA, and a starter in a bad stretch is a reason to pass no matter what the season numbers say.";
     user =
       `BET\n- Sport: ${(Array.isArray(ctx.sports)&&ctx.sports.length>1)?ctx.sports.join(" + "):ctx.sport}\n- Type: ${ctx.betType}\n- Selection: ${ctx.selection}` +
       (ctx.line != null ? `\n- Line: ${ctx.line}` : "") +
@@ -657,7 +665,7 @@ async function generate(ctx, stats) {
       (stats.note ? `\n- Context: ${stats.note}` : "") +
       `\n- MATCHUP_PROVIDED: ${stats.matchup ? "true" : "false"}` +
       `\n\nDATA\n${dataBlock}` +
-      (ctx.question ? `\n\nUSER QUESTION\n${ctx.question}` : "") + profileBlock + leagueBlock;
+      (ctx.question ? `\n\nUSER QUESTION\n${ctx.question}` : "") + profileBlock + leagueBlock + plokBlock;
   }
 
   const r = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -725,6 +733,63 @@ async function generate(ctx, stats) {
   return parsed;
 }
 
+// ── Price gate (29 Aug 2026) ──────────────────────────────────────────────────
+// Audit of the 90 graded plok_calls: conviction 70-75 on dogs +131 or longer went
+// 6-17 (-9.7u) while the rest of the book was 42-25 (+10.4u). GPT's self-rated
+// conviction is anti-predictive exactly on mid-range underdogs, so the rating is
+// clamped AFTER generation: past +130 the strongest allowed read is a lean at 65.
+// The prompt states the same cap (so the summary prose agrees), but prompts drift
+// across model updates — the clamp is the guarantee. Runs before storeCache so
+// cached responses are gated too, and the client logs verdict/conviction from the
+// response, so plok_calls inherits the gate with no App.jsx change.
+function priceGate(out, ctx) {
+  try {
+    const o = parseInt(String((ctx && ctx.odds) || "").replace(/[^0-9+-]/g, ""), 10);
+    if (!Number.isFinite(o) || o <= 130) return out;
+    if (out && typeof out.conviction === "number" && out.conviction > 65) out.conviction = 65;
+    if (out && out.verdict === "strong") out.verdict = "lean";
+  } catch (e) {}
+  return out;
+}
+
+// ── Chase gate + Plok's own team record (29 Aug 2026) ─────────────────────────
+// The loss audit showed losses clustering on repeat-backed teams (ATL 0-4,
+// BOS 0-3, CWS 0-3) because nothing feeds Plok's graded plok_calls record back
+// into the read. Two parts: the record goes into the prompt as PLOK RECORD, and
+// — because prompts are advisory — a hard gate: two consecutive graded losses
+// backing the same team cap the verdict at lean/65 until a win breaks the run.
+// Scope is the backed side of ml/spread only; totals and props aren't chasing.
+// The record is GLOBAL (no user filter): it is Plok's brain, not the user's.
+function backedTeam(ctx) {
+  if (!ctx || (ctx.betType !== "ml" && ctx.betType !== "spread")) return null;
+  const t = String(ctx.selection || "").replace(/\s[+-]?\d+(?:\.\d+)?\s*$/, "").trim();
+  return t.length >= 4 ? t : null;
+}
+async function plokTeamRecord(ctx) {
+  const team = backedTeam(ctx);
+  if (!team || !SB_URL || !SB_KEY) return null;
+  try {
+    const since = new Date(Date.now() - 30 * 86400000).toISOString();
+    const r = await fetch(
+      `${SB_URL}/rest/v1/plok_calls?selection=ilike.${encodeURIComponent("*" + team + "*")}` +
+      `&result=in.(W,L)&game_date=gte.${since}&order=game_date.desc&limit=20&select=result`,
+      { headers: sbHeaders }
+    );
+    if (!r.ok) return null;
+    const rows = await r.json();
+    if (!Array.isArray(rows) || !rows.length) return null;
+    const w = rows.filter((x) => x.result === "W").length;
+    const coldRun = rows.length >= 2 && rows[0].result === "L" && rows[1].result === "L";
+    return { team, w, l: rows.length - w, coldRun };
+  } catch { return null; }
+}
+function chaseGate(out, rec) {
+  if (!rec || !rec.coldRun) return out;
+  if (out && typeof out.conviction === "number" && out.conviction > 65) out.conviction = 65;
+  if (out && out.verdict === "strong") out.verdict = "lean";
+  return out;
+}
+
 // ── handler ───────────────────────────────────────────────────────────────────
 // ── Auth ────────────────────────────────────────────────────────────────────
 // The user comes from the Authorization token, NEVER the request body. Same
@@ -760,7 +825,7 @@ export default async function handler(req, res) {
 
     const day = new Date().toISOString().slice(0, 10);
     const leagueSig = ctx.leagueCtx ? `${ctx.leagueCtx.myRank || ""}_${ctx.leagueCtx.matchupGap != null ? Math.round(ctx.leagueCtx.matchupGap) : ""}` : "";
-    const key = hashKey(["v8", ctx.sport, (Array.isArray(ctx.sports)?ctx.sports.join("+"):""), ctx.betType, ctx.selection, ctx.line, ctx.game, ctx.question || "", _uid || "", ctx.persona || "", leagueSig, day].join("|"));
+    const key = hashKey(["v9", ctx.sport, (Array.isArray(ctx.sports)?ctx.sports.join("+"):""), ctx.betType, ctx.selection, ctx.line, ctx.game, ctx.question || "", _uid || "", ctx.persona || "", leagueSig, day].join("|"));
 
     const cached = await getCached(key);
     if (cached) return res.status(200).json({ ...cached, cached: true });
@@ -775,7 +840,8 @@ export default async function handler(req, res) {
     }
 
     const stats = await fetchSportsData(ctx);
-    const out = await generate(ctx, stats);
+    ctx._plokRec = await plokTeamRecord(ctx);
+    const out = chaseGate(priceGate(await generate(ctx, stats), ctx), ctx._plokRec);
     if (stats.matchup) out.matchup = stats.matchup;
     out.hunter = stats._hunter || null;
     if (ctx.betType === "prop") out.keyStats = (stats.lines && stats.lines.length) ? stats.lines.slice(0, 4) : [];
