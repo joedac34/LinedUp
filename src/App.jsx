@@ -7454,7 +7454,7 @@ function App() {
       setPlokLedger({ loading:false, rows:(d&&d.ledger)||[], total:(d&&d.ledgerTotal)||0 });
     }catch(e){ setPlokLedger({ loading:false, rows:[], total:0 }); }
   };
-  useEffect(()=>{ if(screen==="ai" && user?.id) fetchPlokRecord(); },[screen, user]);
+  useEffect(()=>{ if((screen==="ai"||screen==="home") && user?.id) fetchPlokRecord(); },[screen, user]);
   // Load Find-a-bet data once per game on open (Pro, cached) -> powers Plok Read + The Tape.
   useEffect(()=>{
     const eg = gameSheet && gameSheet.espnGame; const gid = eg && eg.id;
@@ -7522,6 +7522,8 @@ function App() {
   const [plokSlotBusy, setPlokSlotBusy] = useState(null);
   const [plokSlotErr, setPlokSlotErr] = useState(null);
   const [plokRail, setPlokRail] = useState({});
+  const [plokBrowseQ, setPlokBrowseQ] = useState("");        // slot browser text search (cleared on slot toggle)
+  const [plokBrowseMkt, setPlokBrowseMkt] = useState({});    // per-slot prop-market pill, keyed like plokRail
   const [plokFlatType, setPlokFlatType] = useState("all");
   useEffect(()=>{ setPlokSlot(null); setPlokRail({}); setPlokFlatType("all"); }, [activeLeagueId, isSoloMode]);
   // MUST live below the useState above: this IIFE evaluates during render, so declaring
@@ -12584,6 +12586,20 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {screen==="home"&&(
  <>
  <div className="body" key={screen}>
+           {plokRecord && plokRecord.lock && (
+             <div onClick={()=>{ setAiReturn("home"); setScreen("ai"); }} style={{display:"flex",alignItems:"center",gap:11,background:"linear-gradient(160deg,#0f171d,#0b0b0e 78%)",border:"0.5px solid rgba(100,210,255,0.32)",borderRadius:RAD.lg,padding:"11px 13px",marginBottom:12,cursor:"pointer"}}>
+               <div style={{flex:1,minWidth:0}}>
+                 <div style={{fontSize:9.5,fontWeight:900,letterSpacing:"1.4px",textTransform:"uppercase",color:"#64D2FF"}}>{"Plok's Lock of the Day"}</div>
+                 <div style={{display:"flex",alignItems:"baseline",gap:7,marginTop:3,minWidth:0}}>
+                   <span style={{fontSize:14.5,fontWeight:800,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{plokRecord.lock.selection}</span>
+                   <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:900,color:"#64D2FF",flexShrink:0}}>{plokRecord.lock.odds}</span>
+                 </div>
+                 <div style={{fontSize:10,color:"rgba(255,255,255,0.35)",marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{plokRecord.lock.game}</div>
+               </div>
+               {(plokRecord.wins+plokRecord.losses)>=25 && <span style={{flexShrink:0,fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:12.5,fontWeight:900,color:"#64D2FF",background:"rgba(100,210,255,0.12)",border:"0.5px solid rgba(100,210,255,0.32)",borderRadius:99,padding:"4px 10px"}}>{plokRecord.wins}-{plokRecord.losses}</span>}
+               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2.6" strokeLinecap="round" style={{flexShrink:0}}><path d="M9 6l6 6-6 6"/></svg>
+             </div>
+           )}
            {(() => {
              const _sup = (typeof Notification !== "undefined") && ("serviceWorker" in navigator) && ("PushManager" in window);
              const _perm = _sup ? Notification.permission : "denied";
@@ -21073,10 +21089,18 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
                         const _games = [...new Set(_elig.map(b=>b.game).filter(Boolean))];
                         const _key = activeLeagueId+"_"+si;
                         const _sel = plokRail[_key] || "all";
-                        const _list = plokSortBets(_t, _sel==="all" ? _elig : _elig.filter(b=>b.game===_sel));
+                        const _isProp = _t==="prop" || String(_t||"").indexOf("prop")===0;
+                        const _mkts = _isProp ? [...new Set(_elig.map(b=>b.market).filter(Boolean))] : [];
+                        const _mktSel = plokBrowseMkt[_key] || "all";
+                        const _q = (plokBrowseQ||"").trim().toLowerCase();
+                        let _pool = _sel==="all" ? _elig : _elig.filter(b=>b.game===_sel);
+                        if(_mktSel!=="all") _pool = _pool.filter(b=>b.market===_mktSel);
+                        if(_q) _pool = _pool.filter(b=>(((b.pick||"")+" "+(b.game||"")).toLowerCase().indexOf(_q)!==-1));
+                        const _list = plokSortBets(_t, _pool);
+                        const _mktLabel = (mk)=> (PROP_HIST_MAP[mk]&&PROP_HIST_MAP[mk].label) || String(mk||"").replace(/^(player_|batter_|pitcher_)/,"").replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
                         return (
                           <div key={si} style={{background:_done?`linear-gradient(135deg,${IOS.green}10,rgba(255,255,255,0.015))`:"#141419",border:_done?`0.5px solid ${IOS.green}4d`:(_open?`0.5px solid ${IOS.blue}73`:"0.5px solid rgba(255,255,255,0.07)"),borderRadius:RAD.md,marginBottom:8,overflow:"hidden"}}>
-                            <div onClick={()=>{ if(_done) return; setPlokSlot(plokOpenSlot===si ? -1 : si); }} style={{display:"flex",alignItems:"center",gap:9,padding:"10px 11px",cursor:_done?"default":"pointer"}}>
+                            <div onClick={()=>{ if(_done) return; setPlokBrowseQ(""); setPlokSlot(plokOpenSlot===si ? -1 : si); }} style={{display:"flex",alignItems:"center",gap:9,padding:"10px 11px",cursor:_done?"default":"pointer"}}>
                               <div style={{width:23,height:23,borderRadius:RAD.sm,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10.5,fontWeight:900,flexShrink:0,background:_done?`${IOS.green}2e`:"#1e1e25",color:_done?IOS.green:"rgba(255,255,255,0.4)"}}>
                                 {_done ? <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> : si+1}
                               </div>
@@ -21089,6 +21113,19 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
                             </div>
                             {_open && (
                               <div style={{borderTop:"0.5px solid rgba(255,255,255,0.07)",padding:"9px 0 10px"}}>
+                                <div style={{position:"relative",margin:"0 10px 8px"}}>
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2.6" strokeLinecap="round" style={{position:"absolute",left:11,top:"50%",transform:"translateY(-50%)"}}><circle cx="11" cy="11" r="7"/><line x1="20" y1="20" x2="16.7" y2="16.7"/></svg>
+                                  <input value={plokBrowseQ} onChange={e=>setPlokBrowseQ(e.target.value)} placeholder={_isProp?"Search a player or team...":"Search a team or game..."} style={{width:"100%",boxSizing:"border-box",background:"rgba(255,255,255,0.06)",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"9px 30px 9px 30px",fontFamily:"Barlow,sans-serif",fontSize:12.5,color:"#fff",outline:"none"}}/>
+                                  {plokBrowseQ && <span onClick={()=>setPlokBrowseQ("")} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:13,color:"rgba(255,255,255,0.4)",cursor:"pointer"}}>{"\u00d7"}</span>}
+                                </div>
+                                {_mkts.length>1 && (
+                                  <div className="pk-rail" style={{margin:"0 10px 8px"}}>
+                                    <div onClick={()=>setPlokBrowseMkt(prev=>({...prev,[_key]:"all"}))} className={"pk-chip"+(_mktSel==="all"?" on":"")}>All</div>
+                                    {_mkts.map(mk=>(
+                                      <div key={mk} onClick={()=>setPlokBrowseMkt(prev=>({...prev,[_key]:mk}))} className={"pk-chip"+(_mktSel===mk?" on":"")}>{_mktLabel(mk)}<span style={{color:"rgba(255,255,255,0.25)",marginLeft:3,fontSize:9}}>{_elig.filter(b=>b.market===mk).length}</span></div>
+                                    ))}
+                                  </div>
+                                )}
                                 {_games.length>1 && (
                                   <div className="pk-rail" style={{margin:"0 10px 8px"}}>
                                     <div onClick={()=>setPlokRail(prev=>({...prev,[_key]:"all"}))} className={"pk-chip"+(_sel==="all"?" on":"")}>All<span style={{color:"rgba(255,255,255,0.25)",marginLeft:3,fontSize:9}}>{_elig.length}</span></div>
