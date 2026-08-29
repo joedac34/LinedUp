@@ -20,7 +20,10 @@ const ODDS_KEY = process.env.ODDS_API_KEY;
 const CRON_SECRET = process.env.CRON_SECRET;
 const sbHeaders = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, "Content-Type": "application/json" };
 
-const SPORT_KEYS = { nfl: "americanfootball_nfl", nba: "basketball_nba", mlb: "baseball_mlb" };
+// ncaaf included: CFB picks grade fine but were silently excluded from CLV, which
+// skewed every analytics surface that reads closing_lines. The free /events gate
+// below means an out-of-season sport costs nothing, so this is safe year-round.
+const SPORT_KEYS = { nfl: "americanfootball_nfl", ncaaf: "americanfootball_ncaaf", nba: "basketball_nba", mlb: "baseball_mlb" };
 
 // How far out to keep board lines fresh (covers night-before shopping).
 const SNAP_WINDOW_H = 48;
