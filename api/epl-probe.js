@@ -68,7 +68,21 @@ async function probeOdds() {
         : { eventTried: tried, note: "no P1 markets returned", status: p1.status };
       // The prop set Joe asked for: goalscorer, SOG, assists, points, goalie saves.
       // Props deferred to v2, but record what books post so the decision is evidence-based.
-      const propMarkets = "player_goal_scorer_anytime,player_shots_on_goal";
+      // Ask for EVERY soccer player market The Odds API documents. The earlier
+      // probe only requested two, so "only anytime-goalscorer posts" was never a
+      // finding - it was the question not being asked. player_shots_on_goal is a
+      // HOCKEY key and was always going to miss; soccer uses player_shots_on_target.
+      const propMarkets = [
+        "player_goal_scorer_anytime",
+        "player_first_goal_scorer",
+        "player_last_goal_scorer",
+        "player_goal_scorer_2plus",
+        "player_assists",
+        "player_shots_on_target",
+        "player_shots",
+        "player_to_receive_card",
+        "player_to_receive_red_card",
+      ].join(",");
       const pr = await j(`https://api.the-odds-api.com/v4/sports/${SPORT}/events/${ev}/odds?apiKey=${ODDS_KEY}&regions=us&markets=${propMarkets}&oddsFormat=american`);
       if (pr.ok && pr.body && pr.body.bookmakers) {
         const mkts = [...new Set(pr.body.bookmakers.flatMap(b => (b.markets || []).map(m => m.key)))];
