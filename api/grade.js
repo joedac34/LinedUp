@@ -410,6 +410,11 @@ const ESPN_MAP = {
 // (NBA verified against a real summary response. NFL/MLB are best-effort —
 //  confirm with a sample box score before trusting those.)
 const STAT_ALIASES = {
+  // ── Soccer (ESPN rosters[].roster[].stats, per-match) ──
+  "goals": ["totalGoals", "goals", "G"],
+  "assists": ["goalAssists", "assists", "A"],
+  "shots": ["totalShots", "shotsTotal", "S"],
+  "shots on target": ["shotsOnTarget"],
   // NBA
   "points": ["PTS", "points"], "pts": ["PTS", "points"],
   "rebounds": ["REB", "rebounds"], "reb": ["REB", "rebounds"], "boards": ["REB", "rebounds"],
@@ -635,7 +640,38 @@ async function buildPlayerStatIndex(sp, lg) {
       try {
         const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/${sp}/${lg}/summary?event=${ev.id}`);
         if (!r.ok) return null;
-        return { date: ev.date, home: ev.home, away: ev.away, players: (await r.json()).boxscore?.players || null };
+        const _j = await r.json();
+        // Soccer serves per-player stats under rosters[].roster[].stats, NOT
+        // boxscore.players (which comes back empty). Verified 30 Aug 2026 against
+        // MAN @ BHA 24 May: Bruno Fernandes totalGoals 1, goalAssists 1,
+        // shotsOnTarget 1, appearances 1 — PER-MATCH, not season cumulative
+        // (a season line would read ~38 appearances on the final matchday).
+        // Shape it into the same {players:[{team,statistics:[...]}]} contract the
+        // caller already consumes so the indexing loop below stays untouched.
+        if (sp === "soccer") {
+          const _ros = Array.isArray(_j.rosters) ? _j.rosters : [];
+          if (!_ros.length) return null;
+          const players = _ros.map((rt) => ({
+            team: rt.team,
+            statistics: [{
+              names: [], keys: [],
+              athletes: (rt.roster || []).filter((pl) => pl && Array.isArray(pl.stats) && pl.stats.length).map((pl) => ({
+                athlete: pl.athlete,
+                didNotPlay: false,
+                // Emit as a name/value pair list; the loop reads names[idx]/keys[idx].
+                stats: pl.stats.map((x) => (x.value != null ? x.value : x.displayValue)),
+                _keys: pl.stats.map((x) => x.name || x.abbreviation),
+              })),
+            }],
+          }));
+          // Fold the per-athlete keys up into the group so the shared loop can map them.
+          for (const tb of players) for (const g of tb.statistics) {
+            const first = (g.athletes || [])[0];
+            if (first && first._keys) { g.names = first._keys; g.keys = first._keys; }
+          }
+          return { date: ev.date, home: ev.home, away: ev.away, players };
+        }
+        return { date: ev.date, home: ev.home, away: ev.away, players: _j.boxscore?.players || null };
       } catch { return null; }
     }));
     for (const rr of results) {
@@ -870,7 +906,10 @@ function gradeProp(pickName, gameField, index, info = {}, gameDate = null) {
     // NHL goal scorer: goals >= 1. Single box column (goals / G), no D/ST analog,
     // and empty-net or OT goals count exactly as the books settle it. Shootout
     // goals sit in shootoutGoals and correctly do NOT count.
-    val = sget(["goals", "G"]);
+    // NHL uses goals/G; SOCCER (ESPN rosters) uses totalGoals. Own goals live in
+    // a separate ownGoals key and correctly do NOT count toward a scorer prop,
+    // which is exactly how the books settle it.
+    val = sget(["goals", "G", "totalGoals"]);
     if (val == null) { info.reason = "prop_goals_data_unavailable"; return null; }
   } else if (/\bpoints?\b/i.test(parsed.stat) && stats["PTS"] == null && shas(["goals"]) && shas(["assists"])) {
     // NHL points = goals + assists; ESPN hockey has no points column. The PTS

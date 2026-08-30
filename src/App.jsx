@@ -521,9 +521,10 @@ const SPORTS = {
  { id:"ou", label:"Over/Under", mult:2, icon:"", color:"#FF9F0A", bg:"rgba(255,159,10,0.15)", desc:"Total goals over or under" },
  { id:"spread", label:"Goal Line", mult:3, icon:"", color:"#30D158", bg:"rgba(48,209,88,0.15)", desc:"Cover the +/- goal line" },
  { id:"btts", label:"Both Teams To Score", mult:4, icon:"", color:"#00E5A0", bg:"rgba(0,229,160,0.13)", desc:"Will both sides find the net?" },
+ { id:"prop", label:"Anytime Goal", mult:3, icon:"", color:"#FFD60A", bg:"rgba(255,214,10,0.15)", desc:"Will this player score?" },
  { id:"longshot", label:"Parlay", mult:5, icon:"", color:"#FF375F", bg:"rgba(255,55,95,0.15)", desc:"Build a mini parlay - pick 2+ legs" },
  ],
- bets:{ ml:[], ou:[], spread:[], btts:[], longshot:[] },
+ bets:{ ml:[], ou:[], spread:[], btts:[], prop:[], longshot:[] },
  },
  ucl: {
  id:"ucl", label:"UCL", icon:"", color:"#3D5AFE",
@@ -533,9 +534,10 @@ const SPORTS = {
  { id:"ou", label:"Over/Under", mult:2, icon:"", color:"#FF9F0A", bg:"rgba(255,159,10,0.15)", desc:"Total goals over or under" },
  { id:"spread", label:"Goal Line", mult:3, icon:"", color:"#30D158", bg:"rgba(48,209,88,0.15)", desc:"Cover the +/- goal line" },
  { id:"btts", label:"Both Teams To Score", mult:4, icon:"", color:"#3D5AFE", bg:"rgba(0,229,160,0.13)", desc:"Will both sides find the net?" },
+ { id:"prop", label:"Anytime Goal", mult:3, icon:"", color:"#FFD60A", bg:"rgba(255,214,10,0.15)", desc:"Will this player score?" },
  { id:"longshot", label:"Parlay", mult:5, icon:"", color:"#FF375F", bg:"rgba(255,55,95,0.15)", desc:"Build a mini parlay - pick 2+ legs" },
  ],
- bets:{ ml:[], ou:[], spread:[], btts:[], longshot:[] },
+ bets:{ ml:[], ou:[], spread:[], btts:[], prop:[], longshot:[] },
  },
  nba: {
  id:"nba", label:"NBA", icon:"", color:"#FF6B35",

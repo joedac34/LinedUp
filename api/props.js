@@ -14,9 +14,15 @@ const PROP_MARKETS = {
     // them may enter the player-prop path. All verified present by epl-probe
     // (30 Aug 2026) with their outcome shapes captured.
     "btts", "draw_no_bet", "double_chance", "team_totals",
+    // Anytime goalscorer: the only PLAYER market books post for soccer. Gradeable
+    // via ESPN rosters (totalGoals, per-match) - verified 30 Aug 2026.
+    "player_goal_scorer_anytime",
   ],
   soccer_uefa_champs_league: [
     "btts", "draw_no_bet", "double_chance", "team_totals",
+    // Anytime goalscorer: the only PLAYER market books post for soccer. Gradeable
+    // via ESPN rosters (totalGoals, per-match) - verified 30 Aug 2026.
+    "player_goal_scorer_anytime",
   ],
  icehockey_nhl: [
  // All five verified against nhl-probe (29 Aug 2026): goals/assists/shotsTotal on
