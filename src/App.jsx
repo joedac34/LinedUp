@@ -14009,7 +14009,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const _hasFilled=(arr)=>(arr||[]).some(s=>s.mult&&(s.isParlay?(s.parlayLegs||[]).length>0:!!s.bet));
  const slipSlots = _hasFilled(flexPicks) ? flexPicks : ((savedPicks&&savedPicks.flexPicks&&_hasFilled(savedPicks.flexPicks)) ? savedPicks.flexPicks : null);
  const catColors={ml:IOS.blue,prop:IOS.yellow,ou:IOS.orange,spread:IOS.green,longshot:IOS.pink};
- const catAbbr={ml:"ML",prop:"PROP",ou:"O/U",spread:"SPREAD",longshot:"LONG"};
+ const catAbbr={ml:"ML",prop:"PROP",ou:"O/U",spread:"SPREAD",btts:"BTTS",longshot:"LONG"};
  const wk=activeLeague.current_week||activeLeague.week||1;
  const doClear=async()=>{
  if(!window.confirm("Clear your unlocked picks? Picks from games that have already started are kept.")) return;
@@ -15204,7 +15204,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  }
  if(!slot.bet) return null;
  const pts = calcPickPoints(slot.mult, slot.bet.impliedOdds, "W");
- const catLabel = slot.category ? {ml:"MONEYLINE",prop:"PROP",ou:"OVER/UNDER",spread:"SPREAD",longshot:"LONGSHOT"}[slot.category]||slot.category.toUpperCase() : "PICK";
+ const catLabel = slot.category ? {ml:"MONEYLINE",prop:"PROP",ou:"OVER/UNDER",spread:"SPREAD",btts:"BTTS",longshot:"LONGSHOT"}[slot.category]||slot.category.toUpperCase() : "PICK";
  return (
  <div key={i} style={{margin:"0 16px 6px",background:IOS.bg2,borderRadius:RAD.md,padding:"11px 14px",border:`0.5px solid rgba(255,255,255,0.07)`}}>
  <div style={{fontSize:10,fontWeight:800,letterSpacing:0.5,textTransform:"uppercase",color:IOS.blue,marginBottom:5}}>{slot.mult}× · {catLabel}</div>
@@ -15324,7 +15324,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const parlayOdds = slot.isParlay && slot.parlayLegs.length>=2 ? calcLS(slot.parlayLegs) : null;
  const multColors = {1:"#3A9EE0", 2:"#3A9EE0", 3:"#3A9EE0", 4:"#3A9EE0", 5:"#3A9EE0"};
  const catColors = {ml:IOS.blue, prop:IOS.yellow, ou:IOS.orange, spread:IOS.green, longshot:IOS.pink};
- const catLabels = {ml:"MONEYLINE", prop:"PROP", ou:"OVER/UNDER", spread:"SPREAD", longshot:"LONGSHOT", yrfi:"YRFI", nrfi:"NRFI", wildcard:"WILDCARD"};
+ const catLabels = {ml:"MONEYLINE", prop:"PROP", ou:"OVER/UNDER", spread:"SPREAD", btts:"BTTS", longshot:"LONGSHOT", yrfi:"YRFI", nrfi:"NRFI", wildcard:"WILDCARD"};
  const appliedPU = activatedPUs[idx];
  const isDouble = appliedPU?.id==="double";
  const isEnhance = appliedPU?.id==="enhance";
@@ -16559,7 +16559,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  if(isSoloMode){
    const _cf = lineConflict(cat, bet, soloFreePicks);
    if(_cf){ setPickConflict(_cf); setTimeout(()=>setPickConflict(""),2600); setGridJustAdded(null); return; }
-   const _CL={ml:"Moneyline",spread:"Spread",ou:"Over/Under",prop:"Prop",longshot:"Longshot"};
+   const _CL={ml:"Moneyline",spread:"Spread",ou:"Over/Under",prop:"Prop",btts:"Both Teams To Score",longshot:"Longshot"};
    const _CC={ml:IOS.blue,spread:IOS.green,ou:IOS.orange,prop:IOS.yellow,longshot:IOS.pink};
    setSoloFreePicks(prev=> prev.some(p=>String(p.id)===String(bet.id)) ? prev : [...prev, {...bet, category:cat, categoryLabel:_CL[cat]||cat, categoryColor:_CC[cat]||IOS.blue, mult:1}]);
    setGridJustAdded(bet.id); setTimeout(()=>setGridJustAdded(null),480);
@@ -16990,9 +16990,12 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const _isSoc = (sp)=> sp==="epl" || sp==="ucl";
  const nick = (nm="", sp)=>{ const t=String(nm).trim(); if(_isSoc(sp||gSport)) return t.replace(/^(AFC|FC)\s+/i,"").replace(/\s+(FC|AFC)$/i,""); const w=t.split(/\s+/); return w.length>1 ? w[w.length-1] : t; };
  const _bg = {};
- const _ens = (g,t)=>{ if(!_bg[g]){ const pg=parseGame(g); _bg[g]={ game:g, away:pg.away, home:pg.home, time:t||"", ml:{}, spread:{}, ou:{} }; } if(t&&!_bg[g].time)_bg[g].time=t; return _bg[g]; };
+ const _ens = (g,t)=>{ if(!_bg[g]){ const pg=parseGame(g); _bg[g]={ game:g, away:pg.away, home:pg.home, time:t||"", ml:{}, spread:{}, ou:{}, btts:{} }; } if(t&&!_bg[g].time)_bg[g].time=t; return _bg[g]; };
  (BETS.ml||[]).filter(b=>gSport==="all"||b._sport===gSport).forEach(b=>{ const e=_ens(b.game,b.gameTime); if(b.awayPitcher&&!e.awayPitcher)e.awayPitcher=b.awayPitcher; if(b.homePitcher&&!e.homePitcher)e.homePitcher=b.homePitcher; const _nm=String(b.outcome||b.pick||"").trim(); if(/^draw$/i.test(_nm)){ e.ml.draw=b; return; } const sd=sideOf(_nm,b.game); if(sd==="AWAY")e.ml.away=b; else if(sd==="HOME")e.ml.home=b; });
  (BETS.spread||[]).filter(b=>gSport==="all"||b._sport===gSport).forEach(b=>{ const e=_ens(b.game,b.gameTime); if(b.awayPitcher&&!e.awayPitcher)e.awayPitcher=b.awayPitcher; if(b.homePitcher&&!e.homePitcher)e.homePitcher=b.homePitcher; const sd=sideOf(b.outcome||teamFromSpread(b.pick),b.game); if(sd==="AWAY")e.spread.away=b; else if(sd==="HOME")e.spread.home=b; });
+ // BTTS (soccer): Yes/No, no team side. Bucketed like O/U, off the head token
+ // so a club name containing "no" cannot misroute it.
+ (BETS.btts||[]).filter(b=>gSport==="all"||b._sport===gSport).forEach(b=>{ const e=_ens(b.game,b.gameTime); const o=String(b.outcome||b.pick||"").trim().toLowerCase(); if(/^yes\b/.test(o))e.btts.yes=b; else if(/^no\b/.test(o))e.btts.no=b; });
  (BETS.ou||[]).filter(b=>gSport==="all"||b._sport===gSport).forEach(b=>{ const e=_ens(b.game,b.gameTime); if(b.awayPitcher&&!e.awayPitcher)e.awayPitcher=b.awayPitcher; if(b.homePitcher&&!e.homePitcher)e.homePitcher=b.homePitcher; const o=String(b.outcome||b.pick||"").toLowerCase(); if(o.indexOf("over")===0)e.ou.over=b; else if(o.indexOf("under")===0)e.ou.under=b; });
  let sheetGames = Object.values(_bg);
  if(gridSearch.trim()){ const q=gridSearch.toLowerCase().trim(); sheetGames=sheetGames.filter(g=>String(g.game).toLowerCase().includes(q)); }
@@ -17049,6 +17052,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const isPlok = g.game===plokGame;
  const exp = sheetExpanded===g.game;
  const awayRec=recordFor(g.away,g.game), homeRec=recordFor(g.home,g.game);
+                const _gsp = (g.ml.away&&g.ml.away._sport)||(g.ml.home&&g.ml.home._sport)||(g.ou.over&&g.ou.over._sport)||(gSport!=="all"?gSport:null);
  const spLineA=g.spread.away?(lineFromSpread(g.spread.away.pick)||(g.spread.away.point!=null?String(g.spread.away.point):"")):"";
  const spLineH=g.spread.home?(lineFromSpread(g.spread.home.pick)||(g.spread.home.point!=null?String(g.spread.home.point):"")):"";
  const totPt=(g.ou.over&&g.ou.over.point!=null)?g.ou.over.point:((g.ou.under&&g.ou.under.point!=null)?g.ou.under.point:"");
@@ -17082,7 +17086,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div style={{padding:"8px 13px",display:"flex",flexDirection:"column",justifyContent:"center",gap:9}}>
  {[{nm:g.away,badge:"away",rec:awayRec,pit:g.awayPitcher},...(g.ml.draw?[{nm:"Draw",badge:"draw",rec:null,pit:null}]:[]),{nm:g.home,badge:"home",rec:homeRec,pit:g.homePitcher}].map((tm,ti)=>(
  <div key={ti} style={{display:"flex",alignItems:"center",gap:8}}>
- <div style={{width:28,height:28,borderRadius:RAD.sm,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,flexShrink:0,background:tm.badge==="draw"?"transparent":(tm.badge==="home"?"rgba(10,132,255,0.15)":"rgba(255,255,255,0.07)"),border:tm.badge==="draw"?"1px dashed rgba(255,255,255,0.22)":"none",color:tm.badge==="draw"?"rgba(255,255,255,0.5)":"#fff"}}>{tm.badge==="draw" ? (<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 9h16"/><path d="M4 15h16"/></svg>) : getAcronym(tm.nm,false)}</div>
+ <div style={{width:28,height:28,borderRadius:RAD.sm,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,flexShrink:0,background:tm.badge==="draw"?"transparent":(tm.badge==="home"?"rgba(10,132,255,0.15)":"rgba(255,255,255,0.07)"),border:tm.badge==="draw"?"1px dashed rgba(255,255,255,0.22)":"none",color:tm.badge==="draw"?"rgba(255,255,255,0.5)":"#fff"}}>{tm.badge==="draw" ? (<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 9h16"/><path d="M4 15h16"/></svg>) : (teamLogo(_gsp,tm.nm) ? <img src={teamLogo(_gsp,tm.nm)} alt="" style={{width:22,height:22,objectFit:"contain"}} onError={(e)=>{ e.currentTarget.style.display="none"; }}/> : getAcronym(tm.nm,false))}</div>
  <div style={{minWidth:0}}>
  <div style={{fontSize:13.5,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{tm.badge==="draw" ? "Draw" : nick(tm.nm)} {tm.badge!=="draw" && <span style={{fontSize:8,fontWeight:800,letterSpacing:"0.05em",padding:"1px 5px",borderRadius:4,background:tm.badge==="home"?"rgba(10,132,255,0.18)":"rgba(255,255,255,0.08)",color:tm.badge==="home"?IOS.teal:"rgba(255,255,255,0.5)"}}>{tm.badge==="home"?"HOME":"AWAY"}</span>}</div>
  {tm.rec ? <div style={{fontSize:9.5,color:"rgba(255,255,255,0.34)",fontWeight:600,marginTop:1}}>{tm.rec}</div> : null}
@@ -17107,7 +17111,19 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <Chip b={g.ml.home} cat="ml" line="ML" value={isVal(g.ml.home,g._ov.ml)} mv={g.ml.home?lineMoves[g.ml.home.selKey]:null}/>
  </div>
  </div>
- <div onClick={()=>setSheetExpanded(exp?null:g.game)} style={{borderTop:"1px solid rgba(255,255,255,0.07)",padding:"7px 14px",display:"flex",alignItems:"center",gap:6,cursor:"pointer",background:"rgba(255,255,255,0.015)"}}>
+ 
+                  {/* BTTS: soccer signature market. Only rendered when the feed
+                      actually returned both sides for this fixture. */}
+                  {(g.btts.yes||g.btts.no) && (
+                    <div style={{borderTop:"1px solid rgba(255,255,255,0.07)",padding:"8px 13px",display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)",flexShrink:0}}>Both teams to score</span>
+                      <div style={{marginLeft:"auto",display:"flex",gap:6}}>
+                        <div style={{width:74}}><Chip b={g.btts.yes} cat="btts" line="YES" value={false}/></div>
+                        <div style={{width:74}}><Chip b={g.btts.no} cat="btts" line="NO" value={false}/></div>
+                      </div>
+                    </div>
+                  )}
+                  <div onClick={()=>setSheetExpanded(exp?null:g.game)} style={{borderTop:"1px solid rgba(255,255,255,0.07)",padding:"7px 14px",display:"flex",alignItems:"center",gap:6,cursor:"pointer",background:"rgba(255,255,255,0.015)"}}>
  <span style={{fontSize:10,fontWeight:700,color:"rgba(255,255,255,0.4)"}}>{exp?"Hide detail":"Tap for implied % + read"}</span>
  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2.4" strokeLinecap="round" style={{marginLeft:"auto",transform:exp?"rotate(180deg)":"none",transition:"transform .15s"}}><polyline points="6 9 12 15 18 9"/></svg>
  </div>
