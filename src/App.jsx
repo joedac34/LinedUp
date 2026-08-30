@@ -5139,16 +5139,6 @@ function SoloHome({raceUser, gauntletSlot, soloWeeks, soloLoading, isPro, IOS, s
   const [openDays,setOpenDays]=useState({});
   const [openLegs,setOpenLegs]=useState({});   // which parlay rows are expanded here
   const [joinCode,setJoinCode]=useState("");
-  // A ?join= code can arrive before sign-in (invite link -> signup), so park it
-  // in localStorage at load and let the post-auth effect below spend it. Read
-  // once on mount: the auth flow rewrites the URL and the param would be lost.
-  const [pendingJoin,setPendingJoin]=useState(()=>{
-    try{
-      const p=new URLSearchParams(window.location.search).get("join");
-      if(p){ const c=String(p).toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,12); if(c){ localStorage.setItem("picklock_pending_join",c); return c; } }
-      return localStorage.getItem("picklock_pending_join")||"";
-    }catch(e){ return ""; }
-  });
   const [dayPlay,setDayPlay]=useState(null); // Plok Play of the Day: {loading|data|error}
   const [heroCollapsed, setHeroCollapsed] = useState(()=>{ try{return localStorage.getItem("picklock_lobby_collapsed")==="1";}catch(e){return false;} });
   const collapseHero=()=>{ setHeroCollapsed(true); try{localStorage.setItem("picklock_lobby_collapsed","1");}catch(e){} };
@@ -6270,6 +6260,18 @@ function App() {
  // back-map: "where did I come from" is the correct answer for a back gesture, and the
  // league screen alone has three different entry points.
  const navHist = useRef(["home"]);
+ // A ?join= code can arrive before sign-in (invite link -> signup), so park it
+ // in localStorage at load and let the post-auth effect spend it. MUST live in
+ // App(): the effect that reads it is here. It was briefly declared inside
+ // SoloHome (a different component), which crashed the whole app with
+ // "Can't find variable: pendingJoin" on 30 Aug 2026.
+ const [pendingJoin,setPendingJoin]=useState(()=>{
+   try{
+     const q=new URLSearchParams(window.location.search).get("join");
+     if(q){ const c=String(q).toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,12); if(c){ localStorage.setItem("picklock_pending_join",c); return c; } }
+     return localStorage.getItem("picklock_pending_join")||"";
+   }catch(e){ return ""; }
+ });
  // Every rendered screen, ONE list. Tabs subtract out; everything else is
 // pushed (edge-swipe + hardware back). Adding a screen here is the single
 // touchpoint - the recap omission (found 30 Aug 2026: missing swipe-back AND
