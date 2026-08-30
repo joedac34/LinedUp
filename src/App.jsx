@@ -6260,6 +6260,18 @@ function App() {
  // back-map: "where did I come from" is the correct answer for a back gesture, and the
  // league screen alone has three different entry points.
  const navHist = useRef(["home"]);
+ // A pick row with sport=null can never grade: grade.js maps sport -> ESPN
+ // endpoint. Parlay legs rely on _sport stamped by the odds-merge tag(); any
+ // leg from a path that skips it inserted null (a real Aug 28 parlay stuck
+ // pending). League sport is the LAST resort only - it is wrong for
+ // multi-sport leagues, which is why it is third.
+ // MUST be App-scope: it was first declared beside tag() inside the odds-merge
+ // function, out of scope at both parlay insert sites (caught by eslint
+ // no-undef, 30 Aug 2026 - it would have thrown on every parlay lock).
+ const _pickSport = (b, legs) => (b && b._sport)
+   || ((legs||[]).map(l=>l && l._sport).find(Boolean))
+   || (activeLeague && (activeLeague.sport || (Array.isArray(activeLeague.sports) && activeLeague.sports[0])))
+   || null;
  // A ?join= code can arrive before sign-in (invite link -> signup), so park it
  // in localStorage at load and let the post-auth effect spend it. MUST live in
  // App(): the effect that reads it is here. It was briefly declared inside
@@ -6853,15 +6865,6 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
    // on undefined and the error boundary swallowed the whole app.
    PERIOD_CATS.forEach(c=>{ if(!merged[c]) merged[c]=[]; });
    const tag = (arr, sp) => (arr||[]).map(b=>({...b, _sport:sp}));
-   // A pick row with sport=null can never grade: grade.js maps sport -> ESPN
-   // endpoint. Parlays were relying on legs carrying _sport from tag() above,
-   // and any leg built off a path that skips tag() inserted null (a real Aug 28
-   // parlay is stuck pending because of this). League sport is the last resort:
-   // a pick always belongs to a league, so this always resolves to something.
-   const _pickSport = (b, legs) => (b && b._sport)
-     || ((legs||[]).map(l=>l && l._sport).find(Boolean))
-     || (activeLeague && (activeLeague.sport || (Array.isArray(activeLeague.sports) && activeLeague.sports[0])))
-     || null;
    leagueSports.forEach(sp => {
      const odds = liveOdds[sp];
      if(!odds) return; // not loaded yet for this sport
