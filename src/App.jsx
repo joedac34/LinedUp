@@ -490,6 +490,18 @@ const SPORTS = {
  ],
  bets:{ ml:[], prop:[], ou:[], spread:[], longshot:[] },
  },
+ nhl: {
+ id:"nhl", label:"NHL", icon:"", color:"#5AC8FA",
+ season:"2026-27 NHL Season",
+ slots:[
+ { id:"ml", label:"Moneyline", mult:1, icon:"", color:"#5AC8FA", bg:"rgba(90,200,250,0.15)", desc:"Pick a winner (includes OT/SO)" },
+ { id:"prop", label:"Player Prop",mult:2, icon:"", color:"#FFD60A", bg:"rgba(255,214,10,0.15)", desc:"Goals, shots, assists, saves" },
+ { id:"ou", label:"Over/Under", mult:3, icon:"", color:"#FF9F0A", bg:"rgba(255,159,10,0.15)", desc:"Total goals over or under" },
+ { id:"spread", label:"Puck Line", mult:4, icon:"", color:"#30D158", bg:"rgba(48,209,88,0.15)", desc:"Cover the +/-1.5 puck line" },
+ { id:"longshot", label:"Parlay", mult:5, icon:"", color:"#FF375F", bg:"rgba(255,55,95,0.15)", desc:"Build a mini parlay - pick 2+ legs" },
+ ],
+ bets:{ ml:[], prop:[], ou:[], spread:[], longshot:[] },
+ },
  nba: {
  id:"nba", label:"NBA", icon:"", color:"#FF6B35",
  season:"2024-25 NBA Season",
@@ -3647,6 +3659,7 @@ const soloWeekShort = (n) => {
 const TEAM_ABBR = {
   mlb:{ "diamondbacks":"ari","braves":"atl","orioles":"bal","red sox":"bos","cubs":"chc","white sox":"chw","reds":"cin","guardians":"cle","rockies":"col","tigers":"det","astros":"hou","royals":"kc","angels":"laa","dodgers":"lad","marlins":"mia","brewers":"mil","twins":"min","mets":"nym","yankees":"nyy","athletics":"oak","phillies":"phi","pirates":"pit","padres":"sd","giants":"sf","mariners":"sea","cardinals":"stl","rays":"tb","rangers":"tex","blue jays":"tor","nationals":"wsh" },
   nfl:{ "cardinals":"ari","falcons":"atl","ravens":"bal","bills":"buf","panthers":"car","bears":"chi","bengals":"cin","browns":"cle","cowboys":"dal","broncos":"den","lions":"det","packers":"gb","texans":"hou","colts":"ind","jaguars":"jax","chiefs":"kc","raiders":"lv","chargers":"lac","rams":"lar","dolphins":"mia","vikings":"min","patriots":"ne","saints":"no","giants":"nyg","jets":"nyj","eagles":"phi","steelers":"pit","49ers":"sf","seahawks":"sea","buccaneers":"tb","titans":"ten","commanders":"wsh" },
+  nhl:{ "ducks":"ana","bruins":"bos","sabres":"buf","flames":"cgy","hurricanes":"car","blackhawks":"chi","avalanche":"col","blue jackets":"cbj","stars":"dal","red wings":"det","oilers":"edm","panthers":"fla","kings":"la","wild":"min","canadiens":"mtl","predators":"nsh","devils":"nj","islanders":"nyi","rangers":"nyr","senators":"ott","flyers":"phi","penguins":"pit","sharks":"sj","kraken":"sea","blues":"stl","lightning":"tb","maple leafs":"tor","mammoth":"utah","canucks":"van","golden knights":"vgk","capitals":"wsh","jets":"wpg" },
   nba:{ "hawks":"atl","celtics":"bos","nets":"bkn","hornets":"cha","bulls":"chi","cavaliers":"cle","mavericks":"dal","nuggets":"den","pistons":"det","warriors":"gs","rockets":"hou","pacers":"ind","clippers":"lac","lakers":"lal","grizzlies":"mem","heat":"mia","bucks":"mil","timberwolves":"min","pelicans":"no","knicks":"ny","thunder":"okc","magic":"orl","76ers":"phi","suns":"phx","trail blazers":"por","kings":"sac","spurs":"sa","raptors":"tor","jazz":"utah","wizards":"wsh" }
 };
 
@@ -5030,8 +5043,8 @@ const trophySVG = (id, color="#fff") => {
   return icons[id] || <svg {...s}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>;
 };
 
-const PERIOD_MARKETS = { ml_h1:"h2h_h1", spread_h1:"spreads_h1", ou_h1:"totals_h1", ml_f5:"h2h_1st_5_innings", spread_f5:"spreads_1st_5_innings", ou_f5:"totals_1st_5_innings", ml_f3:"h2h_1st_3_innings", spread_f3:"spreads_1st_3_innings", ou_f3:"totals_1st_3_innings", yrfi:"totals_1st_1_innings", nrfi:"totals_1st_1_innings" };
-const PERIOD_CATS = ["ml_h1","spread_h1","ou_h1","ml_f5","spread_f5","ou_f5","ml_f3","spread_f3","ou_f3","yrfi","nrfi"];
+const PERIOD_MARKETS = { ml_p1:"h2h_p1", spread_p1:"spreads_p1", ou_p1:"totals_p1", ml_h1:"h2h_h1", spread_h1:"spreads_h1", ou_h1:"totals_h1", ml_f5:"h2h_1st_5_innings", spread_f5:"spreads_1st_5_innings", ou_f5:"totals_1st_5_innings", ml_f3:"h2h_1st_3_innings", spread_f3:"spreads_1st_3_innings", ou_f3:"totals_1st_3_innings", yrfi:"totals_1st_1_innings", nrfi:"totals_1st_1_innings" };
+const PERIOD_CATS = ["ml_p1","spread_p1","ou_p1","ml_h1","spread_h1","ou_h1","ml_f5","spread_f5","ou_f5","ml_f3","spread_f3","ou_f3","yrfi","nrfi"];
 const SUB_MK = {
 pass:["player_pass_yds","player_pass_tds"], rush:["player_rush_yds","player_rush_tds"],
 rec:["player_receptions","player_reception_yds","player_reception_tds"],
@@ -5047,9 +5060,13 @@ const PERIOD_VOCAB = {
  nfl:{umbrella:"1st Half",unit:"points"},
  ncaaf:{umbrella:"1st Half",unit:"points"},
  nba:{umbrella:"1st Half",unit:"points"},
+ nhl:{umbrella:"1st Period",unit:"goals"},
 };
 const periodUmbrella = (sp) => (PERIOD_VOCAB[sp]||{}).umbrella || "Periods";
 const periodUnit = (sp) => (PERIOD_VOCAB[sp]||{}).unit || "points";
+// Hockey shows P1/P2/P3 then OT; everything else keeps Q. Reads game.sport so the
+// same gamecast component serves both without forking the layout.
+const _perTag = (g) => { const p=(g&&g.period)||1; return g&&g.sport==="nhl" ? (p>3?"OT":("P"+p)) : ("Q"+p); };
 const periodCatLabel = (sps) => { const u=(sps||[]).map(x=>(PERIOD_VOCAB[x]||{}).umbrella); const inn=u.includes("Innings"); const half=u.some(x=>x==="1st Half"); return inn&&half?"Innings / halves":inn?"Innings":half?"Halves":"Periods"; };
 const PERIOD_SUBS_BY_SPORT = {
  mlb:[{id:"ml_f5",l:"F5 ML"},{id:"spread_f5",l:"F5 Spread"},{id:"ou_f5",l:"F5 O/U"},{id:"ml_f3",l:"F3 ML"},{id:"spread_f3",l:"F3 Spread"},{id:"ou_f3",l:"F3 O/U"},{id:"yrfi",l:"YRFI"},{id:"nrfi",l:"NRFI"}],
@@ -5241,7 +5258,7 @@ function ScoreChip({ pick, live, onOpen }){
   const g=live;
   if(g && g.state==="live"){
     const up=(g.half==="Top"||g.half==="Middle");
-    const inn=g.inning!=null?((up?"\u25B2":"\u25BC")+g.inning):(g.period!=null?((g.clock&&g.clock!=="0:00"?(g.clock+" "):"")+"Q"+g.period):(g.detail||""));
+    const inn=g.inning!=null?((up?"\u25B2":"\u25BC")+g.inning):(g.period!=null?((g.clock&&g.clock!=="0:00"?(g.clock+" "):"")+(g.sport==="nhl"?(g.period>3?"OT":("P"+g.period)):("Q"+g.period))):(g.detail||""));
     return (
       <div onClick={onOpen} style={{marginTop:2,display:"inline-flex",alignItems:"center",gap:5,padding:"3px 7px",borderRadius:RAD.sm,background:"rgba(48,209,88,0.13)",border:"0.5px solid rgba(48,209,88,0.35)",cursor:"pointer",whiteSpace:"nowrap"}}>
         <span style={{width:5,height:5,borderRadius:"50%",background:"#FF453A",flexShrink:0}}/>
@@ -5467,7 +5484,7 @@ function GamecastSheet({ game, pick, onClose }){
   const sit = game.situation || null;
   const periodsArr = (game.linescore && game.linescore.periods) || [];
   const nPer = Math.max(baseball?0:4, periodsArr.length);
-  const _liveStatus = baseball ? ((game.half||"")+" "+_lsOrdinal(game.inning)+(game.outs!=null?(" · "+game.outs+" out"):"")) : (game.period!=null ? ((game.clock&&game.clock!=="0:00")?("Q"+game.period+" · "+game.clock):(game.detail||("Q"+game.period))) : (game.detail||"Live"));
+  const _liveStatus = baseball ? ((game.half||"")+" "+_lsOrdinal(game.inning)+(game.outs!=null?(" · "+game.outs+" out"):"")) : (game.period!=null ? ((game.clock&&game.clock!=="0:00")?(_perTag(game)+" · "+game.clock):(game.detail||(_perTag(game)))) : (game.detail||"Live"));
   const statusTxt= fin?"Final" : live? _liveStatus : "Scheduled";
   const badge=pickBadge(pick, game);
   const inns=(game.linescore&&game.linescore.innings)||[];
@@ -5539,7 +5556,7 @@ function GamecastSheet({ game, pick, onClose }){
                       </div>
                     </>)}
                     {live && football && (<>
-                      <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:900,color:CY,marginTop:2}}>{"Q"+(game.period||1)}{game.clock?(" \u00b7 "+game.clock):""}</div>
+                      <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:900,color:CY,marginTop:2}}>{_perTag(game)}{game.clock?(" \u00b7 "+game.clock):""}</div>
                       {sit && (sit.possession || sit.downDistance) && (
                         <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1,marginTop:3}}>
                           {sit.possession && <span style={{fontSize:10.5,fontWeight:800,color:sit.isRedZone?RED:CY,letterSpacing:"0.03em"}}>{(sit.possession||"").toUpperCase()} BALL</span>}
@@ -6135,7 +6152,7 @@ function App() {
  const [oddsError, setOddsError] = useState(false);
  // oddsLastFetched persisted in localStorage so cache survives page refreshes
 
- const SPORT_KEYS = { nfl:"americanfootball_nfl", nba:"basketball_nba", mlb:"baseball_mlb", ncaaf:"americanfootball_ncaaf" };
+ const SPORT_KEYS = { nfl:"americanfootball_nfl", nba:"basketball_nba", mlb:"baseball_mlb", ncaaf:"americanfootball_ncaaf", nhl:"icehockey_nhl" };
 
  const _oddsInFlight = useRef({});
  // In-flight guard. Three separate effects can ask for the same sport within a few
@@ -7148,7 +7165,7 @@ function App() {
       return out;
     }catch(e){ return null; }
   };
-  const PERIOD_SCOPE = { ml_f5:"First 5", spread_f5:"First 5", ou_f5:"First 5", ml_f3:"First 3", spread_f3:"First 3", ou_f3:"First 3", ml_h1:"1st Half", spread_h1:"1st Half", ou_h1:"1st Half", yrfi:"1st Inning", nrfi:"1st Inning" };
+  const PERIOD_SCOPE = { ml_p1:"1st Period", spread_p1:"1st Period", ou_p1:"1st Period", ml_f5:"First 5", spread_f5:"First 5", ou_f5:"First 5", ml_f3:"First 3", spread_f3:"First 3", ou_f3:"First 3", ml_h1:"1st Half", spread_h1:"1st Half", ou_h1:"1st Half", yrfi:"1st Inning", nrfi:"1st Inning" };
   const periodSelLabel = (bet) => {
     const c = bet.category||""; const scope = PERIOD_SCOPE[c]||"Period"; const pt = bet.point;
     if(c==="yrfi") return "YRFI — a run scored in the 1st inning";
@@ -7870,6 +7887,9 @@ function App() {
   {id:"ml_h1",l:"1st Half ML",scope:"1st half",color:"#64D2FF",sports:["nfl","ncaaf","nba"]},
   {id:"spread_h1",l:"1st Half Spread",scope:"1st half",color:"#64D2FF",sports:["nfl","ncaaf","nba"]},
   {id:"ou_h1",l:"1st Half O / U",scope:"1st half",color:"#64D2FF",sports:["nfl","ncaaf","nba"]},
+  {id:"ml_p1",l:"1st Period ML",scope:"1st period",color:"#5AC8FA",sports:["nhl"]},
+  {id:"spread_p1",l:"1st Period Puck Line",scope:"1st period",color:"#5AC8FA",sports:["nhl"]},
+  {id:"ou_p1",l:"1st Period O / U",scope:"1st period",color:"#5AC8FA",sports:["nhl"]},
   {id:"ml_f5",l:"First 5 ML",scope:"1st 5 inn",color:"#5E5CE6",sports:["mlb"]},
   {id:"spread_f5",l:"First 5 Spread",scope:"1st 5 inn",color:"#5E5CE6",sports:["mlb"]},
   {id:"ou_f5",l:"First 5 O / U",scope:"1st 5 inn",color:"#5E5CE6",sports:["mlb"]},
@@ -13147,7 +13167,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {/* ══ SOLO MODE HOME SCREEN ══ */}
  {homeMode==="solo" && <SoloHome raceUser={user} gauntletSlot={screen==="home" ? <GauntletCard user={user} onEnter={()=>{ applyMode(false); setActiveLeagueId(GAUNTLET_ID); }} onJoin={async()=>{ if(user){ await fetchLeagues(user.id); } applyMode(false); setActiveLeagueId(GAUNTLET_ID); }}/> : null} soloWeeks={soloWeeks} soloLoading={soloLoading} isPro={isPro} IOS={IOS} setScreen={setScreen} setShowNewLeague={setShowNewLeague} setNewLeagueStep={setNewLeagueStep} setShowBrowse={setShowBrowse} fetchPublicLeagues={fetchPublicLeagues} setIsSoloMode={applyMode} setActiveLeagueId={setActiveLeagueId} getOrCreateSoloLeague={getOrCreateSoloLeague} soloSavedPicks={soloSavedPicks} setSoloSavedPicks={setSoloSavedPicks} soloFlexPicks={soloFlexPicks} setSoloFlexPicks={setSoloFlexPicks} soloSport={soloSport} setSoloSport={setSoloSportPersist} setShowSoloSportPicker={setShowSoloSportPicker} soloSubmitted={soloSubmitted} setSoloSubmitted={setSoloSubmitted} username={userProfile?.username||""} soloTopPct={soloTopPct} onDeleteSlate={deleteSoloSlate} onJoinCode={handleJoinCode} setShowPaywall={setShowPaywall} tickerGames={tickerGames} espnGames={espnGames} globalRank={(()=>{ const rows=lbCache["all"]; if(!rows||!rows.length) return null; const sx=[...rows].sort((a,b)=>(Number(b.points)||0)-(Number(a.points)||0)); const i=sx.findIndex(r=>String(r.user_id)===String(user?.id)); return i>=0?{rank:i+1,total:sx.length}:null; })()} onOpenLeaderboard={()=>{ fetchLeaderboard("all"); setScreen("leaderboard"); }} liveGames={liveGames} onOpenGamecast={openGamecast} onReplace={startReplace}/>}
        {homeMode==="solo" && screen==="home" && (()=>{
-         const SP=["mlb","nfl","nba","ncaaf"];
+         const SP=["mlb","nfl","nba","ncaaf","nhl"];
          const games=(tickerGames||[]).filter(g=>g&&g.sport===soloSport);
          const shown=soloGamesAll?games:games.slice(0,4);
          const so=liveOdds[soloSport];
@@ -17319,7 +17339,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
   {/* Solo sport switcher */}
  {isSoloMode && (
  <div className="gbx-scroll" style={{display:"flex",gap:7,padding:"2px 16px 8px",overflowX:"auto"}}>
- {["mlb","nfl","nba","ncaaf"].map(sp=>{
+ {["mlb","nfl","nba","ncaaf","nhl"].map(sp=>{
  const on = sp===soloSport; const sc = SPORTS[sp]?.color || IOS.blue;
  return (
  <div key={sp} onClick={()=>{ if(soloSport!==sp) setSoloSportPersist(sp); }} style={{...pillBase,
@@ -18620,9 +18640,11 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:isPro?4:16}}>
    {[
      {id:"nfl",label:"NFL"},{id:"ncaaf",label:"NCAAF"},{id:"nba",label:"NBA"},{id:"mlb",label:"MLB"},
-     /* NHL hidden: no entry in ESPN_MAP in api/grade.js or api/espn.js, so an NHL
-        league returns no scores and NOTHING ever grades. Restore this line only
-        after both maps carry icehockey_nhl and a pick has graded end-to-end. */
+     /* NHL restored 29 Aug 2026: grade.js + espn.js now both carry icehockey_nhl
+        (chunk A). Half the old restore-condition is still open — no NHL pick has
+        graded end-to-end yet (season starts Oct). Joe chose to expose it now
+        anyway; the MANDATORY check is grading the first preseason pick (~Sep 29). */
+     {id:"nhl",label:"NHL"},
    ].map(sp=>{
      const isSelected = newLeagueSports.includes(sp.id);
      const _svLock = newLeagueType==="survivor" || newLeagueType==="ladder"; // NFL-only: anytime-TD / NFL moneylines / NFL alt-yardage ladders
