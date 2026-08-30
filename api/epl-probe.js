@@ -52,9 +52,19 @@ async function probeOdds() {
       const ev = games[0].id;
       const tried = `${games[0].away_team} @ ${games[0].home_team}`;
       // P1 markets ship in v1, so probe them explicitly.
-      const p1 = await j(`https://api.the-odds-api.com/v4/sports/${SPORT}/events/${ev}/odds?apiKey=${ODDS_KEY}&regions=us&markets=btts,h2h_h1,totals_h1,draw_no_bet&oddsFormat=american`);
+      const p1 = await j(`https://api.the-odds-api.com/v4/sports/${SPORT}/events/${ev}/odds?apiKey=${ODDS_KEY}&regions=us&markets=btts,h2h_h1,totals_h1,draw_no_bet,double_chance,team_totals,alternate_spreads,alternate_totals&oddsFormat=american`);
+      // For every market that posts, capture 3 sample outcomes: grading needs the
+      // OUTCOME NAME SHAPES (is double_chance "Leeds United or Draw"? does
+      // team_totals carry the team in name or description? do alternates use
+      // point like main lines?), not just the fact that the market exists.
+      const _samples = {};
+      if (p1.ok && p1.body && p1.body.bookmakers) {
+        for (const b of p1.body.bookmakers) for (const m of (b.markets || [])) {
+          if (!_samples[m.key]) _samples[m.key] = (m.outcomes || []).slice(0, 3).map(o => ({ name: o.name, description: o.description, point: o.point, price: o.price }));
+        }
+      }
       out.periodMarkets = (p1.ok && p1.body && p1.body.bookmakers)
-        ? { eventTried: tried, marketsReturned: [...new Set(p1.body.bookmakers.flatMap(b => (b.markets || []).map(m => m.key)))] }
+        ? { eventTried: tried, marketsReturned: Object.keys(_samples), sampleOutcomes: _samples }
         : { eventTried: tried, note: "no P1 markets returned", status: p1.status };
       // The prop set Joe asked for: goalscorer, SOG, assists, points, goalie saves.
       // Props deferred to v2, but record what books post so the decision is evidence-based.
