@@ -124,7 +124,54 @@ async function probeEspnBox() {
     // league play has no extra time so the final IS the 90-minute result.
     const comp = (sum.body && sum.body.header && sum.body.header.competitions || [])[0] || {};
     const ls = (comp.competitors || []).map(c => ({ team: c.team && c.team.abbreviation, linescores: (c.linescores || []).map(l => l.displayValue != null ? l.displayValue : l.value) }));
-    return { usedDate, game: gameName, statCategories: categories, sampleSkater, sampleGoalie, linescores: ls };
+    // ── Are soccer player stats gradeable at all? ────────────────────────────
+    // boxscore.players comes back EMPTY for soccer (confirmed 30 Aug 2026), which
+    // is why goalscorer props are currently unshippable: every other sport grades
+    // props out of that structure. ESPN serves soccer player data differently, so
+    // probe the plausible homes before concluding it cannot be done:
+    //   rosters[].roster[].stats      - per-player season/match stats
+    //   keyEvents / scoringPlays      - goal events with the scorer named
+    // A goal-scorer prop only needs "who scored", so scoring EVENTS are enough
+    // even if per-player stat lines are not exposed.
+    const _b = sum.body || {};
+    const _rosters = Array.isArray(_b.rosters) ? _b.rosters : [];
+    const _firstWithStats = (() => {
+      for (const r of _rosters) for (const pl of (r.roster || [])) {
+        if (pl && Array.isArray(pl.stats) && pl.stats.length) {
+          return {
+            team: (r.team && (r.team.abbreviation || r.team.displayName)) || null,
+            player: (pl.athlete && pl.athlete.displayName) || null,
+            position: (pl.position && pl.position.abbreviation) || null,
+            statKeys: pl.stats.map((x) => x.name || x.abbreviation || x.shortDisplayName),
+            statSample: pl.stats.slice(0, 12).map((x) => ({ k: x.name || x.abbreviation, v: x.value != null ? x.value : x.displayValue })),
+          };
+        }
+      }
+      return null;
+    })();
+    const _events = Array.isArray(_b.keyEvents) ? _b.keyEvents : [];
+    const _goalEvents = _events
+      .filter((e) => /goal/i.test((e.type && (e.type.text || e.type.id)) || "") || e.scoringPlay)
+      .slice(0, 6)
+      .map((e) => ({
+        typeText: e.type && e.type.text,
+        scoringPlay: !!e.scoringPlay,
+        clock: e.clock && e.clock.displayValue,
+        athletes: (e.athletesInvolved || []).map((x) => x.displayName),
+        team: e.team && (e.team.abbreviation || e.team.displayName),
+      }));
+
+    return {
+      usedDate, game: gameName, statCategories: categories, sampleSkater, sampleGoalie, linescores: ls,
+      // THE props question. If either of these has content, soccer props ship.
+      playerStats: {
+        rostersPresent: _rosters.length,
+        rosterPlayerWithStats: _firstWithStats,
+        keyEventsTotal: _events.length,
+        goalEventsSample: _goalEvents,
+        topLevelKeys: Object.keys(_b).slice(0, 25),
+      },
+    };
   } catch (e) { return { error: String(e && e.message || e) }; }
 }
 
