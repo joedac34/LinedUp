@@ -5139,6 +5139,16 @@ function SoloHome({raceUser, gauntletSlot, soloWeeks, soloLoading, isPro, IOS, s
   const [openDays,setOpenDays]=useState({});
   const [openLegs,setOpenLegs]=useState({});   // which parlay rows are expanded here
   const [joinCode,setJoinCode]=useState("");
+  // A ?join= code can arrive before sign-in (invite link -> signup), so park it
+  // in localStorage at load and let the post-auth effect below spend it. Read
+  // once on mount: the auth flow rewrites the URL and the param would be lost.
+  const [pendingJoin,setPendingJoin]=useState(()=>{
+    try{
+      const p=new URLSearchParams(window.location.search).get("join");
+      if(p){ const c=String(p).toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,12); if(c){ localStorage.setItem("picklock_pending_join",c); return c; } }
+      return localStorage.getItem("picklock_pending_join")||"";
+    }catch(e){ return ""; }
+  });
   const [dayPlay,setDayPlay]=useState(null); // Plok Play of the Day: {loading|data|error}
   const [heroCollapsed, setHeroCollapsed] = useState(()=>{ try{return localStorage.getItem("picklock_lobby_collapsed")==="1";}catch(e){return false;} });
   const collapseHero=()=>{ setHeroCollapsed(true); try{localStorage.setItem("picklock_lobby_collapsed","1");}catch(e){} };
@@ -6260,21 +6270,38 @@ function App() {
  // back-map: "where did I come from" is the correct answer for a back gesture, and the
  // league screen alone has three different entry points.
  const navHist = useRef(["home"]);
- const PUSHED_SCREENS = ["league","chat","commissioner","leaderboard","analytics","browser","ai","help","legal","deleteaccount","leaguehistory"];
+ // Every rendered screen, ONE list. Tabs subtract out; everything else is
+// pushed (edge-swipe + hardware back). Adding a screen here is the single
+// touchpoint - the recap omission (found 30 Aug 2026: missing swipe-back AND
+// hardcoding home) is the bug class this derivation retires. "auth" is
+// excluded on purpose: the login flow has no back.
+const ALL_SCREENS = ["home","picks","matchup","leagues","profile","league","chat","commissioner","leaderboard","analytics","browser","ai","help","legal","deleteaccount","leaguehistory","recap","solohistory","solostats"];
+const ROOT_TABS = ["home","picks","matchup","leagues","profile","solohistory","solostats"];
+const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  useEffect(()=>{
    const h = navHist.current;
    if(h[h.length-1] !== screen){ h.push(screen); if(h.length>25) h.shift(); }
    try{ document.documentElement.setAttribute("data-pk-back",
      (PUSHED_SCREENS.indexOf(screen)!==-1 && h.length>1) ? "1" : "0"); }catch(e){}
  }, [screen]);
+ // THE back. Pops navHist (the only thing that knows where the user came from)
+ // and lands on the previous screen. Visible back buttons call goBack(fallback):
+ // fallback fires only when the stack is somehow empty (fresh deep entry), and
+ // each button passes its old hardcoded destination there, so behavior in that
+ // corner is unchanged. The hardware handler calls goBack() bare - at a root it
+ // does nothing, letting Android background the app. Never hardcode a back
+ // destination again; that class of bug (recap -> home from inside a league)
+ // is what this replaces. Audit procedure: picklock-navigation skill.
+ const goBack = (fallback)=>{
+   const h = navHist.current;
+   if(h.length < 2){ if(fallback) setScreen(fallback); return; }
+   h.pop();
+   const prev = h.pop();
+   if(prev){ haptic("light"); setScreen(prev); }
+   else if(fallback) setScreen(fallback);
+ };
  useEffect(()=>{
-   const onBack = ()=>{
-     const h = navHist.current;
-     if(h.length < 2) return;
-     h.pop();
-     const prev = h.pop();
-     if(prev){ haptic("light"); setScreen(prev); }
-   };
+   const onBack = ()=>{ goBack(); };
    try{ window.addEventListener("pk:back", onBack); }catch(e){}
    return ()=>{ try{ window.removeEventListener("pk:back", onBack); }catch(e){} };
  }, []);
@@ -6817,7 +6844,12 @@ function App() {
    ? activeLeague.sports
    : [activeLeague.sport || "nfl"];
  const BETS = (() => {
-   const merged = {ml:[],spread:[],ou:[],prop:[],btts:[],longshot:[],ml_h1:[],spread_h1:[],ou_h1:[],ml_f5:[],spread_f5:[],ou_f5:[],ml_f3:[],spread_f3:[],ou_f3:[],yrfi:[],nrfi:[]};
+   const merged = {ml:[],spread:[],ou:[],prop:[],btts:[],longshot:[]};
+   // Period buckets are DERIVED from PERIOD_CATS. Hardcoding them here is what
+   // broke the app on 30 Aug 2026: ml_p1/spread_p1/ou_p1 were added to
+   // PERIOD_CATS for NHL but not to this object, so merged[c].push below threw
+   // on undefined and the error boundary swallowed the whole app.
+   PERIOD_CATS.forEach(c=>{ if(!merged[c]) merged[c]=[]; });
    const tag = (arr, sp) => (arr||[]).map(b=>({...b, _sport:sp}));
    leagueSports.forEach(sp => {
      const odds = liveOdds[sp];
@@ -7356,7 +7388,7 @@ function App() {
    if(lid && realLeagues.some(l=>l.id===lid)) setActiveLeagueId(lid);
    if(n.type==="pick_win"||n.type==="pick_loss") setScreen("picks");
    else if(n.type==="week_recap") openRecapFromNotif(n);
-   else if(n.type==="plok_call"){ if(isPro){ setAiReturn(prev => screen==="ai" ? prev : screen); setScreen("ai"); } else { setShowPaywall("ai"); } }
+   else if(n.type==="plok_call"){ if(isPro){ setScreen("ai"); } else { setShowPaywall("ai"); } }
    else if(n.type==="league_recap_share"){ const _lg=(realLeagues||[]).find(l=>l.id===(n.data&&n.data.league_id)); if(_lg){ setActiveLeagueId(_lg.id); openLeagueRecap(_lg); } }
  };
  useEffect(()=>{
@@ -7533,7 +7565,6 @@ function App() {
   const [aiThread, setAiThread] = useState([]);
   const [aiInput, setAiInput] = useState("");
   const [aiBusy, setAiBusy] = useState(false);
-  const [aiReturn, setAiReturn] = useState("home");
   const [plokRecord, setPlokRecord] = useState(null);
   const [plokLedger, setPlokLedger] = useState(null); // null=closed, {loading,rows}=sheet open
   const [plokPersona, setPlokPersona] = useState(null);
@@ -8001,7 +8032,7 @@ function App() {
   const askFromBet = (bet, category) => {
     if(!plokTipSeen) markPlokTipSeen();
     if(!isPro){ setShowPaywall("ai"); return; }
-    setAiReturn(prev => screen==="ai" ? prev : screen); setScreen("ai");
+    setScreen("ai");
     // Period bets (F5 / YRFI / NRFI / 1H): the EV screener does not price these, but the
     // Trends lens already carries NRFI rates + first-5 starter form — route there for real data.
     const isPeriod = category==="period" || !!(bet && PERIOD_MARKETS[bet.category]);
@@ -8072,7 +8103,7 @@ function App() {
   const askFindBet = (g) => {
     if(!isPro){ setShowPaywall("ai"); return; }
     setFindBetOpen(false);
-    setAiReturn(prev => screen==="ai" ? prev : screen); setScreen("ai");
+    setScreen("ai");
     const _m = PLOK_MODELS.find(x=>x.id===plokModel) || PLOK_MODELS[0];
     const label = `${_m.name} · ${g.game}`;
     const item = { role:"ai", label, bet:null, category:null, loading:true };
@@ -8086,7 +8117,7 @@ function App() {
   const askPlok = (text) => {
     const q = (text||"").trim(); if(!q) return;
     if(!isPro){ setShowPaywall("ai"); return; }
-    setAiReturn(prev => screen==="ai" ? prev : screen); setScreen("ai");
+    setScreen("ai");
     const item = { role:"ai", label:"Plok", bet:null, category:null, loading:true };
     setAiThread(prev=>[...prev, { role:"user", text:q }, item]);
     setAiBusy(true);
@@ -8472,12 +8503,22 @@ function App() {
  const [advancingWeek, setAdvancingWeek] = useState(false);
  const [creatingLeague, setCreatingLeague] = useState(false);
 
+ // Every invite points at /api/invite, which shows the code, offers the App
+ // Store to people without the app, and forwards ?join= into the web app.
+ // Before this, league invites shared TEXT ONLY - a 6-char code and no link,
+ // so a friend without PickLock had no path to it. The code stays in the
+ // message body too: iOS drops query params across an App Store install.
+ const inviteUrl = (params) => {
+   const qs = Object.keys(params).filter(k=>params[k]).map(k=>k+"="+encodeURIComponent(params[k])).join("&");
+   return "https://app.picklockapp.com/api/invite" + (qs?("?"+qs):"");
+ };
  const shareInvite = async (code, leagueName) => {
- const text = `Join my PickLock league "${leagueName}"! Use invite code: ${code} `;
+ const url = inviteUrl({ join: code, n: leagueName });
+ const text = `Join my PickLock league "${leagueName}"! Code: ${code}`;
  if(navigator.share) {
- try { await navigator.share({ title: "Join my PickLock League", text }); return; } catch(e) {}
+ try { await navigator.share({ title: "Join my PickLock League", text, url }); return; } catch(e) {}
  }
- try { await navigator.clipboard.writeText(code); alert("Invite code copied! "); } catch(e) {
+ try { await navigator.clipboard.writeText(text+" "+url); alert("Invite link copied!"); } catch(e) {
  alert(`Invite code: ${code}`);
  }
  };
@@ -9162,6 +9203,15 @@ function App() {
    if(soloSavedPicks && soloSavedPicks.week===week){ setSoloSavedPicks(null); setSoloSubmitted(false); try{ localStorage.removeItem("picklock_solo_locked"); }catch(e){} }
    await fetchSoloWeeks();
  };
+ // Deferred invite join: fires once after sign-in. Cleared BEFORE the attempt so
+ // a failure (bad/expired code) cannot loop on every render.
+ useEffect(()=>{
+   if(!user || !pendingJoin) return;
+   const c = pendingJoin;
+   setPendingJoin("");
+   try{ localStorage.removeItem("picklock_pending_join"); }catch(e){}
+   handleJoinCode(c);
+ }, [user, pendingJoin]);
  const handleJoinCode = async (code) => {
    if(!user || !code) return;
    const {data:league,error}=await supabase.from("leagues").select().eq("invite_code",String(code).toUpperCase().trim()).single();
@@ -12990,7 +13040,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  </div>
  <div className="gh-center"></div>
  <div className="gh-right">
-            <div onClick={()=>{ if(!isPro){setShowPaywall("ai");return;} setAiReturn(prev => screen==="ai" ? prev : screen); setScreen("ai"); }} aria-label="Plok" style={{display:"inline-flex",alignItems:"center",gap:5,height:34,padding:"0 11px",borderRadius:RAD.lg,background:`${IOS.blue}1f`,border:`1px solid ${IOS.blue}3a`,cursor:"pointer"}}><svg width="15" height="15" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg><span style={{fontSize:13,fontWeight:800,color:IOS.blue,letterSpacing:"-0.2px"}}>Plok</span></div>
+            <div onClick={()=>{ if(!isPro){setShowPaywall("ai");return;} setScreen("ai"); }} aria-label="Plok" style={{display:"inline-flex",alignItems:"center",gap:5,height:34,padding:"0 11px",borderRadius:RAD.lg,background:`${IOS.blue}1f`,border:`1px solid ${IOS.blue}3a`,cursor:"pointer"}}><svg width="15" height="15" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg><span style={{fontSize:13,fontWeight:800,color:IOS.blue,letterSpacing:"-0.2px"}}>Plok</span></div>
  {!isSoloMode && <div className="gh-icon" onClick={()=>setScreen("chat")}>
  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
  {unreadByLeague[activeLeagueId]>0 && <span className="gh-badge">{unreadByLeague[activeLeagueId]>9?"9+":unreadByLeague[activeLeagueId]}</span>}
@@ -13103,7 +13153,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <>
  <div className="body" key={screen}>
            {plokRecord && plokRecord.lock && (
-             <div onClick={()=>{ setAiReturn("home"); setScreen("ai"); }} style={{display:"flex",alignItems:"center",gap:11,background:"linear-gradient(160deg,#0f171d,#0b0b0e 78%)",border:"0.5px solid rgba(100,210,255,0.32)",borderRadius:RAD.lg,padding:"11px 13px",marginBottom:12,cursor:"pointer"}}>
+             <div onClick={()=>setScreen("ai")} style={{display:"flex",alignItems:"center",gap:11,background:"linear-gradient(160deg,#0f171d,#0b0b0e 78%)",border:"0.5px solid rgba(100,210,255,0.32)",borderRadius:RAD.lg,padding:"11px 13px",marginBottom:12,cursor:"pointer"}}>
                <div style={{flex:1,minWidth:0}}>
                  <div style={{fontSize:9.5,fontWeight:900,letterSpacing:"1.4px",textTransform:"uppercase",color:"#64D2FF"}}>{"Plok's Lock of the Day"}</div>
                  <div style={{display:"flex",alignItems:"baseline",gap:7,marginTop:3,minWidth:0}}>
@@ -16028,7 +16078,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div className="body" key={screen}>
   <div className="pk-cbar" style={{paddingLeft:20,paddingRight:20}}><div className="pk-cbar-t">League history</div></div>
   <div style={{display:"flex",alignItems:"center",gap:11,padding:"calc(var(--sa-top) + 12px) 16px 10px"}}>
-   <div onClick={()=>{ haptic("select"); setScreen("league"); }} style={{width:31,height:31,borderRadius:RAD.md,background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
+   <div onClick={()=>{ haptic("select"); goBack("league"); }} style={{width:31,height:31,borderRadius:RAD.md,background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
    </div>
    <div><div style={{fontSize:23,fontWeight:800,letterSpacing:"-0.5px"}}>League history</div>
@@ -16114,7 +16164,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 {screen==="help"&&(
  <div className="body" key={screen}>
   <div style={{display:"flex",alignItems:"center",gap:11,padding:"calc(var(--sa-top) + 12px) 16px 10px"}}>
-   <div onClick={()=>{ haptic("select"); setScreen("profile"); }} style={{width:31,height:31,borderRadius:RAD.md,background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
+   <div onClick={()=>{ haptic("select"); goBack("profile"); }} style={{width:31,height:31,borderRadius:RAD.md,background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
    </div>
    <div><div style={{fontSize:23,fontWeight:800,letterSpacing:"-0.5px"}}>Help &amp; Support</div>
@@ -16128,7 +16178,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 {screen==="legal"&&(
  <div className="body" key={screen}>
   <div style={{display:"flex",alignItems:"center",gap:11,padding:"calc(var(--sa-top) + 12px) 16px 10px"}}>
-   <div onClick={()=>{ haptic("select"); setScreen("profile"); }} style={{width:31,height:31,borderRadius:RAD.md,background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
+   <div onClick={()=>{ haptic("select"); goBack("profile"); }} style={{width:31,height:31,borderRadius:RAD.md,background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
    </div>
    <div><div style={{fontSize:23,fontWeight:800,letterSpacing:"-0.5px"}}>{LEGAL[legalDoc].title}</div>
@@ -16163,7 +16213,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    return (
    <div className="body">
      <div style={{display:"flex",alignItems:"center",gap:12,padding:"6px 2px 14px"}}>
-       <div onClick={()=>setScreen("home")} style={{cursor:"pointer",width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:RAD.md,background:"rgba(255,255,255,0.06)"}}>
+       <div onClick={()=>goBack("home")} style={{cursor:"pointer",width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:RAD.md,background:"rgba(255,255,255,0.06)"}}>
          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
        </div>
        <div><div style={{fontSize:24,fontWeight:800,letterSpacing:-0.5}}>Leaderboard</div><div style={{fontSize:12,color:IOS.label3,fontWeight:600}}>{"Daily Lock streaks · "+sRows.length+" ranked"}</div></div>
@@ -16192,7 +16242,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    return (
    <div className="body">
      <div style={{display:"flex",alignItems:"center",gap:12,padding:"6px 2px 14px"}}>
-       <div onClick={()=>setScreen("home")} style={{cursor:"pointer",width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:RAD.md,background:"rgba(255,255,255,0.06)"}}>
+       <div onClick={()=>goBack("home")} style={{cursor:"pointer",width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:RAD.md,background:"rgba(255,255,255,0.06)"}}>
          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
        </div>
        <div><div style={{fontSize:24,fontWeight:800,letterSpacing:-0.5}}>Leaderboard</div><div style={{fontSize:12,color:IOS.label3,fontWeight:600}}>{(lbTab==="hit"?"Qualified players":"Top players")+" · "+rows.length+" ranked"}</div></div>
@@ -21455,7 +21505,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
           <div className="body" style={{display:"flex",flexDirection:"column",height:"100%",background:"#08080A",overflow:"hidden",position:"relative"}}>
             <style>{`@keyframes aiRise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}} .ai-rise{animation:aiRise .28s ease both;} @keyframes aiBlink{0%,100%{opacity:1}50%{opacity:0}} .ai-caret{display:inline-block;width:2px;height:0.95em;background:#0A84FF;margin-left:2px;vertical-align:-1px;border-radius:1px;animation:aiBlink .8s steps(1) infinite;} @keyframes aiPulse{0%,100%{opacity:0.25;transform:translateY(0)}50%{opacity:1;transform:translateY(-2px)}} .ai-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.6);display:inline-block;animation:aiPulse .9s ease-in-out infinite;}`}</style>
             <div style={{flexShrink:0,display:"flex",alignItems:"center",gap:11,padding:"12px 16px 10px",borderBottom:"0.5px solid rgba(255,255,255,0.08)"}}>
-              <div onClick={()=>setScreen(aiReturn||"home")} style={{width:34,height:34,borderRadius:RAD.md,background:"rgba(255,255,255,0.06)",border:EDGE.hair2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:18,flexShrink:0}}>‹</div>
+              <div onClick={()=>goBack("home")} style={{width:34,height:34,borderRadius:RAD.md,background:"rgba(255,255,255,0.06)",border:EDGE.hair2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:18,flexShrink:0}}>‹</div>
               <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:0}}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg>
                 <div>
@@ -22064,7 +22114,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 
  {(()=>{
    const code=(userProfile&&userProfile.referral_code)||"";
-   const link="https://picklockapp.com/?ref="+code;
+   /* Was the MARKETING host picklockapp.com, while the ref reader
+      lives on app.picklockapp.com, so the code was dropped every time. */
+   const link="https://app.picklockapp.com/api/invite?ref="+code;
    const people=refStats.people||[];
    const MILE=5;                         /* milestone the bar is measured against */
    const filled=Math.min(people.length,MILE);
@@ -23486,7 +23538,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {screen==="recap"&&(
    <div className="body" style={{paddingTop:14,paddingLeft:16,paddingRight:16}}>
      <div style={{display:"flex",alignItems:"center",gap:11,marginBottom:14}}>
-       <div onClick={()=>setScreen("home")} style={{width:34,height:34,borderRadius:RAD.md,background:IOS.bg2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
+       <div onClick={()=>goBack("home")} style={{width:34,height:34,borderRadius:RAD.md,background:IOS.bg2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4"><path d="M15 18l-6-6 6-6"/></svg>
        </div>
        <div style={{fontSize:20,fontWeight:800,color:"#fff"}}>Season recap</div>
@@ -23881,7 +23933,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  profile:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
  };
  return (
- <div key={t.id} className={"tab-item "+(isOn?"on":"")+(t.id==="picks"?" pk-t-pickstab":"")} onClick={()=>{ if(isOn){ if(scrollActiveToTop()) haptic("light"); return; } haptic("select"); setScreen(t.id); }}>
+ <div key={t.id} className={"tab-item "+(isOn?"on":"")+(t.id==="picks"?" pk-t-pickstab":"")} onClick={()=>{ if(isOn){ if(scrollActiveToTop()) haptic("light"); return; } haptic("select"); navHist.current=[t.id]; setScreen(t.id); }}>
  {_lamp && <span className="tab-lamp"/>}
  {_anyLive && isOn && <span className="tab-lamp tab-lamp-sm"/>}
  <div className="tab-icon" style={{display:"flex",alignItems:"center",justifyContent:"center"}}>{svgs[t.icon]}</div>
