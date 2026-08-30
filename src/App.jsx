@@ -5559,6 +5559,10 @@ const PERIOD_SUBS_BY_SPORT = {
  nfl:[{id:"ml_h1",l:"1H ML"},{id:"spread_h1",l:"1H Spread"},{id:"ou_h1",l:"1H O/U"}],
  ncaaf:[{id:"ml_h1",l:"1H ML"},{id:"spread_h1",l:"1H Spread"},{id:"ou_h1",l:"1H O/U"}],
  nba:[{id:"ml_h1",l:"1H ML"},{id:"spread_h1",l:"1H Spread"},{id:"ou_h1",l:"1H O/U"}],
+ // Soccer: 1H moneyline is THREE-WAY (Draw pickable) and 1H total. No 1H spread -
+ // epl-probe returned no spreads_h1, and an unlisted market must never appear.
+ epl:[{id:"ml_h1",l:"1H Result"},{id:"ou_h1",l:"1H Goals"}],
+ ucl:[{id:"ml_h1",l:"1H Result"},{id:"ou_h1",l:"1H Goals"}],
 };
 // ── MLB starting lineup (StatsAPI) — shown on game detail, under the mound ──
 const _lineupCache = {};   // "away|home|date" -> payload; survives pane remounts
@@ -8436,9 +8440,9 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
    sports:["nfl","nba","mlb","nhl"]},
   {id:"longshot",l:"Longshot / Parlay",scope:"Exotic",color:"#FF375F"},
   {id:"wildcard",l:"Wildcard",scope:"Any type",color:"#BF5AF2"},
-  {id:"ml_h1",l:"1st Half ML",scope:"1st half",color:"#64D2FF",sports:["nfl","ncaaf","nba","ncaab"]},
+  {id:"ml_h1",l:"1st Half ML",scope:"1st half",color:"#64D2FF",sports:["nfl","ncaaf","nba","ncaab","epl","ucl"]},
   {id:"spread_h1",l:"1st Half Spread",scope:"1st half",color:"#64D2FF",sports:["nfl","ncaaf","nba","ncaab"]},
-  {id:"ou_h1",l:"1st Half O / U",scope:"1st half",color:"#64D2FF",sports:["nfl","ncaaf","nba","ncaab"]},
+  {id:"ou_h1",l:"1st Half O / U",scope:"1st half",color:"#64D2FF",sports:["nfl","ncaaf","nba","ncaab","epl","ucl"]},
   {id:"btts",l:"Both Teams To Score",scope:"Match",color:"#00E5A0",sports:["epl","ucl"]},
   {id:"dnb",l:"Draw No Bet",scope:"Match",color:"#00E5A0",sports:["epl","ucl"]},
   {id:"dchance",l:"Double Chance",scope:"Match",color:"#00E5A0",sports:["epl","ucl"]},

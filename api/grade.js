@@ -945,8 +945,20 @@ function gradePeriod(pick, game, info) {
     return ats > os ? "W" : ats < os ? "L" : "P";
   }
   if (mk.startsWith("h2h")) {
+    // Soccer half-time lines are THREE-WAY: the book prices Home / Draw / Away
+    // and a level half is a real, pickable outcome - not no-action. Pushing it
+    // (correct for a US-sports first half) would both rob a winning Draw pick
+    // and hand a losing team pick its stake back. epl-probe (30 Aug 2026)
+    // confirmed h2h_h1 returns three outcomes with a literal "Draw".
+    const _soc = pick.sport === "epl" || pick.sport === "ucl";
+    if (_soc) {
+      if (/^draw\b/i.test(String(pick.outcome || pick.pick_name || "").trim())) return h === a ? "W" : "L";
+      if (h === a) return "L";                       // backed a team, half was level
+      const winner = h > a ? game.home_team : game.away_team;
+      return teamMatchName(winner, pick.outcome) ? "W" : "L";
+    }
     const winner = h > a ? game.home_team : (a > h ? game.away_team : null);
-    if (!winner) return "P";              // period tie → push
+    if (!winner) return "P";              // period tie → push (2-way markets only)
     return teamMatchName(winner, pick.outcome) ? "W" : "L";
   }
   info.reason = "period_basetype_unhandled";
