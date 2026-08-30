@@ -19,7 +19,7 @@ const OPENAI = process.env.OPENAI_API_KEY;
 const ODDS   = process.env.ODDS_API_KEY;
 
 const sbHeaders = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, "Content-Type": "application/json" };
-const SPORT_KEYS = { nfl: "americanfootball_nfl", ncaaf: "americanfootball_ncaaf", nba: "basketball_nba", mlb: "baseball_mlb", nhl: "icehockey_nhl", ncaab: "basketball_ncaab" };
+const SPORT_KEYS = { nfl: "americanfootball_nfl", ncaaf: "americanfootball_ncaaf", nba: "basketball_nba", mlb: "baseball_mlb", nhl: "icehockey_nhl", ncaab: "basketball_ncaab", epl: "soccer_epl", ucl: "soccer_uefa_champs_league" };
 
 // ── per-identity rate limit on the EXPENSIVE (uncached) path ──────────────────
 // Same pattern + SAME table as insight.js (insight_rate): one shared hourly Plok
@@ -72,9 +72,9 @@ function poissonCDF(k, lam) { // P(X <= k)
 }
 function blendMu(series, sport) {
   const all = mean(series);
-  const rn = { nba: 5, nfl: 3, ncaaf: 3, mlb: 7, nhl: 7, ncaab: 5 }[sport] || 5;
+  const rn = { nba: 5, nfl: 3, ncaaf: 3, mlb: 7, nhl: 7, ncaab: 5, epl: 6, ucl: 6 }[sport] || 5;
   const recent = series.slice(0, rn);
-  let [Wa, Wb] = ({ nba: [0.7, 0.3], nfl: [0.6, 0.4], ncaaf: [0.6, 0.4], mlb: [0.8, 0.2], nhl: [0.8, 0.2], ncaab: [0.7, 0.3] }[sport]) || [0.7, 0.3];
+  let [Wa, Wb] = ({ nba: [0.7, 0.3], nfl: [0.6, 0.4], ncaaf: [0.6, 0.4], mlb: [0.8, 0.2], nhl: [0.8, 0.2], ncaab: [0.7, 0.3], epl: [0.75, 0.25], ucl: [0.75, 0.25] }[sport]) || [0.7, 0.3];
   if (recent.length < 3) { Wb = Wb / 2; Wa = 1 - Wb; }
   const rMean = recent.length ? mean(recent) : all;
   return all * Wa + rMean * Wb;
@@ -107,7 +107,7 @@ async function storeCache(key, payload) {
 }
 
 // ── ESPN (game logs for prop projections) ─────────────────────────────────────
-const ESPN_MAP = { nfl: { sp: "football", lg: "nfl" }, ncaaf: { sp: "football", lg: "college-football" }, nba: { sp: "basketball", lg: "nba" }, mlb: { sp: "baseball", lg: "mlb" }, nhl: { sp: "hockey", lg: "nhl" }, ncaab: { sp: "basketball", lg: "mens-college-basketball" } };
+const ESPN_MAP = { nfl: { sp: "football", lg: "nfl" }, ncaaf: { sp: "football", lg: "college-football" }, nba: { sp: "basketball", lg: "nba" }, mlb: { sp: "baseball", lg: "mlb" }, nhl: { sp: "hockey", lg: "nhl" }, ncaab: { sp: "basketball", lg: "mens-college-basketball" }, epl: { sp: "soccer", lg: "eng.1" }, ucl: { sp: "soccer", lg: "uefa.champions" } };
 const STAT_ALIASES = {
   "points": ["PTS", "points"], "rebounds": ["REB", "rebounds"], "assists": ["AST", "assists"],
   "3-pointers": ["3PT"], "passing yards": ["YDS", "passingYards"], "rushing yards": ["YDS", "rushingYards"],
@@ -230,7 +230,7 @@ async function fetchGameOdds(sport, ctx) {
 }
 
 const labelFor = (mkt, name, point) => {
-  if (mkt === "h2h") return `${name} ML`;
+  if (mkt === "h2h") return name === "Draw" ? "Draw (3-way)" : `${name} ML`;
   if (mkt === "spreads") return `${name} ${point > 0 ? "+" : ""}${point}`;
   if (mkt === "totals") return `${name} ${point}`;
   return name;
@@ -242,9 +242,13 @@ function analyzeGame(event) {
   for (const bk of (event.bookmakers || [])) {
     for (const mk of (bk.markets || [])) {
       const outs = mk.outcomes || [];
-      if (outs.length !== 2) continue;
+      // 2-way (US sports) or 3-way (soccer h2h: Home/Draw/Away). The proportional
+      // de-vig below generalizes: fair_i = p_i / sum(p) across ALL outcomes, so a
+      // 3-way market needs nothing but admission. `!== 2` was silently dropping
+      // every soccer moneyline from the EV screen.
+      if (outs.length !== 2 && outs.length !== 3) continue;
       const probs = outs.map(o => amToProb(o.price));
-      const sum = probs[0] + probs[1]; if (!sum) continue;
+      const sum = probs.reduce((a, b) => a + b, 0); if (!sum) continue;
       outs.forEach((o, i) => {
         const fair = probs[i] / sum, dec = amToDec(o.price);
         const key = `${mk.key}|${o.name}|${o.point != null ? o.point : ""}`;
@@ -511,7 +515,8 @@ async function buildMatchup(sport, ctx) {
   let h2h = null;
   if (away && home) { const hg = A._games.filter(x => nameMatch(normName(x.opp), normName(home))); if (hg.length) { const w = hg.filter(x => x.win).length; h2h = { label: `H2H (last ${hg.length})`, away: `${w}-${hg.length - w}`, home: `${hg.length - w}-${w}` }; } }
   const slim = (t) => ({ name: t.name, abbr: t.abbr, overall: t.overall, home: t.home, away: t.away, scored: t.scored, allowed: t.allowed, streak: t.streak });
-  return { away: slim(A), home: slim(H), scoredLabel: sport === "mlb" ? "Runs/game" : "Points/game", allowedLabel: sport === "mlb" ? "Runs allowed/game" : "Points allowed/game", h2h, title: `${A.abbr} @ ${H.abbr}` };
+  const _isSoc = sport === "epl" || sport === "ucl";
+  return { away: slim(A), home: slim(H), scoredLabel: sport === "mlb" ? "Runs/game" : (_isSoc ? "Goals/game" : "Points/game"), allowedLabel: sport === "mlb" ? "Runs allowed/game" : (_isSoc ? "Goals allowed/game" : "Points allowed/game"), h2h, title: `${A.abbr} @ ${H.abbr}` };
 }
 
 async function narrateProjection(game, facts) {

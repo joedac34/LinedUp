@@ -25,6 +25,8 @@ const SPORTS = [
   { odds: "baseball_mlb", app: "mlb" },
   { odds: "icehockey_nhl", app: "nhl" },
   { odds: "basketball_ncaab", app: "ncaab" },
+  { odds: "soccer_epl", app: "epl" },
+  { odds: "soccer_uefa_champs_league", app: "ucl" },
 ];
 
 const dayOf = (ms) => Math.floor((ms - DL_ANCHOR_MS) / DAY_MS) + 1;

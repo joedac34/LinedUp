@@ -188,6 +188,8 @@ const ESPN_MAP = {
   ncaaf: { sp: "football", lg: "college-football" },
   nhl: { sp: "hockey", lg: "nhl" },
   ncaab: { sp: "basketball", lg: "mens-college-basketball" },
+  epl: { sp: "soccer", lg: "eng.1" },
+  ucl: { sp: "soccer", lg: "uefa.champions" },
   nba: { sp: "basketball", lg: "nba" },
   mlb: { sp: "baseball",   lg: "mlb" },
 };
