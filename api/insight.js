@@ -187,6 +187,7 @@ const ESPN_MAP = {
   // game ran with no stats context and the model padded around missing DATA.
   ncaaf: { sp: "football", lg: "college-football" },
   nhl: { sp: "hockey", lg: "nhl" },
+  ncaab: { sp: "basketball", lg: "mens-college-basketball" },
   nba: { sp: "basketball", lg: "nba" },
   mlb: { sp: "baseball",   lg: "mlb" },
 };

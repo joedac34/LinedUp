@@ -24,6 +24,7 @@ const SPORTS = [
   { odds: "basketball_nba", app: "nba" },
   { odds: "baseball_mlb", app: "mlb" },
   { odds: "icehockey_nhl", app: "nhl" },
+  { odds: "basketball_ncaab", app: "ncaab" },
 ];
 
 const dayOf = (ms) => Math.floor((ms - DL_ANCHOR_MS) / DAY_MS) + 1;

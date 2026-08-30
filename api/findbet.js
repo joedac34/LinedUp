@@ -19,7 +19,7 @@ const OPENAI = process.env.OPENAI_API_KEY;
 const ODDS   = process.env.ODDS_API_KEY;
 
 const sbHeaders = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, "Content-Type": "application/json" };
-const SPORT_KEYS = { nfl: "americanfootball_nfl", ncaaf: "americanfootball_ncaaf", nba: "basketball_nba", mlb: "baseball_mlb", nhl: "icehockey_nhl" };
+const SPORT_KEYS = { nfl: "americanfootball_nfl", ncaaf: "americanfootball_ncaaf", nba: "basketball_nba", mlb: "baseball_mlb", nhl: "icehockey_nhl", ncaab: "basketball_ncaab" };
 
 // ── per-identity rate limit on the EXPENSIVE (uncached) path ──────────────────
 // Same pattern + SAME table as insight.js (insight_rate): one shared hourly Plok
@@ -72,9 +72,9 @@ function poissonCDF(k, lam) { // P(X <= k)
 }
 function blendMu(series, sport) {
   const all = mean(series);
-  const rn = { nba: 5, nfl: 3, ncaaf: 3, mlb: 7, nhl: 7 }[sport] || 5;
+  const rn = { nba: 5, nfl: 3, ncaaf: 3, mlb: 7, nhl: 7, ncaab: 5 }[sport] || 5;
   const recent = series.slice(0, rn);
-  let [Wa, Wb] = ({ nba: [0.7, 0.3], nfl: [0.6, 0.4], ncaaf: [0.6, 0.4], mlb: [0.8, 0.2], nhl: [0.8, 0.2] }[sport]) || [0.7, 0.3];
+  let [Wa, Wb] = ({ nba: [0.7, 0.3], nfl: [0.6, 0.4], ncaaf: [0.6, 0.4], mlb: [0.8, 0.2], nhl: [0.8, 0.2], ncaab: [0.7, 0.3] }[sport]) || [0.7, 0.3];
   if (recent.length < 3) { Wb = Wb / 2; Wa = 1 - Wb; }
   const rMean = recent.length ? mean(recent) : all;
   return all * Wa + rMean * Wb;
@@ -107,7 +107,7 @@ async function storeCache(key, payload) {
 }
 
 // ── ESPN (game logs for prop projections) ─────────────────────────────────────
-const ESPN_MAP = { nfl: { sp: "football", lg: "nfl" }, ncaaf: { sp: "football", lg: "college-football" }, nba: { sp: "basketball", lg: "nba" }, mlb: { sp: "baseball", lg: "mlb" }, nhl: { sp: "hockey", lg: "nhl" } };
+const ESPN_MAP = { nfl: { sp: "football", lg: "nfl" }, ncaaf: { sp: "football", lg: "college-football" }, nba: { sp: "basketball", lg: "nba" }, mlb: { sp: "baseball", lg: "mlb" }, nhl: { sp: "hockey", lg: "nhl" }, ncaab: { sp: "basketball", lg: "mens-college-basketball" } };
 const STAT_ALIASES = {
   "points": ["PTS", "points"], "rebounds": ["REB", "rebounds"], "assists": ["AST", "assists"],
   "3-pointers": ["3PT"], "passing yards": ["YDS", "passingYards"], "rushing yards": ["YDS", "rushingYards"],

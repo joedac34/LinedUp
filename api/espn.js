@@ -10,6 +10,7 @@ const SPORT_MAP = {
   // which is why the gap was invisible on the surface.
   americanfootball_ncaaf: { sport: "football", league: "college-football" },
   icehockey_nhl: { sport: "hockey", league: "nhl" },
+  basketball_ncaab: { sport: "basketball", league: "mens-college-basketball" },
 };
 
 // Season "tape" stats, by ESPN standings stat name (present for every sport in

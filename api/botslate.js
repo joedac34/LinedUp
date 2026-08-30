@@ -35,6 +35,7 @@ const SPORTS = [
   { odds: "baseball_mlb", app: "mlb" },
   { odds: "americanfootball_nfl", app: "nfl" },
   { odds: "icehockey_nhl", app: "nhl" },
+  { odds: "basketball_ncaab", app: "ncaab" },
 ];
 
 // OVERLORD's market menu + labels. pick_name must read exactly like a user prop row

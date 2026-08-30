@@ -14,6 +14,7 @@ const SPORT_KEYS = {
   mlb: "baseball_mlb",
   ncaaf: "americanfootball_ncaaf",
   nhl: "icehockey_nhl",
+  ncaab: "basketball_ncaab",
 };
 
 // ── Supabase REST helpers ─────────────────────────────────────────────────────
@@ -398,6 +399,7 @@ const ESPN_MAP = {
   // scoreboard final already reflects that, so no special handling needed. P1
   // picks grade via periodIndices (_p1) off linescores like every period market.
   nhl: { sp: "hockey", lg: "nhl" },
+  ncaab: { sp: "basketball", lg: "mens-college-basketball" },
 };
 
 // Map the stat words in a prop pick_name to ESPN's stat labels/keys.

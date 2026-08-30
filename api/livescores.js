@@ -133,6 +133,7 @@ const ESPN_SPORTS = {
   ncaaf: { sp: "football",   lg: "college-football" },
   nba:   { sp: "basketball", lg: "nba" },
   nhl:   { sp: "hockey",     lg: "nhl" },
+  ncaab: { sp: "basketball", lg: "mens-college-basketball" },
 };
 function espnState(state) {
   const t = (state || "").toLowerCase();
@@ -219,14 +220,15 @@ export default async function handler(req, res) {
   const seen = new Set();
   const games = [];
   for (const d of list) {
-    const [mlb, nfl, ncaaf, nba, nhl] = await Promise.all([
+    const [mlb, nfl, ncaaf, nba, nhl, ncaab] = await Promise.all([
       fetchDate(d),
       fetchEspnDate("nfl", d),
       fetchEspnDate("ncaaf", d),
       fetchEspnDate("nba", d),
       fetchEspnDate("nhl", d),
+      fetchEspnDate("ncaab", d),
     ]);
-    for (const g of [...mlb, ...nfl, ...ncaaf, ...nba, ...nhl]) {
+    for (const g of [...mlb, ...nfl, ...ncaaf, ...nba, ...nhl, ...ncaab]) {
       if (g.gamePk != null && seen.has(g.gamePk)) continue;
       if (g.gamePk != null) seen.add(g.gamePk);
       games.push(g);
