@@ -62,7 +62,7 @@ export default async function handler(req, res) {
   try {
     const { data: leagues, error } = await supabase
       .from("leagues")
-      .select("id, name, current_week, season_weeks, season_start, league_type, playoffs_enabled, playoff_size, champion_id, completed_at, survivor_lives, duration_days, target_size, slot_config")
+      .select("power_ups_enabled, id, name, current_week, season_weeks, season_start, league_type, playoffs_enabled, playoff_size, champion_id, completed_at, survivor_lives, duration_days, target_size, slot_config")
       .not("season_start", "is", null)
       .eq("is_demo", false);
     if (error) throw error;
@@ -118,6 +118,7 @@ export default async function handler(req, res) {
       for (let wk = cw; wk < target; wk++) {
         await maybeSeedPlayoff(supabase, lg, wk);
         await finalizeWeek(supabase, lg.id, wk);
+        await awardTopScorerSpin(supabase, lg, wk);
         await supabase.from("leagues").update({ current_week: Math.min(seasonWeeks, wk + 1) }).eq("id", lg.id);
         await advancePlayoffBracket(supabase, lg.id);
       }
@@ -259,6 +260,46 @@ async function maybeSeedPlayoff(supabase, league, curWeek) {
 
 // Ascending pass: finalize each closed playoff round, then propagate winners into the next
 // round's seats. Idempotent.
+// ── Power-up spin award ──────────────────────────────────────────────────────
+// The ONLY place spins are awarded server-side. Runs once per closed week per
+// league, immediately after finalizeWeek, so the totals it reads are final.
+//
+// History: awarding used to live client-side inside the manual advance handler
+// and only fired when the person tapping Advance was themselves the top scorer
+// (RLS blocks writing other members' rows). The cron awarded nothing at all, so
+// power-ups were effectively unobtainable. This fixes both paths: the cron
+// awards here, and manual advance calls /api/award-spin which shares the
+// last_spin_week guard, so the two can never double-award the same week.
+//
+// Rules: h2h leagues only (a spread-mover in a survivor pool is nonsense),
+// power_ups_enabled not off, top scorer(s) of the closed week, ties all awarded,
+// zero-point weeks award nobody.
+async function awardTopScorerSpin(supabase, lg, wk) {
+  try {
+    if ((lg.league_type || "h2h") !== "h2h") return;
+    if (lg.power_ups_enabled === false) return;
+    const { data: picks } = await supabase.from("picks")
+      .select("user_id, points_earned")
+      .eq("league_id", lg.id).eq("week", wk);
+    if (!Array.isArray(picks) || !picks.length) return;
+    const totals = {};
+    for (const p of picks) totals[p.user_id] = (totals[p.user_id] || 0) + (Number(p.points_earned) || 0);
+    const best = Math.max(...Object.values(totals));
+    if (!(best > 0)) return;
+    const winners = Object.keys(totals).filter((u) => totals[u] === best);
+    for (const uid of winners) {
+      const { data: m } = await supabase.from("league_members")
+        .select("wheel_spins, last_spin_week")
+        .eq("league_id", lg.id).eq("user_id", uid).maybeSingle();
+      if (!m) continue;
+      if (m.last_spin_week != null && m.last_spin_week >= wk) continue; // already awarded
+      await supabase.from("league_members")
+        .update({ wheel_spins: (m.wheel_spins || 0) + 1, last_spin_week: wk })
+        .eq("league_id", lg.id).eq("user_id", uid);
+    }
+  } catch (e) { /* award failure must never block the advance */ }
+}
+
 async function advancePlayoffBracket(supabase, leagueId) {
   const { data: lg } = await supabase.from("leagues").select("current_week").eq("id", leagueId).maybeSingle();
   const cw = (lg && lg.current_week) || 1;

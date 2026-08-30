@@ -8234,7 +8234,9 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  const [myPUs, setMyPUs] = useState([]); // loaded from league_power_ups table
  // Power-ups are league-only, and a per-league setting (commissioner, Pro-only). Solo mode
  // never has them. When a league has them off, members can neither win nor apply them.
- const puEnabled = !isSoloMode && !!(activeLeague && activeLeague.id) && activeLeague.power_ups_enabled!==false;
+ // Power-ups are an h2h mechanic. A spread-mover in a survivor pool or a
+ // bracket is nonsense; league-specific power-ups can widen this later.
+ const puEnabled = !isSoloMode && !!(activeLeague && activeLeague.id) && (activeLeague.league_type||"h2h")==="h2h" && activeLeague.power_ups_enabled!==false;
  const [showPUModal, setShowPUModal] = useState(null); // {context:"picks"|"matchup", slotId, pickIdx}
  const [secondSwap, setSecondSwap] = useState(null); // {pick, category} — live Second Chance target
  const doSecondSwap = async (pick, bet) => {
@@ -8785,7 +8787,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
    playoffs_enabled:(newLeagueType==='bracket'||newLeagueType==='ladder')?false:(!!newLeaguePlayoffs&&(()=>{const _f=Math.min(newLeaguePlayoffSize,([2,4,6,8].filter(v=>v<=newLeagueSize).pop()||2));return _f>=2&&seasonWeeks>Math.ceil(Math.log2(_f));})()),
    playoff_size:(newLeagueType==='bracket'||newLeagueType==='ladder'||!newLeaguePlayoffs)?0:(()=>{const _f=Math.min(newLeaguePlayoffSize,([2,4,6,8].filter(v=>v<=newLeagueSize).pop()||2));return (_f>=2&&seasonWeeks>Math.ceil(Math.log2(_f)))?_f:0;})(),
    paid: _needsPaywall ? false : true,
-   power_ups_enabled: isPro ? !!newLeaguePowerUps : true,
+   power_ups_enabled: (!newLeagueType||newLeagueType==="h2h"||newLeagueType==="duel") ? (isPro ? !!newLeaguePowerUps : true) : false,
    ...(newLeagueType==="survivor" ? { survivor_config: newSvMode } : {}),
    ...(newLeagueType==="ladder" ? { ladder_count: (isPro ? Math.max(3, Math.min(6, newLadderCount)) : 4) } : {}),
    // Duel duration: day mode stores 1-7; a 1-week duel stores 7 (same window, two doors).
@@ -11076,14 +11078,21 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  }
  },[screen, activeLeague?.id]);
 
- const spinWheel=()=>{
- if(spinning||!puEnabled)return;
- setSpinning(true);setWonPU(null);
- const segA=360/WHEEL_ITEMS.length;
- const winIdx=Math.floor(Math.random()*WHEEL_ITEMS.length);
- const final=wheelAngle+(5+Math.random()*3)*360+(360-winIdx*segA-segA/2);
- setWheelAngle(final);
- setTimeout(()=>{setWonPU(WHEEL_ITEMS[winIdx]);setSpinning(false);setTimeout(()=>setShowWin(true),400);},4000);
+ // Concept A (approved 30 Aug 2026): tap-to-reveal cards replace the wheel.
+ // The outcome is drawn on tap - same honest randomness the wheel had, minus
+ // four seconds of theater - and the draw is WEIGHTED by rarity, which the
+ // wheel never was (legendary dropped as often as common; the labels were
+ // cosmetics). Common 48 / Rare 34 / Legendary 18, uniform within a tier.
+ const [puChosenIdx, setPuChosenIdx] = useState(null);
+ const drawCard=(idx)=>{
+   if(puChosenIdx!=null || !puEnabled) return;
+   const tiers=[["common",48],["rare",34],["legendary",18]];
+   let roll=Math.random()*100, tier="common";
+   for(const [t,w] of tiers){ if(roll<w){ tier=t; break; } roll-=w; }
+   const pool=POWER_UPS.filter(pu=>pu.rarity===tier);
+   const won=pool[Math.floor(Math.random()*pool.length)]||POWER_UPS[0];
+   setWonPU(won);
+   setPuChosenIdx(idx);
  };
 
  const claimPU=async()=>{
@@ -11106,7 +11115,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  .eq("user_id", user.id);
  setWheelSpins(newSpins);
  }
- setShowWin(false);setShowWheel(false);setWonPU(null);
+ setShowWin(false);setShowWheel(false);setWonPU(null);setPuChosenIdx(null);
  };
 
  const usePU=async(pu, context, key)=>{
@@ -12959,48 +12968,36 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {/* ══ WHEEL ══ */}
  {showWheel && (
  <div className="wheel-overlay">
- {showWin && wonPU ? (
- <div className="win-modal">
- <div className="win-icon">{puSVG(wonPU.id,wonPU.color)}</div>
- <div className="win-got">You won a power-up</div>
- <div className="win-name">{wonPU.name}</div>
- <div className="win-rarity-pill" style={{background:`${wonPU.color}20`,color:wonPU.color,border:`1px solid ${wonPU.color}40`}}>
- {wonPU.rarity==="legendary"?" Legendary":wonPU.rarity==="rare"?" Rare":"● Common"}
- </div>
- <div className="win-desc">{wonPU.desc}</div>
- <button className="ios-btn blue" style={{width:"auto",padding:"14px 40px",marginTop:8}} onClick={claimPU}>
- "Add to Inventory"
- </button>
- <div onClick={()=>{setShowWin(false);setShowWheel(false);setWonPU(null);}} style={{fontSize:15,color:IOS.label3,cursor:"pointer",marginTop:4}}>Dismiss</div>
- </div>
- ) : (
- <>
- <div className="wheel-hdr">
- <div className="wheel-hdr-title">Power-Up Wheel</div>
- <div className="wheel-hdr-sub">Week 6 Top Scorer Reward</div>
- </div>
- <div className="wheel-wrap">
- <div className="wheel-pointer"/>
- <svg width={W} height={W} style={{transition:spinning?"transform 4s cubic-bezier(0.17,0.67,0.12,0.99)":"none",transform:`rotate(${wheelAngle}deg)`,borderRadius:"50%",display:"block"}}>
- {WHEEL_ITEMS.map((item,i)=>{
- const sa=i*segA;const ea=(i+1)*segA;
- const p1=polarToCart(R,R,R,sa);const p2=polarToCart(R,R,R,ea);
- const mid=polarToCart(R,R,R*0.64,sa+segA/2);
- const cols=["#1a1a2e","#16213e","#0f3460","#1a1a2e","#16213e","#0f1b35","#1e1e2e","#141428","#1c1c30","#141422"];
- return (
- <g key={i}>
- <path d={`M ${R} ${R} L ${p1.x} ${p1.y} A ${R} ${R} 0 0 1 ${p2.x} ${p2.y} Z`} fill={cols[i%cols.length]} stroke="rgba(255,255,255,0.06)" strokeWidth="1"/>
- <text x={mid.x} y={mid.y} textAnchor="middle" dominantBaseline="middle" fontSize="16" transform={`rotate(${sa+segA/2}, ${mid.x}, ${mid.y})`}>{item.icon}</text>
- </g>
- );
- })}
- <circle cx={R} cy={R} r={16} fill="#1C1C1E" stroke="rgba(255,255,255,0.1)" strokeWidth="2"/>
- </svg>
- </div>
- <button className="spin-ios-btn" disabled={spinning} onClick={spinWheel}>{spinning?"Spinning...":"Spin"}</button>
- {!spinning&&<div onClick={()=>setShowWheel(false)} style={{marginTop:16,fontSize:15,color:IOS.label3,cursor:"pointer"}}>Cancel</div>}
- </>
- )}
+   <div style={{width:52,height:52,borderRadius:16,background:"linear-gradient(160deg,rgba(255,214,10,0.22),rgba(255,214,10,0.05))",border:"1px solid rgba(255,214,10,0.4)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:14}}>
+     <svg width="26" height="26" viewBox="0 0 24 24" fill={IOS.yellow}><path d="M3 17l2-9 4.5 4L12 5l2.5 7L19 8l2 9H3zm0 2h18v2H3v-2z"/></svg>
+   </div>
+   <div style={{fontSize:10,fontWeight:900,letterSpacing:"2.2px",textTransform:"uppercase",color:IOS.yellow}}>Week {(activeLeague&&activeLeague.current_week)||1} - Top Scorer</div>
+   <div style={{fontSize:24,fontWeight:900,marginTop:5,color:"#fff"}}>You outscored the league</div>
+   <div style={{fontSize:13,color:"rgba(255,255,255,0.55)",marginTop:6,textAlign:"center",maxWidth:290,lineHeight:1.5}}>{puChosenIdx==null?"Pick a card to claim your power-up.":"Claimed from your best week yet."}</div>
+   <div style={{display:"flex",gap:12,margin:"30px 0 8px",perspective:"900px"}}>
+     {[0,1,2].map(i=>{ const flipped=puChosenIdx===i; const dim=puChosenIdx!=null&&!flipped; return (
+       <div key={i} onClick={()=>drawCard(i)} style={{width:104,height:150,position:"relative",cursor:puChosenIdx==null?"pointer":"default",transformStyle:"preserve-3d",transition:"transform .5s cubic-bezier(0.3,1.15,0.4,1), opacity .3s",transform:flipped?"rotateY(180deg) translateY(-10px)":"none",opacity:dim?0.35:1}}>
+         <div style={{position:"absolute",inset:0,borderRadius:16,backfaceVisibility:"hidden",background:"linear-gradient(155deg,#161a26,#0c0e16 75%)",border:"1px solid rgba(59,111,224,0.35)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8}}>
+           <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="1.8"><rect x="4" y="10" width="16" height="10" rx="2.5"/><path d="M8 10V7a4 4 0 018 0v3"/></svg>
+           <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:26,fontWeight:900,color:"rgba(255,255,255,0.25)"}}>?</div>
+         </div>
+         <div style={{position:"absolute",inset:0,borderRadius:16,backfaceVisibility:"hidden",transform:"rotateY(180deg)",background:wonPU?("linear-gradient(155deg,"+wonPU.color+"30,"+wonPU.color+"08 70%)"):"#111",border:wonPU?("1.5px solid "+wonPU.color+"90"):"1px solid #333",boxShadow:wonPU?("0 0 34px "+wonPU.color+"50"):"none",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8,padding:8}}>
+           {wonPU&&puSVG(wonPU.id,wonPU.color)}
+           <div style={{fontSize:13,fontWeight:900,textAlign:"center",lineHeight:1.2,color:"#fff"}}>{wonPU?wonPU.name:""}</div>
+           {wonPU&&<div style={{fontSize:8.5,fontWeight:900,letterSpacing:"1.4px",textTransform:"uppercase",borderRadius:99,padding:"3px 9px",color:wonPU.color,background:wonPU.color+"20",border:"0.5px solid "+wonPU.color+"40"}}>{wonPU.rarity}</div>}
+         </div>
+       </div>
+     );})}
+   </div>
+   <div style={{marginTop:18,textAlign:"center",minHeight:52}}>
+     {wonPU&&puChosenIdx!=null&&(<>
+       <div style={{fontSize:17,fontWeight:900,color:wonPU.color}}>{wonPU.name}</div>
+       <div style={{fontSize:12.5,color:"rgba(255,255,255,0.6)",marginTop:4,maxWidth:280,lineHeight:1.5,marginLeft:"auto",marginRight:"auto"}}>{wonPU.desc}</div>
+     </>)}
+   </div>
+   {wonPU&&puChosenIdx!=null
+     ? <button className="ios-btn blue" style={{width:"auto",padding:"14px 40px",marginTop:8}} onClick={claimPU}>Add to inventory</button>
+     : <div onClick={()=>{setShowWheel(false);setPuChosenIdx(null);setWonPU(null);}} style={{marginTop:16,fontSize:15,color:IOS.label3,cursor:"pointer"}}>Save for later</div>}
  </div>
  )}
 
@@ -19365,7 +19362,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    {/* Season weeks — h2h and points only */}
    {newLeagueType!=="bracket"&&(
      <>
-     {isPro && (
+     {isPro && (!newLeagueType||newLeagueType==="h2h"||newLeagueType==="duel") && (
      <>
      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4,marginTop:12}}>
        <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"rgba(255,255,255,0.6)"}}>Power-Ups</div>
@@ -20661,22 +20658,20 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  }
  }
 
- // Wheel spin for top scorer
- if(weekPicksAll && weekPicksAll.length > 0) {
- const topScorerId = Object.entries(totals).sort((a,b)=>b[1]-a[1])[0]?.[0];
- if(topScorerId === user.id) {
- setWheelSpins(s=>s+1);
- await supabase.from("league_members")
- .update({wheel_spins: wheelSpins+1})
- .eq("league_id", activeLeague.id)
- .eq("user_id", user.id);
- alert(` Advanced to Week ${nextWeek}! You were the top scorer — you earned a Wheel Spin!`);
- } else {
- alert(` Advanced to Week ${nextWeek}! Slips have been reset.`);
- }
- } else {
- alert(` Advanced to Week ${nextWeek}! Slips have been reset.`);
- }
+         // Spin award moved SERVER-SIDE (/api/award-spin): RLS blocks a client
+         // from writing other members' rows, which is why the old code here could
+         // only ever award the commissioner themselves. The endpoint verifies the
+         // caller is the commissioner, awards the real top scorer(s), and shares
+         // the last_spin_week guard with the Tuesday cron so a week can never
+         // double-award.
+         let _spinMsg = "";
+         try {
+           const _h = await authHeaders();
+           const _r = await fetch(API_BASE+"/api/award-spin", { method:"POST", headers:{ ..._h, "Content-Type":"application/json" }, body: JSON.stringify({ league_id: activeLeague.id, week: currentWeek }) });
+           const _d = await _r.json().catch(()=>null);
+           if(_d && Array.isArray(_d.awarded) && _d.awarded.some(u=>String(u)===String(user.id))){ setWheelSpins(x=>x+1); _spinMsg = " You were the top scorer - you earned a power-up draw!"; }
+         } catch(e) {}
+         alert(`Advanced to Week ${nextWeek}! Slips have been reset.`+_spinMsg);
 
  // PUSH TRIGGER: notif_results — notify all users of weekly result
  // for(const m of (weekMatchups||[])) {
