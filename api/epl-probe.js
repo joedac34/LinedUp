@@ -156,6 +156,30 @@ async function probeEspnBox(dateOverride) {
       }
       return null;
     })();
+    // The first player with stats is always a keeper, so his line tells us nothing
+    // about totalGoals/shotsOnTarget - the exact fields an anytime-goalscorer prop
+    // grades on. Capture an OUTFIELDER and, decisively, anyone who actually scored.
+    const _pick = (test) => {
+      for (const r of _rosters) for (const pl of (r.roster || [])) {
+        if (!pl || !Array.isArray(pl.stats) || !pl.stats.length) continue;
+        const get = (k) => { const f = pl.stats.find((x) => (x.name || x.abbreviation) === k); return f ? (f.value != null ? f.value : f.displayValue) : null; };
+        if (!test(pl, get)) continue;
+        return {
+          team: (r.team && (r.team.abbreviation || r.team.displayName)) || null,
+          player: (pl.athlete && pl.athlete.displayName) || null,
+          position: (pl.position && pl.position.abbreviation) || null,
+          starter: pl.starter != null ? pl.starter : null,
+          totalGoals: get("totalGoals"), goalAssists: get("goalAssists"),
+          totalShots: get("totalShots"), shotsOnTarget: get("shotsOnTarget"),
+          appearances: get("appearances"), subIns: get("subIns"),
+        };
+      }
+      return null;
+    };
+    const _outfielder = _pick((pl) => ((pl.position && pl.position.abbreviation) || "") !== "G");
+    const _scorer = _pick((pl, get) => Number(get("totalGoals")) > 0);
+    const _assister = _pick((pl, get) => Number(get("goalAssists")) > 0);
+
     const _events = Array.isArray(_b.keyEvents) ? _b.keyEvents : [];
     const _goalEvents = _events
       .filter((e) => /goal/i.test((e.type && (e.type.text || e.type.id)) || "") || e.scoringPlay)
@@ -175,6 +199,9 @@ async function probeEspnBox(dateOverride) {
         rostersPresent: _rosters.length,
         rosterPlayerWithStats: _firstWithStats,
         keyEventsTotal: _events.length,
+        outfielder: _outfielder,
+        scorer: _scorer,          // non-null with totalGoals>=1 => anytime-goalscorer ships
+        assister: _assister,
         goalEventsSample: _goalEvents,
         topLevelKeys: Object.keys(_b).slice(0, 25),
       },
