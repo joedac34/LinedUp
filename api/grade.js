@@ -15,6 +15,8 @@ const SPORT_KEYS = {
   ncaaf: "americanfootball_ncaaf",
   nhl: "icehockey_nhl",
   ncaab: "basketball_ncaab",
+  epl: "soccer_epl",
+  ucl: "soccer_uefa_champs_league",
 };
 
 // ── Supabase REST helpers ─────────────────────────────────────────────────────
@@ -400,6 +402,8 @@ const ESPN_MAP = {
   // picks grade via periodIndices (_p1) off linescores like every period market.
   nhl: { sp: "hockey", lg: "nhl" },
   ncaab: { sp: "basketball", lg: "mens-college-basketball" },
+  epl: { sp: "soccer", lg: "eng.1" },
+  ucl: { sp: "soccer", lg: "uefa.champions" },
 };
 
 // Map the stat words in a prop pick_name to ESPN's stat labels/keys.
@@ -1119,8 +1123,41 @@ function gradePick(pick, games, playerIndex, info = {}) {
   }
   if (!game.completed) { info.reason = "game_in_progress"; return null; }
 
+  const isSoccer = pick.sport === "epl" || pick.sport === "ucl";
+
+  // ── Soccer settlement guard: 3-way markets settle on the 90-minute result.
+  // UCL knockout ties go to ET/pens and the reported final is the post-ET score,
+  // which would grade the 90-minute draw WRONG. Until the linescore-based
+  // 90-minute settle ships (verified vs spring-2026 ET games, due before the
+  // Feb knockouts), any match flagged ET/pens stays PENDING — pending beats wrong.
+  if (isSoccer) {
+    const det = String(game.status_detail || game.detail || "");
+    if (/aet|extra time|pen/i.test(det)) { info.reason = "soccer_et_needs_90min_settle"; return null; }
+  }
+
+  // ── BTTS (soccer signature market, 2-way). market_key is authoritative; the
+  // pick name leads with Yes/No, so token-match the head, never substring teams.
+  if (pick.market_key === "btts") {
+    const both = homeScore > 0 && awayScore > 0;
+    if (/^yes\b/i.test(name)) return both ? "W" : "L";
+    if (/^no\b/i.test(name))  return both ? "L" : "W";
+    info.reason = "btts_side_unparsed"; return null;
+  }
+
   // ── Moneyline ──
   if (baseType === "ml" || slot === "longshot_ml") {
+    if (isSoccer) {
+      // 3-way: Home / Draw / Away are all pickable. A backed team that draws
+      // LOSES, exactly as the books settle 3-way h2h. NOTE the pre-existing
+      // winnerName above is home-biased on equal scores — never use it here.
+      if (/^draw\b/i.test(name.trim())) return homeScore === awayScore ? "W" : "L";
+      const lw = name.toLowerCase().split(" ");
+      const backedHome = lw.some(w => w.length > 3 && String(game.home_team || "").toLowerCase().includes(w));
+      const backedAway = lw.some(w => w.length > 3 && String(game.away_team || "").toLowerCase().includes(w));
+      if (backedHome && !backedAway) return homeScore > awayScore ? "W" : "L";
+      if (backedAway && !backedHome) return awayScore > homeScore ? "W" : "L";
+      info.reason = "soccer_ml_side_unresolved"; return null;
+    }
     const pickedTeamWords = name.toLowerCase().split(" ");
     const pickedHome = pickedTeamWords.some(w => w.length > 3 && winnerName.toLowerCase().includes(w));
     return pickedHome ? "W" : "L";

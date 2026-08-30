@@ -11,6 +11,8 @@ const SPORT_MAP = {
   americanfootball_ncaaf: { sport: "football", league: "college-football" },
   icehockey_nhl: { sport: "hockey", league: "nhl" },
   basketball_ncaab: { sport: "basketball", league: "mens-college-basketball" },
+  soccer_epl: { sport: "soccer", league: "eng.1" },
+  soccer_uefa_champs_league: { sport: "soccer", league: "uefa.champions" },
 };
 
 // Season "tape" stats, by ESPN standings stat name (present for every sport in
