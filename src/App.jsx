@@ -16984,10 +16984,14 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const isGameLine = gridType==="ml"||gridType==="spread"||gridType==="ou";
  const impFrac = (o)=>{ const p=impliedPct(o); return p?p/100:0; };
  const ptsOf = (b)=> b ? calcPickPoints(targetMult||1, b.impliedOdds, "W") : 0;
- const nick = (nm="")=>{ const w=String(nm).trim().split(/\s+/); return w.length>1 ? w[w.length-1] : nm; };
+ // Last word is the US-sports nickname ("Kansas City Chiefs" -> "Chiefs") but
+ // mangles clubs ("Ipswich Town" -> "Town", "Manchester United" -> "United").
+ // Soccer keeps the full club name; "FC"/"AFC" noise is trimmed instead.
+ const _isSoc = (sp)=> sp==="epl" || sp==="ucl";
+ const nick = (nm="", sp)=>{ const t=String(nm).trim(); if(_isSoc(sp||gSport)) return t.replace(/^(AFC|FC)\s+/i,"").replace(/\s+(FC|AFC)$/i,""); const w=t.split(/\s+/); return w.length>1 ? w[w.length-1] : t; };
  const _bg = {};
  const _ens = (g,t)=>{ if(!_bg[g]){ const pg=parseGame(g); _bg[g]={ game:g, away:pg.away, home:pg.home, time:t||"", ml:{}, spread:{}, ou:{} }; } if(t&&!_bg[g].time)_bg[g].time=t; return _bg[g]; };
- (BETS.ml||[]).filter(b=>gSport==="all"||b._sport===gSport).forEach(b=>{ const e=_ens(b.game,b.gameTime); if(b.awayPitcher&&!e.awayPitcher)e.awayPitcher=b.awayPitcher; if(b.homePitcher&&!e.homePitcher)e.homePitcher=b.homePitcher; const sd=sideOf(b.outcome||b.pick,b.game); if(sd==="AWAY")e.ml.away=b; else if(sd==="HOME")e.ml.home=b; });
+ (BETS.ml||[]).filter(b=>gSport==="all"||b._sport===gSport).forEach(b=>{ const e=_ens(b.game,b.gameTime); if(b.awayPitcher&&!e.awayPitcher)e.awayPitcher=b.awayPitcher; if(b.homePitcher&&!e.homePitcher)e.homePitcher=b.homePitcher; const _nm=String(b.outcome||b.pick||"").trim(); if(/^draw$/i.test(_nm)){ e.ml.draw=b; return; } const sd=sideOf(_nm,b.game); if(sd==="AWAY")e.ml.away=b; else if(sd==="HOME")e.ml.home=b; });
  (BETS.spread||[]).filter(b=>gSport==="all"||b._sport===gSport).forEach(b=>{ const e=_ens(b.game,b.gameTime); if(b.awayPitcher&&!e.awayPitcher)e.awayPitcher=b.awayPitcher; if(b.homePitcher&&!e.homePitcher)e.homePitcher=b.homePitcher; const sd=sideOf(b.outcome||teamFromSpread(b.pick),b.game); if(sd==="AWAY")e.spread.away=b; else if(sd==="HOME")e.spread.home=b; });
  (BETS.ou||[]).filter(b=>gSport==="all"||b._sport===gSport).forEach(b=>{ const e=_ens(b.game,b.gameTime); if(b.awayPitcher&&!e.awayPitcher)e.awayPitcher=b.awayPitcher; if(b.homePitcher&&!e.homePitcher)e.homePitcher=b.homePitcher; const o=String(b.outcome||b.pick||"").toLowerCase(); if(o.indexOf("over")===0)e.ou.over=b; else if(o.indexOf("under")===0)e.ou.under=b; });
  let sheetGames = Object.values(_bg);
@@ -17072,28 +17076,34 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {["Team","Spread","Total","Money"].map((h,hi)=>(<span key={h} style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"rgba(255,255,255,0.32)",textAlign:hi===0?"left":"center"}}>{h}</span>))}
  </div>
  <div style={{display:"grid",gridTemplateColumns:"1.45fr 1fr 1fr 1fr",alignItems:"stretch"}}>
+                  {/* Soccer is 3-way: Home / Draw / Away all pickable. _rows keeps the
+                      team column and every chip column on the same row count so they stay
+                      aligned. A drawn match LOSES a team pick, same as the books. */}
  <div style={{padding:"8px 13px",display:"flex",flexDirection:"column",justifyContent:"center",gap:9}}>
- {[{nm:g.away,badge:"away",rec:awayRec,pit:g.awayPitcher},{nm:g.home,badge:"home",rec:homeRec,pit:g.homePitcher}].map((tm,ti)=>(
+ {[{nm:g.away,badge:"away",rec:awayRec,pit:g.awayPitcher},...(g.ml.draw?[{nm:"Draw",badge:"draw",rec:null,pit:null}]:[]),{nm:g.home,badge:"home",rec:homeRec,pit:g.homePitcher}].map((tm,ti)=>(
  <div key={ti} style={{display:"flex",alignItems:"center",gap:8}}>
- <div style={{width:28,height:28,borderRadius:RAD.sm,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,background:tm.badge==="home"?"rgba(10,132,255,0.16)":"rgba(255,255,255,0.08)",color:tm.badge==="home"?IOS.teal:"rgba(255,255,255,0.6)"}}>{getAcronym(tm.nm,false)}</div>
+ <div style={{width:28,height:28,borderRadius:RAD.sm,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,flexShrink:0,background:tm.badge==="draw"?"transparent":(tm.badge==="home"?"rgba(10,132,255,0.15)":"rgba(255,255,255,0.07)"),border:tm.badge==="draw"?"1px dashed rgba(255,255,255,0.22)":"none",color:tm.badge==="draw"?"rgba(255,255,255,0.5)":"#fff"}}>{tm.badge==="draw" ? (<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 9h16"/><path d="M4 15h16"/></svg>) : getAcronym(tm.nm,false)}</div>
  <div style={{minWidth:0}}>
- <div style={{fontSize:13.5,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{nick(tm.nm)} <span style={{fontSize:8,fontWeight:800,letterSpacing:"0.05em",padding:"1px 5px",borderRadius:4,background:tm.badge==="home"?"rgba(10,132,255,0.18)":"rgba(255,255,255,0.08)",color:tm.badge==="home"?IOS.teal:"rgba(255,255,255,0.5)"}}>{tm.badge==="home"?"HOME":"AWAY"}</span></div>
+ <div style={{fontSize:13.5,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{tm.badge==="draw" ? "Draw" : nick(tm.nm)} {tm.badge!=="draw" && <span style={{fontSize:8,fontWeight:800,letterSpacing:"0.05em",padding:"1px 5px",borderRadius:4,background:tm.badge==="home"?"rgba(10,132,255,0.18)":"rgba(255,255,255,0.08)",color:tm.badge==="home"?IOS.teal:"rgba(255,255,255,0.5)"}}>{tm.badge==="home"?"HOME":"AWAY"}</span>}</div>
  {tm.rec ? <div style={{fontSize:9.5,color:"rgba(255,255,255,0.34)",fontWeight:600,marginTop:1}}>{tm.rec}</div> : null}
                      {gSport==="mlb" ? (<div style={{display:"flex",alignItems:"center",gap:3,marginTop:2,fontSize:9.5,fontWeight:600,color:"rgba(255,255,255,0.42)"}}><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><circle cx="12" cy="12" r="9"/><path d="M5 6c3 3 3 9 0 12M19 6c-3 3-3 9 0 12"/></svg>{tm.pit||"TBD"}</div>) : null}
  </div>
  </div>
  ))}
  </div>
- <div style={{display:"grid",gridTemplateRows:"1fr 1fr",gap:6,padding:"8px 4px"}}>
+ <div style={{display:"grid",gridTemplateRows:(g.ml.draw?"1fr 1fr 1fr":"1fr 1fr"),gap:6,padding:"8px 4px"}}>
  <Chip b={g.spread.away} cat="spread" line={spLineA} value={isVal(g.spread.away,g._ov.spread)}/>
+                      {g.ml.draw && <div/>}
  <Chip b={g.spread.home} cat="spread" line={spLineH} value={isVal(g.spread.home,g._ov.spread)}/>
  </div>
- <div style={{display:"grid",gridTemplateRows:"1fr 1fr",gap:6,padding:"8px 4px"}}>
+ <div style={{display:"grid",gridTemplateRows:(g.ml.draw?"1fr 1fr 1fr":"1fr 1fr"),gap:6,padding:"8px 4px"}}>
  <Chip b={g.ou.over} cat="ou" line={totPt!==""?("O "+totPt):""} value={isVal(g.ou.over,g._ov.ou)}/>
+                      {g.ml.draw && <div/>}
  <Chip b={g.ou.under} cat="ou" line={totPt!==""?("U "+totPt):""} value={isVal(g.ou.under,g._ov.ou)}/>
  </div>
- <div style={{display:"grid",gridTemplateRows:"1fr 1fr",gap:6,padding:"8px 4px"}}>
+ <div style={{display:"grid",gridTemplateRows:(g.ml.draw?"1fr 1fr 1fr":"1fr 1fr"),gap:6,padding:"8px 4px"}}>
  <Chip b={g.ml.away} cat="ml" line="ML" value={isVal(g.ml.away,g._ov.ml)} mv={g.ml.away?lineMoves[g.ml.away.selKey]:null}/>
+                      {g.ml.draw && <Chip b={g.ml.draw} cat="ml" line="DRAW" value={false} mv={null}/>}
  <Chip b={g.ml.home} cat="ml" line="ML" value={isVal(g.ml.home,g._ov.ml)} mv={g.ml.home?lineMoves[g.ml.home.selKey]:null}/>
  </div>
  </div>
