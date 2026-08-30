@@ -2,7 +2,12 @@ import { logUsage } from "./_usage.js";
 
 // Only sports PickLock actually offers. An open proxy with a free-text sport param
 // is a quota-drain vector (and junk query params bust the edge cache per-URL).
-const SPORT_ALLOW = new Set(["baseball_mlb","americanfootball_nfl","americanfootball_ncaaf","basketball_nba"]);
+// Every sport the app can render a board for. THIS LIST IS THE GATE: a sport
+// missing here gets a 400 "Unsupported sport" and the client silently falls
+// back to sample odds with an empty board - which is exactly what happened to
+// NHL/NCAAB/EPL/UCL on 30 Aug 2026, wired everywhere else but not here.
+// Adding a sport ALWAYS means adding it to this set.
+const SPORT_ALLOW = new Set(["baseball_mlb","americanfootball_nfl","americanfootball_ncaaf","basketball_nba","icehockey_nhl","basketball_ncaab","soccer_epl","soccer_uefa_champs_league"]);
 
 // The Odds API keeps NFL preseason on its own sport key. Regular-season lines are
 // already posted in August, so this is a MERGE, not a fallback: without it the HOF

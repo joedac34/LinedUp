@@ -6853,6 +6853,15 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
    // on undefined and the error boundary swallowed the whole app.
    PERIOD_CATS.forEach(c=>{ if(!merged[c]) merged[c]=[]; });
    const tag = (arr, sp) => (arr||[]).map(b=>({...b, _sport:sp}));
+   // A pick row with sport=null can never grade: grade.js maps sport -> ESPN
+   // endpoint. Parlays were relying on legs carrying _sport from tag() above,
+   // and any leg built off a path that skips tag() inserted null (a real Aug 28
+   // parlay is stuck pending because of this). League sport is the last resort:
+   // a pick always belongs to a league, so this always resolves to something.
+   const _pickSport = (b, legs) => (b && b._sport)
+     || ((legs||[]).map(l=>l && l._sport).find(Boolean))
+     || (activeLeague && (activeLeague.sport || (Array.isArray(activeLeague.sports) && activeLeague.sports[0])))
+     || null;
    leagueSports.forEach(sp => {
      const odds = liveOdds[sp];
      if(!odds) return; // not loaded yet for this sport
@@ -8310,7 +8319,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
    const isCustomSlip = !!parseSlotConfig(activeLeague&&activeLeague.slot_config) || (picksArr||[]).some(p=>p.locked);
    const _pu = activatedPUs[slotIdx] || null; const _puId=_pu?_pu.id:null; const _puTier=(_pu&&_pu.tier!=null)?_pu.tier:null;
    if(slot.isParlay){
-     return (slot.parlayLegs||[]).map((b,legIdx)=>({ league_id:activeLeague.id, user_id:user.id, week:_weekNum, sport:b._sport||null, slot: isCustomSlip?`longshot_${slotIdx}_${legIdx}`:`longshot_${legIdx}`, multiplier:slot.mult, power_up_id:_puId, pu_tier:_puTier, pick_name:b.pick, game:b.game||"", odds:b.odds, implied_odds:b.impliedOdds, game_date:b.gameTime||null, event_id:b.eventId||null, market_key:b.marketKey||null, outcome:b.outcome||null, outcome_point:(b.point!=null?b.point:null), sel_key:b.selKey||null, result:"pending", points_earned:0 }));
+     return (slot.parlayLegs||[]).map((b,legIdx)=>({ league_id:activeLeague.id, user_id:user.id, week:_weekNum, sport:_pickSport(b, slot.parlayLegs), slot: isCustomSlip?`longshot_${slotIdx}_${legIdx}`:`longshot_${legIdx}`, multiplier:slot.mult, power_up_id:_puId, pu_tier:_puTier, pick_name:b.pick, game:b.game||"", odds:b.odds, implied_odds:b.impliedOdds, game_date:b.gameTime||null, event_id:b.eventId||null, market_key:b.marketKey||null, outcome:b.outcome||null, outcome_point:(b.point!=null?b.point:null), sel_key:b.selKey||null, result:"pending", points_earned:0 }));
    }
    return [{ league_id:activeLeague.id, user_id:user.id, week:_weekNum, sport:(slot.bet&&slot.bet._sport)||null, slot: isCustomSlip?`${slot.category||"ml"}_${slotIdx}`:(slot.category||"ml"), multiplier:slot.mult, power_up_id:_puId, pu_tier:_puTier, pick_name:slot.bet.pick, game:slot.bet.game||"", odds:slot.bet.odds, implied_odds:slot.bet.impliedOdds, game_date:slot.bet.gameTime||null, event_id:slot.bet.eventId||null, market_key:slot.bet.marketKey||null, outcome:slot.bet.outcome||null, outcome_point:(slot.bet.point!=null?slot.bet.point:null), sel_key:slot.bet.selKey||null, result:"pending", points_earned:0 }];
  };
@@ -9081,7 +9090,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  const _idxByWeek = {};
  const rows = []; soloFreePicks.forEach((b)=>{ const _w=_weekOf(b); if(_idxByWeek[_w]==null) _idxByWeek[_w]=_baseByWeek[_w]||0; const _si=_idxByWeek[_w]++;
    if(b.isParlay && Array.isArray(b.parlayLegs) && b.parlayLegs.length){
-     rows.push({ league_id: lgId, user_id: user.id, week: _w, sport: b._sport||((b.parlayLegs[0]&&b.parlayLegs[0]._sport)||null), slot: `parlay_${_si}`, multiplier: b.mult||1, pick_name: b.pick, game: b.game||((b.parlayLegs[0]&&b.parlayLegs[0].game)||""), odds: b.odds, implied_odds: b.impliedOdds, game_date: b.gameTime||null, parlay_legs: b.parlayLegs, result: "pending", points_earned: 0 });
+     rows.push({ league_id: lgId, user_id: user.id, week: _w, sport: _pickSport(b, b.parlayLegs), slot: `parlay_${_si}`, multiplier: b.mult||1, pick_name: b.pick, game: b.game||((b.parlayLegs[0]&&b.parlayLegs[0].game)||""), odds: b.odds, implied_odds: b.impliedOdds, game_date: b.gameTime||null, parlay_legs: b.parlayLegs, result: "pending", points_earned: 0 });
    } else {
      rows.push({ league_id: lgId, user_id: user.id, week: _w, sport: b._sport||null, slot: `${b.category||"ml"}_${_si}`, multiplier: b.mult||1, pick_name: b.pick, game: b.game||"", odds: b.odds, implied_odds: b.impliedOdds, game_date: b.gameTime||null, event_id: b.eventId||null, market_key: b.marketKey||null, outcome: b.outcome||null, outcome_point: (b.point!=null?b.point:null), sel_key: b.selKey||null, result: "pending", points_earned: 0 });
    } });
