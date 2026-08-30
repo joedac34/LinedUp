@@ -16,13 +16,17 @@ const PROP_MARKETS = {
     "btts", "draw_no_bet", "double_chance", "team_totals",
     // Anytime goalscorer: the only PLAYER market books post for soccer. Gradeable
     // via ESPN rosters (totalGoals, per-match) - verified 30 Aug 2026.
-    "player_goal_scorer_anytime",
+    // All probe-verified as posting for EPL (30 Aug 2026) and gradeable from
+    // ESPN rosters: totalGoals / goalAssists / shotsOnTarget / totalShots.
+    "player_goal_scorer_anytime", "player_assists", "player_shots_on_target", "player_shots",
   ],
   soccer_uefa_champs_league: [
     "btts", "draw_no_bet", "double_chance", "team_totals",
     // Anytime goalscorer: the only PLAYER market books post for soccer. Gradeable
     // via ESPN rosters (totalGoals, per-match) - verified 30 Aug 2026.
-    "player_goal_scorer_anytime",
+    // All probe-verified as posting for EPL (30 Aug 2026) and gradeable from
+    // ESPN rosters: totalGoals / goalAssists / shotsOnTarget / totalShots.
+    "player_goal_scorer_anytime", "player_assists", "player_shots_on_target", "player_shots",
   ],
  icehockey_nhl: [
  // All five verified against nhl-probe (29 Aug 2026): goals/assists/shotsTotal on
@@ -50,6 +54,7 @@ const PROP_MARKETS = {
 const MARKET_LABELS = {
   player_anytime_td:"Anytime TD", player_first_td:"First TD",
   player_goal_scorer_anytime:"Anytime Goal", player_shots_on_goal:"Shots on Goal", player_total_saves:"Saves",
+  player_assists:"Assists", player_shots_on_target:"Shots on Target", player_shots:"Shots",
   btts:"Both Teams To Score", draw_no_bet:"Draw No Bet", double_chance:"Double Chance", team_totals:"Team Total",
   player_pass_yds:"Pass Yds", player_pass_tds:"Pass TDs", player_rush_yds:"Rush Yds",
   player_receptions:"Receptions", player_reception_yds:"Rec Yds",
@@ -236,6 +241,49 @@ export default async function handler(req, res) {
     }
 
     if (debugRows) return res.status(200).json({ requested: markets, events: debugRows });
+
+    // ── Derived: "Goal or Assist" (soccer) ───────────────────────────────────
+    // No book posts this market, but two real ones do: anytime-goalscorer and
+    // assists Over 0.5. Both are priced by actual books, so the LINE is derived
+    // rather than invented:
+    //   P(goal or assist) = P(g) + P(a) - P(g)*P(a)
+    // Two biases run opposite ways and roughly cancel. Using vigged inputs
+    // overstates each leg (shortens the price, favours the house); assuming
+    // independence understates the union, since a player cannot assist his own
+    // goal (lengthens it, favours the picker). Spot-checked 30 Aug 2026 against
+    // Arsenal-Villa: Saka +210 goal / +220 assist -> -115, which is where books
+    // price "to score or assist" for that calibre of player.
+    // Only emitted when BOTH real markets exist for that player in that game.
+    try {
+      const _am2p = (o) => (o < 0 ? Math.abs(o) / (Math.abs(o) + 100) : 100 / (o + 100));
+      const _p2am = (p) => (p >= 0.5 ? Math.round((-100 * p) / (1 - p)) : Math.round((100 * (1 - p)) / p));
+      const byGame = {};
+      for (const r of props) {
+        if (r.market !== "player_goal_scorer_anytime" && r.market !== "player_assists") continue;
+        const who = String(r.pick || "").replace(/\s*-\s*Anytime Goal\s*$/i, "").replace(/\s+Over\s+[0-9.]+.*$/i, "").trim();
+        if (!who) continue;
+        const g = byGame[r.game] || (byGame[r.game] = {});
+        const e = g[who] || (g[who] = { row: r });
+        if (r.market === "player_goal_scorer_anytime") e.goal = r.impliedOdds;
+        else if (String(r.pick || "").match(/Over\s+0\.5/i)) e.assist = r.impliedOdds;
+      }
+      for (const gm in byGame) for (const who in byGame[gm]) {
+        const e = byGame[gm][who];
+        if (e.goal == null || e.assist == null) continue;
+        const pg = _am2p(Number(e.goal)), pa = _am2p(Number(e.assist));
+        if (!(pg > 0) || !(pa > 0)) continue;
+        const pu = pg + pa - pg * pa;
+        if (!(pu > 0) || !(pu < 1)) continue;
+        const am = _p2am(pu);
+        props.push({
+          ...e.row,
+          pick: `${who} - Goal or Assist`,
+          market: "player_goal_or_assist",
+          odds: am >= 0 ? `+${am}` : `${am}`,
+          impliedOdds: am,
+        });
+      }
+    } catch (e) { /* derived market must never break the real props response */ }
 
     // Props are identical for every user and all pre-game, so let Vercel's CDN serve one
     // upstream pull to all users per window instead of hitting the Odds API per client.

@@ -497,6 +497,10 @@ function parseProp(pickName) {
   // "Connor McDavid - Anytime Goal" (props.js NHL goal-scorer label, same shape).
   m = s.match(/^(.+?)\s*-\s*anytime\s+goal(?:s|scorer)?\s*$/i);
   if (m) return { player: m[1].trim(), dir: "over_eq", line: 1, stat: "anytime goal" };
+  // "Bukayo Saka - Goal or Assist" (PickLock-derived soccer market: priced off the
+  // book's anytime-goal and assists lines, settled on either happening).
+  m = s.match(/^(.+?)\s*-\s*goal\s+or\s+assist\s*$/i);
+  if (m) return { player: m[1].trim(), dir: "over_eq", line: 1, stat: "goal or assist" };
   return null;
 }
 
@@ -902,6 +906,11 @@ function gradeProp(pickName, gameField, index, info = {}, gameDate = null) {
     const H = sget(["H", "hits"]), D = sget(["2B", "doubles", "2b"]), Tr = sget(["3B", "triples", "3b"]), HR = sget(["HR", "homeRuns", "hr"]);
     if (H == null || D == null || Tr == null || HR == null) { info.reason = "prop_singles_data_unavailable"; return null; }
     val = H - D - Tr - HR;
+  } else if (parsed.stat === "goal or assist") {
+    // Either counts. Own goals sit in ownGoals and correctly do not count.
+    const _g = sget(["totalGoals", "goals", "G"]), _a = sget(["goalAssists", "assists", "A"]);
+    if (_g == null && _a == null) { info.reason = "prop_goal_assist_data_unavailable"; return null; }
+    val = ((Number(_g) || 0) >= 1 || (Number(_a) || 0) >= 1) ? 1 : 0;
   } else if (parsed.stat === "anytime goal") {
     // NHL goal scorer: goals >= 1. Single box column (goals / G), no D/ST analog,
     // and empty-net or OT goals count exactly as the books settle it. Shootout
