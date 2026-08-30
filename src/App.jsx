@@ -520,9 +520,10 @@ const SPORTS = {
  { id:"ml", label:"Match Result", mult:1, icon:"", color:"#00E5A0", bg:"rgba(0,229,160,0.15)", desc:"Home, Draw or Away - pick one of three" },
  { id:"ou", label:"Over/Under", mult:2, icon:"", color:"#FF9F0A", bg:"rgba(255,159,10,0.15)", desc:"Total goals over or under" },
  { id:"spread", label:"Goal Line", mult:3, icon:"", color:"#30D158", bg:"rgba(48,209,88,0.15)", desc:"Cover the +/- goal line" },
+ { id:"btts", label:"Both Teams To Score", mult:4, icon:"", color:"#00E5A0", bg:"rgba(0,229,160,0.13)", desc:"Will both sides find the net?" },
  { id:"longshot", label:"Parlay", mult:5, icon:"", color:"#FF375F", bg:"rgba(255,55,95,0.15)", desc:"Build a mini parlay - pick 2+ legs" },
  ],
- bets:{ ml:[], ou:[], spread:[], longshot:[] },
+ bets:{ ml:[], ou:[], spread:[], btts:[], longshot:[] },
  },
  ucl: {
  id:"ucl", label:"UCL", icon:"", color:"#3D5AFE",
@@ -531,9 +532,10 @@ const SPORTS = {
  { id:"ml", label:"Match Result", mult:1, icon:"", color:"#3D5AFE", bg:"rgba(61,90,254,0.15)", desc:"Home, Draw or Away - pick one of three" },
  { id:"ou", label:"Over/Under", mult:2, icon:"", color:"#FF9F0A", bg:"rgba(255,159,10,0.15)", desc:"Total goals over or under" },
  { id:"spread", label:"Goal Line", mult:3, icon:"", color:"#30D158", bg:"rgba(48,209,88,0.15)", desc:"Cover the +/- goal line" },
+ { id:"btts", label:"Both Teams To Score", mult:4, icon:"", color:"#3D5AFE", bg:"rgba(0,229,160,0.13)", desc:"Will both sides find the net?" },
  { id:"longshot", label:"Parlay", mult:5, icon:"", color:"#FF375F", bg:"rgba(255,55,95,0.15)", desc:"Build a mini parlay - pick 2+ legs" },
  ],
- bets:{ ml:[], ou:[], spread:[], longshot:[] },
+ bets:{ ml:[], ou:[], spread:[], btts:[], longshot:[] },
  },
  nba: {
  id:"nba", label:"NBA", icon:"", color:"#FF6B35",
@@ -6731,12 +6733,18 @@ function App() {
 
  // Fetch live player props from separate endpoint
  let prop = []; // live props only — blank if the feed has none for this sport
+ let btts = []; // soccer match market, split OUT of the prop feed below
  try {
  const propsRes = await fetch(API_BASE+`/api/props?sport=${sportKey}`, { headers: await authHeaders() });
  if(propsRes.ok) {
  const propsPayload = await propsRes.json();
  if(propsPayload.props && propsPayload.props.length > 0) {
  prop = propsPayload.props;
+ // BTTS rides the same event-endpoint fetch but is a MATCH market, not a player
+ // prop: route it to its own bucket so it can never reach the player-lookup
+ // grader, and stamp marketKey so the inserted pick carries market_key "btts".
+ btts = prop.filter(r=>r.market==="btts").map(r=>({...r, marketKey:"btts", outcome:(r.pick||"").split(" ")[0] }));
+ prop = prop.filter(r=>r.market!=="btts");
  }
  }
  } catch(e) {
@@ -6774,7 +6782,7 @@ function App() {
 
  setLiveOdds(prev => ({
  ...prev,
- [sportId]: { ml, spread, ou, longshot, prop }
+ [sportId]: { ml, spread, ou, longshot, prop, btts }
  }));
 
  } catch(e) {
@@ -6809,7 +6817,7 @@ function App() {
    ? activeLeague.sports
    : [activeLeague.sport || "nfl"];
  const BETS = (() => {
-   const merged = {ml:[],spread:[],ou:[],prop:[],longshot:[],ml_h1:[],spread_h1:[],ou_h1:[],ml_f5:[],spread_f5:[],ou_f5:[],ml_f3:[],spread_f3:[],ou_f3:[],yrfi:[],nrfi:[]};
+   const merged = {ml:[],spread:[],ou:[],prop:[],btts:[],longshot:[],ml_h1:[],spread_h1:[],ou_h1:[],ml_f5:[],spread_f5:[],ou_f5:[],ml_f3:[],spread_f3:[],ou_f3:[],yrfi:[],nrfi:[]};
    const tag = (arr, sp) => (arr||[]).map(b=>({...b, _sport:sp}));
    leagueSports.forEach(sp => {
      const odds = liveOdds[sp];
@@ -6818,6 +6826,7 @@ function App() {
      merged.spread.push(...tag(odds.spread||[], sp));
      merged.ou.push(...tag(odds.ou||[], sp));
      merged.prop.push(...tag(odds.prop||[], sp));
+     merged.btts.push(...tag(odds.btts||[], sp));
      merged.longshot.push(...tag(odds.longshot||[], sp));
      PERIOD_CATS.forEach(c=>{ merged[c].push(...tag(odds[c]||[], sp)); });
    });
@@ -7573,7 +7582,7 @@ function App() {
     if(!t) return "Any type";
     if(t==="wildcard") return "Wildcard";
     if(PERIOD_MARKETS[t]) return PERIOD_TYPE_LABEL[t] || t;
-    return ({ml:"Moneyline", spread:"Spread", ou:"Total", prop:"Player prop", longshot:"Longshot"})[SLOT_OF[t]||t] || t;
+    return ({ml:"Moneyline", spread:"Spread", ou:"Total", prop:"Player prop", btts:"BTTS", longshot:"Longshot"})[SLOT_OF[t]||t] || t;
   };
   const plokTypeColor = (t) => {
     if(t==="wildcard") return IOS.purple;
@@ -8373,6 +8382,7 @@ function App() {
   {id:"ml_h1",l:"1st Half ML",scope:"1st half",color:"#64D2FF",sports:["nfl","ncaaf","nba","ncaab"]},
   {id:"spread_h1",l:"1st Half Spread",scope:"1st half",color:"#64D2FF",sports:["nfl","ncaaf","nba","ncaab"]},
   {id:"ou_h1",l:"1st Half O / U",scope:"1st half",color:"#64D2FF",sports:["nfl","ncaaf","nba","ncaab"]},
+  {id:"btts",l:"Both Teams To Score",scope:"Match",color:"#00E5A0",sports:["epl","ucl"]},
   {id:"ml_p1",l:"1st Period ML",scope:"1st period",color:"#5AC8FA",sports:["nhl"]},
   {id:"spread_p1",l:"1st Period Puck Line",scope:"1st period",color:"#5AC8FA",sports:["nhl"]},
   {id:"ou_p1",l:"1st Period O / U",scope:"1st period",color:"#5AC8FA",sports:["nhl"]},

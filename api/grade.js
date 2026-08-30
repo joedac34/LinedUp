@@ -1137,7 +1137,7 @@ function gradePick(pick, games, playerIndex, info = {}) {
 
   // ── BTTS (soccer signature market, 2-way). market_key is authoritative; the
   // pick name leads with Yes/No, so token-match the head, never substring teams.
-  if (pick.market_key === "btts") {
+  if (pick.market_key === "btts" || String(pick.slot || "").indexOf("btts") === 0) {
     const both = homeScore > 0 && awayScore > 0;
     if (/^yes\b/i.test(name)) return both ? "W" : "L";
     if (/^no\b/i.test(name))  return both ? "L" : "W";

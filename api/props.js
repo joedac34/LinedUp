@@ -8,7 +8,16 @@ const PROP_MARKETS = {
   basketball_nba: [
     "player_points","player_rebounds","player_assists","player_threes","player_points_rebounds_assists",
   ],
-  icehockey_nhl: [
+  soccer_epl: [
+    // BTTS is a MATCH market riding the props fetch because both live on the
+    // per-event endpoint. The client routes market==="btts" to its own bucket;
+    // it must never enter the player-prop path.
+    "btts",
+  ],
+  soccer_uefa_champs_league: [
+    "btts",
+  ],
+ icehockey_nhl: [
  // All five verified against nhl-probe (29 Aug 2026): goals/assists/shotsTotal on
  // skater categories, saves on goalies. ESPN keeps shootoutSaves separate from
  // saves, matching how books settle saves props (reg+OT, shootout excluded).
@@ -34,6 +43,7 @@ const PROP_MARKETS = {
 const MARKET_LABELS = {
   player_anytime_td:"Anytime TD", player_first_td:"First TD",
   player_goal_scorer_anytime:"Anytime Goal", player_shots_on_goal:"Shots on Goal", player_total_saves:"Saves",
+  btts:"Both Teams To Score",
   player_pass_yds:"Pass Yds", player_pass_tds:"Pass TDs", player_rush_yds:"Rush Yds",
   player_receptions:"Receptions", player_reception_yds:"Rec Yds",
   player_rush_tds:"Rush TDs", player_reception_tds:"Rec TDs",
@@ -175,6 +185,11 @@ export default async function handler(req, res) {
               player = player.replace(/\s+(?:D\s*\/\s*ST|DST|Defense)$/i, " D/ST");
               label = `${player} - ${marketLabel}`;
               dedupKey = `${market.key}|${player}`;
+            } else if (market.key === "btts") {
+              // Yes/No, no player, no point. Label leads with the side so grade.js
+              // token-matches the head (/^yes|^no/) and never substring-hits a team.
+              label = `${outcome.name} - Both Teams To Score`;
+              dedupKey = `btts|${outcome.name}`;
             } else {
               const player = outcome.description || outcome.name;
               const direction = outcome.name === "Over" || outcome.name === "Under" ? outcome.name : "";
