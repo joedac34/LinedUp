@@ -66,35 +66,39 @@ async function probeOdds() {
       out.periodMarkets = (p1.ok && p1.body && p1.body.bookmakers)
         ? { eventTried: tried, marketsReturned: Object.keys(_samples), sampleOutcomes: _samples }
         : { eventTried: tried, note: "no P1 markets returned", status: p1.status };
-      // The prop set Joe asked for: goalscorer, SOG, assists, points, goalie saves.
-      // Props deferred to v2, but record what books post so the decision is evidence-based.
-      // Ask for EVERY soccer player market The Odds API documents. The earlier
-      // probe only requested two, so "only anytime-goalscorer posts" was never a
-      // finding - it was the question not being asked. player_shots_on_goal is a
-      // HOCKEY key and was always going to miss; soccer uses player_shots_on_target.
-      const propMarkets = [
+      // Probe each player market SEPARATELY. The Odds API returns 422 for the
+      // WHOLE request if any single market key is invalid for the sport, so a
+      // batched request tells you nothing about which keys are good - one bad key
+      // silently hides eight working ones (that is exactly what happened here on
+      // 30 Aug 2026: a nine-market batch 422'd and looked like "no props exist").
+      const candidateMarkets = [
         "player_goal_scorer_anytime",
         "player_first_goal_scorer",
         "player_last_goal_scorer",
-        "player_goal_scorer_2plus",
         "player_assists",
         "player_shots_on_target",
         "player_shots",
         "player_to_receive_card",
-        "player_to_receive_red_card",
-      ].join(",");
-      const pr = await j(`https://api.the-odds-api.com/v4/sports/${SPORT}/events/${ev}/odds?apiKey=${ODDS_KEY}&regions=us&markets=${propMarkets}&oddsFormat=american`);
-      if (pr.ok && pr.body && pr.body.bookmakers) {
-        const mkts = [...new Set(pr.body.bookmakers.flatMap(b => (b.markets || []).map(m => m.key)))];
-        const first = pr.body.bookmakers.flatMap(b => b.markets || [])[0];
-        out.props = {
-          eventTried: tried,
-          marketsReturned: mkts,
-          sampleOutcomes: first ? (first.outcomes || []).slice(0, 3).map(o => ({ name: o.name, description: o.description, point: o.point, price: o.price })) : [],
+      ];
+      const perMarket = {};
+      for (const mk of candidateMarkets) {
+        const r = await j(`https://api.the-odds-api.com/v4/sports/${SPORT}/events/${ev}/odds?apiKey=${ODDS_KEY}&regions=us&markets=${mk}&oddsFormat=american`);
+        if (!r.ok) { perMarket[mk] = { ok: false, status: r.status }; continue; }
+        const found = (r.body && r.body.bookmakers || []).flatMap(b => (b.markets || []).filter(m => m.key === mk));
+        if (!found.length) { perMarket[mk] = { ok: true, posted: false }; continue; }
+        perMarket[mk] = {
+          ok: true, posted: true,
+          books: new Set((r.body.bookmakers || []).filter(b => (b.markets || []).some(m => m.key === mk)).map(b => b.key)).size,
+          sample: (found[0].outcomes || []).slice(0, 3).map(o => ({ name: o.name, description: o.description, point: o.point, price: o.price })),
         };
-      } else {
-        out.props = { eventTried: tried, note: "no props returned (typical until close to game time)", status: pr.status };
       }
+      out.props = {
+        eventTried: tried,
+        // THE answer: which player markets actually price for soccer.
+        posted: Object.keys(perMarket).filter(k => perMarket[k].posted),
+        invalidKey: Object.keys(perMarket).filter(k => perMarket[k].ok === false),
+        detail: perMarket,
+      };
     }
   } catch (e) { out.error = String(e && e.message || e); }
   return out;
