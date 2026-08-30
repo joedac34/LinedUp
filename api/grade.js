@@ -1514,7 +1514,11 @@ export default async function handler(req, res) {
             // ── Solo parlay: one row holds every leg in parlay_legs. Grade each leg and AND them.
             if (pick.parlay_legs && Array.isArray(pick.parlay_legs) && pick.parlay_legs.length) {
               const _legs = pick.parlay_legs;
-              const _leg = (l) => ({ user_id: pick.user_id, week: pick.week, multiplier: pick.multiplier, slot: (l.category || "ml") + "_0", pick_name: l.pick, game: l.game || "", game_date: l.gameTime || null, implied_odds: l.impliedOdds, event_id: l.eventId || null, market_key: l.marketKey || null, outcome: l.outcome || null, outcome_point: (l.point != null ? l.point : null), sel_key: l.selKey || null });
+              // sport MUST ride along: gradePick branches on it for soccer (3-way ML +
+              // the ET guard). Without it a soccer parlay leg backing a team that drew
+              // would grade on the 2-way path and settle WRONG. Legs inherit the parent
+              // pick's sport, which is also what _gamesFor/_indexFor resolve against.
+              const _leg = (l) => ({ sport: pick.sport, user_id: pick.user_id, week: pick.week, multiplier: pick.multiplier, slot: (l.category || "ml") + "_0", pick_name: l.pick, game: l.game || "", game_date: l.gameTime || null, implied_odds: l.impliedOdds, event_id: l.eventId || null, market_key: l.marketKey || null, outcome: l.outcome || null, outcome_point: (l.point != null ? l.point : null), sel_key: l.selKey || null });
               const _res = _legs.map((l) => gradePick(_leg(l), _gamesFor(pick), _indexFor(pick), {}));
               if (_res.some((r) => r === null)) { results.skipped++; noteSkip(pick, "parlay_leg_pending"); continue; }
               const _kept = _legs.map((_, i) => i).filter((i) => _res[i] !== "P");   // drop voided/pushed legs
