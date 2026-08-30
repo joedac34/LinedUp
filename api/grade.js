@@ -1137,6 +1137,66 @@ function gradePick(pick, games, playerIndex, info = {}) {
 
   // ── BTTS (soccer signature market, 2-way). market_key is authoritative; the
   // pick name leads with Yes/No, so token-match the head, never substring teams.
+  // ── Soccer side resolver. Books send bare club names ("Aston Villa"); the
+  // game carries home_team/away_team from the same feed, so match against each
+  // independently. Never use winnerName here: it is home-biased on equal scores.
+  const _socSide = (who) => {
+    const w = String(who || "").toLowerCase().trim();
+    if (!w) return null;
+    const h = String(game.home_team || "").toLowerCase();
+    const a = String(game.away_team || "").toLowerCase();
+    if (h === w) return "home";
+    if (a === w) return "away";
+    const words = w.split(/\s+/).filter((x) => x.length > 3);
+    const inHome = words.some((x) => h.includes(x));
+    const inAway = words.some((x) => a.includes(x));
+    if (inHome && !inAway) return "home";
+    if (inAway && !inHome) return "away";
+    return null;
+  };
+
+  // ── Draw No Bet: the draw refunds. Outcome is a bare team name. ──
+  if (pick.market_key === "draw_no_bet") {
+    if (homeScore === awayScore) return "P";
+    const side = _socSide(name);
+    if (!side) { info.reason = "dnb_side_unresolved"; return null; }
+    const won = side === "home" ? homeScore > awayScore : awayScore > homeScore;
+    return won ? "W" : "L";
+  }
+
+  // ── Double Chance: two of the three outcomes. Book sends either
+  // "<Team> or Draw" or "<Team> or <Team>" (the no-draw pair). ──
+  if (pick.market_key === "double_chance") {
+    const parts = String(name).split(/\s+or\s+/i).map((x) => x.trim()).filter(Boolean);
+    if (parts.length !== 2) { info.reason = "dc_unparsed"; return null; }
+    const drawIdx = parts.findIndex((x) => /^draw$/i.test(x));
+    if (drawIdx === -1) {
+      // "Team A or Team B" — covers everything except the draw.
+      return homeScore === awayScore ? "L" : "W";
+    }
+    const side = _socSide(parts[1 - drawIdx]);
+    if (!side) { info.reason = "dc_side_unresolved"; return null; }
+    if (homeScore === awayScore) return "W"; // draw leg cashes
+    const teamWon = side === "home" ? homeScore > awayScore : awayScore > homeScore;
+    return teamWon ? "W" : "L";
+  }
+
+  // ── Team Totals: one side's goals vs a line. The TEAM arrives in
+  // outcome.description, so props.js labels these "<Team> Over 1.5" and the
+  // team is parsed back out here. Exact-number lines push.
+  if (pick.market_key === "team_totals") {
+    const m = String(name).match(/^(.*?)\s+(Over|Under)\s+([0-9.]+)\s*$/i);
+    if (!m) { info.reason = "team_total_unparsed"; return null; }
+    const side = _socSide(m[1]);
+    if (!side) { info.reason = "team_total_side_unresolved"; return null; }
+    const pt = parseFloat(m[3]);
+    if (!isFinite(pt)) { info.reason = "team_total_no_line"; return null; }
+    const teamScore = side === "home" ? homeScore : awayScore;
+    if (teamScore === pt) return "P";
+    const over = /^over$/i.test(m[2]);
+    return (over ? teamScore > pt : teamScore < pt) ? "W" : "L";
+  }
+
   if (pick.market_key === "btts" || String(pick.slot || "").indexOf("btts") === 0) {
     const both = homeScore > 0 && awayScore > 0;
     if (/^yes\b/i.test(name)) return both ? "W" : "L";

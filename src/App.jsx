@@ -6775,6 +6775,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  // Fetch live player props from separate endpoint
  let prop = []; // live props only — blank if the feed has none for this sport
  let btts = []; // soccer match market, split OUT of the prop feed below
+ let dnb = [], dchance = [], tmtotal = []; // soccer match markets, same split
  try {
  const propsRes = await fetch(API_BASE+`/api/props?sport=${sportKey}`, { headers: await authHeaders() });
  if(propsRes.ok) {
@@ -6785,7 +6786,13 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  // prop: route it to its own bucket so it can never reach the player-lookup
  // grader, and stamp marketKey so the inserted pick carries market_key "btts".
  btts = prop.filter(r=>r.market==="btts").map(r=>({...r, marketKey:"btts", outcome:(r.pick||"").split(" ")[0] }));
- prop = prop.filter(r=>r.market!=="btts");
+ // Same treatment for the other soccer MATCH markets (probe-verified 30 Aug).
+ // Each keeps its own bucket + marketKey so grade.js routes on market_key and
+ // none of them can reach the player-prop path.
+ dnb = prop.filter(r=>r.market==="draw_no_bet").map(r=>({...r, marketKey:"draw_no_bet", outcome:r.pick }));
+ dchance = prop.filter(r=>r.market==="double_chance").map(r=>({...r, marketKey:"double_chance", outcome:r.pick }));
+ tmtotal = prop.filter(r=>r.market==="team_totals").map(r=>({...r, marketKey:"team_totals", outcome:r.pick }));
+ prop = prop.filter(r=>["btts","draw_no_bet","double_chance","team_totals"].indexOf(r.market)===-1);
  }
  }
  } catch(e) {
@@ -6823,7 +6830,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
 
  setLiveOdds(prev => ({
  ...prev,
- [sportId]: { ml, spread, ou, longshot, prop, btts }
+ [sportId]: { ml, spread, ou, longshot, prop, btts, dnb, dchance, tmtotal }
  }));
 
  } catch(e) {
@@ -6858,7 +6865,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
    ? activeLeague.sports
    : [activeLeague.sport || "nfl"];
  const BETS = (() => {
-   const merged = {ml:[],spread:[],ou:[],prop:[],btts:[],longshot:[]};
+   const merged = {ml:[],spread:[],ou:[],prop:[],btts:[],dnb:[],dchance:[],tmtotal:[],longshot:[]};
    // Period buckets are DERIVED from PERIOD_CATS. Hardcoding them here is what
    // broke the app on 30 Aug 2026: ml_p1/spread_p1/ou_p1 were added to
    // PERIOD_CATS for NHL but not to this object, so merged[c].push below threw
@@ -6873,6 +6880,9 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
      merged.ou.push(...tag(odds.ou||[], sp));
      merged.prop.push(...tag(odds.prop||[], sp));
      merged.btts.push(...tag(odds.btts||[], sp));
+     merged.dnb.push(...tag(odds.dnb||[], sp));
+     merged.dchance.push(...tag(odds.dchance||[], sp));
+     merged.tmtotal.push(...tag(odds.tmtotal||[], sp));
      merged.longshot.push(...tag(odds.longshot||[], sp));
      PERIOD_CATS.forEach(c=>{ merged[c].push(...tag(odds[c]||[], sp)); });
    });
@@ -7627,7 +7637,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
     if(!t) return "Any type";
     if(t==="wildcard") return "Wildcard";
     if(PERIOD_MARKETS[t]) return PERIOD_TYPE_LABEL[t] || t;
-    return ({ml:"Moneyline", spread:"Spread", ou:"Total", prop:"Player prop", btts:"BTTS", longshot:"Longshot"})[SLOT_OF[t]||t] || t;
+    return ({ml:"Moneyline", spread:"Spread", ou:"Total", prop:"Player prop", btts:"BTTS", dnb:"DNB", dchance:"DC", tmtotal:"TT", longshot:"Longshot"})[SLOT_OF[t]||t] || t;
   };
   const plokTypeColor = (t) => {
     if(t==="wildcard") return IOS.purple;
@@ -8430,6 +8440,9 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
   {id:"spread_h1",l:"1st Half Spread",scope:"1st half",color:"#64D2FF",sports:["nfl","ncaaf","nba","ncaab"]},
   {id:"ou_h1",l:"1st Half O / U",scope:"1st half",color:"#64D2FF",sports:["nfl","ncaaf","nba","ncaab"]},
   {id:"btts",l:"Both Teams To Score",scope:"Match",color:"#00E5A0",sports:["epl","ucl"]},
+  {id:"dnb",l:"Draw No Bet",scope:"Match",color:"#00E5A0",sports:["epl","ucl"]},
+  {id:"dchance",l:"Double Chance",scope:"Match",color:"#00E5A0",sports:["epl","ucl"]},
+  {id:"tmtotal",l:"Team Total",scope:"Match",color:"#00E5A0",sports:["epl","ucl"]},
   {id:"ml_p1",l:"1st Period ML",scope:"1st period",color:"#5AC8FA",sports:["nhl"]},
   {id:"spread_p1",l:"1st Period Puck Line",scope:"1st period",color:"#5AC8FA",sports:["nhl"]},
   {id:"ou_p1",l:"1st Period O / U",scope:"1st period",color:"#5AC8FA",sports:["nhl"]},
@@ -14009,7 +14022,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const _hasFilled=(arr)=>(arr||[]).some(s=>s.mult&&(s.isParlay?(s.parlayLegs||[]).length>0:!!s.bet));
  const slipSlots = _hasFilled(flexPicks) ? flexPicks : ((savedPicks&&savedPicks.flexPicks&&_hasFilled(savedPicks.flexPicks)) ? savedPicks.flexPicks : null);
  const catColors={ml:IOS.blue,prop:IOS.yellow,ou:IOS.orange,spread:IOS.green,longshot:IOS.pink};
- const catAbbr={ml:"ML",prop:"PROP",ou:"O/U",spread:"SPREAD",btts:"BTTS",longshot:"LONG"};
+ const catAbbr={ml:"ML",prop:"PROP",ou:"O/U",spread:"SPREAD",btts:"BTTS",dnb:"DNB",dchance:"DC",tmtotal:"TT",longshot:"LONG"};
  const wk=activeLeague.current_week||activeLeague.week||1;
  const doClear=async()=>{
  if(!window.confirm("Clear your unlocked picks? Picks from games that have already started are kept.")) return;
@@ -15204,7 +15217,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  }
  if(!slot.bet) return null;
  const pts = calcPickPoints(slot.mult, slot.bet.impliedOdds, "W");
- const catLabel = slot.category ? {ml:"MONEYLINE",prop:"PROP",ou:"OVER/UNDER",spread:"SPREAD",btts:"BTTS",longshot:"LONGSHOT"}[slot.category]||slot.category.toUpperCase() : "PICK";
+ const catLabel = slot.category ? {ml:"MONEYLINE",prop:"PROP",ou:"OVER/UNDER",spread:"SPREAD",btts:"BTTS",dnb:"DRAW NO BET",dchance:"DOUBLE CHANCE",tmtotal:"TEAM TOTAL",longshot:"LONGSHOT"}[slot.category]||slot.category.toUpperCase() : "PICK";
  return (
  <div key={i} style={{margin:"0 16px 6px",background:IOS.bg2,borderRadius:RAD.md,padding:"11px 14px",border:`0.5px solid rgba(255,255,255,0.07)`}}>
  <div style={{fontSize:10,fontWeight:800,letterSpacing:0.5,textTransform:"uppercase",color:IOS.blue,marginBottom:5}}>{slot.mult}× · {catLabel}</div>
@@ -15324,7 +15337,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const parlayOdds = slot.isParlay && slot.parlayLegs.length>=2 ? calcLS(slot.parlayLegs) : null;
  const multColors = {1:"#3A9EE0", 2:"#3A9EE0", 3:"#3A9EE0", 4:"#3A9EE0", 5:"#3A9EE0"};
  const catColors = {ml:IOS.blue, prop:IOS.yellow, ou:IOS.orange, spread:IOS.green, longshot:IOS.pink};
- const catLabels = {ml:"MONEYLINE", prop:"PROP", ou:"OVER/UNDER", spread:"SPREAD", btts:"BTTS", longshot:"LONGSHOT", yrfi:"YRFI", nrfi:"NRFI", wildcard:"WILDCARD"};
+ const catLabels = {ml:"MONEYLINE", prop:"PROP", ou:"OVER/UNDER", spread:"SPREAD", btts:"BTTS", dnb:"DRAW NO BET", dchance:"DOUBLE CHANCE", tmtotal:"TEAM TOTAL", longshot:"LONGSHOT", yrfi:"YRFI", nrfi:"NRFI", wildcard:"WILDCARD"};
  const appliedPU = activatedPUs[idx];
  const isDouble = appliedPU?.id==="double";
  const isEnhance = appliedPU?.id==="enhance";
@@ -16559,7 +16572,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  if(isSoloMode){
    const _cf = lineConflict(cat, bet, soloFreePicks);
    if(_cf){ setPickConflict(_cf); setTimeout(()=>setPickConflict(""),2600); setGridJustAdded(null); return; }
-   const _CL={ml:"Moneyline",spread:"Spread",ou:"Over/Under",prop:"Prop",btts:"Both Teams To Score",longshot:"Longshot"};
+   const _CL={ml:"Moneyline",spread:"Spread",ou:"Over/Under",prop:"Prop",btts:"Both Teams To Score",dnb:"Draw No Bet",dchance:"Double Chance",tmtotal:"Team Total",longshot:"Longshot"};
    const _CC={ml:IOS.blue,spread:IOS.green,ou:IOS.orange,prop:IOS.yellow,longshot:IOS.pink};
    setSoloFreePicks(prev=> prev.some(p=>String(p.id)===String(bet.id)) ? prev : [...prev, {...bet, category:cat, categoryLabel:_CL[cat]||cat, categoryColor:_CC[cat]||IOS.blue, mult:1}]);
    setGridJustAdded(bet.id); setTimeout(()=>setGridJustAdded(null),480);
@@ -16990,12 +17003,19 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const _isSoc = (sp)=> sp==="epl" || sp==="ucl";
  const nick = (nm="", sp)=>{ const t=String(nm).trim(); if(_isSoc(sp||gSport)) return t.replace(/^(AFC|FC)\s+/i,"").replace(/\s+(FC|AFC)$/i,""); const w=t.split(/\s+/); return w.length>1 ? w[w.length-1] : t; };
  const _bg = {};
- const _ens = (g,t)=>{ if(!_bg[g]){ const pg=parseGame(g); _bg[g]={ game:g, away:pg.away, home:pg.home, time:t||"", ml:{}, spread:{}, ou:{}, btts:{} }; } if(t&&!_bg[g].time)_bg[g].time=t; return _bg[g]; };
+ const _ens = (g,t)=>{ if(!_bg[g]){ const pg=parseGame(g); _bg[g]={ game:g, away:pg.away, home:pg.home, time:t||"", ml:{}, spread:{}, ou:{}, btts:{}, dnb:{}, dchance:{}, tmtotal:{} }; } if(t&&!_bg[g].time)_bg[g].time=t; return _bg[g]; };
  (BETS.ml||[]).filter(b=>gSport==="all"||b._sport===gSport).forEach(b=>{ const e=_ens(b.game,b.gameTime); if(b.awayPitcher&&!e.awayPitcher)e.awayPitcher=b.awayPitcher; if(b.homePitcher&&!e.homePitcher)e.homePitcher=b.homePitcher; const _nm=String(b.outcome||b.pick||"").trim(); if(/^draw$/i.test(_nm)){ e.ml.draw=b; return; } const sd=sideOf(_nm,b.game); if(sd==="AWAY")e.ml.away=b; else if(sd==="HOME")e.ml.home=b; });
  (BETS.spread||[]).filter(b=>gSport==="all"||b._sport===gSport).forEach(b=>{ const e=_ens(b.game,b.gameTime); if(b.awayPitcher&&!e.awayPitcher)e.awayPitcher=b.awayPitcher; if(b.homePitcher&&!e.homePitcher)e.homePitcher=b.homePitcher; const sd=sideOf(b.outcome||teamFromSpread(b.pick),b.game); if(sd==="AWAY")e.spread.away=b; else if(sd==="HOME")e.spread.home=b; });
  // BTTS (soccer): Yes/No, no team side. Bucketed like O/U, off the head token
  // so a club name containing "no" cannot misroute it.
  (BETS.btts||[]).filter(b=>gSport==="all"||b._sport===gSport).forEach(b=>{ const e=_ens(b.game,b.gameTime); const o=String(b.outcome||b.pick||"").trim().toLowerCase(); if(/^yes\b/.test(o))e.btts.yes=b; else if(/^no\b/.test(o))e.btts.no=b; });
+ // DNB: two team outcomes, keyed home/away off the game label so the row order
+ // matches the grid above it.
+ (BETS.dnb||[]).filter(b=>gSport==="all"||b._sport===gSport).forEach(b=>{ const e=_ens(b.game,b.gameTime); const sd=sideOf(String(b.outcome||b.pick||"").replace(/\s*\(Draw No Bet\)\s*$/i,""),b.game); if(sd==="AWAY")e.dnb.away=b; else if(sd==="HOME")e.dnb.home=b; });
+ // Double chance: three outcomes. The no-draw pair is the one WITHOUT "draw".
+ (BETS.dchance||[]).filter(b=>gSport==="all"||b._sport===gSport).forEach(b=>{ const e=_ens(b.game,b.gameTime); const nm=String(b.outcome||b.pick||""); if(!/\bdraw\b/i.test(nm)){ e.dchance.pair=b; return; } const team=nm.split(/\s+or\s+/i).map(x=>x.trim()).filter(x=>!/^draw$/i.test(x))[0]||""; const sd=sideOf(team,b.game); if(sd==="AWAY")e.dchance.away=b; else if(sd==="HOME")e.dchance.home=b; });
+ // Team totals: label is "<Team> Over 1.5"; bucket by side then direction.
+ (BETS.tmtotal||[]).filter(b=>gSport==="all"||b._sport===gSport).forEach(b=>{ const e=_ens(b.game,b.gameTime); const m=String(b.outcome||b.pick||"").match(/^(.*?)\s+(Over|Under)\s+([0-9.]+)\s*$/i); if(!m)return; const sd=sideOf(m[1],b.game); const dir=/^over$/i.test(m[2])?"over":"under"; if(sd==="AWAY"){ e.tmtotal.away=e.tmtotal.away||{}; e.tmtotal.away[dir]=b; } else if(sd==="HOME"){ e.tmtotal.home=e.tmtotal.home||{}; e.tmtotal.home[dir]=b; } });
  (BETS.ou||[]).filter(b=>gSport==="all"||b._sport===gSport).forEach(b=>{ const e=_ens(b.game,b.gameTime); if(b.awayPitcher&&!e.awayPitcher)e.awayPitcher=b.awayPitcher; if(b.homePitcher&&!e.homePitcher)e.homePitcher=b.homePitcher; const o=String(b.outcome||b.pick||"").toLowerCase(); if(o.indexOf("over")===0)e.ou.over=b; else if(o.indexOf("under")===0)e.ou.under=b; });
  let sheetGames = Object.values(_bg);
  if(gridSearch.trim()){ const q=gridSearch.toLowerCase().trim(); sheetGames=sheetGames.filter(g=>String(g.game).toLowerCase().includes(q)); }
@@ -17114,6 +17134,41 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  
                   {/* BTTS: soccer signature market. Only rendered when the feed
                       actually returned both sides for this fixture. */}
+                  {/* Soccer extras (probe-verified 30 Aug 2026). Each renders
+                      only when the feed returned that market for this fixture. */}
+                  {(g.dnb.home||g.dnb.away) && (
+                    <div style={{borderTop:"1px solid rgba(255,255,255,0.07)",padding:"8px 13px",display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)",flexShrink:0}}>Draw no bet</span>
+                      <div style={{marginLeft:"auto",display:"flex",gap:6}}>
+                        <div style={{width:74}}><Chip b={g.dnb.away} cat="dnb" line={nick(g.away,_gsp).slice(0,7)} value={false}/></div>
+                        <div style={{width:74}}><Chip b={g.dnb.home} cat="dnb" line={nick(g.home,_gsp).slice(0,7)} value={false}/></div>
+                      </div>
+                    </div>
+                  )}
+                  {(g.dchance.home||g.dchance.away||g.dchance.pair) && (
+                    <div style={{borderTop:"1px solid rgba(255,255,255,0.07)",padding:"8px 13px",display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)",flexShrink:0}}>Double chance</span>
+                      <div style={{marginLeft:"auto",display:"flex",gap:6}}>
+                        <div style={{width:64}}><Chip b={g.dchance.away} cat="dchance" line="X2" value={false}/></div>
+                        <div style={{width:64}}><Chip b={g.dchance.pair} cat="dchance" line="12" value={false}/></div>
+                        <div style={{width:64}}><Chip b={g.dchance.home} cat="dchance" line="1X" value={false}/></div>
+                      </div>
+                    </div>
+                  )}
+                  {(g.tmtotal.home||g.tmtotal.away) && (
+                    <div style={{borderTop:"1px solid rgba(255,255,255,0.07)",padding:"8px 13px"}}>
+                      <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)",marginBottom:7}}>Team goals</div>
+                      {[{k:"away",nm:g.away},{k:"home",nm:g.home}].map(t=> (g.tmtotal[t.k]&&(g.tmtotal[t.k].over||g.tmtotal[t.k].under)) ? (
+                        <div key={t.k} style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
+                          <span style={{fontSize:12,fontWeight:700,color:"rgba(255,255,255,0.75)"}}>{nick(t.nm,_gsp)}</span>
+                          <div style={{marginLeft:"auto",display:"flex",gap:6}}>
+                            <div style={{width:74}}><Chip b={g.tmtotal[t.k].over} cat="tmtotal" line="OVER" value={false}/></div>
+                            <div style={{width:74}}><Chip b={g.tmtotal[t.k].under} cat="tmtotal" line="UNDER" value={false}/></div>
+                          </div>
+                        </div>
+                      ) : null)}
+                    </div>
+                  )}
                   {(g.btts.yes||g.btts.no) && (
                     <div style={{borderTop:"1px solid rgba(255,255,255,0.07)",padding:"8px 13px",display:"flex",alignItems:"center",gap:8}}>
                       <span style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)",flexShrink:0}}>Both teams to score</span>
