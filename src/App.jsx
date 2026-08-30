@@ -513,6 +513,28 @@ const SPORTS = {
  ],
  bets:{ ml:[], ou:[], spread:[], longshot:[] },
  },
+ epl: {
+ id:"epl", label:"EPL", icon:"", color:"#00E5A0",
+ season:"2026-27 Premier League",
+ slots:[
+ { id:"ml", label:"Match Result", mult:1, icon:"", color:"#00E5A0", bg:"rgba(0,229,160,0.15)", desc:"Home, Draw or Away - pick one of three" },
+ { id:"ou", label:"Over/Under", mult:2, icon:"", color:"#FF9F0A", bg:"rgba(255,159,10,0.15)", desc:"Total goals over or under" },
+ { id:"spread", label:"Goal Line", mult:3, icon:"", color:"#30D158", bg:"rgba(48,209,88,0.15)", desc:"Cover the +/- goal line" },
+ { id:"longshot", label:"Parlay", mult:5, icon:"", color:"#FF375F", bg:"rgba(255,55,95,0.15)", desc:"Build a mini parlay - pick 2+ legs" },
+ ],
+ bets:{ ml:[], ou:[], spread:[], longshot:[] },
+ },
+ ucl: {
+ id:"ucl", label:"UCL", icon:"", color:"#3D5AFE",
+ season:"2026-27 Champions League",
+ slots:[
+ { id:"ml", label:"Match Result", mult:1, icon:"", color:"#3D5AFE", bg:"rgba(61,90,254,0.15)", desc:"Home, Draw or Away - pick one of three" },
+ { id:"ou", label:"Over/Under", mult:2, icon:"", color:"#FF9F0A", bg:"rgba(255,159,10,0.15)", desc:"Total goals over or under" },
+ { id:"spread", label:"Goal Line", mult:3, icon:"", color:"#30D158", bg:"rgba(48,209,88,0.15)", desc:"Cover the +/- goal line" },
+ { id:"longshot", label:"Parlay", mult:5, icon:"", color:"#FF375F", bg:"rgba(255,55,95,0.15)", desc:"Build a mini parlay - pick 2+ legs" },
+ ],
+ bets:{ ml:[], ou:[], spread:[], longshot:[] },
+ },
  nba: {
  id:"nba", label:"NBA", icon:"", color:"#FF6B35",
  season:"2024-25 NBA Season",
@@ -4514,11 +4536,88 @@ const NCAAB_TEAMS = {
 const NCAAB_NORM = {}; Object.keys(NCAAB_TEAMS).forEach(k=>{ NCAAB_NORM[_ncaafNorm(k)] = k; });
 const NCAAB_ALIAS = { "connecticut huskies":"uconn huskies","north carolina state wolfpack":"nc state wolfpack","southern california trojans":"usc trojans","mississippi rebels":"ole miss rebels","louisiana state tigers":"lsu tigers","appalachian state mountaineers":"app state mountaineers","college of charleston cougars":"charleston cougars" };
 function ncaabTeam(name){ if(!name) return null; if(NCAAB_TEAMS[name]) return NCAAB_TEAMS[name]; const n=_ncaafNorm(name); const key=NCAAB_NORM[NCAAB_ALIAS[n]||n]||NCAAB_NORM[n]; return key ? NCAAB_TEAMS[key] : null; }
+const EPL_TEAMS = {
+"AFC Bournemouth":["BOU","349"],
+"Arsenal":["ARS","359"],
+"Aston Villa":["AVL","362"],
+"Brentford":["BRE","337"],
+"Brighton & Hove Albion":["BHA","331"],
+"Chelsea":["CHE","363"],
+"Coventry City":["COV","388"],
+"Crystal Palace":["CRY","384"],
+"Everton":["EVE","368"],
+"Fulham":["FUL","370"],
+"Hull City":["HUL","306"],
+"Ipswich Town":["IPS","373"],
+"Leeds United":["LEE","357"],
+"Liverpool":["LIV","364"],
+"Manchester City":["MNC","382"],
+"Manchester United":["MAN","360"],
+"Newcastle United":["NEW","361"],
+"Nottingham Forest":["NFO","393"],
+"Sunderland":["SUN","366"],
+"Tottenham Hotspur":["TOT","367"],
+};
+// 2026-27 Premier League 20, from epl-probe (30 Aug 2026).
+const UCL_TEAMS = {
+"AEK Athens":["AEK","887"],
+"AS Roma":["ROMA","104"],
+"Arsenal":["ARS","359"],
+"Aston Villa":["AVL","362"],
+"Atlético Madrid":["ATM","1068"],
+"Barcelona":["BAR","83"],
+"Bayern Munich":["MUN","132"],
+"Bodo/Glimt":["BODO","2980"],
+"Borussia Dortmund":["DOR","124"],
+"Club Brugge":["BRU","570"],
+"Como":["COMO","2572"],
+"FC Porto":["FCP","437"],
+"Fenerbahce":["FEN","436"],
+"Feyenoord Rotterdam":["FEY","142"],
+"Galatasaray":["GAL","432"],
+"Internazionale":["INT","110"],
+"LASK Linz":["LAS","4411"],
+"Lens":["RCL","175"],
+"Lille":["LILL","166"],
+"Liverpool":["LIV","364"],
+"Manchester City":["MNC","382"],
+"Manchester United":["MAN","360"],
+"Napoli":["NAP","114"],
+"PSV Eindhoven":["PSV","148"],
+"Paris Saint-Germain":["PSG","160"],
+"RB Leipzig":["RBL","11420"],
+"Real Betis":["BET","244"],
+"Real Madrid":["RMA","86"],
+"Sabah FK":["SAB","21922"],
+"Shakhtar Donetsk":["SHK","493"],
+"Slavia Prague":["SLP","494"],
+"Slovan Bratislava":["SLB","521"],
+"Sporting CP":["SCP","2250"],
+"VfB Stuttgart":["VFB","134"],
+"Viking FK":["VIK","510"],
+"Villarreal":["VIL","102"],
+};
+// 2026-27 Champions League league-phase 36, from epl-probe?league=ucl.
+// Odds-API naming vs ESPN naming for soccer, normalized-form aliases. The book
+// says "Inter Milan"; ESPN says "Internazionale". _ncaafNorm already strips
+// diacritics (Atletico) and punctuation (Saint-Germain), so only word-level
+// differences need entries here.
+const SOCCER_ALIAS = { "inter milan":"internazionale","porto":"fc porto","feyenoord":"feyenoord rotterdam","sporting lisbon":"sporting cp","roma":"as roma","fk bodo glimt":"bodo glimt","brighton and hove albion":"brighton hove albion","bournemouth":"afc bournemouth","paris st germain":"paris saint germain","wolverhampton wanderers":"wolves" };
+const EPL_NORM = {}; Object.keys(EPL_TEAMS).forEach(k=>{ EPL_NORM[_ncaafNorm(k)] = k; });
+const UCL_NORM = {}; Object.keys(UCL_TEAMS).forEach(k=>{ UCL_NORM[_ncaafNorm(k)] = k; });
+function soccerTeam(lg, name){
+  if(!name || /^draw$/i.test(String(name).trim())) return null; // Draw is an outcome, not a team
+  const T = lg==="ucl" ? UCL_TEAMS : EPL_TEAMS, N = lg==="ucl" ? UCL_NORM : EPL_NORM;
+  if(T[name]) return T[name];
+  const n=_ncaafNorm(name); const key=N[SOCCER_ALIAS[n]||n]||N[n];
+  return key ? T[key] : null;
+}
 const teamLogo = (sport, name) => {
   if(!name) return null;
   const lg=String(sport||"").toLowerCase();
   if(lg==="ncaaf"){ const t=ncaafTeam(name); return t ? "https://a.espncdn.com/i/teamlogos/ncaa/500/"+t[1]+".png" : null; }
   if(lg==="ncaab"){ const t=ncaabTeam(name); return t ? "https://a.espncdn.com/i/teamlogos/ncaa/500/"+t[1]+".png" : null; }
+  if(lg==="epl"||lg==="ucl"){ const t=soccerTeam(lg,name); return t ? "https://a.espncdn.com/i/teamlogos/soccer/500/"+t[1]+".png" : null; }
   const m=TEAM_ABBR[lg]; if(!m) return null;
   const n=String(name).toLowerCase().trim();
   let abbr=m[n];
@@ -5444,12 +5543,14 @@ const PERIOD_VOCAB = {
  nba:{umbrella:"1st Half",unit:"points"},
  nhl:{umbrella:"1st Period",unit:"goals"},
  ncaab:{umbrella:"1st Half",unit:"points"},
+ epl:{umbrella:"1st Half",unit:"goals"},
+ ucl:{umbrella:"1st Half",unit:"goals"},
 };
 const periodUmbrella = (sp) => (PERIOD_VOCAB[sp]||{}).umbrella || "Periods";
 const periodUnit = (sp) => (PERIOD_VOCAB[sp]||{}).unit || "points";
 // Hockey shows P1/P2/P3 then OT; everything else keeps Q. Reads game.sport so the
 // same gamecast component serves both without forking the layout.
-const _perTag = (g) => { const p=(g&&g.period)||1; if(g&&g.sport==="nhl") return p>3?"OT":("P"+p); if(g&&g.sport==="ncaab") return p>2?"OT":("H"+p); return "Q"+p; };
+const _perTag = (g) => { const p=(g&&g.period)||1; if(g&&g.sport==="nhl") return p>3?"OT":("P"+p); if(g&&g.sport==="ncaab") return p>2?"OT":("H"+p); if(g&&(g.sport==="epl"||g.sport==="ucl")) return p>2?"ET":("H"+p); return "Q"+p; };
 const periodCatLabel = (sps) => { const u=(sps||[]).map(x=>(PERIOD_VOCAB[x]||{}).umbrella); const inn=u.includes("Innings"); const half=u.some(x=>x==="1st Half"); return inn&&half?"Innings / halves":inn?"Innings":half?"Halves":"Periods"; };
 const PERIOD_SUBS_BY_SPORT = {
  mlb:[{id:"ml_f5",l:"F5 ML"},{id:"spread_f5",l:"F5 Spread"},{id:"ou_f5",l:"F5 O/U"},{id:"ml_f3",l:"F3 ML"},{id:"spread_f3",l:"F3 Spread"},{id:"ou_f3",l:"F3 O/U"},{id:"yrfi",l:"YRFI"},{id:"nrfi",l:"NRFI"}],
@@ -6535,7 +6636,7 @@ function App() {
  const [oddsError, setOddsError] = useState(false);
  // oddsLastFetched persisted in localStorage so cache survives page refreshes
 
- const SPORT_KEYS = { nfl:"americanfootball_nfl", nba:"basketball_nba", mlb:"baseball_mlb", ncaaf:"americanfootball_ncaaf", nhl:"icehockey_nhl", ncaab:"basketball_ncaab" };
+ const SPORT_KEYS = { nfl:"americanfootball_nfl", nba:"basketball_nba", mlb:"baseball_mlb", ncaaf:"americanfootball_ncaaf", nhl:"icehockey_nhl", ncaab:"basketball_ncaab", epl:"soccer_epl", ucl:"soccer_uefa_champs_league" };
 
  const _oddsInFlight = useRef({});
  // In-flight guard. Three separate effects can ask for the same sport within a few
@@ -13552,7 +13653,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {/* ══ SOLO MODE HOME SCREEN ══ */}
  {homeMode==="solo" && <SoloHome raceUser={user} gauntletSlot={screen==="home" ? <GauntletCard user={user} onEnter={()=>{ applyMode(false); setActiveLeagueId(GAUNTLET_ID); }} onJoin={async()=>{ if(user){ await fetchLeagues(user.id); } applyMode(false); setActiveLeagueId(GAUNTLET_ID); }}/> : null} soloWeeks={soloWeeks} soloLoading={soloLoading} isPro={isPro} IOS={IOS} setScreen={setScreen} setShowNewLeague={setShowNewLeague} setNewLeagueStep={setNewLeagueStep} setShowBrowse={setShowBrowse} fetchPublicLeagues={fetchPublicLeagues} setIsSoloMode={applyMode} setActiveLeagueId={setActiveLeagueId} getOrCreateSoloLeague={getOrCreateSoloLeague} soloSavedPicks={soloSavedPicks} setSoloSavedPicks={setSoloSavedPicks} soloFlexPicks={soloFlexPicks} setSoloFlexPicks={setSoloFlexPicks} soloSport={soloSport} setSoloSport={setSoloSportPersist} setShowSoloSportPicker={setShowSoloSportPicker} soloSubmitted={soloSubmitted} setSoloSubmitted={setSoloSubmitted} username={userProfile?.username||""} soloTopPct={soloTopPct} onDeleteSlate={deleteSoloSlate} onJoinCode={handleJoinCode} setShowPaywall={setShowPaywall} tickerGames={tickerGames} espnGames={espnGames} globalRank={(()=>{ const rows=lbCache["all"]; if(!rows||!rows.length) return null; const sx=[...rows].sort((a,b)=>(Number(b.points)||0)-(Number(a.points)||0)); const i=sx.findIndex(r=>String(r.user_id)===String(user?.id)); return i>=0?{rank:i+1,total:sx.length}:null; })()} onOpenLeaderboard={()=>{ fetchLeaderboard("all"); setScreen("leaderboard"); }} liveGames={liveGames} onOpenGamecast={openGamecast} onReplace={startReplace}/>}
        {homeMode==="solo" && screen==="home" && (()=>{
-         const SP=["mlb","nfl","nba","ncaaf","nhl","ncaab"];
+         const SP=["mlb","nfl","nba","ncaaf","nhl","ncaab","epl","ucl"];
          const games=(tickerGames||[]).filter(g=>g&&g.sport===soloSport);
          const shown=soloGamesAll?games:games.slice(0,4);
          const so=liveOdds[soloSport];
@@ -17724,7 +17825,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
   {/* Solo sport switcher */}
  {isSoloMode && (
  <div className="gbx-scroll" style={{display:"flex",gap:7,padding:"2px 16px 8px",overflowX:"auto"}}>
- {["mlb","nfl","nba","ncaaf","nhl","ncaab"].map(sp=>{
+ {["mlb","nfl","nba","ncaaf","nhl","ncaab","epl","ucl"].map(sp=>{
  const on = sp===soloSport; const sc = SPORTS[sp]?.color || IOS.blue;
  return (
  <div key={sp} onClick={()=>{ if(soloSport!==sp) setSoloSportPersist(sp); }} style={{...pillBase,
@@ -19029,7 +19130,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
         (chunk A). Half the old restore-condition is still open — no NHL pick has
         graded end-to-end yet (season starts Oct). Joe chose to expose it now
         anyway; the MANDATORY check is grading the first preseason pick (~Sep 29). */
-     {id:"nhl",label:"NHL"},{id:"ncaab",label:"NCAAB"},
+     {id:"nhl",label:"NHL"},{id:"ncaab",label:"NCAAB"},{id:"epl",label:"EPL"},{id:"ucl",label:"UCL"},
    ].map(sp=>{
      const isSelected = newLeagueSports.includes(sp.id);
      const _svLock = newLeagueType==="survivor" || newLeagueType==="ladder"; // NFL-only: anytime-TD / NFL moneylines / NFL alt-yardage ladders
