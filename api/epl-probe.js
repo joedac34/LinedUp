@@ -89,7 +89,14 @@ async function probeOdds() {
 // ── 2. ESPN: completed game box score -> stat field names (grading) ──────────
 async function probeEspnBox() {
   // 2025-26 regular-season / playoff dates guaranteed to hold completed games.
-  const dates = ["20260823", "20260822", "20260816"]; // 2026-27 EPL matchweeks already played
+  // ?date=YYYYMMDD overrides. THE decisive test for props: rosters[].roster[].stats
+  // exposes totalGoals/goalAssists/shotsOnTarget, but an August fixture cannot tell
+  // us whether those are PER-MATCH or SEASON-TO-DATE - both read 1 appearance that
+  // early. Point this at a LATE-season match: appearances:1 means per-match (props
+  // ship), appearances:30+ means cumulative and every anytime-goal prop would cash
+  // off season totals instead of that day's goals.
+  const _dq = (req.query && req.query.date) ? String(req.query.date).replace(/[^0-9]/g, "").slice(0, 8) : "";
+  const dates = _dq ? [_dq] : ["20260823", "20260822", "20260816"];
   try {
     let gameId = null, gameName = null, usedDate = null;
     for (const d of dates) {
