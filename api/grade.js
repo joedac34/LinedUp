@@ -412,6 +412,12 @@ const STAT_ALIASES = {
   "blocks": ["BLK", "blocks"], "blk": ["BLK", "blocks"],
   "turnovers": ["TO", "turnovers"],
   "3-pointers": ["3PT"], "three pointers": ["3PT"], "threes": ["3PT"], "3pt": ["3PT"], "3 pointers": ["3PT"],
+  // Hockey (NHL). Keys verified by nhl-probe against a completed 2025-26 box
+  // score. shotsTotal is shots-on-goal (the "SOG" LABEL belongs to shootoutGoals
+  // — do not alias by label here). saves excludes shootoutSaves, matching book
+  // settlement. Points is derived (goals+assists) in gradeProp, not aliased.
+  "shots on goal": ["shotsTotal", "S"], "sog": ["shotsTotal", "S"],
+  "saves": ["saves", "SV"], "goalie saves": ["saves", "SV"],
   // Football (NFL + NCAAF). ESPN nests passing/rushing/receiving as separate
   // categories that SHARE labels (YDS/TD), so key off the category-specific ESPN
   // keys (passingYards, rushingYards, ...) and never the ambiguous shared labels.
@@ -477,6 +483,9 @@ function parseProp(pickName) {
   // no direction and no line). Settles as over_eq 1 on the combined TD count.
   m = s.match(/^(.+?)\s*-\s*anytime\s+td(?:s|scorer)?\s*$/i);
   if (m) return { player: m[1].trim(), dir: "over_eq", line: 1, stat: "anytime td" };
+  // "Connor McDavid - Anytime Goal" (props.js NHL goal-scorer label, same shape).
+  m = s.match(/^(.+?)\s*-\s*anytime\s+goal(?:s|scorer)?\s*$/i);
+  if (m) return { player: m[1].trim(), dir: "over_eq", line: 1, stat: "anytime goal" };
   return null;
 }
 
@@ -851,6 +860,19 @@ function gradeProp(pickName, gameField, index, info = {}, gameDate = null) {
     const H = sget(["H", "hits"]), D = sget(["2B", "doubles", "2b"]), Tr = sget(["3B", "triples", "3b"]), HR = sget(["HR", "homeRuns", "hr"]);
     if (H == null || D == null || Tr == null || HR == null) { info.reason = "prop_singles_data_unavailable"; return null; }
     val = H - D - Tr - HR;
+  } else if (parsed.stat === "anytime goal") {
+    // NHL goal scorer: goals >= 1. Single box column (goals / G), no D/ST analog,
+    // and empty-net or OT goals count exactly as the books settle it. Shootout
+    // goals sit in shootoutGoals and correctly do NOT count.
+    val = sget(["goals", "G"]);
+    if (val == null) { info.reason = "prop_goals_data_unavailable"; return null; }
+  } else if (/\bpoints?\b/i.test(parsed.stat) && stats["PTS"] == null && shas(["goals"]) && shas(["assists"])) {
+    // NHL points = goals + assists; ESPN hockey has no points column. The PTS
+    // guard keeps NBA points on the alias path, and requiring both hockey keys
+    // keeps this branch from ever firing on a non-hockey line.
+    const G = sget(["goals", "G"]), A = sget(["assists", "A"]);
+    if (G == null || A == null) { info.reason = "prop_points_data_unavailable"; return null; }
+    val = G + A;
   } else {
     const labels = resolveStatLabels(parsed.stat);
     let raw = null;

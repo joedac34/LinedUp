@@ -5052,7 +5052,7 @@ td:["player_anytime_td","player_first_td","player_rush_tds","player_reception_td
 pts:["player_points","player_points_rebounds_assists"], reb:["player_rebounds"], ast:["player_assists"], "3pt":["player_threes"],
 hr:["batter_home_runs","batter_home_runs_alternate"], hits:["batter_hits"], bases:["batter_total_bases"], rbi:["batter_rbis"], k:["pitcher_strikeouts"],
 runs:["batter_runs_scored"], walks:["batter_walks"], sb:["batter_stolen_bases"], doubles:["batter_doubles"], triples:["batter_triples"], singles:["batter_singles"], hrr:["batter_hits_runs_rbis"], er:["pitcher_earned_runs"], hitsallowed:["pitcher_hits_allowed"], walksallowed:["pitcher_walks"], outs:["pitcher_outs"],
-anytd:["player_anytime_td"], passyds:["player_pass_yds"], passtds:["player_pass_tds"], rushyds:["player_rush_yds"], rushtds:["player_rush_tds"], recs:["player_receptions"], recyds:["player_reception_yds"], rectds:["player_reception_tds"],
+anytd:["player_anytime_td"], goal:["player_goal_scorer_anytime"], sog:["player_shots_on_goal"], saves:["player_total_saves"], passyds:["player_pass_yds"], passtds:["player_pass_tds"], rushyds:["player_rush_yds"], rushtds:["player_rush_tds"], recs:["player_receptions"], recyds:["player_reception_yds"], rectds:["player_reception_tds"],
 };
 
 const PERIOD_VOCAB = {
@@ -7880,8 +7880,10 @@ function App() {
   {id:"prop",l:"Player Prop",scope:"Any prop",color:"#FFD60A",
    // No ncaaf: /api/props has no market list for it (400), NCAAF player props are
    // banned in many states, and books post them thinly. Revisit only with a real
-   // props.js entry AND a grading test. No nhl until that sport is wired end-to-end.
-   sports:["nfl","nba","mlb"]},
+   // props.js entry AND a grading test. nhl added 29 Aug 2026: props.js carries
+   // icehockey_nhl and every market graded against probe-verified box keys —
+   // first-preseason-pick verification (~Sep 29) still owed, same as game lines.
+   sports:["nfl","nba","mlb","nhl"]},
   {id:"longshot",l:"Longshot / Parlay",scope:"Exotic",color:"#FF375F"},
   {id:"wildcard",l:"Wildcard",scope:"Any type",color:"#BF5AF2"},
   {id:"ml_h1",l:"1st Half ML",scope:"1st half",color:"#64D2FF",sports:["nfl","ncaaf","nba"]},

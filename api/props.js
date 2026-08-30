@@ -8,7 +8,15 @@ const PROP_MARKETS = {
   basketball_nba: [
     "player_points","player_rebounds","player_assists","player_threes","player_points_rebounds_assists",
   ],
-  baseball_mlb: [
+  icehockey_nhl: [
+ // All five verified against nhl-probe (29 Aug 2026): goals/assists/shotsTotal on
+ // skater categories, saves on goalies. ESPN keeps shootoutSaves separate from
+ // saves, matching how books settle saves props (reg+OT, shootout excluded).
+ // Points has no box column; grade.js derives goals+assists. shotsTotal is the
+ // real SOG key — the label "SOG" sits on shootoutGoals. Do not "fix" that.
+    "player_goal_scorer_anytime","player_shots_on_goal","player_assists","player_points","player_total_saves",
+  ],
+ baseball_mlb: [
     "batter_home_runs","batter_hits","batter_total_bases","batter_rbis","pitcher_strikeouts",
     // batch 1 (all gradeable by grade.js STAT_ALIASES):
     "batter_runs_scored","batter_walks","batter_stolen_bases","pitcher_earned_runs","pitcher_hits_allowed",
@@ -25,6 +33,7 @@ const PROP_MARKETS = {
 
 const MARKET_LABELS = {
   player_anytime_td:"Anytime TD", player_first_td:"First TD",
+  player_goal_scorer_anytime:"Anytime Goal", player_shots_on_goal:"Shots on Goal", player_total_saves:"Saves",
   player_pass_yds:"Pass Yds", player_pass_tds:"Pass TDs", player_rush_yds:"Rush Yds",
   player_receptions:"Receptions", player_reception_yds:"Rec Yds",
   player_rush_tds:"Rush TDs", player_reception_tds:"Rec TDs",
@@ -140,7 +149,7 @@ export default async function handler(req, res) {
       data.bookmakers.forEach(bk => {
         bk.markets?.forEach(market => {
           const marketLabel = MARKET_LABELS[market.key] || market.key;
-          const isTD = market.key === "player_anytime_td" || market.key === "player_first_td";
+          const isTD = market.key === "player_anytime_td" || market.key === "player_first_td" || market.key === "player_goal_scorer_anytime";
           market.outcomes?.forEach(outcome => {
             if (market.key === "batter_home_runs_alternate" && outcome.point !== 0.5) return;
             let label, dedupKey;
