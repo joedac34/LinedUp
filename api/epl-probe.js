@@ -87,7 +87,7 @@ async function probeOdds() {
 }
 
 // ── 2. ESPN: completed game box score -> stat field names (grading) ──────────
-async function probeEspnBox() {
+async function probeEspnBox(dateOverride) {
   // 2025-26 regular-season / playoff dates guaranteed to hold completed games.
   // ?date=YYYYMMDD overrides. THE decisive test for props: rosters[].roster[].stats
   // exposes totalGoals/goalAssists/shotsOnTarget, but an August fixture cannot tell
@@ -95,7 +95,7 @@ async function probeEspnBox() {
   // early. Point this at a LATE-season match: appearances:1 means per-match (props
   // ship), appearances:30+ means cumulative and every anytime-goal prop would cash
   // off season totals instead of that day's goals.
-  const _dq = (req.query && req.query.date) ? String(req.query.date).replace(/[^0-9]/g, "").slice(0, 8) : "";
+  const _dq = dateOverride ? String(dateOverride).replace(/[^0-9]/g, "").slice(0, 8) : "";
   const dates = _dq ? [_dq] : ["20260823", "20260822", "20260816"];
   try {
     let gameId = null, gameName = null, usedDate = null;
@@ -207,6 +207,7 @@ export default async function handler(req, res) {
   if (!cronSecret || req.headers.authorization !== `Bearer ${cronSecret}`) {
     return res.status(401).json({ error: "Unauthorized" });
   }
+  const _dateOverride = (req.query && req.query.date) ? req.query.date : "";
   if (req.query && req.query.league === "ucl") {
     SPORT = "soccer_uefa_champs_league";
     ESPN = "https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.champions";
@@ -216,6 +217,6 @@ export default async function handler(req, res) {
     const teamMap = await probeTeams();
     return res.status(200).json({ generatedAt: new Date().toISOString(), teamMap });
   }
-  const [oddsApi, espn, teamMap] = await Promise.all([probeOdds(), probeEspnBox(), probeTeams()]);
+  const [oddsApi, espn, teamMap] = await Promise.all([probeOdds(), probeEspnBox(_dateOverride), probeTeams()]);
   return res.status(200).json({ generatedAt: new Date().toISOString(), oddsApi, espn, teamMap });
 }
