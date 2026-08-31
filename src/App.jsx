@@ -8448,7 +8448,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
   {id:"btts",l:"Both Teams To Score",scope:"Match",color:"#00E5A0",sports:["epl","ucl"]},
   {id:"dnb",l:"Draw No Bet",scope:"Match",color:"#00E5A0",sports:["epl","ucl"]},
   {id:"dchance",l:"Double Chance",scope:"Match",color:"#00E5A0",sports:["epl","ucl"]},
-  {id:"tmtotal",l:"Team Total",scope:"Match",color:"#00E5A0",sports:["epl","ucl"]},
+  {id:"tmtotal",l:"Team Total",scope:"Game",color:"#FF9F0A",sports:["nfl","ncaaf","nba","mlb","nhl","ncaab","epl","ucl"]},
   {id:"ml_p1",l:"1st Period ML",scope:"1st period",color:"#5AC8FA",sports:["nhl"]},
   {id:"spread_p1",l:"1st Period Puck Line",scope:"1st period",color:"#5AC8FA",sports:["nhl"]},
   {id:"ou_p1",l:"1st Period O / U",scope:"1st period",color:"#5AC8FA",sports:["nhl"]},
@@ -17163,7 +17163,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
                   )}
                   {(g.tmtotal.home||g.tmtotal.away) && (
                     <div style={{borderTop:"1px solid rgba(255,255,255,0.07)",padding:"8px 13px"}}>
-                      <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)",marginBottom:7}}>Team goals</div>
+                      <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)",marginBottom:7}}>Team {(PERIOD_VOCAB[_gsp]&&PERIOD_VOCAB[_gsp].unit)||"points"}</div>
                       {[{k:"away",nm:g.away},{k:"home",nm:g.home}].map(t=> (g.tmtotal[t.k]&&(g.tmtotal[t.k].over||g.tmtotal[t.k].under)) ? (
                         <div key={t.k} style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
                           <span style={{fontSize:12,fontWeight:700,color:"rgba(255,255,255,0.75)"}}>{nick(t.nm,_gsp)}</span>

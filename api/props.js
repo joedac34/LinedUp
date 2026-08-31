@@ -1,11 +1,19 @@
 const PROP_MARKETS = {
   americanfootball_nfl: [
+    // team_totals: verified valid + posting via /api/market-probe (30 Aug 2026).
+    // Team in description, direction in name, line in point - identical shape to
+    // soccer, so the existing grade.js branch settles it unchanged.
+    "team_totals",
     // player_first_td removed: settlement needs scoring-play ORDER, which the box
     // score does not carry. Never offer a pick type that cannot be graded.
     "player_anytime_td","player_pass_yds","player_pass_tds",
     "player_rush_yds","player_receptions","player_reception_yds","player_rush_tds","player_reception_tds",
   ],
   basketball_nba: [
+    // team_totals: verified valid + valid (posts once preseason lines open) via /api/market-probe (30 Aug 2026).
+    // Team in description, direction in name, line in point - identical shape to
+    // soccer, so the existing grade.js branch settles it unchanged.
+    "team_totals",
     "player_points","player_rebounds","player_assists","player_threes","player_points_rebounds_assists",
   ],
   soccer_epl: [
@@ -29,6 +37,10 @@ const PROP_MARKETS = {
     "player_goal_scorer_anytime", "player_assists", "player_shots_on_target", "player_shots",
   ],
  icehockey_nhl: [
+    // team_totals: verified valid + posting via /api/market-probe (30 Aug 2026).
+    // Team in description, direction in name, line in point - identical shape to
+    // soccer, so the existing grade.js branch settles it unchanged.
+    "team_totals",
  // All five verified against nhl-probe (29 Aug 2026): goals/assists/shotsTotal on
  // skater categories, saves on goalies. ESPN keeps shootoutSaves separate from
  // saves, matching how books settle saves props (reg+OT, shootout excluded).
@@ -37,6 +49,10 @@ const PROP_MARKETS = {
     "player_goal_scorer_anytime","player_shots_on_goal","player_assists","player_points","player_total_saves",
   ],
  baseball_mlb: [
+    // team_totals: verified valid + posting via /api/market-probe (30 Aug 2026).
+    // Team in description, direction in name, line in point - identical shape to
+    // soccer, so the existing grade.js branch settles it unchanged.
+    "team_totals",
     "batter_home_runs","batter_hits","batter_total_bases","batter_rbis","pitcher_strikeouts",
     // batch 1 (all gradeable by grade.js STAT_ALIASES):
     "batter_runs_scored","batter_walks","batter_stolen_bases","pitcher_earned_runs","pitcher_hits_allowed",
