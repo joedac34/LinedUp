@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, Component, Fragment } from "react";
 import { supabase } from './supabase';
 import { LEGAL } from './legal';
-import { initPurchases, logOutPurchases, getProPackages, purchasePro, restorePurchases, checkProStatus, onProStatusChange } from './purchases';
+import { initPurchases, logOutPurchases, getProPackages, purchasePro, purchaseLeague, restorePurchases, checkProStatus, onProStatusChange } from './purchases';
 // Attach the current user's Supabase access token so API routes verify the caller
 // server-side (endpoints derive the user from this token, not the request body).
 async function authHeaders() {
@@ -8766,7 +8766,43 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  const weekCap = _noSlots ? { max:18, reason:"" } : leagueMaxWeeks(new Date(), _lgSportsSel, newLeagueSlots, 18);
  useEffect(()=>{ if(weekCap.max>0 && newLeagueWeeks>weekCap.max) setNewLeagueWeeks(weekCap.max); }, [weekCap.max]);
  const leaguePrice = (weeks, slots) => { const raw = 2*(Number(weeks)||0) + 1*(Number(slots)||0); return Math.max(10, Math.min(50, Math.floor(raw/5)*5)); };
- const startLeagueCheckout = async (leagueId) => { if(IS_NATIVE){ alert("Unlocking custom leagues isn\u2019t available in the iOS app yet."); return; } try { const r = await fetch(API_BASE+"/api/checkout",{method:"POST",headers:await authHeaders(),body:JSON.stringify({plan:"league",leagueId})}); const d = await r.json(); if(r.ok && d.url){ window.location.href=d.url; return; } alert("Couldn't start checkout: "+((d&&d.error)||"unknown")); } catch(e){ alert("Checkout failed."); } };
+ // iOS cannot use Stripe for digital goods, so the native path buys the one-time
+ // StoreKit product and then REDEEMS it server-side. The purchase itself grants no
+ // entitlement (a league unlock is per-league, not per-user), so /api/unlock-league
+ // verifies the transaction against RevenueCat and spends it against exactly this
+ // league. Before this, native users were dead-ended into the $9.99/mo Pro paywall.
+ const startLeagueCheckout = async (leagueId) => {
+   if(IS_NATIVE){
+     try {
+       const r = await purchaseLeague();
+       if(r && r.cancelled) return;
+       if(!r || !r.ok){
+         alert(r && r.error==="product_unavailable"
+           ? "That purchase isn\u2019t available right now. Try again shortly."
+           : "Purchase didn\u2019t complete. You have not been charged.");
+         return;
+       }
+       const resp = await fetch(API_BASE+"/api/unlock-league", {
+         method:"POST",
+         headers:{ ...(await authHeaders()), "Content-Type":"application/json" },
+         body: JSON.stringify({ league_id: leagueId }),
+       });
+       const d = await resp.json().catch(()=>null);
+       if(resp.ok && d && d.ok){
+         setShowLeaguePaywall(null);
+         if(user) await fetchLeagues(user.id);
+         alert("League unlocked.");
+       } else {
+         // Purchase succeeded but redemption did not. Never imply they lost money:
+         // the transaction stays unspent and Restore Purchases can retry it.
+         alert("Payment went through but the unlock didn\u2019t register. Reopen the league to retry \u2014 you won\u2019t be charged twice.");
+       }
+     } catch(e){
+       alert("Purchase didn\u2019t complete. You have not been charged.");
+     }
+     return;
+   }
+   try { const r = await fetch(API_BASE+"/api/checkout",{method:"POST",headers:await authHeaders(),body:JSON.stringify({plan:"league",leagueId})}); const d = await r.json(); if(r.ok && d.url){ window.location.href=d.url; return; } alert("Couldn't start checkout: "+((d&&d.error)||"unknown")); } catch(e){ alert("Checkout failed."); } };
  const openBillingPortal = async () => { try { const r = await fetch(API_BASE+"/api/portal",{method:"POST",headers:await authHeaders()}); const d = await r.json(); if(r.ok && d.url){ window.location.href=d.url; return; } alert((d&&d.error==="no active subscription to manage") ? "No active subscription to manage." : ("Couldn't open billing: "+((d&&d.error)||"unknown"))); } catch(e){ alert("Couldn't open billing."); } };
  const createLeague = async (name, sportId) => {
  if(!user||!name||!sportId) return;

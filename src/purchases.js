@@ -9,6 +9,10 @@ import { Purchases, LOG_LEVEL } from '@revenuecat/purchases-capacitor';
 
 const RC_IOS_API_KEY = import.meta.env.VITE_REVENUECAT_IOS_KEY;
 const PRO_ENTITLEMENT = 'pro';
+// One-time league unlock SKU. Exists in App Store Connect; grants NO entitlement
+// by design — a league unlock is per-league, not per-user, so it is redeemed
+// server-side via /api/unlock-league instead.
+const LEAGUE_PRODUCT_ID = 'com.dacunto.picklock.league.single';
 
 export const isNative = () => Capacitor.isNativePlatform();
 
@@ -84,6 +88,61 @@ export async function purchasePro(pkg) {
     console.error('[rc] purchase failed', err);
     return { ok: false, cancelled: false, isPro: false, error: err };
   }
+}
+
+/**
+ * Buy the one-time league unlock (iOS). This is a NON-SUBSCRIPTION product, so it
+ * grants no entitlement — owning it proves nothing about WHICH league was paid
+ * for. The caller must follow a successful purchase with a POST to
+ * /api/unlock-league, which verifies the transaction against RevenueCat and
+ * spends it against exactly one league.
+ *
+ * Looks the product up across every offering rather than assuming it lives in
+ * `current`, since the league SKU is typically configured outside the default
+ * subscription offering.
+ */
+export async function purchaseLeague() {
+  if (!isNative()) return { ok: false, cancelled: false, error: 'not_native' };
+  try {
+    const offerings = await Purchases.getOfferings();
+    const all = offerings?.all ? Object.values(offerings.all) : [];
+    const pools = [offerings?.current, ...all].filter(Boolean);
+    let pkg = null;
+    for (const o of pools) {
+      pkg = (o.availablePackages ?? []).find(
+        (x) => x?.product?.identifier === LEAGUE_PRODUCT_ID
+      );
+      if (pkg) break;
+    }
+    if (!pkg) {
+      console.warn('[rc] league product not found in any offering — check RevenueCat config');
+      return { ok: false, cancelled: false, error: 'product_unavailable' };
+    }
+    await Purchases.purchasePackage({ aPackage: pkg });
+    return { ok: true, cancelled: false };
+  } catch (err) {
+    if (err?.code === 'PURCHASE_CANCELLED' || err?.userCancelled) {
+      return { ok: false, cancelled: true };
+    }
+    console.error('[rc] league purchase failed', err);
+    return { ok: false, cancelled: false, error: err };
+  }
+}
+
+/** Price string for the league SKU, straight from StoreKit (localized). */
+export async function getLeaguePriceString() {
+  if (!isNative()) return null;
+  try {
+    const offerings = await Purchases.getOfferings();
+    const all = offerings?.all ? Object.values(offerings.all) : [];
+    for (const o of [offerings?.current, ...all].filter(Boolean)) {
+      const pkg = (o.availablePackages ?? []).find(
+        (x) => x?.product?.identifier === LEAGUE_PRODUCT_ID
+      );
+      if (pkg) return pkg.product?.priceString ?? null;
+    }
+  } catch (err) { /* fall through to null */ }
+  return null;
 }
 
 /** Apple requires a visible Restore Purchases control. Wire this to it. */
