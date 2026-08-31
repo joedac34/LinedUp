@@ -84,7 +84,12 @@ export default async function handler(req, res) {
           const leagueId = s.metadata.leagueId;
           if (leagueId) {
             const { data: lg, error: lgErr } = await supabase
-              .from('leagues').update({ paid: true }).eq('id', leagueId).select('id');
+              .from('leagues')
+              // Store the payment_intent so a later charge.refunded can find its
+              // way back to THIS league. The refund event carries a charge, not
+              // our metadata, so without this there is no reverse lookup.
+              .update({ paid: true, stripe_payment_intent: s.payment_intent || null })
+              .eq('id', leagueId).select('id');
             if (lgErr) throw new Error(`league unlock failed for ${leagueId}: ${lgErr.message}`);
             if (!lg || lg.length === 0) throw new Error(`league unlock matched no row for ${leagueId}`);
           }
@@ -111,6 +116,36 @@ export default async function handler(req, res) {
         const userId = sub.metadata && sub.metadata.userId;
         if (userId) await setProById(userId, false);
         else await setProByCustomer(sub.customer, false, sub.id);
+        break;
+      }
+      // ── Refunds ──────────────────────────────────────────────────────────
+      // Until now this event was not handled at all, so a refunded league stayed
+      // unlocked forever and a refunded subscription kept Pro. Stripe is live, so
+      // that was real exposure, not a hypothetical.
+      //
+      // Policy: a refund revokes what it paid for. Partial refunds are IGNORED —
+      // only a full refund revokes, so a goodwill partial credit does not silently
+      // lock someone out of their season.
+      //
+      // NOTE for league unlocks: revoking re-locks the league for EVERY member,
+      // not just the commissioner who refunded. At current scale that is the
+      // honest default and rare enough to handle by hand; if it ever fires on a
+      // populated mid-season league, expect a support conversation.
+      case 'charge.refunded': {
+        const ch = event.data.object;
+        if (!ch || ch.refunded !== true) break;   // partial refund: leave access intact
+        const pi = ch.payment_intent || null;
+
+        // One-time league unlock -> re-lock that league only.
+        if (pi) {
+          const { data: lgs, error: lgErr } = await supabase
+            .from('leagues').update({ paid: false }).eq('stripe_payment_intent', pi).select('id');
+          if (lgErr) throw new Error(`league re-lock failed for ${pi}: ${lgErr.message}`);
+          if (lgs && lgs.length) break;           // it was a league purchase; done
+        }
+
+        // Otherwise treat it as a subscription refund -> drop Pro for that customer.
+        if (ch.customer) await setProByCustomer(ch.customer, false, null);
         break;
       }
       default:
