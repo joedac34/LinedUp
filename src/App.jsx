@@ -7037,7 +7037,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
    ladReqRef.current[key] = 1;
    setLadCache(c => ({...c, [key]:{loading:true}}));
    try {
-     const _spk = {mlb:"baseball_mlb",nfl:"americanfootball_nfl",nba:"basketball_nba",nhl:"icehockey_nhl",ncaaf:"americanfootball_ncaaf"};
+     const _spk = SPORT_KEYS;
      const _raw = (bet && (bet._sport||bet.sport)) || "nfl";
      const q = new URLSearchParams({ sport:(_spk[_raw]||_raw||"americanfootball_nfl"), event:(bet&&bet.eventId)||"", market:market, player:player });
      const r = await fetch(API_BASE+"/api/altlines?"+q.toString(), { cache:"no-store", headers: await authHeaders() });
@@ -16822,7 +16822,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    const side0 = isSpread ? (bet.outcome||"") : ((meta&&meta.side) || (String(bet.pick||"").toLowerCase().indexOf("under")>-1?"Under":"Over"));
    setAltSheet({ bet, player, label, isProp, isSpread, sides:[], side:side0, sel:null, loading:true });
    try {
-   const _spk = {mlb:"baseball_mlb",nfl:"americanfootball_nfl",nba:"basketball_nba",nhl:"icehockey_nhl",ncaaf:"americanfootball_ncaaf"}; const _rawSp = bet._sport||bet.sport||"mlb"; const q = new URLSearchParams({ sport: (_spk[_rawSp]||_rawSp||"baseball_mlb"), event: bet.eventId||"", market: mk });
+   const _spk = SPORT_KEYS; const _rawSp = bet._sport||bet.sport||"mlb"; const q = new URLSearchParams({ sport: (_spk[_rawSp]||_rawSp||"baseball_mlb"), event: bet.eventId||"", market: mk });
    if(isProp && player) q.set("player", player);
    if(isSpread && bet.outcome) q.set("name", bet.outcome);
    const r = await fetch(API_BASE+"/api/altlines?"+q.toString(), { cache: "no-store", headers: await authHeaders() });
