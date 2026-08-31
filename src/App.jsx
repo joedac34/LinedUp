@@ -2015,7 +2015,8 @@ const acColor=i=>({D:"#5E5CE6",M:"#0A84FF",T:"#FF453A",C:"#30D158",A:"#FF9F0A",R
 // Keep in sync with the _CL map in the solo add path.
 const CAT_LABEL={ml:"Moneyline",spread:"Spread",ou:"Over/Under",prop:"Prop",longshot:"Longshot",
   yrfi:"YRFI",nrfi:"NRFI",ml_f5:"Moneyline (F5)",spread_f5:"Spread (F5)",ou_f5:"Over/Under (F5)",
-  ml_h1:"Moneyline (1H)",spread_h1:"Spread (1H)",ou_h1:"Over/Under (1H)"};
+  ml_h1:"Moneyline (1H)",spread_h1:"Spread (1H)",ou_h1:"Over/Under (1H)",
+  ml_q1:"Moneyline (Q1)",spread_q1:"Spread (Q1)",ou_q1:"Over/Under (Q1)"};
 const catLabel=(b)=>{ if(!b) return "Pick";
   if(b.isParlay) return "Parlay"+((b.parlayLegs||[]).length?" \u00b7 "+b.parlayLegs.length+" legs":"");
   return b.categoryLabel || CAT_LABEL[b.category] || (b.category?String(b.category).toUpperCase():"Pick"); };
@@ -2818,7 +2819,7 @@ const PARLAY_MAX_ODDS = 1000;
 
 // Lines only conflict within the same scope: a full-game line and a First-5 line
 // on the same game are independent bets, so they never clash.
-const LINE_GROUP = { ml:"full", spread:"full", ou:"full", ml_f5:"f5", spread_f5:"f5", ou_f5:"f5", ml_h1:"h1", spread_h1:"h1", ou_h1:"h1", yrfi:"f1", nrfi:"f1" };
+const LINE_GROUP = { ml:"full", spread:"full", ou:"full", ml_q1:"q1", spread_q1:"q1", ou_q1:"q1", ml_f5:"f5", spread_f5:"f5", ou_f5:"f5", ml_h1:"h1", spread_h1:"h1", ou_h1:"h1", yrfi:"f1", nrfi:"f1" };
 // Straight opposites: same underlying market, opposite sides. NRFI and YRFI are both
 // totals_1st_1_innings — taking both is a guaranteed split, not a hedge you'd choose.
 const OPPOSITE_TYPES = { yrfi:"nrfi", nrfi:"yrfi" };
@@ -5528,8 +5529,8 @@ const trophySVG = (id, color="#fff") => {
   return icons[id] || <svg {...s}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>;
 };
 
-const PERIOD_MARKETS = { ml_p1:"h2h_p1", spread_p1:"spreads_p1", ou_p1:"totals_p1", ml_h1:"h2h_h1", spread_h1:"spreads_h1", ou_h1:"totals_h1", ml_f5:"h2h_1st_5_innings", spread_f5:"spreads_1st_5_innings", ou_f5:"totals_1st_5_innings", ml_f3:"h2h_1st_3_innings", spread_f3:"spreads_1st_3_innings", ou_f3:"totals_1st_3_innings", yrfi:"totals_1st_1_innings", nrfi:"totals_1st_1_innings" };
-const PERIOD_CATS = ["ml_p1","spread_p1","ou_p1","ml_h1","spread_h1","ou_h1","ml_f5","spread_f5","ou_f5","ml_f3","spread_f3","ou_f3","yrfi","nrfi"];
+const PERIOD_MARKETS = { ml_q1:"h2h_q1", spread_q1:"spreads_q1", ou_q1:"totals_q1", ml_p1:"h2h_p1", spread_p1:"spreads_p1", ou_p1:"totals_p1", ml_h1:"h2h_h1", spread_h1:"spreads_h1", ou_h1:"totals_h1", ml_f5:"h2h_1st_5_innings", spread_f5:"spreads_1st_5_innings", ou_f5:"totals_1st_5_innings", ml_f3:"h2h_1st_3_innings", spread_f3:"spreads_1st_3_innings", ou_f3:"totals_1st_3_innings", yrfi:"totals_1st_1_innings", nrfi:"totals_1st_1_innings" };
+const PERIOD_CATS = ["ml_q1","spread_q1","ou_q1","ml_p1","spread_p1","ou_p1","ml_h1","spread_h1","ou_h1","ml_f5","spread_f5","ou_f5","ml_f3","spread_f3","ou_f3","yrfi","nrfi"];
 const SUB_MK = {
 pass:["player_pass_yds","player_pass_tds"], rush:["player_rush_yds","player_rush_tds"],
 rec:["player_receptions","player_reception_yds","player_reception_tds"],
@@ -5558,9 +5559,9 @@ const _perTag = (g) => { const p=(g&&g.period)||1; if(g&&g.sport==="nhl") return
 const periodCatLabel = (sps) => { const u=(sps||[]).map(x=>(PERIOD_VOCAB[x]||{}).umbrella); const inn=u.includes("Innings"); const half=u.some(x=>x==="1st Half"); return inn&&half?"Innings / halves":inn?"Innings":half?"Halves":"Periods"; };
 const PERIOD_SUBS_BY_SPORT = {
  mlb:[{id:"ml_f5",l:"F5 ML"},{id:"spread_f5",l:"F5 Spread"},{id:"ou_f5",l:"F5 O/U"},{id:"ml_f3",l:"F3 ML"},{id:"spread_f3",l:"F3 Spread"},{id:"ou_f3",l:"F3 O/U"},{id:"yrfi",l:"YRFI"},{id:"nrfi",l:"NRFI"}],
- nfl:[{id:"ml_h1",l:"1H ML"},{id:"spread_h1",l:"1H Spread"},{id:"ou_h1",l:"1H O/U"}],
- ncaaf:[{id:"ml_h1",l:"1H ML"},{id:"spread_h1",l:"1H Spread"},{id:"ou_h1",l:"1H O/U"}],
- nba:[{id:"ml_h1",l:"1H ML"},{id:"spread_h1",l:"1H Spread"},{id:"ou_h1",l:"1H O/U"}],
+ nfl:[{id:"ml_q1",l:"Q1 ML"},{id:"spread_q1",l:"Q1 Spread"},{id:"ou_q1",l:"Q1 O/U"},{id:"ml_h1",l:"1H ML"},{id:"spread_h1",l:"1H Spread"},{id:"ou_h1",l:"1H O/U"}],
+ ncaaf:[{id:"ml_q1",l:"Q1 ML"},{id:"spread_q1",l:"Q1 Spread"},{id:"ou_q1",l:"Q1 O/U"},{id:"ml_h1",l:"1H ML"},{id:"spread_h1",l:"1H Spread"},{id:"ou_h1",l:"1H O/U"}],
+ nba:[{id:"ml_q1",l:"Q1 ML"},{id:"spread_q1",l:"Q1 Spread"},{id:"ou_q1",l:"Q1 O/U"},{id:"ml_h1",l:"1H ML"},{id:"spread_h1",l:"1H Spread"},{id:"ou_h1",l:"1H O/U"}],
  // Soccer: 1H moneyline is THREE-WAY (Draw pickable) and 1H total. No 1H spread -
  // epl-probe returned no spreads_h1, and an unlisted market must never appear.
  epl:[{id:"ml_h1",l:"1H Result"},{id:"ou_h1",l:"1H Goals"}],
@@ -7615,7 +7616,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
   const SLOT_OF = { ml:"ml", moneyline:"ml", spread:"spread", ou:"ou", total:"ou", prop:"prop", longshot:"longshot", parlay:"longshot" };
   // ─── PLOK SLOT BOARD ──────────────────────────────────────────────────────
   // Reads slot_config + flexPicks. A slot only ever offers bets it can legally take.
-  const PERIOD_TYPE_LABEL = { ml_h1:"1H Moneyline", spread_h1:"1H Spread", ou_h1:"1H Total", ml_f5:"F5 Moneyline", spread_f5:"F5 Spread", ou_f5:"F5 Total", ml_f3:"F3 Moneyline", spread_f3:"F3 Spread", ou_f3:"F3 Total", yrfi:"YRFI", nrfi:"NRFI" };
+  const PERIOD_TYPE_LABEL = { ml_q1:"Q1 Moneyline", spread_q1:"Q1 Spread", ou_q1:"Q1 Total", ml_h1:"1H Moneyline", spread_h1:"1H Spread", ou_h1:"1H Total", ml_f5:"F5 Moneyline", spread_f5:"F5 Spread", ou_f5:"F5 Total", ml_f3:"F3 Moneyline", spread_f3:"F3 Spread", ou_f3:"F3 Total", yrfi:"YRFI", nrfi:"NRFI" };
   const plokCfg = parseSlotConfig(activeLeague && activeLeague.slot_config);
   const plokSlotMode = !isSoloMode && !!plokCfg;
   // Normalise the unicode minus (U+2212) FIRST — the strip regex would eat it and turn
@@ -8442,6 +8443,9 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
    sports:["nfl","nba","mlb","nhl"]},
   {id:"longshot",l:"Longshot / Parlay",scope:"Exotic",color:"#FF375F"},
   {id:"wildcard",l:"Wildcard",scope:"Any type",color:"#BF5AF2"},
+  {id:"ml_q1",l:"1st Quarter ML",scope:"1st quarter",color:"#64D2FF",sports:["nfl","ncaaf","nba"]},
+  {id:"spread_q1",l:"1st Quarter Spread",scope:"1st quarter",color:"#64D2FF",sports:["nfl","ncaaf","nba"]},
+  {id:"ou_q1",l:"1st Quarter O / U",scope:"1st quarter",color:"#64D2FF",sports:["nfl","ncaaf","nba"]},
   {id:"ml_h1",l:"1st Half ML",scope:"1st half",color:"#64D2FF",sports:["nfl","ncaaf","nba","ncaab","epl","ucl"]},
   {id:"spread_h1",l:"1st Half Spread",scope:"1st half",color:"#64D2FF",sports:["nfl","ncaaf","nba","ncaab"]},
   {id:"ou_h1",l:"1st Half O / U",scope:"1st half",color:"#64D2FF",sports:["nfl","ncaaf","nba","ncaab","epl","ucl"]},
