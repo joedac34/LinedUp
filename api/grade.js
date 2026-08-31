@@ -944,9 +944,16 @@ function gradeProp(pickName, gameField, index, info = {}, gameDate = null) {
 // ── Grade a single straight pick ─────────────────────────────────────────────
 // ── Period markets (1st half, first-5 innings, YRFI/NRFI) ────────────────────
 // Which linescore indices make up the period implied by an Odds API market key.
-function periodIndices(mk) {
-  if (/_h1$/.test(mk)) return [0, 1];
-  if (/_h2$/.test(mk)) return [2, 3];
+// Linescore indices for a period market. CRITICAL: "first half" means different
+// indices depending on how the sport reports linescores.
+//   NFL / NBA / NCAAF: 4 quarters  -> H1 = [0,1]
+//   Soccer / NCAAB:    2 halves    -> H1 = [0]     (summing [0,1] = THE WHOLE GAME)
+// Getting this wrong does not error, it silently grades a first-half pick off the
+// final score. periodLen (linescore entry count) disambiguates.
+function periodIndices(mk, periodLen) {
+  // A 2-entry linescore IS halves: index 0 is the first half, full stop.
+  if (/_h1$/.test(mk)) return (periodLen === 2) ? [0] : [0, 1];
+  if (/_h2$/.test(mk)) return (periodLen === 2) ? [1] : [2, 3];
   let m = mk.match(/_q([1-4])$/); if (m) return [parseInt(m[1], 10) - 1];
   m = mk.match(/_p([1-3])$/); if (m) return [parseInt(m[1], 10) - 1];
   m = mk.match(/_1st_(\d+)_innings$/); if (m) { const n = parseInt(m[1], 10); return Array.from({ length: n }, (_, i) => i); }
@@ -963,10 +970,11 @@ function teamMatchName(team, outcome) {
 // (market_key / outcome / outcome_point). Returns "W" | "L" | "P" | null (not gradable yet).
 function gradePeriod(pick, game, info) {
   const mk = pick.market_key || "";
-  const idxs = periodIndices(mk);
-  if (!idxs) { info.reason = "period_unrecognized"; return null; }
   const hl = game.homeLines, al = game.awayLines;
   if (!Array.isArray(hl) || !Array.isArray(al) || !hl.length || !al.length) { info.reason = "no_linescores"; return null; }
+  // Pass the linescore length so "_h1" resolves to the right indices for this sport.
+  const idxs = periodIndices(mk, Math.min(hl.length, al.length));
+  if (!idxs) { info.reason = "period_unrecognized"; return null; }
   const need = Math.max(...idxs);
   if (need >= hl.length || need >= al.length) { info.reason = "period_incomplete"; return null; }
   const h = idxs.reduce((sum, i) => sum + (Number(hl[i]) || 0), 0);
