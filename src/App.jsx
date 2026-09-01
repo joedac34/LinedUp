@@ -7018,6 +7018,11 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  const [showPaywall, setShowPaywall] = useState(null);
  // Live StoreKit prices on iOS (web keeps its hardcoded Stripe copy).
  const [nativePrices, setNativePrices] = useState(null);
+ // Trial copy. Server-side eligibility lives in checkout.js (users.trial_used_at);
+ // this only decides what the button SAYS, and it errs toward not promising a
+ // trial: unknown profile => no trial text, never the reverse.
+ const _webTrialOk = !IS_NATIVE && !!userProfile && !userProfile.trial_used_at && !isPro;
+ const _trialLabel = (t)=> t ? ("1 "+(t.unit==="month"?"month":t.unit)+(t.periods>1?"s":"")+" free, then ") : "";
  // ── Ladder league: board state ──
  // ladPicks: [{ key, player, market, label, unit, bet, rungs:[{point,odds,px}] }]
  // Rungs are fetched per player on tap -- /api/altlines groups prop outcomes by
@@ -8397,6 +8402,11 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  const [newStartWeek, setNewStartWeek] = useState(1);
  const [svStarting, setSvStarting] = useState(false); // commissioner start-pool in flight
  const [showBrowse, setShowBrowse] = useState(false);
+ // Join-sheet code entry. The dominant real-world join is "a friend texted me a
+ // code", so the code field leads and public browse is the secondary path.
+ const [browseCode, setBrowseCode] = useState("");
+ const [browseExpanded, setBrowseExpanded] = useState(false);
+ const [browseJoining, setBrowseJoining] = useState(false);
  const [publicLeagues, setPublicLeagues] = useState([]);
  const [browseFilter, setBrowseFilter] = useState({sport:"all", size:"all", type:"all"});
  const [browseLoading, setBrowseLoading] = useState(false);
@@ -9297,7 +9307,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
    if(currentMembers && currentMembers.length >= targetSize){alert("This league is already full ("+targetSize+"/"+targetSize+").");return;}
    if(league.league_type==="survivor" && league.season_start && new Date(league.season_start).getTime()<=Date.now()){ alert("This survivor pool already started \u2014 everyone starts Week 1 together. Ask the commissioner to run it back next season."); return; }
    const {data:_mine}=await supabase.from("league_members").select("user_id").eq("league_id",league.id).eq("user_id",user.id).maybeSingle();
-   if(_mine){ applyMode(false,{leagueId:league.id}); await fetchLeagues(user.id); alert("You're already in "+league.name+" — opening it now."); return; }
+   if(_mine){ applyMode(false,{leagueId:league.id}); await fetchLeagues(user.id); alert("You're already in "+league.name+" — opening it now."); return true; }
    const {error:joinError}=await supabase.from("league_members").insert({league_id:league.id,user_id:user.id,is_commissioner:false});
    if(joinError){alert("Couldn't join "+league.name+": "+(joinError.message||joinError.code||"unknown error"));return;}
    try{ posthog.capture('league_joined', { league_id: league.id, league_type: league.league_type||'h2h', via: 'code' }); }catch(e){}
@@ -9312,6 +9322,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
      alert("Joined "+league.name+"! "+(targetSize-allMembers.length)+" more needed.");
    }
    fetchLeagues(user.id);
+   return true;   // callers (join sheet) close only on success; failures alert and return undefined
  };
 
  const fetchPublicLeagues = async () => {
@@ -9326,7 +9337,13 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
      .limit(50);
    if(data) {
      const myLeagueIds = realLeagues.map(l=>l.id);
-     const withCounts = await Promise.all(data.map(async lg=>{
+     // System leagues (Daily Lock, Gauntlet, bot arena) are privacy:"public" so
+     // their members can read them, but they are NOT leagues you browse into -
+     // each has its own card on Home. Without this they showed up in Browse as
+     // "H2H - 1000000-player - MLB", which is confusing and joinable by mistake.
+     const _sys = new Set([DAILY_LOCK_ID, GAUNTLET_ID, BOTS_LEAGUE_ID]);
+     const _real = data.filter(lg => !_sys.has(lg.id) && !String(lg.id||"").startsWith("00000000-0000-4000-"));
+     const withCounts = await Promise.all(_real.map(async lg=>{
        const {count, error:cErr} = await supabase
          .from("league_members")
          .select("*", {count:"exact",head:true})
@@ -10958,7 +10975,11 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      if(!alive) return;
      const m = pkgs.find(p=>p.identifier==="$rc_monthly");
      const a = pkgs.find(p=>p.identifier==="$rc_annual");
-     setNativePrices({ monthly:(m&&m.product&&m.product.priceString)||null, annual:(a&&a.product&&a.product.priceString)||null });
+     // introPrice is populated by StoreKit when an Introductory Offer exists in App
+     // Store Connect AND this Apple ID is still eligible (Apple enforces one per
+     // account). So "trial available" is decided by Apple, not by us.
+     const _intro = (pk)=>{ const ip = pk&&pk.product&&pk.product.introPrice; return (ip && (ip.price===0 || ip.priceString==="$0.00" || /free/i.test(String(ip.priceString||"")))) ? { periods:ip.periodNumberOfUnits||1, unit:String(ip.periodUnit||"MONTH").toLowerCase() } : null; };
+     setNativePrices({ monthly:(m&&m.product&&m.product.priceString)||null, annual:(a&&a.product&&a.product.priceString)||null, monthlyTrial:_intro(m), annualTrial:_intro(a) });
    }catch(e){}
    try{
      const active = await checkProStatus();
@@ -12393,9 +12414,22 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  // ── lap / pick coach layer ──
  if(!_st) return null;
  const _isTap = !!_st.tap;
- const _below = _st.place==="below";
- const _tipTop = _r ? (_below ? (_r.y+_r.h+46) : null) : null;
- const _tipBot = _r ? (_below ? null : (_vh - _r.y + 38)) : 24;
+ // Placement is a HINT, not a guarantee. A "below" step whose target sits low on
+ // screen pushed the tip past the viewport: the ring rendered but the text was
+ // gone (the bet-browser step, where the target row is near the bottom). Flip to
+ // the other side when the preferred one does not fit, then clamp regardless.
+ const _TIP_H = 190;   // card height incl. padding + dots row
+ const _EDGE = 14;
+ let _below = _st.place==="below";
+ if(_r){
+   const _fitsBelow = (_r.y + _r.h + 46 + _TIP_H) < (_vh - _EDGE);
+   const _fitsAbove = (_r.y - 38 - _TIP_H) > _EDGE;
+   if(_below && !_fitsBelow && _fitsAbove) _below = false;
+   else if(!_below && !_fitsAbove && _fitsBelow) _below = true;
+ }
+ const _rawTop = _r ? (_r.y+_r.h+46) : null;
+ const _tipTop = (_r && _below) ? Math.max(_EDGE, Math.min(_rawTop, _vh - _TIP_H - _EDGE)) : null;
+ const _tipBot = _r ? (_below ? null : Math.max(_EDGE, Math.min(_vh - _r.y + 38, _vh - _TIP_H - _EDGE))) : 24;
  return (
  <div style={{position:"fixed",inset:0,zIndex:99990,pointerEvents:_isTap?"none":"auto",fontFamily:"Barlow,sans-serif"}}>
    <style>{"@keyframes pkRing{0%{box-shadow:0 0 0 0 rgba(59,111,224,0.55)}70%{box-shadow:0 0 0 13px rgba(59,111,224,0)}100%{box-shadow:0 0 0 0 rgba(59,111,224,0)}}@keyframes pkBobD{0%,100%{transform:translateY(0)}50%{transform:translateY(7px)}}@keyframes pkBobU{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}"}</style>
@@ -13771,8 +13805,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    <div style={{fontSize:11.5,fontWeight:800}}>This app peaks with your group.</div>
    <div style={{fontSize:11,color:"rgba(255,255,255,0.45)",marginTop:2}}>{"Start one and send a link, or jump into someone else\u2019s."}</div>
    <div style={{display:"flex",gap:7,marginTop:9}}>
-     <div onClick={()=>{ setScreen("leagues"); setNewLeagueStep(0); setShowNewLeague(true); }} style={{flex:1,textAlign:"center",background:IOS.blue,borderRadius:8,padding:"9px 12px",fontSize:12,fontWeight:800,cursor:"pointer",color:"#fff"}}>Start a league</div>
-     <div onClick={()=>{ try{ fetchPublicLeagues(); }catch(e){} setShowBrowse(true); }} style={{flex:1,textAlign:"center",background:"rgba(255,255,255,0.06)",boxShadow:"inset 0 0 0 0.5px rgba(255,255,255,0.16)",borderRadius:8,padding:"9px 12px",fontSize:12,fontWeight:800,cursor:"pointer",color:"rgba(255,255,255,0.8)"}}>Join a league</div>
+     <div className="pk-t-create" onClick={()=>{ setScreen("leagues"); setNewLeagueStep(0); setShowNewLeague(true); }} style={{flex:1,textAlign:"center",background:IOS.blue,borderRadius:8,padding:"9px 12px",fontSize:12,fontWeight:800,cursor:"pointer",color:"#fff"}}>Start a league</div>
+     <div className="pk-t-join" onClick={()=>{ try{ fetchPublicLeagues(); }catch(e){} setShowBrowse(true); }} style={{flex:1,textAlign:"center",background:"rgba(255,255,255,0.06)",boxShadow:"inset 0 0 0 0.5px rgba(255,255,255,0.16)",borderRadius:8,padding:"9px 12px",fontSize:12,fontWeight:800,cursor:"pointer",color:"rgba(255,255,255,0.8)"}}>Join a league</div>
    </div>
  </div>)}
  {screen==="home" && homeMode==="solo" && <DailyLockCard user={user}/>}
@@ -14190,6 +14224,49 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  )}
  </div>
 
+ {/* Survivor leagues have no points to rank. A standings table there shows
+     everyone at 0.0 in arbitrary order (the Gauntlet screenshot, 1 Sep 2026).
+     The right model is binary: alive or out, plus lives on 2-life pools. */}
+ {activeLeague && activeLeague.league_type==="survivor" ? (()=>{
+   const _lives = (Number(activeLeague.survivor_lives)||1);
+   const _ms = (membersFor===activeLeague.id ? leagueMembers : []);
+   const _alive = _ms.filter(m=>m.eliminatedWeek==null);
+   const _me = _ms.find(m=>m.isYou);
+   const _meOut = !!(_me && _me.eliminatedWeek!=null);
+   const _meLivesLeft = _me ? Math.max(0, _lives - (Number(_me.strikes)||0)) : _lives;
+   const _sorted = [..._ms].sort((x,y)=> (x.eliminatedWeek==null?0:1)-(y.eliminatedWeek==null?0:1) || (y.isYou?1:0)-(x.isYou?1:0) || String(x.name).localeCompare(String(y.name)));
+   return (
+   <div className="ios-section" style={{margin:"12px 16px 6px"}}>
+     <div className="ios-section-header" style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+       <span>Survivors</span>
+       <span onClick={()=>setScreen("league")} style={{color:IOS.blue,fontSize:13,textTransform:"none",fontWeight:500,letterSpacing:0,cursor:"pointer"}}>See All</span>
+     </div>
+     <div style={{display:"flex",alignItems:"center",gap:14,background:"linear-gradient(160deg,rgba(191,90,242,0.14),rgba(191,90,242,0.03))",border:"0.5px solid rgba(191,90,242,0.35)",borderRadius:16,padding:"14px 16px",marginBottom:10}}>
+       <div>
+         <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:40,fontWeight:900,color:"#BF5AF2",lineHeight:1}}>{_alive.length}<span style={{fontSize:20,color:"rgba(191,90,242,0.6)"}}>/{_ms.length||0}</span></div>
+         <div style={{fontSize:9.5,fontWeight:900,letterSpacing:"1.4px",textTransform:"uppercase",color:"rgba(191,90,242,0.8)"}}>Still alive</div>
+       </div>
+       {_me && (<div style={{marginLeft:"auto",textAlign:"right"}}>
+         <div style={{fontSize:9.5,fontWeight:900,letterSpacing:"1.4px",textTransform:"uppercase",color:IOS.label3}}>You</div>
+         <div style={{fontSize:15,fontWeight:900,marginTop:3,color:_meOut?IOS.red:IOS.green}}>{_meOut ? ("Out - Week "+_me.eliminatedWeek) : (_lives===2 ? ("Alive - "+_meLivesLeft+(_meLivesLeft===1?" life":" lives")) : "Alive")}</div>
+       </div>)}
+     </div>
+     {(_ms.length===0) ? (<SkelGroup>{[0,1,2].map(i=>(<div key={i} style={{height:56,borderRadius:14,background:"rgba(255,255,255,0.04)",marginBottom:7}}/>))}</SkelGroup>) : _sorted.slice(0,6).map((m,i)=>{
+       const dead = m.eliminatedWeek!=null; const left = Math.max(0,_lives-(Number(m.strikes)||0));
+       return (
+       <div key={m.userId||i} style={{display:"flex",alignItems:"center",gap:12,background:m.isYou?"rgba(59,111,224,0.06)":"rgba(255,255,255,0.04)",border:"0.5px solid "+(m.isYou?"rgba(59,111,224,0.5)":"rgba(255,255,255,0.08)"),borderRadius:14,padding:"12px 14px",marginBottom:7,opacity:dead?0.5:1}}>
+         <div style={{width:34,height:34,borderRadius:"50%",background:m.isYou?"rgba(59,111,224,0.25)":"#2a2a30",color:m.isYou?"#7FA6FF":"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:13,flexShrink:0}}>{String(m.isYou?"You":(m.name||"?")).charAt(0).toUpperCase()}</div>
+         <div style={{flex:1,minWidth:0}}>
+           <div style={{fontSize:15,fontWeight:800,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{m.isYou?"You":m.name}</div>
+           {dead && <div style={{fontSize:11,fontWeight:600,color:IOS.label3,marginTop:2}}>Out - Week {m.eliminatedWeek}</div>}
+         </div>
+         {_lives===2 && (<div style={{display:"flex",gap:4}}>{[0,1].map(k=>(<i key={k} style={{display:"block",width:8,height:8,borderRadius:"50%",background:(!dead&&k<left)?IOS.green:"rgba(255,255,255,0.15)"}}/>))}</div>)}
+         <span style={{fontSize:9.5,fontWeight:900,letterSpacing:"1.2px",textTransform:"uppercase",borderRadius:99,padding:"5px 10px",color:dead?IOS.red:IOS.green,background:dead?"rgba(255,69,58,0.12)":"rgba(48,209,88,0.12)",border:"0.5px solid "+(dead?"rgba(255,69,58,0.35)":"rgba(48,209,88,0.35)")}}>{dead?"Out":"Alive"}</span>
+       </div>
+       );})}
+   </div>
+   );
+ })() : (<>
  {/* Standings preview */}
  <div className="ios-section" style={{margin:"12px 16px 6px"}}>
  <div className="ios-section-header" style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -14238,6 +14315,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  );
  })}
  </div>
+ </>)}
  <div style={{height:16}}/>
  </>}
  {homeTab==="games" && (<>
@@ -23258,16 +23336,44 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 
  {/* ══ BROWSE PUBLIC LEAGUES SHEET ══ */}
  {showBrowse&&(
- <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:9998,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>setShowBrowse(false)}>
+ <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:9998,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>{ setShowBrowse(false); setBrowseCode(""); setBrowseExpanded(false); }}>
    <div className="pk-sheet" style={{background:"#111",maxHeight:"85vh",display:"flex",flexDirection:"column",border:"0.5px solid #1E1E1E"}} onClick={e=>e.stopPropagation()}>
      <div style={{width:36,height:4,background:"#2A2A2A",borderRadius:2,margin:"12px auto 0"}}/>
 
      {/* Header */}
      <div style={{padding:"12px 20px 10px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"0.5px solid #1A1A1A",flexShrink:0}}>
-       <div style={{fontSize:17,fontWeight:700,color:"#fff"}}>Browse Leagues</div>
-       <div onClick={()=>setShowBrowse(false)} style={{fontSize:13,fontWeight:600,color:IOS.blue,cursor:"pointer"}}>Done</div>
+       <div style={{fontSize:17,fontWeight:700,color:"#fff"}}>Join a league</div>
+       <div onClick={()=>{ setShowBrowse(false); setBrowseCode(""); setBrowseExpanded(false); }} style={{fontSize:13,fontWeight:600,color:IOS.blue,cursor:"pointer"}}>Done</div>
      </div>
 
+     {/* Code first. Six cells, Join lights when full. Browse lives below an "or". */}
+     <div style={{padding:"16px 20px 6px",flexShrink:0}}>
+       <div style={{fontSize:10,fontWeight:900,letterSpacing:"1.6px",textTransform:"uppercase",color:IOS.label3,marginBottom:9}}>Have a code from a friend?</div>
+       <div style={{position:"relative",marginBottom:10}}>
+         <input value={browseCode} onChange={e=>setBrowseCode(String(e.target.value||"").toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,6))} inputMode="text" autoCapitalize="characters" autoCorrect="off" spellCheck={false} maxLength={6} aria-label="League code"
+           style={{position:"absolute",inset:0,opacity:0,width:"100%",height:"100%",fontSize:16}}/>
+         <div style={{display:"flex",gap:7,pointerEvents:"none"}}>
+           {[0,1,2,3,4,5].map(i=>{ const ch=browseCode[i]||""; const cur=browseCode.length===i; return (
+             <div key={i} style={{flex:1,height:54,borderRadius:12,background:ch?"rgba(59,111,224,0.12)":"rgba(255,255,255,0.05)",border:"1px solid "+((ch||cur)?IOS.blue:"rgba(255,255,255,0.14)"),boxShadow:cur?"0 0 0 3px rgba(59,111,224,0.25)":"none",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:24,fontWeight:900,color:"#fff"}}>{ch}</div>
+           );})}
+         </div>
+       </div>
+       <button disabled={browseCode.length<6||browseJoining} onClick={async()=>{ if(browseCode.length<6) return; setBrowseJoining(true); try{ const ok = await handleJoinCode(browseCode); if(ok){ setShowBrowse(false); setBrowseCode(""); setBrowseExpanded(false); } } catch(e){} finally{ setBrowseJoining(false); } }}
+         style={{width:"100%",border:"none",borderRadius:14,padding:15,fontSize:15,fontWeight:800,color:"#fff",fontFamily:"inherit",background:IOS.blue,opacity:(browseCode.length<6||browseJoining)?0.4:1,cursor:browseCode.length<6?"default":"pointer"}}>
+         {browseJoining ? "Joining..." : "Join"}
+       </button>
+       <div style={{fontSize:11.5,color:IOS.label3,textAlign:"center",marginTop:9,lineHeight:1.5}}>Six characters. Ask whoever runs the league, it is on their invite.</div>
+       <div style={{display:"flex",alignItems:"center",gap:12,margin:"18px 0 4px",color:IOS.label3,fontSize:11,fontWeight:800,letterSpacing:"1.4px",textTransform:"uppercase"}}>
+         <div style={{flex:1,height:0.5,background:"rgba(255,255,255,0.08)"}}/><span>or</span><div style={{flex:1,height:0.5,background:"rgba(255,255,255,0.08)"}}/>
+       </div>
+       {!browseExpanded && (
+         <div onClick={()=>{ setBrowseExpanded(true); try{ fetchPublicLeagues(); }catch(e){} }} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.04)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:14,padding:"14px 15px",cursor:"pointer",marginTop:6}}>
+           <div><div style={{fontSize:14.5,fontWeight:800,color:"#fff"}}>Browse public leagues</div><div style={{fontSize:12,color:IOS.label2,marginTop:3}}>Open leagues looking for players</div></div>
+           <div style={{color:IOS.label3,fontSize:20}}>&#8250;</div>
+         </div>
+       )}
+     </div>
+     {browseExpanded && (<>
      {/* Filters */}
      <div style={{padding:"10px 16px 8px",borderBottom:"0.5px solid #1A1A1A",flexShrink:0}}>
        <div className="pk-rail" style={{marginBottom:2}}>
@@ -23350,6 +23456,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
          });
        })()}
      </div>
+     </>)}
    </div>
  </div>
  )}
@@ -23387,10 +23494,10 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
              </div>
            ))}
           <button disabled={checkoutLoading!==null} onClick={()=>startCheckout("annual")} style={{display:"block",width:"100%",background:IOS.blue,color:"#fff",border:"none",borderRadius:RAD.md,padding:14,fontSize:14,fontWeight:800,textAlign:"center",marginTop:16,cursor:checkoutLoading?"default":"pointer",fontFamily:"Barlow,sans-serif",opacity:checkoutLoading?0.6:1}}>
-             {checkoutLoading==="annual" ? (IS_NATIVE?"Purchasing...":"Redirecting...") : (IS_NATIVE ? ("Go Pro — "+((nativePrices&&nativePrices.annual)||"$59.99")+"/yr (save 50%)") : "Go Pro — $60/yr (save 50%)")}
+             {checkoutLoading==="annual" ? (IS_NATIVE?"Purchasing...":"Redirecting...") : (IS_NATIVE ? ((nativePrices&&nativePrices.annualTrial)?("1 month free, then "+((nativePrices&&nativePrices.annual)||"$59.99")+"/yr"):("Go Pro — "+((nativePrices&&nativePrices.annual)||"$59.99")+"/yr (save 50%)")) : (_webTrialOk ? "1 month free, then $60/yr" : "Go Pro — $60/yr (save 50%)"))}
            </button>
           <button disabled={checkoutLoading!==null} onClick={()=>startCheckout("monthly")} style={{display:"block",width:"100%",background:"rgba(255,255,255,0.06)",color:"#fff",border:EDGE.hair3,borderRadius:RAD.md,padding:13,fontSize:13.5,fontWeight:700,textAlign:"center",marginTop:8,cursor:checkoutLoading?"default":"pointer",fontFamily:"Barlow,sans-serif",opacity:checkoutLoading?0.6:1}}>
-             {checkoutLoading==="monthly" ? (IS_NATIVE?"Purchasing...":"Redirecting...") : (IS_NATIVE ? ("Or "+((nativePrices&&nativePrices.monthly)||"$9.99")+"/mo") : "Or $10/mo")}
+             {checkoutLoading==="monthly" ? (IS_NATIVE?"Purchasing...":"Redirecting...") : (IS_NATIVE ? ((nativePrices&&nativePrices.monthlyTrial)?("1 month free, then "+((nativePrices&&nativePrices.monthly)||"$9.99")+"/mo"):("Or "+((nativePrices&&nativePrices.monthly)||"$9.99")+"/mo")) : (_webTrialOk ? "1 month free, then $10/mo" : "Or $10/mo"))}
            </button>
           {_isDev && !IS_NATIVE && (
              <button onClick={()=>{setProStatus(true);setShowPaywall(null);}} style={{display:"block",width:"100%",background:"none",border:"0.5px dashed rgba(48,209,88,0.4)",color:"#30D158",borderRadius:RAD.sm,padding:9,fontSize:11,fontWeight:700,textAlign:"center",marginTop:10,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>
@@ -23402,7 +23509,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
               terms, and functional links to Terms of Use and Privacy Policy. */}
           <div style={{marginTop:14,paddingTop:12,borderTop:"0.5px solid #1A1A1A"}}>
              <div style={{fontSize:11,color:"#888",lineHeight:1.55}}>
-               PickLock Pro is an auto-renewing subscription. Annual: {IS_NATIVE ? ((nativePrices&&nativePrices.annual)||"$59.99") : "$60.00"} per year. Monthly: {IS_NATIVE ? ((nativePrices&&nativePrices.monthly)||"$9.99") : "$10.00"} per month.
+               {((IS_NATIVE && nativePrices && (nativePrices.monthlyTrial||nativePrices.annualTrial)) || _webTrialOk) ? "Free for the first month; you will not be charged until the trial ends. Cancel any time before then and you pay nothing. " : ""}PickLock Pro is an auto-renewing subscription. Annual: {IS_NATIVE ? ((nativePrices&&nativePrices.annual)||"$59.99") : "$60.00"} per year. Monthly: {IS_NATIVE ? ((nativePrices&&nativePrices.monthly)||"$9.99") : "$10.00"} per month.
              </div>
              {IS_NATIVE && (
                <div style={{fontSize:11,color:"#666",lineHeight:1.55,marginTop:8}}>
