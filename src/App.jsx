@@ -6440,6 +6440,22 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  // switch flashed that empty state before the real rows arrived.
  const [standingsFor, setStandingsFor] = useState(null);
  const [membersFor, setMembersFor] = useState(null);   // which league leagueMembers belongs to
+ // Survivor: teams (ML mode) or players (TD mode) this user already burned in
+ // the active league. Mirrors the survivor_one_team_lock DB trigger so the
+ // board can grey them out instead of failing at insert. Voids (result P) do
+ // not count - a cancelled game never used the team.
+ const [svUsedNames, setSvUsedNames] = useState(new Set());
+ useEffect(()=>{
+   let dead=false;
+   (async()=>{
+     if(isSoloMode || !user || !activeLeague || activeLeague.league_type!=="survivor" || !activeLeague.id || activeLeague.id==="solo"){ setSvUsedNames(new Set()); return; }
+     const cw = Number(activeLeague.current_week)||1;
+     const { data } = await supabase.from("picks").select("pick_name, result, week").eq("league_id", activeLeague.id).eq("user_id", user.id).lt("week", cw);
+     if(dead) return;
+     setSvUsedNames(new Set((data||[]).filter(p=>p.result!=="P").map(p=>String(p.pick_name||"").trim().toLowerCase()).filter(Boolean)));
+   })();
+   return ()=>{ dead=true; };
+ }, [isSoloMode, user, activeLeague && activeLeague.id, activeLeague && activeLeague.league_type, activeLeague && activeLeague.current_week]);
  const [weekPicksFor, setWeekPicksFor] = useState(null); // "<leagueId>:<week>" weekPicks belongs to
  const standingsReqRef = useRef(null);
  const scheduleReqRef = useRef(null);   // liveSchedule ownership — without it a slow
@@ -17163,16 +17179,17 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const lineAllowed = (cat)=> !gridCfg ? true : allowedTypes.includes(cat);
  const Chip = ({b, cat, line, value, mv}) => {
  if(!b) return <div style={{borderRadius:RAD.md,border:"1px dashed rgba(255,255,255,0.08)",minHeight:52}}/>;
- const enabled = lineAllowed(cat);
+ const svUsed = !isSoloMode && activeLeague && activeLeague.league_type==="survivor" && svUsedNames.has(String(b.pick||"").trim().toLowerCase());
+ const enabled = lineAllowed(cat) && !svUsed;
  const sel = isSoloMode ? soloFreePicks.some(p=>String(p.id)===String(b.id)) : ((activePicks.some(p=>p.bet&&p.bet.id===b.id)) || isLeg(b));
  const pts = ptsOf(b);
  return (
- <div onClick={()=>{ if(!enabled) return; if(sel){ if(isSoloMode){ setSoloFreePicks(prev=>prev.filter(p=>String(p.id)!==String(b.id))); } else { setActivePicks(prev=>prev.map(pp=> (pp.bet&&String(pp.bet.id)===String(b.id)) ? {...pp, bet:null} : pp)); } } else { addCard(b,cat); } }} style={{position:"relative",borderRadius:RAD.md,cursor:enabled?"pointer":"default",textAlign:"center",padding:"8px 3px",opacity:enabled?1:0.4,
+ <div title={svUsed?"Already used in an earlier week":undefined} onClick={()=>{ if(!enabled) return; if(sel){ if(isSoloMode){ setSoloFreePicks(prev=>prev.filter(p=>String(p.id)!==String(b.id))); } else { setActivePicks(prev=>prev.map(pp=> (pp.bet&&String(pp.bet.id)===String(b.id)) ? {...pp, bet:null} : pp)); } } else { addCard(b,cat); } }} style={{position:"relative",borderRadius:RAD.md,cursor:enabled?"pointer":"default",textAlign:"center",padding:"8px 3px",opacity:enabled?1:0.4,
  border:"1px solid "+(sel?IOS.blue+"a6":value?"rgba(48,209,88,0.55)":"rgba(255,255,255,0.1)"),
  background:sel?"linear-gradient(160deg,rgba(10,132,255,0.24),rgba(10,132,255,0.05))":value?"linear-gradient(160deg,rgba(48,209,88,0.2),rgba(48,209,88,0.04))":"rgba(255,255,255,0.04)",transition:"all .13s"}}>
  {(cat==="spread"||cat==="ou") && canAlt(b.marketKey) && <div onClick={(e)=>{e.stopPropagation(); openAltLines(b);}} style={{position:"absolute",top:2,right:2,fontSize:7.5,fontWeight:900,color:"#64D2FF",background:"rgba(100,210,255,0.14)",border:"1px solid rgba(100,210,255,0.45)",borderRadius:4,padding:"1px 4px",cursor:"pointer",zIndex:3,lineHeight:1.25}}>ALT</div>}
  {value && <div style={{position:"absolute",top:-6,left:"50%",transform:"translateX(-50%)"}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="3" strokeLinecap="round"><polyline points="6 14 12 8 18 14"/></svg></div>}
- {line ? <div style={{fontSize:12,fontWeight:700,color:"rgba(255,255,255,0.55)"}}>{line}</div> : null}
+ {svUsed ? <div style={{fontSize:9,fontWeight:900,letterSpacing:"1.2px",color:"#FF453A"}}>USED</div> : (line ? <div style={{fontSize:12,fontWeight:700,color:"rgba(255,255,255,0.55)"}}>{line}</div> : null)}
  <div style={{fontSize:18,fontWeight:900,color:sel?IOS.blue:"#fff",fontVariantNumeric:"tabular-nums",lineHeight:1.1}}>{b.odds}</div>
  <div style={{fontSize:11,fontWeight:800,color:IOS.green}}>+{pts}</div>
  {mv && mv.implied!=null && (()=>{ const cur=impFrac(b.impliedOdds); const op=Number(mv.implied); if(!op) return null; const yy=(v)=>(7-Math.max(0,Math.min(1,v))*6).toFixed(1); const up=cur>op+0.003, dn=cur<op-0.003; const col=up?IOS.green:dn?IOS.red:"rgba(255,255,255,0.3)"; return (<svg viewBox="0 0 40 8" preserveAspectRatio="none" style={{position:"absolute",bottom:1,left:6,width:"calc(100% - 12px)",height:5,opacity:0.55}}><polyline points={"0,"+yy(op)+" 40,"+yy(cur)} fill="none" stroke={col} strokeWidth="1.5"/></svg>); })()}
@@ -20698,12 +20715,22 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      </div>
      ):(
      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,padding:"0 14px 14px"}}>
-       {[2,6,8,10,12].map(sz=>{ const on=sz===_target; return (
-         <div key={sz} onClick={async()=>{ if(sz===_target) return; if(!window.confirm("Change league size to "+sz+"? This will wipe the current schedule and regenerate it when the league fills.")) return; await supabase.from("leagues").update({target_size:sz,max_members:sz}).eq("id",activeLeague.id); await supabase.from("matchups").delete().eq("league_id",activeLeague.id); await fetchLeagues(user.id); }} style={{border:"1.5px solid "+(on?IOS.blue:"rgba(255,255,255,0.08)"),background:on?"rgba(10,132,255,0.12)":"rgba(255,255,255,0.04)",borderRadius:RAD.md,padding:"10px 4px",textAlign:"center",cursor:on?"default":"pointer"}}>
+       {/* Three guards the grid was missing (audit 1 Sep 2026):
+           1. FLOOR - cannot shrink below the members already in. Without it a
+              10-member league set to 6 was over capacity with no schedule and
+              no join could ever fill it.
+           2. SEASON LOCK - once week 2 has begun, results exist in matchups;
+              wiping them destroys standings. Locked past week 1.
+           3. REGENERATE NOW - the schedule used to rebuild only on the next
+              join. If the league is already full at the new size, nothing
+              would ever join, so it stayed scheduleless forever. */}
+       {(() => { const _seasonLocked = (Number(activeLeague.current_week)||1) > 1; return [2,6,8,10,12].map(sz=>{ const on=sz===_target; const belowFloor = sz < leagueMembers.length; const dis = belowFloor || _seasonLocked; return (
+         <div key={sz} onClick={async()=>{ if(dis || sz===_target) return; if(!window.confirm("Change league size to "+sz+"? This wipes the current schedule. It regenerates now if the league is already full, otherwise when it fills.")) return; await supabase.from("leagues").update({target_size:sz,max_members:sz}).eq("id",activeLeague.id); await supabase.from("matchups").delete().eq("league_id",activeLeague.id); if(leagueMembers.length>=sz){ const _ids=leagueMembers.map(m=>m.userId).filter(Boolean); try{ await generateSchedule(activeLeague.id, _ids, regularSeasonWeeksFor({...activeLeague,target_size:sz,max_members:sz}, _ids.length)); }catch(e){} } await fetchLeagues(user.id); }} style={{border:"1.5px solid "+(on?IOS.blue:"rgba(255,255,255,0.08)"),background:on?"rgba(10,132,255,0.12)":"rgba(255,255,255,0.04)",borderRadius:RAD.md,padding:"10px 4px",textAlign:"center",cursor:on?"default":"pointer"}}>
            <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:18,color:on?IOS.blue:"rgba(255,255,255,0.4)"}}>{sz}</div>
            <div style={{fontSize:9.5,color:on?IOS.blue:"rgba(255,255,255,0.3)",marginTop:2,fontWeight:600}}>players</div>
          </div>
-       );})}
+       );}); })()}
+       {(Number(activeLeague.current_week)||1) > 1 && <div style={{gridColumn:"1 / -1",fontSize:11,color:"rgba(255,255,255,0.35)",fontWeight:600,lineHeight:1.4}}>Size is locked once the season is underway, so results already on the board cannot be wiped.</div>}
      </div>
      )}
      <div style={{...(_crow),borderTop:_hair}}>
