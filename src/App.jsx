@@ -6445,6 +6445,22 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  // board can grey them out instead of failing at insert. Voids (result P) do
  // not count - a cancelled game never used the team.
  const [svUsedNames, setSvUsedNames] = useState(new Set());
+ // "Week 1 is live" card for AUTO-start leagues. Everything about it is DERIVED
+ // from activeLeague (start_mode, season_start, current_week) plus a per-league
+ // dismissal set, so it cannot go stale across league switches and cannot
+ // outlive week 1: it disappears on its own when the week advances or 7 days
+ // pass, whichever comes first, and the moment the user taps Got it.
+ const [startedSeen, setStartedSeen] = useState(()=>{ try{ return new Set(JSON.parse(localStorage.getItem("picklock_started_seen")||"[]")); }catch(e){ return new Set(); } });
+ const markStartedSeen = (id)=>{ setStartedSeen(prev=>{ const n=new Set(prev); n.add(id); try{ localStorage.setItem("picklock_started_seen", JSON.stringify([...n])); }catch(e){} return n; }); };
+ const showStartedCard = (()=>{
+   if(isSoloMode || !activeLeague || !activeLeague.id || activeLeague.id==="solo") return false;
+   if(((activeLeague.start_mode)||"auto")!=="auto") return false;   // manual/scheduled get the Start card instead
+   if(!activeLeague.season_start) return false;
+   if((Number(activeLeague.current_week)||1)!==1) return false;
+   const age = Date.now() - new Date(activeLeague.season_start).getTime();
+   if(!(age>=0 && age < 7*24*3600*1000)) return false;
+   return !startedSeen.has(activeLeague.id);
+ })();
  useEffect(()=>{
    let dead=false;
    (async()=>{
@@ -13884,6 +13900,17 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      the auto-start effect writes season_start, so this card flashed a Start button
      nobody could use (seen 2 Sep 2026 on a 6-person CFB league). Auto leagues render
      the normal home during that frame; the card is the manual/scheduled experience. */}
+ {homeTab==='home' && showStartedCard && (
+   <div style={{margin:"6px 16px 16px",background:"linear-gradient(160deg,#0c1f38,#0b0d12)",border:"0.5px solid rgba(10,132,255,0.25)",borderRadius:RAD.xl,padding:"18px",textAlign:"center"}}>
+     <div style={{display:"inline-flex",alignItems:"center",gap:5,background:"rgba(48,209,88,0.14)",border:"0.5px solid rgba(48,209,88,0.3)",borderRadius:RAD.pill,padding:"4px 11px",fontSize:11,fontWeight:800,letterSpacing:"0.06em",color:IOS.green}}><span className="wr-dot"/>SEASON LIVE</div>
+     <div style={{fontSize:20,fontWeight:900,color:"#fff",marginTop:11,letterSpacing:-0.3}}>{"Roster\u2019s full. Week 1 is live."}</div>
+     <div style={{fontSize:13,color:IOS.label2,lineHeight:1.5,marginTop:7}}>{"Everyone\u2019s in and picks are open. Lock yours before the first kickoff."}</div>
+     <div style={{display:"flex",gap:8,marginTop:14}}>
+       <div onClick={()=>markStartedSeen(activeLeague.id)} style={{flex:1,padding:"12px",borderRadius:RAD.md,background:"rgba(255,255,255,0.07)",border:"0.5px solid rgba(255,255,255,0.12)",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer"}}>Got it</div>
+       <div onClick={()=>{ markStartedSeen(activeLeague.id); setScreen("picks"); }} style={{flex:1.4,padding:"12px",borderRadius:RAD.md,background:IOS.blue,fontSize:14,fontWeight:800,color:"#fff",cursor:"pointer"}}>Make picks</div>
+     </div>
+   </div>
+ )}
  {homeTab==='home' && !isSoloMode && leagueAwaitingStart && ((activeLeague.start_mode)||"auto")!=="auto" && (activeLeague.isCommissioner ? (
    <div style={{margin:"6px 16px 16px",background:"linear-gradient(160deg,#0c1f38,#0b0d12)",border:"0.5px solid rgba(10,132,255,0.25)",borderRadius:RAD.xl,padding:"18px",textAlign:"center"}}>
      <div style={{display:"inline-flex",alignItems:"center",gap:5,background:"rgba(48,209,88,0.14)",border:"0.5px solid rgba(48,209,88,0.3)",borderRadius:RAD.pill,padding:"4px 11px",fontSize:11,fontWeight:800,color:IOS.green}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>Roster full · {(activeLeague.memberCount||0)}/{_lgTarget}</div>
