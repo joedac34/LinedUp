@@ -10819,10 +10819,15 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  useEffect(()=>{
    if(!user || pkTour || tutorialStep>=0 || leaguesLoading) return;
    if(user.is_anonymous) return;
+   // The DOB gate is the OAuth signup step (Google/Apple never see the signup
+   // form, so this is the only place they give a date of birth). While it is
+   // up, nothing else may start: the tour was launching underneath it and
+   // spotlighting elements hidden behind the modal (2 Sep 2026).
+   if(!userProfile || !userProfile.birth_date) return;
    try{ if(localStorage.getItem("picklock_tour_done_"+user.id)) return; }catch(e){}
    if((realLeagues||[]).length>0) return;
    setPkTour("welcome");
- }, [user, pkTour, tutorialStep, leaguesLoading, realLeagues]);
+ }, [user, pkTour, tutorialStep, leaguesLoading, realLeagues, userProfile && userProfile.birth_date]);
  // Pick-tour advancement: watch the real state the user is changing.
  useEffect(()=>{
    if(pkTour!=="pick") return;
@@ -12393,7 +12398,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
   </div>
 </div>
 )}
- {pkTour && user && (()=>{
+ {pkTour && user && userProfile && userProfile.birth_date && (()=>{
  // ── Guided first run: coach layer + cards ──
  const _mark = pkTour==="lap" || pkTour==="pick";
  const _steps = pkTour==="lap" ? PK_LAP : PK_PICK;
