@@ -13880,7 +13880,11 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  </div>
 
 
- {homeTab==='home' && !isSoloMode && leagueAwaitingStart && (activeLeague.isCommissioner ? (
+ {/* On AUTO start the league is full-and-unstarted for exactly one render before
+     the auto-start effect writes season_start, so this card flashed a Start button
+     nobody could use (seen 2 Sep 2026 on a 6-person CFB league). Auto leagues render
+     the normal home during that frame; the card is the manual/scheduled experience. */}
+ {homeTab==='home' && !isSoloMode && leagueAwaitingStart && ((activeLeague.start_mode)||"auto")!=="auto" && (activeLeague.isCommissioner ? (
    <div style={{margin:"6px 16px 16px",background:"linear-gradient(160deg,#0c1f38,#0b0d12)",border:"0.5px solid rgba(10,132,255,0.25)",borderRadius:RAD.xl,padding:"18px",textAlign:"center"}}>
      <div style={{display:"inline-flex",alignItems:"center",gap:5,background:"rgba(48,209,88,0.14)",border:"0.5px solid rgba(48,209,88,0.3)",borderRadius:RAD.pill,padding:"4px 11px",fontSize:11,fontWeight:800,color:IOS.green}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>Roster full · {(activeLeague.memberCount||0)}/{_lgTarget}</div>
      <div style={{fontSize:20,fontWeight:900,color:"#fff",marginTop:11,letterSpacing:-0.3}}>Roster’s full</div>
