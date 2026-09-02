@@ -6440,38 +6440,6 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  // switch flashed that empty state before the real rows arrived.
  const [standingsFor, setStandingsFor] = useState(null);
  const [membersFor, setMembersFor] = useState(null);   // which league leagueMembers belongs to
- // Survivor: teams (ML mode) or players (TD mode) this user already burned in
- // the active league. Mirrors the survivor_one_team_lock DB trigger so the
- // board can grey them out instead of failing at insert. Voids (result P) do
- // not count - a cancelled game never used the team.
- const [svUsedNames, setSvUsedNames] = useState(new Set());
- // "Week 1 is live" card for AUTO-start leagues. Everything about it is DERIVED
- // from activeLeague (start_mode, season_start, current_week) plus a per-league
- // dismissal set, so it cannot go stale across league switches and cannot
- // outlive week 1: it disappears on its own when the week advances or 7 days
- // pass, whichever comes first, and the moment the user taps Got it.
- const [startedSeen, setStartedSeen] = useState(()=>{ try{ return new Set(JSON.parse(localStorage.getItem("picklock_started_seen")||"[]")); }catch(e){ return new Set(); } });
- const markStartedSeen = (id)=>{ setStartedSeen(prev=>{ const n=new Set(prev); n.add(id); try{ localStorage.setItem("picklock_started_seen", JSON.stringify([...n])); }catch(e){} return n; }); };
- const showStartedCard = (()=>{
-   if(isSoloMode || !activeLeague || !activeLeague.id || activeLeague.id==="solo") return false;
-   if(((activeLeague.start_mode)||"auto")!=="auto") return false;   // manual/scheduled get the Start card instead
-   if(!activeLeague.season_start) return false;
-   if((Number(activeLeague.current_week)||1)!==1) return false;
-   const age = Date.now() - new Date(activeLeague.season_start).getTime();
-   if(!(age>=0 && age < 7*24*3600*1000)) return false;
-   return !startedSeen.has(activeLeague.id);
- })();
- useEffect(()=>{
-   let dead=false;
-   (async()=>{
-     if(isSoloMode || !user || !activeLeague || activeLeague.league_type!=="survivor" || !activeLeague.id || activeLeague.id==="solo"){ setSvUsedNames(new Set()); return; }
-     const cw = Number(activeLeague.current_week)||1;
-     const { data } = await supabase.from("picks").select("pick_name, result, week").eq("league_id", activeLeague.id).eq("user_id", user.id).lt("week", cw);
-     if(dead) return;
-     setSvUsedNames(new Set((data||[]).filter(p=>p.result!=="P").map(p=>String(p.pick_name||"").trim().toLowerCase()).filter(Boolean)));
-   })();
-   return ()=>{ dead=true; };
- }, [isSoloMode, user, activeLeague && activeLeague.id, activeLeague && activeLeague.league_type, activeLeague && activeLeague.current_week]);
  const [weekPicksFor, setWeekPicksFor] = useState(null); // "<leagueId>:<week>" weekPicks belongs to
  const standingsReqRef = useRef(null);
  const scheduleReqRef = useRef(null);   // liveSchedule ownership — without it a slow
@@ -6518,6 +6486,41 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  const setSoloSportPersist = (sp) => { setSoloSport(sp); try{localStorage.setItem("picklock_solo_sport",sp);}catch(e){} };
  const [showSoloSportPicker, setShowSoloSportPicker] = useState(false); // sport selector before building
  const activeLeague = isSoloMode ? {id:soloLeagueId||"solo",name:"Solo Mode",sport:soloSport,current_week:soloWeekNum(),season_weeks:99,max_members:1,target_size:1,isCommissioner:false} : ([...realLeagues].find(l=>l.id===activeLeagueId) || realLeagues[0] || {id:"",name:"",sport:"nfl",current_week:1,season_weeks:18,max_members:8,target_size:8,isCommissioner:false});
+ // NOTE: these read activeLeague / isSoloMode during render (effect deps, IIFE),
+ // so they MUST sit below those declarations. They were briefly above and threw
+ // "Cannot access before initialization" on every load (2 Sep 2026).
+ // Survivor: teams (ML mode) or players (TD mode) this user already burned in
+ // the active league. Mirrors the survivor_one_team_lock DB trigger so the
+ // board can grey them out instead of failing at insert. Voids (result P) do
+ // not count - a cancelled game never used the team.
+ const [svUsedNames, setSvUsedNames] = useState(new Set());
+ // "Week 1 is live" card for AUTO-start leagues. Everything about it is DERIVED
+ // from activeLeague (start_mode, season_start, current_week) plus a per-league
+ // dismissal set, so it cannot go stale across league switches and cannot
+ // outlive week 1: it disappears on its own when the week advances or 7 days
+ // pass, whichever comes first, and the moment the user taps Got it.
+ const [startedSeen, setStartedSeen] = useState(()=>{ try{ return new Set(JSON.parse(localStorage.getItem("picklock_started_seen")||"[]")); }catch(e){ return new Set(); } });
+ const markStartedSeen = (id)=>{ setStartedSeen(prev=>{ const n=new Set(prev); n.add(id); try{ localStorage.setItem("picklock_started_seen", JSON.stringify([...n])); }catch(e){} return n; }); };
+ const showStartedCard = (()=>{
+   if(isSoloMode || !activeLeague || !activeLeague.id || activeLeague.id==="solo") return false;
+   if(((activeLeague.start_mode)||"auto")!=="auto") return false;   // manual/scheduled get the Start card instead
+   if(!activeLeague.season_start) return false;
+   if((Number(activeLeague.current_week)||1)!==1) return false;
+   const age = Date.now() - new Date(activeLeague.season_start).getTime();
+   if(!(age>=0 && age < 7*24*3600*1000)) return false;
+   return !startedSeen.has(activeLeague.id);
+ })();
+ useEffect(()=>{
+   let dead=false;
+   (async()=>{
+     if(isSoloMode || !user || !activeLeague || activeLeague.league_type!=="survivor" || !activeLeague.id || activeLeague.id==="solo"){ setSvUsedNames(new Set()); return; }
+     const cw = Number(activeLeague.current_week)||1;
+     const { data } = await supabase.from("picks").select("pick_name, result, week").eq("league_id", activeLeague.id).eq("user_id", user.id).lt("week", cw);
+     if(dead) return;
+     setSvUsedNames(new Set((data||[]).filter(p=>p.result!=="P").map(p=>String(p.pick_name||"").trim().toLowerCase()).filter(Boolean)));
+   })();
+   return ()=>{ dead=true; };
+ }, [isSoloMode, user, activeLeague && activeLeague.id, activeLeague && activeLeague.league_type, activeLeague && activeLeague.current_week]);
  // ── OWNERSHIP GATES ── weekPicks and leagueMembers are single shared arrays that
  // every screen reads, but they are filled per league. Mid-switch — or in solo mode,
  // which loads YOUR SOLO league into the same arrays — they hold rows belonging to a
