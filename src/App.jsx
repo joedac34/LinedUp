@@ -82,7 +82,16 @@ const API_BASE = IS_NATIVE ? "https://app.picklockapp.com" : "";
  "Orlando Magic":"ORL","Detroit Pistons":"DET",
  };
  if(known[name]) return known[name];
- const _cfb=ncaafTeam(name); if(_cfb) return _cfb[0];
+ const _cfb=collegeTeam(name); if(_cfb) return _cfb[0];
+ // Below here is a PRO nickname map ("Broncos"->DEN, "Cowboys"->DAL). College
+ // names must never reach it: Western Michigan Broncos was rendering as DEN and
+ // Oklahoma State Cowboys as DAL. If a name looks collegiate but missed both
+ // maps, build initials from the school instead of borrowing a pro badge.
+ const _school = cfbSchool(name);
+ if(_school && _school !== name){
+   const _init = _school.split(/\s+/).filter(Boolean).map(w=>w[0]).join("").toUpperCase().slice(0,4);
+   if(/^(state|university|college|a&m|tech)$/i.test(_school.split(/\s+/).slice(-1)[0]) || _school.split(/\s+/).length>1) return _init;
+ }
 
  // Partial name match — check if name contains a known nickname
  const partialMap = {
@@ -4170,6 +4179,21 @@ const NCAAF_TEAMS = {
 const _ncaafNorm = (s) => { try { s=String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,""); } catch(e){ s=String(s||""); } return s.toLowerCase().replace(/['\u2019]/g,"").replace(/[^a-z0-9 ]/g," ").replace(/\s+/g," ").trim(); };
 const NCAAF_NORM = {}; Object.keys(NCAAF_TEAMS).forEach(k=>{ NCAAF_NORM[_ncaafNorm(k)] = k; });
 const NCAAF_ALIAS = { "louisiana state tigers":"lsu tigers","southern california trojans":"usc trojans","mississippi rebels":"ole miss rebels","appalachian state mountaineers":"app state mountaineers","connecticut huskies":"uconn huskies","umass minutemen":"massachusetts minutemen","north carolina state wolfpack":"nc state wolfpack" };
+// Two-word mascots, derived from both college maps. Needed to strip the mascot
+// off a full team name and leave the SCHOOL, e.g. "Alabama Crimson Tide" ->
+// "Alabama". Anything not in here is assumed to be a single-word mascot.
+const CFB_MASCOT2 = new Set(["big blue","big green","big red","black bears","black knights","blue demons","blue devils","blue hens","blue hose","blue jays","blue raiders","blue streaks","crimson hawks","crimson storm","crimson tide","delta devils","demon deacons","fighting camels","fighting hawks","fighting illini","fighting irish","fighting muskies","fighting scots","flying dutchmen","golden bears","golden bulls","golden eagles","golden flashes","golden gophers","golden griffins","golden grizzlies","golden hurricane","golden knights","golden lions","golden rams","golden tornadoes","great danes","green falcons","green wave","horned frogs","mean green","mountain hawks","mountain lions","nittany lions","purple aces","purple eagles","purple raiders","rainbow warriors","red devils","red foxes","red raiders","red storm","red wolves","scarlet knights","sun devils","tar heels","thundering herd","white mules","wolf pack","yellow jackets"]);
+// The school, without the mascot. Used for DISPLAY on college rows: a bare
+// mascot ("Broncos", "Cowboys", "Eagles") is ambiguous with the pro teams and
+// was actively misleading - Western Michigan read as the Denver Broncos.
+function cfbSchool(name){
+  const t = String(name||"").trim(); if(!t) return t;
+  const w = t.split(/\s+/); if(w.length < 2) return t;
+  const last2 = w.slice(-2).join(" ").toLowerCase();
+  const cut = CFB_MASCOT2.has(last2) ? 2 : 1;
+  const school = w.slice(0, Math.max(1, w.length - cut)).join(" ");
+  return school || t;
+}
 function ncaafTeam(name){ if(!name) return null; if(NCAAF_TEAMS[name]) return NCAAF_TEAMS[name]; const n=_ncaafNorm(name); const key=NCAAF_NORM[NCAAF_ALIAS[n]||n]||NCAAF_NORM[n]; return key ? NCAAF_TEAMS[key] : null; }
 const NCAAB_TEAMS = {
 "Abilene Christian Wildcats":["ACU","2000"],
@@ -4540,6 +4564,9 @@ const NCAAB_TEAMS = {
 // /i/teamlogos/ncaa/500/{id}.png path. _ncaafNorm is sport-agnostic; reuse it.
 const NCAAB_NORM = {}; Object.keys(NCAAB_TEAMS).forEach(k=>{ NCAAB_NORM[_ncaafNorm(k)] = k; });
 const NCAAB_ALIAS = { "connecticut huskies":"uconn huskies","north carolina state wolfpack":"nc state wolfpack","southern california trojans":"usc trojans","mississippi rebels":"ole miss rebels","louisiana state tigers":"lsu tigers","appalachian state mountaineers":"app state mountaineers","college of charleston cougars":"charleston cougars" };
+// Either college map counts as a college hit. Order matters only for teams that
+// differ between the two; abbreviations agree where both carry the school.
+function collegeTeam(name){ return ncaafTeam(name) || ncaabTeam(name); }
 function ncaabTeam(name){ if(!name) return null; if(NCAAB_TEAMS[name]) return NCAAB_TEAMS[name]; const n=_ncaafNorm(name); const key=NCAAB_NORM[NCAAB_ALIAS[n]||n]||NCAAB_NORM[n]; return key ? NCAAB_TEAMS[key] : null; }
 const EPL_TEAMS = {
 "AFC Bournemouth":["BOU","349"],
@@ -5538,7 +5565,7 @@ td:["player_anytime_td","player_first_td","player_rush_tds","player_reception_td
 pts:["player_points","player_points_rebounds_assists"], reb:["player_rebounds"], ast:["player_assists"], "3pt":["player_threes"],
 hr:["batter_home_runs","batter_home_runs_alternate"], hits:["batter_hits"], bases:["batter_total_bases"], rbi:["batter_rbis"], k:["pitcher_strikeouts"],
 runs:["batter_runs_scored"], walks:["batter_walks"], sb:["batter_stolen_bases"], doubles:["batter_doubles"], triples:["batter_triples"], singles:["batter_singles"], hrr:["batter_hits_runs_rbis"], er:["pitcher_earned_runs"], hitsallowed:["pitcher_hits_allowed"], walksallowed:["pitcher_walks"], outs:["pitcher_outs"],
-anytd:["player_anytime_td"], goal:["player_goal_scorer_anytime"], sog:["player_shots_on_goal"], saves:["player_total_saves"], passyds:["player_pass_yds"], passtds:["player_pass_tds"], rushyds:["player_rush_yds"], rushtds:["player_rush_tds"], recs:["player_receptions"], recyds:["player_reception_yds"], rectds:["player_reception_tds"],
+anytd:["player_anytime_td"], goal:["player_goal_scorer_anytime"], ga:["player_goal_or_assist"], shots:["player_shots"], sot:["player_shots_on_target"], sog:["player_shots_on_goal"], saves:["player_total_saves"], passyds:["player_pass_yds"], passtds:["player_pass_tds"], rushyds:["player_rush_yds"], rushtds:["player_rush_tds"], recs:["player_receptions"], recyds:["player_reception_yds"], rectds:["player_reception_tds"],
 };
 
 const PERIOD_VOCAB = {
@@ -7219,6 +7246,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  const [gridSport, setGridSport] = useState(null);     // null = follow league default sport
  const [gridType, setGridType] = useState("ml");        // ml | spread | ou | prop | longshot
  const [gridPropSub, setGridPropSub] = useState("all"); // prop sub-category filter
+ const [specialsSub, setSpecialsSub] = useState("btts"); // soccer Specials tab: btts | dnb | dchance | tmtotal
  const [gridPeriodSub, setGridPeriodSub] = useState(""); // period sub-type (solo browser)
  const [gridTargetSlot, setGridTargetSlot] = useState(null); // which flex slot a tapped card fills
  const [slipBarOpen, setSlipBarOpen] = useState(false); // DK-style slip sheet in the browser
@@ -8519,6 +8547,9 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  const PROP_SUBS_BY_SPORT = {
   nfl:[{id:"all",l:"All"},{id:"pass",l:"Pass"},{id:"rush",l:"Rush"},{id:"rec",l:"Receiving"},{id:"td",l:"TDs"},{id:"anytd",l:"Any TD"},{id:"passyds",l:"Pass Yds"},{id:"passtds",l:"Pass TDs"},{id:"rushyds",l:"Rush Yds"},{id:"rushtds",l:"Rush TDs"},{id:"recs",l:"Recs"},{id:"recyds",l:"Rec Yds"},{id:"rectds",l:"Rec TDs"}],
   nba:[{id:"all",l:"All"},{id:"pts",l:"Points"},{id:"reb",l:"Rebounds"},{id:"ast",l:"Assists"},{id:"3pt",l:"Threes"}],
+  // Soccer: the five player markets the books post for EPL/UCL (probe-verified).
+  epl:[{id:"all",l:"All"},{id:"goal",l:"Anytime Goal"},{id:"ga",l:"Goal or Assist"},{id:"ast",l:"Assists"},{id:"shots",l:"Shots"},{id:"sot",l:"On Target"}],
+  ucl:[{id:"all",l:"All"},{id:"goal",l:"Anytime Goal"},{id:"ga",l:"Goal or Assist"},{id:"ast",l:"Assists"},{id:"shots",l:"Shots"},{id:"sot",l:"On Target"}],
   mlb:[{id:"all",l:"All"},{id:"hr",l:"HR"},{id:"hits",l:"Hits"},{id:"bases",l:"Total Bases"},{id:"rbi",l:"RBIs"},{id:"runs",l:"Runs"},{id:"walks",l:"Walks"},{id:"sb",l:"SB"},{id:"doubles",l:"2B"},{id:"triples",l:"3B"},{id:"singles",l:"1B"},{id:"hrr",l:"H+R+RBI"},{id:"k",l:"K"},{id:"er",l:"ER"},{id:"hitsallowed",l:"Hits Alwd"},{id:"walksallowed",l:"BB Alwd"},{id:"outs",l:"Outs"}],
  };
  // ─── LEAGUE LENGTH VALIDATION ────────────────────────────────────────────────
@@ -17180,7 +17211,11 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  // mangles clubs ("Ipswich Town" -> "Town", "Manchester United" -> "United").
  // Soccer keeps the full club name; "FC"/"AFC" noise is trimmed instead.
  const _isSoc = (sp)=> sp==="epl" || sp==="ucl";
- const nick = (nm="", sp)=>{ const t=String(nm).trim(); if(_isSoc(sp||gSport)) return t.replace(/^(AFC|FC)\s+/i,"").replace(/\s+(FC|AFC)$/i,""); const w=t.split(/\s+/); return w.length>1 ? w[w.length-1] : t; };
+ // Last word is the US-pro nickname ("Kansas City Chiefs" -> "Chiefs"), but for
+ // COLLEGE it produces a bare mascot that collides with pro teams - "Broncos"
+ // for Western Michigan, "Cowboys" for Oklahoma State. Colleges show the school.
+ const _isCollege = (sp)=> sp==="ncaaf" || sp==="ncaab";
+ const nick = (nm="", sp)=>{ const t=String(nm).trim(); const _sp=sp||gSport; if(_isSoc(_sp)) return t.replace(/^(AFC|FC)\s+/i,"").replace(/\s+(FC|AFC)$/i,""); if(_isCollege(_sp)) return cfbSchool(t); const w=t.split(/\s+/); return w.length>1 ? w[w.length-1] : t; };
  const _bg = {};
  const _ens = (g,t)=>{ if(!_bg[g]){ const pg=parseGame(g); _bg[g]={ game:g, away:pg.away, home:pg.home, time:t||"", ml:{}, spread:{}, ou:{}, btts:{}, dnb:{}, dchance:{}, tmtotal:{} }; } if(t&&!_bg[g].time)_bg[g].time=t; return _bg[g]; };
  (BETS.ml||[]).filter(b=>gSport==="all"||b._sport===gSport).forEach(b=>{ const e=_ens(b.game,b.gameTime); if(b.awayPitcher&&!e.awayPitcher)e.awayPitcher=b.awayPitcher; if(b.homePitcher&&!e.homePitcher)e.homePitcher=b.homePitcher; const _nm=String(b.outcome||b.pick||"").trim(); if(/^draw$/i.test(_nm)){ e.ml.draw=b; return; } const sd=sideOf(_nm,b.game); if(sd==="AWAY")e.ml.away=b; else if(sd==="HOME")e.ml.home=b; });
@@ -17276,10 +17311,13 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div style={{fontSize:11,fontWeight:800}}>{dayLabel(g.time)} · <span style={{color:IOS.teal}}>{clockLabel(g.time)}</span></div>
  <div style={{fontSize:10,fontWeight:700,color:IOS.orange}}>{countdown(g.time)}</div>
  </div>
- <div style={{display:"grid",gridTemplateColumns:"1.45fr 1fr 1fr 1fr",padding:"4px 13px 2px"}}>
- {["Team","Spread","Total","Money"].map((h,hi)=>(<span key={h} style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"rgba(255,255,255,0.32)",textAlign:hi===0?"left":"center"}}>{h}</span>))}
- </div>
- <div style={{display:"grid",gridTemplateColumns:"1.45fr 1fr 1fr 1fr",alignItems:"stretch"}}>
+ {/* Header follows the grid: soccer drops the spread column when no goal line
+     posted, and speaks its own vocabulary (Match / Goals / Result). */}
+ {(()=>{ const _socNoSp = _isSoc(_gsp)&&!g.spread.away&&!g.spread.home; const _cols = _isSoc(_gsp) ? (_socNoSp ? ["Match","Goals","Result"] : ["Match","Goal line","Goals","Result"]) : ["Team","Spread","Total","Money"]; return (
+ <div style={{display:"grid",gridTemplateColumns:_socNoSp?"1.45fr 1fr 1fr":"1.45fr 1fr 1fr 1fr",padding:"4px 13px 2px"}}>
+ {_cols.map((h,hi)=>(<span key={h} style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"rgba(255,255,255,0.32)",textAlign:hi===0?"left":"center"}}>{h}</span>))}
+ </div>); })()}
+ <div style={{display:"grid",gridTemplateColumns:(_isSoc(_gsp)&&!g.spread.away&&!g.spread.home)?"1.45fr 1fr 1fr":"1.45fr 1fr 1fr 1fr",alignItems:"stretch"}}>
                   {/* Soccer is 3-way: Home / Draw / Away all pickable. _rows keeps the
                       team column and every chip column on the same row count so they stay
                       aligned. A drawn match LOSES a team pick, same as the books. */}
@@ -17295,11 +17333,11 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  </div>
  ))}
  </div>
- <div style={{display:"grid",gridTemplateRows:(g.ml.draw?"1fr 1fr 1fr":"1fr 1fr"),gap:6,padding:"8px 4px"}}>
+ {(!_isSoc(_gsp)||g.spread.away||g.spread.home) && (<div style={{display:"grid",gridTemplateRows:(g.ml.draw?"1fr 1fr 1fr":"1fr 1fr"),gap:6,padding:"8px 4px"}}>
  <Chip b={g.spread.away} cat="spread" line={spLineA} value={isVal(g.spread.away,g._ov.spread)}/>
                       {g.ml.draw && <div/>}
  <Chip b={g.spread.home} cat="spread" line={spLineH} value={isVal(g.spread.home,g._ov.spread)}/>
- </div>
+ </div>)}
  <div style={{display:"grid",gridTemplateRows:(g.ml.draw?"1fr 1fr 1fr":"1fr 1fr"),gap:6,padding:"8px 4px"}}>
  <Chip b={g.ou.over} cat="ou" line={totPt!==""?("O "+totPt):""} value={isVal(g.ou.over,g._ov.ou)}/>
                       {g.ml.draw && <div/>}
@@ -17314,41 +17352,6 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  
                   {/* BTTS: soccer signature market. Only rendered when the feed
                       actually returned both sides for this fixture. */}
-                  {/* Soccer extras (probe-verified 30 Aug 2026). Each renders
-                      only when the feed returned that market for this fixture. */}
-                  {(g.dnb.home||g.dnb.away) && (
-                    <div style={{borderTop:"1px solid rgba(255,255,255,0.07)",padding:"8px 13px",display:"flex",alignItems:"center",gap:8}}>
-                      <span style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)",flexShrink:0}}>Draw no bet</span>
-                      <div style={{marginLeft:"auto",display:"flex",gap:6}}>
-                        <div style={{width:74}}><Chip b={g.dnb.away} cat="dnb" line={nick(g.away,_gsp).slice(0,7)} value={false}/></div>
-                        <div style={{width:74}}><Chip b={g.dnb.home} cat="dnb" line={nick(g.home,_gsp).slice(0,7)} value={false}/></div>
-                      </div>
-                    </div>
-                  )}
-                  {(g.dchance.home||g.dchance.away||g.dchance.pair) && (
-                    <div style={{borderTop:"1px solid rgba(255,255,255,0.07)",padding:"8px 13px",display:"flex",alignItems:"center",gap:8}}>
-                      <span style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)",flexShrink:0}}>Double chance</span>
-                      <div style={{marginLeft:"auto",display:"flex",gap:6}}>
-                        <div style={{width:64}}><Chip b={g.dchance.away} cat="dchance" line="X2" value={false}/></div>
-                        <div style={{width:64}}><Chip b={g.dchance.pair} cat="dchance" line="12" value={false}/></div>
-                        <div style={{width:64}}><Chip b={g.dchance.home} cat="dchance" line="1X" value={false}/></div>
-                      </div>
-                    </div>
-                  )}
-                  {(g.tmtotal.home||g.tmtotal.away) && (
-                    <div style={{borderTop:"1px solid rgba(255,255,255,0.07)",padding:"8px 13px"}}>
-                      <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)",marginBottom:7}}>Team {(PERIOD_VOCAB[_gsp]&&PERIOD_VOCAB[_gsp].unit)||"points"}</div>
-                      {[{k:"away",nm:g.away},{k:"home",nm:g.home}].map(t=> (g.tmtotal[t.k]&&(g.tmtotal[t.k].over||g.tmtotal[t.k].under)) ? (
-                        <div key={t.k} style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
-                          <span style={{fontSize:12,fontWeight:700,color:"rgba(255,255,255,0.75)"}}>{nick(t.nm,_gsp)}</span>
-                          <div style={{marginLeft:"auto",display:"flex",gap:6}}>
-                            <div style={{width:74}}><Chip b={g.tmtotal[t.k].over} cat="tmtotal" line="OVER" value={false}/></div>
-                            <div style={{width:74}}><Chip b={g.tmtotal[t.k].under} cat="tmtotal" line="UNDER" value={false}/></div>
-                          </div>
-                        </div>
-                      ) : null)}
-                    </div>
-                  )}
                   {(g.btts.yes||g.btts.no) && (
                     <div style={{borderTop:"1px solid rgba(255,255,255,0.07)",padding:"8px 13px",display:"flex",alignItems:"center",gap:8}}>
                       <span style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)",flexShrink:0}}>Both teams to score</span>
@@ -17378,6 +17381,49 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  </div>
  );
  };
+  // Soccer "Specials" tab. Draw No Bet, Double Chance and Team Goals used to stack
+  // under EVERY game card on Game Lines, which made a ten-game slate ten screens
+  // tall and left the labels cryptic (X2 / 12 / 1X, OVER with no line). Here it is
+  // one market at a time, labels spelled out, BTTS included for completeness.
+  const renderSpecialsSheet = () => {
+    const _has = (g)=> (g.btts&&(g.btts.yes||g.btts.no)) || (g.dnb&&(g.dnb.home||g.dnb.away)) || (g.dchance&&(g.dchance.home||g.dchance.away||g.dchance.pair)) || (g.tmtotal&&(g.tmtotal.home||g.tmtotal.away));
+    const games = Object.values(_bg).filter(_has).sort((x,y)=> new Date(x.time||0)-new Date(y.time||0));
+    const subs = [{id:"btts",l:"BTTS"},{id:"dnb",l:"Draw No Bet"},{id:"dchance",l:"Double Chance"},{id:"tmtotal",l:"Team Goals"}];
+    const _sp = (g)=> (g.ml.away&&g.ml.away._sport)||(g.ml.home&&g.ml.home._sport)||(g.btts.yes&&g.btts.yes._sport)||gSport;
+    const _ab = (g,nm)=>{ const t=soccerTeam(_sp(g),nm); return t ? t[0] : getAcronym(nm,false); };
+    const _ln = (b)=>{ const m=String(b&&(b.outcome||b.pick)||"").match(/(Over|Under)\s+([0-9.]+)/i); return m ? ((/^o/i.test(m[1])?"O ":"U ")+m[2]) : ""; };
+    const _when = (t)=>{ try{ const d=new Date(t); return isNaN(d)?"":d.toLocaleString([],{weekday:"short",hour:"numeric",minute:"2-digit"}); }catch(e){ return ""; } };
+    return (
+    <div style={{padding:"0 14px 28px"}}>
+      <div className="gbx-scroll" style={{display:"flex",gap:6,padding:"0 0 12px",overflowX:"auto"}}>
+        {subs.map(x=>{ const on=specialsSub===x.id; return (<div key={x.id} onClick={()=>setSpecialsSub(x.id)} style={{flexShrink:0,padding:"7px 12px",borderRadius:RAD.pill,fontSize:12,fontWeight:700,cursor:"pointer",color:on?"#00E5A0":"rgba(255,255,255,0.55)",border:"1px solid "+(on?"#00E5A0":"rgba(255,255,255,0.08)"),background:on?"rgba(0,229,160,0.1)":"transparent"}}>{x.l}</div>); })}
+      </div>
+      {games.length===0 && <div style={{textAlign:"center",padding:"40px 20px",color:"rgba(255,255,255,0.35)",fontSize:13}}>No specials posted yet for these matches.</div>}
+      {games.map((g,gi)=>{
+        const A=_ab(g,g.away), H=_ab(g,g.home);
+        const body = specialsSub==="btts" ? ((g.btts.yes||g.btts.no) ? (
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,padding:"0 12px 12px"}}><Chip b={g.btts.yes} cat="btts" line="Yes" value={false}/><Chip b={g.btts.no} cat="btts" line="No" value={false}/></div>) : null)
+        : specialsSub==="dnb" ? ((g.dnb.away||g.dnb.home) ? (
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,padding:"0 12px 12px"}}><Chip b={g.dnb.away} cat="dnb" line={A} value={false}/><Chip b={g.dnb.home} cat="dnb" line={H} value={false}/></div>) : null)
+        : specialsSub==="dchance" ? ((g.dchance.away||g.dchance.pair||g.dchance.home) ? (
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,padding:"0 12px 12px"}}><Chip b={g.dchance.away} cat="dchance" line={A+" or Draw"} value={false}/><Chip b={g.dchance.pair} cat="dchance" line={A+" or "+H} value={false}/><Chip b={g.dchance.home} cat="dchance" line={H+" or Draw"} value={false}/></div>) : null)
+        : ((g.tmtotal.away||g.tmtotal.home) ? (
+          <div style={{padding:"0 12px 12px"}}>{[{k:"away",nm:g.away},{k:"home",nm:g.home}].map(t=> (g.tmtotal[t.k]&&(g.tmtotal[t.k].over||g.tmtotal[t.k].under)) ? (
+            <div key={t.k} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}><span style={{fontSize:12.5,fontWeight:700,color:"rgba(255,255,255,0.75)",flex:1}}>{nick(t.nm,_sp(g))}</span><div style={{display:"flex",gap:6}}><div style={{width:80}}><Chip b={g.tmtotal[t.k].over} cat="tmtotal" line={_ln(g.tmtotal[t.k].over)} value={false}/></div><div style={{width:80}}><Chip b={g.tmtotal[t.k].under} cat="tmtotal" line={_ln(g.tmtotal[t.k].under)} value={false}/></div></div></div>) : null)}</div>) : null);
+        if(!body) return null;
+        return (
+          <div key={g.game||gi} style={{background:"rgba(255,255,255,0.03)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:16,marginBottom:10,overflow:"hidden"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"11px 14px 8px"}}>
+              <div style={{fontSize:13,fontWeight:800,color:"#fff"}}>{nick(g.away,_sp(g))} <span style={{color:"rgba(255,255,255,0.35)",fontWeight:600}}>@</span> {nick(g.home,_sp(g))}</div>
+              <div style={{fontSize:11,fontWeight:700,color:"#5AC8FA"}}>{_when(g.time)}</div>
+            </div>
+            {body}
+          </div>
+        );
+      })}
+    </div>
+    );
+  };
 
 
  // ─── SURVIVOR: dedicated pick screens ────────────────────────────────────────
@@ -18200,7 +18246,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {(()=>{
  const _gl = allowedTypes.filter(t=>t==="ml"||t==="spread"||t==="ou");
  const _rest = allowedTypes.filter(t=>t!=="ml"&&t!=="spread"&&t!=="ou");
- const _pills = [...(_gl.length?[{key:"__gl__",label:"Game Lines",target:_gl[0],on:isGameLine,col:IOS.blue}]:[]), ..._rest.map(t=>({key:t,label:typeLabel(t),target:t,on:t===gridType,col:ACC[t]}))];
+ const _socHere = (gSport==="epl"||gSport==="ucl") || (gSport==="all" && sportsList.some(x=>x==="epl"||x==="ucl"));
+ const _pills = [...(_gl.length?[{key:"__gl__",label:"Game Lines",target:_gl[0],on:isGameLine,col:IOS.blue}]:[]), ...(_socHere?[{key:"specials",label:"Specials",target:"specials",on:gridType==="specials",col:"#00E5A0"}]:[]), ..._rest.map(t=>({key:t,label:typeLabel(t),target:t,on:t===gridType,col:ACC[t]}))];
  return _pills.map(p=>(
  <div key={p.key} onClick={()=>{ setGridType(p.target); setGridPropSub("all"); if(p.target==="period"){ const _ps=PERIOD_SUBS_BY_SPORT[gSport]; setGridPeriodSub(_ps&&_ps.length?_ps[0].id:""); } if(gridCfg){ const _st=(s)=>s?(s.slotType||s.category):null; const _cur=activePicks[gridTargetSlot]; const _onWild=_cur&&!_cur.isParlay&&_st(_cur)==="wildcard"&&_cur.bet===null; if(!_onWild){ let _i=activePicks.findIndex(x=>!x.isParlay && _st(x)===p.target && x.bet===null); if(_i===-1) _i=activePicks.findIndex(x=>!x.isParlay && _st(x)==="wildcard" && x.bet===null); setGridTargetSlot(_i!==-1?_i:null); } } }} style={{...pillBase,
  background:p.on?`${p.col}26`:"rgba(255,255,255,0.05)", borderColor:p.on?`${p.col}80`:"rgba(255,255,255,0.1)", color:p.on?p.col:"rgba(255,255,255,0.45)"}}>
@@ -18315,7 +18362,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {/* Card grid */}
  {oddsLoading ? (
  <SkelBets n={6} pad="10px 16px"/>
- ) : isGameLine ? renderLineSheet() : list.length===0 ? (
+ ) : isGameLine ? renderLineSheet() : gridType==="specials" ? renderSpecialsSheet() : list.length===0 ? (
  <div style={{padding:"50px 28px",textAlign:"center"}}>
  <div style={{fontSize:14,fontWeight:700,color:"rgba(255,255,255,0.45)",marginBottom:6}}>
  {gridType==="prop"?"No props live yet":`No ${typeLabel(gridType)} bets right now`}
