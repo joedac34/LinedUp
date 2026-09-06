@@ -959,6 +959,30 @@ function periodIndices(mk, periodLen) {
   m = mk.match(/_1st_(\d+)_innings$/); if (m) { const n = parseInt(m[1], 10); return Array.from({ length: n }, (_, i) => i); }
   return null;
 }
+// Resolve an ML pick to a SIDE, then settle on the score. NEVER match the
+// pick against the winner's name: teamMatchName falls back to a shared last
+// word, so "Clemson Tigers" matched winner "LSU Tigers" and a loss paid out
+// as a win (5 Sep 2026, real points awarded). Shared words carry no signal in
+// Tigers @ Tigers, Bulldogs @ Bulldogs, Wildcats @ Wildcats - all common in
+// college football. Only DISTINCTIVE words decide, and a tie refuses to grade.
+function mlSide(game, outcome) {
+  const norm = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+  const o = norm(outcome), h = norm(game.home_team), a = norm(game.away_team);
+  if (!o || !h || !a) return null;
+  if (o === h) return "home";
+  if (o === a) return "away";
+  const ow = new Set(o.split(" ").filter((w) => w.length > 2));
+  const hw = h.split(" ").filter((w) => w.length > 2);
+  const aw = a.split(" ").filter((w) => w.length > 2);
+  const shared = new Set(hw.filter((w) => aw.includes(w)));
+  const hs = hw.filter((w) => !shared.has(w) && ow.has(w)).length;
+  const as = aw.filter((w) => !shared.has(w) && ow.has(w)).length;
+  if (hs > as) return "home";
+  if (as > hs) return "away";
+  return null;   // ambiguous: refuse to grade rather than guess
+}
+
 function teamMatchName(team, outcome) {
   const t = (team || "").toLowerCase().trim(), o = (outcome || "").toLowerCase().trim();
   if (!t || !o) return false;
@@ -1286,9 +1310,12 @@ function gradePick(pick, games, playerIndex, info = {}) {
       if (backedAway && !backedHome) return awayScore > homeScore ? "W" : "L";
       info.reason = "soccer_ml_side_unresolved"; return null;
     }
-    const pickedTeamWords = name.toLowerCase().split(" ");
-    const pickedHome = pickedTeamWords.some(w => w.length > 3 && winnerName.toLowerCase().includes(w));
-    return pickedHome ? "W" : "L";
+    // Side-then-score. Replaces winner-name matching, which paid out losers
+    // whenever both teams shared a nickname word.
+    const _side = mlSide(game, name);
+    if (!_side) { info.reason = "ml_side_unresolved"; return null; }
+    if (homeScore === awayScore) return "P";
+    return (_side === "home" ? homeScore > awayScore : awayScore > homeScore) ? "W" : "L";
   }
 
   // ── Spread ──
