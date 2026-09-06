@@ -17019,7 +17019,15 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 
 
    // --- OPTION A: prop/period/longshot as grouped-by-game rows (same pill language as game lines) ---
-   const ALT_MARKETS = new Set(["spreads","totals","batter_total_bases","batter_hits","batter_rbis","batter_runs_scored","batter_walks","batter_strikeouts","batter_doubles","batter_singles","batter_hits_runs_rbis","pitcher_strikeouts","pitcher_earned_runs","pitcher_hits_allowed","pitcher_walks","pitcher_outs"]);
+   // Markets with an alternate ladder. A key here must be VALID for its sport:
+   // an invalid one 422s the whole odds request and kills every prop for that
+   // sport. All of the below were verified with /api/market-probe (6 Sep 2026).
+   // NFL: 7-8 books, real rung ladders. Soccer assists posts; soccer shots keys
+   // are valid but were not posting at probe time, which is harmless - a valid
+   // key that returns nothing just shows no rungs.
+   const ALT_MARKETS = new Set(["spreads","totals",
+     "player_pass_yds","player_rush_yds","player_reception_yds","player_receptions",
+     "player_assists","player_shots","player_shots_on_target","batter_total_bases","batter_hits","batter_rbis","batter_runs_scored","batter_walks","batter_strikeouts","batter_doubles","batter_singles","batter_hits_runs_rbis","pitcher_strikeouts","pitcher_earned_runs","pitcher_hits_allowed","pitcher_walks","pitcher_outs"]);
    const canAlt = (mk) => ALT_MARKETS.has(mk||"");
    const openAltLines = async (bet, meta) => {
    if(!isPro){ if(setShowPaywall) setShowPaywall("alt"); return; }
