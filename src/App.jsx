@@ -8179,9 +8179,16 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
   })();
   const findBetGames = (() => {
     const seen = new Map();
+    // Ticker lookup used to match on away OR home, so every Patriots game inherited
+    // the first Patriots kickoff and three different WEEKS all read "Wed 8:20 PM"
+    // (6 Sep 2026). Require BOTH sides, and prefer the bet's own commence time.
     const findTime = (away, home) => {
-      const tg = (tickerGames||[]).find(t => (t.away&&away&&(t.away.includes(away)||away.includes(t.away))) || (t.home&&home&&(t.home.includes(home)||home.includes(t.home))));
-      return tg ? tg.time : null;
+      const hit = (tickerGames||[]).find(t => {
+        const aOk = t.away && away && (t.away.includes(away) || away.includes(t.away));
+        const hOk = t.home && home && (t.home.includes(home) || home.includes(t.home));
+        return aOk && hOk;
+      });
+      return hit ? hit.time : null;
     };
     for (const b of ALL_BETS) {
       if (!b.game) continue;
@@ -8189,7 +8196,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
         const sp = b._sport || leagueSports[0] || "nfl";
         const parts = String(b.game).split("@");
         const away = (parts[0]||"").trim(), home = (parts[1]||"").trim();
-        seen.set(b.game, { game:b.game, sport:sp, away, home, time: findTime(away, home), lines:{ total:null, spreads:[] } });
+        seen.set(b.game, { game:b.game, sport:sp, away, home, time: b.gameTime || findTime(away, home), lines:{ total:null, spreads:[] } });
       }
       // Carry tonight's posted numbers so the Trends lens can apply them to real game logs.
       const _g = seen.get(b.game);
@@ -22233,7 +22240,10 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
                         <div style={{padding:"12px 16px 5px",fontSize:10,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(255,255,255,0.35)"}}>{({nfl:"NFL",nba:"NBA",mlb:"MLB"})[grp.sport]||String(grp.sport).toUpperCase()}</div>
                         {grp.games.map((g,gi)=>{
                           const tm = g.time ? new Date(g.time) : null;
-                          const tstr = tm && !isNaN(tm.getTime()) ? tm.toLocaleString([],{weekday:"short",hour:"numeric",minute:"2-digit"}) : null;
+                          // Beyond 6 days a weekday alone is ambiguous - the same team appears in
+                          // several future weeks - so show the date too.
+                          const _far = tm && !isNaN(tm.getTime()) && (tm.getTime() - Date.now()) > 6*24*3600*1000;
+                          const tstr = tm && !isNaN(tm.getTime()) ? tm.toLocaleString([], _far ? {month:"short",day:"numeric",hour:"numeric",minute:"2-digit"} : {weekday:"short",hour:"numeric",minute:"2-digit"}) : null;
                           return (
                             <div key={gi} onClick={()=>askFindBet(g)} style={{padding:"11px 16px",borderTop:"0.5px solid rgba(255,255,255,0.05)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
                               <div style={{minWidth:0}}>
