@@ -1015,10 +1015,10 @@ function gradePeriod(pick, game, info) {
   }
   if (mk.startsWith("spreads")) {
     if (pt == null) return null;
-    const isHome = teamMatchName(game.home_team, pick.outcome);
-    const isAway = teamMatchName(game.away_team, pick.outcome);
+    const _ssd = mlSide(game, pick.outcome);
+    if (!_ssd) { info.reason = "period_side_unresolved"; return null; }
     let ps, os;
-    if (isHome) { ps = h; os = a; } else if (isAway) { ps = a; os = h; } else return null;
+    if (_ssd === "home") { ps = h; os = a; } else { ps = a; os = h; }
     let sp = pt;
     if (pick.power_up_id && pick.power_up_id.indexOf("enhance") === 0) { const ti = parseFloat(pick.pu_tier); if (!isNaN(ti)) sp += ti; }
     const ats = ps + sp;
@@ -1034,12 +1034,14 @@ function gradePeriod(pick, game, info) {
     if (_soc) {
       if (/^draw\b/i.test(String(pick.outcome || pick.pick_name || "").trim())) return h === a ? "W" : "L";
       if (h === a) return "L";                       // backed a team, half was level
-      const winner = h > a ? game.home_team : game.away_team;
-      return teamMatchName(winner, pick.outcome) ? "W" : "L";
+      const _s3 = mlSide(game, pick.outcome);
+      if (!_s3) { info.reason = "period_side_unresolved"; return null; }
+      return (_s3 === "home" ? h > a : a > h) ? "W" : "L";
     }
-    const winner = h > a ? game.home_team : (a > h ? game.away_team : null);
-    if (!winner) return "P";              // period tie → push (2-way markets only)
-    return teamMatchName(winner, pick.outcome) ? "W" : "L";
+    if (h === a) return "P";              // period tie → push (2-way markets only)
+    const _s2 = mlSide(game, pick.outcome);
+    if (!_s2) { info.reason = "period_side_unresolved"; return null; }
+    return (_s2 === "home" ? h > a : a > h) ? "W" : "L";
   }
   info.reason = "period_basetype_unhandled";
   return null;
@@ -1331,13 +1333,16 @@ function gradePick(pick, games, playerIndex, info = {}) {
     }
     const teamPart = name.replace(/[+-]?\d+\.?\d*$/, "").trim().toLowerCase();
 
-    const pickedHome = game.home_team.toLowerCase().split(" ").some(w => w.length > 3 && teamPart.includes(w));
-    const pickedAway = game.away_team.toLowerCase().split(" ").some(w => w.length > 3 && teamPart.includes(w));
-
+    // Same class of bug as the moneyline one fixed 5 Sep 2026: pickedHome and
+    // pickedAway were computed independently on loose word matching, and when
+    // BOTH matched (Clemson Tigers @ LSU Tigers) the home branch won - a Clemson
+    // spread pick graded as an LSU pick. Resolve the side with mlSide, which
+    // ignores words the two teams share and refuses when ambiguous.
+    const _sside = mlSide(game, teamPart);
+    if (!_sside) { info.reason = "spread_side_unresolved"; return null; }
     let pickedScore, oppScore;
-    if (pickedHome)      { pickedScore = homeScore; oppScore = awayScore; }
-    else if (pickedAway) { pickedScore = awayScore; oppScore = homeScore; }
-    else return null;
+    if (_sside === "home") { pickedScore = homeScore; oppScore = awayScore; }
+    else                   { pickedScore = awayScore; oppScore = homeScore; }
 
     // ATS: picked team score + spread > opponent score
     const ats = pickedScore + spread;
@@ -1362,14 +1367,15 @@ function gradePick(pick, games, playerIndex, info = {}) {
   // ── Longshot legs (ML-style) ──
   if (slot?.startsWith("longshot_")) {
     // Try ML grading — pick_name is usually "Team Name ML" or "Team Name +400"
-    const cleanName = name.replace(/\s+(ML|[+-]\d+)$/i, "").trim().toLowerCase();
-    const pickedWinner = winnerName.toLowerCase().split(" ").some(w => w.length > 3 && cleanName.includes(w));
-    // Only an L if the name actually references a team in this game. A prop-shaped name
-    // that slipped into a longshot slot must not default to L — that is exactly how
-    // "Brice Turang Over 0.5 Doubles" was graded a loss and needed a DB correction.
-    const pickedLoser = loserName.toLowerCase().split(" ").some(w => w.length > 3 && cleanName.includes(w));
-    if (!pickedWinner && !pickedLoser) { info.reason = "longshot_team_unrecognized"; return null; }
-    return pickedWinner ? "W" : "L";
+    const cleanName = name.replace(/\s+(ML|[+-]\d+)$/i, "").trim();
+    // Third instance of the shared-nickname bug (see mlSide). Matching the winner's
+    // words paid out "Clemson Tigers" when "LSU Tigers" won. Resolve the SIDE; a
+    // name that references neither team stays unresolved rather than defaulting to
+    // L - that is how "Brice Turang Over 0.5 Doubles" once graded a loss.
+    const _lside = mlSide(game, cleanName);
+    if (!_lside) { info.reason = "longshot_team_unrecognized"; return null; }
+    if (homeScore === awayScore) return "P";
+    return (_lside === "home" ? homeScore > awayScore : awayScore > homeScore) ? "W" : "L";
   }
 
   info.reason = "slot_not_handled";
