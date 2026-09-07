@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, Component, Fragment } from "react";
 import { supabase } from './supabase';
 import { LEGAL } from './legal';
-import { initPurchases, logOutPurchases, getProPackages, purchasePro, purchaseLeague, restorePurchases, checkProStatus, onProStatusChange } from './purchases';
+import { initPurchases, logOutPurchases, getProPackages, purchasePro, purchaseLeague, getLeaguePriceString, restorePurchases, checkProStatus, onProStatusChange } from './purchases';
 // Attach the current user's Supabase access token so API routes verify the caller
 // server-side (endpoints derive the user from this token, not the request body).
 async function authHeaders() {
@@ -7085,6 +7085,9 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  const [showPaywall, setShowPaywall] = useState(null);
  // Live StoreKit prices on iOS (web keeps its hardcoded Stripe copy).
  const [nativePrices, setNativePrices] = useState(null);
+ // StoreKit price for the league consumable. On iOS the charge is whatever App
+ // Store Connect says, so the paywall must not show a locally computed number.
+ const [nativeLeaguePrice, setNativeLeaguePrice] = useState(null);
  // Trial copy. Server-side eligibility lives in checkout.js (users.trial_used_at);
  // this only decides what the button SAYS, and it errs toward not promising a
  // trial: unknown profile => no trial text, never the reverse.
@@ -11063,6 +11066,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      // account). So "trial available" is decided by Apple, not by us.
      const _intro = (pk)=>{ const ip = pk&&pk.product&&pk.product.introPrice; return (ip && (ip.price===0 || ip.priceString==="$0.00" || /free/i.test(String(ip.priceString||"")))) ? { periods:ip.periodNumberOfUnits||1, unit:String(ip.periodUnit||"MONTH").toLowerCase() } : null; };
      setNativePrices({ monthly:(m&&m.product&&m.product.priceString)||null, annual:(a&&a.product&&a.product.priceString)||null, monthlyTrial:_intro(m), annualTrial:_intro(a) });
+     try{ const _lp = await getLeaguePriceString(); if(_lp) setNativeLeaguePrice(_lp); }catch(e){}
    }catch(e){}
    try{
      const active = await checkProStatus();
@@ -23700,7 +23704,11 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
   </div>
  </div>
  )}
- {!IS_NATIVE && showLeaguePaywall && (
+ {/* Was gated on !IS_NATIVE, so on iOS the paywall never rendered and the
+    In-App Purchase was unreachable - App Review 2.1(b), 7 Sep 2026. The native
+    branch of startLeagueCheckout (StoreKit -> /api/unlock-league) was already
+    built; only the modal that triggers it was hidden. */}
+{showLeaguePaywall && (
    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:9999,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>setShowLeaguePaywall(null)}>
      <div className="pk-sheet" style={{background:"#0d0d12",padding:"0 18px calc(var(--sa-bot) + 24px)",border:"0.5px solid #1E1E1E"}} onClick={e=>e.stopPropagation()}>
        <div style={{width:36,height:4,background:"#2A2A2A",borderRadius:2,margin:"12px auto 16px"}}/>
@@ -23708,7 +23716,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        <div style={{fontSize:12.5,color:IOS.label3,textAlign:"center",margin:"3px 0 16px"}}>Your custom league is ready. Choose how to unlock it:</div>
        <div onClick={()=>startLeagueCheckout(showLeaguePaywall.leagueId)} style={{borderRadius:RAD.lg,padding:15,marginBottom:11,cursor:"pointer",background:"linear-gradient(135deg,rgba(255,55,95,0.12),rgba(191,90,242,0.06))",border:"1.5px solid rgba(255,55,95,0.4)"}}>
          <div style={{fontSize:8.5,fontWeight:800,textTransform:"uppercase",letterSpacing:0.4,padding:"2px 7px",borderRadius:RAD.sm,display:"inline-block",marginBottom:6,background:"rgba(255,55,95,0.9)",color:"#fff"}}>This league</div>
-         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}><div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Unlock this league</div><div style={{fontSize:19,fontWeight:800,color:"#fff"}}>${showLeaguePaywall.price}</div></div>
+         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}><div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Unlock this league</div><div style={{fontSize:19,fontWeight:800,color:"#fff"}}>{IS_NATIVE ? (nativeLeaguePrice||"") : ("$"+showLeaguePaywall.price)}</div></div>
          <div style={{fontSize:11.5,color:"rgba(255,255,255,0.55)",marginTop:4,lineHeight:1.45}}>One-time. Runs this full season for everyone in the league.</div>
        </div>
        <div onClick={()=>startCheckout("monthly")} style={{borderRadius:RAD.lg,padding:15,marginBottom:8,cursor:"pointer",background:"linear-gradient(135deg,rgba(10,132,255,0.14),rgba(94,92,230,0.06))",border:"1.5px solid rgba(10,132,255,0.45)"}}>
