@@ -8489,7 +8489,8 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  const [browseFilter, setBrowseFilter] = useState({sport:"all", size:"all", type:"all"});
  const [browseLoading, setBrowseLoading] = useState(false);
  const [joiningLeagueId, setJoiningLeagueId] = useState(null); // 'h2h' | 'bracket' | 'points'
- const [newLeagueWeeks, setNewLeagueWeeks] = useState(18);
+ // Free tier is 10 weeks; a longer season is a paid feature (see FREE_WEEKS_MAX).
+ const [newLeagueWeeks, setNewLeagueWeeks] = useState(10);
  const [newLeaguePowerUps, setNewLeaguePowerUps] = useState(true); // Pro-only league setting
  const [newLeagueStep, setNewLeagueStep] = useState(0); // 0=type, 1=details
  const [newLeaguePrivacy, setNewLeaguePrivacy] = useState('private');
@@ -8612,6 +8613,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
   }
   return { max:hardCap, reason:"" };
  };
+ const FREE_WEEKS_MAX = 10;   // free leagues run up to 10 weeks; longer is a paid league
  const DEFAULT_SLOTS=[{type:"ml",mult:1},{type:"prop",mult:2},{type:"ou",mult:3},{type:"spread",mult:4},{type:"longshot",mult:5}];
  const LAYOUT_PRESETS=[
   {id:"classic", name:"Classic", desc:"The all-rounder — one of each, escalating multipliers.", slots:[{type:"ml",mult:1},{type:"spread",mult:2},{type:"ou",mult:3},{type:"prop",mult:4},{type:"longshot",mult:5}]},
@@ -8919,7 +8921,10 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  const _classic = _typed && newLeagueSlots.length===DEFAULT_SLOTS.length
    && newLeagueSlots.every((s,i)=> s.type===DEFAULT_SLOTS[i].type && !s.market)
    && (newLeaguePool||[]).length===DEFAULT_SLOTS.length && (newLeaguePool||[]).every((m,i)=>Number(m)===i+1);
- const _hasCustom = _typed && !_classic;
+ // Free tier: the classic 5-slot layout AND at most FREE_WEEKS_MAX weeks. Either
+ // a changed layout or a longer season makes it a paid league (or Pro).
+ const _longSeason = Number(newLeagueWeeks) > FREE_WEEKS_MAX;
+ const _hasCustom = _typed && (!_classic || _longSeason);
  const _needsPaywall = !isPro && _hasCustom;
  // This used to short-circuit to the Pro paywall on native, because at the time
  // iOS had no way to sell the one-time unlock. It does now (RevenueCat consumable
@@ -19178,7 +19183,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
     <div onClick={()=>{ haptic("select");
       // Step back through the flow first; only leave from the first step.
       if(newLeagueStep>0){ setNewLeagueStep(newLeagueStep-1); return; }
-      setScreen("leagues"); setShowNewLeague(false);setNewLeagueSport(null);setNewLeagueSports([]);setNewLeagueName("");setNewLeagueSize(8);setNewLeagueType(null);setNewLeagueStep(0);setNewLeagueWeeks(18);
+      setScreen("leagues"); setShowNewLeague(false);setNewLeagueSport(null);setNewLeagueSports([]);setNewLeagueName("");setNewLeagueSize(8);setNewLeagueType(null);setNewLeagueStep(0);setNewLeagueWeeks(10);
  setNewLeagueSlots(DEFAULT_SLOTS); setNewLeaguePool([1,2,3,4,5]); setSlotSheetIdx(null);setNewLeaguePrivacy('private');setNewLeaguePlayoffs(true);setNewLeaguePlayoffSize(4);setNewLeagueStartMode('auto');
     }} style={{width:31,height:31,borderRadius:RAD.md,background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
@@ -19228,7 +19233,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  setNewLeagueSize(8);
  setNewLeagueType(null);
  setNewLeagueStep(0);
- setNewLeagueWeeks(18);
+ setNewLeagueWeeks(10);
  }} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:RAD.lg,padding:"16px",fontFamily:"Barlow,sans-serif",fontSize:17,fontWeight:600,color:"#fff",cursor:"pointer"}}>
  Go to My League →
  </button>
@@ -19262,7 +19267,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        // Ladder is NFL-only (alt yardage ladders live in NFL player props) and scores on
        // cumulative points, so no bracket and no matchup schedule.
        else if(t.id==="ladder"){ setNewLeagueSports(["nfl"]); setNewLeagueWeeks(18); setNewLeaguePlayoffs(false); if(!isPro) setNewLadderCount(4); if(newLeagueSize<2||newLeagueSize>100) setNewLeagueSize(8); }
-       else if(_wasPreset){ setNewLeagueSize(8); setNewLeagueWeeks(18); setNewLeaguePlayoffs(true); } // leaving a preset restores defaults
+       else if(_wasPreset){ setNewLeagueSize(8); setNewLeagueWeeks(10); setNewLeaguePlayoffs(true); } // leaving a preset restores defaults
        if(t.id==='h2h'&&![2,6,8,10,12].includes(newLeagueSize)) setNewLeagueSize(8);
        if(t.id==='bracket'&&![4,8,16,32].includes(newLeagueSize)) setNewLeagueSize(8);
      }} style={{
@@ -19405,7 +19410,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div style={{textAlign:"center",fontSize:11,color:"#555",fontWeight:600,margin:"6px 0 9px"}}>{newLeagueSlots.length} picks · {tot} max multiplier{uniq===1&&newLeagueSlots.length>1?" · single-type league":""}</div>
  <button disabled={!ready} onClick={()=>{if(ready)createLeague(newLeagueName.trim(), newLeagueSports[0]);}} style={{width:"100%",background:ready?IOS.blue:"rgba(255,255,255,0.08)",border:"none",borderRadius:RAD.md,padding:"15px",fontFamily:"Barlow,sans-serif",fontSize:16,fontWeight:800,color:ready?"#fff":"rgba(255,255,255,0.25)",cursor:ready?"pointer":"default",marginBottom:4}}>{(()=>{ if(creatingLeague) return "Creating...";
    const _cl = newLeagueSlots.length===DEFAULT_SLOTS.length && newLeagueSlots.every((s,i)=>s.type===DEFAULT_SLOTS[i].type&&!s.market) && newLeaguePool.length===DEFAULT_SLOTS.length && newLeaguePool.every((m,i)=>Number(m)===i+1);
-   if(isPro||_cl) return "Create League";
+   if(isPro||(_cl && Number(newLeagueWeeks)<=FREE_WEEKS_MAX)) return "Create League";
    if(IS_NATIVE) return nativeLeaguePrice ? ("Create \u00B7 "+nativeLeaguePrice+" to unlock (or go Pro)") : "Create \u00B7 unlock or go Pro";
    return "Create \u00B7 $"+leaguePrice(newLeagueWeeks, newLeagueSlots.length)+" to unlock (or go Pro)"; })()}</button>
  </>);})()}
