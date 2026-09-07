@@ -8882,7 +8882,9 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
        if(resp.ok && d && d.ok){
          setShowLeaguePaywall(null);
          if(user) await fetchLeagues(user.id);
-         alert("League unlocked.");
+         // Advance to the invite screen, exactly like a Pro create does. Leaving the
+         // builder open with a live Create button produced duplicate leagues.
+         try{ const { data: _lg } = await supabase.from("leagues").select("*").eq("id", leagueId).single(); if(_lg) setNewLeagueCreated(_lg); }catch(e){}
        } else {
          // Purchase succeeded but redemption did not. Never imply they lost money:
          // the transaction stays unspent and Restore Purchases can retry it.
@@ -13484,10 +13486,10 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {!isPro && realLeagues.some(lg=>lg.isCommissioner) && (
    <div style={{margin:"10px 0 0",background:"rgba(10,132,255,0.08)",border:"0.5px solid rgba(10,132,255,0.2)",borderRadius:RAD.sm,padding:"9px 12px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}} onClick={()=>setShowPaywall("settings")}>
      <div>
-       <div style={{fontSize:12,fontWeight:600,color:IOS.blue}}>Unlock Commish Pro</div>
-       <div style={{fontSize:11,color:"#555",marginTop:1}}>Custom picks, multi-sport, power-ups</div>
+       <div style={{fontSize:12,fontWeight:600,color:IOS.blue}}>Unlock PickLock Pro</div>
+       <div style={{fontSize:11,color:"#555",marginTop:1}}>Custom leagues, multi-sport, Plok AI</div>
      </div>
-     <div style={{fontSize:11,fontWeight:700,color:IOS.blue,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.25)",borderRadius:RAD.sm,padding:"4px 9px",whiteSpace:"nowrap"}}>$5/mo</div>
+     <div style={{fontSize:11,fontWeight:700,color:IOS.blue,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.25)",borderRadius:RAD.sm,padding:"4px 9px",whiteSpace:"nowrap"}}>{IS_NATIVE ? (((nativePrices&&nativePrices.monthly)||"$9.99")+"/mo") : "$10/mo"}</div>
    </div>
  )}
 
@@ -23726,7 +23728,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}><div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Go Pro</div><div style={{fontSize:19,fontWeight:800,color:"#fff"}}>$10<span style={{fontSize:12,fontWeight:700,color:IOS.label3}}>/mo</span></div></div>
          <div style={{fontSize:11.5,color:"rgba(255,255,255,0.55)",marginTop:4,lineHeight:1.45}}>Unlimited custom leagues, multi-sport, Plok AI &amp; full analytics. Or $60/yr.</div>
        </div>
-       <button onClick={()=>setShowLeaguePaywall(null)} style={{width:"100%",background:"transparent",border:"none",color:IOS.label3,fontSize:13,fontWeight:700,padding:10,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Not now — I'll finish later</button>
+       <button onClick={()=>{ setShowLeaguePaywall(null); setShowNewLeague(false); setNewLeagueCreated(null); if(user) fetchLeagues(user.id); }} style={{width:"100%",background:"transparent",border:"none",color:IOS.label3,fontSize:13,fontWeight:700,padding:10,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Not now — I'll finish later</button>
      </div>
    </div>
  )}
