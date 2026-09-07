@@ -8919,10 +8919,11 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
    && (newLeaguePool||[]).length===DEFAULT_SLOTS.length && (newLeaguePool||[]).every((m,i)=>Number(m)===i+1);
  const _hasCustom = _typed && !_classic;
  const _needsPaywall = !isPro && _hasCustom;
- // Native can't sell the one-time unlock (no Stripe in the iOS app), so a free
- // custom create routes to the Pro paywall (RevenueCat IAP) BEFORE any insert —
- // never strand an unpaid league behind a modal that can't render.
- if(_needsPaywall && IS_NATIVE){ setShowPaywall("settings"); setCreatingLeague(false); return; }
+ // This used to short-circuit to the Pro paywall on native, because at the time
+ // iOS had no way to sell the one-time unlock. It does now (RevenueCat consumable
+ // com.dacunto.picklock.league.single), and that short-circuit made the IAP
+ // unreachable - App Review 2.1(b), 7 Sep 2026. Both platforms now create the
+ // league unpaid and offer the choice: one-time unlock, or Pro.
  const {data,error} = await supabase.from("leagues").insert({
    name, sport:sportsArr[0], sports:sportsArr, commissioner_id:user.id, invite_code:inviteCode,
    max_members:newLeagueSize, target_size:newLeagueSize, pick_deadline:"Sun 1PM ET",
@@ -19403,6 +19404,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <button disabled={!ready} onClick={()=>{if(ready)createLeague(newLeagueName.trim(), newLeagueSports[0]);}} style={{width:"100%",background:ready?IOS.blue:"rgba(255,255,255,0.08)",border:"none",borderRadius:RAD.md,padding:"15px",fontFamily:"Barlow,sans-serif",fontSize:16,fontWeight:800,color:ready?"#fff":"rgba(255,255,255,0.25)",cursor:ready?"pointer":"default",marginBottom:4}}>{(()=>{ if(creatingLeague) return "Creating...";
    const _cl = newLeagueSlots.length===DEFAULT_SLOTS.length && newLeagueSlots.every((s,i)=>s.type===DEFAULT_SLOTS[i].type&&!s.market) && newLeaguePool.length===DEFAULT_SLOTS.length && newLeaguePool.every((m,i)=>Number(m)===i+1);
    if(isPro||_cl) return "Create League";
+   if(IS_NATIVE) return nativeLeaguePrice ? ("Create \u00B7 "+nativeLeaguePrice+" to unlock (or go Pro)") : "Create \u00B7 unlock or go Pro";
    return "Create \u00B7 $"+leaguePrice(newLeagueWeeks, newLeagueSlots.length)+" to unlock (or go Pro)"; })()}</button>
  </>);})()}
 
