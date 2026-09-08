@@ -194,6 +194,50 @@ function nflWeekStartMs(ms){
   if (ms < a) return a;
   return a + Math.floor((ms - a)/NFL_WEEK_MS)*NFL_WEEK_MS;
 }
+// Most recent Tuesday at 07:00 UTC. That is 3:00 AM ET in summer, 2:00 AM ET in
+// winter. Deliberately NOT DST-corrected: both are dead hours for every US league
+// (the latest west-coast NBA/NHL games end near 1:30 AM ET), so an hour of drift
+// there costs nothing next to parsing locale strings inside an iOS WebView.
+// Tuesday is the boundary because it is the one day the NFL never plays, so a
+// league week can never split a slate.
+function tuesdayWeekStartMs(ms){
+  const d = new Date(ms);
+  const at7 = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 7, 0, 0);
+  const back = (new Date(at7).getUTCDay() - 2 + 7) % 7;      // days since Tuesday
+  let start = at7 - back*24*60*60*1000;
+  if (ms < start) start -= 7*24*60*60*1000;                  // before 07:00 on a Tuesday
+  return start;
+}
+// SPORT GUARD. nflWeekStartMs clamps FORWARD to the Week 1 anchor. That is right for
+// football (a pool built in June waits for real football) and fatal for anything else:
+// an MLB league built in June would be stamped to September and sit dead for three
+// months. Only NFL-ONLY leagues get the NFL anchor. Everything else, multi-sport
+// included, gets the plain Tuesday boundary. sports[] wins over sport, because the two
+// columns disagree on live rows (sport='mlb' alongside sports=['nfl']).
+function leagueWeekStartMs(league, ms){
+  const arr = Array.isArray(league && league.sports) ? league.sports.map(x=>String(x||"").toLowerCase()).filter(Boolean) : [];
+  const list = arr.length ? arr : [String((league && league.sport)||"").toLowerCase()];
+  return (list.length===1 && list[0]==="nfl") ? nflWeekStartMs(ms) : tuesdayWeekStartMs(ms);
+}
+// Single stamp path for h2h / points / bracket. Replaces four copies of
+// `season_start: new Date()`, which pinned a league's roll time to the accident of
+// when its last member happened to join: a league that filled Sunday at 2pm rolled
+// its week every Sunday at 2pm, straight through the afternoon slate. Both original
+// guards are preserved exactly -- never overwrite an existing stamp, never touch a
+// manual-start league.
+async function stampLeagueStart(leagueId, opts){
+  const o = opts || {};
+  const { data: rows } = await supabase.from("leagues").select("id, sport, sports, duration_days").eq("id", leagueId).limit(1);
+  const lg = (rows||[])[0] || null;
+  // Day-mode duels are measured from the moment they fill, not from a week boundary.
+  const ms = (lg && Number(lg.duration_days)) ? Date.now() : leagueWeekStartMs(lg, Date.now());
+  let q = supabase.from("leagues")
+    .update({ season_start: new Date(ms).toISOString(), current_week: 1 })
+    .eq("id", leagueId);
+  if(!o.overwrite) q = q.is("season_start", null);
+  if(!o.allowManual) q = q.or("start_mode.is.null,start_mode.neq.manual");
+  await q;
+}
 // ── Ladder leagues ───────────────────────────────────────────────────────────
 // Only markets that actually publish alternate lines can carry a ladder. Anytime
 // TD is binary and has no alternates, so it can never be a ladder -- same rule as
@@ -5025,12 +5069,16 @@ function GauntletCard({ user, onEnter, onJoin }){
     }catch(e){ setMem(null); } })();
   },[user&&user.id]);
   const started=Date.now()>=GAUNTLET_START_MS;
+  // Week number straight off the anchor -- GAUNTLET_START_MS IS the NFL Tuesday
+  // anchor, so this needs no extra query and cannot drift from the board.
+  const gWeek=started?Math.floor((Date.now()-GAUNTLET_START_MS)/NFL_WEEK_MS)+1:0;
+  const entriesOpen=!started||gWeek<=1;
   const daysLeft=Math.max(0,Math.ceil((GAUNTLET_START_MS-Date.now())/86400000));
   const join=async()=>{
     if(busy||!user) return; setBusy(true);
     try{
       const {error}=await supabase.from("league_members").insert({league_id:GAUNTLET_ID,user_id:user.id,is_commissioner:false});
-      if(error&&error.code!=="23505"){ alert(error.message.indexOf("closed")>-1?"Entries are closed — the pool already started.":"Couldn’t join right now. Try again."); setBusy(false); return; }
+      if(error&&error.code!=="23505"){ alert(error.message.indexOf("closed")>-1?"Entries are closed — this pool is past week 1.":"Couldn’t join right now. Try again."); setBusy(false); return; }
       try{ posthog.capture("gauntlet_joined"); }catch(e2){}
       setMem({eliminated_week:null});
       if(onJoin) await onJoin();
@@ -5051,7 +5099,12 @@ function GauntletCard({ user, onEnter, onJoin }){
   <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",marginTop:4}}>{"Free entry · "+(entrants>0?(entrants+" in already · "):"")+"doors close in "+daysLeft+" day"+(daysLeft===1?"":"s")+" · NFL Week 1"}</div>
   <div onClick={join} style={{display:"block",textAlign:"center",background:"linear-gradient(120deg,#BF5AF2,#8E4BD0)",color:"#fff",fontWeight:800,fontSize:13.5,padding:"11px",borderRadius:RAD.md,marginTop:11,cursor:"pointer",opacity:busy?0.6:1}}>{busy?"Joining…":"Step in"}</div>
   </>)}
-  {!mem&&started&&(<div style={{fontSize:11.5,color:"rgba(255,255,255,0.5)",marginTop:9}}>{"Entries closed · "+alive+" of "+entrants+" still standing"}</div>)}
+  {!mem&&started&&entriesOpen&&(<>
+  <div style={{fontSize:14.5,fontWeight:800,marginTop:9,letterSpacing:"-0.2px"}}>All of PickLock. One pick a week. Last one standing.</div>
+  <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",marginTop:4}}>{"Free entry · "+entrants+" in · Week 1 is live · doors close when week 2 opens"}</div>
+  <div onClick={join} style={{display:"block",textAlign:"center",background:"linear-gradient(120deg,#BF5AF2,#8E4BD0)",color:"#fff",fontWeight:800,fontSize:13.5,padding:"11px",borderRadius:RAD.md,marginTop:11,cursor:"pointer",opacity:busy?0.6:1}}>{busy?"Joining…":"Step in"}</div>
+  </>)}
+  {!mem&&started&&!entriesOpen&&(<div style={{fontSize:11.5,color:"rgba(255,255,255,0.5)",marginTop:9}}>{"Entries closed · "+alive+" of "+entrants+" still standing"}</div>)}
   {mem&&!started&&(<>
   <div style={{fontSize:13.5,fontWeight:800,marginTop:9,color:"#30D158"}}>{"You’re in."}</div>
   <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",marginTop:3}}>{entrants+" entered · first pick opens with the season · "+daysLeft+" day"+(daysLeft===1?"":"s")+" out"}</div>
@@ -8423,10 +8476,11 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
    const _weekNum = (activeLeague&&(activeLeague.current_week||activeLeague.week))||1;
    const isCustomSlip = !!parseSlotConfig(activeLeague&&activeLeague.slot_config) || (picksArr||[]).some(p=>p.locked);
    const _pu = activatedPUs[slotIdx] || null; const _puId=_pu?_pu.id:null; const _puTier=(_pu&&_pu.tier!=null)?_pu.tier:null;
+   const _mult = (activeLeague && activeLeague.league_type==="survivor") ? 1 : slot.mult;
    if(slot.isParlay){
-     return (slot.parlayLegs||[]).map((b,legIdx)=>({ league_id:activeLeague.id, user_id:user.id, week:_weekNum, sport:_pickSport(b, slot.parlayLegs), slot: isCustomSlip?`longshot_${slotIdx}_${legIdx}`:`longshot_${legIdx}`, multiplier:slot.mult, power_up_id:_puId, pu_tier:_puTier, pick_name:b.pick, game:b.game||"", odds:b.odds, implied_odds:b.impliedOdds, game_date:b.gameTime||null, event_id:b.eventId||null, market_key:b.marketKey||null, outcome:b.outcome||null, outcome_point:(b.point!=null?b.point:null), sel_key:b.selKey||null, result:"pending", points_earned:0 }));
+     return (slot.parlayLegs||[]).map((b,legIdx)=>({ league_id:activeLeague.id, user_id:user.id, week:_weekNum, sport:_pickSport(b, slot.parlayLegs), slot: isCustomSlip?`longshot_${slotIdx}_${legIdx}`:`longshot_${legIdx}`, multiplier:_mult, power_up_id:_puId, pu_tier:_puTier, pick_name:b.pick, game:b.game||"", odds:b.odds, implied_odds:b.impliedOdds, game_date:b.gameTime||null, event_id:b.eventId||null, market_key:b.marketKey||null, outcome:b.outcome||null, outcome_point:(b.point!=null?b.point:null), sel_key:b.selKey||null, result:"pending", points_earned:0 }));
    }
-   return [{ league_id:activeLeague.id, user_id:user.id, week:_weekNum, sport:_pickSport(slot.bet, null), slot: isCustomSlip?`${slot.category||"ml"}_${slotIdx}`:(slot.category||"ml"), multiplier:slot.mult, power_up_id:_puId, pu_tier:_puTier, pick_name:slot.bet.pick, game:slot.bet.game||"", odds:slot.bet.odds, implied_odds:slot.bet.impliedOdds, game_date:slot.bet.gameTime||null, event_id:slot.bet.eventId||null, market_key:slot.bet.marketKey||null, outcome:slot.bet.outcome||null, outcome_point:(slot.bet.point!=null?slot.bet.point:null), sel_key:slot.bet.selKey||null, result:"pending", points_earned:0 }];
+   return [{ league_id:activeLeague.id, user_id:user.id, week:_weekNum, sport:_pickSport(slot.bet, null), slot: isCustomSlip?`${slot.category||"ml"}_${slotIdx}`:(slot.category||"ml"), multiplier:_mult, power_up_id:_puId, pu_tier:_puTier, pick_name:slot.bet.pick, game:slot.bet.game||"", odds:slot.bet.odds, implied_odds:slot.bet.impliedOdds, game_date:slot.bet.gameTime||null, event_id:slot.bet.eventId||null, market_key:slot.bet.marketKey||null, outcome:slot.bet.outcome||null, outcome_point:(slot.bet.point!=null?slot.bet.point:null), sel_key:slot.bet.selKey||null, result:"pending", points_earned:0 }];
  };
  const [matchupPUs, setMatchupPUs] = useState({}); // pickIdx -> pu applied on live matchup
  const [profTab, setProfTab] = useState("stats");
@@ -9123,14 +9177,14 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
 
  await supabase.from("matchups").insert(matchupsToInsert);
     // Stamp the league start the first time a schedule is built — drives the 7-day week math.
-    await supabase.from("leagues").update({ season_start: new Date().toISOString(), current_week: 1 }).eq("id", leagueId).is("season_start", null).or("start_mode.is.null,start_mode.neq.manual");
+    await stampLeagueStart(leagueId);
     // A scheduled league carries its date from creation. If that date has already
     // passed by the time the roster fills, leaving it would make week 1 start in the
     // past and the clock would jump straight to the present week.
     try{
       const { data:_lg } = await supabase.from("leagues").select("season_start").eq("id", leagueId).maybeSingle();
       if(_lg && _lg.season_start && new Date(_lg.season_start).getTime() < Date.now()-60000){
-        await supabase.from("leagues").update({ season_start: new Date().toISOString(), current_week: 1 }).eq("id", leagueId);
+        await stampLeagueStart(leagueId, { overwrite:true, allowManual:true });
       }
     }catch(e){}
  };
@@ -9394,7 +9448,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
    const {data:currentMembers}=await supabase.from("league_members").select("user_id").eq("league_id",league.id);
    const targetSize = league.target_size||league.max_members||8;
    if(currentMembers && currentMembers.length >= targetSize){alert("This league is already full ("+targetSize+"/"+targetSize+").");return;}
-   if(league.league_type==="survivor" && league.season_start && new Date(league.season_start).getTime()<=Date.now()){ alert("This survivor pool already started \u2014 everyone starts Week 1 together. Ask the commissioner to run it back next season."); return; }
+   if(league.league_type==="survivor" && league.season_start && (Number(league.current_week)||1)>1){ alert("This survivor pool is past week 1 \u2014 entries are closed. Ask the commissioner to run it back next season."); return; }
    const {data:_mine}=await supabase.from("league_members").select("user_id").eq("league_id",league.id).eq("user_id",user.id).maybeSingle();
    if(_mine){ applyMode(false,{leagueId:league.id}); await fetchLeagues(user.id); alert("You're already in "+league.name+" — opening it now."); return true; }
    const {error:joinError}=await supabase.from("league_members").insert({league_id:league.id,user_id:user.id,is_commissioner:false});
@@ -9405,7 +9459,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
      const memberIds=allMembers.map(m=>m.user_id);
      if((league.league_type||"h2h")==="bracket") await generateBracket(league.id, memberIds);
      else if((league.league_type||"h2h")==="h2h") await generateSchedule(league.id, memberIds, regularSeasonWeeksFor(league, memberIds.length));
-     else if(league.league_type==="points") await supabase.from("leagues").update({ season_start: new Date().toISOString(), current_week: 1 }).eq("id", league.id).is("season_start", null).or("start_mode.is.null,start_mode.neq.manual");
+     else if(league.league_type==="points") await stampLeagueStart(league.id);
      alert("Joined "+league.name+"! League is full"+(league.league_type==='survivor'?" — waiting on the commissioner to start the pool.":(league.league_type||'h2h')==='points'?" — standings are live!":(league.league_type||'h2h')==='bracket'?" — bracket generated!":" — schedule generated."));
    } else {
      alert("Joined "+league.name+"! "+(targetSize-allMembers.length)+" more needed.");
@@ -9456,7 +9510,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
    if(!window.confirm("Start the pool? Everyone in right now plays Week 1 \u2014 entries close the moment it starts.")) return;
    setSvStarting(true);
    try{
-     await supabase.from("leagues").update({ season_start: new Date().toISOString(), current_week: 1 }).eq("id", activeLeague.id).is("season_start", null);
+     await stampLeagueStart(activeLeague.id, { allowManual:true });
      await fetchLeagues(user.id);
      haptic("medium");
    }catch(e){ alert("Couldn\u2019t start the pool \u2014 try again."); }
@@ -9468,7 +9522,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  try {
    const {data:currentMembers} = await supabase.from("league_members").select("user_id").eq("league_id",league.id);
    const targetSize = league.target_size||league.max_members||8;
-   if(league.league_type==="survivor" && league.season_start && new Date(league.season_start).getTime()<=Date.now()){ alert("This survivor pool already started \u2014 everyone starts Week 1 together."); setJoiningLeagueId(null); return; }
+   if(league.league_type==="survivor" && league.season_start && (Number(league.current_week)||1)>1){ alert("This survivor pool is past week 1 \u2014 entries are closed."); setJoiningLeagueId(null); return; }
    if(currentMembers && currentMembers.length >= targetSize) {
      alert("This league just filled up!");
      setJoiningLeagueId(null);
@@ -9485,7 +9539,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
      const memberIds = allMembers.map(m=>m.user_id);
      if((league.league_type||"h2h")==="bracket") await generateBracket(league.id, memberIds);
      else if((league.league_type||"h2h")==="h2h") await generateSchedule(league.id, memberIds, regularSeasonWeeksFor(league, memberIds.length));
-     else if(league.league_type==="points") await supabase.from("leagues").update({ season_start: new Date().toISOString(), current_week: 1 }).eq("id", league.id).is("season_start", null).or("start_mode.is.null,start_mode.neq.manual");
+     else if(league.league_type==="points") await stampLeagueStart(league.id);
    }
    await fetchLeagues(user.id);
    setShowBrowse(false);
@@ -9523,7 +9577,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  }
  await supabase.from("matchups").insert(matchupsToInsert);
     // Stamp the league start the first time a schedule is built — drives the 7-day week math.
-    await supabase.from("leagues").update({ season_start: new Date().toISOString(), current_week: 1 }).eq("id", leagueId).is("season_start", null).or("start_mode.is.null,start_mode.neq.manual");
+    await stampLeagueStart(leagueId);
  };
 
  // Seed a single-elim playoff from final standings order (1 vs N, 2 vs N-1 ...).
@@ -13907,10 +13961,10 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {screen==="home" && homeMode==="solo" && <DailyLockCard user={user}/>}
 
  {/* The Gauntlet — global survivor pool, both home modes */}
- {screen==="home" && homeMode!=="solo" && <GauntletCard user={user} onEnter={()=>{ applyMode(false); setActiveLeagueId(GAUNTLET_ID); }} onJoin={async()=>{ if(user){ await fetchLeagues(user.id); } applyMode(false); setActiveLeagueId(GAUNTLET_ID); }}/>}
+ {screen==="home" && homeMode!=="solo" && <GauntletCard user={user} onEnter={()=>{ applyMode(false); setActiveLeagueId(GAUNTLET_ID); setScreen("picks"); }} onJoin={async()=>{ if(user){ await fetchLeagues(user.id); } applyMode(false); setActiveLeagueId(GAUNTLET_ID); }}/>}
 
  {/* ══ SOLO MODE HOME SCREEN ══ */}
- {homeMode==="solo" && <SoloHome raceUser={user} gauntletSlot={screen==="home" ? <GauntletCard user={user} onEnter={()=>{ applyMode(false); setActiveLeagueId(GAUNTLET_ID); }} onJoin={async()=>{ if(user){ await fetchLeagues(user.id); } applyMode(false); setActiveLeagueId(GAUNTLET_ID); }}/> : null} soloWeeks={soloWeeks} soloLoading={soloLoading} isPro={isPro} IOS={IOS} setScreen={setScreen} setShowNewLeague={setShowNewLeague} setNewLeagueStep={setNewLeagueStep} setShowBrowse={setShowBrowse} fetchPublicLeagues={fetchPublicLeagues} setIsSoloMode={applyMode} setActiveLeagueId={setActiveLeagueId} getOrCreateSoloLeague={getOrCreateSoloLeague} soloSavedPicks={soloSavedPicks} setSoloSavedPicks={setSoloSavedPicks} soloFlexPicks={soloFlexPicks} setSoloFlexPicks={setSoloFlexPicks} soloSport={soloSport} setSoloSport={setSoloSportPersist} setShowSoloSportPicker={setShowSoloSportPicker} soloSubmitted={soloSubmitted} setSoloSubmitted={setSoloSubmitted} username={userProfile?.username||""} soloTopPct={soloTopPct} onDeleteSlate={deleteSoloSlate} onJoinCode={handleJoinCode} setShowPaywall={setShowPaywall} tickerGames={tickerGames} espnGames={espnGames} globalRank={(()=>{ const rows=lbCache["all"]; if(!rows||!rows.length) return null; const sx=[...rows].sort((a,b)=>(Number(b.points)||0)-(Number(a.points)||0)); const i=sx.findIndex(r=>String(r.user_id)===String(user?.id)); return i>=0?{rank:i+1,total:sx.length}:null; })()} onOpenLeaderboard={()=>{ fetchLeaderboard("all"); setScreen("leaderboard"); }} liveGames={liveGames} onOpenGamecast={openGamecast} onReplace={startReplace}/>}
+ {homeMode==="solo" && <SoloHome raceUser={user} gauntletSlot={screen==="home" ? <GauntletCard user={user} onEnter={()=>{ applyMode(false); setActiveLeagueId(GAUNTLET_ID); setScreen("picks"); }} onJoin={async()=>{ if(user){ await fetchLeagues(user.id); } applyMode(false); setActiveLeagueId(GAUNTLET_ID); }}/> : null} soloWeeks={soloWeeks} soloLoading={soloLoading} isPro={isPro} IOS={IOS} setScreen={setScreen} setShowNewLeague={setShowNewLeague} setNewLeagueStep={setNewLeagueStep} setShowBrowse={setShowBrowse} fetchPublicLeagues={fetchPublicLeagues} setIsSoloMode={applyMode} setActiveLeagueId={setActiveLeagueId} getOrCreateSoloLeague={getOrCreateSoloLeague} soloSavedPicks={soloSavedPicks} setSoloSavedPicks={setSoloSavedPicks} soloFlexPicks={soloFlexPicks} setSoloFlexPicks={setSoloFlexPicks} soloSport={soloSport} setSoloSport={setSoloSportPersist} setShowSoloSportPicker={setShowSoloSportPicker} soloSubmitted={soloSubmitted} setSoloSubmitted={setSoloSubmitted} username={userProfile?.username||""} soloTopPct={soloTopPct} onDeleteSlate={deleteSoloSlate} onJoinCode={handleJoinCode} setShowPaywall={setShowPaywall} tickerGames={tickerGames} espnGames={espnGames} globalRank={(()=>{ const rows=lbCache["all"]; if(!rows||!rows.length) return null; const sx=[...rows].sort((a,b)=>(Number(b.points)||0)-(Number(a.points)||0)); const i=sx.findIndex(r=>String(r.user_id)===String(user?.id)); return i>=0?{rank:i+1,total:sx.length}:null; })()} onOpenLeaderboard={()=>{ fetchLeaderboard("all"); setScreen("leaderboard"); }} liveGames={liveGames} onOpenGamecast={openGamecast} onReplace={startReplace}/>}
        {homeMode==="solo" && screen==="home" && (()=>{
          const SP=["mlb","nfl","nba","ncaaf","nhl","ncaab","epl","ucl"];
          const games=(tickerGames||[]).filter(g=>g&&g.sport===soloSport);
@@ -14702,7 +14756,11 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const availableMults = [1,2,3,4,5].filter(m=>!usedMults.includes(m));
  // ── Multiplier pool (draft model): commish-defined multiset from slot_config; players assign each once ──
  const _multPoolCfg = !isSoloMode ? parseSlotConfig(activeLeague&&activeLeague.slot_config) : null;
- const multPool = _multPoolCfg ? _multPoolCfg.map(c=>c.mult) : [1,2,3,4,5];
+ // Survivor is one moneyline winner, win or go home. No multiplier concept exists,
+ // but the slot carries no slot_config so the pool fell through to [1..5] and the
+ // full picker rendered on a format where it means nothing.
+ const _isSvSlip = !isSoloMode && !!activeLeague && activeLeague.league_type==="survivor";
+ const multPool = _isSvSlip ? [1] : (_multPoolCfg ? _multPoolCfg.map(c=>c.mult) : [1,2,3,4,5]);
  const poolCounts = multPool.reduce((a,v)=>{a[v]=(a[v]||0)+1;return a;},{});
  const poolUsedCounts = usedMults.reduce((a,v)=>{a[v]=(a[v]||0)+1;return a;},{});
  const poolDistinct = [...new Set(multPool)].sort((a,b)=>a-b);
@@ -14719,8 +14777,16 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const hasParlay = hasLongshot;
  const allFlexFilled = activePicks.every(p=>p.mult!==null&&(p.isParlay?p.parlayLegs.length>=2:p.bet!==null));
  const _ts = activeLeague.target_size||activeLeague.max_members||8;
- const leagueNotStarted = !isSoloMode && leagueMembers.length>0 && leagueMembers.length < _ts;
+ // Roster count is NOT the gate. seasonNotStarted is the single source of truth
+ // and already knows an auto league starts on its season_start stamp and that a
+ // survivor pool runs with whoever is in. This tab used its own members<target
+ // test, which held started leagues hostage to a full roster.
+ const leagueNotStarted = seasonNotStarted;
  const _need = Math.max(0, _ts - leagueMembers.length);
+ const _ssMs = activeLeague.season_start ? new Date(activeLeague.season_start).getTime() : 0;
+ const _waitOnDate = _ssMs > Date.now();
+ const _waitOnCommish = !activeLeague.season_start;
+ const _waitOnSeats = !_waitOnDate && !_waitOnCommish;
  // Loading is not the same as having no league — without this the app briefly decides
  // you are league-less on every cold start.
  const noRealLeague = !isSoloMode && !leaguesLoading && (!activeLeague || !activeLeague.id || (realLeagues||[]).length===0);
@@ -14754,11 +14820,13 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={IOS.orange} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
          </div>
          <div style={{fontSize:17,fontWeight:800,color:"#fff"}}>{activeLeague.name} hasn't started yet</div>
-         <div style={{fontSize:13,color:IOS.label3,marginTop:6,lineHeight:1.45}}>Picks open once all {_ts} spots are filled. {_need} more {_need===1?"player":"players"} to go.</div>
-         <div style={{height:6,background:"rgba(255,255,255,0.08)",borderRadius:3,overflow:"hidden",margin:"14px 0 6px"}}>
-           <div style={{height:"100%",borderRadius:3,background:`linear-gradient(90deg,${IOS.orange},${IOS.yellow})`,width:`${Math.min(100,(leagueMembers.length/_ts)*100)}%`,transition:"width .4s"}}/>
-         </div>
-         <div style={{fontSize:11,color:IOS.label3}}>{leagueMembers.length}/{_ts} joined</div>
+         <div style={{fontSize:13,color:IOS.label3,marginTop:6,lineHeight:1.45}}>{_waitOnCommish ? "The commissioner hasn\u2019t started this league yet." : _waitOnDate ? ("Picks open " + new Date(_ssMs).toLocaleDateString(undefined,{month:"short",day:"numeric"}) + ".") : ("Picks open once all " + _ts + " spots are filled. " + _need + " more " + (_need===1?"player":"players") + " to go.")}</div>
+         {_waitOnSeats && (<div>
+           <div style={{height:6,background:"rgba(255,255,255,0.08)",borderRadius:3,overflow:"hidden",margin:"14px 0 6px"}}>
+             <div style={{height:"100%",borderRadius:3,background:`linear-gradient(90deg,${IOS.orange},${IOS.yellow})`,width:`${Math.min(100,(leagueMembers.length/_ts)*100)}%`,transition:"width .4s"}}/>
+           </div>
+           <div style={{fontSize:11,color:IOS.label3}}>{leagueMembers.length}/{_ts} joined</div>
+         </div>)}
          {(activeLeague.invite_code||activeLeague.inviteCode) && <button onClick={()=>shareInvite(activeLeague.invite_code||activeLeague.inviteCode, activeLeague.name)} style={{marginTop:14,width:"100%",background:"rgba(255,255,255,0.08)",border:EDGE.hair3,color:"#fff",borderRadius:RAD.md,padding:"11px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Invite players</button>}
        </div>
        <div style={{background:"linear-gradient(160deg,#161019,#0c0a12)",border:`0.5px solid ${(IOS.purple||"#BF5AF2")}4d`,borderRadius:RAD.lg,padding:"18px",marginTop:12}}>
@@ -14788,7 +14856,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const slot = activePicks[idx];
  if(!slot||!slot.mult||slot.committed) return;
  if(!isSoloMode && lgCompleted(activeLeague)){ alert("This season is complete \u2014 the league is read-only."); return; }
- { const _tsz=activeLeague.target_size||activeLeague.max_members||8; if(!isSoloMode && leagueMembers.length>0 && leagueMembers.length<_tsz){ alert("Your league hasn't started yet — it needs all "+_tsz+" players first. You can make picks in Solo Mode until then."); return; } }
+ if(seasonNotStarted){ alert("Your league hasn\u2019t started yet. You can make picks in Solo Mode until then."); return; }
  if(slot.isParlay ? (slot.parlayLegs||[]).length<2 : !slot.bet) return;
  if(slotStarted(slot)){ alert("That game has already started — this pick can no longer be locked."); return; }
  if(!user){ alert("Sign in to lock picks."); return; }
@@ -14813,6 +14881,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const slot = activePicks[idx];
  if(!slot||!slot.committed) return;
  if(slotLocked(slot)){ alert(slotGraded(slot)?"This pick has already been graded — it can’t be changed.":"That game has started — this pick is locked in."); return; }
+ // Survivor: the pool locks at Sunday 1:00 PM ET regardless of kickoff. Unlocking
+ // deletes the row, and survivorBlocked would refuse the re-lock, leaving no pick.
+ if(!isSoloMode && activeLeague && activeLeague.league_type==="survivor"){ const _lk=svWeekLockMs(activeLeague,_weekNum); if(_lk!=null && Date.now()>=_lk){ alert("Week "+_weekNum+" locked at 1:00 PM ET Sunday. Picks are final."); return; } }
  const ids = slot.commitIds||[];
  if(ids.length){
    const { data:_chk } = await supabase.from("picks").select("result").in("id", ids);
@@ -15525,7 +15596,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  </div>
 
  {/* Multiplier pool — draft model */}
- {isCustomSlip && multPool.length>0 && !activeSubmitted && (
+ {isCustomSlip && multPool.length>0 && !activeSubmitted && !_isSvSlip && (
  <div style={{margin:"0 16px 12px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.lg,padding:"11px 14px"}}>
  <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",marginBottom:9}}>
  <div style={{fontSize:12,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"rgba(255,255,255,0.4)"}}>Your multipliers</div>
@@ -15728,7 +15799,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {/* Bottom bar: multipliers + pts if win */}
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(0,0,0,0.25)",borderTop:"0.5px solid rgba(255,255,255,0.06)",padding:"6px 13px",gap:8}}>
  <div style={{display:"flex",gap:5}}>
- {slot.committed ? [(<div key="lk" style={{width:34,height:26,borderRadius:RAD.sm,display:"flex",alignItems:"center",justifyContent:"center",background:(multColors[slot.mult]||"#2a2a2a"),color:"#fff",fontSize:11,fontWeight:700}}>{slot.mult}×</div>)] : poolDistinct.map(m=>{
+ {_isSvSlip ? null : slot.committed ? [(<div key="lk" style={{width:34,height:26,borderRadius:RAD.sm,display:"flex",alignItems:"center",justifyContent:"center",background:(multColors[slot.mult]||"#2a2a2a"),color:"#fff",fontSize:11,fontWeight:700}}>{slot.mult}×</div>)] : poolDistinct.map(m=>{
  const taken = multRemaining(m, slot.mult)<=0 && slot.mult!==m;
  const active = slot.mult===m;
  return (
@@ -16813,6 +16884,25 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    return;
  }
  if(gridBuildMode && !isSoloMode){ toggleLeg(bet); return; }
+ if(!isSoloMode && activeLeague && activeLeague.league_type==="survivor" && cat!=="longshot" && activePicks[0] && activePicks[0].committed){
+   const _s0 = activePicks[0];
+   if(slotLocked(_s0)){ setPickConflict(slotGraded(_s0) ? "That pick has already been graded." : "That game has started \u2014 your pick is locked in."); setTimeout(()=>setPickConflict(""),2600); setGridJustAdded(null); return; }
+   { const _lk=svWeekLockMs(activeLeague,_weekNum); if(_lk!=null && Date.now()>=_lk){ setPickConflict("Week "+_weekNum+" locked at 1:00 PM ET Sunday. Picks are final."); setTimeout(()=>setPickConflict(""),2600); setGridJustAdded(null); return; } }
+   (async()=>{
+     const _ids = _s0.commitIds||[];
+     let _q = supabase.from("picks").delete().eq("result","pending");
+     _q = _ids.length ? _q.in("id", _ids) : _q.eq("league_id",activeLeague.id).eq("user_id",user.id).eq("week",_weekNum);
+     const { data:_gone, error } = await _q.select("id");
+     if(error){ setPickConflict("Couldn\u2019t swap: "+error.message); setTimeout(()=>setPickConflict(""),2600); setGridJustAdded(null); return; }
+     if(_ids.length && !(_gone||[]).length){ setPickConflict("That pick has already been graded."); setTimeout(()=>setPickConflict(""),2600); setGridJustAdded(null); return; }
+     setActivePicks(prev=>prev.map((p,i)=> i===0 ? {...p, committed:false, commitIds:[], bet, category:cat, isParlay:false, parlayLegs:[], mult:1} : p));
+     try{ fetchWeekPicks(activeLeague.id, _weekNum); }catch(e){}
+     try{ posthog.capture("pick_added", { league_id: activeLeague.id, category: cat, market_key: (bet&&bet.marketKey)||null, swap:true }); }catch(e){}
+     setGridJustAdded(bet.id);
+     setTimeout(()=>{ setScreen("picks"); setGridJustAdded(null); }, 480);
+   })();
+   return;
+ }
  // One bet per type (longshot legs excepted): if this type is already in the
  // slip, replace that slot instead of stacking a second bet of the same type.
  let dest = target;
@@ -18471,8 +18561,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      if(!user){ alert("Sign in to lock picks."); return; }
      if(demoBlock("lock these picks")) return;
      if(!isSoloMode && lgCompleted(activeLeague)){ alert("This season is complete \u2014 the league is read-only."); return; }
-     const _tsz=activeLeague.target_size||activeLeague.max_members||8;
-     if(!isSoloMode && leagueMembers.length>0 && leagueMembers.length<_tsz){ alert("Your league hasn't started yet \u2014 picks open once all "+_tsz+" seats are filled."); return; }
+     if(seasonNotStarted){ alert("Your league hasn\u2019t started yet."); return; }
      const eligible = staged.filter(x=> x.sl.mult!=null && !slotStarted(x.sl));
      if(!eligible.length){ alert(allM ? "Those games have already started." : "Give every pick a multiplier first \u2014 tap its P-chip."); return; }
      const rowsPer = eligible.map(x=> buildSlotRows(x.sl, x.i, activePicks));
@@ -20370,7 +20459,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      const {data:currentMems}=await supabase.from("league_members").select("user_id").eq("league_id",league.id);
      const targetSize=league.target_size||league.max_members||8;
      if(currentMems&&currentMems.length>=targetSize){alert("League is full.");return;}
-     if(league.league_type==="survivor" && league.season_start && new Date(league.season_start).getTime()<=Date.now()){ alert("This survivor pool already started \u2014 everyone starts Week 1 together."); return; }
+     if(league.league_type==="survivor" && league.season_start && (Number(league.current_week)||1)>1){ alert("This survivor pool is past week 1 \u2014 entries are closed."); return; }
      const {error:joinError}=await supabase.from("league_members").insert({league_id:league.id,user_id:user.id,is_commissioner:false});
      if(joinError){alert("Error joining.");return;}
      const {data:allMems2}=await supabase.from("league_members").select("user_id").eq("league_id",league.id);
