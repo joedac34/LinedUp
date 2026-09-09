@@ -4968,6 +4968,10 @@ function DailyLockCard({ user }){
   const [board,setBoard]=useState(null);  // server-curated options for today
   const [sel,setSel]=useState(null);
   const [busy,setBusy]=useState(false);
+  // Collapsed by default: a long board was pushing the whole solo home down. A
+  // locked pick stays visible in the collapsed state; only the board folds.
+  const [open,setOpen]=useState(()=>{ try{ return localStorage.getItem("picklock_dl_open")==="1"; }catch(e){ return false; } });
+  const toggleOpen=()=>{ setOpen(o=>{ const n=!o; try{ localStorage.setItem("picklock_dl_open", n?"1":"0"); }catch(e){} return n; }); };
   const today=dlDayOf(Date.now());
   const load=async()=>{ try{
     const {data}=await supabase.from("picks").select("week,result,points_earned,pick_name,game_date").eq("league_id",DAILY_LOCK_ID).eq("user_id",user.id).gte("week",today-45).order("week",{ascending:false});
@@ -5014,7 +5018,7 @@ function DailyLockCard({ user }){
     }catch(e){}
     setBusy(false);
   };
-  const kick=(t,c)=>(<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6}}><span style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.13em",textTransform:"uppercase",color:c}}>{t}</span><span style={{textAlign:"center"}}><span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:20,color:streak>0?IOS.orange:"rgba(255,255,255,0.35)",lineHeight:1}}>{streak}</span><span style={{fontSize:8,fontWeight:800,letterSpacing:"0.07em",color:"rgba(255,255,255,0.4)",marginLeft:4}}>DAY STREAK</span></span></div>);
+  const kick=(t,c,fold)=>(<div onClick={fold?toggleOpen:undefined} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,cursor:fold?"pointer":"default"}}><span style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.13em",textTransform:"uppercase",color:c}}>{t}</span><span style={{textAlign:"center",display:"flex",alignItems:"center",gap:8}}><span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:20,color:streak>0?IOS.orange:"rgba(255,255,255,0.35)",lineHeight:1}}>{streak}</span><span style={{fontSize:8,fontWeight:800,letterSpacing:"0.07em",color:"rgba(255,255,255,0.4)",marginLeft:4}}>DAY STREAK</span>{fold&&(<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2.4" strokeLinecap="round" style={{transform:open?"rotate(180deg)":"none",transition:"transform .2s",flexShrink:0}}><path d="M6 9l6 6 6-6"/></svg>)}</span></div>);
   return (
   <div className="pl-rise" style={{margin:"0 16px 12px",position:"relative",border:"0.5px solid rgba(255,159,10,0.3)",borderRadius:RAD.lg,overflow:"hidden",boxShadow:"0 10px 26px -14px rgba(0,0,0,0.8)",background:"radial-gradient(120% 90% at 80% -10%, rgba(255,159,10,0.16), transparent 55%), linear-gradient(160deg,#16130E,#0B0B10 75%)"}}>
   <div style={{padding:"13px 14px"}}>
@@ -5027,7 +5031,9 @@ function DailyLockCard({ user }){
   <div style={{fontSize:13.5,fontWeight:800,marginTop:9}}>{todays.pick_name}</div>
   <div style={{fontSize:10.5,color:"rgba(255,255,255,0.45)",marginTop:3}}>{todays.result==="pending"?("Locked · streak’s on the line tonight"):(todays.result==="W"?("Cashed. Back tomorrow to keep it alive."):"It happens. New streak starts tomorrow.")}</div>
   </>):live.length?(<>
-  {kick("The Daily Lock · today’s board",IOS.orange)}
+  {kick("The Daily Lock · today’s board",IOS.orange,true)}
+  {!open&&(<div onClick={toggleOpen} style={{fontSize:11.5,color:"rgba(255,255,255,0.5)",marginTop:8,cursor:"pointer"}}>{live.length+(live.length===1?" line":" lines")+" on the board · one pick, streak on the line"}</div>)}
+  {open&&(<>
   <div style={{fontSize:10.5,color:"rgba(255,255,255,0.45)",margin:"8px 0 9px"}}>{(new Set(live.map(x=>x.event_id)).size===1)?"Everything on the board is one game tonight. Pick your angle.":"One pick. Nothing shorter than -200. Miss a day or miss the pick — streak dies."}</div>
   <div style={{display:"flex",flexDirection:"column",gap:6}}>
   {live.map((b,i)=>{ const on=sel&&sel.id===b.id; const mk=DL_MK[b.market_key]||DL_MK.h2h; return (
@@ -5040,6 +5046,7 @@ function DailyLockCard({ user }){
   </div>); })}
   </div>
   <div onClick={lock} style={{display:"block",textAlign:"center",background:sel?"linear-gradient(120deg,#FF9F0A,#FF6B2C)":"rgba(255,255,255,0.06)",color:sel?"#141414":"rgba(255,255,255,0.35)",fontWeight:800,fontSize:13.5,padding:"11px",borderRadius:RAD.md,marginTop:10,cursor:sel?"pointer":"default",opacity:busy?0.6:1}}>{busy?"Locking…":(sel?("Lock "+sel.pick_name):"Pick one to lock")}</div>
+  </>)}
   </>):(<>
   {kick("The Daily Lock",IOS.orange)}
   <div style={{fontSize:11.5,color:"rgba(255,255,255,0.45)",marginTop:8}}>{"No board right now — today’s eligible games are done or haven’t posted. Check back."}</div>
@@ -5310,7 +5317,10 @@ function SoloHome({raceUser, gauntletSlot, soloWeeks, soloLoading, isPro, IOS, s
 
   return (
     <div style={{padding:"0 16px 40px"}}>
-      {/* Your week — the core of solo mode, so it leads the scroll */}
+      {/* Gauntlet first: the one thing on this screen with a deadline. The card
+          carries its own 16px margin, so undo the container padding. */}
+      {gauntletSlot ? <div style={{margin:"0 -16px 0"}}>{gauntletSlot}</div> : null}
+      {/* Your week — the core of solo mode */}
       {/* This Week — expansive live tracker */}
       <div style={{background:"linear-gradient(180deg,#15151a,#0e0e12)",border:EDGE.hair,borderRadius:14,overflow:"hidden",marginBottom:16}}>
         {weekHasPicks && (
@@ -5403,8 +5413,6 @@ function SoloHome({raceUser, gauntletSlot, soloWeeks, soloLoading, isPro, IOS, s
 
       {/* You vs The Bots — weekly race vs the persona roster */}
       <div style={{margin:"0 -16px 0"}}><BotRaceCard user={raceUser} isSolo={true}/></div>
-      {gauntletSlot||null}
-
       {/* Plok's Play of the Day */}
       {featGame && ((dayPlay && dayPlay.data) ? (
         <div style={{background:"linear-gradient(135deg,rgba(10,132,255,0.14),rgba(94,92,230,0.08))",border:"0.5px solid rgba(10,132,255,0.32)",borderRadius:RAD.md,padding:"12px 14px",marginBottom:12}}>
@@ -11355,7 +11363,22 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  // Remove from local inventory
  setMyPUs(p=>p.filter(x=>x.dbId!==pu.dbId));
  // Apply to the right context
- if(context==="picks") setActivatedPUs(p=>({...p,[key]:pu}));
+ if(context==="picks"){
+   setActivatedPUs(p=>({...p,[key]:pu}));
+   // activatedPUs is memory only. Applied to a slot that is ALREADY locked, the
+   // power-up was consumed from inventory but never reached the pick row, so the
+   // grader never saw it (Gaper NFL wk1, enhance15 used, pick row null). Write it
+   // through to the pending rows right now.
+   try{
+     const _s=((isSoloMode?soloFlexPicks:flexPicks)||[])[key];
+     const _ids=(_s&&_s.committed&&_s.commitIds)||[];
+     if(_ids.length){
+       const _tier=(pu.tier!=null?pu.tier:null);
+       const {error}=await supabase.from("picks").update({power_up_id:pu.id, pu_tier:_tier}).in("id",_ids).eq("result","pending");
+       if(!error) (isSoloMode?setSoloFlexPicks:setFlexPicks)(prev=>prev.map((x,i)=> i===key ? {...x, power_up_id:pu.id, pu_tier:_tier} : x));
+     }
+   }catch(e){}
+ }
  if(context==="matchup") setMatchupPUs(p=>({...p,[key]:pu}));
  setShowPUModal(null);
  };
@@ -13826,10 +13849,16 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        const _mem4=(uid)=>((leagueMembers||[]).find(m=>m.userId===uid)||{}).name||"?";
        const _clk=(ms)=>{ const d=Math.max(0,ms-nowTick), h=Math.floor(d/3600000), m=Math.floor((d%3600000)/60000), x=Math.floor((d%60000)/1000); return h>0?(h+":"+String(m).padStart(2,"0")+":"+String(x).padStart(2,"0")):(m+":"+String(x).padStart(2,"0")); };
        const _at=(ms)=>{ try{ return new Intl.DateTimeFormat("en-US",{timeZone:"America/New_York",hour:"numeric",minute:"2-digit"}).format(new Date(ms)); }catch(e){ return ""; } };
-       const _chip=_won?{t:"SURVIVED",c:IOS.green}:_lost?{t:"ELIMINATED",c:IOS.red}:_void?{t:"VOID",c:IOS.label2}:_live?{t:"LIVE",c:"#64D2FF"}:_p?{t:"LOCKED IN",c:IOS.blue}:{t:"PICK OPEN",c:IOS.yellow};
+       // While the window is open the chip IS the pick control: it replaces the
+       // purple Gauntlet card that used to sit under this one and duplicate it.
+       const _canEdit=_open&&!_live&&!_won&&!_lost&&!_void&&!(_kick!=null&&nowTick>=_kick);
+       const _chip=_won?{t:"SURVIVED",c:IOS.green}:_lost?{t:"ELIMINATED",c:IOS.red}:_void?{t:"VOID",c:IOS.label2}:_live?{t:"LIVE",c:"#64D2FF"}:_p?{t:(_canEdit?"LOCKED IN \u00B7 EDIT":"LOCKED IN"),c:IOS.blue}:{t:(_canEdit?"MAKE YOUR PICK":"PICK OPEN"),c:IOS.yellow};
        return (<>
        <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",marginTop:-18,marginBottom:12}}>
-         <span style={{fontSize:9,fontWeight:900,letterSpacing:"0.07em",padding:"3px 8px",borderRadius:5,color:_chip.c,background:_chip.c+"1A",border:"1px solid "+_chip.c+"59"}}>{_chip.t}</span>
+         <span onClick={_canEdit?()=>{ haptic("select"); setScreen("picks"); }:undefined} style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:9,fontWeight:900,letterSpacing:"0.07em",padding:_canEdit?"5px 10px":"3px 8px",borderRadius:_canEdit?7:5,color:_chip.c,background:_chip.c+(_canEdit?"26":"1A"),border:"1px solid "+_chip.c+(_canEdit?"80":"59"),cursor:_canEdit?"pointer":"default"}}>
+           {_canEdit&&(<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={_chip.c} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>)}
+           {_chip.t}
+         </span>
        </div>
        {_p ? (
        <div style={{background:"rgba(0,0,0,0.4)",border:EDGE.hair,borderRadius:RAD.md,padding:13,marginBottom:12}}>
@@ -13870,7 +13899,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        {_p&&(
          <div style={{marginTop:12,display:"flex",alignItems:"center",gap:9,fontSize:12.5,color:"rgba(255,255,255,0.6)",fontWeight:600}}>
            <span style={{width:7,height:7,borderRadius:"50%",flexShrink:0,background:_won?IOS.green:_lost?IOS.red:_live?"#64D2FF":IOS.label2,boxShadow:"0 0 8px "+(_won?IOS.green:_lost?IOS.red:_live?"#64D2FF":"transparent")}}/>
-           {_won?(_ml?("The "+_short+" got the win"):(_short+" found the end zone")):_lost?(_ml?("The "+_short+" lost"):(_short+" never got there")):_void?"Voided \u2014 you survive and get "+(_ml?"the team":"the player")+" back":_live?("Your pick is live"+(_settle?(" \u00B7 settles ~"+_at(_settle)):"")):"Locked in"}
+           {_won?(_ml?("The "+_short+" got the win"):(_short+" found the end zone")):_lost?(_ml?("The "+_short+" lost"):(_short+" never got there")):_void?"Voided \u2014 you survive and get "+(_ml?"the team":"the player")+" back":_live?("Your pick is live"+(_settle?(" \u00B7 settles ~"+_at(_settle)):"")):(_canEdit?"Swap any time before Sunday 1:00 PM ET":"Locked in")}
          </div>
        )}
        {!_p&&(
@@ -13962,13 +13991,13 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      <div className="pk-t-join" onClick={()=>{ try{ fetchPublicLeagues(); }catch(e){} setShowBrowse(true); }} style={{flex:1,textAlign:"center",background:"rgba(255,255,255,0.06)",boxShadow:"inset 0 0 0 0.5px rgba(255,255,255,0.16)",borderRadius:8,padding:"9px 12px",fontSize:12,fontWeight:800,cursor:"pointer",color:"rgba(255,255,255,0.8)"}}>Join a league</div>
    </div>
  </div>)}
- {screen==="home" && homeMode==="solo" && <DailyLockCard user={user}/>}
-
  {/* The Gauntlet — global survivor pool, both home modes */}
- {screen==="home" && homeMode!=="solo" && <GauntletCard user={user} onEnter={()=>{ applyMode(false); setActiveLeagueId(GAUNTLET_ID); setScreen("picks"); }} onJoin={async()=>{ if(user){ await fetchLeagues(user.id); } applyMode(false); setActiveLeagueId(GAUNTLET_ID); }}/>}
+ {screen==="home" && homeMode!=="solo" && activeLeagueId!==GAUNTLET_ID && <GauntletCard user={user} onEnter={()=>{ applyMode(false); setActiveLeagueId(GAUNTLET_ID); setScreen("picks"); }} onJoin={async()=>{ if(user){ await fetchLeagues(user.id); } applyMode(false); setActiveLeagueId(GAUNTLET_ID); }}/>}
 
  {/* ══ SOLO MODE HOME SCREEN ══ */}
  {homeMode==="solo" && <SoloHome raceUser={user} gauntletSlot={screen==="home" ? <GauntletCard user={user} onEnter={()=>{ applyMode(false); setActiveLeagueId(GAUNTLET_ID); setScreen("picks"); }} onJoin={async()=>{ if(user){ await fetchLeagues(user.id); } applyMode(false); setActiveLeagueId(GAUNTLET_ID); }}/> : null} soloWeeks={soloWeeks} soloLoading={soloLoading} isPro={isPro} IOS={IOS} setScreen={setScreen} setShowNewLeague={setShowNewLeague} setNewLeagueStep={setNewLeagueStep} setShowBrowse={setShowBrowse} fetchPublicLeagues={fetchPublicLeagues} setIsSoloMode={applyMode} setActiveLeagueId={setActiveLeagueId} getOrCreateSoloLeague={getOrCreateSoloLeague} soloSavedPicks={soloSavedPicks} setSoloSavedPicks={setSoloSavedPicks} soloFlexPicks={soloFlexPicks} setSoloFlexPicks={setSoloFlexPicks} soloSport={soloSport} setSoloSport={setSoloSportPersist} setShowSoloSportPicker={setShowSoloSportPicker} soloSubmitted={soloSubmitted} setSoloSubmitted={setSoloSubmitted} username={userProfile?.username||""} soloTopPct={soloTopPct} onDeleteSlate={deleteSoloSlate} onJoinCode={handleJoinCode} setShowPaywall={setShowPaywall} tickerGames={tickerGames} espnGames={espnGames} globalRank={(()=>{ const rows=lbCache["all"]; if(!rows||!rows.length) return null; const sx=[...rows].sort((a,b)=>(Number(b.points)||0)-(Number(a.points)||0)); const i=sx.findIndex(r=>String(r.user_id)===String(user?.id)); return i>=0?{rank:i+1,total:sx.length}:null; })()} onOpenLeaderboard={()=>{ fetchLeaderboard("all"); setScreen("leaderboard"); }} liveGames={liveGames} onOpenGamecast={openGamecast} onReplace={startReplace}/>}
+ {/* Daily Lock sits under the solo content; collapsible so a deep board never pushes the week down */}
+ {screen==="home" && homeMode==="solo" && <DailyLockCard user={user}/>}
        {homeMode==="solo" && screen==="home" && (()=>{
          const SP=["mlb","nfl","nba","ncaaf","nhl","ncaab","epl","ucl"];
          const games=(tickerGames||[]).filter(g=>g&&g.sport===soloSport);
@@ -15650,9 +15679,11 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const multColors = {1:"#3A9EE0", 2:"#3A9EE0", 3:"#3A9EE0", 4:"#3A9EE0", 5:"#3A9EE0"};
  const catColors = {ml:IOS.blue, prop:IOS.yellow, ou:IOS.orange, spread:IOS.green, longshot:IOS.pink};
  const catLabels = {ml:"MONEYLINE", prop:"PROP", ou:"OVER/UNDER", spread:"SPREAD", btts:"BTTS", dnb:"DRAW NO BET", dchance:"DOUBLE CHANCE", tmtotal:"TEAM TOTAL", longshot:"LONGSHOT", yrfi:"YRFI", nrfi:"NRFI", wildcard:"WILDCARD"};
- const appliedPU = activatedPUs[idx];
+ // Memory first, then whatever is on the locked row — a reload or a swap must not
+ // make an applied power-up vanish from the slip.
+ const appliedPU = activatedPUs[idx] || (slot.power_up_id ? (POWER_UPS.find(x=>x.id===slot.power_up_id)||null) : null);
  const isDouble = appliedPU?.id==="double";
- const isEnhance = appliedPU?.id==="enhance";
+ const isEnhance = !!(appliedPU && String(appliedPU.id).indexOf("enhance")===0);
  const mult = isDouble ? (slot.mult||1)*2 : (slot.mult||1);
  const pts = slot.isParlay && parlayOdds
  ? calcPickPoints(mult, parlayOdds.decimal>1?(parlayOdds.decimal-1)*100:0, "W")
@@ -15848,13 +15879,17 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  return (<button onClick={(e)=>{e.stopPropagation();lockSlot(idx);}} style={{fontFamily:"Barlow",display:"inline-flex",alignItems:"center",gap:5,fontSize:11,fontWeight:800,color:"#08080B",background:IOS.green,border:"none",borderRadius:RAD.sm,padding:"6px 12px",cursor:"pointer"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#08080B" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Lock</button>);
  })()}
  {slot.mult&&filled&&slot.result!=="P"&&<div style={{fontSize:12,fontWeight:700,color:IOS.green,flexShrink:0}}>
- {isDouble?`+${pts} pts (2⃣ doubled!)`:isEnhance&&slot.bet?`+${pts} pts `:`+${pts} pts if win`}
+ {isDouble?`+${pts} pts (doubled)`:isEnhance&&slot.bet?`+${pts} pts \u00B7 line moved ${appliedPU.tier!=null?"+"+appliedPU.tier:""}`:`+${pts} pts if win`}
  </div>}
  {puEnabled&&(myPUs.filter(p=>p.type==="offensive").length>0||appliedPU)&&slot.mult&&filled&&(
  appliedPU ? (
  <div style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:RAD.sm,background:`${appliedPU.color}15`,border:`1px solid ${appliedPU.color}30`,cursor:"pointer"}}
- onClick={e=>{e.stopPropagation();const r=appliedPU;if(r?.dbId)supabase.from("league_power_ups").update({used:false}).eq("id",r.dbId);setMyPUs(p=>[...p,r]);setActivatedPUs(p=>{const n={...p};delete n[idx];return n;});}}>
- <span style={{fontSize:10}}>{appliedPU.icon}</span>
+ onClick={async e=>{e.stopPropagation();const r=appliedPU;if(r?.dbId)supabase.from("league_power_ups").update({used:false}).eq("id",r.dbId);setMyPUs(p=>[...p,r]);setActivatedPUs(p=>{const n={...p};delete n[idx];return n;});
+   // Locked slot: clear the row too, and hand the inventory row back if the
+   // in-memory copy had no dbId (came from the pick row on reload).
+   try{ const _ids=(slot.committed&&slot.commitIds)||[]; if(_ids.length){ await supabase.from("picks").update({power_up_id:null, pu_tier:null}).in("id",_ids).eq("result","pending"); setActivePicks(prev=>prev.map((x,i)=> i===idx ? {...x, power_up_id:null, pu_tier:null} : x)); if(!(r&&r.dbId)&&activeLeague&&user){ const {data:_row}=await supabase.from("league_power_ups").select("id").eq("league_id",activeLeague.id).eq("user_id",user.id).eq("power_up_id",r.id).eq("used",true).order("created_at",{ascending:false}).limit(1); if(_row&&_row[0]) await supabase.from("league_power_ups").update({used:false}).eq("id",_row[0].id); } } }catch(e2){}
+ }}>
+ <PUBadge puId={appliedPU.id} size={14}/>
  <span style={{fontSize:10,fontWeight:700,color:appliedPU.color}}>{appliedPU.name}</span>
  <span style={{fontSize:9,color:IOS.label3,marginLeft:2}}></span>
  </div>
