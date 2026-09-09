@@ -13193,7 +13193,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {/* Spin button */}
  <div className="ts-btn" style={{width:"100%",marginBottom:14}}>
  <button className="spin-glow-btn" style={{display:puEnabled?undefined:"none"}} onClick={()=>{ if(!puEnabled) return; setShowTopScorer(false);setShowWheel(true);}}>
- Spin the Wheel
+ Draw your power-up
  </button>
  </div>
 
@@ -13213,9 +13213,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    <div style={{width:52,height:52,borderRadius:16,background:"linear-gradient(160deg,rgba(255,214,10,0.22),rgba(255,214,10,0.05))",border:"1px solid rgba(255,214,10,0.4)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:14}}>
      <svg width="26" height="26" viewBox="0 0 24 24" fill={IOS.yellow}><path d="M3 17l2-9 4.5 4L12 5l2.5 7L19 8l2 9H3zm0 2h18v2H3v-2z"/></svg>
    </div>
-   <div style={{fontSize:10,fontWeight:900,letterSpacing:"2.2px",textTransform:"uppercase",color:IOS.yellow}}>Week {(activeLeague&&activeLeague.current_week)||1} - Top Scorer</div>
-   <div style={{fontSize:24,fontWeight:900,marginTop:5,color:"#fff"}}>You outscored the league</div>
-   <div style={{fontSize:13,color:"rgba(255,255,255,0.55)",marginTop:6,textAlign:"center",maxWidth:290,lineHeight:1.5}}>{puChosenIdx==null?"Pick a card to claim your power-up.":"Claimed from your best week yet."}</div>
+   <div style={{fontSize:10,fontWeight:900,letterSpacing:"2.2px",textTransform:"uppercase",color:IOS.yellow}}>Power-up draw</div>
+   <div style={{fontSize:24,fontWeight:900,marginTop:5,color:"#fff"}}>{puChosenIdx==null?"Pick a card":"It\u2019s yours"}</div>
+   <div style={{fontSize:13,color:"rgba(255,255,255,0.55)",marginTop:6,textAlign:"center",maxWidth:290,lineHeight:1.5}}>{puChosenIdx==null?"One power-up behind each card. Rarer ones show up less often.":"Added to your inventory. Use it on any pick this season."}</div>
    <div style={{display:"flex",gap:12,margin:"30px 0 8px",perspective:"900px"}}>
      {[0,1,2].map(i=>{ const flipped=puChosenIdx===i; const dim=puChosenIdx!=null&&!flipped; return (
        <div key={i} onClick={()=>drawCard(i)} style={{width:104,height:150,position:"relative",cursor:puChosenIdx==null?"pointer":"default",transformStyle:"preserve-3d",transition:"transform .5s cubic-bezier(0.3,1.15,0.4,1), opacity .3s",transform:flipped?"rotateY(180deg) translateY(-10px)":"none",opacity:dim?0.35:1}}>
@@ -14060,6 +14060,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const _ls=activeLeague?.sports||(activeLeague?.sport?[activeLeague.sport]:[]);
  const _games=(tickerGames||[]).filter(g=>_ls.length===0||_ls.includes(g.sport));
  if(!_games.length) return null;
+ const _sameDay=(a,b)=>a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();
+ const _allToday=_games.slice(0,10).every(g=>_sameDay(new Date(g.time),now));
  const myList=(weekPicks||[]).filter(p=>p.user_id===user?.id);
  const myPickNames=myList.map(p=>(p.pick_name||"").toLowerCase()); const myPickGames=myList.map(p=>(p.game||"").toLowerCase());
  const openG=async(g,away,home,espn,gameTime,isLive)=>{
@@ -14073,7 +14075,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <>
  <div className="ios-section" style={{margin:"10px 16px 6px"}}>
  <div className="ios-section-header" style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
- <span>Today's Games</span>
+ <span>{_allToday?"Today\u2019s Games":"Upcoming Games"}</span>
  <span onClick={()=>setHomeTab("games")} style={{color:IOS.blue,fontSize:13,textTransform:"none",fontWeight:500,letterSpacing:0,cursor:"pointer"}}>See All</span>
  </div>
  </div>
@@ -14085,6 +14087,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const isLive=now>=t&&now<new Date(t.getTime()+4*60*60*1000);
  const isDone=espn?.awayScore!=null&&espn?.homeScore!=null&&!isLive&&!!t&&now>=t;
  const gameTime=t.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
+ const gameLabel=_sameDay(t,now)?gameTime:(t.toLocaleDateString([],{weekday:"short",month:"short",day:"numeric"})+" \u00b7 "+gameTime);
  const so=liveOdds[activeLeague?.sport];
  const ml=(so?.ml||[]).filter(o=>o.game?.includes(away)||o.game?.includes(home));
  const sp2=(so?.spread||[]).filter(o=>o.game?.includes(away)||o.game?.includes(home));
@@ -14092,8 +14095,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const hasPick=myPickGames.some(gm=>gm.includes(away.toLowerCase())&&gm.includes(home.toLowerCase()));
  const _pit=ml[0]||sp2[0]||ou[0]; const _ap=_pit&&_pit.awayPitcher; const _hp=_pit&&_pit.homePitcher; const _isMlb=activeLeague?.sport==="mlb";
  return (
- <div key={gi} className={"wr-gc pl-rise pl-d"+((gi%3)+1)+(hasPick?" picked":"")} style={{"--tc":nickAccent(home)}} onClick={()=>openG(g,away,home,espn,gameTime,isLive)}>
- <div className="wr-gctop">{isLive?<span className="wr-glive"><span className="wr-dot"/>LIVE</span>:isDone?<span className="wr-gtime">Final</span>:<span className="wr-gtime">{gameTime}</span>}<span className="wr-gsport">{SPORTS[activeLeague?.sport]?.label||""}</span></div>
+ <div key={gi} className={"wr-gc pl-rise pl-d"+((gi%3)+1)+(hasPick?" picked":"")} style={{"--tc":nickAccent(home)}} onClick={()=>openG(g,away,home,espn,gameLabel,isLive)}>
+ <div className="wr-gctop">{isLive?<span className="wr-glive"><span className="wr-dot"/>LIVE</span>:isDone?<span className="wr-gtime">Final</span>:<span className="wr-gtime">{gameLabel}</span>}<span className="wr-gsport">{SPORTS[activeLeague?.sport]?.label||""}</span></div>
  {[{ab:away,logo:(teamLogo(activeLeague?.sport,g.away)||espn?.awayLogo),sc:espn?.awayScore,rec:espn?.awayRecord},{ab:home,logo:(teamLogo(activeLeague?.sport,g.home)||espn?.homeLogo),sc:espn?.homeScore,rec:espn?.homeRecord}].map((tm,ti)=>(
  <div key={ti} className="wr-grow">
  <div className="wr-gl"><div className="wr-glogo">{tm.logo?<img src={tm.logo} style={{width:22,height:22,objectFit:"contain"}} onError={e=>{e.target.style.display="none";}}/>:tm.ab}</div><div style={{minWidth:0}}><div className="wr-gn">{tm.ab}</div>{tm.rec&&<div style={{fontSize:9.5,color:"rgba(255,255,255,0.4)"}}>{tm.rec}</div>}</div></div>
@@ -14381,8 +14384,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div className="pu-spin-chip" style={{display:puEnabled?undefined:"none"}} onClick={()=>{ if(puEnabled) setShowWheel(true); }}>
  <div style={{fontSize:20}}></div>
  <div>
- <div style={{fontSize:13,fontWeight:600,color:"#fff"}}>Spin Wheel</div>
- <div style={{fontSize:11,color:IOS.purple,fontWeight:500}}>{wheelSpins} spin{wheelSpins!==1?"s":""} available</div>
+ <div style={{fontSize:13,fontWeight:600,color:"#fff"}}>Power-up draw</div>
+ <div style={{fontSize:11,color:IOS.purple,fontWeight:500}}>{wheelSpins} draw{wheelSpins!==1?"s":""} available</div>
  </div>
  </div>
  )}
@@ -21083,7 +21086,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
            const _h = await authHeaders();
            const _r = await fetch(API_BASE+"/api/award-spin", { method:"POST", headers:{ ..._h, "Content-Type":"application/json" }, body: JSON.stringify({ league_id: activeLeague.id, week: currentWeek }) });
            const _d = await _r.json().catch(()=>null);
-           if(_d && Array.isArray(_d.awarded) && _d.awarded.some(u=>String(u)===String(user.id))){ setWheelSpins(x=>x+1); _spinMsg = " You were the top scorer - you earned a power-up draw!"; }
+           if(_d && Array.isArray(_d.awarded) && _d.awarded.some(u=>String(u)===String(user.id))){ setWheelSpins(x=>x+1); _spinMsg = " You topped the league this week \u2014 you earned a power-up draw."; }
          } catch(e) {}
          alert(`Advanced to Week ${nextWeek}! Slips have been reset.`+_spinMsg);
 
@@ -22824,17 +22827,17 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div style={{fontSize:15,color:IOS.label3}}>{displayPUs.length} power-up{displayPUs.length!==1?"s":""} in inventory</div>
  {displaySpins > 0 && isActiveLeague && puEnabled
  ? <button onClick={()=>setShowWheel(true)} style={{background:`linear-gradient(135deg,${IOS.indigo},${IOS.purple})`,border:"none",borderRadius:RAD.md,padding:"8px 16px",fontFamily:"Barlow,sans-serif",fontSize:13,fontWeight:600,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
- Spin Wheel
+ Draw
  <span style={{background:"rgba(255,255,255,0.25)",borderRadius:RAD.pill,padding:"1px 8px",fontSize:12,fontWeight:800}}>{displaySpins}</span>
  </button>
  : <button disabled style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:RAD.md,padding:"8px 16px",fontFamily:"Barlow,sans-serif",fontSize:13,fontWeight:600,color:"rgba(255,255,255,0.25)",cursor:"not-allowed",display:"flex",alignItems:"center",gap:8}}>
- Spin Wheel
+ Draw
  <span style={{background:"rgba(255,255,255,0.08)",borderRadius:RAD.pill,padding:"1px 8px",fontSize:12,fontWeight:800,color:"rgba(255,255,255,0.25)"}}>{displaySpins}</span>
  </button>
  }
  </div>
  {displayPUs.length===0
- ? <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:RAD.lg,padding:24,textAlign:"center",color:IOS.label3,fontSize:15}}>No power-ups yet. Win a week to spin.</div>
+ ? <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:RAD.lg,padding:24,textAlign:"center",color:IOS.label3,fontSize:15}}>No power-ups yet. Top your league for a week to earn a draw.</div>
  : displayPUs.map((pu,i)=>(
  <div key={i} className="pu-card" style={{borderWidth:1,borderStyle:"solid",borderColor:`${pu.color}30`}}>
  <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:pu.color}}/>
