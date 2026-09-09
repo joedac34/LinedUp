@@ -2066,7 +2066,7 @@ const acColor=i=>({D:"#5E5CE6",M:"#0A84FF",T:"#FF453A",C:"#30D158",A:"#FF9F0A",R
 // Category -> human label. Rehydrated picks only carry a category (parsed out of the
 // slot string), never a label, so anything rendering a locked pick has to derive it.
 // Keep in sync with the _CL map in the solo add path.
-const CAT_LABEL={ml:"Moneyline",spread:"Spread",ou:"Over/Under",prop:"Prop",longshot:"Longshot",
+const CAT_LABEL={ml:"Moneyline",spread:"Spread",ou:"Over/Under",prop:"Prop",longshot:"Longshot",wildcard:"Wildcard",lines:"Game Lines",
   yrfi:"YRFI",nrfi:"NRFI",ml_f5:"Moneyline (F5)",spread_f5:"Spread (F5)",ou_f5:"Over/Under (F5)",
   ml_h1:"Moneyline (1H)",spread_h1:"Spread (1H)",ou_h1:"Over/Under (1H)",
   ml_q1:"Moneyline (Q1)",spread_q1:"Spread (Q1)",ou_q1:"Over/Under (Q1)"};
@@ -2840,6 +2840,11 @@ function playoffFieldFor(league, total){
 }
 // A wildcard slot accepts ANY of these (all gradeable) bet types.
 const WILDCARD_TYPES=["ml","spread","ou","prop","longshot"];
+// A Game Lines slot is a wildcard narrowed to the three game markets. grade.js
+// settles lines_N by market_key on the same branch as wildcard_N.
+const LINES_TYPES=["ml","spread","ou"];
+const isFlexSlotType=(t)=> t==="wildcard"||t==="lines";
+const slotAccepts=(t)=> t==="wildcard"?WILDCARD_TYPES:(t==="lines"?LINES_TYPES:[t]);
 // league_id columns are uuid. Anything else and Postgres 400s the whole query — which is
 // exactly what the demo id "lg1" did, on every screen, for every new user.
 const isUuid = (v) => typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
@@ -5622,7 +5627,8 @@ const PERIOD_CATS = ["ml_q1","spread_q1","ou_q1","ml_p1","spread_p1","ou_p1","ml
 const SUB_MK = {
 pass:["player_pass_yds","player_pass_tds"], rush:["player_rush_yds","player_rush_tds"],
 rec:["player_receptions","player_reception_yds","player_reception_tds"],
-td:["player_anytime_td","player_first_td","player_rush_tds","player_reception_tds","player_pass_tds"],
+td:["player_anytime_td","player_first_td","player_1st_td","player_tds_over","player_rush_tds","player_reception_tds","player_pass_tds"],
+firsttd:["player_1st_td","player_first_td"], tds2:["player_tds_over"],
 pts:["player_points","player_points_rebounds_assists"], reb:["player_rebounds"], ast:["player_assists"], "3pt":["player_threes"],
 hr:["batter_home_runs","batter_home_runs_alternate"], hits:["batter_hits"], bases:["batter_total_bases"], rbi:["batter_rbis"], k:["pitcher_strikeouts"],
 runs:["batter_runs_scored"], walks:["batter_walks"], sb:["batter_stolen_bases"], doubles:["batter_doubles"], triples:["batter_triples"], singles:["batter_singles"], hrr:["batter_hits_runs_rbis"], er:["pitcher_earned_runs"], hitsallowed:["pitcher_hits_allowed"], walksallowed:["pitcher_walks"], outs:["pitcher_outs"],
@@ -7567,7 +7573,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
    const iv=setInterval(()=>{ if(document.visibilityState==="visible") fetchNotifs(); },30000);
    return ()=>{ document.removeEventListener("visibilitychange",onVis); clearInterval(iv); };
  },[user]);
- useEffect(()=>{ if(screen!=="browser"||isSoloMode) return; const _cfg=parseSlotConfig(activeLeague&&activeLeague.slot_config); if(!_cfg) return; const _allowed=[...new Set(_cfg.flatMap(s=>s.type==="wildcard"?WILDCARD_TYPES:[s.type]))]; const _ts=flexPicks[gridTargetSlot]; const _isWild=_ts&&(_ts.slotType||_ts.category)==="wildcard"; const _tgt=(gridTargetSlot!=null&&_ts&&_ts.locked&&!_isWild)?_ts.category:null; const _want=_tgt||(_allowed.includes(gridType)?gridType:_allowed[0]); if(_want&&_want!==gridType) setGridType(_want); const _mkt=(gridTargetSlot!=null&&_ts&&_ts.locked&&!_isWild&&_ts.category==="prop")?(_ts.market||"all"):null; if(_mkt!==null) setGridPropSub(_mkt); if(_mkt&&_mkt!=="all"){ const _msp=(leagueSports||[]).find(s=>(PROP_SUBS_BY_SPORT[s]||[]).some(x=>x.id===_mkt)); if(_msp) setGridSport(_msp); } }, [screen, gridTargetSlot, activeLeagueId, gridType]);
+ useEffect(()=>{ if(screen!=="browser"||isSoloMode) return; const _cfg=parseSlotConfig(activeLeague&&activeLeague.slot_config); if(!_cfg) return; const _allowed=[...new Set(_cfg.flatMap(s=>slotAccepts(s.type)))]; const _ts=flexPicks[gridTargetSlot]; const _isWild=_ts&&isFlexSlotType(_ts.slotType||_ts.category); const _tgt=(gridTargetSlot!=null&&_ts&&_ts.locked&&!_isWild)?_ts.category:null; const _want=_tgt||(_allowed.includes(gridType)?gridType:_allowed[0]); if(_want&&_want!==gridType) setGridType(_want); const _mkt=(gridTargetSlot!=null&&_ts&&_ts.locked&&!_isWild&&_ts.category==="prop")?(_ts.market||"all"):null; if(_mkt!==null) setGridPropSub(_mkt); if(_mkt&&_mkt!=="all"){ const _msp=(leagueSports||[]).find(s=>(PROP_SUBS_BY_SPORT[s]||[]).some(x=>x.id===_mkt)); if(_msp) setGridSport(_msp); } }, [screen, gridTargetSlot, activeLeagueId, gridType]);
 
  // Survivor pools: the browser is pinned to the pool's one market. Several generic
  // openers call setGridType("ml") before navigating; without this, a TD pool opened
@@ -7763,9 +7769,9 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
     if(!t) return ALL_BETS||[];
     // A wildcard slot takes any gradeable type — WILDCARD_TYPES is the same list the
     // manual grid uses, so Plok and the builder agree on what's legal.
-    if(t==="wildcard"){
+    if(isFlexSlotType(t)){
       const out=[]; const seen=new Set();
-      WILDCARD_TYPES.forEach(w=>{ betsForSlotType(w).forEach(b=>{ if(!seen.has(b.id)){ seen.add(b.id); out.push(b); } }); });
+      slotAccepts(t).forEach(w=>{ betsForSlotType(w).forEach(b=>{ if(!seen.has(b.id)){ seen.add(b.id); out.push(b); } }); });
       return out;
     }
     if(PERIOD_MARKETS[t]) return ((BETS && BETS[t]) || []).map(b=>({...b, category:t}));
@@ -7780,11 +7786,13 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
   const plokTypeLabel = (t) => {
     if(!t) return "Any type";
     if(t==="wildcard") return "Wildcard";
+    if(t==="lines") return "Game Lines";
     if(PERIOD_MARKETS[t]) return PERIOD_TYPE_LABEL[t] || t;
     return ({ml:"Moneyline", spread:"Spread", ou:"Total", prop:"Player prop", btts:"BTTS", dnb:"DNB", dchance:"DC", tmtotal:"TT", longshot:"Longshot"})[SLOT_OF[t]||t] || t;
   };
   const plokTypeColor = (t) => {
     if(t==="wildcard") return IOS.purple;
+    if(t==="lines") return IOS.blue;
     if(PERIOD_MARKETS[t]) return "#64D2FF";
     return ({ml:IOS.blue, spread:IOS.green, ou:IOS.orange, prop:IOS.purple, longshot:IOS.pink})[SLOT_OF[t]||t] || IOS.blue;
   };
@@ -7895,11 +7903,11 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
     // reached buildslip at all.
     const eligible = {};
     neededCats.forEach(cat=>{
-      if(cat==="wildcard"){
+      if(isFlexSlotType(cat)){
         // Round-robin across the types a wildcard accepts. Straight concatenation put
         // every moneyline first, so on a one-game slate the six sent were all ML/spread
         // from the same game — all conflicting — and the props were never seen.
-        const lists = WILDCARD_TYPES.map(w=>plokSortBets(w, betsForSlotType(w)));
+        const lists = slotAccepts(cat).map(w=>plokSortBets(w, betsForSlotType(w)));
         const out=[], seen=new Set();
         for(let i=0;;i++){
           let added=false;
@@ -8594,6 +8602,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
    sports:["nfl","nba","mlb","nhl"]},
   {id:"longshot",l:"Longshot / Parlay",scope:"Exotic",color:"#FF375F"},
   {id:"wildcard",l:"Wildcard",scope:"Any type",color:"#BF5AF2"},
+  {id:"lines",l:"Game Lines",scope:"ML, spread or total",color:"#3B6FE0"},
   {id:"ml_q1",l:"1st Quarter ML",scope:"1st quarter",color:"#64D2FF",sports:["nfl","ncaaf","nba"]},
   {id:"spread_q1",l:"1st Quarter Spread",scope:"1st quarter",color:"#64D2FF",sports:["nfl","ncaaf","nba"]},
   {id:"ou_q1",l:"1st Quarter O / U",scope:"1st quarter",color:"#64D2FF",sports:["nfl","ncaaf","nba"]},
@@ -8623,7 +8632,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
   {id:"clv", name:"CLV Report Card", ready:false, color:IOS.purple, desc:"Did your locked picks beat the closing line? The pro's scorecard.", icon:<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={IOS.purple} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="6"/><path d="M9 13l-2 8 5-3 5 3-2-8"/></svg>},
  ];
  const PROP_SUBS_BY_SPORT = {
-  nfl:[{id:"all",l:"All"},{id:"pass",l:"Pass"},{id:"rush",l:"Rush"},{id:"rec",l:"Receiving"},{id:"td",l:"TDs"},{id:"anytd",l:"Any TD"},{id:"passyds",l:"Pass Yds"},{id:"passtds",l:"Pass TDs"},{id:"rushyds",l:"Rush Yds"},{id:"rushtds",l:"Rush TDs"},{id:"recs",l:"Recs"},{id:"recyds",l:"Rec Yds"},{id:"rectds",l:"Rec TDs"}],
+  nfl:[{id:"all",l:"All"},{id:"pass",l:"Pass"},{id:"rush",l:"Rush"},{id:"rec",l:"Receiving"},{id:"td",l:"TDs"},{id:"anytd",l:"Any TD"},{id:"firsttd",l:"First TD"},{id:"tds2",l:"2+ TDs"},{id:"passyds",l:"Pass Yds"},{id:"passtds",l:"Pass TDs"},{id:"rushyds",l:"Rush Yds"},{id:"rushtds",l:"Rush TDs"},{id:"recs",l:"Recs"},{id:"recyds",l:"Rec Yds"},{id:"rectds",l:"Rec TDs"}],
   nba:[{id:"all",l:"All"},{id:"pts",l:"Points"},{id:"reb",l:"Rebounds"},{id:"ast",l:"Assists"},{id:"3pt",l:"Threes"}],
   // Soccer: the five player markets the books post for EPL/UCL (probe-verified).
   epl:[{id:"all",l:"All"},{id:"goal",l:"Anytime Goal"},{id:"ga",l:"Goal or Assist"},{id:"ast",l:"Assists"},{id:"shots",l:"Shots"},{id:"sot",l:"On Target"}],
@@ -10192,7 +10201,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  const worstBet=picks.filter(p=>p.result==="L")[0];
  // By bet type
  const TYPE_COLORS={ml:"#0A84FF",prop:"#FFD60A",ou:"#FF9F0A",spread:"#30D158",longshot:"#FF375F"};
- const TYPE_LABELS={ml:"Moneyline",prop:"Prop",ou:"Over/Under",spread:"Spread",longshot:"Longshot"};
+ const TYPE_LABELS={ml:"Moneyline",prop:"Prop",ou:"Over/Under",spread:"Spread",longshot:"Longshot",wildcard:"Wildcard",lines:"Game Lines"};
  const byType={};
  picks.forEach(p=>{const slot=p.slot?.startsWith("longshot")?"longshot":(p.slot||"ml").split("_")[0];if(!byType[slot])byType[slot]={wins:0,losses:0,pts:0,color:TYPE_COLORS[slot]||"#888",label:TYPE_LABELS[slot]||slot};byType[slot].units=(byType[slot].units||0)+(unitsOf(p)||0);if(p.result==="W"){byType[slot].wins++;byType[slot].pts+=parseFloat(p.points_earned||0);}else byType[slot].losses++;});
  Object.values(byType).forEach(t=>{const tot=t.wins+t.losses;t.pct=tot>0?Math.round(t.wins/tot*100):0;t.pts=parseFloat(t.pts.toFixed(1));});
@@ -10430,7 +10439,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
        const _pcat = String(slotName).split("_")[0] || (bySlot[slotName][0] && bySlot[slotName][0].category) || "";
        const _isLong = String(slotName).startsWith("longshot");
        idx = base.findIndex(b=> !b.bet && !b.isParlay && ((_isLong && (b.slotType==="longshot")) || (b.slotType===_pcat)));
-       if(idx===-1) idx = base.findIndex(b=> !b.bet && !b.isParlay && b.slotType==="wildcard");
+       if(idx===-1) idx = base.findIndex(b=> !b.bet && !b.isParlay && isFlexSlotType(b.slotType) && slotAccepts(b.slotType).includes(_pcat));
        if(idx===-1) idx = base.findIndex(b=> !b.bet && !b.isParlay);
        if(idx===-1) idx = base.length;
      }
@@ -15294,7 +15303,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const canEdit=(slots.some(x=>!slotLocked(x)) || emptyLeft>0) && !isEliminated;
  const wk=activeLeague.current_week||activeLeague.week||1;
  const catColors={ml:IOS.blue,prop:IOS.yellow,ou:IOS.orange,spread:IOS.green,longshot:IOS.pink};
- const catLabels={ml:"Moneyline",prop:"Prop",ou:"Over/Under",spread:"Spread",longshot:"Longshot",yrfi:"YRFI",nrfi:"NRFI",wildcard:"Wildcard"};
+ const catLabels={ml:"Moneyline",prop:"Prop",ou:"Over/Under",spread:"Spread",longshot:"Longshot",yrfi:"YRFI",nrfi:"NRFI",wildcard:"Wildcard",lines:"Game Lines"};
  const ptsFor=(slot)=>{const m=slot.mult||1;if(slot.isParlay){const ls=calcLS(slot.parlayLegs);return ls?calcPickPoints(m,ls.decimal>1?(ls.decimal-1)*100:0,"W"):0;}return slot.bet?calcPickPoints(m,slot.bet.impliedOdds,"W"):0;};
  const resultFor=(slot)=>slot.result||slot.bet?.result||null;
  const graded=slots.some(x=>resultFor(x));
@@ -15677,8 +15686,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const filled = slot.isParlay ? parlayValid : slot.bet!==null;
  const parlayOdds = slot.isParlay && slot.parlayLegs.length>=2 ? calcLS(slot.parlayLegs) : null;
  const multColors = {1:"#3A9EE0", 2:"#3A9EE0", 3:"#3A9EE0", 4:"#3A9EE0", 5:"#3A9EE0"};
- const catColors = {ml:IOS.blue, prop:IOS.yellow, ou:IOS.orange, spread:IOS.green, longshot:IOS.pink};
- const catLabels = {ml:"MONEYLINE", prop:"PROP", ou:"OVER/UNDER", spread:"SPREAD", btts:"BTTS", dnb:"DRAW NO BET", dchance:"DOUBLE CHANCE", tmtotal:"TEAM TOTAL", longshot:"LONGSHOT", yrfi:"YRFI", nrfi:"NRFI", wildcard:"WILDCARD"};
+ const catColors = {ml:IOS.blue, prop:IOS.yellow, ou:IOS.orange, spread:IOS.green, longshot:IOS.pink, wildcard:IOS.purple, lines:IOS.blue};
+ const catLabels = {ml:"MONEYLINE", prop:"PROP", ou:"OVER/UNDER", spread:"SPREAD", btts:"BTTS", dnb:"DRAW NO BET", dchance:"DOUBLE CHANCE", tmtotal:"TEAM TOTAL", longshot:"LONGSHOT", yrfi:"YRFI", nrfi:"NRFI", wildcard:"WILDCARD", lines:"GAME LINES"};
  // Memory first, then whatever is on the locked row — a reload or a swap must not
  // make an applied power-up vanish from the slip.
  const appliedPU = activatedPUs[idx] || (slot.power_up_id ? (POWER_UPS.find(x=>x.id===slot.power_up_id)||null) : null);
@@ -16659,8 +16668,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const setActivePicks = isSoloMode ? setSoloFlexPicks : setFlexPicks;
 
  // Per-bet-type accent — the screen's accent shifts with the selected type
- const ACC = { ml:IOS.blue, spread:IOS.green, ou:IOS.orange, prop:IOS.yellow, longshot:IOS.pink, ml_h1:"#64D2FF", spread_h1:"#64D2FF", ou_h1:"#64D2FF", ml_f5:"#5E5CE6", spread_f5:"#5E5CE6", ou_f5:"#5E5CE6", yrfi:"#FF9F0A", nrfi:"#30D158", period:"#5E5CE6" };
- const TYPE_LABELS = { ml:"Moneyline", spread:"Spread", ou:"Over/Under", prop:"Prop", longshot:"Longshot", ml_h1:"1H Moneyline", spread_h1:"1H Spread", ou_h1:"1H Over/Under", ml_f5:"F5 Moneyline", spread_f5:"F5 Spread", ou_f5:"F5 Over/Under", ml_f3:"F3 Moneyline", spread_f3:"F3 Spread", ou_f3:"F3 Over/Under", yrfi:"YRFI", nrfi:"NRFI", period:"Periods" };
+ const ACC = { ml:IOS.blue, spread:IOS.green, ou:IOS.orange, prop:IOS.yellow, longshot:IOS.pink, wildcard:IOS.purple, lines:IOS.blue, ml_h1:"#64D2FF", spread_h1:"#64D2FF", ou_h1:"#64D2FF", ml_f5:"#5E5CE6", spread_f5:"#5E5CE6", ou_f5:"#5E5CE6", yrfi:"#FF9F0A", nrfi:"#30D158", period:"#5E5CE6" };
+ const TYPE_LABELS = { ml:"Moneyline", spread:"Spread", ou:"Over/Under", prop:"Prop", longshot:"Longshot", wildcard:"Wildcard", lines:"Game Lines", ml_h1:"1H Moneyline", spread_h1:"1H Spread", ou_h1:"1H Over/Under", ml_f5:"F5 Moneyline", spread_f5:"F5 Spread", ou_f5:"F5 Over/Under", ml_f3:"F3 Moneyline", spread_f3:"F3 Spread", ou_f3:"F3 Over/Under", yrfi:"YRFI", nrfi:"NRFI", period:"Periods" };
  const acc = ACC[gridType] || IOS.blue;
  const gridCfg = !isSoloMode ? parseSlotConfig(activeLeague&&activeLeague.slot_config) : null;
  // Survivor pools browse exactly ONE market. This is not cosmetic: without it the
@@ -16668,7 +16677,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  // member could lock a pass-yards Over and "survive" on it. The slot's market chip
  // at the top of the prop rail was UI-only and never filtered the list.
  const svMode = (!isSoloMode && activeLeague && activeLeague.league_type==="survivor") ? (activeLeague.survivor_config==="ml" ? "ml" : "anytd") : null;
- const allowedTypes = svMode ? [svMode==="ml"?"ml":"prop"] : (gridCfg ? [...new Set(gridCfg.flatMap(s=>s.type==="wildcard"?WILDCARD_TYPES:[s.type]))] : (isSoloMode ? ["ml","spread","ou","prop","period","longshot"] : ["ml","spread","ou","prop","longshot"]));
+ const allowedTypes = svMode ? [svMode==="ml"?"ml":"prop"] : (gridCfg ? [...new Set(gridCfg.flatMap(s=>slotAccepts(s.type)))] : (isSoloMode ? ["ml","spread","ou","prop","period","longshot"] : ["ml","spread","ou","prop","longshot"]));
 
  // Resolve active sport (default to league's first sport)
  const sportsList = leagueSports && leagueSports.length ? leagueSports : ["nfl"];
@@ -16786,6 +16795,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  case "rush": return s.includes("rush")&&!s.includes("rec");
  case "rec": return s.includes("rec")||s.includes("receiv");
  case "td": return s.includes("td")||s.includes("touchdown");
+ case "firsttd": return /first td|1st td/.test(s);
+ case "tds2": return /\d\+ tds/.test(s);
  case "pts": return s.includes("point")||s.includes("pts");
  case "reb": return s.includes("rebound")||s.includes("reb");
  case "ast": return s.includes("assist")||s.includes("ast");
@@ -16958,7 +16969,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
     let _li = activePicks.findIndex(p=> !p.isParlay && _lsOf(p) && p.bet===null);
     // Never silently replace when something is still open: empty wildcard next (custom
     // leagues), then any empty slot, and only THEN swap out an existing longshot.
-    if(_li===-1) _li = activePicks.findIndex(p=> !p.isParlay && (p.slotType||p.category)==="wildcard" && p.bet===null);
+    if(_li===-1) _li = activePicks.findIndex(p=> !p.isParlay && (p.slotType||p.category)==="wildcard" && p.bet===null);   // lines never takes a parlay
     if(_li===-1) _li = activePicks.findIndex(p=> !p.isParlay && p.bet===null && !p.committed);
     if(_li===-1) _li = activePicks.findIndex(p=> _lsOf(p) && !p.isParlay && !p.committed);
     if(_li===-1){ setPickConflict("No open longshot slot — remove one to add this."); setTimeout(()=>setPickConflict(""),2600); setGridJustAdded(null); return; }
@@ -16971,13 +16982,15 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const _st=(s)=>s?(s.slotType||s.category):null;
  const _cur=(gridTargetSlot!=null)?activePicks[gridTargetSlot]:null;
  let idx=-1;
- if(_cur && !_cur.isParlay && _cur.bet===null && (_st(_cur)===cat || _st(_cur)==="wildcard")) idx=gridTargetSlot;
+ const _flexTakes=(s)=> isFlexSlotType(_st(s)) && slotAccepts(_st(s)).includes(cat);
+ if(_cur && !_cur.isParlay && _cur.bet===null && (_st(_cur)===cat || _flexTakes(_cur))) idx=gridTargetSlot;
  if(idx===-1) idx = activePicks.findIndex(p=>!p.isParlay && _st(p)===cat && p.bet===null);
+ if(idx===-1) idx = activePicks.findIndex(p=>!p.isParlay && _st(p)==="lines" && p.bet===null && _flexTakes(p));   // narrower flex first
  if(idx===-1) idx = activePicks.findIndex(p=>!p.isParlay && _st(p)==="wildcard" && p.bet===null);
   // NO cross-type fallback in a fixed-type league: a yrfi must land in a yrfi (or wildcard)
   // slot, never in whatever slot happens to be empty. The old "any open slot" line put a
   // YRFI into the OU slot and a NRFI into the SPREAD slot. Type slot -> wildcard -> block.
- if(idx===-1){ const _lbl=typeLabel(cat); setPickConflict("No open slot for another "+_lbl+" — your "+_lbl+" and wildcard slots are full. Remove one to swap."); setTimeout(()=>setPickConflict(""),3000); setGridJustAdded(null); return; }
+ if(idx===-1){ const _lbl=typeLabel(cat); setPickConflict("No open slot for another "+_lbl+" — your "+_lbl+" and flex slots are full. Remove one to swap."); setTimeout(()=>setPickConflict(""),3000); setGridJustAdded(null); return; }
  dest = idx;
  } else if(!isSoloMode && gridFlexMult!=null && cat!=="longshot"){
  // Flex league, multiplier-first: fill the chosen mult slot (replace if taken),
@@ -18414,7 +18427,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const _socHere = (gSport==="epl"||gSport==="ucl") || (gSport==="all" && sportsList.some(x=>x==="epl"||x==="ucl"));
  const _pills = [...(_gl.length?[{key:"__gl__",label:"Game Lines",target:_gl[0],on:isGameLine,col:IOS.blue}]:[]), ...(_socHere?[{key:"specials",label:"Specials",target:"specials",on:gridType==="specials",col:"#00E5A0"}]:[]), ..._rest.map(t=>({key:t,label:typeLabel(t),target:t,on:t===gridType,col:ACC[t]}))];
  return _pills.map(p=>(
- <div key={p.key} onClick={()=>{ setGridType(p.target); setGridPropSub("all"); if(p.target==="period"){ const _ps=PERIOD_SUBS_BY_SPORT[gSport]; setGridPeriodSub(_ps&&_ps.length?_ps[0].id:""); } if(gridCfg){ const _st=(s)=>s?(s.slotType||s.category):null; const _cur=activePicks[gridTargetSlot]; const _onWild=_cur&&!_cur.isParlay&&_st(_cur)==="wildcard"&&_cur.bet===null; if(!_onWild){ let _i=activePicks.findIndex(x=>!x.isParlay && _st(x)===p.target && x.bet===null); if(_i===-1) _i=activePicks.findIndex(x=>!x.isParlay && _st(x)==="wildcard" && x.bet===null); setGridTargetSlot(_i!==-1?_i:null); } } }} style={{...pillBase,
+ <div key={p.key} onClick={()=>{ setGridType(p.target); setGridPropSub("all"); if(p.target==="period"){ const _ps=PERIOD_SUBS_BY_SPORT[gSport]; setGridPeriodSub(_ps&&_ps.length?_ps[0].id:""); } if(gridCfg){ const _st=(s)=>s?(s.slotType||s.category):null; const _cur=activePicks[gridTargetSlot]; const _onWild=_cur&&!_cur.isParlay&&isFlexSlotType(_st(_cur))&&slotAccepts(_st(_cur)).includes(p.target)&&_cur.bet===null; if(!_onWild){ let _i=activePicks.findIndex(x=>!x.isParlay && _st(x)===p.target && x.bet===null); if(_i===-1) _i=activePicks.findIndex(x=>!x.isParlay && isFlexSlotType(_st(x)) && slotAccepts(_st(x)).includes(p.target) && x.bet===null); setGridTargetSlot(_i!==-1?_i:null); } } }} style={{...pillBase,
  background:p.on?`${p.col}26`:"rgba(255,255,255,0.05)", borderColor:p.on?`${p.col}80`:"rgba(255,255,255,0.1)", color:p.on?p.col:"rgba(255,255,255,0.45)"}}>
  {p.label}
  </div>
@@ -19104,7 +19117,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 
  const multColors = {1:"#3A9EE0", 2:"#3A9EE0", 3:"#3A9EE0", 4:"#3A9EE0", 5:"#3A9EE0"};
  const slotLabels = {ml:"Moneyline", prop:"Prop", ou:"Over/Under", spread:"Spread", longshot:"Longshot"};
- const catColors = {ml:IOS.blue, prop:IOS.yellow, ou:IOS.orange, spread:IOS.green, longshot:IOS.pink};
+ const catColors = {ml:IOS.blue, prop:IOS.yellow, ou:IOS.orange, spread:IOS.green, longshot:IOS.pink, wildcard:IOS.purple, lines:IOS.blue};
  const rColor = r=>r==="W"?IOS.green:r==="L"?IOS.red:IOS.label3;
  const rLabel = r=>r==="W"?" Win":r==="L"?" Loss":"● Pending";
 
@@ -19164,7 +19177,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const myBySlot={}, oppBySlot={};
  myPicks.forEach(p=>{ const i=_slotIdx(p); (myBySlot[i]=myBySlot[i]||[]).push(p); });
  oppUserPicks.forEach(p=>{ const i=_slotIdx(p); (oppBySlot[i]=oppBySlot[i]||[]).push(p); });
- matchRows = _cfg.map((c,i)=>({ key:"s"+i, idx:i, mode:"slot", type:(c.type==="wildcard"?null:c.type), mine:myBySlot[i]||null, theirs:oppBySlot[i]||null }));
+ matchRows = _cfg.map((c,i)=>({ key:"s"+i, idx:i, mode:"slot", type:(isFlexSlotType(c.type)?null:c.type), mine:myBySlot[i]||null, theirs:oppBySlot[i]||null }));
  } else {
  const used=[...new Set([...Object.keys(myPicksByMult),...Object.keys(oppPicksByMult)].map(Number))];
  const maxM=used.length?Math.max(5,...used):5;
@@ -19623,9 +19636,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
   {cat:"Player props",rows:[{...SLOT_TYPES.find(t=>t.id==="prop"),market:null}]},
   {cat:"Batter props",rows:[["hr","Home Runs"],["hits","Hits"],["bases","Total Bases"],["rbi","RBIs"],["runs","Runs Scored"],["hrr","Hits + Runs + RBIs"],["singles","Singles"],["doubles","Doubles"],["triples","Triples"],["walks","Walks"],["sb","Stolen Bases"]].map(x=>({id:"prop",market:x[0],l:x[1],scope:"Batter",color:"#FFD60A",sports:["mlb"]}))},
   {cat:"Pitcher props",rows:[["k","Strikeouts"],["outs","Outs Recorded"],["er","Earned Runs"],["hitsallowed","Hits Allowed"],["walksallowed","Walks Allowed"]].map(x=>({id:"prop",market:x[0],l:x[1],scope:"Pitcher",color:"#64D2FF",sports:["mlb"]}))},
-  {cat:"Football props",rows:[["anytd","Anytime TD","TD"],["passyds","Pass Yds","Pass"],["passtds","Pass TDs","Pass"],["rushyds","Rush Yds","Rush"],["rushtds","Rush TDs","Rush"],["recs","Receptions","Rec"],["recyds","Rec Yds","Rec"],["rectds","Rec TDs","Rec"]].map(x=>({id:"prop",market:x[0],l:x[1],scope:x[2],color:"#FFD60A",sports:["nfl"]}))},
+  {cat:"Football props",rows:[["td","Any TD type","TD"],["anytd","Anytime TD","TD"],["firsttd","First TD","TD"],["tds2","2+ TDs","TD"],["passyds","Pass Yds","Pass"],["passtds","Pass TDs","Pass"],["rushyds","Rush Yds","Rush"],["rushtds","Rush TDs","Rush"],["recs","Receptions","Rec"],["recyds","Rec Yds","Rec"],["rectds","Rec TDs","Rec"]].map(x=>({id:"prop",market:x[0],l:x[1],scope:x[2],color:"#FFD60A",sports:["nfl"]}))},
   {cat:periodCatLabel(newLeagueSports),rows:["ml_f5","spread_f5","ou_f5","ml_f3","spread_f3","ou_f3","ml_h1","spread_h1","ou_h1","yrfi","nrfi"]},
-  {cat:"Exotic",rows:["longshot","wildcard"]},
+  {cat:"Exotic",rows:["longshot","wildcard","lines"]},
  ];
  const q=(slotSearch||"").toLowerCase();
  const avail=(tp)=>!tp.sports||tp.sports.some(sp=>newLeagueSports.includes(sp));
@@ -20848,7 +20861,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    const _slotN=_sc?_sc.length:5;
    const _isSv=(activeLeague.league_type||"")==="survivor";
    const _svMl=activeLeague.survivor_config==="ml";
-   const _tLabel=(t)=>({ml:"Moneyline",spread:"Spread",ou:"Total",prop:"Player prop",longshot:"Parlay",wildcard:"Wildcard"}[t]||(t?(""+t).toUpperCase():"Pick"));
+   const _tLabel=(t)=>({ml:"Moneyline",spread:"Spread",ou:"Total",prop:"Player prop",longshot:"Parlay",wildcard:"Wildcard",lines:"Game Lines"}[t]||(t?(""+t).toUpperCase():"Pick"));
    const _privacy=activeLeague.privacy||"private";
    const _code=activeLeague.invite_code||activeLeague.inviteCode||"";
    const _sportLbl=(SPORTS[activeLeague.sport]&&SPORTS[activeLeague.sport].label)||(activeLeague.sport?(""+activeLeague.sport).toUpperCase():"—");

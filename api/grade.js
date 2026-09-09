@@ -494,6 +494,10 @@ function parseProp(pickName) {
   // no direction and no line). Settles as over_eq 1 on the combined TD count.
   m = s.match(/^(.+?)\s*-\s*anytime\s+td(?:s|scorer)?\s*$/i);
   if (m) return { player: m[1].trim(), dir: "over_eq", line: 1, stat: "anytime td" };
+  // "Jahmyr Gibbs - First TD" (props.js player_1st_td label). Settled off the
+  // scoring-play ORDER captured in buildPlayerStatIndex, never the box score.
+  m = s.match(/^(.+?)\s*-\s*(?:first|1st)\s+td(?:\s+scorer)?\s*$/i);
+  if (m) return { player: m[1].trim(), dir: "first", line: 1, stat: "first td" };
   // "Connor McDavid - Anytime Goal" (props.js NHL goal-scorer label, same shape).
   m = s.match(/^(.+?)\s*-\s*anytime\s+goal(?:s|scorer)?\s*$/i);
   if (m) return { player: m[1].trim(), dir: "over_eq", line: 1, stat: "anytime goal" };
@@ -511,6 +515,32 @@ const ANYTIME_TD_KEYS = [
   "kickReturnTouchdowns", "puntReturnTouchdowns",
   "defensiveTouchdowns", "interceptionTouchdowns", "fumblesTouchdowns",
 ];
+// For a COUNT ("2+ TDs", player_tds_over) a pick six must score once, so the
+// interception/fumble keys that echo defensiveTouchdowns are excluded here.
+const TD_COUNT_KEYS = [
+  "rushingTouchdowns", "receivingTouchdowns",
+  "kickReturnTouchdowns", "puntReturnTouchdowns", "defensiveTouchdowns",
+];
+
+// First-TD settlement needs the scoring-play sequence, which the box score does
+// not carry. buildPlayerStatIndex captures ESPN summary.scoringPlays for football
+// games here, one entry per final game: { date, home, away, firstTd:{scorer,team}|null }.
+// Module-level like the lambda's other caches: rebuilt on every grade run.
+let _scoringGames = [];
+function firstTdFromScoringPlays(plays) {
+  for (const sp of (Array.isArray(plays) ? plays : [])) {
+    const isTd = /touchdown/i.test(String(sp?.scoringType?.name || sp?.scoringType?.displayName || sp?.type?.text || ""))
+      || String(sp?.scoringType?.abbreviation || sp?.type?.abbreviation || "").toUpperCase() === "TD";
+    if (!isTd) continue;
+    // "Jahmyr Gibbs 4 Yd Rush (Jake Bates Kick)" / "Kerby Joseph 33 Yd Interception Return (...)"
+    const text = String(sp.text || "");
+    const m = text.match(/^(.+?)\s+\d+\s*Yd\b/i);
+    const scorer = m ? m[1].trim() : null;
+    const team = (sp.team && (sp.team.displayName || sp.team.name)) || null;
+    return { scorer, team, text, isReturn: /return|recovery|blocked|fumble|interception|safety/i.test(text) };
+  }
+  return null;
+}
 
 function resolveStatLabels(statText) {
   const t = (statText || "").toLowerCase();
@@ -675,6 +705,15 @@ async function buildPlayerStatIndex(sp, lg) {
           }
           return { date: ev.date, home: ev.home, away: ev.away, players };
         }
+        // Football: keep the scoring sequence for First-TD settlement.
+        if (sp === "football" && Array.isArray(_j.scoringPlays)) {
+          // NFL and NCAAF both index as "football"; accumulate rather than reset so one
+          // league's build cannot wipe the other's games. Matching is by teams+date, so
+          // stale finals from a warm lambda are harmless; cap so it never grows unbounded.
+          if (!_scoringGames.some(x => x.home === ev.home && x.away === ev.away && x.date === (ev.date ? Date.parse(ev.date) : NaN)))
+            _scoringGames.push({ date: ev.date ? Date.parse(ev.date) : NaN, home: ev.home, away: ev.away, firstTd: firstTdFromScoringPlays(_j.scoringPlays) });
+          if (_scoringGames.length > 200) _scoringGames = _scoringGames.slice(-200);
+        }
         return { date: ev.date, home: ev.home, away: ev.away, players: _j.boxscore?.players || null };
       } catch { return null; }
     }));
@@ -763,9 +802,35 @@ function gradeTeamDefenseTD(teamName, gameField, index, info = {}, gameDate = nu
   return tds >= 1 ? "W" : "L";
 }
 
+// "Player - First TD": W if the game's first touchdown was scored by that player,
+// L if someone else scored it, P (no action, as the books settle) if the game had
+// no touchdown. A D/ST first TD is any return/defensive score by that team.
+function gradeFirstTD(parsed, gameField, info = {}, gameDate = null) {
+  const teams = parseMatchupTeams(gameField);
+  if (!teams || teams.length !== 2) { info.reason = "firsttd_no_matchup"; return null; }
+  const want = gameDate ? Date.parse(gameDate) : NaN;
+  const g = _scoringGames.find(e => teamInGame(teams[0], e) && teamInGame(teams[1], e)
+    && (isNaN(want) || (!isNaN(e.date) && Math.abs(e.date - want) <= 2 * 3600 * 1000)));
+  if (!g) { info.reason = "firsttd_game_not_final"; return null; }
+  if (!g.firstTd) { info.reason = "firsttd_no_td_in_game"; return "P"; }
+  const dst = String(parsed.player || "").match(/^(.*?)\s+(?:D\s*\/\s*ST|DST|Defense)$/i);
+  if (dst && dst[1]) {
+    const hit = g.firstTd.isReturn && g.firstTd.team && sameTeamName(g.firstTd.team, dst[1]);
+    info.reason = "firsttd_dst_" + (hit ? "hit" : "miss");
+    return hit ? "W" : "L";
+  }
+  if (!g.firstTd.scorer) { info.reason = "firsttd_scorer_unparsed"; return null; }
+  const a = normName(parsed.player), b = normName(g.firstTd.scorer);
+  const hit = !!a && !!b && (a === b || stripNameSuffix(a) === stripNameSuffix(b)
+    || (a.split(" ").pop() === b.split(" ").pop() && a[0] === b[0]));
+  info.reason = "firsttd_" + (hit ? "hit" : "miss:" + b);
+  return hit ? "W" : "L";
+}
+
 function gradeProp(pickName, gameField, index, info = {}, gameDate = null) {
   const parsed = parseProp(pickName);
   if (!parsed) { info.reason = "prop_unparsed"; return null; }
+  if (parsed.stat === "first td") return gradeFirstTD(parsed, gameField, info, gameDate);
   // Standard props: player is in the pick_name and gameField is the matchup.
   // Longshot legs: no player in the name and gameField IS the player.
   // "Seattle Seahawks D/ST" / "New England Patriots Defense" are teams, not athletes.
@@ -879,6 +944,9 @@ function gradeProp(pickName, gameField, index, info = {}, gameDate = null) {
     // so this sum can read 2 for one score. Harmless at over_eq 1, but any future
     // "2+ TDs" market must not reuse it.
     val = ANYTIME_TD_KEYS.reduce((n, k) => n + (sget([k]) || 0), 0);
+  } else if (/^(tds?|touchdowns?)$/.test(parsed.stat.trim())) {
+    // "2+ TDs" (player_tds_over 1.5): a COUNT, so use the no-double-count key set.
+    val = TD_COUNT_KEYS.reduce((n, k) => n + (sget([k]) || 0), 0);
   } else if (/total\s*bases?\b/.test(parsed.stat) || /^tb$/.test(parsed.stat.trim())) {
     // Total bases = 1B + 2B*2 + 3B*3 + HR*4 = H + 2B + 2*3B + 3*HR. ESPN's batting line
     // doesn't always carry doubles/triples; only grade when the components are actually
@@ -1080,7 +1148,7 @@ function gradePick(pick, games, playerIndex, info = {}) {
   // Solo freeform picks are saved as slot "free_N", and wildcard slots as "wildcard_N",
   // neither of which carries a bet type — recover the real type from market_key, or they
   // match no grading branch and never settle (wildcard picks used to need hand-grading).
-  if (baseType === "free" || baseType === "wildcard") {
+  if (baseType === "free" || baseType === "wildcard" || baseType === "lines") {
     if (parseProp(pick.pick_name)) {
       baseType = "prop";
     } else {

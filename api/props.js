@@ -67,8 +67,16 @@ const PROP_MARKETS = {
   ],
 };
 
+// Markets requested in a SEPARATE per-event call, so a key the Odds API rejects
+// (422 invalidates the whole request) can only cost these rows, never the core
+// slate above. Both settle in grade.js: First TD off summary.scoringPlays order
+// (gradeFirstTD), Touchdowns Over off the no-double-count TD keys (TD_COUNT_KEYS).
+const EXTRA_MARKETS = {
+  americanfootball_nfl: ["player_1st_td", "player_tds_over"],
+};
+
 const MARKET_LABELS = {
-  player_anytime_td:"Anytime TD", player_first_td:"First TD",
+  player_anytime_td:"Anytime TD", player_first_td:"First TD", player_1st_td:"First TD", player_tds_over:"TDs",
   player_goal_scorer_anytime:"Anytime Goal", player_shots_on_goal:"Shots on Goal", player_total_saves:"Saves",
   player_assists:"Assists", player_shots_on_target:"Shots on Target", player_shots:"Shots",
   btts:"Both Teams To Score", draw_no_bet:"Draw No Bet", double_chance:"Double Chance", team_totals:"Team Total",
@@ -166,13 +174,27 @@ export default async function handler(req, res) {
     // Fetch every game's odds IN PARALLEL. Sequential await in a loop meant 18 games took
     // 6-9s of round-trips and risked a serverless timeout returning a partial/empty slate.
     // Promise.all makes 18 games cost about the same wall-time as 1.
+    const extraParam = (EXTRA_MARKETS[sport] || []).join(",");
     const results = await Promise.all(slate.map(async (event) => {
       const url = `https://api.the-odds-api.com/v4/sports/${sport}/events/${event.id}/odds?apiKey=${apiKey}&regions=us&markets=${marketsParam}&bookmakers=${bookmakers}&oddsFormat=american`;
+      let data = null;
       try {
         const r = await fetch(url);
-        if (!r.ok) return { event, data: null };
-        return { event, data: await r.json() };
-      } catch (e) { return { event, data: null }; }
+        if (r.ok) data = await r.json();
+      } catch (e) { data = null; }
+      if (extraParam) {
+        try {
+          const r2 = await fetch(`https://api.the-odds-api.com/v4/sports/${sport}/events/${event.id}/odds?apiKey=${apiKey}&regions=us&markets=${extraParam}&bookmakers=${bookmakers}&oddsFormat=american`);
+          if (r2.ok) {
+            const d2 = await r2.json();
+            if (d2 && Array.isArray(d2.bookmakers) && d2.bookmakers.length) {
+              if (!data) data = { ...d2 };
+              else data = { ...data, bookmakers: [...(data.bookmakers || []), ...d2.bookmakers] };
+            }
+          }
+        } catch (e) { /* additive; never block the core slate */ }
+      }
+      return { event, data };
     }));
 
     for (const { event, data } of results) {
@@ -187,7 +209,7 @@ export default async function handler(req, res) {
       data.bookmakers.forEach(bk => {
         bk.markets?.forEach(market => {
           const marketLabel = MARKET_LABELS[market.key] || market.key;
-          const isTD = market.key === "player_anytime_td" || market.key === "player_first_td" || market.key === "player_goal_scorer_anytime";
+          const isTD = market.key === "player_anytime_td" || market.key === "player_first_td" || market.key === "player_1st_td" || market.key === "player_goal_scorer_anytime";
           market.outcomes?.forEach(outcome => {
             if (market.key === "batter_home_runs_alternate" && outcome.point !== 0.5) return;
             let label, dedupKey;
@@ -213,6 +235,17 @@ export default async function handler(req, res) {
               player = player.replace(/\s+(?:D\s*\/\s*ST|DST|Defense)$/i, " D/ST");
               label = `${player} - ${marketLabel}`;
               dedupKey = `${market.key}|${player}`;
+            } else if (market.key === "player_tds_over") {
+              // Over side only, as "2+ TDs" / "3+ TDs": the count market. Under a
+              // TD line is not something anyone picks in a slot, and the Over label
+              // must read "<Player> 2+ TDs" so grade.js parses it as over_eq 2.
+              if (!/^over$/i.test(outcome.name || "")) return;
+              const player = outcome.description || "";
+              const pt = Number(outcome.point);
+              if (!player || !isFinite(pt) || pt < 1) return;
+              const need = Math.ceil(pt);            // 1.5 -> 2, 2.5 -> 3
+              label = `${player} ${need}+ TDs`;
+              dedupKey = `${market.key}|${player}|${need}`;
             } else if (market.key === "draw_no_bet") {
               // Bare team name. Grading resolves the side off game.home_team.
               label = `${outcome.name} (Draw No Bet)`;
