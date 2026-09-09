@@ -13420,9 +13420,13 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
              </div>
            )}
            {(() => {
-             const _sup = (typeof Notification !== "undefined") && ("serviceWorker" in navigator) && ("PushManager" in window);
-             const _perm = _sup ? Notification.permission : "denied";
-             const _subbed = !!(userProfile && userProfile.push_enabled) && _perm === "granted";
+             // Native wrap has no Notification/serviceWorker/PushManager globals, so the
+             // web checks were hiding this nudge from every iOS user. On native the
+             // plugin permission is async and cannot be read in render; push_enabled
+             // (flipped by push-subscribe on token receipt) is the proxy.
+             const _sup = IS_NATIVE || ((typeof Notification !== "undefined") && ("serviceWorker" in navigator) && ("PushManager" in window));
+             const _perm = IS_NATIVE ? "default" : (_sup ? Notification.permission : "denied");
+             const _subbed = !!(userProfile && userProfile.push_enabled) && (IS_NATIVE || _perm === "granted");
              if (!userProfile || !_sup || _perm === "denied" || _subbed || pushNudgeOff) return null; // wait for profile to load — no pre-load flash
              return (
              <div style={{display:"flex",alignItems:"center",gap:12,background:"linear-gradient(135deg,rgba(255,55,95,0.14),rgba(10,132,255,0.06))",border:"0.5px solid rgba(255,55,95,0.3)",borderRadius:RAD.lg,padding:"12px 14px",marginBottom:12}}>
@@ -16889,6 +16893,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  if(gridBuildMode && !isSoloMode){ toggleLeg(bet); return; }
  if(!isSoloMode && activeLeague && activeLeague.league_type==="survivor" && cat!=="longshot" && activePicks[0] && activePicks[0].committed){
    const _s0 = activePicks[0];
+   const _weekNum = activeLeague.current_week||activeLeague.week||1;
    if(slotLocked(_s0)){ setPickConflict(slotGraded(_s0) ? "That pick has already been graded." : "That game has started \u2014 your pick is locked in."); setTimeout(()=>setPickConflict(""),2600); setGridJustAdded(null); return; }
    { const _lk=svWeekLockMs(activeLeague,_weekNum); if(_lk!=null && Date.now()>=_lk){ setPickConflict("Week "+_weekNum+" locked at 1:00 PM ET Sunday. Picks are final."); setTimeout(()=>setPickConflict(""),2600); setGridJustAdded(null); return; } }
    (async()=>{
