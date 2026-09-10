@@ -15466,6 +15466,93 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"rgba(255,255,255,0.32)",marginTop:3}}>{lbl}</div>
  </div>
  );
+
+ // ── SURVIVOR: its own locked screen. No multipliers, no points, no "projected".
+ //    One pick, its status, when it locks, and where the pool stands. ──
+ if(lgIsSurvivor(activeLeague)){
+   const _sv = slots[0] || allSlots.find(x=>x.bet) || null;
+   const _bet = _sv && _sv.bet;
+   const _res = _sv ? resultFor(_sv) : null;
+   const _kick = _bet && _bet.gameTime ? Date.parse(_bet.gameTime) : NaN;
+   const _lockAt = svWeekLockMs(activeLeague, wk);
+   const _hard = [_kick, _lockAt].filter(x=>x!=null && !isNaN(x));
+   const _lockMs = _hard.length ? Math.min(..._hard) : NaN;
+   const _now = Date.now();
+   const _started = !isNaN(_kick) && _now >= _kick;
+   const _canSwap = !!_bet && !_res && !_started && (isNaN(_lockMs) || _now < _lockMs) && !isEliminated;
+   const _out = activeLeague.myEliminatedWeek!=null;
+   const _alive = (leagueMembers||[]).filter(m=>m.eliminatedWeek==null).length || Math.max(leagueMembers.length, Number(activeLeague.memberCount||0));
+   const _tot = Math.max(leagueMembers.length, Number(activeLeague.memberCount||0));
+   const _ml = activeLeague.survivor_config==="ml";
+   const _fmtD=(ms)=> new Date(ms).toLocaleDateString([], {weekday:"short"})+" "+new Date(ms).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"});
+   const _statusTxt = _out ? "Eliminated" : _res==="W" ? "Survived" : _res==="L" ? "Eliminated" : _res==="P" ? "Void \u00B7 you survive" : _started ? "Live" : "Locked in";
+   const _statusCol = _out||_res==="L" ? IOS.red : _res==="W" ? IOS.green : _started ? "#64D2FF" : IOS.green;
+   const _short = _bet ? String(_bet.pick||"").replace(/\s*-\s*Anytime TD$/i,"") : "";
+   return (
+   <div className="lsx-scroll" style={{position:"absolute",inset:0,zIndex:10,background:"#07070A",overflowY:"auto",WebkitOverflowScrolling:"touch",paddingTop:"calc(var(--sa-top) + 52px)",paddingBottom:"calc(var(--sa-bottom) + 120px)"}}>
+   <style>{`@keyframes lsxPulse{0%,100%{opacity:1}50%{opacity:.3}}`}</style>
+   <div style={{padding:"22px 18px 6px",display:"flex",alignItems:"flex-start",justifyContent:"space-between"}}>
+     <div>
+       <div style={{fontSize:10.5,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(255,255,255,0.38)"}}>{activeLeague.name}{" \u00B7 Week "+wk}</div>
+       <div style={{fontSize:27,fontWeight:800,letterSpacing:"-0.7px",color:"#fff",marginTop:3,lineHeight:1}}>Your Pick</div>
+     </div>
+     <div style={{display:"flex",alignItems:"center",gap:6,background:_statusCol+"1F",border:"0.5px solid "+_statusCol+"59",borderRadius:RAD.pill,padding:"6px 11px",flexShrink:0}}>
+       <span style={{width:6,height:6,borderRadius:"50%",background:_statusCol,display:"inline-block",boxShadow:"0 0 7px "+_statusCol,animation:(_started&&!_res)?"lsxPulse 2s ease-in-out infinite":"none"}}/>
+       <span style={{fontSize:10,fontWeight:800,letterSpacing:"0.06em",color:_statusCol,textTransform:"uppercase"}}>{_statusTxt}</span>
+     </div>
+   </div>
+
+   {/* The pick */}
+   <div style={{margin:"12px 16px 0",background:"linear-gradient(160deg,#101219,#0A0A0E)",border:"0.5px solid rgba(255,255,255,0.09)",borderRadius:RAD.lg,padding:"16px",boxShadow:"0 10px 26px -14px rgba(0,0,0,0.8)"}}>
+     <div style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:"rgba(255,255,255,0.35)"}}>{_ml?"Your team":"Your scorer"}</div>
+     {_bet ? (<>
+       <div style={{display:"flex",alignItems:"center",gap:12,marginTop:10}}>
+         <div style={{width:44,height:44,borderRadius:12,background:"rgba(255,255,255,0.08)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:13,color:"rgba(255,255,255,0.8)",flexShrink:0}}>{(_short.split(" ").filter(Boolean).slice(0,2).map(w=>w[0]).join("")||"?").toUpperCase()}</div>
+         <div style={{minWidth:0,flex:1}}>
+           <div style={{fontSize:19,fontWeight:800,letterSpacing:"-0.3px",color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{_short}</div>
+           <div style={{fontSize:12,color:"rgba(255,255,255,0.5)",marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{_bet.game}{!isNaN(_kick)?(" \u00B7 "+_fmtD(_kick)):""}</div>
+         </div>
+         <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:20,color:"#64D2FF",flexShrink:0}}>{_bet.odds}</div>
+       </div>
+       <div style={{marginTop:14,display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(0,0,0,0.35)",borderRadius:12,padding:"11px 12px"}}>
+         <div style={{fontSize:12,fontWeight:700,color:"rgba(255,255,255,0.55)"}}>
+           {_res ? (_res==="W" ? (_ml?"They won. You live.":"Found the end zone. You live.") : _res==="L" ? (_ml?"They lost.":"Never got there.") : "Voided \u2014 no strike.")
+             : _started ? "Kicked off \u00B7 pick is final"
+             : _canSwap ? ("Swap until "+(!isNaN(_lockMs)?_fmtD(_lockMs):"kickoff"))
+             : "Locked"}
+         </div>
+         {!_res && !_started && !isNaN(_kick) && <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:16,color:IOS.yellow}}>{(()=>{ const d=Math.max(0,_kick-_now); const h=Math.floor(d/3600000), m=Math.floor((d%3600000)/60000); return h>=48?Math.floor(h/24)+"d "+(h%24)+"h":h+"h "+String(m).padStart(2,"0")+"m"; })()}</div>}
+       </div>
+     </>) : (
+       <div style={{fontSize:13,color:"rgba(255,255,255,0.5)",marginTop:8}}>No pick locked yet.</div>
+     )}
+   </div>
+
+   {/* Pool */}
+   <div style={{margin:"10px 16px 0",display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+     {[[String(_alive)+(_tot?("/"+_tot):""),"Alive",IOS.green],[String(Math.max(0,_tot-_alive)),"Out","rgba(255,255,255,0.6)"],[String(wk),"Week","#fff"]].map(([v,l,c],i)=>(
+       <div key={i} style={{background:"rgba(255,255,255,0.04)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:RAD.md,padding:"12px 8px",textAlign:"center"}}>
+         <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:22,color:c,lineHeight:1}}>{v}</div>
+         <div style={{fontSize:9,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:"rgba(255,255,255,0.35)",marginTop:5}}>{l}</div>
+       </div>
+     ))}
+   </div>
+   <div style={{margin:"10px 16px 0",fontSize:11,color:"rgba(255,255,255,0.4)",fontWeight:700,textAlign:"center",lineHeight:1.5}}>{_ml?"One team a week \u00B7 every team is one and done":"One scorer a week \u00B7 every player is one and done"}{" \u00B7 pool picks reveal Sunday 1:00 PM ET"}</div>
+
+   {/* Share */}
+   <div style={{margin:"14px 16px 0",background:"linear-gradient(135deg,rgba(10,132,255,0.16),rgba(94,92,230,0.08))",border:"0.5px solid rgba(10,132,255,0.3)",borderRadius:RAD.lg,padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+     <div><div style={{fontSize:13.5,fontWeight:700,color:"#fff"}}>Share your pick</div><div style={{fontSize:11.5,color:"rgba(255,255,255,0.5)",marginTop:2}}>{"Let the pool know you\u2019re locked in"}</div></div>
+     <button className="ios-btn" style={{width:"auto",padding:"10px 16px",background:IOS.blue,color:"#fff",fontSize:13,display:"inline-flex",alignItems:"center",gap:6}} onClick={()=>{ try{ const t=(activeLeague.name||"Survivor")+" \u00B7 Week "+wk+": "+(_short||"locked in")+" \u2014 "+_alive+" alive"; if(navigator.share) navigator.share({title:"PickLock",text:t}); else navigator.clipboard&&navigator.clipboard.writeText(t); }catch(e){} }}>Share</button>
+   </div>
+
+   <div style={{padding:"14px 16px 0"}}>
+     {_canSwap && <button className="ios-btn" style={{background:IOS.blue,color:"#fff",marginTop:8}} onClick={()=>{ const sp=activeSavedPicks?.flexPicks; if(sp) setActivePicks(sp); setActiveSavedPicks(null); setActiveSubmitted(false); setBuildingSlip(true); }}>{_ml?"Change team":"Change scorer"}</button>}
+     {!_bet && !isEliminated && <button className="ios-btn" style={{background:IOS.blue,color:"#fff",marginTop:8}} onClick={()=>{ setActiveSavedPicks(null); setActiveSubmitted(false); setBuildingSlip(true); }}>Make your pick</button>}
+     <button className="ios-btn" style={{background:"rgba(255,255,255,0.07)",color:IOS.blue,marginTop:8}} onClick={()=>{setScreen("home");}}>Back to Home</button>
+   </div>
+   </div>
+   );
+ }
  return (
  <div className="lsx-scroll" style={{position:"absolute",inset:0,zIndex:10,background:"#07070A",overflowY:"auto",WebkitOverflowScrolling:"touch",paddingTop:"calc(var(--sa-top) + 52px)",paddingBottom:"calc(var(--sa-bot) + 76px)"}}>
  <style>{`
