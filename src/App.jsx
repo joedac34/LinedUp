@@ -2843,6 +2843,14 @@ const WILDCARD_TYPES=["ml","spread","ou","prop","longshot"];
 // A Game Lines slot is a wildcard narrowed to the three game markets. grade.js
 // settles lines_N by market_key on the same branch as wildcard_N.
 const LINES_TYPES=["ml","spread","ou"];
+// Survivor pools have no roster size: anyone can enter until the first Sunday
+// 1 PM ET lock, then the pool runs with whoever is in. The row is stamped with
+// this sentinel so no size test anywhere can ever read a survivor pool as
+// "filling" or "full" (TD Scorer Survivor, 9 Sep 2026: target_size=2 held the
+// commissioner out of his own picks tab and read as a closed pool to a joiner).
+const SURVIVOR_NO_CAP=100000;
+const lgIsSurvivor=(lg)=> !!lg && lg.league_type==="survivor";
+const lgSizeLabel=(lg)=> lgIsSurvivor(lg) ? String(Number(lg.memberCount||0)||"?") : String(lg.target_size||lg.max_members||"?");
 const isFlexSlotType=(t)=> t==="wildcard"||t==="lines";
 const slotAccepts=(t)=> t==="wildcard"?WILDCARD_TYPES:(t==="lines"?LINES_TYPES:[t]);
 // league_id columns are uuid. Anything else and Postgres 400s the whole query — which is
@@ -6683,7 +6691,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
        hit:(w+l)>0?Math.round(w/(w+l)*100):null, graded:w+l, champion:champ };
    }catch(e){ return null; }
  })();
- const _lgTarget=(activeLeague&&(activeLeague.target_size||activeLeague.max_members))||8;
+ const _lgTarget=lgIsSurvivor(activeLeague) ? Infinity : ((activeLeague&&(activeLeague.target_size||activeLeague.max_members))||8);
  const _lgMembers = Math.max(Number((activeLeague&&activeLeague.memberCount)||0), (!isSoloMode && activeLeague && activeLeague.id && Array.isArray(leagueMembers)) ? leagueMembers.length : 0);
  const leagueFull = !isSoloMode && (_lgMembers >= _lgTarget);
  // leagueMembers is emptied on every league change, so before the refetch lands
@@ -7510,7 +7518,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
      try{
        if(isSoloMode||!user||!user.id||!activeLeague||!activeLeague.id||activeLeague.id==="solo"){ if(alive) setStrayPicks([]); return; }
        const ts=activeLeague.target_size||activeLeague.max_members||8;
-       if(!(leagueMembers.length>0 && leagueMembers.length<ts)){ if(alive) setStrayPicks([]); return; }
+       if(lgIsSurvivor(activeLeague) || !(leagueMembers.length>0 && leagueMembers.length<ts)){ if(alive) setStrayPicks([]); return; }
        const { data } = await supabase.from("picks").select("id,pick_name,result,game").eq("league_id",activeLeague.id).eq("user_id",user.id);
        if(alive) setStrayPicks(data||[]);
      }catch(e){ if(alive) setStrayPicks([]); }
@@ -9004,7 +9012,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  // league unpaid and offer the choice: one-time unlock, or Pro.
  const {data,error} = await supabase.from("leagues").insert({
    name, sport:sportsArr[0], sports:sportsArr, commissioner_id:user.id, invite_code:inviteCode,
-   max_members:newLeagueSize, target_size:newLeagueSize, pick_deadline:"Sun 1PM ET",
+   max_members:(newLeagueType==="survivor"?SURVIVOR_NO_CAP:newLeagueSize), target_size:(newLeagueType==="survivor"?SURVIVOR_NO_CAP:newLeagueSize), pick_deadline:"Sun 1PM ET",
    season_weeks:seasonWeeks, current_week:1, privacy:newLeaguePrivacy||"private",
    scoring_type:"multiplier_odds", start_mode:newLeagueStartMode||"auto", league_type:(newLeagueType==="duel"?"h2h":newLeagueType)||"h2h",
    ...(newLeagueStartMode==="scheduled" && newLeagueStartAt ? {season_start:new Date(newLeagueType==="survivor" ? svSeasonStartMs(new Date(newLeagueStartAt).getTime()) : new Date(newLeagueStartAt).getTime()).toISOString()} : {}),
@@ -9104,8 +9112,8 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  try{
    const { count:_mc } = await supabase.from("league_members")
      .select("user_id", { count:"exact", head:true }).eq("league_id", leagueId);
-   const _target = Number(league.target_size || league.max_members || 8);
-   if(!_mc || _mc < _target) return false;   // not full = not started
+   const _target = lgIsSurvivor(league) ? 2 : Number(league.target_size || league.max_members || 8);
+   if(!_mc || _mc < _target) return false;   // not full = not started (survivor: fewer than 2 = no pool)
  }catch(e){ return false; }                  // cannot confirm, so do not advance
  const WEEK_MS = 7*24*60*60*1000;
  const GRACE_MS = 3*60*60*1000; // buffer so late finals grade before a week closes
@@ -15593,7 +15601,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  </div>
 
  {/* League filling banner */}
- {leagueMembers.length < (activeLeague.target_size||activeLeague.max_members||8) && (
+ {!lgIsSurvivor(activeLeague) && leagueMembers.length < (activeLeague.target_size||activeLeague.max_members||8) && (
  <div style={{margin:"0 16px 10px",background:"rgba(255,159,10,0.08)",borderRadius:RAD.md,padding:"9px 13px",border:"0.5px solid rgba(255,159,10,0.25)"}}>
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:7}}>
  <div style={{fontSize:12,fontWeight:700,color:IOS.orange,whiteSpace:"nowrap"}}>League still filling up</div>
@@ -19787,10 +19795,11 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      </>);
    })()}
    {/* Size */}
-   {!isDuel&&<div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"rgba(255,255,255,0.6)",marginBottom:8}}>
+   {!isDuel&&newLeagueType!=="survivor"&&<div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"rgba(255,255,255,0.6)",marginBottom:8}}>
      {newLeagueType==="bracket"?"Tournament size":"League size"}
    </div>}
-   {!isDuel&&((newLeagueType==="points"||newLeagueType==="survivor"||newLeagueType==="ladder")?(
+   {!isDuel&&newLeagueType==="survivor"&&<div style={{fontSize:11.5,color:"rgba(255,255,255,0.5)",lineHeight:1.45,marginBottom:14}}>{"No roster size. Anyone with the code can enter until the first Sunday 1:00 PM ET lock, then the pool runs with whoever is in."}</div>}
+   {!isDuel&&newLeagueType!=="survivor"&&((newLeagueType==="points"||newLeagueType==="survivor"||newLeagueType==="ladder")?(
      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
        <div onClick={()=>setNewLeagueSize(s=>Math.max(2,s-1))} style={{width:28,height:28,borderRadius:RAD.sm,background:"#1A1A1A",border:"0.5px solid #2A2A2A",color:"#ccc",fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>−</div>
        <div style={{fontSize:16,fontWeight:700,color:"#fff",minWidth:28,textAlign:"center"}}>{newLeagueSize}</div>
@@ -20032,7 +20041,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      <div>
        <div style={{fontSize:15,fontWeight:800,color:"#fff"}}>{lg.name}</div>
        <div style={{fontSize:10,color:IOS.label3,marginTop:2,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-         <span>{(lg.sports||[lg.sport]).map(s=>SPORTS[s]?.label||s.toUpperCase()).join(" · ")} · {(lg.league_type||"h2h")==="h2h"?"H2H":(lg.league_type||"h2h")==="bracket"?"Tournament":(lg.league_type==="survivor"?"Survivor":"Points")} · #{myRank} of {lg.target_size||lg.max_members||"?"}</span>
+         <span>{(lg.sports||[lg.sport]).map(s=>SPORTS[s]?.label||s.toUpperCase()).join(" · ")} · {(lg.league_type||"h2h")==="h2h"?"H2H":(lg.league_type||"h2h")==="bracket"?"Tournament":(lg.league_type==="survivor"?"Survivor":"Points")} · #{myRank} of {lgSizeLabel(lg)}</span>
          {lg.privacy==="public"
            ? <span style={{fontSize:8,fontWeight:700,color:"#30D158",background:"rgba(48,209,88,0.1)",border:"0.5px solid rgba(48,209,88,0.25)",borderRadius:4,padding:"1px 5px",letterSpacing:.3}}>PUBLIC</span>
            : <span style={{fontSize:8,fontWeight:700,color:"rgba(255,255,255,0.3)",background:"rgba(255,255,255,0.05)",border:EDGE.hair2,borderRadius:4,padding:"1px 5px",letterSpacing:.3}}>PRIVATE</span>
@@ -20164,7 +20173,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    })()}
    {/* My rank card */}
    <div style={{background:`linear-gradient(135deg,rgba(10,132,255,0.1),rgba(94,92,230,0.07))`,border:`0.5px solid rgba(10,132,255,0.25)`,borderRadius:RAD.md,padding:"12px 14px",marginBottom:10}}>
-     <div style={{fontSize:10,fontWeight:700,color:IOS.blue,letterSpacing:.5,textTransform:"uppercase",marginBottom:8}}>Your Rank — #{myRank} of {lg.target_size||lg.max_members||"?"}</div>
+     <div style={{fontSize:10,fontWeight:700,color:IOS.blue,letterSpacing:.5,textTransform:"uppercase",marginBottom:8}}>Your Rank — #{myRank} of {lgSizeLabel(lg)}</div>
      <div style={{display:"flex",gap:8,marginBottom:0}}>
        {[{l:"Record",v:myRecord,c:IOS.blue},{l:"Win %",v:myWinPct+"%",c:IOS.green},{l:"Points",v:myPts.toFixed?myPts.toFixed(1):myPts,c:"#fff"}].map((s,i)=>(
          <div key={i} style={{flex:1,background:"rgba(0,0,0,0.3)",borderRadius:RAD.sm,padding:"7px 6px",textAlign:"center"}}>
