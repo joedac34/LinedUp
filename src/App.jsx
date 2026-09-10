@@ -6707,7 +6707,11 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  // Survivor pools start on the commissioner's stamp with WHOEVER is in -- any
  // count from 2 up. The leagueFull test below is right for h2h (a half-empty
  // schedule is meaningless) and fatal here: a 3-of-8 pool would never start.
- const _svStarted = !isSoloMode && activeLeague && activeLeague.league_type==="survivor" && !!activeLeague.season_start && (leagueFull || new Date(activeLeague.season_start).getTime() <= Date.now());
+ // Survivor: a pool is open for picks from the minute it is created. No roster
+ // count, no start-date wait. The start week only decides which week the pool
+ // scores first and when the Sunday 1 PM join/pick lock lands; it never gates
+ // viewing the board or locking a pick.
+ const _svStarted = !isSoloMode && !!activeLeague && activeLeague.league_type==="survivor";
  const seasonNotStarted = !isSoloMode && !!(activeLeague&&activeLeague.id) && _lgReady && !_svStarted && (!leagueFull || !activeLeague.season_start || new Date(activeLeague.season_start).getTime() > Date.now());
  const leagueAwaitingStart = seasonNotStarted && leagueFull;
  // The ONLY way to change mode. Never call setIsSoloMode or setHomeMode directly.
@@ -8498,7 +8502,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  };
  const buildSlotRows = (slot, slotIdx, picksArr)=>{
    const _weekNum = (activeLeague&&(activeLeague.current_week||activeLeague.week))||1;
-   const isCustomSlip = !!parseSlotConfig(activeLeague&&activeLeague.slot_config) || (picksArr||[]).some(p=>p.locked);
+   const isCustomSlip = (!lgIsSurvivor(activeLeague) && !!parseSlotConfig(activeLeague&&activeLeague.slot_config)) || (picksArr||[]).some(p=>p.locked);
    const _pu = activatedPUs[slotIdx] || null; const _puId=_pu?_pu.id:null; const _puTier=(_pu&&_pu.tier!=null)?_pu.tier:null;
    const _mult = (activeLeague && activeLeague.league_type==="survivor") ? 1 : slot.mult;
    if(slot.isParlay){
@@ -9081,7 +9085,9 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  const {error:memberError} = await supabase.from("league_members").insert({league_id:data.id,user_id:user.id,is_commissioner:true});
  if(memberError){alert(`league_members error: ${memberError.message} | code: ${memberError.code}`);setCreatingLeague(false);return;}
  // Best-effort: store custom per-slot config (Pro). Safe no-op until the column exists.
- if(_hasCustom && (isPro || _needsPaywall)){
+ // A survivor pool has exactly one slot, fixed by survivor_config. Persisting the
+ // builder's slot list here made the rehydrate render five slots for a TD pool.
+ if(_hasCustom && newLeagueType!=="survivor" && (isPro || _needsPaywall)){
  const _cfg = newLeagueSlots.map((s,i)=>({ type:s.type, mult:(newLeaguePool[i]||1), ...(s.market?{market:s.market}:{}) }));
  await supabase.from("leagues").update({slot_config: JSON.stringify(_cfg)}).eq("id", data.id);
  }
@@ -10451,7 +10457,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  data = (data||[]).filter(pp=>!pp.replaced_by); // hide voids already replaced so the slot shows the replacement
  if(data && data.length > 0) {
   // Convert DB picks back into flexPicks format for the locked/edit view
-  const _cfgForCustom = parseSlotConfig(_lgRow&&_lgRow.slot_config);
+  const _cfgForCustom = (_lgRow && _lgRow.league_type==="survivor") ? null : parseSlotConfig(_lgRow&&_lgRow.slot_config);
    const _isCustom = !!(_cfgForCustom && _cfgForCustom.length) || data.some(pp=>{const s=pp.slot||""; return !s.startsWith("longshot") && /_\d+$/.test(s);});
   const buildSlot = (picks, slotId)=>{
     const isParlay = (picks[0].slot||"").startsWith("longshot");
@@ -15038,7 +15044,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  // WRONG name format, and every downstream reader (rehydrate, matchup pairing) disagreed
  // about what they were looking at. That mismatch was the root of the phantom-slot,
  // wrong-count, and missing-longshot bugs.
- const isCustomSlip = !!parseSlotConfig(activeLeague&&activeLeague.slot_config) || activePicks.some(p=>p.locked);
+ const isCustomSlip = (!lgIsSurvivor(activeLeague) && !!parseSlotConfig(activeLeague&&activeLeague.slot_config)) || activePicks.some(p=>p.locked);
  return (
  <>
 
