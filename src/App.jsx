@@ -19872,9 +19872,17 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 
    {/* League name */}
    <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"rgba(255,255,255,0.6)",marginBottom:8}}>League name</div>
+   {/* Uncontrolled on purpose. Each keystroke re-renders the whole App, and on a
+       phone that render can outlast the next keystroke; a controlled value then
+       snaps the field back to the stale state and the letter is lost (Joe, TD
+       survivor builder, 10 Sep: first letter only). The DOM owns the text;
+       state follows it. The field mounts fresh with the builder, so
+       defaultValue is always the reset value. */}
    <input
-     value={newLeagueName}
+     key="new-league-name"
+     defaultValue={newLeagueName}
      onChange={e=>setNewLeagueName(e.target.value)}
+     autoCapitalize="words" autoCorrect="off" spellCheck={false} maxLength={40}
      placeholder="e.g. The Boys League"
      style={{width:"100%",background:"#111",border:"0.5px solid #222",borderRadius:RAD.sm,padding:"11px 13px",color:"#fff",fontSize:14,fontFamily:"Barlow,sans-serif",outline:"none",marginBottom:16,boxSizing:"border-box"}}
    />
