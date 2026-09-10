@@ -7337,14 +7337,26 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  // from /api/cfb-tags (ESPN conference id + AP rank per team on this week's slate).
  const [cfbFilter, setCfbFilter] = useState("all");
  const [cfbTags, setCfbTags] = useState(null); // { teams:{name:{conf,rank}}, confs:[] }
+ const [cfbTagsState, setCfbTagsState] = useState("idle"); // idle | loading | ok | empty | error
+ const _cfbFetchAt = useRef(0);
+ const loadCfbTags = async (force)=>{
+   if(!force && cfbTags && cfbTags.teams && Object.keys(cfbTags.teams).length) return;
+   if(!force && Date.now()-_cfbFetchAt.current < 15000) return;
+   _cfbFetchAt.current = Date.now(); setCfbTagsState("loading");
+   try{
+     const r = await fetch(API_BASE+"/api/cfb-tags", {cache:"no-store"});
+     if(!r.ok){ setCfbTagsState("error"); return; }
+     const j = await r.json();
+     if(j && j.teams && Object.keys(j.teams).length){ setCfbTags(j); setCfbTagsState("ok"); }
+     else setCfbTagsState("empty");
+   }catch(e){ setCfbTagsState("error"); }
+ };
  useEffect(()=>{
    if(screen!=="browser") return;
    const _sp = isSoloMode ? soloSport : (gridSport || (activeLeague&&activeLeague.sport));
    const _has = _sp==="ncaaf" || (activeLeague && Array.isArray(activeLeague.sports) && activeLeague.sports.includes("ncaaf"));
-   if(!_has || cfbTags) return;
-   let alive=true;
-   fetch(API_BASE+"/api/cfb-tags").then(r=>r.ok?r.json():null).then(j=>{ if(alive&&j&&j.teams) setCfbTags(j); }).catch(()=>{});
-   return ()=>{ alive=false; };
+   if(!_has) return;
+   loadCfbTags(false);
  }, [screen, isSoloMode, soloSport, gridSport, activeLeague&&activeLeague.id]);
  const _cfbNorm = (x)=> String(x||"").toLowerCase().replace(/&/g,"and").replace(/[^a-z0-9]/g,"");
  const cfbTagOf = (teamName)=>{ if(!cfbTags||!cfbTags.teams) return null; const t=cfbTags.teams[teamName]; if(t) return t; const k=_cfbNorm(teamName); for(const nm in cfbTags.teams){ if(_cfbNorm(nm)===k) return cfbTags.teams[nm]; } const last=k.slice(-8); for(const nm in cfbTags.teams){ const n2=_cfbNorm(nm); if(n2.endsWith(last)&&(n2.startsWith(k.slice(0,5))||k.startsWith(n2.slice(0,5)))) return cfbTags.teams[nm]; } return null; };
@@ -18573,13 +18585,16 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    const _confs = (cfbTags&&cfbTags.confs)||["SEC","Big Ten","Big 12","ACC"];
    const _chips = [{id:"all",l:"All"},{id:"top25",l:"Top 25"}].concat(_confs.map(c=>({id:c,l:c})));
    const _acc = "#FF9F0A";
-   return (
-   <div className="pk-rail" style={{margin:"0 16px 10px"}}>
+   const _ready = !!(cfbTags && cfbTags.teams && Object.keys(cfbTags.teams).length);
+   const _note = _ready ? null : (cfbTagsState==="loading" ? "loading conferences\u2026" : cfbTagsState==="empty" ? "no conference tags for this slate" : cfbTagsState==="error" ? "couldn\u2019t load conference tags \u00B7 tap to retry" : null);
+   return (<>
+   <div className="pk-rail" style={{margin:"0 16px "+(_note?"4px":"10px"), opacity:_ready?1:0.55}}>
    {_chips.map(c=>{ const on=c.id===cfbFilter; return (
-   <div key={c.id} onClick={()=>{ haptic("select"); setCfbFilter(on&&c.id!=="all"?"all":c.id); }} className={"pk-chip"+(on?" on":"")} style={{"--on-a":_acc+"52","--on-b":_acc+"24"}}><span>{c.l}</span></div>
+   <div key={c.id} onClick={()=>{ haptic("select"); if(!_ready) loadCfbTags(true); setCfbFilter(on&&c.id!=="all"?"all":c.id); }} className={"pk-chip"+(on?" on":"")} style={{"--on-a":_acc+"52","--on-b":_acc+"24"}}><span>{c.l}</span></div>
    );})}
    </div>
-   );
+   {_note && <div onClick={()=>loadCfbTags(true)} style={{fontSize:10.5,color:"rgba(255,255,255,0.4)",fontWeight:700,padding:"0 16px 8px"}}>{_note}</div>}
+   </>);
  })()}
  {/* Prop sub-filter */}
  {gridType==="prop" && (()=>{

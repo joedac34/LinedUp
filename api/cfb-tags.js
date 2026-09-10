@@ -17,6 +17,25 @@ const CONF = {
   "8": "SEC", "5": "Big Ten", "4": "Big 12", "1": "ACC", "9": "Pac-12",
   "151": "American", "17": "Mountain West", "37": "Sun Belt", "15": "MAC", "12": "CUSA", "18": "Independent",
 };
+// Static Power-4 fallback used only when ESPN omits conferenceId for a team.
+// Matched on the school part of displayName ("Georgia Bulldogs" -> "Georgia").
+const P4 = {
+  "SEC": ["Alabama","Arkansas","Auburn","Florida","Georgia","Kentucky","LSU","Mississippi State","Missouri","Oklahoma","Ole Miss","South Carolina","Tennessee","Texas","Texas A&M","Vanderbilt"],
+  "Big Ten": ["Illinois","Indiana","Iowa","Maryland","Michigan","Michigan State","Minnesota","Nebraska","Northwestern","Ohio State","Oregon","Penn State","Purdue","Rutgers","UCLA","USC","Washington","Wisconsin"],
+  "Big 12": ["Arizona","Arizona State","Baylor","BYU","Cincinnati","Colorado","Houston","Iowa State","Kansas","Kansas State","Oklahoma State","TCU","Texas Tech","UCF","Utah","West Virginia"],
+  "ACC": ["Boston College","California","Clemson","Duke","Florida State","Georgia Tech","Louisville","Miami","North Carolina","NC State","Pittsburgh","SMU","Stanford","Syracuse","Virginia","Virginia Tech","Wake Forest"],
+  "Independent": ["Notre Dame","UConn"],
+};
+const P4_BY_SCHOOL = {};
+for (const [conf, list] of Object.entries(P4)) for (const school of list) P4_BY_SCHOOL[school.toLowerCase()] = conf;
+function confFromName(displayName, location) {
+  const loc = String(location || "").toLowerCase();
+  if (loc && P4_BY_SCHOOL[loc]) return P4_BY_SCHOOL[loc];
+  const dn = String(displayName || "").toLowerCase();
+  for (const school in P4_BY_SCHOOL) if (dn.startsWith(school + " ")) return P4_BY_SCHOOL[school];
+  return null;
+}
+
 const ORDER = ["SEC", "Big Ten", "Big 12", "ACC", "Independent", "Pac-12", "American", "Mountain West", "Sun Belt", "MAC", "CUSA", "Other"];
 
 let _mem = null; let _at = 0;
@@ -49,9 +68,10 @@ export default async function handler(req, res) {
             const t = c.team || {};
             const name = t.displayName;
             if (!name) continue;
-            const cr = c.curatedRank && Number(c.curatedRank.current);
-            const rank = (cr && cr >= 1 && cr <= 25) ? cr : null;
-            const conf = CONF[String(t.conferenceId || "")] || "Other";
+            const cr = Number((c.curatedRank && c.curatedRank.current) ?? c.rank ?? (t.rank) ?? 99);
+            const rank = (cr >= 1 && cr <= 25) ? cr : null;
+            const cid = t.conferenceId || (t.conference && t.conference.id) || (t.groups && t.groups.id) || "";
+            const conf = CONF[String(cid)] || confFromName(name, t.location) || "Other";
             const prev = teams[name] || {};
             teams[name] = { conf: prev.conf && prev.conf !== "Other" ? prev.conf : conf, rank: prev.rank || rank, abbr: t.abbreviation || prev.abbr || "" };
           }
