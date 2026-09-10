@@ -13509,7 +13509,10 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const t = new Date(g.time);
  const isLive = now >= t && now < new Date(t.getTime() + 4*60*60*1000);
  const isToday = t.toDateString() === now.toDateString();
- const timeStr = t.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+ const _clk = t.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+ // "1:00 PM" on a Wednesday means nothing without the day. Non-today games
+ // read "Sun 1:00 PM"; today's keep the bare clock.
+ const timeStr = isToday ? _clk : (t.toLocaleDateString([], {weekday:'short'}) + ' ' + _clk);
  const away = g.away.split(' ').pop();
  const home = g.home.split(' ').pop();
  const hasPick = gameHasPick(away, home);
@@ -13660,7 +13663,11 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    const COL={win:"#30D158",loss:"#FF453A",pend:"#FF9F0A",idle:"rgba(255,255,255,0.16)"};
    const _legLamps=myPicks.map(p=>p.result==="W"?COL.win:(p.result==="L"?COL.loss:COL.pend)).concat(Array(Math.max(0,openSlots)).fill(COL.idle)).slice(0,10);
    const _stripDot=liveCount>0?"#64D2FF":(hit>0?"#30D158":"#FF453A");
-   const _stripText=liveCount>0?(liveCount+" of "+slotCount+" legs live"+(settleMs?(" · settles ~"+fmtClk(settleMs)):"")+" · "+weekPts+" this week"):(hit+" of "+total+" hit · "+weekPts+" pts this week");
+   // liveCount is pick ROWS and a parlay is one row per leg, so measuring it
+   // against slotCount produced "10 of 6 legs live" (Morgan NFL, Nick, 9 Sep).
+   // Both numbers now count rows; "leg" is only the word when a parlay is in.
+   const _legWord = (total>slotCount) ? " legs live" : " picks live";
+   const _stripText=liveCount>0?(liveCount+" of "+total+_legWord+(settleMs?(" · settles ~"+fmtClk(settleMs)):"")+" · "+weekPts+" this week"):(hit+" of "+total+" hit · "+weekPts+" pts this week");
    const _buildLabel=isSoloMode?"Build this week's slip":(_svHome?("Make your Week "+(activeLeague.current_week||activeLeague.week||1)+" pick"):("Build Week "+(activeLeague.current_week||activeLeague.week||1)+" slip"));
    // ── DUEL COMMAND CENTER ── tale-of-the-tape card replaces the generic league card
    // for 2-player 1-week h2h leagues. Three states: pre-lock, live, final. Renders
