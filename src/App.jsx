@@ -14255,7 +14255,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const currentOpp = liveSchedule.find(w=>w.week===currentWeekNum)?.opp;
  const oppId = liveSchedule.find(w=>w.week===currentWeekNum)?.oppId;
  const targetSize = activeLeague.target_size||activeLeague.max_members||8;
- const leagueIsFull = activeLeagueId==="solo" || leagueMembers.length >= targetSize;
+ const leagueIsFull = activeLeagueId==="solo" || lgIsSurvivor(activeLeague) || leagueMembers.length >= targetSize;   // survivor: never roster-gated
  const hasOpponent = leagueMembers.filter(m=>!m.isYou).length > 0;
 
  if(activeLeague.league_type==="points"){
@@ -16009,7 +16009,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div style={{height:12}}/>
  {(()=>{
  const targetSize = activeLeague.target_size||activeLeague.max_members||8;
- const leagueIsFull = activeLeagueId==="solo" || leagueMembers.length >= targetSize;
+ const leagueIsFull = activeLeagueId==="solo" || lgIsSurvivor(activeLeague) || leagueMembers.length >= targetSize;   // survivor: never roster-gated
  if(!leagueIsFull) return (
  <div style={{margin:"0 16px",background:"rgba(255,159,10,0.06)",borderRadius:RAD.md,padding:"11px 14px",border:"0.5px solid rgba(255,159,10,0.2)",display:"flex",alignItems:"center",gap:11}}>
  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={IOS.orange} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -16023,7 +16023,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  })()}
  {(()=>{
  const targetSize = activeLeague.target_size||activeLeague.max_members||8;
- const leagueIsFull = activeLeagueId==="solo" || leagueMembers.length >= targetSize;
+ const leagueIsFull = activeLeagueId==="solo" || lgIsSurvivor(activeLeague) || leagueMembers.length >= targetSize;   // survivor: never roster-gated
  if(!leagueIsFull) return null;
  return allFlexFilled && (hasParlay||isCustomSlip)
  ? <button className="ios-btn green" onClick={async()=>{
