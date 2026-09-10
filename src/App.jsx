@@ -7333,6 +7333,21 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  const [gridSport, setGridSport] = useState(null);     // null = follow league default sport
  const [gridType, setGridType] = useState("ml");        // ml | spread | ou | prop | longshot
  const [gridPropSub, setGridPropSub] = useState("all"); // prop sub-category filter
+ // College board filter: "all" | "top25" | a conference label ("SEC"). Tags come
+ // from /api/cfb-tags (ESPN conference id + AP rank per team on this week's slate).
+ const [cfbFilter, setCfbFilter] = useState("all");
+ const [cfbTags, setCfbTags] = useState(null); // { teams:{name:{conf,rank}}, confs:[] }
+ useEffect(()=>{
+   if(screen!=="browser") return;
+   const _sp = isSoloMode ? soloSport : (gridSport || (activeLeague&&activeLeague.sport));
+   const _has = _sp==="ncaaf" || (activeLeague && Array.isArray(activeLeague.sports) && activeLeague.sports.includes("ncaaf"));
+   if(!_has || cfbTags) return;
+   let alive=true;
+   fetch(API_BASE+"/api/cfb-tags").then(r=>r.ok?r.json():null).then(j=>{ if(alive&&j&&j.teams) setCfbTags(j); }).catch(()=>{});
+   return ()=>{ alive=false; };
+ }, [screen, isSoloMode, soloSport, gridSport, activeLeague&&activeLeague.id]);
+ const _cfbNorm = (x)=> String(x||"").toLowerCase().replace(/&/g,"and").replace(/[^a-z0-9]/g,"");
+ const cfbTagOf = (teamName)=>{ if(!cfbTags||!cfbTags.teams) return null; const t=cfbTags.teams[teamName]; if(t) return t; const k=_cfbNorm(teamName); for(const nm in cfbTags.teams){ if(_cfbNorm(nm)===k) return cfbTags.teams[nm]; } const last=k.slice(-8); for(const nm in cfbTags.teams){ const n2=_cfbNorm(nm); if(n2.endsWith(last)&&(n2.startsWith(k.slice(0,5))||k.startsWith(n2.slice(0,5)))) return cfbTags.teams[nm]; } return null; };
  const [specialsSub, setSpecialsSub] = useState("btts"); // soccer Specials tab: btts | dnb | dchance | tmtotal
  const [gridPeriodSub, setGridPeriodSub] = useState(""); // period sub-type (solo browser)
  const [gridTargetSlot, setGridTargetSlot] = useState(null); // which flex slot a tapped card fills
@@ -10460,7 +10475,14 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
   const _cfgForCustom = (_lgRow && _lgRow.league_type==="survivor") ? null : parseSlotConfig(_lgRow&&_lgRow.slot_config);
    const _isCustom = !!(_cfgForCustom && _cfgForCustom.length) || data.some(pp=>{const s=pp.slot||""; return !s.startsWith("longshot") && /_\d+$/.test(s);});
   const buildSlot = (picks, slotId)=>{
-    const isParlay = (picks[0].slot||"").startsWith("longshot");
+    // A longshot slot is a PARLAY only when it has legs: several rows, or a custom
+    // slot name with a leg index (longshot_SLOT_LEG), or the legacy per-leg name
+    // (longshot_LEG) on a non-custom slip. A single "longshot_4" row is one pick.
+    // Treating every longshot as a parlay rehydrated a locked single longshot as a
+    // one-leg parlay with no LOCKED/Unlock chip, so it could not be edited (Ryan,
+    // Morgan NFL wk1, "Christian Watson 3+ TDs").
+    const _sl0 = String(picks[0].slot||""); const _parts0 = _sl0.split("_");
+    const isParlay = _sl0.startsWith("longshot") && (picks.length>1 || _parts0.length>=3 || (!_isCustom && _parts0.length>=2));
     const cat = (picks[0].slot||"").split("_")[0];
     return {
       id: slotId,
@@ -16872,6 +16894,16 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
     }) : null;
     const replaceCooked = replaceCtx ? (!_replEligible || _replEligible.length===0) : false;
 
+ // College conference / Top 25 filter. A bet qualifies when EITHER team in its
+ // game carries the tag (an SEC team at a Big Ten team shows under both chips).
+ if(gSport==="ncaaf" && cfbFilter!=="all" && cfbTags && cfbTags.teams){
+   list = list.filter(b=>{
+     const g=String(b.game||""); const m=g.split(/\s*@\s*/); if(m.length<2) return true;
+     const ta=cfbTagOf(m[0]), th=cfbTagOf(m[1]);
+     if(cfbFilter==="top25") return !!((ta&&ta.rank)||(th&&th.rank));
+     return (ta&&ta.conf===cfbFilter)||(th&&th.conf===cfbFilter);
+   });
+ }
  // Prop sub-category filter
  const propSubsBySport = PROP_SUBS_BY_SPORT;
  const propSubs = propSubsBySport[gSport] || [{id:"all",l:"All"}];
@@ -18532,6 +18564,19 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {gridSearch&&<div onClick={()=>setGridSearch("")} style={{color:"rgba(255,255,255,0.4)",fontSize:16,cursor:"pointer",lineHeight:1}}>×</div>}
  </div>
 </div>
+ {/* College conference / Top 25 filter */}
+ {gSport==="ncaaf" && (()=>{
+   const _confs = (cfbTags&&cfbTags.confs)||["SEC","Big Ten","Big 12","ACC"];
+   const _chips = [{id:"all",l:"All"},{id:"top25",l:"Top 25"}].concat(_confs.map(c=>({id:c,l:c})));
+   const _acc = "#FF9F0A";
+   return (
+   <div className="pk-rail" style={{margin:"0 16px 10px"}}>
+   {_chips.map(c=>{ const on=c.id===cfbFilter; return (
+   <div key={c.id} onClick={()=>{ haptic("select"); setCfbFilter(on&&c.id!=="all"?"all":c.id); }} className={"pk-chip"+(on?" on":"")} style={{"--on-a":_acc+"52","--on-b":_acc+"24"}}><span>{c.l}</span></div>
+   );})}
+   </div>
+   );
+ })()}
  {/* Prop sub-filter */}
  {gridType==="prop" && (()=>{
  const _tslot=(gridTargetSlot!=null)?activePicks[gridTargetSlot]:null;
