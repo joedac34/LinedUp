@@ -12082,14 +12082,25 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  .lh-rank{font-size:13px;font-weight:500;color:${IOS.blue};margin-bottom:6px;}
  .lh-name{font-size:30px;font-weight:700;letter-spacing:-0.5px;margin-bottom:12px;}
  @keyframes ticker-scroll{0%{transform:translateX(0%)}100%{transform:translateX(-50%)}}
- .ticker-wrap{overflow:hidden;background:#0a0a0a;border-top:0.5px solid rgba(255,255,255,0.06);border-bottom:0.5px solid rgba(255,255,255,0.06);height:42px;display:flex;align-items:center;margin:0 0 10px;}
+ /* Ticker. In normal flow (sticky, not fixed): when a live score makes a tile
+    two rows tall the strip grows and pushes the page down, never over it. */
+ .ticker-wrap{overflow:hidden;background:linear-gradient(180deg,#0e1016,#08090c);border-top:0.5px solid rgba(255,255,255,0.06);border-bottom:0.5px solid rgba(255,255,255,0.07);min-height:42px;display:flex;align-items:center;margin:0 0 10px;padding:4px 0;}
  .ticker-track{display:flex;align-items:center;white-space:nowrap;animation:ticker-scroll 40s linear infinite;}
  .ticker-track:hover,.ticker-track:active{animation-play-state:paused;}
- .ticker-item{display:inline-flex;align-items:center;gap:7px;padding:0 22px;font-size:13px;font-weight:600;color:rgba(255,255,255,0.5);letter-spacing:0.02em;font-family:'Barlow',sans-serif;}
+ .ticker-item{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 11px;margin:0 3px;border-radius:10px;background:rgba(255,255,255,0.04);border:0.5px solid rgba(255,255,255,0.07);font-size:12.5px;font-weight:600;color:rgba(255,255,255,0.5);letter-spacing:0.02em;font-family:'Barlow',sans-serif;cursor:pointer;-webkit-tap-highlight-color:rgba(255,255,255,0.1);user-select:none;}
  .ticker-item .ti-teams{color:rgba(255,255,255,0.85);font-weight:700;}
- .ticker-item .ti-live{color:#30D158;font-weight:800;letter-spacing:0.05em;}
- .ticker-item .ti-time{color:rgba(255,255,255,0.35);}
- .ticker-sep{color:rgba(255,255,255,0.15);padding:0 4px;font-size:10px;}
+ .ticker-item .ti-live{color:#30D158;font-weight:800;letter-spacing:0.05em;font-size:11px;}
+ .ticker-item .ti-fin{color:rgba(255,255,255,0.4);font-weight:800;letter-spacing:0.08em;font-size:9.5px;}
+ .ticker-item .ti-time{color:rgba(255,255,255,0.4);font-size:12px;display:inline-flex;align-items:center;gap:5px;}
+ .ticker-item .ti-day{font-size:9.5px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:rgba(255,255,255,0.35);}
+ .ticker-item .ti-mp{font-size:9px;color:#0a84ff;font-weight:800;letter-spacing:0.5px;}
+ .ticker-item.ti-mine{background:rgba(10,132,255,0.12);border-color:rgba(10,132,255,0.5);}
+ .ticker-item.ti-mine .ti-teams{color:#fff;}
+ .ticker-item.ti-card{flex-direction:column;align-items:stretch;justify-content:center;gap:1px;height:auto;min-width:96px;padding:5px 10px;}
+ .ticker-item.ti-card .ti-row{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12.5px;font-weight:800;color:rgba(255,255,255,0.9);line-height:1.15;}
+ .ticker-item.ti-card .ti-sc{font-family:'Barlow Semi Condensed',sans-serif;font-size:13.5px;font-weight:800;color:#fff;min-width:16px;text-align:right;}
+ .ticker-item.ti-card .ti-ft{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:1px;line-height:1;}
+ .ticker-sep{display:none;}
  .lh-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:rgba(255,255,255,0.06);border-radius:12px;overflow:hidden;}
  .lh-stat{background:#2C2C2E;padding:10px 6px;text-align:center;}
  .lh-stat-val{font-size:16px;font-weight:700;letter-spacing:-0.3px;line-height:1;margin-bottom:2px;}
@@ -13512,11 +13523,25 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const _clk = t.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
  // "1:00 PM" on a Wednesday means nothing without the day. Non-today games
  // read "Sun 1:00 PM"; today's keep the bare clock.
- const timeStr = isToday ? _clk : (t.toLocaleDateString([], {weekday:'short'}) + ' ' + _clk);
+ const dayStr = isToday ? '' : t.toLocaleDateString([], {weekday:'short'});
+ const timeStr = dayStr ? (dayStr + ' ' + _clk) : _clk;
  const away = g.away.split(' ').pop();
  const home = g.home.split(' ').pop();
  const hasPick = gameHasPick(away, home);
- return {away, home, isLive, isToday, timeStr, hasPick};
+ // Score card data. A game that is live or final with a score becomes a
+ // two-row tile; everything else stays one line so the strip only grows when
+ // there is a score worth the height.
+ const espn = matchEspnGame(espnGames, g.away, g.home);
+ const lv = (liveGames||[]).find(x=>x&&x.away&&x.home&&x.away.name===g.away&&x.home.name===g.home)||null;
+ const aSc = (lv&&lv.away&&lv.away.score!=null)?lv.away.score:(espn?espn.awayScore:null);
+ const hSc = (lv&&lv.home&&lv.home.score!=null)?lv.home.score:(espn?espn.homeScore:null);
+ const hasScore = aSc!=null && hSc!=null;
+ const isFinal = !isLive && now>=t && hasScore;
+ const aAb = (espn&&espn.awayAbbr) || away.slice(0,3).toUpperCase();
+ const hAb = (espn&&espn.homeAbbr) || home.slice(0,3).toUpperCase();
+ const perTxt = (lv&&lv.period!=null) ? ((lv.clock&&lv.clock!=="0:00")?(lv.clock+" "):"")+(g.sport==="nhl"?(lv.period>3?"OT":("P"+lv.period)):(g.sport==="mlb"?((lv.half||"").toUpperCase()+" "+(lv.inning||"")):("Q"+lv.period))) : "LIVE";
+ const card = (isLive||isFinal) && hasScore;
+ return {away, home, isLive, isToday, timeStr, dayStr, clk:_clk, hasPick, card, aAb, hAb, aSc, hSc, isFinal, perTxt};
  });
  // Duplicate for seamless loop
  const doubled = [...items, ...items];
@@ -13549,23 +13574,21 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div className='ticker-wrap' style={{position:"sticky",top:0,zIndex:25,marginBottom:0}}>
  <div className='ticker-track' style={{animationDuration: Math.max(12, items.length * 5) + 's'}}>
  {doubled.map((g, i) => (
- <span key={i} className='ticker-item'
+ <span key={i} className={'ticker-item'+(g.card?' ti-card':'')+(g.hasPick?' ti-mine':'')}
  onClick={e=>{e.stopPropagation();if(i<items.length)openGame(g);}}
- onTouchEnd={e=>{e.preventDefault();e.stopPropagation();if(i<items.length)openGame(g);}}
- style={{cursor:"pointer",WebkitTapHighlightColor:"rgba(255,255,255,0.1)",userSelect:"none",
- background: g.hasPick ? "rgba(10,132,255,0.18)" : "transparent",
- borderRadius: g.hasPick ? 8 : 0,
- padding: g.hasPick ? "2px 10px" : "0 22px",
- border: g.hasPick ? "1px solid rgba(10,132,255,0.35)" : "none",
- margin: g.hasPick ? "0 8px" : 0,
- }}>
- {g.hasPick && <span style={{fontSize:9,color:IOS.blue,fontWeight:800,marginRight:4,letterSpacing:0.5}}>MY PICK</span>}
- <span className='ti-teams' style={{color: g.hasPick ? "#fff" : undefined}}>{g.away} @ {g.home}</span>
+ onTouchEnd={e=>{e.preventDefault();e.stopPropagation();if(i<items.length)openGame(g);}}>
+ {g.card ? (<>
+ <span className='ti-row'><span className='ti-ab'>{g.aAb}</span><span className='ti-sc'>{g.aSc}</span></span>
+ <span className='ti-row'><span className='ti-ab'>{g.hAb}</span><span className='ti-sc'>{g.hSc}</span></span>
+ <span className='ti-ft'>{g.hasPick && <span className='ti-mp'>MY PICK</span>}<span className={g.isLive?'ti-live':'ti-fin'}>{g.isLive?("\u25CF "+g.perTxt):"FINAL"}</span></span>
+ </>) : (<>
+ {g.hasPick && <span className='ti-mp'>MY PICK</span>}
+ <span className='ti-teams'>{g.away} @ {g.home}</span>
  {g.isLive
- ? <span className='ti-live'>● LIVE</span>
- : <span className='ti-time'>{g.timeStr}</span>
+ ? <span className='ti-live'>{"\u25CF LIVE"}</span>
+ : <span className='ti-time'>{g.dayStr && <span className='ti-day'>{g.dayStr}</span>}{g.clk}</span>
  }
- {!g.hasPick && <span className='ticker-sep'>|</span>}
+ </>)}
  </span>
  ))}
  </div>
