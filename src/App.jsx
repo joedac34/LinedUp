@@ -7415,7 +7415,11 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  const [gridFlexMult, setGridFlexMult] = useState(null); // flex leagues: multiplier-first picking
  const [gridParlayMult, setGridParlayMult] = useState(5); // flex: which multiplier is the parlay
  const [gridBuildMode, setGridBuildMode] = useState(false); // flex: building parlay legs in the browser
- const [gridSort, setGridSort] = useState("long");
+ // Longest-odds default made the Longshot tab open on +9000 parlay fodder; the
+ // slot is a single pick, so it opens on the shortest odds. Other tabs keep
+ // longest. A choice from the dropdown sticks across tabs until reload.
+ const [gridSortUser, setGridSort] = useState(null);
+ const gridSort = gridSortUser || (gridType==="longshot" ? "short" : "long");
  const [gridLsMarket, setGridLsMarket] = useState("all");
  useEffect(()=>{
  if(screen!=="browser"||isSoloMode){ if(gridBuildMode) setGridBuildMode(false); return; }
