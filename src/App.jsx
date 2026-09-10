@@ -8897,6 +8897,52 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
      }catch(e){}
    })();
  }, [user && user.id]);
+
+ // ── LIVE ACTIVITY (iOS lock screen / Dynamic Island) ──
+ // Native-only, ActivityKit via the local LiveActivity plugin (ios/App/App/
+ // LiveActivityPlugin.swift). The card runs ONLY while one of the user's locked
+ // picks is in a game that is live now; /api/live-activity owns that rule and
+ // grade.js pushes every update. This side does three things: register the
+ // device push-to-start token once, forward any activity token the OS mints,
+ // and start an activity locally when the app is opened mid-game (the
+ // push-to-start path covers the app-closed case on iOS 17.2+).
+ const _laPlugin = () => { try{ return (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.LiveActivity) || null; }catch(e){ return null; } };
+ const _laListeners = useRef(false);
+ const _laRegister = async (payload) => {
+   try{ await fetch(API_BASE+"/api/live-activity", { method:"POST", headers: await authHeaders(), body: JSON.stringify({ op:"register", environment:_apnsEnv(), ...payload }) }); }catch(e){}
+ };
+ useEffect(()=>{
+   if(!IS_NATIVE || !user || !user.id) return;
+   const LA = _laPlugin(); if(!LA) return;
+   (async ()=>{
+     try{
+       const sup = await LA.isSupported();
+       if(!sup || !sup.supported) return;
+       if(!_laListeners.current){
+         _laListeners.current = true;
+         LA.addListener("activityToken", (t)=>{ if(t && t.token){ const [lg, wk] = String(t.matchupId||"").split("|"); _laRegister({ kind:"activity", token:t.token, activityId:t.id, leagueId:lg||null, week:wk?Number(wk):null }); } });
+         LA.addListener("pushToStartToken", (t)=>{ if(t && t.token) _laRegister({ kind:"push_to_start", token:t.token }); });
+       }
+       if(sup.pushToStart) await LA.requestPushToStartToken();
+     }catch(e){}
+   })();
+ }, [user && user.id]);
+ // Opened the app during a live game with a pick in it: start the card now.
+ useEffect(()=>{
+   if(!IS_NATIVE || !user || !user.id || !activeLeague || !activeLeague.id || activeLeague.id==="solo") return;
+   const LA = _laPlugin(); if(!LA) return;
+   let alive = true;
+   (async ()=>{
+     try{
+       const sup = await LA.isSupported(); if(!sup || !sup.supported) return;
+       const r = await fetch(API_BASE+"/api/live-activity?leagueId="+encodeURIComponent(activeLeague.id)+"&week="+encodeURIComponent(activeLeague.current_week||1), { headers: await authHeaders() });
+       if(!r.ok || !alive) return;
+       const st = await r.json();
+       if(st && st.shouldRun && st.attributes && st.state) await LA.start({ attributes: st.attributes, state: st.state });
+     }catch(e){}
+   })();
+   return ()=>{ alive=false; };
+ }, [user && user.id, activeLeague && activeLeague.id, activeLeague && activeLeague.current_week]);
  const subscribeToPush = async () => {
    if(IS_NATIVE) return subscribeToPushNative();
    try {

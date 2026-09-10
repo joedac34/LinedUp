@@ -186,6 +186,20 @@ async function stashWeekRanks(league) {
 //
 // Best-effort by construction: grading correctness outranks a notification, so a
 // failure here is swallowed and never propagates. No await on the response body.
+// Live Activity tick: every grade run, /api/live-activity refreshes each running
+// lock-screen card, ends the finished ones and push-starts cards for games that
+// just kicked off. Best-effort like pushNotify; grading never waits on it.
+async function liveActivityTick() {
+  try {
+    if (!process.env.CRON_SECRET || !PUSH_BASE) return;
+    await fetch(PUSH_BASE + '/api/live-activity', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${process.env.CRON_SECRET}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ op: 'tick' }),
+    });
+  } catch (e) { /* best-effort */ }
+}
+
 async function pushNotify(userIds, title, body, category, url) {
   try {
     const ids = (Array.isArray(userIds) ? userIds : [userIds]).filter(Boolean);
@@ -1790,6 +1804,7 @@ export default async function handler(req, res) {
     }
 
     await gradePlokCalls();
+    await liveActivityTick();
 
     return res.status(200).json({ ok: true, ...results });
   } catch (err) {
