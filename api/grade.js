@@ -574,7 +574,11 @@ function statNumber(raw) {
 async function espnRecentEventIds(sp, lg) {
   const out = [];
   const now = new Date();
-  for (let i = 0; i < 4; i++) {                              // today + last 3 days (UTC)
+  // today + last 7 days (UTC). Was 4: a Thursday game still holding a pending
+  // parlay leg on the following Monday fell outside the window, and every prop in
+  // it then reported prop_player_not_in_boxscores even though ESPN had the stats
+  // (George Holani, NE@SEA wk1 — displayName and rushing line both present).
+  for (let i = 0; i < 8; i++) {
     const d = new Date(now); d.setUTCDate(d.getUTCDate() - i);
     const day = `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`;
     try {
@@ -890,8 +894,17 @@ function gradeProp(pickName, gameField, index, info = {}, gameDate = null) {
       const _w = gameDate ? Date.parse(gameDate) : NaN;
       let _final = false;
       for (const _nm in index) { for (const _e of index[_nm]) { if (teamInGame(_t[0], _e) && teamInGame(_t[1], _e) && (isNaN(_w) || (!isNaN(_e.date) && Math.abs(_e.date - _w) <= 2 * 3600 * 1000))) { _final = true; break; } } if (_final) break; }
-      if (_final) { info.reason = "prop_player_dnp"; return "P"; }
+      if (_final) info.gameFinal = true;
     }
+    // TD props ONLY: anyone who scores a touchdown always appears in the box
+    // score, so absence from a FINAL game is proof of no touchdown -> L. This is
+    // safe because the inference runs one way. It is deliberately NOT applied to
+    // yardage/reception lines: there, absence is ambiguous between "played, no
+    // stat" and "the index missed this player", and guessing 0 would settle an
+    // Under as a WIN on a lookup failure. Those stay pending and surface as
+    // prop_player_not_in_boxscores in the health check instead.
+    const _isTdProp = parsed.stat === "anytime td" || parsed.stat === "first td" || /^(tds?|touchdowns?)$/.test(String(parsed.stat).trim());
+    if (info.gameFinal && _isTdProp) { info.reason = "prop_no_td_absent_from_box"; return "L"; }
     info.reason = "prop_player_not_in_boxscores"; return null;
   }
 
@@ -1224,6 +1237,7 @@ function gradePick(pick, games, playerIndex, info = {}) {
         if (_best === null || _diff < _best.diff) _best = { g, diff: _diff };
       }
       if (_best && (isNaN(_want) || _best.diff <= 11 * 3600 * 1000) && _best.g.voided) { info.reason = "game_cancelled"; return "P"; }
+      if (_best && (isNaN(_want) || _best.diff <= 11 * 3600 * 1000) && _best.g.completed) info.gameFinal = true;
     }
     return gradeProp(name, pick.game, playerIndex || {}, info, pick.game_date);
   }
@@ -1665,6 +1679,15 @@ export default async function handler(req, res) {
         playerIndexCache[_sp] = idx;
       }
       const _indexFor = (p) => playerIndexCache[_spOf(p)] || {};
+      // Per-sport index size + the games it covers. Without this a miss is
+      // indistinguishable between "player absent" and "this game never got indexed".
+      results.debug.index = results.debug.index || {};
+      for (const _sp of _propSports) {
+        const _idx = playerIndexCache[_sp] || {};
+        const _gm = new Set();
+        for (const _n in _idx) for (const _e of _idx[_n]) _gm.add(`${_e.away} @ ${_e.home}`);
+        results.debug.index[_sp] = { players: Object.keys(_idx).length, games: [..._gm].slice(0, 25) };
+      }
 
       // ── Diagnostics: what did the data sources actually return? ──
       results.debug.scoresTotal += _allGames.length;
