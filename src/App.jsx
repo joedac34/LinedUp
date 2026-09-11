@@ -7340,6 +7340,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  // College board filter: "all" | "top25" | a conference label ("SEC"). Tags come
  // from /api/cfb-tags (ESPN conference id + AP rank per team on this week's slate).
  const [cfbFilter, setCfbFilter] = useState("all");
+ const [svPoolAll, setSvPoolAll] = useState(false);
  const [cfbTags, setCfbTags] = useState(null); // { teams:{name:{conf,rank}}, confs:[] }
  const [cfbTagsState, setCfbTagsState] = useState("idle"); // idle | loading | ok | empty | error
  const _cfbFetchAt = useRef(0);
@@ -8495,6 +8496,61 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  };
  // Hard deadline for a pool week: Sunday 1:00 PM ET, the same instant the board
  // reveals everyone's picks. Past it the week is closed -- no new picks, no changes.
+ // Survivor pool rows for the current week: every member with pick + status.
+ // Other members' picks stay hidden until the Sunday 1 PM lock (the reveal);
+ // yours always show. Alive first, you pinned, out at the bottom.
+ const svPoolRows = (lg, week) => {
+   if(!lg || lg.league_type!=="survivor") return { rows:[], revealed:false, lockMs:null, locked:0, deciding:0 };
+   const _lockMs = svWeekLockMs(lg, week);
+   const _now = nowTick || Date.now();
+   const revealed = _lockMs!=null && _now >= _lockMs;
+   const _byUser = {};
+   (weekPicks||[]).forEach(pk=>{ if(pk.replaced_by) return; if(!_byUser[pk.user_id]) _byUser[pk.user_id]=pk; });
+   const rows = (leagueMembers||[]).map(m=>{
+     const _uid = m.userId||m.user_id||m.id;
+     const pk = _byUser[_uid] || null;
+     const _stt = svStatus[_uid] || null;
+     const hasHidden = !pk && !!(_stt && _stt.has_pick);
+     const out = m.eliminatedWeek!=null && m.eliminatedWeek<=week;
+     const isMe = !!(user && _uid===user.id);
+     const kick = pk && pk.game_date ? Date.parse(pk.game_date) : NaN;
+     const started = !isNaN(kick) && _now >= kick;
+     const res = pk ? pk.result : null;
+     let state, tag;
+     if(out){ state="out"; tag="OUT"; }
+     else if(!pk && hasHidden){ state="locked"; tag="LOCKED"; }
+     else if(!pk){ state = revealed ? "nopick" : "deciding"; tag = revealed ? "NO PICK" : "DECIDING"; }
+     else if(res==="W"){ state="alive"; tag="SURVIVED"; }
+     else if(res==="L"){ state="out"; tag="OUT"; }
+     else if(res==="P"||res==="V"){ state="alive"; tag="VOID"; }
+     else if(started){ state="live"; tag="LIVE"; }
+     else { state="locked"; tag="LOCKED"; }
+     const show = isMe || revealed;
+     const nm = String((pk&&pk.pick_name)||"").replace(/\s*-\s*Anytime TD$/i,"");
+     const _lv = pk ? ((liveGames||[]).find(x=>x&&x.away&&x.home&&pk.game&&(pk.game.indexOf(x.away.name)>=0)&&(pk.game.indexOf(x.home.name)>=0))||null) : null;
+     const _sc = _lv && _lv.away && _lv.home && _lv.away.score!=null ? (String(_lv.away.score)+"-"+String(_lv.home.score)+(_lv.period!=null?(" \u00B7 Q"+_lv.period):"")) : null;
+     const sub = out && !pk ? ("Out \u00B7 Week "+(m.eliminatedWeek||week))
+       : (!pk && hasHidden) ? "Locked \u00B7 pick hidden until kickoff"
+       : !pk ? (revealed ? ("No pick \u00B7 Week "+week) : "No pick yet")
+       : !show ? ("Locked \u00B7 pick hidden until Sun 1:00 PM")
+       : (nm + (pk.game ? (" \u00B7 " + String(pk.game).replace(/([A-Z][a-z]+ )+(?=[A-Z][a-z]+ @)/,"").slice(0,26)) : "") + (_sc ? (" \u00B7 "+_sc) : (started ? "" : (!isNaN(kick) ? (" \u00B7 "+new Date(kick).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})) : ""))));
+     const name = isMe ? "You" : (m.name || m.username || (pk && pk.users && pk.users.username) || "Member");
+     const av = String(isMe ? (user.username||"Yo") : name).replace(/[^A-Za-z0-9]/g,"").slice(0,2).toUpperCase() || "??";
+     return { id:_uid, isMe, name, av, state, tag, sub, out, hasPick:(!!pk||hasHidden) };
+   });
+   const order = { live:0, alive:1, locked:2, deciding:3, nopick:4, out:5 };
+   rows.sort((a,b)=> (a.isMe?-1:0)-(b.isMe?-1:0) || (order[a.state]-order[b.state]) || a.name.localeCompare(b.name));
+   const locked = rows.filter(r=>!r.out && r.hasPick).length, deciding = rows.filter(r=>!r.out && !r.hasPick).length;
+   return { rows, revealed, lockMs:_lockMs, locked, deciding };
+ };
+ const SV_TAG = { live:"#64D2FF", alive:IOS.green, locked:IOS.green, deciding:IOS.orange, nopick:"rgba(255,255,255,0.45)", out:IOS.red };
+ const SvRow = ({r, dense}) => (
+   <div style={{display:"flex",alignItems:"center",gap:10,padding:dense?"8px 0":"10px 0",borderBottom:"0.5px solid rgba(255,255,255,0.06)",opacity:r.out?0.6:1}}>
+     <div style={{width:30,height:30,borderRadius:"50%",background:r.isMe?IOS.blue:"rgba(255,255,255,0.1)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9.5,fontWeight:800,color:r.isMe?"#fff":"rgba(255,255,255,0.75)",flexShrink:0}}>{r.av}</div>
+     <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:700,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.name}</div><div style={{fontSize:10.5,color:"rgba(255,255,255,0.4)",fontWeight:600,marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.sub}</div></div>
+     <span style={{fontSize:9,fontWeight:900,letterSpacing:"0.08em",padding:"3px 7px",borderRadius:5,color:SV_TAG[r.state],border:"0.5px solid "+SV_TAG[r.state]+"66",background:SV_TAG[r.state]+"1F",flexShrink:0}}>{r.tag}</span>
+   </div>
+ );
  const svWeekLockMs = (lg, week)=>{
    if(!lg || !lg.season_start) return null;
    const _ss = new Date(lg.season_start).getTime();
@@ -10795,14 +10851,19 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 
  const [svPicks, setSvPicks] = useState([]);   // all pool picks: {user_id, week, result}
  const [svBurned, setSvBurned] = useState([]); // my scorers so far: {outcome, week, result}
+ const [svMine, setSvMine] = useState([]);     // my survivor picks with details, for the Weeks tab
+ const [svStatus, setSvStatus] = useState({}); // user_id -> {has_pick, kick} from sv_week_status (RLS hides others' pending picks)
  useEffect(()=>{
   if(isSoloMode||!user||!activeLeague||activeLeague.league_type!=="survivor"){ return; }
   if(screen!=="picks"&&screen!=="matchup"&&screen!=="leagues"&&screen!=="home"&&screen!=="browser"){ return; }
   (async()=>{ try{
-    const [{data:_all},{data:_mine}] = await Promise.all([
+    const [{data:_all},{data:_mine},{data:_st}] = await Promise.all([
       supabase.from("picks").select("user_id, week, result, outcome, pick_name").eq("league_id",activeLeague.id),
-      supabase.from("picks").select("outcome, week, result").eq("league_id",activeLeague.id).eq("user_id",user.id),
+      supabase.from("picks").select("outcome, week, result, pick_name, game, game_date, odds, replaced_by").eq("league_id",activeLeague.id).eq("user_id",user.id).order("week"),
+      supabase.rpc("sv_week_status", { p_league: activeLeague.id, p_week: activeLeague.current_week||1 }),
     ]);
+    const _sm={}; (_st||[]).forEach(r=>{ _sm[r.user_id]={ has_pick:!!r.has_pick, kick:r.kick?Date.parse(r.kick):NaN }; }); setSvStatus(_sm);
+    setSvMine((_mine||[]).filter(x=>!x.replaced_by));
     // Voided picks are released, not burned \u2014 must match survivorBlocked above,
     // or the rail would show a player the lock guard would happily let you re-use.
     setSvPicks(_all||[]); setSvBurned((_mine||[]).filter(x=>x.outcome && x.result!=="P"));
@@ -14023,6 +14084,13 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
          <div><div style={_lab}>Total pts</div><div style={{..._val,fontSize:20,marginTop:1,color:seasonPts>0?"#64D2FF":"rgba(255,255,255,0.3)"}}>{seasonPts>0?<CountUp value={seasonPts}/>:"\u2014"}</div>
            <div style={{fontSize:8.5,color:"rgba(255,255,255,0.28)",fontWeight:700,marginTop:2}}>{"tiebreak if more than one survives"}</div></div>
        </div>
+       {(()=>{ const _pr = svPoolRows(activeLeague, activeLeague.current_week||1); if(!_pr.rows.length) return null; const _in = _pr.rows.filter(r=>!r.out); const _show=_in.slice(0,8); return (
+         <div style={{display:"flex",alignItems:"center",marginBottom:10}}>
+           {_show.map((r,i)=>(<span key={r.id||i} style={{width:24,height:24,borderRadius:"50%",background:r.hasPick?IOS.green:"rgba(255,159,10,0.18)",color:r.hasPick?"#000":IOS.orange,border:"2px solid #0d0f14",marginLeft:i?-7:0,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:7.5,fontWeight:800,flexShrink:0}}>{r.av}</span>))}
+           {_in.length>8 && <span style={{width:24,height:24,borderRadius:"50%",background:"#2a2f3a",border:"2px solid #0d0f14",marginLeft:-7,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:7.5,fontWeight:800,color:"rgba(255,255,255,0.7)"}}>{"+"+(_in.length-8)}</span>}
+           <span style={{fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.5)",marginLeft:10}}><span style={{color:IOS.green}}>{_pr.locked+" locked"}</span>{" \u00B7 "}<span style={{color:IOS.orange}}>{_pr.deciding+" deciding"}</span></span>
+         </div>
+       ); })()}
        {(_open&&_reveal!=null)&&(
          <div style={{background:"rgba(0,0,0,0.35)",border:EDGE.hair,borderRadius:RAD.md,padding:"10px 12px",display:"flex",alignItems:"center",gap:10}}>
            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={_p?"rgba(255,255,255,0.4)":IOS.yellow} strokeWidth="2.1" strokeLinecap="round" style={{flexShrink:0}}><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
@@ -14368,6 +14436,25 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    );
  }
 
+  if(lgIsSurvivor(activeLeague)){
+    // No opponent in a survivor pool. Before the Sunday 1 PM reveal the top card
+    // already says everything; after it, this slot shows the pool's picks.
+    const _pr = svPoolRows(activeLeague, activeLeague.current_week||1);
+    if(!_pr.revealed || !_pr.rows.length) return null;
+    const _lim = 7; const _rows = svPoolAll ? _pr.rows : _pr.rows.slice(0,_lim);
+    return (
+    <div className="ios-section" style={{margin:"0 16px 6px"}}>
+      <div className="ios-section-header" style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <span>{"Pool picks \u00B7 Week "+(activeLeague.current_week||1)}</span>
+        <span onClick={()=>{setLeagueTab("standings");setScreen("league");}} style={{color:IOS.blue,fontSize:13,textTransform:"none",fontWeight:500,letterSpacing:0,cursor:"pointer"}}>Board</span>
+      </div>
+      <div style={{background:IOS.bg2,border:EDGE.hair,borderRadius:RAD.lg,padding:"2px 14px"}}>
+        {_rows.map(r=><SvRow key={r.id} r={r}/>)}
+        {_pr.rows.length>_lim && <div onClick={()=>setSvPoolAll(v=>!v)} style={{textAlign:"center",fontSize:12,fontWeight:700,color:IOS.blue,padding:"10px 0 8px",cursor:"pointer"}}>{svPoolAll?"Show fewer":("Show all "+_pr.rows.length)}</div>}
+      </div>
+    </div>
+    );
+  }
  if(!leagueIsFull || !hasOpponent) return null;
 
  const oppUserPicks = oppId ? weekPicks.filter(p=>p.user_id===oppId) : [];
@@ -14540,7 +14627,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    </div>
  </div>
  )}
- {homeTab==='home' && realLeagues.length>0 && <>
+ {homeTab==='home' && realLeagues.length>0 && !lgIsSurvivor(activeLeague) && <>
  <div className="ios-section" style={{margin:"12px 16px 6px"}}>
  <div className="ios-section-header" style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
  <span>Power-Ups</span>
@@ -21571,7 +21658,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 
  {/* Tabs */}
  <div className="seg-control" style={{marginBottom:14}}>
- {(activeLeague.league_type==="bracket"?["bracket","trophies"]:activeLeague.league_type==="points"?["standings","trophies","playoff"]:["standings","trophies","schedule","playoff"]).map(t=><div key={t} className={`seg-item ${leagueTab===t?"on":""}`} onClick={()=>setLeagueTab(t)}>{t.charAt(0).toUpperCase()+t.slice(1)}</div>)}
+ {(activeLeague.league_type==="bracket"?["bracket","trophies"]:activeLeague.league_type==="survivor"?["standings","schedule","trophies"]:activeLeague.league_type==="points"?["standings","trophies","playoff"]:["standings","trophies","schedule","playoff"]).map(t=><div key={t} className={`seg-item ${leagueTab===t?"on":""}`} onClick={()=>setLeagueTab(t)}>{lgIsSurvivor(activeLeague)?({standings:"Board",schedule:"Weeks",trophies:"Hall"}[t]||t):(t.charAt(0).toUpperCase()+t.slice(1))}</div>)}
  </div>
 
  {(leagueTab==="bracket"||(leagueTab==="schedule"&&activeLeague.league_type==="bracket"))&&(
@@ -21754,7 +21841,27 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    );
  })()}
 
- {leagueTab==="standings"&&(
+ {leagueTab==="standings"&&lgIsSurvivor(activeLeague)&&(()=>{
+   const _wk = activeLeague.current_week||1;
+   const _pr = svPoolRows(activeLeague, _wk);
+   const _alive = _pr.rows.filter(r=>!r.out).length, _out = _pr.rows.length-_alive;
+   return (
+   <div style={{padding:"0 16px 24px"}}>
+     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
+       {[[String(_alive),"Alive",IOS.green],[String(_out),"Out","rgba(255,255,255,0.6)"],[String(_pr.locked)+"/"+String(_alive),"Locked","#fff"]].map(([v,l,c],i)=>(
+         <div key={i} style={{background:"rgba(255,255,255,0.04)",border:"0.5px solid rgba(255,255,255,0.08)",borderRadius:RAD.md,padding:"12px 8px",textAlign:"center"}}>
+           <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:22,color:c,lineHeight:1}}>{v}</div>
+           <div style={{fontSize:9,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:"rgba(255,255,255,0.35)",marginTop:5}}>{l}</div>
+         </div>))}
+     </div>
+     <div style={{fontSize:10.5,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:"rgba(255,255,255,0.35)",marginBottom:6}}>{"Week "+_wk+(_pr.revealed?" \u00B7 picks revealed":" \u00B7 picks reveal Sun 1:00 PM")}</div>
+     <div style={{background:IOS.bg2,border:EDGE.hair,borderRadius:RAD.lg,padding:"2px 14px"}}>
+       {_pr.rows.length ? _pr.rows.map(r=><SvRow key={r.id} r={r}/>) : <div style={{fontSize:12.5,color:"rgba(255,255,255,0.45)",padding:"14px 0",textAlign:"center"}}>No members yet.</div>}
+     </div>
+   </div>
+   );
+ })()}
+ {leagueTab==="standings"&&!lgIsSurvivor(activeLeague)&&(
  <>
 {activeLeague.league_type==="points" ? (()=>{
    // Empty only means "no graded picks" once these standings belong to this
@@ -22006,7 +22113,40 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  )}
 
  {/* TROPHIES TAB */}
-  {leagueTab==="trophies"&&(
+  {leagueTab==="trophies"&&lgIsSurvivor(activeLeague)&&(()=>{
+    const _cw = activeLeague.current_week||1;
+    const _mem = leagueMembers||[];
+    const _alive = _mem.filter(m=>m.eliminatedWeek==null);
+    const _outs = _mem.filter(m=>m.eliminatedWeek!=null);
+    const _firstWk = _outs.length ? Math.min(..._outs.map(m=>m.eliminatedWeek)) : null;
+    const _firstOut = _firstWk!=null ? _outs.filter(m=>m.eliminatedWeek===_firstWk) : [];
+    const _last = (_alive.length===1 && _outs.length>0) ? _alive[0] : null;
+    const _streak = Math.max(0, _cw-1);
+    const _nm=(m)=> user && m.userId===user.id ? "You" : (m.name||"Member");
+    const _cards = [
+      { ic:"\uD83C\uDFC6", bg:"rgba(255,214,10,0.14)", n:"Last Standing", d:"Outlive the pool.", who: _last ? (_nm(_last)+" \u00B7 Week "+_cw) : "Not yet claimed", on: !!_last },
+      { ic:"\uD83D\uDD25", bg:"rgba(48,209,88,0.14)", n:"Iron Streak", d:"Longest run of survived weeks.", who: _streak>0 ? (_alive.length+" tied at "+_streak+" wk"+(_streak===1?"":"s")) : "Leader after Week 1 grades", on: _streak>0 },
+      { ic:"\uD83D\uDC80", bg:"rgba(255,69,58,0.14)", n:"First Out", d:"Nobody wants it. Someone gets it.", who: _firstOut.length ? (_firstOut.map(_nm).slice(0,2).join(", ")+(_firstOut.length>2?(" +"+(_firstOut.length-2)):"")+" \u00B7 Week "+_firstWk) : "Awarded when it happens", on: _firstOut.length>0 },
+      { ic:"\uD83C\uDFAF", bg:"rgba(191,90,242,0.14)", n:"Longest Shot", d:"Survive on the longest odds in the pool that week.", who:"Awarded weekly", on:false },
+      { ic:"\uD83E\uDDCA", bg:"rgba(100,210,255,0.14)", n:"Ice in the Veins", d:"Survive a week where half the pool fell.", who:"Situational", on:false },
+      { ic:"\u23F1\uFE0F", bg:"rgba(255,159,10,0.14)", n:"Buzzer Beater", d:"Lock within 10 minutes of the deadline and survive.", who:"Awarded weekly", on:false },
+    ];
+    return (
+    <div style={{padding:"0 16px 24px"}}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        {_cards.map((c,i)=>(
+          <div key={i} style={{background:IOS.bg2,border:"0.5px solid "+(c.on?"rgba(255,214,10,0.45)":"rgba(255,255,255,0.09)"),borderRadius:RAD.lg,padding:12,opacity:c.on?1:0.55}}>
+            <div style={{width:34,height:34,borderRadius:10,background:c.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>{c.ic}</div>
+            <div style={{fontSize:13,fontWeight:800,marginTop:8,color:"#fff"}}>{c.n}</div>
+            <div style={{fontSize:10.5,color:"rgba(255,255,255,0.45)",marginTop:2,lineHeight:1.35}}>{c.d}</div>
+            <div style={{fontSize:11,fontWeight:700,color:c.on?IOS.yellow:"rgba(255,255,255,0.4)",marginTop:6}}>{c.who}</div>
+          </div>))}
+      </div>
+      <div style={{fontSize:11,color:"rgba(255,255,255,0.35)",fontWeight:600,marginTop:10,textAlign:"center"}}>Cards light up when earned.</div>
+    </div>
+    );
+  })()}
+  {leagueTab==="trophies"&&!lgIsSurvivor(activeLeague)&&(
    <div style={{paddingBottom:24}}>
     {leagueMembers.filter(m=>!m.isYou).length===0 ? (
      <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:RAD.lg,padding:"40px 24px",textAlign:"center"}}>
@@ -22105,7 +22245,52 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    </div>
   )}
 
- {leagueTab==="schedule"&&activeLeague.league_type!=="bracket"&&(
+ {leagueTab==="schedule"&&lgIsSurvivor(activeLeague)&&(()=>{
+   const _cw = activeLeague.current_week||1;
+   const _byWk = {}; (svMine||[]).forEach(x=>{ if(!_byWk[x.week]) _byWk[x.week]=x; });
+   const _me = (leagueMembers||[]).find(m=>user && (m.userId===user.id)) || null;
+   const _outWk = _me && _me.eliminatedWeek!=null ? _me.eliminatedWeek : null;
+   const _fmtK=(ms)=> isNaN(ms) ? "" : (new Date(ms).toLocaleDateString([], {weekday:"short"})+" "+new Date(ms).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}));
+   const _rows = []; for(let w=1; w<=Math.max(_cw, _outWk||0)+1; w++){ _rows.push(w); }
+   const _short=(x)=>String((x&&(x.pick_name||x.outcome))||"").replace(/\s*-\s*Anytime TD$/i,"");
+   const _burn = (svBurned||[]).filter(x=>x.week<=_cw);
+   return (
+   <div style={{padding:"0 16px 24px"}}>
+     <div style={{background:IOS.bg2,border:EDGE.hair,borderRadius:RAD.lg,padding:"14px"}}>
+       <div style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.13em",textTransform:"uppercase",color:"rgba(255,255,255,0.35)"}}>Your path</div>
+       {_rows.map(w=>{
+         const x=_byWk[w]||null; const isNow=w===_cw; const future=w>_cw; const dead=_outWk!=null && w>_outWk;
+         const kick = x && x.game_date ? Date.parse(x.game_date) : NaN;
+         const started = !isNaN(kick) && (nowTick||Date.now())>=kick;
+         let r, rc;
+         if(dead){ r="\u2014"; rc="rgba(255,255,255,0.2)"; }
+         else if(future){ r="\u2014"; rc="rgba(255,255,255,0.25)"; }
+         else if(!x){ r = (w<_cw || _outWk===w) ? "NO PICK" : "OPEN"; rc = (w<_cw || _outWk===w) ? IOS.red : IOS.yellow; }
+         else if(x.result==="W"){ r="SURVIVED"; rc=IOS.green; }
+         else if(x.result==="L"){ r="OUT"; rc=IOS.red; }
+         else if(x.result==="P"||x.result==="V"){ r="VOID"; rc="rgba(255,255,255,0.5)"; }
+         else if(started){ r="LIVE"; rc="#64D2FF"; }
+         else { r="LOCKED"; rc=IOS.green; }
+         const main = dead ? "" : future ? "Opens Tuesday" : x ? _short(x) : (isNow ? "Make your pick" : "No pick");
+         const sub = dead ? "" : future ? ("after Week "+(w-1)+" grades") : x ? ((x.game||"")+(started?"":(!isNaN(kick)?(" \u00B7 "+_fmtK(kick)):""))) : "";
+         return (
+         <div key={w} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 0",borderBottom:"0.5px solid rgba(255,255,255,0.06)",background:isNow?"rgba(59,111,224,0.08)":"transparent",margin:isNow?"0 -14px":0,paddingLeft:isNow?14:0,paddingRight:isNow?14:0,borderRadius:isNow?10:0,opacity:(future||dead)?0.45:1}}>
+           <div style={{width:38,fontSize:10,fontWeight:800,letterSpacing:"0.1em",color:"rgba(255,255,255,0.35)"}}>{"WK "+w}</div>
+           <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:700,color:x?"#fff":"rgba(255,255,255,0.4)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{main}</div>{sub && <div style={{fontSize:10.5,color:"rgba(255,255,255,0.4)",fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{sub}</div>}</div>
+           <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.08em",color:rc,flexShrink:0}}>{r}</div>
+         </div>);
+       })}
+     </div>
+     <div style={{background:IOS.bg2,border:EDGE.hair,borderRadius:RAD.lg,padding:"14px",marginTop:10}}>
+       <div style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.13em",textTransform:"uppercase",color:"rgba(255,255,255,0.35)"}}>{"Burned \u00B7 can\u2019t pick again"}</div>
+       {_burn.length ? (
+         <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:8}}>{_burn.map((b,i)=>(<span key={i} title={"Week "+b.week} style={{fontSize:11,fontWeight:800,padding:"5px 9px",borderRadius:8,background:"rgba(255,255,255,0.06)",color:"rgba(255,255,255,0.6)",textDecoration:"line-through"}}>{_svTitle(b.outcome)}</span>))}</div>
+       ) : <div style={{fontSize:12,color:"rgba(255,255,255,0.4)",marginTop:8}}>Nothing burned yet. Every player you survive with lands here.</div>}
+     </div>
+   </div>
+   );
+ })()}
+ {leagueTab==="schedule"&&activeLeague.league_type!=="bracket"&&!lgIsSurvivor(activeLeague)&&(
  <>
  {(()=>{
  const targetSize = activeLeague.target_size||activeLeague.max_members||8;
