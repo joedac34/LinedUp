@@ -2852,6 +2852,10 @@ const SURVIVOR_NO_CAP=100000;
 const lgIsSurvivor=(lg)=> !!lg && lg.league_type==="survivor";
 const lgSizeLabel=(lg)=> lgIsSurvivor(lg) ? String(Number(lg.memberCount||0)||"?") : String(lg.target_size||lg.max_members||"?");
 const isFlexSlotType=(t)=> t==="wildcard"||t==="lines";
+// Same selection? Prefer the event-keyed selKey (game id|market|outcome|point);
+// fall back to id. Ids are per-sport now, but selKey survives a re-fetch that
+// reorders games and never collides across sports.
+const sameBet=(a,b)=> !!a && !!b && ((a.selKey&&b.selKey) ? a.selKey===b.selKey : (a.id!=null && b.id!=null && String(a.id)===String(b.id)));
 const slotAccepts=(t)=> t==="wildcard"?WILDCARD_TYPES:(t==="lines"?LINES_TYPES:[t]);
 // league_id columns are uuid. Anything else and Postgres 400s the whole query — which is
 // exactly what the demo id "lg1" did, on every screen, for every new user.
@@ -6879,7 +6883,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  h2h?.outcomes?.forEach((o, oi) => {
  const american = o.price >= 0 ? `+${o.price}` : `${o.price}`;
  ml.push({
- id: `live_ml_${gi}_${oi}`,
+ id: `live_ml_${sportId}_${gi}_${oi}`,   // sport in the id: index-only ids collided across sports, so a Canucks ML lit up (and could remove) the same cell on the NHL/NBA boards
  game: gameLabel,
  pick: o.name,
  odds: american,
@@ -6896,7 +6900,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  const american = o.price >= 0 ? `+${o.price}` : `${o.price}`;
  const sign = o.point >= 0 ? `+${o.point}` : `${o.point}`;
  spread.push({
- id: `live_sp_${gi}_${oi}`,
+ id: `live_sp_${sportId}_${gi}_${oi}`,
  game: gameLabel,
  pick: `${o.name} ${sign}`,
  odds: american,
@@ -6912,7 +6916,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  totals?.outcomes?.forEach((o, oi) => {
  const american = o.price >= 0 ? `+${o.price}` : `${o.price}`;
  ou.push({
- id: `live_ou_${gi}_${oi}`,
+ id: `live_ou_${sportId}_${gi}_${oi}`,
  game: gameLabel,
  pick: `${o.name} ${o.point}`,
  odds: american,
@@ -16229,7 +16233,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const locked = (soloSavedPicks && soloSavedPicks.freePicks) ? soloSavedPicks : null;
  const slateNum = soloWeeks.length + 1;
  const CATS = [{k:"all",l:"All"},{k:"ml",l:"ML"},{k:"spread",l:"Spread"},{k:"ou",l:"O/U"},{k:"prop",l:"Prop"},{k:"longshot",l:"Longshot"}];
- const board = (freeCat==="all" ? ALL_BETS : ALL_BETS.filter(b=>b.category===freeCat)).filter(b=>!soloFreePicks.some(p=>p.id===b.id)).slice(0,40);
+ const board = (freeCat==="all" ? ALL_BETS : ALL_BETS.filter(b=>b.category===freeCat)).filter(b=>!soloFreePicks.some(p=>sameBet(p,b))).slice(0,40);
  const projTotal = soloFreePicks.reduce((s2,b)=>s2+(b.mult||1)*ptsFor(b.impliedOdds),0);
  const CAP = 12;
  const atCap = soloFreePicks.length>=CAP;
@@ -17157,7 +17161,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    if(_cf){ setPickConflict(_cf); setTimeout(()=>setPickConflict(""),2600); setGridJustAdded(null); return; }
    const _CL={ml:"Moneyline",spread:"Spread",ou:"Over/Under",prop:"Prop",btts:"Both Teams To Score",dnb:"Draw No Bet",dchance:"Double Chance",tmtotal:"Team Total",longshot:"Longshot"};
    const _CC={ml:IOS.blue,spread:IOS.green,ou:IOS.orange,prop:IOS.yellow,longshot:IOS.pink};
-   setSoloFreePicks(prev=> prev.some(p=>String(p.id)===String(bet.id)) ? prev : [...prev, {...bet, category:cat, categoryLabel:_CL[cat]||cat, categoryColor:_CC[cat]||IOS.blue, mult:1}]);
+   setSoloFreePicks(prev=> prev.some(p=>sameBet(p,bet)) ? prev : [...prev, {...bet, category:cat, categoryLabel:_CL[cat]||cat, categoryColor:_CC[cat]||IOS.blue, mult:1}]);
    setGridJustAdded(bet.id); setTimeout(()=>setGridJustAdded(null),480);
    return;
  }
@@ -17299,12 +17303,12 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const StatLabel = ({children}) => (<div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:"rgba(255,255,255,0.32)",marginBottom:3}}>{children}</div>);
 
  const renderCard = (bet, idx) => {
- const selected = isSoloMode ? (bet.id!=null && soloFreePicks.some(p=>p.id!=null && String(p.id)===String(bet.id))) : (activePicks.some(p=>p.bet?.id===bet.id) || isLeg(bet));
+ const selected = isSoloMode ? (bet.id!=null && soloFreePicks.some(p=>sameBet(p,bet))) : (activePicks.some(p=>p.bet?.id===bet.id) || isLeg(bet));
  const added = gridJustAdded===bet.id;
  const pct = impliedPct(bet.impliedOdds);
  const read = readFor(pct);
  const pos = bet.odds?.startsWith("+");
- const _myMult = isSoloMode ? ((soloFreePicks.find(p=>String(p.id)===String(bet.id))||{}).mult||1) : (targetMult||1);
+ const _myMult = isSoloMode ? ((soloFreePicks.find(p=>sameBet(p,bet))||{}).mult||1) : (targetMult||1);
  const pts = calcPickPoints(_myMult, bet.impliedOdds, "W");
  const ret = decReturn(bet.impliedOdds);
 
@@ -17455,12 +17459,12 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    setAltSheet(null);
    };
    const renderRow = (bet, idx, isFirst, showPlokTip) => {
-   const selected = isSoloMode ? (bet.id!=null && soloFreePicks.some(p=>p.id!=null && String(p.id)===String(bet.id))) : (activePicks.some(p=>p.bet&&p.bet.id===bet.id) || isLeg(bet));
+   const selected = isSoloMode ? (bet.id!=null && soloFreePicks.some(p=>sameBet(p,bet))) : (activePicks.some(p=>p.bet&&p.bet.id===bet.id) || isLeg(bet));
    const added = gridJustAdded===bet.id;
    const pct = impliedPct(bet.impliedOdds);
    const read = readFor(pct);
    const pos = bet.odds && String(bet.odds).charAt(0)==="+";
-   const _myMult = isSoloMode ? ((soloFreePicks.find(p=>String(p.id)===String(bet.id))||{}).mult||1) : (targetMult||1);
+   const _myMult = isSoloMode ? ((soloFreePicks.find(p=>sameBet(p,bet))||{}).mult||1) : (targetMult||1);
    const pts = calcPickPoints(_myMult, bet.impliedOdds, "W");
    const ret = decReturn(bet.impliedOdds);
    let title="", subtitle="", sideChip=null;
@@ -17533,7 +17537,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    const uPct = under ? impliedPct(under.impliedOdds) : null;
    const favOver = (oPct!=null && uPct!=null) ? oPct>=uPct : (oPct!=null);
    const leanPct = Math.max(oPct||0, uPct||0); const leanRead = readFor(leanPct);
-   const sel = (b)=> b && (isSoloMode ? soloFreePicks.some(p=>String(p.id)===String(b.id)) : (activePicks.some(p=>p.bet&&p.bet.id===b.id)||isLeg(b)));
+   const sel = (b)=> b && (isSoloMode ? soloFreePicks.some(p=>sameBet(p,b)) : (activePicks.some(p=>p.bet&&p.bet.id===b.id)||isLeg(b)));
    const sideBtn = (b, label, fav) => {
    if(!b) return (<div style={{width:66,borderRadius:RAD.md,border:"1px solid rgba(255,255,255,0.06)",background:"rgba(255,255,255,0.02)",textAlign:"center",padding:"6px 3px 5px",opacity:0.45}}><div style={{fontSize:8,fontWeight:800,letterSpacing:"0.06em",color:"rgba(255,255,255,0.3)"}}>{label}</div><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:16,color:"rgba(255,255,255,0.3)",lineHeight:1.1,marginTop:1}}>—</div><div style={{fontSize:9,fontWeight:700,color:"rgba(255,255,255,0.25)",marginTop:1}}>n/a</div></div>);
    const on=sel(b); const pos=String(b.odds||"").charAt(0)==="+"; const pts=calcPickPoints(targetMult||1,b.impliedOdds,"W");
@@ -17658,10 +17662,10 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  if(!b) return <div style={{borderRadius:RAD.md,border:"1px dashed rgba(255,255,255,0.08)",minHeight:52}}/>;
  const svUsed = !isSoloMode && activeLeague && activeLeague.league_type==="survivor" && svUsedNames.has(String(b.pick||"").trim().toLowerCase());
  const enabled = lineAllowed(cat) && !svUsed;
- const sel = isSoloMode ? soloFreePicks.some(p=>String(p.id)===String(b.id)) : ((activePicks.some(p=>p.bet&&p.bet.id===b.id)) || isLeg(b));
+ const sel = isSoloMode ? soloFreePicks.some(p=>sameBet(p,b)) : ((activePicks.some(p=>p.bet&&p.bet.id===b.id)) || isLeg(b));
  const pts = ptsOf(b);
  return (
- <div title={svUsed?"Already used in an earlier week":undefined} onClick={()=>{ if(!enabled) return; if(sel){ if(isSoloMode){ setSoloFreePicks(prev=>prev.filter(p=>String(p.id)!==String(b.id))); } else { setActivePicks(prev=>prev.map(pp=> (pp.bet&&String(pp.bet.id)===String(b.id)) ? {...pp, bet:null} : pp)); } } else { addCard(b,cat); } }} style={{position:"relative",borderRadius:RAD.md,cursor:enabled?"pointer":"default",textAlign:"center",padding:"8px 3px",opacity:enabled?1:0.4,
+ <div title={svUsed?"Already used in an earlier week":undefined} onClick={()=>{ if(!enabled) return; if(sel){ if(isSoloMode){ setSoloFreePicks(prev=>prev.filter(p=>!sameBet(p,b))); } else { setActivePicks(prev=>prev.map(pp=> (pp.bet&&String(pp.bet.id)===String(b.id)) ? {...pp, bet:null} : pp)); } } else { addCard(b,cat); } }} style={{position:"relative",borderRadius:RAD.md,cursor:enabled?"pointer":"default",textAlign:"center",padding:"8px 3px",opacity:enabled?1:0.4,
  border:"1px solid "+(sel?IOS.blue+"a6":value?"rgba(48,209,88,0.55)":"rgba(255,255,255,0.1)"),
  background:sel?"linear-gradient(160deg,rgba(10,132,255,0.24),rgba(10,132,255,0.05))":value?"linear-gradient(160deg,rgba(48,209,88,0.2),rgba(48,209,88,0.04))":"rgba(255,255,255,0.04)",transition:"all .13s"}}>
  {(cat==="spread"||cat==="ou") && canAlt(b.marketKey) && <div onClick={(e)=>{e.stopPropagation(); openAltLines(b);}} style={{position:"absolute",top:2,right:2,fontSize:7.5,fontWeight:900,color:"#64D2FF",background:"rgba(100,210,255,0.14)",border:"1px solid rgba(100,210,255,0.45)",borderRadius:4,padding:"1px 4px",cursor:"pointer",zIndex:3,lineHeight:1.25}}>ALT</div>}
