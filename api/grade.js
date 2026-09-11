@@ -1679,6 +1679,21 @@ export default async function handler(req, res) {
         playerIndexCache[_sp] = idx;
       }
       const _indexFor = (p) => playerIndexCache[_spOf(p)] || {};
+      // POST {"debugPlayer":"holani"} -> dump every index key containing that
+      // substring, with the games and the TD-relevant stats, so a lookup miss can
+      // be told apart from a key mismatch without another deploy.
+      if (req && req.body && req.body.debugPlayer) {
+        const _q = String(req.body.debugPlayer).toLowerCase();
+        results.debug.playerProbe = results.debug.playerProbe || [];
+        for (const _sp of _propSports) {
+          const _idx = playerIndexCache[_sp] || {};
+          for (const _k in _idx) {
+            if (_k.indexOf(_q) === -1) continue;
+            results.debug.playerProbe.push({ sport: _sp, key: _k, entries: _idx[_k].map(e => ({ game: `${e.away} @ ${e.home}`, date: e.date, team: e.team, rushTD: e.stats && e.stats.rushingTouchdowns, recTD: e.stats && e.stats.receivingTouchdowns })) });
+          }
+        }
+        if (!results.debug.playerProbe.length) results.debug.playerProbe.push({ note: "no index key contains " + _q, keysSample: Object.keys(playerIndexCache[_propSports[0]] || {}).slice(0, 20) });
+      }
       // Per-sport index size + the games it covers. Without this a miss is
       // indistinguishable between "player absent" and "this game never got indexed".
       results.debug.index = results.debug.index || {};
