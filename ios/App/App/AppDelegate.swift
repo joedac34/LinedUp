@@ -7,7 +7,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        // Actionable notification buttons (Pick now / See results / etc). These must
+        // be registered at launch, not at permission time: a category that is not in
+        // the table when a push arrives renders as a plain banner with no buttons,
+        // which is exactly what the first push after a fresh install would do.
+        // Identifiers live in NotificationCategories.swift and must stay in sync
+        // with the `category` string api/notify.js sends.
+        NotificationCategories.register()
         return true
     }
 
@@ -68,4 +74,3 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
 }
-

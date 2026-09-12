@@ -20,6 +20,7 @@
 		D8B2DEE230526328002B35A0 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D8B2DEE130526328002B35A0 /* SwiftUI.framework */; };
 		D8B2DEEF30526329002B35A0 /* PickLockLiveExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D8B2DEDD30526328002B35A0 /* PickLockLiveExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		D8B2DEFD305264E1002B35A0 /* LiveActivityPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8B2DEFC305264E1002B35A0 /* LiveActivityPlugin.swift */; };
+		D8B2DF013054D155002B35A0 /* NotificationCategories.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8B2DF003054D155002B35A0 /* NotificationCategories.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -63,6 +64,7 @@
 		D8B2DEDF30526328002B35A0 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		D8B2DEE130526328002B35A0 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		D8B2DEFC305264E1002B35A0 /* LiveActivityPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityPlugin.swift; sourceTree = "<group>"; };
+		D8B2DF003054D155002B35A0 /* NotificationCategories.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationCategories.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -141,6 +143,7 @@
 				2FAD9762203C412B000D30F8 /* config.xml */,
 				50B271D01FEDC1A000F3C39B /* public */,
 				D8B2DEFC305264E1002B35A0 /* LiveActivityPlugin.swift */,
+				D8B2DF003054D155002B35A0 /* NotificationCategories.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -272,6 +275,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D8B2DF013054D155002B35A0 /* NotificationCategories.swift in Sources */,
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				D8B2DEFD305264E1002B35A0 /* LiveActivityPlugin.swift in Sources */,
 			);
