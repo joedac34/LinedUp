@@ -8889,6 +8889,32 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
      P.addListener("pushNotificationActionPerformed", (a)=>{
        try{
          const d = (a && a.notification && a.notification.data) || {};
+         const act = String((a && a.actionId) || "tap");
+         // A tapped BUTTON routes by its own id; a tap on the banner body falls
+         // back to the payload url. Ids are declared in ios/App/App/
+         // NotificationCategories.swift and must stay in sync with it.
+         if(act && act !== "tap" && act !== "default"){
+           if(d.leagueId) { try{ setActiveLeagueId(d.leagueId); }catch(e){} }
+           switch(act){
+             case "pick_now":
+             case "survivor_pick":  setScreen("picks"); break;
+             case "see_results":    setScreen("history"); break;
+             case "open_standings":
+             case "open_board":     setLeagueTab("standings"); setScreen("league"); break;
+             case "open_league":    setScreen("leagues"); break;
+             case "open_chat":      setScreen("chat"); break;
+             case "snooze":
+               // Re-arm the same reminder an hour out. Server-side so it survives
+               // the app being killed; silent no-op if the endpoint is not live yet.
+               try{ authHeaders().then(h=>fetch(API_BASE+"/api/notify",{method:"POST",headers:h,
+                 body:JSON.stringify({op:"snooze", minutes:60, title:(a.notification&&a.notification.title)||"Picks lock soon",
+                   body:(a.notification&&a.notification.body)||"", url:String(d.url||"/picks"), category:"notif_deadline"})})); }catch(e){}
+               return;
+             default: break;
+           }
+           try{ posthog.capture("push_action", { action: act, category: String(d.category||"") }); }catch(e){}
+           return;
+         }
          const u = String(d.url || "/");
          if(u.indexOf("/league")===0) setScreen("leagues");
          else if(u.indexOf("/picks")===0) setScreen("picks");
