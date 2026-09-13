@@ -2849,6 +2849,7 @@ const LINES_TYPES=["ml","spread","ou"];
 // "filling" or "full" (TD Scorer Survivor, 9 Sep 2026: target_size=2 held the
 // commissioner out of his own picks tab and read as a closed pool to a joiner).
 const SURVIVOR_NO_CAP=100000;
+const svScorerKey=(x)=>{ if(!x) return ""; const o=String(x.outcome||"").trim(); const bad=/^(yes|no|over|under)$/i.test(o); const base = (o && !bad) ? o : String(x.pick_name||""); return base.replace(/\s*-\s*(anytime|first|1st)\s+td.*$/i,"").trim().toLowerCase(); };
 const lgIsSurvivor=(lg)=> !!lg && lg.league_type==="survivor";
 const lgSizeLabel=(lg)=> lgIsSurvivor(lg) ? String(Number(lg.memberCount||0)||"?") : String(lg.target_size||lg.max_members||"?");
 const isFlexSlotType=(t)=> t==="wildcard"||t==="lines";
@@ -10905,7 +10906,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
     setSvMine((_mine||[]).filter(x=>!x.replaced_by));
     // Voided picks are released, not burned \u2014 must match survivorBlocked above,
     // or the rail would show a player the lock guard would happily let you re-use.
-    setSvPicks(_all||[]); setSvBurned((_mine||[]).filter(x=>x.outcome && x.result!=="P"));
+    setSvPicks(_all||[]); setSvBurned((_mine||[]).filter(x=>x.result!=="P").map(x=>({...x, outcome: svScorerKey(x)})).filter(x=>x.outcome));
   }catch(e){} })();
  }, [screen, activeLeagueId, isSoloMode, user&&user.id, activeLeague&&activeLeague.league_type, activeLeague&&activeLeague.current_week]);
 
@@ -11068,13 +11069,17 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
              {(Number(activeLeague.survivor_lives)||1)===2&&!dead&&(m.strikes||0)>0&&<span style={{flexShrink:0,fontSize:8,fontWeight:800,color:IOS.orange,background:"rgba(255,159,10,0.12)",border:"0.5px solid rgba(255,159,10,0.3)",borderRadius:5,padding:"1px 5px",whiteSpace:"nowrap"}}>1 life</span>}
            </div>
            {_weeks.map(w=>{ const st=_cell(m.userId,w,m.eliminatedWeek);
+             // Visible once kicked off (RLS) or graded; your own always. Last name only, the cell is 34px.
+             const _pk=(svPicks||[]).find(x=>x.user_id===m.userId&&x.week===w)||null;
+             const _lbl=_pk ? _svTitle(svScorerKey(_pk)).split(" ").slice(-1)[0] : "";
              const bg=st==="w"?"rgba(48,209,88,0.13)":st==="l"||st==="miss"?"rgba(255,55,95,0.13)":st==="p"?"rgba(255,159,10,0.1)":"rgba(255,255,255,0.04)";
              const bd=st==="w"?"rgba(48,209,88,0.35)":st==="l"||st==="miss"?"rgba(255,55,95,0.4)":st==="p"?"rgba(255,159,10,0.3)":"transparent";
              return (
-             <div key={w} style={{width:34,height:34,borderRadius:8,background:st==="gone"?"transparent":bg,border:`0.5px solid ${st==="gone"?"transparent":bd}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+             <div key={w} style={{width:34,height:34,borderRadius:8,background:st==="gone"?"transparent":bg,border:`0.5px solid ${st==="gone"?"transparent":bd}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,position:"relative",marginBottom:_lbl?10:0}}>
                {st==="w"&&<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
                {(st==="l"||st==="miss")&&<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={IOS.red} strokeWidth="2.8" strokeLinecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>}
                {st==="p"&&<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={IOS.orange} strokeWidth="2.4" strokeLinecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>}
+               {_lbl&&<div style={{position:"absolute",left:-3,right:-3,top:35,fontSize:7.5,fontWeight:800,color:"rgba(255,255,255,0.55)",textAlign:"center",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",lineHeight:1}}>{_lbl}</div>}
              </div>
              );})}
          </div>
@@ -14080,15 +14085,17 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        const _settle=_kick?_kick+11700000:null;
        const _live=_p&&_p.result==="pending"&&_kick&&nowTick>=_kick;
        const _won=_p&&_p.result==="W"; const _lost=_p&&_p.result==="L"; const _void=_p&&_p.result==="P";
-       const _nm=_svTitle(_p&&(_p.outcome||_p.pick_name)||"");
-       const _short=_nm.split(" ").slice(-1)[0]||_nm;
+       const _nm=_svTitle(svScorerKey(_p));
+       // ML pools shorten to the nickname ("the Jaguars"); TD pools name the scorer
+       // ("Chase Brown TD"), because the last word of a player is never enough.
+       const _short=_ml ? (_nm.split(" ").slice(-1)[0]||_nm) : (_nm ? (_nm+" TD") : "TD");
        const _ini=_nm.split(" ").filter(Boolean).map(x=>x[0]).slice(0,_ml?3:2).join("").toUpperCase();
        const _alv=(leagueMembers||[]).filter(m=>m.eliminatedWeek==null).length;
        const _tot2=(leagueMembers||[]).length;
        const _brn=(svBurned||[]).filter(x=>x.week<(activeLeague.current_week||1)).length;
        // Overlap is revealed only after the lock. Before it, showing who is on whom
        // would let a late picker fade the field.
-       const _riders=(!_open&&_p)?(svPicks||[]).filter(x=>x.week===(activeLeague.current_week||1)&&x.user_id!==(user&&user.id)&&_svTitle(x.outcome||x.pick_name||"")===_nm):[];
+       const _riders=(!_open&&_p)?(svPicks||[]).filter(x=>x.week===(activeLeague.current_week||1)&&x.user_id!==(user&&user.id)&&svScorerKey(x)===svScorerKey(_p)):[];
        const _rn=_riders.length;
        const _mem4=(uid)=>((leagueMembers||[]).find(m=>m.userId===uid)||{}).name||"?";
        const _clk=(ms)=>{ const d=Math.max(0,ms-nowTick), h=Math.floor(d/3600000), m=Math.floor((d%3600000)/60000), x=Math.floor((d%60000)/1000); return h>0?(h+":"+String(m).padStart(2,"0")+":"+String(x).padStart(2,"0")):(m+":"+String(x).padStart(2,"0")); };
@@ -18933,7 +18940,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div onClick={(e)=>e.stopPropagation()} style={{width:"100%",maxHeight:"90%",background:"#0d0d10",borderTopLeftRadius:20,borderTopRightRadius:20,borderTop:"1px solid #26262a",display:"flex",flexDirection:"column",overflow:"hidden"}}>
  <div style={{width:36,height:4,borderRadius:2,background:"#33333a",margin:"9px auto 4px"}}/>
  <div style={{padding:"6px 16px 4px"}}>
- <div style={{fontSize:16,fontWeight:800}}>{altSheet.isProp?(altSheet.player+" · "+altSheet.label):(altSheet.isSpread?((altSheet.bet.outcome||"")+" · Run Line"):"Game Total")}</div>
+ <div style={{fontSize:16,fontWeight:800}}>{altSheet.isProp?(altSheet.player+" · "+altSheet.label):(altSheet.isSpread?((altSheet.bet.outcome||"")+" · "+(gSport==="mlb"?"Run Line":gSport==="nhl"?"Puck Line":"Spread")):"Game Total")}</div>
  <div style={{fontSize:11.5,color:"rgba(255,255,255,0.45)",marginTop:1}}>Pick a line — lower pays less, longer pays more</div>
  </div>
  {altSheet.loading ? (
