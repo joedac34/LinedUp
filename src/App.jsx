@@ -7141,7 +7141,20 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  const parseSlotConfig=(raw)=>{ try{ const a=typeof raw==="string"?JSON.parse(raw):raw; return (Array.isArray(a)&&a.length)?a:null; }catch(e){ return null; } };
  const freshSlots=()=>{ if(!isSoloMode && activeLeague && activeLeague.league_type==="survivor") return [ activeLeague.survivor_config==="ml" ? {id:0,bet:null,mult:1,category:"ml",slotType:"ml",market:null,isParlay:false,parlayLegs:[],locked:true} : {id:0,bet:null,mult:1,category:"prop",slotType:"prop",market:"anytd",isParlay:false,parlayLegs:[],locked:true} ]; const cfg = !isSoloMode ? parseSlotConfig(activeLeague&&activeLeague.slot_config) : null; return cfg ? cfg.map((c,i)=>({id:i,bet:null,mult:null,category:c.type,slotType:c.type,market:c.market||null,isParlay:false,parlayLegs:[],locked:true})) : EMPTY_FLEX.map(s=>({...s})); };
  const draftReady = useRef(null); // "the draft for this league+week has been loaded"
- useEffect(()=>{ if(isSoloMode) return; const _wk=(activeLeague && (activeLeague.current_week||activeLeague.week))||1; const _key=`${activeLeagueId}_wk${_wk}`;
+ useEffect(()=>{
+   if(isSoloMode || !activeLeague || activeLeague.league_type!=="survivor") return;
+   const _fp = flexPicks||[];
+   const _bad = _fp.length!==1 || _fp.some(sl=> sl && (sl.isParlay || (sl.slotType!=="prop" && sl.slotType!=="ml")));
+   if(_bad && !_fp.some(sl=> sl && sl.committed)) setFlexPicks(freshSlots());
+ }, [isSoloMode, activeLeague&&activeLeague.id, activeLeague&&activeLeague.league_type, flexPicks&&flexPicks.length]);
+ useEffect(()=>{ if(isSoloMode) return;
+   // activeLeague falls back to realLeagues[0] (or a placeholder) until the row for
+   // activeLeagueId has loaded. Building slots off that fallback produced a 5-slot
+   // h2h slip for a survivor pool, and nothing re-ran once the real row arrived
+   // because league_type was not a dependency (TD survivor, 12 Sep). Wait for the
+   // matching row, and re-run when the type/config it carries changes.
+   if(activeLeagueId && activeLeague && activeLeague.id && activeLeague.id!==activeLeagueId) return;
+   const _wk=(activeLeague && (activeLeague.current_week||activeLeague.week))||1; const _key=`${activeLeagueId}_wk${_wk}`;
    // CRITICAL: this effect re-runs whenever activeLeague changes identity — which happens
    // every time fetchLeagues() refetches (realtime refresh, focus, post-action). If we're
    // already showing this exact league+week AND the in-memory slip has uncommitted picks,
@@ -7150,7 +7163,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
    // So: if the draft context is unchanged and we currently hold live picks, do nothing.
    const _liveNow = (flexPicks||[]).some(sl=> sl && !sl.committed && (sl.bet || (sl.isParlay && (sl.parlayLegs||[]).length)));
    if(draftReady.current===_key && _liveNow) return;
-   let base = freshSlots(); try{ const _d = activeLeagueId ? localStorage.getItem(`linedup_draft_${_key}`) : null; if(_d){ const arr=JSON.parse(_d); if(Array.isArray(arr) && arr.length && arr.some(sl=> sl && !sl.committed && (sl.bet || (sl.isParlay && (sl.parlayLegs||[]).length)))) base = arr; } }catch(e){} setFlexPicks(base); try{ draftReady.current = _key; }catch(e){} }, [activeLeagueId, isSoloMode, (()=>{ try{ const c=activeLeague&&activeLeague.slot_config; return typeof c==="string"?c:JSON.stringify(c||null); }catch(e){ return null; } })(), (activeLeague&&(activeLeague.current_week||activeLeague.week))||1]);
+   let base = freshSlots(); try{ const _d = activeLeagueId ? localStorage.getItem(`linedup_draft_${_key}`) : null; if(_d){ const arr=JSON.parse(_d); if(Array.isArray(arr) && arr.length && arr.some(sl=> sl && !sl.committed && (sl.bet || (sl.isParlay && (sl.parlayLegs||[]).length)))) base = arr; } }catch(e){} setFlexPicks(base); try{ draftReady.current = _key; }catch(e){} }, [activeLeagueId, isSoloMode, activeLeague&&activeLeague.id, activeLeague&&activeLeague.league_type, activeLeague&&activeLeague.survivor_config, (()=>{ try{ const c=activeLeague&&activeLeague.slot_config; return typeof c==="string"?c:JSON.stringify(c||null); }catch(e){ return null; } })(), (activeLeague&&(activeLeague.current_week||activeLeague.week))||1]);
  // Persist the UNLOCKED league draft so an in-progress slip survives leaving/reopening the app.
  // Mirror the draft BOTH ways. This used to be write-only: clearing the last pick left
  // the previous draft in localStorage, so leaving the tab and coming back resurrected
@@ -11028,6 +11041,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      if(rs.includes("W")) return "w";
      if(rs.includes("pending")) return "p";
      if(rs.length) return "l";
+     // Others' pending picks are hidden by RLS until kickoff; the status RPC still
+     // says whether one exists. Show it as pending rather than an empty cell.
+     if(w===_wk && svStatus && svStatus[u] && svStatus[u].has_pick) return "p";
      return w<_wk?"miss":"open";
    };
    return (
