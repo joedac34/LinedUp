@@ -2045,11 +2045,36 @@ function pairSlips(mine, theirs) {
  const idOf = (p) => String(p.slotId || p.slot || "");
  const idxOf = (p) => slotIdxFromName(idOf(p));
  const keyOf = (p) => { const i = idxOf(p); return i!=null ? "i"+i : "s"+idOf(p); };
+ const isLeg = (p) => /^longshot_\d+_\d+$/.test(idOf(p));
  const rows = new Map();
  const put = (p, side) => {
   const k = keyOf(p);
   if(!rows.has(k)) rows.set(k, { key:k, idx:idxOf(p), slot:p.slot, mine:null, theirs:null });
-  rows.get(k)[side] = p;
+  const row = rows.get(k);
+  if(isLeg(p)){
+   // Every leg of a parlay shares one slot index, so the old assignment let each
+   // leg overwrite the last: the grid showed ONE leg (whichever loaded last) and
+   // 0.0 points, because the ticket's points sit on leg _0. Collapse them into a
+   // single pick that carries all the legs and the summed points.
+   const cur = row[side];
+   const legs = (cur && cur.parlayLegs) ? cur.parlayLegs.slice() : [];
+   legs.push(p);
+   legs.sort((x,y)=> (parseInt(String(idOf(x)).split("_")[2],10)||0) - (parseInt(String(idOf(y)).split("_")[2],10)||0));
+   const pts = legs.reduce((n,x)=> n + (Number(x.points_earned)||0), 0);
+   const dec = legs.reduce((d,x)=>{ const o=Number(x.implied_odds)||0; if(!o) return d; return d * (o<0 ? (1+100/Math.abs(o)) : (1+o/100)); }, 1);
+   const am = dec>1 ? Math.round((dec-1)*100) : 0;
+   // One leg losing kills the ticket; it is only a win when every leg won.
+   const anyL = legs.some(x=> x.res==="L" || x.result==="L");
+   const allW = legs.length>0 && legs.every(x=> x.res==="W" || x.result==="W");
+   row[side] = { ...legs[0], isParlay:true, parlayLegs:legs,
+     name: legs.length+"-leg parlay"+(am?(" \u00b7 +"+am):""),
+     game: legs.length+" legs",
+     points_earned: pts, pts: pts,
+     res: anyL ? "L" : allW ? "W" : "pend",
+     result: anyL ? "L" : allW ? "W" : (legs[0].result||"pending") };
+   return;
+  }
+  row[side] = p;
  };
  (mine||[]).forEach(p=>put(p,"mine"));
  (theirs||[]).forEach(p=>put(p,"theirs"));
@@ -3242,6 +3267,22 @@ function MatchBody({ d, IOS, liveGames=[], onOpenGamecast }){
         <div style={{fontSize:voided?11:14,fontWeight:900,marginTop:2,color:voided?"#FF9F0A":won?IOS.green:lost?"rgba(255,255,255,0.3)":IOS.blue}}>
           {voided ? "VOIDED · 0.0" : won ? "+"+Number(pk.pts).toFixed(1) : lost ? "0.0" : (reveal && upside>0 ? "to win "+upside.toFixed(1) : "—")}
         </div>
+        {reveal && pk.isParlay && expanded && (
+          <div style={{marginTop:6,display:"flex",flexDirection:"column",gap:4}}>
+            {(pk.parlayLegs||[]).map((lg,li)=>{
+              const lr = lg.res || lg.result;
+              const lc = lr==="W" ? IOS.green : lr==="L" ? IOS.red : "rgba(255,255,255,0.45)";
+              return (
+              <div key={li} style={{display:"flex",alignItems:"flex-start",gap:6,flexDirection:right?"row-reverse":"row"}}>
+                <span style={{width:5,height:5,borderRadius:"50%",background:lc,flexShrink:0,marginTop:5}}/>
+                <div style={{minWidth:0,textAlign:right?"right":"left"}}>
+                  <div style={{fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.8)",lineHeight:1.25}}>{lg.name||lg.pick_name}</div>
+                  <div style={{fontSize:9,color:"rgba(255,255,255,0.3)",marginTop:1}}>{(lg.game||"")+(lg.odds?(" \u00b7 "+lg.odds):"")}</div>
+                </div>
+              </div>);
+            })}
+          </div>
+        )}
         {reveal && pk.replacedFrom && (
           <div style={{marginTop:5}}>
             <div onClick={(e)=>{ e.stopPropagation(); setOpenVoid(o=>({...o,[_vk]:!o[_vk]})); }} style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:8.5,fontWeight:800,letterSpacing:"0.04em",color:"#FF9F0A",background:"rgba(255,159,10,0.12)",border:"0.5px solid rgba(255,159,10,0.3)",borderRadius:5,padding:"2px 6px",cursor:"pointer"}}>
