@@ -493,6 +493,10 @@ function installSheetDrag(){
   document.addEventListener("mouseup", end, true);
 }
 installSheetDrag();
+// Called on every screen change: a new screen starts with no compact bar until
+// its own scroll handler says otherwise.
+function _resetCbarH(){ _setCbarH(0); }
+
 function _setCbarH(px){
   try { document.documentElement.style.setProperty("--cbar-h", px + "px"); } catch(e){}
 }
@@ -1555,9 +1559,12 @@ try{ if(typeof document!=="undefined" && typeof window!=="undefined" && !window.
       const cb = el.querySelector(".pk-cbar");
       if(cb){
         const on = cb.classList.contains("on");
-        if(!on && y > 64){ cb.classList.add("on"); _setCbarH(46); }
-        else if(on && y < 44){ cb.classList.remove("on"); _setCbarH(0); }
+        if(!on && y > 64) cb.classList.add("on");
+        else if(on && y < 44) cb.classList.remove("on");
       }
+      // Sync every pass, and to 0 when this screen has no bar at all, so the
+      // offset can never outlive the bar that justified it.
+      _setCbarH(cb && cb.classList.contains("on") ? 46 : 0);
     }catch(e){}
 
     // ─ collapsing dock ─
@@ -6684,6 +6691,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
    if(h[h.length-1] !== screen){ h.push(screen); if(h.length>25) h.shift(); }
    try{ document.documentElement.setAttribute("data-pk-back",
      (PUSHED_SCREENS.indexOf(screen)!==-1 && h.length>1) ? "1" : "0"); }catch(e){}
+   _resetCbarH();
  }, [screen]);
  // THE back. Pops navHist (the only thing that knows where the user came from)
  // and lands on the previous screen. Visible back buttons call goBack(fallback):
@@ -12000,6 +12008,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
       chip or track, s5 a divider fill. In light these stop being darker greys and
       become white with the elevation carried by the border instead. */
    --on-color:#FFFFFF;
+   /* Text sitting on a 12% accent tint: pale on black, deep on white. */
+   --chip-ink:#CFE4FF; --chip-ink-solo:#FFC4D2;
    /* Sticky geometry. --cbar-h is written from the scroll handler. */
    --header-h:52px;
    --cbar-h:0px;
@@ -12056,6 +12066,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    --accent-ios:#0B5FCC; --accent-ios-rgb:11,95,204;
    --on-color:#FFFFFF;
    --hero:#E8EFF9;
+   --chip-ink:#1E49B0; --chip-ink-solo:#A81448;
    --bar:rgba(255,255,255,0.86);
    --sticky-shadow:0 8px 16px -10px rgba(13,17,23,0.22);
    --dock-shadow:0 18px 40px -14px rgba(13,17,23,0.26);
@@ -12134,8 +12145,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  .gh-right{display:flex;align-items:center;gap:9px;flex-shrink:0;}
  .gh-switch{display:flex;align-items:center;gap:6px;background:rgba(var(--accent-ios-rgb),0.12);border:0.5px solid rgba(var(--accent-ios-rgb),0.32);border-radius:10px;padding:7px 11px;cursor:pointer;max-width:200px;}
  .gh-switch.solo{background:rgba(var(--longshot-rgb),0.12);border-color:rgba(var(--longshot-rgb),0.32);}
- .gh-nm{font-size:13px;font-weight:700;color:#cfe4ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
- .gh-switch.solo .gh-nm{color:#ffc4d2;}
+ .gh-nm{font-size:13px;font-weight:700;color:var(--chip-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+ .gh-switch.solo .gh-nm{color:var(--chip-ink-solo);}
  /* -- TAP TARGETS ----------------------------------------------------------
     Controls below 44pt get a transparent overlay that extends the touch area
     without changing the box. Values are chosen to reach 44 from the real size:
@@ -13950,7 +13961,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div className="gh-left">
  <div className={"gh-switch"+(isSoloMode?" solo":"")} onClick={()=>setShowSwitcher(true)}>
  <span className="gh-nm">{isSoloMode?"Solo Mode":((activeLeague&&activeLeague.name)||"Select league")}</span>
- <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={isSoloMode?"#ffc4d2":"#9fc8ff"} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+ <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={isSoloMode?"var(--chip-ink-solo)":"var(--chip-ink)"} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
  </div>
  </div>
  <div className="gh-center"></div>
