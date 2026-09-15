@@ -2618,8 +2618,8 @@ function seasonDrawCard(d){
   x.fillStyle=MUT2; x.font="700 20px Barlow, system-ui, sans-serif";
   x.fillText("of "+(d.total||0)+" \u00b7 "+(d.weeks||0)+" weeks", P, 246);
   // Stat strip
-  const stats=[["RECORD",String(d.record||"0-0"),"#fff"],["POINTS",String(d.points!=null?d.points:0),"var(--cyan)"],
-               ["HIT RATE",(d.hit!=null?d.hit+"%":"\u2014"),GR],["PICKS",String(d.graded||0),"#fff"]];
+  const stats=[["RECORD",String(d.record||"0-0"),"var(--text)"],["POINTS",String(d.points!=null?d.points:0),"var(--cyan)"],
+               ["HIT RATE",(d.hit!=null?d.hit+"%":"\u2014"),GR],["PICKS",String(d.graded||0),"var(--text)"]];
   const sw=(W-P*2-24)/4;
   stats.forEach((st,i)=>{
     const sx=P+i*(sw+8);
@@ -3655,7 +3655,7 @@ function AiInsightBubble({ item, IOS, onAddToSlip }) {
         <div style={{textAlign:"right"}}><div style={{fontSize:24,fontWeight:800,letterSpacing:"-0.8px",color:vc,fontFamily:"'Barlow Semi Condensed',sans-serif"}}>{h.edgePts>0?"+":""}{h.edgePts}</div><div style={{fontSize:8.5,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",color:"var(--text3)"}}>pts of edge</div></div>
       </div>
       <div style={{display:"flex",gap:7,marginBottom:8}}>
-        {[{n:h.modelProb+"%",l:"Model win prob",c:"#fff"},{n:h.impliedProb+"%",l:"Implied by "+h.odds,c:"rgba(var(--ink-rgb),0.46)"},{n:String(h.odds),l:"Price",c:vc}].map((b,bi)=>(
+        {[{n:h.modelProb+"%",l:"Model win prob",c:"var(--text)"},{n:h.impliedProb+"%",l:"Implied by "+h.odds,c:"rgba(var(--ink-rgb),0.46)"},{n:String(h.odds),l:"Price",c:vc}].map((b,bi)=>(
           <div key={bi} style={{flex:1,background:"rgba(var(--ink-rgb),0.04)",border:EDGE.hair,borderRadius:RAD.md,padding:"10px 6px",textAlign:"center"}}>
             <div style={{fontSize:16,fontWeight:800,letterSpacing:"-0.3px",color:b.c}}>{b.n}</div>
             <div style={{fontSize:7.5,fontWeight:700,letterSpacing:"0.07em",textTransform:"uppercase",color:"var(--text3)",marginTop:3,whiteSpace:"nowrap"}}>{b.l}</div>
@@ -5207,12 +5207,12 @@ function GauntletCard({ user, onEnter, onJoin }){
   {!mem&&!started&&(<>
   <div style={{fontSize:14.5,fontWeight:800,marginTop:9,letterSpacing:"-0.2px"}}>All of PickLock. One pick a week. Last one standing.</div>
   <div style={{fontSize:11,color:"var(--text25)",marginTop:4}}>{"Free entry · "+(entrants>0?(entrants+" in already · "):"")+"doors close in "+daysLeft+" day"+(daysLeft===1?"":"s")+" · NFL Week 1"}</div>
-  <div onClick={join} style={{display:"block",textAlign:"center",background:"linear-gradient(120deg,var(--purple),#8E4BD0)",color:"var(--text)",fontWeight:800,fontSize:13.5,padding:"11px",borderRadius:RAD.md,marginTop:11,cursor:"pointer",opacity:busy?0.6:1}}>{busy?"Joining…":"Step in"}</div>
+  <div onClick={join} style={{display:"block",textAlign:"center",background:"linear-gradient(120deg,var(--purple),#8E4BD0)",color:"var(--on-color)",fontWeight:800,fontSize:13.5,padding:"11px",borderRadius:RAD.md,marginTop:11,cursor:"pointer",opacity:busy?0.6:1}}>{busy?"Joining…":"Step in"}</div>
   </>)}
   {!mem&&started&&entriesOpen&&(<>
   <div style={{fontSize:14.5,fontWeight:800,marginTop:9,letterSpacing:"-0.2px"}}>All of PickLock. One pick a week. Last one standing.</div>
   <div style={{fontSize:11,color:"var(--text25)",marginTop:4}}>{"Free entry · "+entrants+" in · Week 1 is live · doors close when week 2 opens"}</div>
-  <div onClick={join} style={{display:"block",textAlign:"center",background:"linear-gradient(120deg,var(--purple),#8E4BD0)",color:"var(--text)",fontWeight:800,fontSize:13.5,padding:"11px",borderRadius:RAD.md,marginTop:11,cursor:"pointer",opacity:busy?0.6:1}}>{busy?"Joining…":"Step in"}</div>
+  <div onClick={join} style={{display:"block",textAlign:"center",background:"linear-gradient(120deg,var(--purple),#8E4BD0)",color:"var(--on-color)",fontWeight:800,fontSize:13.5,padding:"11px",borderRadius:RAD.md,marginTop:11,cursor:"pointer",opacity:busy?0.6:1}}>{busy?"Joining…":"Step in"}</div>
   </>)}
   {!mem&&started&&!entriesOpen&&(<div style={{fontSize:11.5,color:"var(--text25)",marginTop:9}}>{"Entries closed · "+alive+" of "+entrants+" still standing"}</div>)}
   {mem&&!started&&(<>
@@ -5222,7 +5222,7 @@ function GauntletCard({ user, onEnter, onJoin }){
   </>)}
   {mem&&started&&!out&&(<>
   <div style={{display:"flex",alignItems:"baseline",gap:8,marginTop:9}}><span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:22,color:"var(--win)"}}>Alive</span><span style={{fontSize:11,fontWeight:700,color:"var(--text25)"}}>{alive+" of "+entrants+" left · Week "+((st&&st.week)||1)}</span></div>
-  <div onClick={onEnter} style={{display:"block",textAlign:"center",background:"linear-gradient(120deg,var(--purple),#8E4BD0)",color:"var(--text)",fontWeight:800,fontSize:13.5,padding:"11px",borderRadius:RAD.md,marginTop:11,cursor:"pointer"}}>Make your pick</div>
+  <div onClick={onEnter} style={{display:"block",textAlign:"center",background:"linear-gradient(120deg,var(--purple),#8E4BD0)",color:"var(--on-color)",fontWeight:800,fontSize:13.5,padding:"11px",borderRadius:RAD.md,marginTop:11,cursor:"pointer"}}>Make your pick</div>
   </>)}
   {mem&&started&&out&&(<>
   <div style={{display:"flex",alignItems:"baseline",gap:8,marginTop:9}}><span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:22,color:"var(--text25)"}}>{"Out · Wk "+mem.eliminated_week}</span><span style={{fontSize:11,fontWeight:700,color:"var(--text25)"}}>{alive+" still alive"}</span></div>
@@ -11055,7 +11055,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    return (
    <div style={{padding:"10px 16px 0"}}>
      <div style={{display:"flex",gap:8}}>
-       {[{v:_alive,k:"Alive",c:IOS.green},{v:_out,k:"Out",c:"rgba(var(--ink-rgb),0.45)"},{v:_wk,k:"Week",c:"#fff"},{v:_burn.length,k:"Burned",c:IOS.blue}].map((s,i)=>(
+       {[{v:_alive,k:"Alive",c:IOS.green},{v:_out,k:"Out",c:"rgba(var(--ink-rgb),0.45)"},{v:_wk,k:"Week",c:"var(--text)"},{v:_burn.length,k:"Burned",c:IOS.blue}].map((s,i)=>(
          <div key={i} style={{flex:1,background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:RAD.md,padding:"9px 6px",textAlign:"center"}}>
            <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:18,fontWeight:900,color:s.c}}>{s.v}</div>
            <div style={{fontSize:8.5,fontWeight:700,letterSpacing:"0.05em",textTransform:"uppercase",color:IOS.label3,marginTop:1}}>{s.k}</div>
@@ -11875,7 +11875,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 
 
  /* Large Title Navigation (iOS style) */
- .nav-header{padding:var(--sa-top) 20px 12px;position:relative;z-index:5;background:#000;}
+ .nav-header{padding:var(--sa-top) 20px 12px;position:relative;z-index:5;background:var(--bg);}
  .nav-header.large{padding-bottom:8px;}
  .nav-title-small{font-size:17px;font-weight:600;letter-spacing:-0.4px;color:var(--text);text-align:center;padding:12px 0 8px;}
  .nav-title-large{font-size:34px;font-weight:700;letter-spacing:-0.5px;color:var(--text);line-height:1.35;padding:1px 0;}
@@ -12245,11 +12245,11 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  .pc-lab{font-size:10px;font-weight:800;letter-spacing:.14em;opacity:.85;margin-top:3px;}
  .pc-tierbadge{font-size:9px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;padding:4px 9px;border-radius:6px;background:rgba(0,0,0,.3);border:1px solid rgba(var(--ink-rgb),.28);display:inline-block;}
  .pc-arch{font-size:11px;font-weight:800;letter-spacing:.06em;opacity:.95;margin-top:6px;text-transform:uppercase;}
- .pc-avatar{margin:6px auto 0;width:104px;height:104px;border-radius:50%;background:radial-gradient(circle at 38% 30%,rgba(var(--ink-rgb),.22),rgba(0,0,0,.28));border:1px solid rgba(var(--ink-rgb),.28);display:flex;align-items:center;justify-content:center;font-size:38px;font-weight:900;letter-spacing:-1px;color:var(--text);text-shadow:0 2px 8px rgba(0,0,0,.4);}
- .pc-name{text-align:center;font-size:23px;font-weight:900;letter-spacing:.04em;margin-top:6px;text-transform:uppercase;color:var(--text);text-shadow:0 2px 10px rgba(0,0,0,.4);}
+ .pc-avatar{margin:6px auto 0;width:104px;height:104px;border-radius:50%;background:radial-gradient(circle at 38% 30%,rgba(var(--ink-rgb),.22),rgba(0,0,0,.28));border:1px solid rgba(var(--ink-rgb),.28);display:flex;align-items:center;justify-content:center;font-size:38px;font-weight:900;letter-spacing:-1px;color:var(--on-color);text-shadow:0 2px 8px rgba(0,0,0,.4);}
+ .pc-name{text-align:center;font-size:23px;font-weight:900;letter-spacing:.04em;margin-top:6px;text-transform:uppercase;color:var(--on-color);text-shadow:0 2px 10px rgba(0,0,0,.4);}
  .pc-divider{height:1px;background:linear-gradient(90deg,transparent,rgba(var(--ink-rgb),.4),transparent);margin:8px 0;}
  .pc-stats{display:flex;justify-content:space-around;text-align:center;}
- .pc-v{font-size:17px;font-weight:900;letter-spacing:-.5px;color:var(--text);}
+ .pc-v{font-size:17px;font-weight:900;letter-spacing:-.5px;color:var(--on-color);}
  .pc-k{font-size:8px;font-weight:800;letter-spacing:.08em;opacity:.7;text-transform:uppercase;margin-top:1px;}
  .pc-badges{display:flex;justify-content:space-between;margin-top:13px;}
  .pc-bdg{display:flex;flex-direction:column;align-items:center;gap:4px;width:50px;cursor:pointer;}
@@ -12258,9 +12258,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  .pc-bdg.off .pc-ic{background:rgba(0,0,0,.32);border:1px solid rgba(var(--ink-rgb),.08);}
  .pc-nm{font-size:7.5px;font-weight:800;letter-spacing:.02em;text-transform:uppercase;text-align:center;line-height:1.05;}
  .pc-bdg.off{opacity:.4;}
- .pc-footrow{margin-top:auto;display:flex;justify-content:space-between;align-items:center;padding-top:9px;font-size:9px;font-weight:800;letter-spacing:.08em;opacity:.6;color:var(--text);}
- .pc-bh{font-size:12px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;opacity:.85;text-align:center;margin:2px 0 10px;color:var(--text);}
- .pc-brow{display:flex;justify-content:space-between;padding:7px 2px;border-bottom:1px solid rgba(var(--ink-rgb),.12);font-size:12.5px;color:var(--text);}
+ .pc-footrow{margin-top:auto;display:flex;justify-content:space-between;align-items:center;padding-top:9px;font-size:9px;font-weight:800;letter-spacing:.08em;opacity:.6;color:var(--on-color);}
+ .pc-bh{font-size:12px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;opacity:.85;text-align:center;margin:2px 0 10px;color:var(--on-color);}
+ .pc-brow{display:flex;justify-content:space-between;padding:7px 2px;border-bottom:1px solid rgba(var(--ink-rgb),.12);font-size:12.5px;color:var(--on-color);}
  .pc-bk{font-weight:600;opacity:.8;} .pc-bv{font-weight:900;}
  .pc-actions{display:flex;gap:10px;margin:16px auto 0;width:300px;}
  .pc-btn{flex:1;display:flex;align-items:center;justify-content:center;gap:7px;font-size:13px;font-weight:800;padding:11px;border-radius:12px;cursor:pointer;border:none;}
@@ -14841,7 +14841,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
     button, which meant the primary CTA was green on MLB and red on NCAAF — the
     two colours the result system reserves for won and lost. Sport is a dot now. */
  <button className="ios-btn" onClick={()=>setScreen("picks")}
-  style={{background:"linear-gradient(165deg,#1B2338,#12141C)",color:"var(--text)",marginBottom:6,
+  style={{background:"linear-gradient(165deg,#1B2338,#12141C)",color:"var(--on-color)",marginBottom:6,
     border:`1px solid ${fade(IOS.blue,0.42)}`,fontWeight:800,
     boxShadow:`0 6px 22px -14px ${fade(IOS.blue,0.851)}, inset 0 1px 0 rgba(var(--ink-rgb),0.05)`}}>
   <span style={{width:7,height:7,borderRadius:"50%",background:sport.color,flexShrink:0}}/>
@@ -15858,7 +15858,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 
    {/* Pool */}
    <div style={{margin:"10px 16px 0",display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-     {[[String(_alive)+(_tot?("/"+_tot):""),"Alive",IOS.green],[String(Math.max(0,_tot-_alive)),"Out","rgba(var(--ink-rgb),0.6)"],[String(wk),"Week","#fff"]].map(([v,l,c],i)=>(
+     {[[String(_alive)+(_tot?("/"+_tot):""),"Alive",IOS.green],[String(Math.max(0,_tot-_alive)),"Out","rgba(var(--ink-rgb),0.6)"],[String(wk),"Week","var(--text)"]].map(([v,l,c],i)=>(
        <div key={i} style={{background:"rgba(var(--ink-rgb),0.04)",border:"0.5px solid rgba(var(--ink-rgb),0.08)",borderRadius:RAD.md,padding:"12px 8px",textAlign:"center"}}>
          <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:22,color:c,lineHeight:1}}>{v}</div>
          <div style={{fontSize:9,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:"var(--text25)",marginTop:5}}>{l}</div>
@@ -15902,7 +15902,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  .pk-mv{font-family:'Barlow Semi Condensed',sans-serif;font-weight:800;line-height:.88;letter-spacing:-.02em}
  .pk-val[data-w="1"] .pk-mv{font-size:23px;color:var(--text25)}
  .pk-val[data-w="2"] .pk-mv{font-size:28px;color:var(--text)}
- .pk-val[data-w="3"] .pk-mv{font-size:33px;color:#fff}
+ .pk-val[data-w="3"] .pk-mv{font-size:33px;color:var(--text)}
  .pk-rule{width:26px;height:.5px;background:rgba(var(--ink-rgb),.12);margin:7px 0 6px}
  .pk-pv{font-family:'Barlow Semi Condensed',sans-serif;font-weight:800;font-size:27px;line-height:.88;letter-spacing:-.02em;color:var(--text)}
  .pk-lb{font-size:7.5px;font-weight:800;letter-spacing:.13em;color:var(--text3);text-transform:uppercase;margin-top:3px;text-align:center}
@@ -18493,7 +18493,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        </div>
        {sc&&!sc.err&&(
        <div style={{display:"flex",gap:7,margin:"13px 0 11px"}}>
-         {[[((sc.recW+sc.recL)>0?(sc.recW+"-"+sc.recL):"—"),"Record",((sc.recW+sc.recL)>0?(sc.recW>=sc.recL?IOS.green:IOS.red):"rgba(var(--ink-rgb),0.3)")],[byes.length===1?("WK "+byes[0]):"—","Bye","#fff"],[String(leftN),"Left to play","#fff"]].map((t,i)=>(
+         {[[((sc.recW+sc.recL)>0?(sc.recW+"-"+sc.recL):"—"),"Record",((sc.recW+sc.recL)>0?(sc.recW>=sc.recL?IOS.green:IOS.red):"rgba(var(--ink-rgb),0.3)")],[byes.length===1?("WK "+byes[0]):"—","Bye","var(--text)"],[String(leftN),"Left to play","var(--text)"]].map((t,i)=>(
            <div key={i} style={{flex:1,background:"rgba(var(--ink-rgb),0.04)",border:EDGE.hair,borderRadius:RAD.md-1,padding:"9px 6px",textAlign:"center"}}>
              <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:17,fontWeight:900,color:t[2]}}>{t[0]}</div>
              <div style={{fontSize:8.5,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--text3)",marginTop:2}}>{t[1]}</div>
@@ -20744,7 +20744,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    <div style={{background:`linear-gradient(135deg,rgba(10,132,255,0.1),rgba(94,92,230,0.07))`,border:`0.5px solid rgba(10,132,255,0.25)`,borderRadius:RAD.md,padding:"12px 14px",marginBottom:10}}>
      <div style={{fontSize:10,fontWeight:700,color:IOS.blue,letterSpacing:.5,textTransform:"uppercase",marginBottom:8}}>Your Rank — #{myRank} of {lgSizeLabel(lg)}</div>
      <div style={{display:"flex",gap:8,marginBottom:0}}>
-       {[{l:"Record",v:myRecord,c:IOS.blue},{l:"Win %",v:myWinPct+"%",c:IOS.green},{l:"Points",v:myPts.toFixed?myPts.toFixed(1):myPts,c:"#fff"}].map((s,i)=>(
+       {[{l:"Record",v:myRecord,c:IOS.blue},{l:"Win %",v:myWinPct+"%",c:IOS.green},{l:"Points",v:myPts.toFixed?myPts.toFixed(1):myPts,c:"var(--text)"}].map((s,i)=>(
          <div key={i} style={{flex:1,background:"var(--fill2)",borderRadius:RAD.sm,padding:"7px 6px",textAlign:"center"}}>
            <div style={{fontSize:14,fontWeight:800,color:s.c}}>{s.v}</div>
            <div style={{fontSize:8,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4,marginTop:1}}>{s.l}</div>
@@ -22085,7 +22085,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    return (
    <div style={{padding:"0 16px 24px"}}>
      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
-       {[[String(_alive),"Alive",IOS.green],[String(_out),"Out","rgba(var(--ink-rgb),0.6)"],[String(_pr.locked)+"/"+String(_alive),"Locked","#fff"]].map(([v,l,c],i)=>(
+       {[[String(_alive),"Alive",IOS.green],[String(_out),"Out","rgba(var(--ink-rgb),0.6)"],[String(_pr.locked)+"/"+String(_alive),"Locked","var(--text)"]].map(([v,l,c],i)=>(
          <div key={i} style={{background:"rgba(var(--ink-rgb),0.04)",border:"0.5px solid rgba(var(--ink-rgb),0.08)",borderRadius:RAD.md,padding:"12px 8px",textAlign:"center"}}>
            <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:22,color:c,lineHeight:1}}>{v}</div>
            <div style={{fontSize:9,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:"var(--text25)",marginTop:5}}>{l}</div>
@@ -22140,7 +22140,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      </div>
    </div>
    <div style={{display:"flex",marginTop:16,background:"rgba(var(--ink-rgb),0.03)",border:`0.5px solid ${IOS.sep}`,borderRadius:RAD.md,overflow:"hidden"}}>
-     {[[me.record||"0-0","Picks W-L","#fff"],[me.wpct||"0%","Hit %",IOS.green],[String(me.points!=null?me.points:0),"Points",IOS.blue],[playoffN>0?("#"+myRank):"—","Seed",IOS.yellow]].map((c,ci)=>(
+     {[[me.record||"0-0","Picks W-L","var(--text)"],[me.wpct||"0%","Hit %",IOS.green],[String(me.points!=null?me.points:0),"Points",IOS.blue],[playoffN>0?("#"+myRank):"—","Seed",IOS.yellow]].map((c,ci)=>(
        <div key={ci} style={{flex:1,textAlign:"center",padding:"10px 4px",borderLeft:ci>0?`1px solid ${IOS.sep}`:"none"}}>
          <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:19,color:c[2]}}>{c[0]}</div>
          <div style={{fontSize:9,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4,fontWeight:700,marginTop:2}}>{c[1]}</div>
@@ -22192,7 +22192,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
           </div>
         </div>
         <div style={{display:"flex",marginTop:18,background:"rgba(var(--ink-rgb),0.03)",border:`0.5px solid ${IOS.sep}`,borderRadius:RAD.lg,overflow:"hidden"}}>
-          {[[realStandings.find(s=>s.isYou)?.record||"0-0","Record","#fff"],[realStandings.find(s=>s.isYou)?.wpct||"0%","Win %",IOS.green],[String(realStandings.find(s=>s.isYou)?.points||0),"Points",IOS.blue],["Wk "+(activeLeague.current_week||activeLeague.week||1),"Current",IOS.label2]].map((c,ci)=>(
+          {[[realStandings.find(s=>s.isYou)?.record||"0-0","Record","var(--text)"],[realStandings.find(s=>s.isYou)?.wpct||"0%","Win %",IOS.green],[String(realStandings.find(s=>s.isYou)?.points||0),"Points",IOS.blue],["Wk "+(activeLeague.current_week||activeLeague.week||1),"Current",IOS.label2]].map((c,ci)=>(
             <div key={ci} style={{flex:1,textAlign:"center",padding:"11px 4px",borderLeft:ci>0?`1px solid ${IOS.sep}`:"none"}}>
               <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:20,color:c[2]}}>{c[0]}</div>
               <div style={{fontSize:9.5,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4,fontWeight:700,marginTop:2}}>{c[1]}</div>
@@ -23605,7 +23605,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div style={{margin:"0 16px 12px"}}>
   <div style={{fontSize:11,fontWeight:700,color:IOS.label3,letterSpacing:.5,textTransform:"uppercase",margin:"0 2px 8px"}}>Trophy case</div>
   <div style={{display:"flex",gap:8,marginBottom:10}}>
-    {[{v:trophyRows.length,k:"Seasons",c:"#fff"},{v:titles,k:titles===1?"Title":"Titles",c:IOS.yellow},{v:W+"\u2013"+L,k:"All-time",c:"#fff"},{v:wr!=null?wr+"%":"\u2014",k:"Win rate",c:"#fff"}].map((s,i)=>(
+    {[{v:trophyRows.length,k:"Seasons",c:"var(--text)"},{v:titles,k:titles===1?"Title":"Titles",c:IOS.yellow},{v:W+"\u2013"+L,k:"All-time",c:"var(--text)"},{v:wr!=null?wr+"%":"\u2014",k:"Win rate",c:"var(--text)"}].map((s,i)=>(
       <div key={i} style={{flex:1,background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:RAD.md,padding:"10px 6px",textAlign:"center"}}>
         <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:17,fontWeight:900,color:s.c}}>{s.v}</div>
         <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.05em",textTransform:"uppercase",color:IOS.label3,marginTop:2}}>{s.k}</div>
@@ -24621,7 +24621,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      {l:"Record",v:soloWeeks.reduce((s,w)=>s+w.wins,0)+"\u2013"+soloWeeks.reduce((s,w)=>s+w.losses,0),c:IOS.blue},
      {l:"Win rate",v:Math.round((soloWeeks.reduce((s,w)=>s+w.wins,0)/(soloWeeks.reduce((s,w)=>s+w.wins+w.losses,0)||1))*100)+"%",c:IOS.green},
      (()=>{ const u=sumUnits(soloWeeks.flatMap(w=>w.picks||[])); return {l:"Units",v:fmtUnits(u),c:u>=0?IOS.green:IOS.red}; })(),
-     {l:"Points",v:soloWeeks.reduce((s,w)=>s+w.pts,0).toFixed(1),c:"#fff"},
+     {l:"Points",v:soloWeeks.reduce((s,w)=>s+w.pts,0).toFixed(1),c:"var(--text)"},
    ].map((s,i)=>(
    <div key={i} style={{flex:1,minWidth:0,background:"linear-gradient(180deg,var(--s2),var(--s1))",borderRadius:13,padding:"12px 5px",textAlign:"center",border:EDGE.hair}}>
      <div style={{fontSize:21,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,lineHeight:0.95,color:s.c,whiteSpace:"nowrap"}}>{s.v}</div>
