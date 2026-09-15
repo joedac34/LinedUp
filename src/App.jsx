@@ -11916,6 +11916,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    /* Sticky bars sit over scrolling content, so they are glass, not a fill. */
    --bar:rgba(10,10,13,0.82);
    --sticky-shadow:0 8px 16px -8px rgba(0,0,0,0.7);
+   --dock-shadow:0 18px 40px -12px rgba(0,0,0,0.75);
    --s0:#08080A; --s1:#0B0B0E; --s2:#141418;
    --s3:#1C1C1E; --s4:#2A2A2A; --s5:#3A3A3C;
    --side-opp:#3a3d47; --side-opp-rgb:58,61,71;
@@ -11965,6 +11966,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    --hero:#E8EFF9;
    --bar:rgba(255,255,255,0.86);
    --sticky-shadow:0 8px 16px -10px rgba(13,17,23,0.22);
+   --dock-shadow:0 18px 40px -14px rgba(13,17,23,0.26);
    --s0:#FFFFFF; --s1:#FFFFFF; --s2:#FFFFFF;
    --s3:#F4F6F8; --s4:#E7ECF2; --s5:#D2D9E2;
    --side-opp:#AFBACA; --side-opp-rgb:175,186,202;
@@ -12030,9 +12032,11 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  .nav-subtitle{font-size:13px;color:${IOS.label3};margin-top:2px;}
 
  /* Scrollable body */
- .body{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior-y:contain;position:relative;z-index:1;padding-top:0;padding-bottom:calc(92px + var(--sa-bot));overscroll-behavior:contain;overscroll-behavior-x:none;}
+ /* No global header on pushed screens, so no reserved space and no sticky offset. */
+ .phone:not(.has-hdr){--header-h:0px;}
+ .body{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior-y:contain;position:relative;z-index:1;padding-top:var(--header-h);padding-bottom:calc(92px + var(--sa-bot));overscroll-behavior:contain;overscroll-behavior-x:none;}
  .body-pad{padding-bottom:calc(100px + var(--sa-bot));}
- .app-header{flex-shrink:0;z-index:25;position:relative;display:flex;align-items:center;gap:8px;height:52px;padding:0 14px;background:linear-gradient(180deg,var(--s2) 0%,var(--s1) 100%);border-bottom:0.5px solid rgba(var(--ink-rgb),0.08);box-shadow:0 6px 18px rgba(0,0,0,0.45);}
+ .app-header{position:absolute;top:0;left:0;right:0;z-index:25;display:flex;align-items:center;gap:8px;height:var(--header-h);padding:0 14px;background:var(--bar);-webkit-backdrop-filter:saturate(180%) blur(22px);backdrop-filter:saturate(180%) blur(22px);border-bottom:0.5px solid var(--edge);}
  .gh-left{display:flex;align-items:center;min-width:0;flex-shrink:0;}
  .gh-center{flex:1;min-width:0;}
  .gh-right{display:flex;align-items:center;gap:9px;flex-shrink:0;}
@@ -12204,9 +12208,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  .pk-ptr{position:fixed;left:0;right:0;top:calc(var(--sa-top) + 4px);z-index:45;display:flex;
    align-items:center;justify-content:center;pointer-events:none;}
  .pk-ptr-pill{display:flex;align-items:center;gap:8px;padding:8px 15px;border-radius:999px;
-   background:rgba(18,18,24,0.72);-webkit-backdrop-filter:blur(22px) saturate(1.4);
+   background:var(--bar);-webkit-backdrop-filter:blur(22px) saturate(1.4);
    backdrop-filter:blur(22px) saturate(1.4);border:0.5px solid rgba(var(--ink-rgb),0.12);
-   box-shadow:0 18px 40px -12px rgba(0,0,0,0.75), inset 0 1px 0 rgba(var(--ink-rgb),0.08);
+   box-shadow:var(--dock-shadow), inset 0 1px 0 rgba(var(--ink-rgb),0.08);
    opacity:0;transform:translateY(-14px) scale(0.9);
    transition:opacity .16s ease, transform .2s cubic-bezier(0.34,1.3,0.42,1);}
  .pk-ptr.armed .pk-ptr-pill,.pk-ptr.busy .pk-ptr-pill{opacity:1;transform:none;}
@@ -12268,7 +12272,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  @keyframes soGrow{from{height:0}to{height:var(--h);}}
  .so-bar{height:var(--h);animation:soGrow .62s cubic-bezier(0.34,1.16,0.42,1) both;}
  @media (prefers-reduced-motion: reduce){ .so-bar{animation:none;} }
- .pk-cbar{position:sticky;top:0;z-index:34;display:flex;align-items:center;gap:9px;height:46px;
+ .pk-cbar{position:sticky;top:var(--header-h);z-index:34;display:flex;align-items:center;gap:9px;height:46px;
    margin-bottom:-46px;padding:0 18px;opacity:0;pointer-events:none;
    background:var(--bar);-webkit-backdrop-filter:blur(22px) saturate(1.4);
    backdrop-filter:blur(22px) saturate(1.4);border-bottom:0.5px solid rgba(var(--ink-rgb),0.09);
@@ -12787,9 +12791,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
     label. --on-a/--on-b let a rail keep its own accent (sport colour, longshot green)
     instead of forcing everything to blue. */
  .pk-rail{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;padding:5px;border-radius:26px;
-   background:rgba(18,18,24,0.72);-webkit-backdrop-filter:blur(22px) saturate(1.4);backdrop-filter:blur(22px) saturate(1.4);
+   background:var(--bar);-webkit-backdrop-filter:blur(22px) saturate(1.4);backdrop-filter:blur(22px) saturate(1.4);
    border:0.5px solid rgba(var(--ink-rgb),0.12);
-   box-shadow:0 18px 40px -12px rgba(0,0,0,0.75), inset 0 1px 0 rgba(var(--ink-rgb),0.08);}
+   box-shadow:var(--dock-shadow), inset 0 1px 0 rgba(var(--ink-rgb),0.08);}
  .pk-rail::-webkit-scrollbar{display:none;}
  .pk-rail{scroll-snap-type:x proximity;}
  .pk-chip{scroll-snap-align:center;}
@@ -12810,9 +12814,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  .tab-dock{position:fixed;left:0;right:0;bottom:calc(12px + var(--sa-bot));z-index:40;display:flex;justify-content:center;pointer-events:none;}
  .tab-bar{position:relative;pointer-events:auto;transform:translateX(0px);
    display:flex;align-items:center;gap:2px;padding:7px;border-radius:26px;
-   background:rgba(18,18,24,0.72);-webkit-backdrop-filter:blur(22px) saturate(1.4);backdrop-filter:blur(22px) saturate(1.4);
+   background:var(--bar);-webkit-backdrop-filter:blur(22px) saturate(1.4);backdrop-filter:blur(22px) saturate(1.4);
    border:0.5px solid rgba(var(--ink-rgb),0.12);
-   box-shadow:0 18px 40px -12px rgba(0,0,0,0.75), inset 0 1px 0 rgba(var(--ink-rgb),0.08);}
+   box-shadow:var(--dock-shadow), inset 0 1px 0 rgba(var(--ink-rgb),0.08);}
  .tab-item{position:relative;flex:0 1 auto;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;padding:8px 13px 6px;border-radius:19px;overflow:hidden;max-width:110px;transition:max-width .3s cubic-bezier(0.4,0,0.2,1), opacity .2s ease, padding .3s cubic-bezier(0.4,0,0.2,1), transform .13s ease;}
  .tab-item:active{transform:scale(0.9);}
  .tab-item::before{content:"";position:absolute;inset:0;border-radius:19px;background:linear-gradient(160deg,rgba(var(--accent-ios-rgb),0.32),rgba(var(--accent-ios-rgb),0.14));opacity:0;transition:opacity .2s ease;}
@@ -12986,7 +12990,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 {preAuthPage && (
 <div style={{position:"fixed",inset:0,zIndex:10001,background:"var(--s0)",overflowY:"auto",WebkitOverflowScrolling:"touch",fontFamily:"Barlow,sans-serif"}}>
   <div style={{maxWidth:480,margin:"0 auto"}}>
-   <div style={{display:"flex",alignItems:"center",gap:11,padding:"calc(var(--sa-top) + 14px) 16px 10px",position:"sticky",top:"var(--cbar-h)",background:"var(--s0)",zIndex:2}}>
+   <div style={{display:"flex",alignItems:"center",gap:11,padding:"calc(var(--sa-top) + 14px) 16px 10px",position:"sticky",top:"calc(var(--header-h) + var(--cbar-h))",background:"var(--s0)",zIndex:2}}>
     <div onClick={()=>setPreAuthPage(null)} style={{width:31,height:31,borderRadius:RAD.md,background:"rgba(var(--ink-rgb),0.06)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--text)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
     </div>
@@ -13452,7 +13456,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  </div>
  )}
 
- {user && <div className="phone"><div className="app-glow"/><div className="app-grain"/><Confetti show={celebrate}/>
+ {user && <div className={"phone"+((homeMode==="solo"?["home","picks","solohistory","solostats","profile"]:["home","picks","matchup","leagues","profile"]).includes(screen)?" has-hdr":"")}><div className="app-glow"/><div className="app-grain"/><Confetti show={celebrate}/>
  {isDemo && (
   <div style={{background:"linear-gradient(90deg,rgba(var(--accent-rgb),0.24),rgba(var(--violet-rgb),0.16))",
    borderBottom:"1px solid rgba(var(--accent-rgb),0.4)",padding:"8px 14px",display:"flex",
@@ -14062,7 +14066,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  }
  };
  return (
- <div className='ticker-wrap' style={{position:"sticky",top:"var(--cbar-h)",zIndex:25,marginBottom:0}}>
+ <div className='ticker-wrap' style={{position:"sticky",top:"calc(var(--header-h) + var(--cbar-h))",zIndex:25,marginBottom:0}}>
  <div className='ticker-track' style={{animationDuration: Math.max(12, items.length * 5) + 's'}}>
  {doubled.map((g, i) => (
  <span key={i} className={'ticker-item'+(g.card?' ti-card':'')+(g.hasPick?' ti-mine':'')}
@@ -18633,7 +18637,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  return (
  <div className="body" style={{background:"var(--s0)",zIndex:"auto"}}>
    <style>{`.gbx-scroll::-webkit-scrollbar{ display:none; }`}</style>
-   <div style={{position:"sticky",top:"var(--cbar-h)",zIndex:10,background:"var(--s0)",boxShadow:"var(--sticky-shadow)"}}>
+   <div style={{position:"sticky",top:"calc(var(--header-h) + var(--cbar-h))",zIndex:10,background:"var(--s0)",boxShadow:"var(--sticky-shadow)"}}>
      <div style={{display:"flex",alignItems:"center",gap:11,padding:"10px 16px 8px"}}>
        <div onClick={()=>setScreen("picks")} style={{width:34,height:34,borderRadius:RAD.md,background:"rgba(var(--ink-rgb),0.06)",border:EDGE.hair2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:18,flexShrink:0}}>‹</div>
        <div style={{flex:1,minWidth:0}}>
@@ -18799,7 +18803,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  return (
  <div className="body" style={{background:"var(--s0)",zIndex:"auto"}}>
    <style>{`.lad-scroll::-webkit-scrollbar{ display:none; }`}</style>
-   <div style={{position:"sticky",top:"var(--cbar-h)",zIndex:10,background:"var(--s0)",boxShadow:"var(--sticky-shadow)"}}>
+   <div style={{position:"sticky",top:"calc(var(--header-h) + var(--cbar-h))",zIndex:10,background:"var(--s0)",boxShadow:"var(--sticky-shadow)"}}>
      <div style={{display:"flex",alignItems:"flex-end",gap:10,padding:"10px 16px 8px"}}>
        <div onClick={()=>setScreen("picks")} style={{width:34,height:34,borderRadius:RAD.md,background:"rgba(var(--ink-rgb),0.06)",border:EDGE.hair2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:18,flexShrink:0}}>{"\u2039"}</div>
        <div style={{flex:1,minWidth:0}}>
@@ -18901,7 +18905,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  `}</style>
 
  {/* Header */}
- <div style={{position:"sticky",top:"var(--cbar-h)",zIndex:10,background:"var(--s0)",paddingBottom:6,boxShadow:"var(--sticky-shadow)"}}>
+ <div style={{position:"sticky",top:"calc(var(--header-h) + var(--cbar-h))",zIndex:10,background:"var(--s0)",paddingBottom:6,boxShadow:"var(--sticky-shadow)"}}>
  <div style={{display:"flex",alignItems:"center",gap:11,padding:"10px 16px 8px"}}>
  <div onClick={()=>setScreen("picks")} style={{width:34,height:34,borderRadius:RAD.md,background:"rgba(var(--ink-rgb),0.06)",border:EDGE.hair2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:acc,fontSize:18,flexShrink:0}} className="pk-t-back">‹</div>
  <div style={{flex:1,minWidth:0}}>
@@ -19799,7 +19803,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const tint = isTied?"var(--s2)":isWinning?"var(--s2)":"var(--s1)";
  const statusTxt = isTied?"You're Tied":isWinning?"You're Winning":"You're Trailing";
  return (
- <div style={{position:"sticky",top:"var(--cbar-h)",zIndex:10,background:"var(--s0)",padding:"6px 0 8px"}}>
+ <div style={{position:"sticky",top:"calc(var(--header-h) + var(--cbar-h))",zIndex:10,background:"var(--s0)",padding:"6px 0 8px"}}>
  <div style={{margin:"0 16px",borderRadius:RAD.lg,padding:"14px 16px",position:"relative",overflow:"hidden",background:"var(--s2)",border:EDGE.hair}}>
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
  <div style={{minWidth:0,flex:1}}>
@@ -24069,7 +24073,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    ):null}
    </div>
 
-  <div style={{position:"sticky",top:"var(--cbar-h)",zIndex:12,display:"flex",padding:"0 6px",background:"var(--bar)",backdropFilter:"blur(14px)",WebkitBackdropFilter:"blur(14px)",borderBottom:EDGE.hair,overflowX:"auto"}}>
+  <div style={{position:"sticky",top:"calc(var(--header-h) + var(--cbar-h))",zIndex:12,display:"flex",padding:"0 6px",background:"var(--bar)",backdropFilter:"blur(14px)",WebkitBackdropFilter:"blur(14px)",borderBottom:EDGE.hair,overflowX:"auto"}}>
   {[["ov","Overview"],["lu","Lineups"],["od","Odds"],["pk","Plok"]].map(([k,lb])=>(
     <div key={k} onClick={()=>goGcTab(k)} style={{flex:"0 0 auto",padding:"12px 14px",fontSize:13,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap",position:"relative",color:gcTab===k?"var(--text)":IOS.label3}}>
       {lb}
@@ -25048,7 +25052,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
   </div>
 
   {/* Sticky category pills */}
-  <div style={{position:"sticky",top:"var(--cbar-h)",zIndex:20,display:"flex",gap:7,overflowX:"auto",scrollbarWidth:"none",padding:"12px 16px",background:"var(--bar)",backdropFilter:"blur(14px)",WebkitBackdropFilter:"blur(14px)",borderBottom:"0.5px solid rgba(var(--ink-rgb),0.09)"}}>
+  <div style={{position:"sticky",top:"calc(var(--header-h) + var(--cbar-h))",zIndex:20,display:"flex",gap:7,overflowX:"auto",scrollbarWidth:"none",padding:"12px 16px",background:"var(--bar)",backdropFilter:"blur(14px)",WebkitBackdropFilter:"blur(14px)",borderBottom:"0.5px solid rgba(var(--ink-rgb),0.09)"}}>
    {ATABS.map(t=>{const on=analyticsTab===t;return (
     <div key={t} onClick={()=>setAnalyticsTab(t)} style={{flex:"0 0 auto",display:"flex",alignItems:"center",gap:6,fontSize:13,fontWeight:800,whiteSpace:"nowrap",cursor:"pointer",color:on?"var(--text)":CC.l2,background:on?"linear-gradient(135deg,rgba(var(--accent-ios-rgb),0.28),rgba(var(--violet-rgb),0.18))":"rgba(var(--ink-rgb),0.05)",border:on?"0.5px solid rgba(var(--accent-ios-rgb),0.55)":"0.5px solid rgba(var(--ink-rgb),0.09)",borderRadius:RAD.pill,padding:"8px 14px",boxShadow:on?"0 3px 12px rgba(var(--accent-ios-rgb),0.25)":"none",transition:"all .18s"}}>
      <span style={{width:6,height:6,borderRadius:"50%",background:TDOT[t]}}/>{t}{!isPro&&t!=="Overview"&&<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={CC.purple} strokeWidth="2.5" strokeLinecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>}
