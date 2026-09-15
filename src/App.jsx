@@ -6287,11 +6287,11 @@ function PropHistorySheet({ ctx, onClose }){
   <style>{`.ph-veil{position:absolute;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);opacity:0;transition:opacity .28s ease;} .ph-veil.on{opacity:1;} .ph-sheet{position:absolute;left:0;right:0;bottom:0;background:var(--s2);border-radius:22px 22px 0 0;border:0.5px solid rgba(var(--ink-rgb),0.1);border-bottom:none;transform:translateY(104%);transition:transform .38s cubic-bezier(0.32,0.72,0.24,1);box-shadow:0 -18px 50px rgba(0,0,0,0.7);padding-bottom:calc(18px + var(--sa-bot,0px));} .ph-sheet.on{transform:translateY(0);} .ph-fade{opacity:0;transform:translateY(6px);transition:opacity .26s ease,transform .26s ease;} .ph-fade.in{opacity:1;transform:none;} .ph-fill{border-radius:5px 5px 2px 2px;transform-origin:bottom;transform:scaleY(0);transition:transform .45s cubic-bezier(0.34,1.3,0.5,1);} .ph-fill.go{transform:scaleY(1);} .ph-line{position:absolute;left:0;right:0;border-top:1.5px dashed rgba(var(--yellow-rgb),0.65);z-index:2;transform-origin:left;transform:scaleX(0);transition:transform .5s cubic-bezier(0.32,0.72,0.24,1) .3s;} .ph-line.go{transform:scaleX(1);} @keyframes phPulse{0%,100%{opacity:0.35}50%{opacity:0.14}} .ph-skel{animation:phPulse 1.2s ease infinite;}`}</style>
   <div className={"ph-veil"+(vis?" on":"")} onClick={doClose}/>
   <div className={"ph-sheet"+(vis?" on":"")}>
-  <div onClick={doClose} style={{width:36,height:4,borderRadius:2,background:"rgba(var(--ink-rgb),0.2)",margin:"12px auto 0",cursor:"pointer"}}/>
+  <div className="tap-grip" onClick={doClose} style={{width:36,height:4,borderRadius:2,background:"rgba(var(--ink-rgb),0.2)",margin:"12px auto 0",cursor:"pointer"}}/>
   <div style={{display:"flex",alignItems:"center",gap:11,padding:"14px 18px 4px"}}>
   <div style={{width:40,height:40,borderRadius:"50%",background:"rgba(var(--accent-ios-rgb),0.16)",border:"1px solid rgba(var(--accent-ios-rgb),0.4)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:IOS.blue,flexShrink:0}}>{_ini2}</div>
   <div style={{minWidth:0}}><div style={{fontSize:17,fontWeight:800,letterSpacing:"-0.3px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{(data&&data.player&&data.player.name)||player}</div><div style={{fontSize:10.5,color:"var(--text25)",fontWeight:700,marginTop:1}}>{(data&&data.player&&data.player.position)||""}{data&&data.player&&data.player.position?" \u00B7 ":""}{"last 10 games"}</div></div>
-  <div onClick={doClose} style={{marginLeft:"auto",width:30,height:30,borderRadius:"50%",background:"rgba(var(--ink-rgb),0.1)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text)" strokeWidth="2.4" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></div>
+  <div className="tap44" onClick={doClose} style={{marginLeft:"auto",width:30,height:30,borderRadius:"50%",background:"rgba(var(--ink-rgb),0.1)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text)" strokeWidth="2.4" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></div>
   </div>
   {tabsFor.length>1&&<div style={{display:"flex",gap:6,padding:"12px 18px 2px",overflowX:"auto"}}>{tabsFor.map(mk=>(<div key={mk} onClick={()=>swapTab(mk)} style={{flexShrink:0,fontSize:11,fontWeight:800,letterSpacing:"0.03em",padding:"7px 13px",borderRadius:16,cursor:"pointer",transition:"background .18s,color .18s,border-color .18s",background:tab===mk?"rgba(var(--accent-ios-rgb),0.16)":"rgba(var(--ink-rgb),0.05)",border:tab===mk?"1px solid rgba(var(--accent-ios-rgb),0.5)":"1px solid rgba(var(--ink-rgb),0.1)",color:tab===mk?IOS.blue:"rgba(var(--ink-rgb),0.55)"}}>{PROP_HIST_MAP[mk].label}</div>))}</div>}
   <div style={{padding:"6px 18px 4px",minHeight:190}}>
@@ -12136,6 +12136,24 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  .gh-switch.solo{background:rgba(var(--longshot-rgb),0.12);border-color:rgba(var(--longshot-rgb),0.32);}
  .gh-nm{font-size:13px;font-weight:700;color:#cfe4ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
  .gh-switch.solo .gh-nm{color:#ffc4d2;}
+ /* -- TAP TARGETS ----------------------------------------------------------
+    Controls below 44pt get a transparent overlay that extends the touch area
+    without changing the box. Values are chosen to reach 44 from the real size:
+    34px needs 5 a side, 32px needs 6, 30px needs 7. */
+ .gh-icon::after,.champ-x::after,.nt-tg::after,.wrec-x::after,.bmd-close::after,
+ .tap44::after{content:"";position:absolute;}
+ .gh-icon::after{inset:-5px;}
+ .champ-x::after{inset:-5px;}
+ .nt-tg::after{inset:-6px;}
+ .wrec-x::after{inset:-7px;}
+ .bmd-close::after{inset:-7px;}
+ /* Applied inline where a control has no class of its own. */
+ .tap44{position:relative;}
+ .tap44::after{inset:-7px;}
+ /* The sheet grab handle is 4px tall by design, so it needs a much taller
+    target than the others. */
+ .tap-grip{position:relative;}
+ .tap-grip::after{content:"";position:absolute;left:-24px;right:-24px;top:-20px;bottom:-20px;}
  .gh-icon{position:relative;width:34px;height:34px;border-radius:50%;background:rgba(var(--ink-rgb),0.08);display:flex;align-items:center;justify-content:center;cursor:pointer;}
  .gh-badge{position:absolute;top:-3px;right:-3px;min-width:16px;height:16px;border-radius:8px;background:${IOS.pink};color:var(--text);font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 4px;border:1.5px solid var(--s1);}
  .gh-avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,${IOS.blue},${IOS.indigo});display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;cursor:pointer;color:var(--text);}
@@ -17097,7 +17115,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  return (
  <div className="body" key={screen}>
   <div style={{display:"flex",alignItems:"center",gap:11,padding:"calc(var(--sa-top) + 12px) 16px 10px"}}>
-   <div onClick={back} style={{width:31,height:31,borderRadius:RAD.md,background:"rgba(var(--ink-rgb),0.06)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
+   <div className="tap44" onClick={back} style={{width:31,height:31,borderRadius:RAD.md,background:"rgba(var(--ink-rgb),0.06)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--text)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
    </div>
    <div><div style={{fontSize:23,fontWeight:800,letterSpacing:"-0.5px"}}>{delStep===1?"Delete account":delStep===2?"Before you go":"Confirm"}</div>
@@ -23313,7 +23331,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
                 <input value={aiInput} onChange={(e)=>setAiInput(e.target.value)} placeholder="Ask Plok anything, or search a pick…"
                   onKeyDown={(e)=>{ if(e.key==="Enter"){ sendAi(); } }}
                   style={{flex:1,background:"rgba(var(--ink-rgb),0.06)",border:EDGE.hair2,borderRadius:RAD.md,padding:"11px 13px",color:"var(--text)",fontSize:13.5,outline:"none",fontFamily:"inherit"}}/>
-                <button onClick={sendAi} disabled={aiBusy||!aiInput.trim()}
+                <button className="tap44" onClick={sendAi} disabled={aiBusy||!aiInput.trim()}
                   style={{width:42,height:42,flexShrink:0,borderRadius:RAD.md,border:"none",background:(aiInput.trim()&&!aiBusy)?IOS.blue:"rgba(var(--ink-rgb),0.08)",color:"var(--on-color)",cursor:(aiInput.trim()&&!aiBusy)?"pointer":"default",display:"flex",alignItems:"center",justifyContent:"center"}}>
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
                 </button>
@@ -23397,7 +23415,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  </div>
  )}
  <div className="chat-input-bar" data-kb-stick>
- <button onClick={openGifSheet} style={{flexShrink:0,height:36,padding:"0 11px",borderRadius:RAD.md,background:"rgba(var(--ink-rgb),0.07)",border:EDGE.hair,fontSize:10,fontWeight:800,letterSpacing:"0.06em",color:"var(--text)",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>GIF</button>
+ <button className="tap44" onClick={openGifSheet} style={{flexShrink:0,height:36,padding:"0 11px",borderRadius:RAD.md,background:"rgba(var(--ink-rgb),0.07)",border:EDGE.hair,fontSize:10,fontWeight:800,letterSpacing:"0.06em",color:"var(--text)",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>GIF</button>
  <input className="chat-field" placeholder="Message..." value={chatMsg} onChange={e=>setChatMsg(e.target.value)} onKeyDown={e=>e.key==="Enter"&&sendMsg()}/>
  <button className="chat-send" disabled={!chatMsg.trim()} onClick={sendMsg}>
  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
