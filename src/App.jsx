@@ -314,38 +314,82 @@ function buildLadder(lines){
   }
   return out;
 }
+// -- TOKENS ------------------------------------------------------------------
+// Every value here is a CSS custom property, defined twice in the <style> block
+// below: once on :root (dark) and once on [data-theme="light"]. Flipping that one
+// attribute on <html> reskins the whole app. The dark values are byte-identical to
+// what shipped before this change, so the default theme renders exactly as it did.
+//
+// Keys are named for the JOB, not the hue. A token called "green" cannot hold a
+// value that is not green, which is why light mode was impossible before.
+//   blue   -> --accent    the one thing you can tap
+//   green  -> --win       graded and it hit
+//   red    -> --loss      graded and it missed
+//   orange -> --live      in progress; a state, never a verdict
+// The old keys stay so the ~2,000 existing IOS.x call sites do not have to change.
+// Phase 3 renames the keys themselves.
+//
+// A two-digit hex alpha can no longer be concatenated onto these, because a var()
+// reference is not a hex string. Use fade(colour, 0.2) instead -- defined below.
 const IOS = {
- blue: "#3B6FE0",   // Deep — was iOS system #0A84FF
- green: "#30D158",
+ blue: "var(--accent)",
+ green: "var(--win)",
  // ONE outcome red. Losses, losing streaks, negative deltas, destructive actions.
- // Nothing else wears it — a rate is not an outcome.
- red: "#FF453A",
- orange: "#FF9F0A",
- purple: "#BF5AF2",
- teal: "#3A9EE0",
- yellow: "#FFD60A",
+ // Nothing else wears it -- a rate is not an outcome.
+ red: "var(--loss)",
+ orange: "var(--live)",
+ purple: "var(--purple)",
+ teal: "var(--teal)",
+ yellow: "var(--yellow)",
  // Longshot / parlay IDENTITY, never a verdict: chips, 5x multiplier, combined odds,
  // underdog tags. It reads as a red, so it must never sit where a loss could.
- longshot: "#FF375F",
- pink: "#FF375F",   // deprecated alias of longshot
- indigo: "#4B4FBF",  // gradient partner for the deep accent
- gray: "#8E8E93",
- gray2: "#636366",
- gray3: "#48484A",
- gray4: "#3A3A3C",
- gray5: "#2C2C2E",
- gray6: "#1C1C1E",
- bg: "#000000",
- bg2: "#1C1C1E",
- bg3: "#2C2C2E",
- label: "#FFFFFF",
- label2: "rgba(255,255,255,0.6)",
- label3: "rgba(255,255,255,0.3)",
- label4: "rgba(255,255,255,0.18)",
- sep: "rgba(255,255,255,0.1)",
- fill: "rgba(255,255,255,0.05)",
- fill2: "rgba(255,255,255,0.08)",
- fill3: "rgba(255,255,255,0.12)",
+ longshot: "var(--longshot)",
+ pink: "var(--longshot)",   // deprecated alias of longshot
+ indigo: "var(--indigo)",   // gradient partner for the deep accent
+ // IOS.gold had ONE call site and was never defined -- the "BEST" badge on the solo
+ // week list rendered background:undefined. Defining it is a fix, not a restyle.
+ gold: "var(--gold)",
+ gray: "var(--gray)",
+ gray2: "var(--gray2)",
+ gray3: "var(--gray3)",
+ gray4: "var(--gray4)",
+ gray5: "var(--gray5)",
+ gray6: "var(--gray6)",
+ bg: "var(--bg)",
+ bg2: "var(--bg2)",
+ bg3: "var(--bg3)",
+ label: "var(--text)",
+ label2: "var(--text2)",
+ label3: "var(--text3)",
+ label4: "var(--text4)",
+ sep: "var(--line)",
+ fill: "var(--fill)",
+ fill2: "var(--fill2)",
+ fill3: "var(--fill3)",
+};
+
+// A translucent tint of a colour, whatever form that colour arrives in.
+//   fade("var(--accent)", .2) -> rgba(var(--accent-rgb), .2)   (themed)
+//   fade("#64D2FF", .2)       -> rgba(100,210,255, .2)         (literal)
+// Every token above has a matching --*-rgb triple in :root. rgba(var(--x-rgb), a)
+// works on every engine we ship to, unlike color-mix(), which needs Safari 16.2.
+// Anything unrecognised is returned untouched rather than turned into garbage.
+const fade = (c, a) => {
+  if (typeof c !== "string") return c;
+  if (c.slice(0, 6) === "var(--") {
+    const close = c.indexOf(")");
+    if (close === -1) return c;
+    return "rgba(var(" + c.slice(4, close) + "-rgb), " + a + ")";
+  }
+  if (c.charAt(0) === "#") {
+    const h = c.length === 4
+      ? c.charAt(1) + c.charAt(1) + c.charAt(2) + c.charAt(2) + c.charAt(3) + c.charAt(3)
+      : c.slice(1, 7);
+    const n = parseInt(h, 16);
+    if (isNaN(n)) return c;
+    return "rgba(" + ((n >> 16) & 255) + "," + ((n >> 8) & 255) + "," + (n & 255) + "," + a + ")";
+  }
+  return c;
 };
 
 // ── Surface scale ───────────────────────────────────────────
@@ -361,18 +405,18 @@ const IOS = {
 // weight works whether or not you are in the matchup, which a you-vs-neutral split
 // does not: most matchups on the Matchups tab are ones you are not in.
 // Module scope on purpose — both the sheet (top of file) and the league list use it.
-const SIDE_YOU  = "#3B6FE0";   // your side of a head-to-head
-const SIDE_OPP  = "#3a3d47";   // the opponent — neutral, not a second brand hue
+const SIDE_YOU  = "var(--accent)";   // your side of a head-to-head
+const SIDE_OPP  = "var(--side-opp)";   // the opponent — neutral, not a second brand hue
 // When NEITHER side is you (most of the Matchups tab) "you vs neutral" has no answer,
 // so the two sides fall back to one hue at two weights rather than rendering identical.
-const SIDE_A    = "#3B6FE0";
-const SIDE_B    = "#31477A";
+const SIDE_A    = "var(--accent)";
+const SIDE_B    = "var(--side-b)";
 
 const RAD  = { sm:8, md:12, lg:16, xl:20, pill:999 };
 const EDGE = {
-  hair:  "0.5px solid rgba(255,255,255,0.08)",   // default card edge
-  hair2: "0.5px solid rgba(255,255,255,0.12)",   // raised / selected
-  hair3: "0.5px solid rgba(255,255,255,0.16)",   // control outline
+  hair:  "0.5px solid var(--edge)",   // default card edge
+  hair2: "0.5px solid var(--edge2)",   // raised / selected
+  hair3: "0.5px solid var(--edge3)",   // control outline
 };
 // ─── SPORT CONFIG ───────────────────────────────────────────────
 // ─── SEASON WINDOWS ────────────────────────────────────────────────────────────
@@ -1805,7 +1849,7 @@ function ProfileSheet({view, data, loading, onClose, myId, globalRank, onReport,
  <div style={{display:"flex",gap:8,overflowX:"auto",margin:"0 -16px",padding:"0 16px 4px"}}>
  {badges.map(b=>(
  <div key={b.id} style={{flexShrink:0,width:104,borderRadius:RAD.lg,padding:"12px 10px 11px",display:"flex",flexDirection:"column",alignItems:"center",textAlign:"center",background:"linear-gradient(165deg,#1a1a1f,#141417)",border:EDGE.hair}}>
- <div style={{width:38,height:38,borderRadius:"50%",background:b.color+"21",border:"0.5px solid "+b.color+"59",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:8}}>{PROF_BIC[b.icon](b.color)}</div>
+ <div style={{width:38,height:38,borderRadius:"50%",background:fade(b.color,0.129),border:"0.5px solid "+fade(b.color,0.349),display:"flex",alignItems:"center",justifyContent:"center",marginBottom:8}}>{PROF_BIC[b.icon](b.color)}</div>
  <div style={{fontSize:11,fontWeight:800,lineHeight:1.25}}>{b.name}</div>
  <div style={{fontSize:9,fontWeight:700,color:IOS.label3,marginTop:3}}>{b.sub}</div>
  </div>
@@ -2120,7 +2164,7 @@ function PUBadge({ puId, size=16 }) {
   const pu = POWER_UPS.find(p => p.id === puId);
   const color = pu ? pu.color : "#0A84FF";
   return (
-    <span title={pu ? pu.name : ""} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:size,height:size,borderRadius:"50%",background:color+"26",border:"1px solid "+color+"66",flexShrink:0,overflow:"hidden"}}>
+    <span title={pu ? pu.name : ""} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:size,height:size,borderRadius:"50%",background:fade(color,0.149),border:"1px solid "+fade(color,0.4),flexShrink:0,overflow:"hidden"}}>
       <span style={{display:"inline-flex",transform:"scale("+(size/30)+")",transformOrigin:"center"}}>{puSVG(puId, color)}</span>
     </span>
   );
@@ -2147,7 +2191,7 @@ function StreakFlame({ count=0, size=18 }){
   const tip=c>=6?"#FF375F":(c>=3?"#FF6A00":"#FF9F0A");
   const gid="fl"+count+"_"+size;
   return (
-    <svg className="flame-flicker" width={w} height={h} viewBox="0 0 24 34" style={{display:"block",overflow:"visible",filter:`drop-shadow(0 0 ${3+c}px ${tip}88)`}}>
+    <svg className="flame-flicker" width={w} height={h} viewBox="0 0 24 34" style={{display:"block",overflow:"visible",filter:`drop-shadow(0 0 ${3+c}px ${fade(tip,0.533)})`}}>
       <defs><linearGradient id={gid} x1="0" y1="1" x2="0" y2="0">
         <stop offset="0%" stopColor="#FFE08A"/><stop offset="45%" stopColor="#FF9F0A"/><stop offset="100%" stopColor={tip}/>
       </linearGradient></defs>
@@ -2165,7 +2209,7 @@ function StatRadar({ axes=[], size=210, color="#0A84FF" }){
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{display:"block",margin:"0 auto"}}>
       {[0.25,0.5,0.75,1].map((g,gi)=><polygon key={"g"+gi} points={axes.map((_,i)=>pt(i,R*g).join(",")).join(" ")} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="1"/>)}
       {axes.map((_,i)=>{const[x,y]=pt(i,R);return <line key={"l"+i} x1={cx} y1={cy} x2={x} y2={y} stroke="rgba(255,255,255,0.07)" strokeWidth="1"/>;})}
-      <polygon points={poly} fill={color+"30"} stroke={color} strokeWidth="2" strokeLinejoin="round"/>
+      <polygon points={poly} fill={fade(color,0.188)} stroke={color} strokeWidth="2" strokeLinejoin="round"/>
       {axes.map((ax,i)=>{const[x,y]=pt(i,R*Math.max(0.05,ax.value));return <circle key={"c"+i} cx={x} cy={y} r="3" fill={ax.color||color}/>;})}
       {axes.map((ax,i)=>{const[x,y]=pt(i,R+15);return <text key={"t"+i} x={x} y={y} fill="rgba(255,255,255,0.65)" fontSize="9.5" fontWeight="700" textAnchor="middle" dominantBaseline="middle">{ax.tag}</text>;})}
     </svg>
@@ -2393,7 +2437,7 @@ function PlayerCard({ data, IOS }){
             <div className="pc-toprow">
               <div className="pc-ovr"><div className="pc-num"><Ticker value={data.ovr}/></div><div className="pc-lab">OVR</div></div>
               <div style={{textAlign:"right"}}>
-                <div className="pc-tierbadge" style={{color:TC,borderColor:TC+"99"}}>{(data.tier||"").toUpperCase()}</div>
+                <div className="pc-tierbadge" style={{color:TC,borderColor:fade(TC,0.6)}}>{(data.tier||"").toUpperCase()}</div>
                 <div className="pc-arch" style={{color:TC}}>{(data.arch||"").toUpperCase()}</div>
               </div>
             </div>
@@ -2435,7 +2479,7 @@ function PlayerCard({ data, IOS }){
       <div className="pc-bsheet">
         <div className="pc-grip"/>
         <div className="pc-bs-top">
-          <div className="pc-bs-ic" style={{background:badge.unlocked?TC+"22":"rgba(255,255,255,.06)",border:"1px solid "+(badge.unlocked?TC+"66":"rgba(255,255,255,.12)")}}>
+          <div className="pc-bs-ic" style={{background:badge.unlocked?fade(TC,0.133):"rgba(255,255,255,.06)",border:"1px solid "+(badge.unlocked?fade(TC,0.4):"rgba(255,255,255,.12)")}}>
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={badge.unlocked?TC:"#fff"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{__html:badge.svg}}/>
           </div>
           <div><div className="pc-bs-nm">{badge.name}</div><div className="pc-bs-st" style={{color:badge.unlocked?IOS.green:"rgba(255,255,255,.4)"}}>{badge.unlocked?"Unlocked":"Locked"}</div></div>
@@ -2807,7 +2851,7 @@ function WeeklyRecap({ data, picks, standings, league, stats, IOS, onClose, user
     "radial-gradient(120% 80% at 50% 15%,rgba(10,132,255,.4),#05101f 70%)",
     "radial-gradient(120% 80% at 50% 15%,rgba(255,214,10,.32),#140f04 70%)",
     "radial-gradient(120% 80% at 50% 15%,rgba(120,120,130,.3),#0c0c0e 70%)",
-    "radial-gradient(120% 80% at 50% 15%,"+sup.color+"55,#140420 70%)",
+    "radial-gradient(120% 80% at 50% 15%,"+fade(sup.color,0.333)+",#140420 70%)",
     "radial-gradient(120% 80% at 50% 15%,rgba(10,132,255,.34),#04060c 68%)",
     "radial-gradient(120% 80% at 50% 0%,#11131c,#04060c 70%)"][i];
   const shareCard=async()=>{
@@ -2823,7 +2867,7 @@ function WeeklyRecap({ data, picks, standings, league, stats, IOS, onClose, user
       else { const a=document.createElement("a"); a.href=cv.toDataURL("image/png"); a.download="picklock-week.png"; a.click(); try{ await navigator.clipboard.writeText(text+" "+url); }catch(e){} setToast("Card saved — caption copied"); setTimeout(()=>setToast(""),2400); }
     }catch(e){}
   };
-  const Emb=({d,color})=>(<div className="wrec-emblem wrec-pop" style={{background:color+"22",border:"1px solid "+color+"66"}}><svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{__html:d}}/></div>);
+  const Emb=({d,color})=>(<div className="wrec-emblem wrec-pop" style={{background:fade(color,0.133),border:"1px solid "+fade(color,0.4)}}><svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{__html:d}}/></div>);
   let body;
   if(i===0) body=(<><div className="wrec-kicker wrec-rise wrec-d1">PickLock</div><div className="wrec-huge wrec-rise wrec-d2" style={{marginTop:14}}>WEEK<br/>{data.week}</div><div className="wrec-sub wrec-rise wrec-d3" style={{marginTop:18}}>Your week is in.<br/>Let's see how it went.</div></>);
   else if(i===1) body=(<><div className="wrec-kicker wrec-rise wrec-d1">The verdict</div>{data.oppName?(<><div className="wrec-huge wrec-pop" style={{marginTop:10,color:won?C.green:C.red}}>{won?<>YOU<br/>WON</>:<>YOU<br/>LOST</>}</div><div className="wrec-mid wrec-rise wrec-d4" style={{marginTop:20}}><WrecCount to={myPts} dec={0}/> <span style={{opacity:.4}}>—</span> {oppPts.toFixed(0)}</div><div className="wrec-sub wrec-rise wrec-d5" style={{marginTop:6}}>{won?"def.":"vs"} {data.oppName}</div></>):(<><div className="wrec-huge wrec-pop" style={{marginTop:10,color:wins>losses?C.green:wins===losses?C.blue:C.orange}}>{wins>losses?<>BIG<br/>WEEK</>:wins===losses?<>EVEN<br/>WEEK</>:<>TOUGH<br/>WEEK</>}</div><div className="wrec-mid wrec-rise wrec-d4" style={{marginTop:20}}><WrecCount to={myPts} dec={1} pre={myPts>=0?"+":""}/> pts</div></>)}</>);
@@ -3222,15 +3266,15 @@ function MatchBody({ d, IOS, liveGames=[], onOpenGamecast }){
         boxShadow:"inset 0 1px 2px rgba(0,0,0,0.5), inset 0 0 0 0.5px rgba(255,255,255,0.05)"}}>
         {/* banked — gradient fill + top sheen + a glow in the team colour */}
         <div style={{position:"absolute",left:0,top:0,bottom:0,borderRadius:lockedPct>=99?"7px":"7px 0 0 7px",width:`${lockedPct}%`,
-          background:`linear-gradient(180deg,${tint}, ${tint}cc)`,
-          boxShadow:`0 0 10px ${tint}66, inset 0 1px 0 rgba(255,255,255,0.35)`}}>
+          background:`linear-gradient(180deg,${tint}, ${fade(tint,0.8)})`,
+          boxShadow:`0 0 10px ${fade(tint,0.4)}, inset 0 1px 0 rgba(255,255,255,0.35)`}}>
           <div style={{position:"absolute",left:0,right:0,top:0,height:"45%",borderRadius:"7px 7px 0 0",background:"linear-gradient(180deg,rgba(255,255,255,0.28),transparent)"}}/>
         </div>
         {/* still live — hatched, sitting on top of banked */}
         {c.live>0 && (
           <div title="still live" style={{position:"absolute",top:0,bottom:0,left:`${lockedPct}%`,width:`${livePct}%`,
-            background:`repeating-linear-gradient(115deg, ${tint}3a 0 5px, transparent 5px 10px)`,
-            borderLeft:`1px solid ${tint}55`}}/>
+            background:`repeating-linear-gradient(115deg, ${fade(tint,0.227)} 0 5px, transparent 5px 10px)`,
+            borderLeft:`1px solid ${fade(tint,0.333)}`}}/>
         )}
       </div>
       <div style={{width:46,textAlign:"right",flexShrink:0,fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:17,fontWeight:900,
@@ -3545,7 +3589,7 @@ function BetslipButton({ bet, IOS }){
   const b = data.best;
   return (
     <div className="ai-rise" style={{marginTop:8}}>
-      <a href={b.link} target="_blank" rel="noopener noreferrer" style={{textDecoration:"none",width:"100%",padding:"10px",borderRadius:RAD.md,border:`1px solid ${IOS.blue}55`,background:`${IOS.blue}14`,color:IOS.blue,fontSize:13,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",gap:7,boxSizing:"border-box"}}>
+      <a href={b.link} target="_blank" rel="noopener noreferrer" style={{textDecoration:"none",width:"100%",padding:"10px",borderRadius:RAD.md,border:`1px solid ${fade(IOS.blue,0.333)}`,background:`${fade(IOS.blue,0.078)}`,color:IOS.blue,fontSize:13,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",gap:7,boxSizing:"border-box"}}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17L17 7"/><path d="M7 7h10v10"/></svg>
         Bet on {b.title}{b.price!=null?("  ("+(b.price>0?"+":"")+b.price+")"):""}
       </a>
@@ -3670,7 +3714,7 @@ function AiInsightBubble({ item, IOS, onAddToSlip }) {
       </div>
     )}
     {phase>=1 && data.yourAngle && !data.hunter && (
-      <div className="ai-rise" style={{display:"flex",alignItems:"flex-start",gap:8,background:`linear-gradient(135deg,${IOS.blue}1f,${IOS.indigo}12)`,border:`0.5px solid ${IOS.blue}3a`,borderRadius:RAD.md,padding:"10px 12px",marginBottom:11}}>
+      <div className="ai-rise" style={{display:"flex",alignItems:"flex-start",gap:8,background:`linear-gradient(135deg,${fade(IOS.blue,0.122)},${fade(IOS.indigo,0.071)})`,border:`0.5px solid ${fade(IOS.blue,0.227)}`,borderRadius:RAD.md,padding:"10px 12px",marginBottom:11}}>
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginTop:1}}><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 12 0v1"/><path d="M17.5 7.5l1.5 1.5 3-3"/></svg>
         <div>
           <div style={{fontSize:9,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:IOS.blue,marginBottom:2}}>Your angle</div>
@@ -3685,15 +3729,15 @@ function AiInsightBubble({ item, IOS, onAddToSlip }) {
       const tc = v==="strong"?IOS.green : v==="lean"?IOS.blue : v==="fade"?IOS.red : IOS.label3;
       const vlabel = v==="strong"?"Strong lean" : v==="lean"?"Lean" : v==="fade"?"Fade" : "Pass";
       return (
-        <div className="ai-rise" style={{background:"rgba(255,255,255,0.04)",border:`0.5px solid ${tc}3a`,borderRadius:RAD.md,padding:"11px 12px",marginBottom:11}}>
+        <div className="ai-rise" style={{background:"rgba(255,255,255,0.04)",border:`0.5px solid ${fade(tc,0.227)}`,borderRadius:RAD.md,padding:"11px 12px",marginBottom:11}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <div style={{fontSize:9,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:"rgba(255,255,255,0.4)"}}>Plok read</div>
-            <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.04em",textTransform:"uppercase",color:tc,background:`${tc}1f`,borderRadius:RAD.sm,padding:"3px 8px"}}>{vlabel}</div>
+            <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.04em",textTransform:"uppercase",color:tc,background:`${fade(tc,0.122)}`,borderRadius:RAD.sm,padding:"3px 8px"}}>{vlabel}</div>
           </div>
           {!isPass ? (
             <div style={{display:"flex",alignItems:"center",gap:9,marginTop:8}}>
               <div style={{flex:1,height:7,borderRadius:5,background:"rgba(255,255,255,0.08)",overflow:"hidden"}}>
-                <div style={{height:"100%",width:`${conv}%`,borderRadius:5,background:`linear-gradient(90deg,${tc},${tc}aa)`,transition:"width .6s ease"}}/>
+                <div style={{height:"100%",width:`${conv}%`,borderRadius:5,background:`linear-gradient(90deg,${tc},${fade(tc,0.667)})`,transition:"width .6s ease"}}/>
               </div>
               <div style={{fontSize:13,fontWeight:800,color:tc,minWidth:28,textAlign:"right"}}>{conv}</div>
             </div>
@@ -4909,18 +4953,18 @@ function MatchupRow({ mi, u1, u2, p1, p2, done, mine, isBye, badge, badgeBg, bad
                const lp=(cl.locked/_maxCeil)*100, mp=(cl.live/_maxCeil)*100;
                return (
                 <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 13px",opacity:lead?1:(anyLead?0.7:1)}}>
-                  <div style={{width:28,height:28,borderRadius:RAD.sm,flexShrink:0,background:tint+"33",color:tint,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900}}>{id?(nameOf(id)||"?").slice(0,2).toUpperCase():"\u2014"}</div>
+                  <div style={{width:28,height:28,borderRadius:RAD.sm,flexShrink:0,background:fade(tint,0.2),color:tint,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900}}>{id?(nameOf(id)||"?").slice(0,2).toUpperCase():"\u2014"}</div>
                   <div onClick={(e)=>{ if(!id||!onOpenProfile) return; e.stopPropagation(); onOpenProfile(id, you); }} style={{width:96,flexShrink:0,fontSize:13.5,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",color:!id?IOS.label3:(you?IOS.blue:"#fff"),cursor:(id&&onOpenProfile)?"pointer":"default"}}>{id?nameOf(id):"BYE"}</div>
                   <div style={{flex:1,height:8,borderRadius:4,background:"rgba(0,0,0,0.4)",position:"relative",overflow:"hidden",boxShadow:"inset 0 1px 2px rgba(0,0,0,0.55)"}}>
-                    {!isBye && <div style={{position:"absolute",left:0,top:0,bottom:0,borderRadius:4,width:lp+"%",background:`linear-gradient(180deg,${tint},${tint}cc)`,boxShadow:`0 0 8px ${tint}55`}}/>}
-                    {!isBye && cl.live>0 && <div style={{position:"absolute",top:0,bottom:0,left:lp+"%",width:mp+"%",background:`repeating-linear-gradient(115deg,${tint}3a 0 4px,transparent 4px 8px)`}}/>}
+                    {!isBye && <div style={{position:"absolute",left:0,top:0,bottom:0,borderRadius:4,width:lp+"%",background:`linear-gradient(180deg,${tint},${fade(tint,0.8)})`,boxShadow:`0 0 8px ${fade(tint,0.333)}`}}/>}
+                    {!isBye && cl.live>0 && <div style={{position:"absolute",top:0,bottom:0,left:lp+"%",width:mp+"%",background:`repeating-linear-gradient(115deg,${fade(tint,0.227)} 0 4px,transparent 4px 8px)`}}/>}
                   </div>
                   <div style={{width:50,textAlign:"right",flexShrink:0,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:19,color:isBye?IOS.label3:(lead?IOS.green:"#fff")}}>{isBye?"\u2014":pts.toFixed(1)}</div>
                 </div>
                );
              };
              return (
-               <div key={mi} onClick={onOpen} style={{background:IOS.bg2,border:mine?("1px solid "+IOS.blue+"88"):`1px solid ${IOS.sep}`,borderRadius:RAD.lg,marginBottom:11,overflow:"hidden",cursor:"pointer"}}>
+               <div key={mi} onClick={onOpen} style={{background:IOS.bg2,border:mine?("1px solid "+fade(IOS.blue,0.533)):`1px solid ${IOS.sep}`,borderRadius:RAD.lg,marginBottom:11,overflow:"hidden",cursor:"pointer"}}>
                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 13px 2px"}}>
                    <div style={{fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",color:mine?IOS.blue:IOS.label3}}>{isBye?(mine?"You have a bye":"Bye"):(mine?"Your matchup":"Matchup")}</div>
                    <div style={{fontSize:10,fontWeight:800,padding:"3px 8px",borderRadius:RAD.sm,background:isBye?"rgba(255,159,10,0.14)":(done?"rgba(255,255,255,0.08)":"rgba(48,209,88,0.14)"),color:isBye?IOS.orange:(done?IOS.label2:IOS.green)}}>{isBye?"BYE":(done?"FINAL":"LIVE")}</div>
@@ -5267,7 +5311,7 @@ function BotRaceCard({ user, isSolo }){
   <span style={{fontSize:11,fontWeight:900,color:"rgba(255,255,255,0.35)",width:16}}>{i+1}</span>
   {me
   ? <div style={{width:30,height:30,borderRadius:"50%",background:"rgba(10,132,255,0.18)",border:"1px solid rgba(10,132,255,0.45)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,color:IOS.blue,flexShrink:0}}>{"YOU"}</div>
-  : <div style={{width:30,height:30,borderRadius:"50%",background:m.color+"1f",border:"1px solid "+m.color+"55",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><BotFace face={m.face} color={m.color} size={17}/></div>}
+  : <div style={{width:30,height:30,borderRadius:"50%",background:fade(m.color,0.122),border:"1px solid "+fade(m.color,0.333),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><BotFace face={m.face} color={m.color} size={17}/></div>}
   <div style={{flex:1,minWidth:0}}>
   <div style={{fontSize:12.5,fontWeight:800}}>{me?"You":m.name}</div>
   {!me&&<div style={{fontSize:9.5,color:"rgba(255,255,255,0.4)",marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{m.bio}</div>}
@@ -6153,7 +6197,7 @@ function GamecastSheet({ game, pick, onClose }){
           );
           return (
           <div style={{position:"relative",overflow:"hidden",padding:"0 18px 15px",borderRadius:"26px 26px 0 0"}}>
-            <div style={{position:"absolute",inset:0,background:`linear-gradient(105deg,${aCol}38 0%,${aCol}00 40%,${hCol}00 60%,${hCol}33 100%)`,pointerEvents:"none"}}/>
+            <div style={{position:"absolute",inset:0,background:`linear-gradient(105deg,${fade(aCol,0.22)} 0%,${fade(aCol,0)} 40%,${fade(hCol,0)} 60%,${fade(hCol,0.2)} 100%)`,pointerEvents:"none"}}/>
             {/* handle + status live INSIDE the tinted band so the hero reaches the sheet top */}
             <div style={{position:"relative",width:38,height:4,borderRadius:2,background:"rgba(255,255,255,0.28)",margin:"10px auto 8px"}}/>
             <div style={{position:"relative",textAlign:"center",marginBottom:13}}>
@@ -6348,7 +6392,7 @@ function GamecastSheet({ game, pick, onClose }){
             : `${tot} of ${lineNum} runs · needs ${Math.max(0,(lineNum-tot)).toFixed(1).replace(/\.0$/,"")} more to win`;
           return (
           <div style={{margin:"10px 16px 4px",borderRadius:RAD.lg,padding:"12px 14px",
-            background:`linear-gradient(135deg,${tint}26,rgba(255,255,255,0.02))`,border:`1px solid ${tint}59`}}>
+            background:`linear-gradient(135deg,${fade(tint,0.149)},rgba(255,255,255,0.02))`,border:`1px solid ${fade(tint,0.349)}`}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
               <div style={{fontSize:9,fontWeight:900,letterSpacing:"0.09em",color:tint}}>{(pick._ownerIsYou===false && pick._ownerName ? (pick._ownerName.toUpperCase()+"\u2019S PICK") : "YOUR PICK")}{won?" \u00b7 WON":lost?" \u00b7 LOST":""}</div>
               {pick.multiplier?<div style={{fontSize:9.5,fontWeight:900,padding:"2px 6px",borderRadius:5,background:"rgba(255,159,10,0.2)",color:"#FF9F0A"}}>{pick.multiplier}×</div>:null}
@@ -11722,6 +11766,81 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  html.native-insets{--sa-top:0px;--sa-bot:0px;}
  ::-webkit-scrollbar{display:none;}
 
+ /* -- THEME TOKENS ---------------------------------------------------------
+    :root is the dark theme and its values are byte-identical to the hard-coded
+    colours that shipped before Phase 0, so nothing moves until [data-theme] is
+    set. The -rgb triples back fade(); see the helper in the JS above. */
+ :root{
+   --accent:#3B6FE0;   --accent-rgb:59,111,224;
+   --win:#30D158;      --win-rgb:48,209,88;
+   --loss:#FF453A;     --loss-rgb:255,69,58;
+   --live:#FF9F0A;     --live-rgb:255,159,10;
+   --longshot:#FF375F; --longshot-rgb:255,55,95;
+   --yellow:#FFD60A;   --yellow-rgb:255,214,10;
+   --purple:#BF5AF2;   --purple-rgb:191,90,242;
+   --teal:#3A9EE0;     --teal-rgb:58,158,224;
+   --indigo:#4B4FBF;   --indigo-rgb:75,79,191;
+   --gold:#FFD60A;     --gold-rgb:255,214,10;
+   --gray:#8E8E93;     --gray-rgb:142,142,147;
+   --gray2:#636366;    --gray2-rgb:99,99,102;
+   --gray3:#48484A;    --gray3-rgb:72,72,74;
+   --gray4:#3A3A3C;    --gray4-rgb:58,58,60;
+   --gray5:#2C2C2E;    --gray5-rgb:44,44,46;
+   --gray6:#1C1C1E;    --gray6-rgb:28,28,30;
+   --bg:#000000;       --bg-rgb:0,0,0;
+   --bg2:#1C1C1E;      --bg2-rgb:28,28,30;
+   --bg3:#2C2C2E;      --bg3-rgb:44,44,46;
+   --text:#FFFFFF;     --text-rgb:255,255,255;
+   --text2:rgba(255,255,255,0.6);   --text2-rgb:255,255,255;
+   --text3:rgba(255,255,255,0.3);   --text3-rgb:255,255,255;
+   --text4:rgba(255,255,255,0.18);  --text4-rgb:255,255,255;
+   --line:rgba(255,255,255,0.1);    --line-rgb:255,255,255;
+   --fill:rgba(255,255,255,0.05);   --fill-rgb:255,255,255;
+   --fill2:rgba(255,255,255,0.08);  --fill2-rgb:255,255,255;
+   --fill3:rgba(255,255,255,0.12);  --fill3-rgb:255,255,255;
+   --edge:rgba(255,255,255,0.08);
+   --edge2:rgba(255,255,255,0.12);
+   --edge3:rgba(255,255,255,0.16);
+   --side-opp:#3a3d47; --side-opp-rgb:58,61,71;
+   --side-b:#31477A;   --side-b-rgb:49,71,122;
+ }
+ /* Daylight. Not an inversion -- outcome colours need their own values or they
+    fail contrast on white (#30D158 on #FFF is about 1.9:1). Nothing selects this
+    yet; the attribute is set in Phase 2. */
+ [data-theme="light"]{
+   --accent:#2C5AD1;   --accent-rgb:44,90,209;
+   --win:#0E7A46;      --win-rgb:14,122,70;
+   --loss:#C32F26;     --loss-rgb:195,47,38;
+   --live:#B26A00;     --live-rgb:178,106,0;
+   --longshot:#C9215A; --longshot-rgb:201,33,90;
+   --yellow:#8A6A00;   --yellow-rgb:138,106,0;
+   --purple:#7B3FB8;   --purple-rgb:123,63,184;
+   --teal:#1F6E9C;     --teal-rgb:31,110,156;
+   --indigo:#3A3FA8;   --indigo-rgb:58,63,168;
+   --gold:#8A6A00;     --gold-rgb:138,106,0;
+   --gray:#6B7280;     --gray-rgb:107,114,128;
+   --gray2:#8A929D;    --gray2-rgb:138,146,157;
+   --gray3:#AAB2BC;    --gray3-rgb:170,178,188;
+   --gray4:#C7CED7;    --gray4-rgb:199,206,215;
+   --gray5:#E7ECF2;    --gray5-rgb:231,236,242;
+   --gray6:#F1F4F7;    --gray6-rgb:241,244,247;
+   --bg:#FFFFFF;       --bg-rgb:255,255,255;
+   --bg2:#F4F6F8;      --bg2-rgb:244,246,248;
+   --bg3:#E7ECF2;      --bg3-rgb:231,236,242;
+   --text:#0D1117;     --text-rgb:13,17,23;
+   --text2:#5A6472;    --text2-rgb:90,100,114;
+   --text3:#8A929D;    --text3-rgb:138,146,157;
+   --text4:#AAB2BC;    --text4-rgb:170,178,188;
+   --line:#E3E8EE;     --line-rgb:227,232,238;
+   --fill:#F1F4F7;     --fill-rgb:241,244,247;
+   --fill2:#E7ECF2;    --fill2-rgb:231,236,242;
+   --fill3:#DDE4EC;    --fill3-rgb:221,228,236;
+   --edge:#E3E8EE;
+   --edge2:#D2D9E2;
+   --edge3:#C7CED7;
+   --side-opp:#AFBACA; --side-opp-rgb:175,186,202;
+   --side-b:#8FA6C9;   --side-b-rgb:143,166,201;
+ }
  html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;position:fixed;width:100%;top:0;left:0;background:#000;touch-action:manipulation;-webkit-text-size-adjust:100%;text-size-adjust:100%;} #root{height:100%;overflow:hidden;background:#000;} .phone{width:100%;max-width:480px;margin:0 auto;height:100vh;height:100dvh;max-height:100dvh;background:#000;position:relative;overflow:hidden;display:flex;flex-direction:column;font-family:'Barlow',system-ui,-apple-system,sans-serif;color:#fff;-webkit-font-smoothing:antialiased;padding-top:var(--sa-top);box-sizing:border-box;}
 
  /* iOS Status Bar */
@@ -13359,7 +13478,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  ? <div style={{padding:"28px 20px",textAlign:"center",color:IOS.label3,fontSize:15}}>No power-ups apply to this pick</div>
  : filteredPUs.map((pu,i)=>(
  <div key={i} className="pu-opt" onClick={()=>usePU(pu, showPUModal.context, showPUModal.context==="picks"?showPUModal.slotId:showPUModal.pickIdx)}>
- <div className="pu-opt-icon" style={{background:`${pu.color}20`}}>{puSVG(pu.id,pu.color)}</div>
+ <div className="pu-opt-icon" style={{background:`${fade(pu.color,0.125)}`}}>{puSVG(pu.id,pu.color)}</div>
  <div style={{flex:1}}>
  <div className="pu-opt-name">{pu.name}</div>
  <div className="pu-opt-desc">{pu.desc}</div>
@@ -13517,10 +13636,10 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="1.8"><rect x="4" y="10" width="16" height="10" rx="2.5"/><path d="M8 10V7a4 4 0 018 0v3"/></svg>
            <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:26,fontWeight:900,color:"rgba(255,255,255,0.25)"}}>?</div>
          </div>
-         <div style={{position:"absolute",inset:0,borderRadius:16,backfaceVisibility:"hidden",transform:"rotateY(180deg)",background:wonPU?("linear-gradient(155deg,"+wonPU.color+"30,"+wonPU.color+"08 70%)"):"#111",border:wonPU?("1.5px solid "+wonPU.color+"90"):"1px solid #333",boxShadow:wonPU?("0 0 34px "+wonPU.color+"50"):"none",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8,padding:8}}>
+         <div style={{position:"absolute",inset:0,borderRadius:16,backfaceVisibility:"hidden",transform:"rotateY(180deg)",background:wonPU?("linear-gradient(155deg,"+fade(wonPU.color,0.188)+","+fade(wonPU.color,0.031)+" 70%)"):"#111",border:wonPU?("1.5px solid "+fade(wonPU.color,0.565)):"1px solid #333",boxShadow:wonPU?("0 0 34px "+fade(wonPU.color,0.314)):"none",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8,padding:8}}>
            {wonPU&&puSVG(wonPU.id,wonPU.color)}
            <div style={{fontSize:13,fontWeight:900,textAlign:"center",lineHeight:1.2,color:"#fff"}}>{wonPU?wonPU.name:""}</div>
-           {wonPU&&<div style={{fontSize:8.5,fontWeight:900,letterSpacing:"1.4px",textTransform:"uppercase",borderRadius:99,padding:"3px 9px",color:wonPU.color,background:wonPU.color+"20",border:"0.5px solid "+wonPU.color+"40"}}>{wonPU.rarity}</div>}
+           {wonPU&&<div style={{fontSize:8.5,fontWeight:900,letterSpacing:"1.4px",textTransform:"uppercase",borderRadius:99,padding:"3px 9px",color:wonPU.color,background:fade(wonPU.color,0.125),border:"0.5px solid "+fade(wonPU.color,0.251)}}>{wonPU.rarity}</div>}
          </div>
        </div>
      );})}
@@ -13587,7 +13706,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  </div>
  <div className="gh-center"></div>
  <div className="gh-right">
-            <div onClick={()=>{ if(!isPro){setShowPaywall("ai");return;} setScreen("ai"); }} aria-label="Plok" style={{display:"inline-flex",alignItems:"center",gap:5,height:34,padding:"0 11px",borderRadius:RAD.lg,background:`${IOS.blue}1f`,border:`1px solid ${IOS.blue}3a`,cursor:"pointer"}}><svg width="15" height="15" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg><span style={{fontSize:13,fontWeight:800,color:IOS.blue,letterSpacing:"-0.2px"}}>Plok</span></div>
+            <div onClick={()=>{ if(!isPro){setShowPaywall("ai");return;} setScreen("ai"); }} aria-label="Plok" style={{display:"inline-flex",alignItems:"center",gap:5,height:34,padding:"0 11px",borderRadius:RAD.lg,background:`${fade(IOS.blue,0.122)}`,border:`1px solid ${fade(IOS.blue,0.227)}`,cursor:"pointer"}}><svg width="15" height="15" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg><span style={{fontSize:13,fontWeight:800,color:IOS.blue,letterSpacing:"-0.2px"}}>Plok</span></div>
  {!isSoloMode && <div className="gh-icon" onClick={()=>setScreen("chat")}>
  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
  {unreadByLeague[activeLeagueId]>0 && <span className="gh-badge">{unreadByLeague[activeLeagueId]>9?"9+":unreadByLeague[activeLeagueId]}</span>}
@@ -13659,7 +13778,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    const ago=!t?"":mins<1?"now":mins<60?(mins+"m"):mins<1440?(Math.floor(mins/60)+"h"):(Math.floor(mins/1440)+"d");
    return (
    <div key={n.id} onClick={()=>handleNotifTap(n)} className="gh-opt" style={{opacity:n.read_at?0.62:1}}>
-   <div className="gh-od" style={{background:accent+"1f"}}>
+   <div className="gh-od" style={{background:fade(accent,0.122)}}>
    {won?<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
     :lost?<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
     :n.type==="plok_call"?<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15 9 22 9.3 16.5 14 18.5 21 12 17 5.5 21 7.5 14 2 9.3 9 9"/></svg>
@@ -14479,7 +14598,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        <span onClick={()=>setScreen("matchup")} style={{color:sport.color,fontSize:13,textTransform:"none",fontWeight:500,letterSpacing:0,cursor:"pointer"}}>The Field</span>
      </div>
    </div>
-   <div onClick={()=>setScreen("league")} style={{margin:"0 16px 10px",borderRadius:RAD.lg,padding:"16px",cursor:"pointer",position:"relative",overflow:"hidden",background:"linear-gradient(155deg,#10183a 0%,#0B0B0E 72%)",border:`1px solid ${IOS.indigo}38`,boxShadow:"0 4px 16px rgba(0,0,0,0.4)"}}>
+   <div onClick={()=>setScreen("league")} style={{margin:"0 16px 10px",borderRadius:RAD.lg,padding:"16px",cursor:"pointer",position:"relative",overflow:"hidden",background:"linear-gradient(155deg,#10183a 0%,#0B0B0E 72%)",border:`1px solid ${fade(IOS.indigo,0.22)}`,boxShadow:"0 4px 16px rgba(0,0,0,0.4)"}}>
      <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${IOS.blue},${IOS.indigo})`}}/>
      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
        <div>
@@ -14695,8 +14814,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
     two colours the result system reserves for won and lost. Sport is a dot now. */
  <button className="ios-btn" onClick={()=>setScreen("picks")}
   style={{background:"linear-gradient(165deg,#1B2338,#12141C)",color:"#fff",marginBottom:6,
-    border:`1px solid ${IOS.blue}6B`,fontWeight:800,
-    boxShadow:`0 6px 22px -14px ${IOS.blue}D9, inset 0 1px 0 rgba(255,255,255,0.05)`}}>
+    border:`1px solid ${fade(IOS.blue,0.42)}`,fontWeight:800,
+    boxShadow:`0 6px 22px -14px ${fade(IOS.blue,0.851)}, inset 0 1px 0 rgba(255,255,255,0.05)`}}>
   <span style={{width:7,height:7,borderRadius:"50%",background:sport.color,flexShrink:0}}/>
   <span>{(!isSoloMode&&activeLeague&&activeLeague.league_type==="survivor")?"Make Your Survivor Pick":("Build Your "+(leagueSports.length > 1 ? "Multi-Sport" : sport.label)+" Slip")}</span>
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{opacity:0.9}}><path d="M5 12h13"/><path d="M13 6l6 6-6 6"/></svg>
@@ -15342,7 +15461,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  return (
  <div key={cat.id} onClick={()=>{ if(!taken) setFlexCategory(cat.id); }}
  style={{display:"flex",alignItems:"center",gap:14,padding:"14px 4px",borderBottom:`0.5px solid ${IOS.sep}`,cursor:taken?"not-allowed":"pointer",opacity:taken?0.35:1}}>
- <div style={{width:40,height:40,borderRadius:RAD.md,background:`${cat.color}20`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{catSVG(cat.id,cat.color)}</div>
+ <div style={{width:40,height:40,borderRadius:RAD.md,background:`${fade(cat.color,0.125)}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{catSVG(cat.id,cat.color)}</div>
  <div style={{flex:1}}>
  <div style={{fontSize:16,fontWeight:600,color:taken?IOS.label3:"#fff"}}>{cat.label}</div>
  <div style={{fontSize:12,color:IOS.label3,marginTop:2}}>{taken?"Already in your slip":cat.desc}</div>
@@ -15376,7 +15495,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        const isOn = betSportFilter === sp;
        return (
          <div key={sp} onClick={()=>{setBetSportFilter(sp);setPropTypeFilter("all");}}
-         className={"pk-chip"+(isOn?" on":"")} style={{"--on-a":color+"52","--on-b":color+"24"}}><span>{label}</span></div>
+         className={"pk-chip"+(isOn?" on":"")} style={{"--on-a":fade(color,0.322),"--on-b":fade(color,0.141)}}><span>{label}</span></div>
        );
      })}
    </div>
@@ -15414,7 +15533,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div className="pk-rail" style={{margin:"8px 16px 4px"}}>
  {filters.map(f=>(
  <div key={f.id} onClick={()=>setPropTypeFilter(f.id)}
- className={"pk-chip"+(propTypeFilter===f.id?" on":"")} style={{"--on-a":IOS.yellow+"52","--on-b":IOS.yellow+"24"}}>
+ className={"pk-chip"+(propTypeFilter===f.id?" on":"")} style={{"--on-a":fade(IOS.yellow,0.322),"--on-b":fade(IOS.yellow,0.141)}}>
  {f.label}
  </div>
  ))}
@@ -15457,7 +15576,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const activeColor = longshotMode==="parlay" ? IOS.pink : IOS.green;
  return (
  <div key={f.id} onClick={()=>setBetTypeFilter(f.id)}
- className={"pk-chip"+(betTypeFilter===f.id?" on":"")} style={{"--on-a":activeColor+"52","--on-b":activeColor+"24"}}>
+ className={"pk-chip"+(betTypeFilter===f.id?" on":"")} style={{"--on-a":fade(activeColor,0.322),"--on-b":fade(activeColor,0.141)}}>
  {f.label}
  </div>
  );
@@ -15677,7 +15796,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        <div style={{fontSize:10.5,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(255,255,255,0.38)"}}>{activeLeague.name}{" \u00B7 Week "+wk}</div>
        <div style={{fontSize:27,fontWeight:800,letterSpacing:"-0.7px",color:"#fff",marginTop:3,lineHeight:1}}>Your Pick</div>
      </div>
-     <div style={{display:"flex",alignItems:"center",gap:6,background:_statusCol+"1F",border:"0.5px solid "+_statusCol+"59",borderRadius:RAD.pill,padding:"6px 11px",flexShrink:0}}>
+     <div style={{display:"flex",alignItems:"center",gap:6,background:fade(_statusCol,0.122),border:"0.5px solid "+fade(_statusCol,0.349),borderRadius:RAD.pill,padding:"6px 11px",flexShrink:0}}>
        <span style={{width:6,height:6,borderRadius:"50%",background:_statusCol,display:"inline-block",boxShadow:"0 0 7px "+_statusCol,animation:(_started&&!_res)?"lsxPulse 2s ease-in-out infinite":"none"}}/>
        <span style={{fontSize:10,fontWeight:800,letterSpacing:"0.06em",color:_statusCol,textTransform:"uppercase"}}>{_statusTxt}</span>
      </div>
@@ -16288,7 +16407,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  </div>}
  {puEnabled&&(myPUs.filter(p=>p.type==="offensive").length>0||appliedPU)&&slot.mult&&filled&&(
  appliedPU ? (
- <div style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:RAD.sm,background:`${appliedPU.color}15`,border:`1px solid ${appliedPU.color}30`,cursor:"pointer"}}
+ <div style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:RAD.sm,background:`${fade(appliedPU.color,0.082)}`,border:`1px solid ${fade(appliedPU.color,0.188)}`,cursor:"pointer"}}
  onClick={async e=>{e.stopPropagation();const r=appliedPU;if(r?.dbId)supabase.from("league_power_ups").update({used:false}).eq("id",r.dbId);setMyPUs(p=>[...p,r]);setActivatedPUs(p=>{const n={...p};delete n[idx];return n;});
    // Locked slot: clear the row too, and hand the inventory row back if the
    // in-memory copy had no dbId (came from the pick row on reload).
@@ -16522,21 +16641,21 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      )}
      <div style={{display:"flex",gap:9,marginBottom:16}}>
        <button onClick={()=>setScreen("home")} style={{flex:1,background:"rgba(255,255,255,0.055)",border:EDGE.hair2,borderRadius:12,padding:"13px",fontSize:13.5,fontWeight:800,color:IOS.label2,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Back to home</button>
-       <button onClick={clearSoloSlate} style={{background:"rgba(255,69,58,0.1)",border:`1px solid ${IOS.red}4d`,borderRadius:12,padding:"13px 18px",fontSize:13.5,fontWeight:800,color:IOS.red,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Clear</button>
+       <button onClick={clearSoloSlate} style={{background:"rgba(255,69,58,0.1)",border:`1px solid ${fade(IOS.red,0.302)}`,borderRadius:12,padding:"13px 18px",fontSize:13.5,fontWeight:800,color:IOS.red,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Clear</button>
      </div>
    </>
    );
    })() : (
      <>
        {plokSlateBusy ? (
-         <div style={{display:"flex",alignItems:"center",gap:9,background:"rgba(255,255,255,0.04)",border:`0.5px solid ${IOS.blue}33`,borderRadius:RAD.md,padding:"13px 14px",marginBottom:12}}>
+         <div style={{display:"flex",alignItems:"center",gap:9,background:"rgba(255,255,255,0.04)",border:`0.5px solid ${fade(IOS.blue,0.2)}`,borderRadius:RAD.md,padding:"13px 14px",marginBottom:12}}>
            <span className="ai-dot"/><span className="ai-dot" style={{animationDelay:".15s"}}/><span className="ai-dot" style={{animationDelay:".3s"}}/>
            <span style={{fontSize:12.5,fontWeight:700,color:"rgba(255,255,255,0.7)"}}>Plok is building your picks…</span>
          </div>
        ) : plokSlate && plokSlate.error ? (
-         <div style={{background:"rgba(255,69,58,0.08)",border:`0.5px solid ${IOS.red}33`,borderRadius:RAD.md,padding:"11px 14px",marginBottom:12,fontSize:12.5,color:"rgba(255,255,255,0.75)"}}>{plokSlate.error}</div>
+         <div style={{background:"rgba(255,69,58,0.08)",border:`0.5px solid ${fade(IOS.red,0.2)}`,borderRadius:RAD.md,padding:"11px 14px",marginBottom:12,fontSize:12.5,color:"rgba(255,255,255,0.75)"}}>{plokSlate.error}</div>
        ) : plokSlate && plokSlate.picks ? (
-         <div style={{background:`linear-gradient(135deg,${IOS.blue}1a,rgba(255,255,255,0.03))`,border:`0.5px solid ${IOS.blue}33`,borderRadius:RAD.lg,padding:"13px 14px",marginBottom:12}}>
+         <div style={{background:`linear-gradient(135deg,${fade(IOS.blue,0.102)},rgba(255,255,255,0.03))`,border:`0.5px solid ${fade(IOS.blue,0.2)}`,borderRadius:RAD.lg,padding:"13px 14px",marginBottom:12}}>
            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
              <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:IOS.blue}}>Plok built your picks</div>
              <div onClick={()=>setPlokSlate(null)} style={{cursor:"pointer",color:"rgba(255,255,255,0.4)",fontSize:17,lineHeight:1}}>×</div>
@@ -16547,7 +16666,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
                const col=b.categoryColor||IOS.blue;
                return (
                <div key={i} style={{display:"flex",alignItems:"flex-start",gap:9}}>
-                 <div style={{fontSize:8.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:col,background:`${col}1c`,borderRadius:5,padding:"3px 6px",flexShrink:0,marginTop:1}}>{b.categoryLabel||b.category}</div>
+                 <div style={{fontSize:8.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:col,background:`${fade(col,0.11)}`,borderRadius:5,padding:"3px 6px",flexShrink:0,marginTop:1}}>{b.categoryLabel||b.category}</div>
                  <div style={{flex:1,minWidth:0}}>
                    <div style={{display:"flex",alignItems:"baseline",gap:6}}>
                      <span style={{fontSize:13,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.pick}</span>
@@ -16562,7 +16681,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
            <button onClick={applyPlokSlate} style={{width:"100%",background:IOS.blue,border:"none",borderRadius:RAD.md,padding:"11px",fontSize:13,fontWeight:800,color:"#fff",cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Add to my picks</button>
          </div>
        ) : (
-         <button onClick={buildPlokSlate} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"rgba(255,255,255,0.05)",border:`1px solid ${IOS.blue}40`,borderRadius:RAD.md,padding:"12px",fontSize:13.5,fontWeight:800,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif",marginBottom:12}}>
+         <button onClick={buildPlokSlate} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"rgba(255,255,255,0.05)",border:`1px solid ${fade(IOS.blue,0.251)}`,borderRadius:RAD.md,padding:"12px",fontSize:13.5,fontWeight:800,color:IOS.blue,cursor:"pointer",fontFamily:"Barlow,sans-serif",marginBottom:12}}>
            <svg width="16" height="16" viewBox="0 0 24 24" fill={IOS.blue} stroke="none"><path d="M12 2l1.7 5.4L19 9l-5.3 1.6L12 16l-1.7-5.4L5 9l5.3-1.6z"/></svg>
            Let Plok build my picks
          </button>
@@ -17049,7 +17168,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
         <div key={r.user_id} onClick={()=>openUserProfile(r.user_id,{username:r.username,is_founder:r.is_founder===true})} style={{cursor:"pointer",display:"flex",alignItems:"center",gap:11,padding:"9px 11px",borderRadius:RAD.md,marginBottom:6,background:isMe?"linear-gradient(135deg,rgba(10,132,255,0.13),#161619)":"linear-gradient(165deg,#1a1a1f,#141417)",border:"1px solid "+(isMe?"rgba(10,132,255,0.4)":"rgba(255,255,255,0.07)")}}>
           {mc ? <div style={{width:26,height:26,borderRadius:"50%",background:mc,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:14,color:"#000",flexShrink:0}}>{rk}</div>
               : <div style={{width:26,textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:16,color:IOS.label3,flexShrink:0}}>{rk}</div>}
-          <div style={{width:38,height:38,borderRadius:"50%",background:"linear-gradient(135deg,"+c+","+c+"99)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:14,color:"#fff",border:"1px solid rgba(255,255,255,0.12)",flexShrink:0}}>{ini(r.username)}</div>
+          <div style={{width:38,height:38,borderRadius:"50%",background:"linear-gradient(135deg,"+c+","+fade(c,0.6)+")",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:14,color:"#fff",border:"1px solid rgba(255,255,255,0.12)",flexShrink:0}}>{ini(r.username)}</div>
           <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",display:"flex",alignItems:"center",gap:5}}><span style={{overflow:"hidden",textOverflow:"ellipsis"}}>{(r.username||"Player")+(isMe?" (you)":"")}</span>{r.is_founder && <svg width="11" height="11" viewBox="0 0 24 24" fill="#FFD60A" stroke="none" style={{flexShrink:0}}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>}</div><div style={{fontSize:10.5,color:IOS.label3,fontWeight:600,marginTop:1}}>{r.wins+"-"+r.losses+" · "+r.picks+" picks"}</div></div>
           <div style={{textAlign:"right",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:19,color:rk===1?"#FFD60A":"#fff",flexShrink:0}}>{valFor(r)}</div>
         </div>
@@ -17473,7 +17592,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 
  const Meter = ({pct}) => (
  <div style={{height:5,borderRadius:3,background:"rgba(255,255,255,0.07)",overflow:"hidden",width:"100%"}}>
- <div style={{height:"100%",width:`${Math.max(6,Math.min(100,pct))}%`,borderRadius:3,background:`linear-gradient(90deg,${acc},${acc}88)`}}/>
+ <div style={{height:"100%",width:`${Math.max(6,Math.min(100,pct))}%`,borderRadius:3,background:`linear-gradient(90deg,${acc},${fade(acc,0.533)})`}}/>
  </div>
  );
 
@@ -17523,11 +17642,11 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  position:"relative", overflow:"hidden", cursor:"pointer", borderRadius:RAD.lg, padding:"13px 13px 12px",
  background:"linear-gradient(160deg,#17171B 0%,#0D0D10 100%)",
  border:`1px solid ${selected||added?acc:"rgba(255,255,255,0.07)"}`,
- boxShadow:selected||added?`0 0 0 1px ${acc}, 0 8px 24px ${acc}22`:"0 4px 14px rgba(0,0,0,0.4)",
+ boxShadow:selected||added?`0 0 0 1px ${acc}, 0 8px 24px ${fade(acc,0.133)}`:"0 4px 14px rgba(0,0,0,0.4)",
  animation:`gbxRise .35s ease ${Math.min(idx,8)*0.035}s both`,
  }}>
  {/* accent glow top-right */}
- <div style={{position:"absolute",top:-30,right:-30,width:90,height:90,borderRadius:"50%",background:`radial-gradient(circle,${acc}26,transparent 70%)`,pointerEvents:"none"}}/>
+ <div style={{position:"absolute",top:-30,right:-30,width:90,height:90,borderRadius:"50%",background:`radial-gradient(circle,${fade(acc,0.149)},transparent 70%)`,pointerEvents:"none"}}/>
  {/* odds badge */}
  <div style={{position:"absolute",top:11,right:11,fontSize:12,fontWeight:800,letterSpacing:"-0.2px",
  color:pos?IOS.green:"rgba(255,255,255,0.55)"}}>{bet.odds}</div>
@@ -17541,7 +17660,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {sideChip && (
  <div style={{display:"inline-flex",marginTop:2,marginBottom:4,fontSize:8,fontWeight:800,letterSpacing:"0.05em",
  color:sideChip==="HOME"||sideChip==="OVER"?acc:"rgba(255,255,255,0.5)",
- background:sideChip==="HOME"||sideChip==="OVER"?`${acc}1f`:"rgba(255,255,255,0.06)",
+ background:sideChip==="HOME"||sideChip==="OVER"?`${fade(acc,0.122)}`:"rgba(255,255,255,0.06)",
  borderRadius:4,padding:"1px 6px"}}>{sideChip}</div>
  )}
  <div style={{fontSize:10.5,color:"rgba(255,255,255,0.4)",marginBottom:9,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{subtitle}</div>
@@ -17558,13 +17677,13 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <StatLabel>Multiplier · units</StatLabel>
  <div onClick={(e)=>e.stopPropagation()} style={{display:"flex",gap:5,marginBottom:10,marginTop:1}}>
  {[1,2,3,4,5].map(m=>{ const on=_myMult===m; return (
- <div key={m} onClick={(e)=>{ e.stopPropagation(); setSoloFreePicks(prev=>prev.map(p=>String(p.id)===String(bet.id)?{...p,mult:m}:p)); }} style={{flex:1,textAlign:"center",padding:"5px 0",borderRadius:RAD.sm,fontSize:11,fontWeight:800,cursor:"pointer", background:on?`${acc}28`:"rgba(255,255,255,0.04)", border:`1px solid ${on?acc:"rgba(255,255,255,0.08)"}`, color:on?acc:"rgba(255,255,255,0.4)"}}>{m}×</div>
+ <div key={m} onClick={(e)=>{ e.stopPropagation(); setSoloFreePicks(prev=>prev.map(p=>String(p.id)===String(bet.id)?{...p,mult:m}:p)); }} style={{flex:1,textAlign:"center",padding:"5px 0",borderRadius:RAD.sm,fontSize:11,fontWeight:800,cursor:"pointer", background:on?`${fade(acc,0.157)}`:"rgba(255,255,255,0.04)", border:`1px solid ${on?acc:"rgba(255,255,255,0.08)"}`, color:on?acc:"rgba(255,255,255,0.4)"}}>{m}×</div>
  );})}
  </div>
  </>)}
  {/* Bottom row: recent form + reward */}
  <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:6}}>
- <button onClick={(e)=>{e.stopPropagation(); askFromBet(bet, gridType==="longshot"?"longshot":gridType);}} aria-label="Ask AI" style={{display:"inline-flex",alignItems:"center",gap:4,padding:"4px 8px",borderRadius:RAD.sm,background:`${acc}1a`,border:`1px solid ${acc}33`,color:acc,fontSize:9.5,fontWeight:800,cursor:"pointer",flexShrink:0,alignSelf:"flex-end"}}><svg width="11" height="11" viewBox="0 0 24 24" fill={acc}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg>PLOK</button>
+ <button onClick={(e)=>{e.stopPropagation(); askFromBet(bet, gridType==="longshot"?"longshot":gridType);}} aria-label="Ask AI" style={{display:"inline-flex",alignItems:"center",gap:4,padding:"4px 8px",borderRadius:RAD.sm,background:`${fade(acc,0.102)}`,border:`1px solid ${fade(acc,0.2)}`,color:acc,fontSize:9.5,fontWeight:800,cursor:"pointer",flexShrink:0,alignSelf:"flex-end"}}><svg width="11" height="11" viewBox="0 0 24 24" fill={acc}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg>PLOK</button>
  <div>
  
  {(()=>{ const _rec=recordFor(formSeed, bet.game); return _rec ? (<><StatLabel>Record</StatLabel><div style={{fontSize:12.5,fontWeight:800,color:"#fff",lineHeight:1}}>{_rec}</div></>) : null; })()}
@@ -17577,8 +17696,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 
  {/* added flash */}
  {added && (
- <div style={{position:"absolute",inset:0,background:`${acc}1a`,backdropFilter:"blur(1px)",display:"flex",alignItems:"center",justifyContent:"center",borderRadius:RAD.lg}}>
- <div style={{display:"flex",alignItems:"center",gap:6,background:acc,color:"#fff",borderRadius:RAD.pill,padding:"6px 14px",fontSize:12,fontWeight:800,boxShadow:`0 4px 16px ${acc}66`}}>
+ <div style={{position:"absolute",inset:0,background:`${fade(acc,0.102)}`,backdropFilter:"blur(1px)",display:"flex",alignItems:"center",justifyContent:"center",borderRadius:RAD.lg}}>
+ <div style={{display:"flex",alignItems:"center",gap:6,background:acc,color:"#fff",borderRadius:RAD.pill,padding:"6px 14px",fontSize:12,fontWeight:800,boxShadow:`0 4px 16px ${fade(acc,0.4)}`}}>
  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
  Added
  </div>
@@ -17662,19 +17781,19 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    const secondary=titleIsGame?"":(subtitle && subtitle!==bet.game ? subtitle : "");
    const chipBn=sideChip==="HOME"||sideChip==="OVER"||sideChip==="YES";
    return (
-   <div key={bet.id} onClick={()=>addCard(bet)} style={{position:"relative",display:"flex",alignItems:"center",gap:11,padding:"11px 13px",borderTop:isFirst?"none":"1px solid rgba(255,255,255,0.07)",cursor:"pointer",background:(selected||added)?(acc+"14"):"transparent",transition:"background .13s"}}>
+   <div key={bet.id} onClick={()=>addCard(bet)} style={{position:"relative",display:"flex",alignItems:"center",gap:11,padding:"11px 13px",borderTop:isFirst?"none":"1px solid rgba(255,255,255,0.07)",cursor:"pointer",background:(selected||added)?(fade(acc,0.078)):"transparent",transition:"background .13s"}}>
    {showPlokTip && (
    <div onClick={(e)=>{ e.stopPropagation(); markPlokTipSeen(); }} style={{position:"absolute",top:-30,left:8,zIndex:6,display:"flex",alignItems:"center",gap:7,whiteSpace:"nowrap",background:"#1e1e25",border:"1px solid rgba(10,132,255,0.45)",borderRadius:9,padding:"7px 10px",fontSize:10.5,fontWeight:700,color:"#fff",boxShadow:"0 8px 20px rgba(0,0,0,0.6)",cursor:"pointer"}}>
    <span><span style={{color:IOS.blue}}>{"Plok\u2019s AI read"}</span>{" \u2014 tap for a writeup on this pick"}</span>
    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth="2.4" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
    </div>
    )}
-   <button onClick={(e)=>{ e.stopPropagation(); askFromBet(bet, gridType==="longshot"?"longshot":gridType); }} aria-label="Plok AI read" style={{flexShrink:0,height:27,padding:"0 9px",borderRadius:RAD.sm,display:"inline-flex",alignItems:"center",gap:5,background:acc+"1a",border:"1px solid "+acc+"33",color:acc,cursor:"pointer",fontSize:10,fontWeight:800,letterSpacing:"0.02em",fontFamily:"Barlow,sans-serif"}}><svg width="11" height="11" viewBox="0 0 24 24" fill={acc}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg><span>PLOK</span></button>
+   <button onClick={(e)=>{ e.stopPropagation(); askFromBet(bet, gridType==="longshot"?"longshot":gridType); }} aria-label="Plok AI read" style={{flexShrink:0,height:27,padding:"0 9px",borderRadius:RAD.sm,display:"inline-flex",alignItems:"center",gap:5,background:fade(acc,0.102),border:"1px solid "+fade(acc,0.2),color:acc,cursor:"pointer",fontSize:10,fontWeight:800,letterSpacing:"0.02em",fontFamily:"Barlow,sans-serif"}}><svg width="11" height="11" viewBox="0 0 24 24" fill={acc}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg><span>PLOK</span></button>
    <div style={{flex:1,minWidth:0}}>
    <div style={{display:"flex",alignItems:"center",gap:7}}>
    <span style={{fontSize:13.5,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",letterSpacing:"-0.2px"}}>{primary}</span>
    <CrowdChip b={bet}/>
-   {sideChip && <span style={{flexShrink:0,fontSize:8,fontWeight:800,letterSpacing:"0.05em",borderRadius:4,padding:"1px 6px",color:chipBn?acc:"rgba(255,255,255,0.5)",background:chipBn?(acc+"1f"):"rgba(255,255,255,0.06)"}}>{sideChip}</span>}
+   {sideChip && <span style={{flexShrink:0,fontSize:8,fontWeight:800,letterSpacing:"0.05em",borderRadius:4,padding:"1px 6px",color:chipBn?acc:"rgba(255,255,255,0.5)",background:chipBn?(fade(acc,0.122)):"rgba(255,255,255,0.06)"}}>{sideChip}</span>}
    </div>
    <div style={{display:"flex",alignItems:"center",gap:7,marginTop:4}}>
    {secondary && <span style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.42)",whiteSpace:"nowrap",flexShrink:0}}>{secondary}</span>}
@@ -17685,17 +17804,17 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    {isSoloMode && selected && (
    <div onClick={(e)=>e.stopPropagation()} style={{display:"flex",gap:5,marginTop:8}}>
    {[1,2,3,4,5].map(m=>{ const on=_myMult===m; return (
-   <div key={m} onClick={(e)=>{ e.stopPropagation(); setSoloFreePicks(prev=>prev.map(pp=>String(pp.id)===String(bet.id)?{...pp,mult:m}:pp)); }} style={{flex:1,textAlign:"center",padding:"5px 0",borderRadius:RAD.sm,fontSize:11,fontWeight:800,cursor:"pointer",background:on?(acc+"28"):"rgba(255,255,255,0.04)",border:"1px solid "+(on?acc:"rgba(255,255,255,0.08)"),color:on?acc:"rgba(255,255,255,0.4)"}}>{m}×</div>
+   <div key={m} onClick={(e)=>{ e.stopPropagation(); setSoloFreePicks(prev=>prev.map(pp=>String(pp.id)===String(bet.id)?{...pp,mult:m}:pp)); }} style={{flex:1,textAlign:"center",padding:"5px 0",borderRadius:RAD.sm,fontSize:11,fontWeight:800,cursor:"pointer",background:on?(fade(acc,0.157)):"rgba(255,255,255,0.04)",border:"1px solid "+(on?acc:"rgba(255,255,255,0.08)"),color:on?acc:"rgba(255,255,255,0.4)"}}>{m}×</div>
    );})}
    </div>
    )}
    </div>
-   <div style={{flexShrink:0,width:74,borderRadius:RAD.md,border:"1px solid "+(selected?acc:"rgba(255,255,255,0.12)"),background:selected?(acc+"1f"):"rgba(255,255,255,0.04)",textAlign:"center",padding:"7px 3px"}}>
+   <div style={{flexShrink:0,width:74,borderRadius:RAD.md,border:"1px solid "+(selected?acc:"rgba(255,255,255,0.12)"),background:selected?(fade(acc,0.122)):"rgba(255,255,255,0.04)",textAlign:"center",padding:"7px 3px"}}>
    <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:17,color:pos?IOS.green:"#fff",lineHeight:1.05}}>{bet.odds}</div>
    <div style={{fontSize:10,fontWeight:800,color:IOS.green,lineHeight:1.1,marginTop:1}}>{gridType==="longshot"?(ret.toFixed(1)+"×"):("+"+pts+" pts")}</div>
    </div>
    {canAlt(bet.marketKey) && <div onClick={(e)=>{e.stopPropagation(); openAltLines(bet);}} style={{flexShrink:0,marginLeft:6,display:"flex",alignItems:"center",justifyContent:"center",border:"1px solid #64D2FF",color:"#64D2FF",background:"rgba(100,210,255,0.1)",borderRadius:RAD.sm,padding:"9px 10px",fontSize:10.5,fontWeight:800,cursor:"pointer"}}>Alt</div>}
-   {added && <div style={{position:"absolute",top:0,right:0,bottom:0,left:0,background:acc+"1a",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{display:"flex",alignItems:"center",gap:5,background:acc,color:"#fff",borderRadius:RAD.pill,padding:"5px 12px",fontSize:11,fontWeight:800}}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Added</div></div>}
+   {added && <div style={{position:"absolute",top:0,right:0,bottom:0,left:0,background:fade(acc,0.102),display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{display:"flex",alignItems:"center",gap:5,background:acc,color:"#fff",borderRadius:RAD.pill,padding:"5px 12px",fontSize:11,fontWeight:800}}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Added</div></div>}
    </div>
    );
    };
@@ -17722,11 +17841,11 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    // favoured, and the row still carries the % and the bar on the left — an accent box
    // on top of that was telling people something they could already read. `on`
    // (selected) still highlights, because that is state, not commentary.
-   return (<div onClick={(e)=>{e.stopPropagation(); addCard(b);}} style={{width:66,borderRadius:RAD.md,cursor:"pointer",border:"1px solid "+(on?acc:"rgba(255,255,255,0.12)"),background:on?(acc+"2e"):"rgba(255,255,255,0.04)",textAlign:"center",padding:"6px 3px 5px"}}><div style={{fontSize:8,fontWeight:800,letterSpacing:"0.06em",color:on?acc:"rgba(255,255,255,0.4)"}}>{label}</div><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:16,color:pos?IOS.green:"#fff",lineHeight:1.1,marginTop:1}}>{b.odds}</div><div style={{fontSize:9,fontWeight:800,color:IOS.green,marginTop:1}}>+{pts} pts</div></div>);
+   return (<div onClick={(e)=>{e.stopPropagation(); addCard(b);}} style={{width:66,borderRadius:RAD.md,cursor:"pointer",border:"1px solid "+(on?acc:"rgba(255,255,255,0.12)"),background:on?(fade(acc,0.18)):"rgba(255,255,255,0.04)",textAlign:"center",padding:"6px 3px 5px"}}><div style={{fontSize:8,fontWeight:800,letterSpacing:"0.06em",color:on?acc:"rgba(255,255,255,0.4)"}}>{label}</div><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:16,color:pos?IOS.green:"#fff",lineHeight:1.1,marginTop:1}}>{b.odds}</div><div style={{fontSize:9,fontWeight:800,color:IOS.green,marginTop:1}}>+{pts} pts</div></div>);
    };
    return (
    <div key={pr.baseKey} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 13px",borderTop:isFirst?"none":"1px solid rgba(255,255,255,0.07)"}}>
-   <button onClick={(e)=>{e.stopPropagation(); askFromBet(over||under,"prop");}} aria-label="Plok AI read" style={{flexShrink:0,height:27,padding:"0 9px",borderRadius:RAD.sm,display:"inline-flex",alignItems:"center",gap:5,background:acc+"1a",border:"1px solid "+acc+"33",color:acc,cursor:"pointer",fontSize:10,fontWeight:800,letterSpacing:"0.02em",fontFamily:"Barlow,sans-serif"}}><svg width="11" height="11" viewBox="0 0 24 24" fill={acc}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg><span>PLOK</span></button>
+   <button onClick={(e)=>{e.stopPropagation(); askFromBet(over||under,"prop");}} aria-label="Plok AI read" style={{flexShrink:0,height:27,padding:"0 9px",borderRadius:RAD.sm,display:"inline-flex",alignItems:"center",gap:5,background:fade(acc,0.102),border:"1px solid "+fade(acc,0.2),color:acc,cursor:"pointer",fontSize:10,fontWeight:800,letterSpacing:"0.02em",fontFamily:"Barlow,sans-serif"}}><svg width="11" height="11" viewBox="0 0 24 24" fill={acc}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg><span>PLOK</span></button>
    <div style={{flex:1,minWidth:0}}>
    <div onClick={(e)=>{ e.stopPropagation(); const _b=over||under||single; const _ln=(()=>{ const m=String(rest||"").match(/^([0-9]+(?:\.[0-9]+)?)/); return m?parseFloat(m[1]):null; })(); try{ posthog.capture("prop_history_opened",{ sport:gSport, market:(_b&&_b.market)||null }); }catch(e2){} setPropHist({ player, sport:gSport, market:(_b&&_b.market)||null, line:_ln }); }} style={{fontSize:14,fontWeight:800,letterSpacing:"-0.2px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",cursor:"pointer",display:"flex",alignItems:"center",gap:5}}><span style={{overflow:"hidden",textOverflow:"ellipsis"}}>{player}</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.4" strokeLinecap="round" style={{flexShrink:0,opacity:0.7}}><path d="M3 17l6-6 4 4 7-7"/><path d="M14 8h6v6"/></svg></div>
    <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.42)",marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{rest}</div>
@@ -17843,7 +17962,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const pts = ptsOf(b);
  return (
  <div title={svUsed?"Already used in an earlier week":undefined} onClick={()=>{ if(!enabled) return; if(sel){ if(isSoloMode){ setSoloFreePicks(prev=>prev.filter(p=>!sameBet(p,b))); } else { setActivePicks(prev=>prev.map(pp=> (pp.bet&&String(pp.bet.id)===String(b.id)) ? {...pp, bet:null} : pp)); } } else { addCard(b,cat); } }} style={{position:"relative",borderRadius:RAD.md,cursor:enabled?"pointer":"default",textAlign:"center",padding:"8px 3px",opacity:enabled?1:0.4,
- border:"1px solid "+(sel?IOS.blue+"a6":value?"rgba(48,209,88,0.55)":"rgba(255,255,255,0.1)"),
+ border:"1px solid "+(sel?fade(IOS.blue,0.651):value?"rgba(48,209,88,0.55)":"rgba(255,255,255,0.1)"),
  background:sel?"linear-gradient(160deg,rgba(10,132,255,0.24),rgba(10,132,255,0.05))":value?"linear-gradient(160deg,rgba(48,209,88,0.2),rgba(48,209,88,0.04))":"rgba(255,255,255,0.04)",transition:"all .13s"}}>
  {(cat==="spread"||cat==="ou") && canAlt(b.marketKey) && <div onClick={(e)=>{e.stopPropagation(); openAltLines(b);}} style={{position:"absolute",top:2,right:2,fontSize:7.5,fontWeight:900,color:"#64D2FF",background:"rgba(100,210,255,0.14)",border:"1px solid rgba(100,210,255,0.45)",borderRadius:4,padding:"1px 4px",cursor:"pointer",zIndex:3,lineHeight:1.25}}>ALT</div>}
  {value && <div style={{position:"absolute",top:-6,left:"50%",transform:"translateX(-50%)"}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="3" strokeLinecap="round"><polyline points="6 14 12 8 18 14"/></svg></div>}
@@ -18669,7 +18788,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const tCol = ACC[tgt.category] || acc;
  return (
  <div style={{position:"relative",flexShrink:0}}>
- <div onClick={()=>setShowMultPick(v=>!v)} style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1,background:"rgba(255,255,255,0.05)",border:"1px solid "+(showMultPick?tCol+"80":"rgba(255,255,255,0.1)"),borderRadius:RAD.md,padding:"5px 10px",cursor:"pointer",minWidth:60}}>
+ <div onClick={()=>setShowMultPick(v=>!v)} style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1,background:"rgba(255,255,255,0.05)",border:"1px solid "+(showMultPick?fade(tCol,0.502):"rgba(255,255,255,0.1)"),borderRadius:RAD.md,padding:"5px 10px",cursor:"pointer",minWidth:60}}>
  <div style={{fontSize:7.5,fontWeight:800,letterSpacing:"0.1em",color:"rgba(255,255,255,0.4)"}}>MULTIPLIER</div>
  <div style={{display:"flex",alignItems:"center",gap:5}}>
  <span style={{fontSize:15,fontWeight:900,color:tCol,letterSpacing:"-0.3px"}}>{tgt.mult?(tgt.mult+"×"):("P"+(target+1))}</span>
@@ -18686,7 +18805,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const filled = sl.isParlay ? (sl.parlayLegs&&sl.parlayLegs.length>=2) : !!sl.bet;
  const nm = sl.isParlay ? ((sl.parlayLegs||[]).length+"-leg parlay") : (sl.bet ? sl.bet.pick : "Empty");
  return (
- <div key={sl.i} onClick={()=>{ setGridTargetSlot(sl.i); if(sl.category) setGridType(sl.category); setShowMultPick(false); }} style={{display:"flex",alignItems:"center",gap:9,padding:"8px",borderRadius:RAD.md,cursor:"pointer",background:isT?(sc+"1f"):"transparent",border:"1px solid "+(isT?sc+"66":"transparent"),marginBottom:2}}>
+ <div key={sl.i} onClick={()=>{ setGridTargetSlot(sl.i); if(sl.category) setGridType(sl.category); setShowMultPick(false); }} style={{display:"flex",alignItems:"center",gap:9,padding:"8px",borderRadius:RAD.md,cursor:"pointer",background:isT?(fade(sc,0.122)):"transparent",border:"1px solid "+(isT?fade(sc,0.4):"transparent"),marginBottom:2}}>
  <span style={{minWidth:30,textAlign:"center",fontSize:13,fontWeight:900,color:sc}}>{sl.mult?(sl.mult+"×"):("P"+(sl.i+1))}</span>
  <div style={{flex:1,minWidth:0}}>
  <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.03em",color:sc,textTransform:"uppercase"}}>{sl.category?typeLabel(sl.category):"Any type"}</div>
@@ -18709,7 +18828,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const curCol = MC[cur] || acc;
  return (
  <div style={{position:"relative",flexShrink:0}}>
- <div onClick={()=>setShowMultPick(v=>!v)} style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1,background:"rgba(255,255,255,0.05)",border:"1px solid "+(showMultPick?curCol+"80":"rgba(255,255,255,0.1)"),borderRadius:RAD.md,padding:"5px 10px",cursor:"pointer",minWidth:60}}>
+ <div onClick={()=>setShowMultPick(v=>!v)} style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1,background:"rgba(255,255,255,0.05)",border:"1px solid "+(showMultPick?fade(curCol,0.502):"rgba(255,255,255,0.1)"),borderRadius:RAD.md,padding:"5px 10px",cursor:"pointer",minWidth:60}}>
  <div style={{fontSize:7.5,fontWeight:800,letterSpacing:"0.1em",color:"rgba(255,255,255,0.4)"}}>MULTIPLIER</div>
  <div style={{display:"flex",alignItems:"center",gap:5}}>
  <span style={{fontSize:15,fontWeight:900,color:curCol,letterSpacing:"-0.3px"}}>{cur+"×"}</span>
@@ -18728,7 +18847,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const lsd = legs.length>=2 ? calcLS(legs) : null;
  const am = lsd ? (lsd.decimal>=2?("+"+Math.round((lsd.decimal-1)*100)):(""+Math.round(-100/(lsd.decimal-1)))) : "";
  return (
- <div key={M} style={{background:IOS.pink+"14",border:"1px solid "+IOS.pink+"55",borderRadius:RAD.md,padding:"8px",marginBottom:3}}>
+ <div key={M} style={{background:fade(IOS.pink,0.078),border:"1px solid "+fade(IOS.pink,0.333),borderRadius:RAD.md,padding:"8px",marginBottom:3}}>
  <div onClick={()=>enterBuild()} style={{display:"flex",alignItems:"center",gap:9,cursor:"pointer"}}>
  <span style={{minWidth:30,textAlign:"center",fontSize:13,fontWeight:900,color:IOS.pink}}>{M+"×"}</span>
  <div style={{flex:1,minWidth:0}}>
@@ -18738,11 +18857,11 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {legs.length>=2 && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
  </div>
  {legs.length>0 && (
- <div style={{display:"flex",flexWrap:"wrap",gap:5,paddingTop:7,marginTop:6,borderTop:"1px dashed "+IOS.pink+"33"}}>
- {legs.map((l,i)=>(<span key={i} style={{fontSize:10,fontWeight:700,padding:"4px 8px",borderRadius:RAD.sm,background:IOS.pink+"22",color:"#ff8aa6"}}>{l.pick}</span>))}
+ <div style={{display:"flex",flexWrap:"wrap",gap:5,paddingTop:7,marginTop:6,borderTop:"1px dashed "+fade(IOS.pink,0.2)}}>
+ {legs.map((l,i)=>(<span key={i} style={{fontSize:10,fontWeight:700,padding:"4px 8px",borderRadius:RAD.sm,background:fade(IOS.pink,0.133),color:"#ff8aa6"}}>{l.pick}</span>))}
  </div>
  )}
- <div onClick={()=>enterBuild()} style={{marginTop:7,display:"flex",alignItems:"center",justifyContent:"center",gap:6,fontSize:11,fontWeight:800,color:IOS.pink,background:IOS.pink+"1a",border:"1px dashed "+IOS.pink+"80",borderRadius:RAD.sm,padding:"7px",cursor:"pointer"}}>+ {legs.length?"Add legs":"Build parlay"}</div>
+ <div onClick={()=>enterBuild()} style={{marginTop:7,display:"flex",alignItems:"center",justifyContent:"center",gap:6,fontSize:11,fontWeight:800,color:IOS.pink,background:fade(IOS.pink,0.102),border:"1px dashed "+fade(IOS.pink,0.502),borderRadius:RAD.sm,padding:"7px",cursor:"pointer"}}>+ {legs.length?"Add legs":"Build parlay"}</div>
  </div>
  );
  }
@@ -18751,7 +18870,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const nm = slot&&slot.bet ? slot.bet.pick : "Open";
  const isT = (gridFlexMult||1)===M && !gridBuildMode;
  return (
- <div key={M} onClick={()=>{ setGridFlexMult(M); setGridBuildMode(false); const mi=activePicks.findIndex(p=>!p.isParlay&&p.mult===M); const ei=activePicks.findIndex(p=>!p.isParlay&&p.bet===null); setGridTargetSlot(mi!==-1?mi:(ei!==-1?ei:0)); setShowMultPick(false); }} style={{display:"flex",alignItems:"center",gap:9,padding:"8px",borderRadius:RAD.md,cursor:"pointer",background:isT?(sc+"1f"):"transparent",border:"1px solid "+(isT?sc+"66":"transparent"),marginBottom:3}}>
+ <div key={M} onClick={()=>{ setGridFlexMult(M); setGridBuildMode(false); const mi=activePicks.findIndex(p=>!p.isParlay&&p.mult===M); const ei=activePicks.findIndex(p=>!p.isParlay&&p.bet===null); setGridTargetSlot(mi!==-1?mi:(ei!==-1?ei:0)); setShowMultPick(false); }} style={{display:"flex",alignItems:"center",gap:9,padding:"8px",borderRadius:RAD.md,cursor:"pointer",background:isT?(fade(sc,0.122)):"transparent",border:"1px solid "+(isT?fade(sc,0.4):"transparent"),marginBottom:3}}>
  <span style={{minWidth:30,textAlign:"center",fontSize:13,fontWeight:900,color:sc}}>{M+"×"}</span>
  <div style={{flex:1,minWidth:0}}>
  <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.03em",color:sc,textTransform:"uppercase"}}>{slot&&slot.category?typeLabel(slot.category):"Any type"}</div>
@@ -18776,7 +18895,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const on = sp===gSport; const sc = sp==="all" ? IOS.blue : (SPORTS[sp]?.color || IOS.blue);
  return (
  <div key={sp} onClick={()=>setGridSport(sp)} style={{...pillBase,
- background:on?`${sc}26`:"rgba(255,255,255,0.05)", borderColor:on?`${sc}80`:"rgba(255,255,255,0.1)", color:on?sc:"rgba(255,255,255,0.45)"}}>
+ background:on?`${fade(sc,0.149)}`:"rgba(255,255,255,0.05)", borderColor:on?`${fade(sc,0.502)}`:"rgba(255,255,255,0.1)", color:on?sc:"rgba(255,255,255,0.45)"}}>
  {sp==="all" ? "All" : (SPORTS[sp]?.label || sp.toUpperCase())}
  </div>
  );
@@ -18791,7 +18910,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const on = sp===soloSport; const sc = SPORTS[sp]?.color || IOS.blue;
  return (
  <div key={sp} onClick={()=>{ if(soloSport!==sp) setSoloSportPersist(sp); }} style={{...pillBase,
- background:on?`${sc}26`:"rgba(255,255,255,0.05)", borderColor:on?`${sc}80`:"rgba(255,255,255,0.1)", color:on?sc:"rgba(255,255,255,0.45)"}}>
+ background:on?`${fade(sc,0.149)}`:"rgba(255,255,255,0.05)", borderColor:on?`${fade(sc,0.502)}`:"rgba(255,255,255,0.1)", color:on?sc:"rgba(255,255,255,0.45)"}}>
  {SPORTS[sp]?.label || sp.toUpperCase()}
  </div>
  );
@@ -18834,7 +18953,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const _pills = [...(_gl.length?[{key:"__gl__",label:"Game Lines",target:_gl[0],on:isGameLine,col:IOS.blue}]:[]), ...(_socHere?[{key:"specials",label:"Specials",target:"specials",on:gridType==="specials",col:"#00E5A0"}]:[]), ..._rest.map(t=>({key:t,label:typeLabel(t),target:t,on:t===gridType,col:ACC[t]}))];
  return _pills.map(p=>(
  <div key={p.key} onClick={()=>{ setGridType(p.target); setGridPropSub("all"); if(p.target==="period"){ const _ps=PERIOD_SUBS_BY_SPORT[gSport]; setGridPeriodSub(_ps&&_ps.length?_ps[0].id:""); } if(gridCfg){ const _st=(s)=>s?(s.slotType||s.category):null; const _cur=activePicks[gridTargetSlot]; const _onWild=_cur&&!_cur.isParlay&&isFlexSlotType(_st(_cur))&&slotAccepts(_st(_cur)).includes(p.target)&&_cur.bet===null; if(!_onWild){ let _i=activePicks.findIndex(x=>!x.isParlay && _st(x)===p.target && x.bet===null); if(_i===-1) _i=activePicks.findIndex(x=>!x.isParlay && isFlexSlotType(_st(x)) && slotAccepts(_st(x)).includes(p.target) && x.bet===null); setGridTargetSlot(_i!==-1?_i:null); } } }} style={{...pillBase,
- background:p.on?`${p.col}26`:"rgba(255,255,255,0.05)", borderColor:p.on?`${p.col}80`:"rgba(255,255,255,0.1)", color:p.on?p.col:"rgba(255,255,255,0.45)"}}>
+ background:p.on?`${fade(p.col,0.149)}`:"rgba(255,255,255,0.05)", borderColor:p.on?`${fade(p.col,0.502)}`:"rgba(255,255,255,0.1)", color:p.on?p.col:"rgba(255,255,255,0.45)"}}>
  {p.label}
  </div>
  ));
@@ -18858,7 +18977,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    return (<>
    <div className="pk-rail" style={{margin:"0 16px "+(_note?"4px":"10px"), opacity:_ready?1:0.55}}>
    {_chips.map(c=>{ const on=c.id===cfbFilter; return (
-   <div key={c.id} onClick={()=>{ haptic("select"); if(!_ready) loadCfbTags(true); setCfbFilter(on&&c.id!=="all"?"all":c.id); }} className={"pk-chip"+(on?" on":"")} style={{"--on-a":_acc+"52","--on-b":_acc+"24"}}><span>{c.l}</span></div>
+   <div key={c.id} onClick={()=>{ haptic("select"); if(!_ready) loadCfbTags(true); setCfbFilter(on&&c.id!=="all"?"all":c.id); }} className={"pk-chip"+(on?" on":"")} style={{"--on-a":fade(_acc,0.322),"--on-b":fade(_acc,0.141)}}><span>{c.l}</span></div>
    );})}
    </div>
    {_note && <div onClick={()=>loadCfbTags(true)} style={{fontSize:10.5,color:"rgba(255,255,255,0.4)",fontWeight:700,padding:"0 16px 8px"}}>{_note}</div>}
@@ -18870,14 +18989,14 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const _lockMkt=(_tslot&&_tslot.locked&&_tslot.category==="prop"&&_tslot.market)?_tslot.market:null;
  if(_lockMkt){ const _ml=(propSubs.find(x=>x.id===_lockMkt)||{l:_lockMkt}).l; return (
  <div style={{display:"flex",alignItems:"center",gap:8,padding:"0 16px 10px"}}>
- <div style={{padding:"5px 11px",borderRadius:RAD.lg,fontSize:11,fontWeight:800,whiteSpace:"nowrap",border:"1px solid",background:`${acc}1f`,borderColor:`${acc}66`,color:acc}}>{_ml}</div>
+ <div style={{padding:"5px 11px",borderRadius:RAD.lg,fontSize:11,fontWeight:800,whiteSpace:"nowrap",border:"1px solid",background:`${fade(acc,0.122)}`,borderColor:`${fade(acc,0.4)}`,color:acc}}>{_ml}</div>
  <span style={{fontSize:10.5,color:"rgba(255,255,255,0.4)",fontWeight:600}}>locked by this slot</span>
  </div>
  ); }
  return (
  <div className="pk-rail" style={{margin:"0 16px 10px"}}>
  {propSubs.map(s=>{ const on = s.id===gridPropSub; return (
- <div key={s.id} onClick={()=>setGridPropSub(s.id)} className={"pk-chip"+(on?" on":"")} style={{"--on-a":acc+"52","--on-b":acc+"24"}}><span>{s.l}</span></div>
+ <div key={s.id} onClick={()=>setGridPropSub(s.id)} className={"pk-chip"+(on?" on":"")} style={{"--on-a":fade(acc,0.322),"--on-b":fade(acc,0.141)}}><span>{s.l}</span></div>
  );})}
  </div>
  );
@@ -18890,7 +19009,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  return (
  <div className="pk-rail" style={{margin:"0 16px 10px"}}>
  {_subs.map(s=>{ const on = s.id===_cur; return (
- <div key={s.id} onClick={()=>setGridPeriodSub(s.id)} className={"pk-chip"+(on?" on":"")} style={{"--on-a":acc+"52","--on-b":acc+"24"}}><span>{s.l}</span></div>
+ <div key={s.id} onClick={()=>setGridPeriodSub(s.id)} className={"pk-chip"+(on?" on":"")} style={{"--on-a":fade(acc,0.322),"--on-b":fade(acc,0.141)}}><span>{s.l}</span></div>
  );})}
  </div>
  );
@@ -19234,11 +19353,11 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        const initials=sp.isYou?"You":(sp.name||"?").slice(0,2).toUpperCase();
        const playoff=playoffN>0 && i<playoffN;
        return (
-       <div key={sp.userId||i} onClick={()=>setFieldPlayer({...sp, rank:i+1, wkPicks, wkPts})} style={{position:"relative",borderRadius:RAD.xl,padding:13,cursor:"pointer",overflow:"hidden",background:"linear-gradient(160deg,rgba(255,255,255,0.05),rgba(255,255,255,0.015))",border:`0.5px solid ${sp.isYou?IOS.blue+"80":IOS.sep}`,boxShadow:sp.isYou?`0 10px 30px -12px ${IOS.blue}66`:"none"}}>
+       <div key={sp.userId||i} onClick={()=>setFieldPlayer({...sp, rank:i+1, wkPicks, wkPts})} style={{position:"relative",borderRadius:RAD.xl,padding:13,cursor:"pointer",overflow:"hidden",background:"linear-gradient(160deg,rgba(255,255,255,0.05),rgba(255,255,255,0.015))",border:`0.5px solid ${sp.isYou?fade(IOS.blue,0.502):IOS.sep}`,boxShadow:sp.isYou?`0 10px 30px -12px ${fade(IOS.blue,0.4)}`:"none"}}>
          <div style={{position:"absolute",top:"-40%",left:"-10%",width:"70%",height:"80%",borderRadius:"50%",filter:"blur(30px)",opacity:.32,background:col}}/>
          {playoff && <div style={{position:"absolute",top:9,right:9,fontSize:7.5,fontWeight:900,letterSpacing:.5,color:"#0c0c0e",background:IOS.yellow,borderRadius:4,padding:"2px 5px"}}>PLAYOFF</div>}
          <div style={{display:"flex",alignItems:"center",gap:9,position:"relative"}}>
-           <div style={{width:38,height:38,borderRadius:RAD.md,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:"#0c0c0e",background:`linear-gradient(150deg,${col},${col}bb)`,flexShrink:0}}>{initials}</div>
+           <div style={{width:38,height:38,borderRadius:RAD.md,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:"#0c0c0e",background:`linear-gradient(150deg,${col},${fade(col,0.733)})`,flexShrink:0}}>{initials}</div>
            <div style={{minWidth:0}}>
              <div style={{fontSize:14,fontWeight:800,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:sp.isYou?IOS.blue:"#fff"}}>{sp.isYou?"You":sp.name}</div>
              <div style={{fontSize:10,color:IOS.label3,fontWeight:700}}>#{i+1} · {wkPicks.length} picks</div>
@@ -19416,7 +19535,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div style={{fontSize:12,color:IOS.label3,marginTop:8,textAlign:"center"}}>{targetSize-_mc} more player{targetSize-_mc!==1?"s":""} needed</div>
  </div>
  {activeLeague.isCommissioner && (
- <div style={{marginTop:8,background:"rgba(10,132,255,0.1)",borderRadius:RAD.lg,padding:"14px 20px",border:`1px solid ${IOS.blue}30`,width:"100%",maxWidth:280}}>
+ <div style={{marginTop:8,background:"rgba(10,132,255,0.1)",borderRadius:RAD.lg,padding:"14px 20px",border:`1px solid ${fade(IOS.blue,0.188)}`,width:"100%",maxWidth:280}}>
  <div style={{fontSize:11,fontWeight:700,letterSpacing:1.5,textTransform:"uppercase",color:IOS.blue,marginBottom:6}}>Invite Code</div>
  <div style={{fontSize:28,fontWeight:800,letterSpacing:5,color:"#fff",marginBottom:12}}>{activeLeague.invite_code||activeLeague.inviteCode}</div>
  <div style={{display:"flex",gap:8}}>
@@ -19611,7 +19730,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const _lab = slotType ? (slotLabels[slotType]||slotType) : "";
  const _tap = !!(isMe && onAdd);
  return (
- <div onClick={_tap?onAdd:undefined} style={{flex:1,borderRadius:RAD.md,minHeight:68,background:_tap?"#0B111C":"#09090B",border:_tap?("1px dashed "+IOS.blue+"55"):"1px dashed #24242C",display:"flex",flexDirection:"column",alignItems:isMe?"flex-start":"flex-end",justifyContent:"center",gap:4,padding:"0 12px",cursor:_tap?"pointer":"default"}}>
+ <div onClick={_tap?onAdd:undefined} style={{flex:1,borderRadius:RAD.md,minHeight:68,background:_tap?"#0B111C":"#09090B",border:_tap?("1px dashed "+fade(IOS.blue,0.333)):"1px dashed #24242C",display:"flex",flexDirection:"column",alignItems:isMe?"flex-start":"flex-end",justifyContent:"center",gap:4,padding:"0 12px",cursor:_tap?"pointer":"default"}}>
  {_lab&&<span style={{fontSize:8,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:_tap?IOS.blue:"#4a4a52"}}>{_lab}</span>}
  <span style={{fontSize:isMe?11:10,fontWeight:isMe?800:700,color:isMe?IOS.blue:"#3a3a40"}}>{isMe?(slotType?"+ Add "+_lab:"+ Add pick"):"Not locked yet"}</span>
  </div>
@@ -19681,7 +19800,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  </div>
  {!isParlay && picks[0] && (liveMatch(picks[0], liveGames) || (picks[0].away_score!=null && picks[0].home_score!=null)) && <div style={{marginTop:4}} onClick={(e)=>e.stopPropagation()}><ScoreChip pick={picks[0]} live={liveMatch(picks[0], liveGames)} onOpen={()=>openGamecast(picks[0])}/></div>}
  {isMe && !isParlay && result==="pending" && myPUs.some(p=>p.id==="second") && (
- <button onClick={(e)=>{e.stopPropagation(); setSecondSwap({pick:picks[0], category:(picks[0].slot||"ml").split("_")[0]});}} style={{marginTop:5,width:"100%",padding:"4px",borderRadius:RAD.sm,border:`1px solid ${IOS.orange}55`,background:`${IOS.orange}1a`,color:IOS.orange,fontSize:8.5,fontWeight:800,letterSpacing:0.3,cursor:"pointer"}}>SECOND CHANCE</button>
+ <button onClick={(e)=>{e.stopPropagation(); setSecondSwap({pick:picks[0], category:(picks[0].slot||"ml").split("_")[0]});}} style={{marginTop:5,width:"100%",padding:"4px",borderRadius:RAD.sm,border:`1px solid ${fade(IOS.orange,0.333)}`,background:`${fade(IOS.orange,0.102)}`,color:IOS.orange,fontSize:8.5,fontWeight:800,letterSpacing:0.3,cursor:"pointer"}}>SECOND CHANCE</button>
  )}
  {isParlay&&<div style={{fontSize:8,color:"rgba(255,255,255,0.40)",marginTop:3}}>▾ tap to see legs</div>}
  {isParlay&&(
@@ -19774,7 +19893,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div style={{fontSize:48,marginBottom:12}}></div>
  <div style={{fontSize:22,fontWeight:800,letterSpacing:-0.5,color:"#fff",marginBottom:6}}>{newLeagueCreated.name}</div>
  <div style={{fontSize:14,color:IOS.label3,marginBottom:28}}>Your league is live. Share the invite code.</div>
- <div style={{background:IOS.bg3,borderRadius:RAD.lg,padding:"20px 24px",marginBottom:20,border:`1px solid ${IOS.blue}30`}}>
+ <div style={{background:IOS.bg3,borderRadius:RAD.lg,padding:"20px 24px",marginBottom:20,border:`1px solid ${fade(IOS.blue,0.188)}`}}>
  <div style={{fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:IOS.blue,marginBottom:8}}>Invite Code</div>
  <div style={{fontSize:40,fontWeight:800,letterSpacing:6,color:"#fff"}}>{newLeagueCreated.invite_code}</div>
  <div style={{display:"flex",gap:10,marginTop:16}}>
@@ -20380,7 +20499,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div className="pk-hdr-sub" style={{fontSize:14,fontWeight:500,color:IOS.label3,marginTop:3}}>{realLeagues.length} active league{realLeagues.length!==1?"s":""}</div>
  </div>
  <div onClick={()=>{setShowNewLeague(true);setNewLeagueCreated(null);setNewLeagueSport(null);setNewLeagueName("");}}
- style={{background:`linear-gradient(135deg,${IOS.blue},${IOS.indigo})`,borderRadius:RAD.md,padding:"9px 15px",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer",boxShadow:`0 4px 14px ${IOS.blue}44`}}>+ New</div>
+ style={{background:`linear-gradient(135deg,${IOS.blue},${IOS.indigo})`,borderRadius:RAD.md,padding:"9px 15px",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer",boxShadow:`0 4px 14px ${fade(IOS.blue,0.267)}`}}>+ New</div>
  </div>
 
  {/* League cards */}
@@ -20638,7 +20757,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    {myPicksThisWeek.length===0 ? (
      <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",borderRadius:RAD.md,padding:"12px 14px",marginBottom:10,border:EDGE.hair}}>
        <div style={{fontSize:12,color:IOS.label3,textAlign:"center"}}>No picks locked yet</div>
-       <button onClick={()=>setScreen("picks")} style={{width:"100%",background:`linear-gradient(135deg,${IOS.blue},${IOS.indigo})`,border:"none",borderRadius:RAD.sm,padding:"10px",fontFamily:"Barlow,sans-serif",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",marginTop:10,boxShadow:`0 4px 14px ${IOS.blue}33`}}>Build My Slip</button>
+       <button onClick={()=>setScreen("picks")} style={{width:"100%",background:`linear-gradient(135deg,${IOS.blue},${IOS.indigo})`,border:"none",borderRadius:RAD.sm,padding:"10px",fontFamily:"Barlow,sans-serif",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",marginTop:10,boxShadow:`0 4px 14px ${fade(IOS.blue,0.2)}`}}>Build My Slip</button>
      </div>
    ) : (
    <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.md,overflow:"hidden",marginBottom:10}}>
@@ -20688,7 +20807,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 
    {/* Quick actions */}
    <div style={{display:"flex",gap:8}}>
-     <button onClick={()=>setScreen("picks")} style={{flex:1,background:`linear-gradient(135deg,${IOS.blue},${IOS.indigo})`,border:"none",borderRadius:RAD.md,padding:"11px",fontFamily:"Barlow,sans-serif",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",boxShadow:`0 4px 14px ${IOS.blue}33`}}>My Picks</button>
+     <button onClick={()=>setScreen("picks")} style={{flex:1,background:`linear-gradient(135deg,${IOS.blue},${IOS.indigo})`,border:"none",borderRadius:RAD.md,padding:"11px",fontFamily:"Barlow,sans-serif",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",boxShadow:`0 4px 14px ${fade(IOS.blue,0.2)}`}}>My Picks</button>
      <button onClick={e=>{e.stopPropagation();setActiveLeagueId(lg.id);setScreen(lg.isCommissioner?"commissioner":"league");}} style={{flex:1,background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:RAD.sm,padding:"10px",fontFamily:"Barlow,sans-serif",fontSize:12,fontWeight:700,color:IOS.blue,cursor:"pointer"}}>{lg.isCommissioner?"Commish Panel":"League Detail"}</button>
    </div>
  </div>
@@ -20910,9 +21029,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
             <Fragment key={r.userId||i}>
               {i===N && (
                 <div style={{display:"flex",alignItems:"center",gap:8,padding:"9px 14px",background:"rgba(255,69,58,0.04)"}}>
-                  <div style={{flex:1,borderTop:`1.5px dashed ${IOS.red}80`}}/>
+                  <div style={{flex:1,borderTop:`1.5px dashed ${fade(IOS.red,0.502)}`}}/>
                   <div style={{fontSize:9,fontWeight:900,letterSpacing:"0.12em",color:IOS.red}}>CUT LINE</div>
-                  <div style={{flex:1,borderTop:`1.5px dashed ${IOS.red}80`}}/>
+                  <div style={{flex:1,borderTop:`1.5px dashed ${fade(IOS.red,0.502)}`}}/>
                 </div>
               )}
               <div style={{display:"flex",alignItems:"center",gap:11,padding:"12px 14px",background:r.isYou?"rgba(10,132,255,0.10)":"transparent",borderBottom:i<shown.length-1?`0.5px solid ${IOS.sep}`:"none",opacity:inField?1:0.72}}>
@@ -21033,7 +21152,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div key={uid} onClick={()=>setSelectedGradeMember(uid)}
  style={{flexShrink:0,display:"flex",alignItems:"center",gap:6,padding:"7px 12px",borderRadius:RAD.pill,cursor:"pointer",transition:"all .15s",
  background:isActive?"rgba(10,132,255,0.15)":"rgba(255,255,255,0.06)",
- border:`1px solid ${isActive?IOS.blue+"60":allGraded?"rgba(48,209,88,0.3)":"rgba(255,255,255,0.08)"}`,
+ border:`1px solid ${isActive?fade(IOS.blue,0.376):allGraded?"rgba(48,209,88,0.3)":"rgba(255,255,255,0.08)"}`,
  }}>
  <span style={{fontSize:12,fontWeight:700,color:isActive?IOS.blue:allGraded?IOS.green:"rgba(255,255,255,0.6)"}}>{md.name}</span>
  {!allGraded&&<span style={{fontSize:10,fontWeight:700,color:IOS.orange,background:"rgba(255,159,10,0.15)",borderRadius:RAD.md,padding:"1px 6px"}}>{pending}</span>}
@@ -21074,7 +21193,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
  <div style={{flex:1,minWidth:0}}>
  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}>
- <div style={{fontSize:10,fontWeight:700,color:col,background:`${col}15`,padding:"1px 6px",borderRadius:4}}>{pick.multiplier}× {pick.slot}</div>
+ <div style={{fontSize:10,fontWeight:700,color:col,background:`${fade(col,0.082)}`,padding:"1px 6px",borderRadius:4}}>{pick.multiplier}× {pick.slot}</div>
  {isPending&&<div style={{fontSize:9,fontWeight:700,color:IOS.orange,background:"rgba(255,159,10,0.12)",padding:"1px 6px",borderRadius:4}}>PENDING</div>}
  </div>
  <div style={{fontSize:13,fontWeight:600,color:"#fff",marginBottom:2}}>{pick.pick_name}</div>
@@ -21261,7 +21380,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  ))}
  </div>
  {/* Invite code */}
- <div style={{margin:"12px 16px",background:"rgba(10,132,255,0.08)",borderRadius:RAD.lg,padding:"14px 16px",border:`1px solid ${IOS.blue}30`}}>
+ <div style={{margin:"12px 16px",background:"rgba(10,132,255,0.08)",borderRadius:RAD.lg,padding:"14px 16px",border:`1px solid ${fade(IOS.blue,0.188)}`}}>
  <div style={{fontSize:11,fontWeight:600,letterSpacing:1,textTransform:"uppercase",color:IOS.blue,marginBottom:6}}>Invite Code</div>
  <div style={{fontSize:28,fontWeight:800,letterSpacing:4,color:"#fff",marginBottom:6}}>{activeLeague.inviteCode||activeLeague.invite_code}</div>
  <div style={{fontSize:12,color:IOS.label3,marginBottom:12}}>Share this code with friends to join</div>
@@ -21832,7 +21951,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
         <div style={{position:"relative",borderRadius:RAD.lg,padding:"16px 15px 14px",overflow:"hidden",marginBottom:14,
          background: inField ? "linear-gradient(160deg,rgba(255,214,10,0.13),rgba(255,159,10,0.05) 60%,rgba(255,255,255,0.02))"
                              : "linear-gradient(160deg,rgba(255,69,58,0.13),rgba(255,159,10,0.05) 60%,rgba(255,255,255,0.02))",
-         border:`1px solid ${accent}47`}}>
+         border:`1px solid ${fade(accent,0.278)}`}}>
          <div style={{position:"absolute",top:0,left:0,right:0,height:2.5,background:`linear-gradient(90deg,${accent},${IOS.orange})`}}/>
          <div style={{textAlign:"center",fontSize:11,fontWeight:800,letterSpacing:"0.14em",textTransform:"uppercase",color:accent,marginBottom:10}}>
           {myRank==null ? "Playoff picture" : inField ? "You're in the field" : "You're on the outside"}
@@ -21895,9 +22014,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
             <Fragment key={r.userId||i}>
               {i===N && (
                 <div style={{display:"flex",alignItems:"center",gap:8,padding:"9px 14px",background:"rgba(255,69,58,0.04)"}}>
-                  <div style={{flex:1,borderTop:`1.5px dashed ${IOS.red}80`}}/>
+                  <div style={{flex:1,borderTop:`1.5px dashed ${fade(IOS.red,0.502)}`}}/>
                   <div style={{fontSize:9,fontWeight:900,letterSpacing:"0.12em",color:IOS.red}}>CUT LINE</div>
-                  <div style={{flex:1,borderTop:`1.5px dashed ${IOS.red}80`}}/>
+                  <div style={{flex:1,borderTop:`1.5px dashed ${fade(IOS.red,0.502)}`}}/>
                 </div>
               )}
               <div style={{display:"flex",alignItems:"center",gap:11,padding:"12px 14px",background:r.isYou?"rgba(10,132,255,0.10)":"transparent",borderBottom:i<shown.length-1?`0.5px solid ${IOS.sep}`:"none",opacity:inField?1:0.72}}>
@@ -21976,17 +22095,17 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    </div>
    <div style={{height:8,borderRadius:5,background:"#222",overflow:"hidden",position:"relative"}}>
      <div style={{height:"100%",width:`${Math.min(100,Math.round(cw/sw*100))}%`,background:`linear-gradient(90deg,${IOS.blue},${IOS.indigo})`,borderRadius:5}}/>
-     {playoffN>0 && <div style={{position:"absolute",right:0,top:0,bottom:0,width:"24%",background:`linear-gradient(90deg,rgba(255,214,10,0),${IOS.yellow}38)`,borderLeft:`1.5px dashed ${IOS.yellow}99`}}/>}
+     {playoffN>0 && <div style={{position:"absolute",right:0,top:0,bottom:0,width:"24%",background:`linear-gradient(90deg,rgba(255,214,10,0),${fade(IOS.yellow,0.22)})`,borderLeft:`1.5px dashed ${fade(IOS.yellow,0.6)}`}}/>}
    </div>
    <div style={{display:"flex",justifyContent:"space-between",fontSize:10.5,color:IOS.label3,marginTop:7,fontWeight:600}}>
      <span>Wk {cw} of {sw}</span>{playoffN>0 && <span style={{color:IOS.yellow,fontWeight:800}}>Playoff after Wk {sw}</span>}
    </div>
  </div>
- <div style={{position:"relative",margin:"14px 16px 0",borderRadius:RAD.xl,padding:18,overflow:"hidden",background:`radial-gradient(120% 120% at 50% -10%, ${IOS.indigo}3d, ${IOS.blue}10 45%, rgba(20,20,22,0) 72%),linear-gradient(180deg,#1a1a1f,#141416)`,border:`1px solid ${IOS.indigo}4d`,boxShadow:`0 18px 50px -22px ${IOS.indigo}99`}}>
+ <div style={{position:"relative",margin:"14px 16px 0",borderRadius:RAD.xl,padding:18,overflow:"hidden",background:`radial-gradient(120% 120% at 50% -10%, ${fade(IOS.indigo,0.239)}, ${fade(IOS.blue,0.063)} 45%, rgba(20,20,22,0) 72%),linear-gradient(180deg,#1a1a1f,#141416)`,border:`1px solid ${fade(IOS.indigo,0.302)}`,boxShadow:`0 18px 50px -22px ${fade(IOS.indigo,0.6)}`}}>
    <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${IOS.blue},${IOS.indigo},#64D2FF)`}}/>
    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,letterSpacing:.7,textTransform:"uppercase",fontSize:12,color:"#64D2FF"}}>Your total</div>
    <div style={{display:"flex",alignItems:"flex-end",gap:13,marginTop:4}}>
-     <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:58,lineHeight:.85,color:"#fff",textShadow:`0 0 36px ${IOS.blue}66`}}>{me.points!=null?me.points:0}<span style={{fontSize:19,color:IOS.label3,fontWeight:700}}> pts</span></div>
+     <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:58,lineHeight:.85,color:"#fff",textShadow:`0 0 36px ${fade(IOS.blue,0.4)}`}}>{me.points!=null?me.points:0}<span style={{fontSize:19,color:IOS.label3,fontWeight:700}}> pts</span></div>
      <div style={{paddingBottom:6}}>
        <div style={{fontSize:21,fontWeight:900,lineHeight:1}}>You {"·"} #{myRank}</div>
        <div style={{fontSize:12,color:inPlayoff?IOS.green:IOS.label2,fontWeight:700,marginTop:5}}>{playoffN<=0?"Most points wins":inPlayoff?(gap!=null?`In the hunt · +${gap} above the line`:"In playoff position"):(gap!=null?`${Math.abs(gap)} pts back of the line`:"Chasing the playoff")}</div>
@@ -22009,16 +22128,16 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      return (
      <div key={r.userId||i}>
        {playoffN>0 && i===playoffN && (
-         <div style={{display:"flex",alignItems:"center",gap:9,padding:"7px 14px",background:`linear-gradient(90deg,${IOS.yellow}1f,${IOS.yellow}05)`}}>
+         <div style={{display:"flex",alignItems:"center",gap:9,padding:"7px 14px",background:`linear-gradient(90deg,${fade(IOS.yellow,0.122)},${fade(IOS.yellow,0.02)})`}}>
            <span style={{fontSize:9.5,fontWeight:900,letterSpacing:1,color:IOS.yellow,textTransform:"uppercase"}}>Playoff line</span>
-           <span style={{flex:1,height:1,background:`repeating-linear-gradient(90deg,${IOS.yellow}80 0 6px,transparent 6px 11px)`}}/>
+           <span style={{flex:1,height:1,background:`repeating-linear-gradient(90deg,${fade(IOS.yellow,0.502)} 0 6px,transparent 6px 11px)`}}/>
            <span style={{fontSize:9.5,fontWeight:900,letterSpacing:1,color:IOS.yellow,textTransform:"uppercase"}}>Top {playoffN}</span>
          </div>
        )}
        <div style={{display:"flex",alignItems:"center",gap:11,padding:"12px 14px",background:r.isYou?"rgba(10,132,255,0.10)":"transparent",borderBottom:i<_ms.length-1?`0.5px solid ${IOS.sep}`:"none",position:"relative"}}>
          {r.isYou && <div style={{position:"absolute",left:0,top:0,bottom:0,width:3,background:IOS.blue}}/>}
          <div style={{width:22,textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:i<3?col:IOS.label3}}>{i+1}</div>
-         <div style={{width:34,height:34,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:13,color:"#0c0c0e",background:`linear-gradient(150deg,${col},${col}bb)`,flexShrink:0}}>{initials}</div>
+         <div style={{width:34,height:34,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:13,color:"#0c0c0e",background:`linear-gradient(150deg,${col},${fade(col,0.733)})`,flexShrink:0}}>{initials}</div>
          <div style={{flex:1,minWidth:0}}>
            <div style={{fontSize:14,fontWeight:800,color:r.isYou?IOS.blue:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.isYou?"You":r.name}</div>
            <div style={{fontSize:10.5,color:IOS.label3,marginTop:1,fontWeight:600}}>{r.record||"0-0"} picks {"·"} {r.wpct||"0%"} hit</div>
@@ -22034,11 +22153,11 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  })() : (<>
  {/* Hero — your stats */}
       {/* Hero rank card */}
-      <div style={{position:"relative",margin:"0 16px 4px",borderRadius:RAD.xl,padding:"20px 18px 16px",overflow:"hidden",background:`radial-gradient(120% 120% at 50% -10%, ${IOS.indigo}38, ${IOS.blue}10 45%, rgba(20,20,22,0) 70%), linear-gradient(180deg,#1a1a1f,#141416)`,border:`1px solid ${IOS.indigo}47`,boxShadow:`0 18px 50px -20px ${IOS.indigo}80`}}>
+      <div style={{position:"relative",margin:"0 16px 4px",borderRadius:RAD.xl,padding:"20px 18px 16px",overflow:"hidden",background:`radial-gradient(120% 120% at 50% -10%, ${fade(IOS.indigo,0.22)}, ${fade(IOS.blue,0.063)} 45%, rgba(20,20,22,0) 70%), linear-gradient(180deg,#1a1a1f,#141416)`,border:`1px solid ${fade(IOS.indigo,0.278)}`,boxShadow:`0 18px 50px -20px ${fade(IOS.indigo,0.502)}`}}>
         <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${IOS.blue},${IOS.indigo},#64D2FF)`}}/>
         <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,letterSpacing:1,textTransform:"uppercase",fontSize:12,color:"#64D2FF"}}>Your rank</div>
         <div style={{display:"flex",alignItems:"flex-end",gap:13,marginTop:4}}>
-          <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:70,lineHeight:.85,color:"#fff",textShadow:`0 0 38px ${IOS.blue}66`}}>{realStandings.find(s=>s.isYou)?.rank||"—"}<span style={{fontSize:28,color:IOS.label3,fontWeight:700}}>/{activeLeague.target_size||activeLeague.max_members||8}</span></div>
+          <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:70,lineHeight:.85,color:"#fff",textShadow:`0 0 38px ${fade(IOS.blue,0.4)}`}}>{realStandings.find(s=>s.isYou)?.rank||"—"}<span style={{fontSize:28,color:IOS.label3,fontWeight:700}}>/{activeLeague.target_size||activeLeague.max_members||8}</span></div>
           <div style={{paddingBottom:7}}>
             <div style={{fontSize:24,fontWeight:900,letterSpacing:-.3,lineHeight:1}}>You</div>
             <div style={{fontSize:12.5,color:IOS.label2,fontWeight:600,marginTop:4}}>{realStandings.find(s=>s.isYou)?.rank===1?"Leading the league":`of ${activeLeague.target_size||activeLeague.max_members||8} players`}</div>
@@ -22060,21 +22179,21 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
           <div style={{display:"flex",alignItems:"flex-end",justifyContent:"center",gap:10}}>
             {[sorted[1],sorted[0],sorted[2]].map((p,idx)=>{ if(!p) return null; const place=idx===0?2:idx===1?1:3; const col=place===1?IOS.yellow:place===2?"#C7CBD1":"#E0915A"; const h=place===1?92:place===2?66:50; const av=place===1?64:52; const initials=(p.name==="You"?"You":(p.name||"?").slice(0,2)).toUpperCase(); return (
               <div key={idx} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
-                <div style={{position:"relative",width:av,height:av,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:place===1?22:18,color:"#0c0c0e",background:`linear-gradient(150deg,${col},${col}bb)`,boxShadow:`0 0 22px ${col}55`}}>
+                <div style={{position:"relative",width:av,height:av,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:place===1?22:18,color:"#0c0c0e",background:`linear-gradient(150deg,${col},${fade(col,0.733)})`,boxShadow:`0 0 22px ${fade(col,0.333)}`}}>
                   {place===1 && <svg width="24" height="24" viewBox="0 0 24 24" fill={IOS.yellow} style={{position:"absolute",top:-17,left:"50%",transform:"translateX(-50%)"}}><path d="M3 7l4 4 5-7 5 7 4-4-2 12H5z"/></svg>}
                   {initials}
                 </div>
                 <div style={{fontSize:12.5,fontWeight:800,maxWidth:100,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:p.isYou?IOS.blue:"#fff"}}>{p.name}</div>
                 <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:16,color:col}}>{p.points}</div>
-                <div style={{width:"100%",height:h,borderRadius:"12px 12px 0 0",background:`linear-gradient(180deg,${col}33,${col}08)`,border:`0.5px solid ${col}44`,borderBottom:"none",display:"flex",justifyContent:"center",paddingTop:9,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:20,color:"rgba(255,255,255,0.85)"}}>{place}</div>
+                <div style={{width:"100%",height:h,borderRadius:"12px 12px 0 0",background:`linear-gradient(180deg,${fade(col,0.2)},${fade(col,0.031)})`,border:`0.5px solid ${fade(col,0.267)}`,borderBottom:"none",display:"flex",justifyContent:"center",paddingTop:9,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:20,color:"rgba(255,255,255,0.85)"}}>{place}</div>
               </div>
             );})}
           </div>
         </div>
       ) : sorted.length>0 ? (
         <div style={{padding:"16px 16px 0"}}>
-          <div style={{borderRadius:RAD.lg,padding:"15px",background:`linear-gradient(135deg,${IOS.yellow}1a,rgba(255,255,255,0.02))`,border:`0.5px solid ${IOS.yellow}33`,display:"flex",alignItems:"center",gap:13}}>
-            <div style={{width:48,height:48,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:18,color:"#0c0c0e",background:`linear-gradient(150deg,${IOS.yellow},#FFB300)`,boxShadow:`0 0 20px ${IOS.yellow}55`,flexShrink:0}}>{(sorted[0].name==="You"?"You":(sorted[0].name||"?").slice(0,2)).toUpperCase()}</div>
+          <div style={{borderRadius:RAD.lg,padding:"15px",background:`linear-gradient(135deg,${fade(IOS.yellow,0.102)},rgba(255,255,255,0.02))`,border:`0.5px solid ${fade(IOS.yellow,0.2)}`,display:"flex",alignItems:"center",gap:13}}>
+            <div style={{width:48,height:48,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:18,color:"#0c0c0e",background:`linear-gradient(150deg,${IOS.yellow},#FFB300)`,boxShadow:`0 0 20px ${fade(IOS.yellow,0.333)}`,flexShrink:0}}>{(sorted[0].name==="You"?"You":(sorted[0].name||"?").slice(0,2)).toUpperCase()}</div>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",color:IOS.yellow}}>League leader</div>
               <div style={{fontSize:17,fontWeight:800,color:sorted[0].isYou?IOS.blue:"#fff",marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{sorted[0].name}</div>
@@ -22291,8 +22410,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        </div>
 
        {steal && (
-        <div style={{display:"flex",alignItems:"center",gap:10,margin:"0 16px 14px",padding:"10px 12px",borderRadius:RAD.md,background:`linear-gradient(135deg,${steal.t.color}1f,rgba(255,255,255,0.02))`,border:`1px solid ${steal.t.color}4d`}}>
-         <div style={{width:30,height:30,borderRadius:RAD.sm,background:`${steal.t.color}2e`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{trophySVG(steal.t.id,steal.t.color)}</div>
+        <div style={{display:"flex",alignItems:"center",gap:10,margin:"0 16px 14px",padding:"10px 12px",borderRadius:RAD.md,background:`linear-gradient(135deg,${fade(steal.t.color,0.122)},rgba(255,255,255,0.02))`,border:`1px solid ${fade(steal.t.color,0.302)}`}}>
+         <div style={{width:30,height:30,borderRadius:RAD.sm,background:`${fade(steal.t.color,0.18)}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{trophySVG(steal.t.id,steal.t.color)}</div>
          <div style={{minWidth:0}}>
           <div style={{fontSize:8.5,fontWeight:900,letterSpacing:"0.1em",textTransform:"uppercase",color:steal.t.color}}>Closest steal</div>
           <div style={{fontSize:13.5,fontWeight:800,color:"#fff",marginTop:1}}>{steal.t.name}</div>
@@ -22306,10 +22425,10 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        {leagueTrophies.map(t=>{
         const pct = t.lead>0 ? Math.max(0,Math.min(1, t.mine/t.lead)) : 0;
         return (
-         <div key={t.id} style={{position:"relative",margin:"0 16px 8px",borderRadius:RAD.md,padding:"11px 12px",overflow:"hidden",background:t.isYou?`linear-gradient(135deg,${IOS.yellow}17,rgba(255,255,255,0.015))`:IOS.bg2,border:t.isYou?`0.5px solid ${IOS.yellow}73`:`0.5px solid ${IOS.sep}`}}>
+         <div key={t.id} style={{position:"relative",margin:"0 16px 8px",borderRadius:RAD.md,padding:"11px 12px",overflow:"hidden",background:t.isYou?`linear-gradient(135deg,${fade(IOS.yellow,0.09)},rgba(255,255,255,0.015))`:IOS.bg2,border:t.isYou?`0.5px solid ${fade(IOS.yellow,0.451)}`:`0.5px solid ${IOS.sep}`}}>
           {t.isYou && <div style={{position:"absolute",top:10,right:11,fontSize:8,fontWeight:900,letterSpacing:"0.08em",background:IOS.yellow,color:"#000",padding:"2px 5px",borderRadius:4}}>YOURS</div>}
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-           <div style={{width:36,height:36,borderRadius:RAD.md,background:`${t.color}29`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{trophySVG(t.id,t.color)}</div>
+           <div style={{width:36,height:36,borderRadius:RAD.md,background:`${fade(t.color,0.161)}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{trophySVG(t.id,t.color)}</div>
            <div style={{flex:1,minWidth:0}}>
             <div style={{fontSize:14.5,fontWeight:900,color:"#fff",letterSpacing:-0.2}}>{t.name}</div>
             <div style={{fontSize:10.5,color:IOS.label3,marginTop:1}}>{t.desc}</div>
@@ -22482,8 +22601,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  return (
  <div key={wk.week}
   style={{position:"relative",display:"flex",alignItems:"center",gap:11,padding:"11px 12px",margin:"0 0 7px",borderRadius:RAD.md,overflow:"hidden",
-   background: showLive&&!done ? `linear-gradient(135deg,${IOS.blue}1a,rgba(255,255,255,0.015))` : IOS.bg3,
-   border: showLive&&!done ? `0.5px solid ${IOS.blue}80` : `0.5px solid ${IOS.sep}`,
+   background: showLive&&!done ? `linear-gradient(135deg,${fade(IOS.blue,0.102)},rgba(255,255,255,0.015))` : IOS.bg3,
+   border: showLive&&!done ? `0.5px solid ${fade(IOS.blue,0.502)}` : `0.5px solid ${IOS.sep}`,
    cursor: done?"pointer":"default"}}
   onClick={()=>{ if(done){ setSelectedMatchup(wk.week); fetchPastMatchupPicks(wk.week, user.id, wk.oppId); } }}
  >
@@ -22517,7 +22636,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    })()}
   </div>
   <div style={{fontSize:11,fontWeight:900,padding:"5px 9px",borderRadius:RAD.sm,flexShrink:0,
-   background: showLive&&!done ? IOS.blue : wk.result==="W" ? `${IOS.green}29` : wk.result==="L" ? `${IOS.red}24` : "rgba(255,255,255,0.06)",
+   background: showLive&&!done ? IOS.blue : wk.result==="W" ? `${fade(IOS.green,0.161)}` : wk.result==="L" ? `${fade(IOS.red,0.141)}` : "rgba(255,255,255,0.06)",
    color: showLive&&!done ? "#fff" : wk.result==="W" ? IOS.green : wk.result==="L" ? IOS.red : "rgba(255,255,255,0.25)"}}>
    {showLive&&!done?"LIVE":wk.result==="upcoming"?"—":wk.result}
   </div>
@@ -22582,8 +22701,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
                 return (
                   <div style={{flexShrink:0}}>
                     <div style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.07em",textTransform:"uppercase",color:"rgba(255,255,255,0.4)",margin:"0 2px 8px"}}>Reading through</div>
-                    <div onClick={()=>{ if(!isPro){setShowPaywall("ai");return;} setModelPicker(true); }} style={{display:"flex",alignItems:"center",gap:10,background:`linear-gradient(135deg,${IOS.blue}21,${IOS.blue}08)`,border:`1px solid ${IOS.blue}59`,borderRadius:RAD.md,padding:"11px 13px",cursor:"pointer"}}>
-                      <div style={{width:32,height:32,borderRadius:RAD.sm,background:_lm.color+"29",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{_lm.icon}</div>
+                    <div onClick={()=>{ if(!isPro){setShowPaywall("ai");return;} setModelPicker(true); }} style={{display:"flex",alignItems:"center",gap:10,background:`linear-gradient(135deg,${fade(IOS.blue,0.129)},${fade(IOS.blue,0.031)})`,border:`1px solid ${fade(IOS.blue,0.349)}`,borderRadius:RAD.md,padding:"11px 13px",cursor:"pointer"}}>
+                      <div style={{width:32,height:32,borderRadius:RAD.sm,background:fade(_lm.color,0.161),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{_lm.icon}</div>
                       <div style={{flex:1,minWidth:0}}>
                         <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(255,255,255,0.4)"}}>Model</div>
                         <div style={{fontSize:14.5,fontWeight:800,color:"#fff",marginTop:1}}>{_lm.name}</div>
@@ -22595,16 +22714,16 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
                 );
               })()}
               {plokBuilding && (
-                <div className="ai-rise" style={{display:"flex",alignItems:"center",gap:9,background:"rgba(255,255,255,0.04)",border:`0.5px solid ${IOS.blue}33`,borderRadius:RAD.md,padding:"14px"}}>
+                <div className="ai-rise" style={{display:"flex",alignItems:"center",gap:9,background:"rgba(255,255,255,0.04)",border:`0.5px solid ${fade(IOS.blue,0.2)}`,borderRadius:RAD.md,padding:"14px"}}>
                   <span className="ai-dot"/><span className="ai-dot" style={{animationDelay:".15s"}}/><span className="ai-dot" style={{animationDelay:".3s"}}/>
                   <span style={{fontSize:12.5,fontWeight:700,color:"rgba(255,255,255,0.7)"}}>Plok is building your slip…</span>
                 </div>
               )}
               {plokBuild && plokBuild.error && (
-                <div className="ai-rise" style={{background:"rgba(255,69,58,0.08)",border:`0.5px solid ${IOS.red}33`,borderRadius:RAD.md,padding:"12px 14px",fontSize:12.5,color:"rgba(255,255,255,0.75)"}}>{plokBuild.error}</div>
+                <div className="ai-rise" style={{background:"rgba(255,69,58,0.08)",border:`0.5px solid ${fade(IOS.red,0.2)}`,borderRadius:RAD.md,padding:"12px 14px",fontSize:12.5,color:"rgba(255,255,255,0.75)"}}>{plokBuild.error}</div>
               )}
               {plokBuild && plokBuild.items && (
-                <div className="ai-rise" style={{background:`linear-gradient(135deg,${IOS.blue}1a,rgba(255,255,255,0.03))`,border:`0.5px solid ${IOS.blue}33`,borderRadius:RAD.lg,padding:"13px 14px"}}>
+                <div className="ai-rise" style={{background:`linear-gradient(135deg,${fade(IOS.blue,0.102)},rgba(255,255,255,0.03))`,border:`0.5px solid ${fade(IOS.blue,0.2)}`,borderRadius:RAD.lg,padding:"13px 14px"}}>
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
                     <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:IOS.blue}}>Plok built your slip</div>
                     <div onClick={()=>setPlokBuild(null)} style={{cursor:"pointer",color:"rgba(255,255,255,0.4)",fontSize:17,lineHeight:1}}>×</div>
@@ -22617,7 +22736,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
                         <div onClick={()=>setPlokChosen(prev=>{ const n=new Set(prev); if(n.has(it.idx)) n.delete(it.idx); else n.add(it.idx); return n; })} style={{width:22,height:22,flexShrink:0,borderRadius:RAD.sm,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",background:plokChosen.has(it.idx)?IOS.blue:"rgba(255,255,255,0.06)",border:plokChosen.has(it.idx)?`1px solid ${IOS.blue}`:"1px solid rgba(255,255,255,0.18)"}}>
                           {plokChosen.has(it.idx) && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
                         </div>
-                        <div style={{width:30,height:30,flexShrink:0,borderRadius:RAD.sm,background:`${it.meta.color}1f`,border:`0.5px solid ${it.meta.color}40`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:it.meta.color}}>{it.mult}×</div>
+                        <div style={{width:30,height:30,flexShrink:0,borderRadius:RAD.sm,background:`${fade(it.meta.color,0.122)}`,border:`0.5px solid ${fade(it.meta.color,0.251)}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:it.meta.color}}>{it.mult}×</div>
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{display:"flex",alignItems:"baseline",gap:6}}>
                             <span style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.04em",textTransform:"uppercase",color:it.meta.color,flexShrink:0}}>{it.meta.label}</span>
@@ -22652,7 +22771,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
                           const _C = 2*Math.PI*9;
                           const _pct = _f.tot ? _f.n/_f.tot : 0;
                           return (
-                            <div key={l.id} onClick={()=>{ applyMode(false,{leagueId:l.id}); }} style={{flexShrink:0,display:"flex",alignItems:"center",gap:7,padding:"7px 11px 7px 8px",borderRadius:RAD.md,cursor:"pointer",whiteSpace:"nowrap",background:_on?`${IOS.blue}21`:"#141419",border:_on?`0.5px solid ${IOS.blue}80`:"0.5px solid rgba(255,255,255,0.09)"}}>
+                            <div key={l.id} onClick={()=>{ applyMode(false,{leagueId:l.id}); }} style={{flexShrink:0,display:"flex",alignItems:"center",gap:7,padding:"7px 11px 7px 8px",borderRadius:RAD.md,cursor:"pointer",whiteSpace:"nowrap",background:_on?`${fade(IOS.blue,0.129)}`:"#141419",border:_on?`0.5px solid ${fade(IOS.blue,0.502)}`:"0.5px solid rgba(255,255,255,0.09)"}}>
                               <svg width="22" height="22" style={{flexShrink:0,transform:"rotate(-90deg)"}}>
                                 <circle cx="11" cy="11" r="9" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="2.5"/>
                                 <circle cx="11" cy="11" r="9" fill="none" stroke={_done?IOS.green:IOS.blue} strokeWidth="2.5" strokeLinecap="round" strokeDasharray={_C} strokeDashoffset={_C*(1-_pct)}/>
@@ -22664,7 +22783,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
                             </div>
                           );
                         })}
-                        <div onClick={()=>applyMode(true)} style={{flexShrink:0,display:"flex",alignItems:"center",gap:7,padding:"7px 11px 7px 8px",borderRadius:RAD.md,cursor:"pointer",whiteSpace:"nowrap",background:isSoloMode?`${IOS.blue}21`:"#141419",border:isSoloMode?`0.5px solid ${IOS.blue}80`:"0.5px solid rgba(255,255,255,0.09)"}}>
+                        <div onClick={()=>applyMode(true)} style={{flexShrink:0,display:"flex",alignItems:"center",gap:7,padding:"7px 11px 7px 8px",borderRadius:RAD.md,cursor:"pointer",whiteSpace:"nowrap",background:isSoloMode?`${fade(IOS.blue,0.129)}`:"#141419",border:isSoloMode?`0.5px solid ${fade(IOS.blue,0.502)}`:"0.5px solid rgba(255,255,255,0.09)"}}>
                           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.45)" strokeWidth="2" strokeLinecap="round" style={{flexShrink:0}}><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6"/></svg>
                           <div>
                             <div style={{fontSize:12.5,fontWeight:800,lineHeight:1.1,color:isSoloMode?"#fff":"rgba(255,255,255,0.62)"}}>Solo</div>
@@ -22701,9 +22820,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
                         const _list = plokSortBets(_t, _pool);
                         const _mktLabel = (mk)=> (PROP_HIST_MAP[mk]&&PROP_HIST_MAP[mk].label) || String(mk||"").replace(/^(player_|batter_|pitcher_)/,"").replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
                         return (
-                          <div key={si} style={{background:_done?`linear-gradient(135deg,${IOS.green}10,rgba(255,255,255,0.015))`:"#141419",border:_done?`0.5px solid ${IOS.green}4d`:(_open?`0.5px solid ${IOS.blue}73`:"0.5px solid rgba(255,255,255,0.07)"),borderRadius:RAD.md,marginBottom:8,overflow:"hidden"}}>
+                          <div key={si} style={{background:_done?`linear-gradient(135deg,${fade(IOS.green,0.063)},rgba(255,255,255,0.015))`:"#141419",border:_done?`0.5px solid ${fade(IOS.green,0.302)}`:(_open?`0.5px solid ${fade(IOS.blue,0.451)}`:"0.5px solid rgba(255,255,255,0.07)"),borderRadius:RAD.md,marginBottom:8,overflow:"hidden"}}>
                             <div onClick={()=>{ if(_done) return; setPlokBrowseQ(""); setPlokSlot(plokOpenSlot===si ? -1 : si); }} style={{display:"flex",alignItems:"center",gap:9,padding:"10px 11px",cursor:_done?"default":"pointer"}}>
-                              <div style={{width:23,height:23,borderRadius:RAD.sm,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10.5,fontWeight:900,flexShrink:0,background:_done?`${IOS.green}2e`:"#1e1e25",color:_done?IOS.green:"rgba(255,255,255,0.4)"}}>
+                              <div style={{width:23,height:23,borderRadius:RAD.sm,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10.5,fontWeight:900,flexShrink:0,background:_done?`${fade(IOS.green,0.18)}`:"#1e1e25",color:_done?IOS.green:"rgba(255,255,255,0.4)"}}>
                                 {_done ? <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> : si+1}
                               </div>
                               <div style={{flex:1,minWidth:0}}>
@@ -22711,7 +22830,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
                                 <div style={{fontSize:9.5,color:"rgba(255,255,255,0.4)",marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_done ? `Slot ${si+1} · ${plokTypeLabel(_t)}` : (_open ? `${_elig.length} eligible · ${_t==="longshot"?"longest price first":"best edge first"}` : `Slot ${si+1} · tap to browse`)}</div>
                               </div>
                               {_done && sl.bet.odds ? <div style={{fontSize:12.5,fontWeight:900,flexShrink:0,color:String(sl.bet.odds).trim().startsWith("+")?IOS.green:"#fff"}}>{sl.bet.odds}</div> : null}
-                              {sl.mult ? <div style={{fontSize:9.5,fontWeight:900,padding:"3px 6px",borderRadius:5,flexShrink:0,background:_col+"22",color:_col}}>{sl.mult}×</div> : null}
+                              {sl.mult ? <div style={{fontSize:9.5,fontWeight:900,padding:"3px 6px",borderRadius:5,flexShrink:0,background:fade(_col,0.133),color:_col}}>{sl.mult}×</div> : null}
                             </div>
                             {_open && (
                               <div style={{borderTop:"0.5px solid rgba(255,255,255,0.07)",padding:"9px 0 10px"}}>
@@ -22745,7 +22864,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
                                           <div style={{fontSize:12.5,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.pick || plokTypeLabel(_t)}</div>
                                           <div style={{fontSize:9,color:"rgba(255,255,255,0.25)",marginTop:1.5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.game}</div>
                                         </div>
-                                        {b.edge!=null && b.edge>0 ? <div style={{fontSize:8,fontWeight:900,padding:"2px 4px",borderRadius:4,flexShrink:0,background:`${IOS.green}26`,color:IOS.green}}>EV +{Number(b.edge).toFixed(1)}%</div> : null}
+                                        {b.edge!=null && b.edge>0 ? <div style={{fontSize:8,fontWeight:900,padding:"2px 4px",borderRadius:4,flexShrink:0,background:`${fade(IOS.green,0.149)}`,color:IOS.green}}>EV +{Number(b.edge).toFixed(1)}%</div> : null}
                                         <div style={{fontSize:13,fontWeight:900,flexShrink:0,color:String(b.odds||"").trim().startsWith("+")?IOS.green:"#fff"}}>{b.odds}</div>
                                       </div>
                                     ))}
@@ -22755,7 +22874,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
                                 )}
                                 {plokSlotErr && plokSlotErr.idx===si && <div style={{padding:"0 10px 6px",fontSize:10.5,color:IOS.orange,lineHeight:1.4}}>{plokSlotErr.msg}</div>}
                                 <div style={{display:"flex",gap:6,padding:"8px 10px 0"}}>
-                                  <button onClick={()=>buildPlokSlot(si)} disabled={plokSlotBusy!=null} style={{flex:1,border:`0.5px solid ${IOS.blue}66`,borderRadius:RAD.sm,padding:8,fontFamily:"inherit",fontSize:11,fontWeight:800,cursor:plokSlotBusy!=null?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:5,background:`${IOS.blue}1f`,color:IOS.blue,opacity:plokSlotBusy!=null&&plokSlotBusy!==si?0.5:1}}>
+                                  <button onClick={()=>buildPlokSlot(si)} disabled={plokSlotBusy!=null} style={{flex:1,border:`0.5px solid ${fade(IOS.blue,0.4)}`,borderRadius:RAD.sm,padding:8,fontFamily:"inherit",fontSize:11,fontWeight:800,cursor:plokSlotBusy!=null?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:5,background:`${fade(IOS.blue,0.122)}`,color:IOS.blue,opacity:plokSlotBusy!=null&&plokSlotBusy!==si?0.5:1}}>
                                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg>
                                     {plokSlotBusy===si ? "Picking…" : "Plok picks this slot"}
                                   </button>
@@ -22779,7 +22898,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
                           if(!_n) return null;
                           const _on = plokFlatType===t;
                           return (
-                            <div key={t} onClick={()=>setPlokFlatType(t)} style={{flexShrink:0,display:"flex",alignItems:"center",gap:5,fontSize:12,fontWeight:800,padding:"7px 12px",borderRadius:RAD.xl,cursor:"pointer",whiteSpace:"nowrap",background:_on?`${IOS.blue}24`:"#141419",border:_on?`0.5px solid ${IOS.blue}80`:"0.5px solid rgba(255,255,255,0.1)",color:_on?"#fff":"rgba(255,255,255,0.62)"}}>
+                            <div key={t} onClick={()=>setPlokFlatType(t)} style={{flexShrink:0,display:"flex",alignItems:"center",gap:5,fontSize:12,fontWeight:800,padding:"7px 12px",borderRadius:RAD.xl,cursor:"pointer",whiteSpace:"nowrap",background:_on?`${fade(IOS.blue,0.141)}`:"#141419",border:_on?`0.5px solid ${fade(IOS.blue,0.502)}`:"0.5px solid rgba(255,255,255,0.1)",color:_on?"#fff":"rgba(255,255,255,0.62)"}}>
                               {t!=="all" && <span style={{width:6,height:6,borderRadius:3,flexShrink:0,background:plokTypeColor(t)}}/>}
                               {t==="all" ? "All" : plokTypeLabel(t)}
                               <span style={{fontSize:9.5,fontWeight:700,color:"rgba(255,255,255,0.25)"}}>{_n}</span>
@@ -22795,7 +22914,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
                               <div style={{fontSize:13,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.pick}</div>
                               <div style={{fontSize:9.5,color:"rgba(255,255,255,0.25)",marginTop:1.5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.game}</div>
                             </div>
-                            {b.edge!=null && b.edge>0 ? <div style={{fontSize:8,fontWeight:900,padding:"2px 4px",borderRadius:4,flexShrink:0,background:`${IOS.green}26`,color:IOS.green}}>EV +{Number(b.edge).toFixed(1)}%</div> : null}
+                            {b.edge!=null && b.edge>0 ? <div style={{fontSize:8,fontWeight:900,padding:"2px 4px",borderRadius:4,flexShrink:0,background:`${fade(IOS.green,0.149)}`,color:IOS.green}}>EV +{Number(b.edge).toFixed(1)}%</div> : null}
                             <div style={{fontSize:13.5,fontWeight:900,flexShrink:0,color:String(b.odds||"").trim().startsWith("+")?IOS.green:"#fff"}}>{b.odds}</div>
                           </div>
                         ))}
@@ -22806,7 +22925,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
                   {/* Whole-slip + game screener stay reachable. */}
                   {/* Find-a-bet lives behind the +EV Hunter model card; one button here. */}
                   <div style={{marginTop:14,paddingTop:14,borderTop:"0.5px solid rgba(255,255,255,0.07)",display:"flex",gap:7}}>
-                    <button onClick={buildPlokSlip} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,padding:"11px",borderRadius:RAD.md,background:`${IOS.blue}1f`,border:`0.5px solid ${IOS.blue}66`,fontFamily:"inherit",fontSize:12,fontWeight:800,color:IOS.blue,cursor:"pointer"}}>
+                    <button onClick={buildPlokSlip} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,padding:"11px",borderRadius:RAD.md,background:`${fade(IOS.blue,0.122)}`,border:`0.5px solid ${fade(IOS.blue,0.4)}`,fontFamily:"inherit",fontSize:12,fontWeight:800,color:IOS.blue,cursor:"pointer"}}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg>
                       Build my whole slip
                     </button>
@@ -22848,7 +22967,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
                     {plokRecord.recent && plokRecord.recent.length>0 && (
                       <div style={{marginTop:12,paddingTop:11,borderTop:"0.5px solid rgba(255,255,255,0.06)",display:"flex",alignItems:"center",gap:6}}>
                         {plokRecord.recent.slice(0,8).map((c,ci)=>(
-                          <span key={ci} style={{width:19,height:19,borderRadius:5,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:900,color:c.result==="W"?IOS.green:IOS.red,background:c.result==="W"?`${IOS.green}29`:`${IOS.red}24`}}>{c.result}</span>
+                          <span key={ci} style={{width:19,height:19,borderRadius:5,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:900,color:c.result==="W"?IOS.green:IOS.red,background:c.result==="W"?`${fade(IOS.green,0.161)}`:`${fade(IOS.red,0.141)}`}}>{c.result}</span>
                         ))}
                         <span onClick={openPlokLedger} style={{marginLeft:"auto",fontSize:11,fontWeight:800,color:"#64D2FF",cursor:"pointer"}}>{"Full ledger \u203a"}</span>
                       </div>
@@ -22898,9 +23017,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
                   <div style={{overflowY:"auto",padding:"10px 12px 16px"}}>
                     {PLOK_MODELS.map(m=>(
                       <div key={m.id} onClick={()=>{ if(!m.ready) return; setPlokModel(m.id); setModelPicker(false); setFindBetOpen(true); }} style={{display:"flex",alignItems:"center",gap:12,background:m.ready?"linear-gradient(160deg,#15151A,#0B0B0E 80%)":"rgba(255,255,255,0.02)",border:"0.5px solid "+(m.ready?"rgba(255,255,255,0.09)":"rgba(255,255,255,0.05)"),borderRadius:RAD.md,padding:"13px 14px",marginBottom:9,cursor:m.ready?"pointer":"default",opacity:m.ready?1:0.6}}>
-                        <div style={{width:38,height:38,borderRadius:RAD.md,background:m.color+"1f",border:"0.5px solid "+m.color+"55",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{m.icon}</div>
+                        <div style={{width:38,height:38,borderRadius:RAD.md,background:fade(m.color,0.122),border:"0.5px solid "+fade(m.color,0.333),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{m.icon}</div>
                         <div style={{flex:1,minWidth:0}}>
-                          <div style={{display:"flex",alignItems:"center",gap:7}}><span style={{fontSize:15,fontWeight:800,color:"#fff"}}>{m.name}</span>{!m.ready && <span style={{fontSize:9,fontWeight:800,letterSpacing:"0.06em",color:m.color,background:m.color+"22",borderRadius:5,padding:"2px 6px"}}>SOON</span>}</div>
+                          <div style={{display:"flex",alignItems:"center",gap:7}}><span style={{fontSize:15,fontWeight:800,color:"#fff"}}>{m.name}</span>{!m.ready && <span style={{fontSize:9,fontWeight:800,letterSpacing:"0.06em",color:m.color,background:fade(m.color,0.133),borderRadius:5,padding:"2px 6px"}}>SOON</span>}</div>
                           <div style={{fontSize:11.5,color:"rgba(255,255,255,0.5)",marginTop:2,lineHeight:1.35}}>{m.desc}</div>
                         </div>
                         {m.ready && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polyline points="9 18 15 12 9 6"/></svg>}
@@ -23388,8 +23507,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  setPuLeagueId(lg.id);
  if(user) fetchPuLeagueData(lg.id, user.id);
  }} style={{flexShrink:0,display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:RAD.pill,cursor:"pointer",transition:"all .15s",
- background:isSelected?`${sp.color}20`:"rgba(255,255,255,0.06)",
- border:`1px solid ${isSelected?sp.color+"60":"rgba(255,255,255,0.08)"}`,
+ background:isSelected?`${fade(sp.color,0.125)}`:"rgba(255,255,255,0.06)",
+ border:`1px solid ${isSelected?fade(sp.color,0.376):"rgba(255,255,255,0.08)"}`,
  }}>
  <span style={{fontSize:14}}></span>
  <span style={{fontSize:12,fontWeight:700,color:isSelected?sp.color:"rgba(255,255,255,0.6)"}}>{lg.name}</span>
@@ -23421,9 +23540,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {displayPUs.length===0
  ? <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:RAD.lg,padding:24,textAlign:"center",color:IOS.label3,fontSize:15}}>No power-ups yet. Top your league for a week to earn a draw.</div>
  : displayPUs.map((pu,i)=>(
- <div key={i} className="pu-card" style={{borderWidth:1,borderStyle:"solid",borderColor:`${pu.color}30`}}>
+ <div key={i} className="pu-card" style={{borderWidth:1,borderStyle:"solid",borderColor:`${fade(pu.color,0.188)}`}}>
  <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:pu.color}}/>
- <div className="pu-card-icon" style={{background:`${pu.color}15`}}>{puSVG(pu.id,pu.color)}</div>
+ <div className="pu-card-icon" style={{background:`${fade(pu.color,0.082)}`}}>{puSVG(pu.id,pu.color)}</div>
  <div style={{flex:1}}>
  <div className="pu-card-rarity" style={{color:rarityColor(pu.rarity)}}>{pu.rarity}</div>
  <div className="pu-card-name">{pu.name}</div>
@@ -23439,7 +23558,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div style={{padding:"14px 20px 8px"}}><div style={{fontSize:13,fontWeight:600,color:IOS.label3,textTransform:"uppercase",letterSpacing:0.5}}>All Power-Ups</div></div>
  {POWER_UPS.map(pu=>(
  <div key={pu.id} style={{display:"flex",alignItems:"center",padding:"12px 16px",margin:"0 16px 6px",background:IOS.bg2,borderRadius:RAD.md,gap:12}}>
- <div style={{width:38,height:38,borderRadius:RAD.md,background:`${pu.color}15`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{puSVG(pu.id,pu.color)}</div>
+ <div style={{width:38,height:38,borderRadius:RAD.md,background:`${fade(pu.color,0.082)}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{puSVG(pu.id,pu.color)}</div>
  <div style={{flex:1}}><div style={{fontSize:14,fontWeight:600,color:"#fff",marginBottom:2}}>{pu.name}</div><div style={{fontSize:12,color:IOS.label3}}>{pu.desc}</div></div>
  <div style={{fontSize:10,fontWeight:700,color:rarityColor(pu.rarity),background:`${rarityColor(pu.rarity)}15`,border:`1px solid ${rarityColor(pu.rarity)}30`,padding:"3px 8px",borderRadius:RAD.sm,whiteSpace:"nowrap"}}>{pu.rarity}</div>
  </div>
@@ -24023,8 +24142,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
            // Fetch odds for selected sport
            fetchLiveOdds(s.id);
            setScreen("picks");
-         }} style={{display:"flex",alignItems:"center",gap:14,padding:"16px",marginBottom:10,background:"#1A1A1A",borderRadius:RAD.lg,cursor:"pointer",border:`1px solid ${soloSport===s.id?s.color+"60":"rgba(255,255,255,0.06)"}`}}>
-           <div style={{width:44,height:44,borderRadius:RAD.md,background:`${s.color}18`,display:"flex",alignItems:"center",justifyContent:"center",color:s.color,flexShrink:0}}>{s.icon}</div>
+         }} style={{display:"flex",alignItems:"center",gap:14,padding:"16px",marginBottom:10,background:"#1A1A1A",borderRadius:RAD.lg,cursor:"pointer",border:`1px solid ${soloSport===s.id?fade(s.color,0.376):"rgba(255,255,255,0.06)"}`}}>
+           <div style={{width:44,height:44,borderRadius:RAD.md,background:`${fade(s.color,0.094)}`,display:"flex",alignItems:"center",justifyContent:"center",color:s.color,flexShrink:0}}>{s.icon}</div>
            <div style={{flex:1}}>
              <div style={{fontSize:17,fontWeight:700,color:"#fff"}}>{s.label}</div>
              <div style={{fontSize:12,color:"rgba(255,255,255,0.4)",marginTop:1}}>{s.sub}</div>
@@ -24258,7 +24377,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
              <div key={lg.id} style={{position:"relative",margin:"0 16px 10px",background:IOS.bg2,borderRadius:RAD.lg,padding:"14px",border:EDGE.hair,overflow:"hidden"}}>
                <div style={{position:"absolute",left:0,top:0,bottom:0,width:3,background:sport.color}}/>
                <div style={{display:"flex",alignItems:"flex-start",gap:11}}>
-                 <div style={{width:40,height:40,borderRadius:RAD.md,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:14,flexShrink:0,background:`${sport.color}22`,color:sport.color,border:`0.5px solid ${sport.color}55`}}>{sport.label}</div>
+                 <div style={{width:40,height:40,borderRadius:RAD.md,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:14,flexShrink:0,background:`${fade(sport.color,0.133)}`,color:sport.color,border:`0.5px solid ${fade(sport.color,0.333)}`}}>{sport.label}</div>
                  <div style={{flex:1,minWidth:0}}>
                    <div style={{fontSize:15.5,fontWeight:800,color:"#fff"}}>{lg.name}</div>
                    <div style={{fontSize:11,color:IOS.label3,marginTop:2}}>{typeLabels[lg.league_type||"h2h"]||"H2H"} · {maxSize}-player · {sport.label}</div>
@@ -24754,7 +24873,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
   <div style={{display:"flex",alignItems:"center",gap:12,padding:"13px 16px",borderTop:first?"none":"0.5px solid rgba(255,255,255,0.05)"}}>
    <div style={{width:46,flexShrink:0,fontSize:11,fontWeight:800,textTransform:"uppercase",color}}>{tag}</div>
    <div style={{flex:1,minWidth:0}}>
-    <div style={{fontSize:13,fontWeight:700,display:"flex",alignItems:"center",gap:7}}>{nm}<span style={{fontSize:10,fontWeight:800,padding:"1px 6px",borderRadius:5,color,background:color+"22"}}>{pct}%</span><span style={{fontSize:11,color:CC.l3,fontWeight:600}}>{rec}</span></div>
+    <div style={{fontSize:13,fontWeight:700,display:"flex",alignItems:"center",gap:7}}>{nm}<span style={{fontSize:10,fontWeight:800,padding:"1px 6px",borderRadius:5,color,background:fade(color,0.133)}}>{pct}%</span><span style={{fontSize:11,color:CC.l3,fontWeight:600}}>{rec}</span></div>
     <div style={{height:6,borderRadius:3,background:"rgba(255,255,255,0.07)",marginTop:7,overflow:"hidden"}}><div style={{width:pct+"%",height:"100%",borderRadius:3,background:color}}/></div>
    </div>
    <div style={{textAlign:"right",flexShrink:0,width:64}}><div style={{fontSize:15,fontWeight:800,color:pts>=0?CC.green:CC.red}}>{pts>=0?"+":""}{pts}</div><div style={{fontSize:10,color:CC.l3,fontWeight:600,marginTop:1}}>pts</div></div>
