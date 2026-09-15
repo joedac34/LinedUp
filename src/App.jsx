@@ -6691,6 +6691,11 @@ function App() {
 // touchpoint - the recap omission (found 30 Aug 2026: missing swipe-back AND
 // hardcoding home) is the bug class this derivation retires. "auth" is
 // excluded on purpose: the login flow has no back.
+// Kill switch for how the bet browser is presented. true = a sheet over the picks
+// screen, so the slip stays visible and gridTargetSlot no longer has to remember
+// where you came from. false = the old full screen. Flipping it needs no other edit.
+const BROWSER_AS_SHEET = true;
+
 const ALL_SCREENS = ["home","picks","matchup","leagues","profile","league","chat","commissioner","leaderboard","analytics","browser","ai","help","legal","deleteaccount","leaguehistory","recap","solohistory","solostats"];
 const ROOT_TABS = ["home","picks","matchup","leagues","profile","solohistory","solostats"];
 const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
@@ -6700,6 +6705,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
    try{ document.documentElement.setAttribute("data-pk-back",
      (PUSHED_SCREENS.indexOf(screen)!==-1 && h.length>1) ? "1" : "0"); }catch(e){}
    _resetCbarH();
+   setBrowserSheet(false);
  }, [screen]);
  // THE back. Pops navHist (the only thing that knows where the user came from)
  // and lands on the previous screen. Visible back buttons call goBack(fallback):
@@ -6709,7 +6715,17 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  // does nothing, letting Android background the app. Never hardcode a back
  // destination again; that class of bug (recap -> home from inside a league)
  // is what this replaces. Audit procedure: picklock-navigation skill.
+ // One opener, so presentation is decided in one place instead of 14 call sites.
+ const openBrowser = ()=>{
+   if(BROWSER_AS_SHEET){ setBrowserSheet(true); }
+   else { setScreen("browser"); }
+ };
+ const closeBrowserSheet = ()=>setBrowserSheet(false);
+
  const goBack = (fallback)=>{
+   // A sheet is not a screen, so dismiss it before popping, or hardware back would
+   // leave the picks screen with the browser still sitting on top of it.
+   if(browserSheet){ setBrowserSheet(false); return; }
    const h = navHist.current;
    if(h.length < 2){ if(fallback) setScreen(fallback); return; }
    h.pop();
@@ -7666,6 +7682,9 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  const [specialsSub, setSpecialsSub] = useState("btts"); // soccer Specials tab: btts | dnb | dchance | tmtotal
  const [gridPeriodSub, setGridPeriodSub] = useState(""); // period sub-type (solo browser)
  const [gridTargetSlot, setGridTargetSlot] = useState(null); // which flex slot a tapped card fills
+ // Open state for browser-as-sheet. screen stays "picks" throughout, so the slip
+ // renders underneath and nothing is pushed onto navHist.
+ const [browserSheet, setBrowserSheet] = useState(false);
  const [slipBarOpen, setSlipBarOpen] = useState(false); // DK-style slip sheet in the browser
  const [soloSlipOpen, setSoloSlipOpen] = useState(false); // solo equivalent (free-form picks)
  const [openLegs, setOpenLegs] = useState({});            // which parlay rows are expanded
@@ -9833,7 +9852,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
    setReplaceCtx({ voidId:pick.id, mult:pick.multiplier||1, week:pick.week, type:_cat, solo:!league, leagueId:league?league.leagueId:null, slot:pick.slot||null, returnScreen:league?(league.returnScreen||"leagues"):"home" });
    setBuildingSlip(true); setGridTargetSlot(null); setGridPropSub("all");
    setGridType(_cat && _cat.indexOf("_")>-1 ? "period" : _cat);
-   setScreen("browser");
+   openBrowser();
  };
  const doReplaceSave = async (bet) => {
    if(!replaceCtx || !user) return;
@@ -12025,6 +12044,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    --hero:#0B1A2E;
    /* Sticky bars sit over scrolling content, so they are glass, not a fill. */
    --bar:rgba(10,10,13,0.82);
+   --scrim-bb:rgba(0,0,0,0.58); --bb-shadow:rgba(0,0,0,0.6);
    --sticky-shadow:0 8px 16px -8px rgba(0,0,0,0.7);
    --dock-shadow:0 18px 40px -12px rgba(0,0,0,0.75);
    --s0:#08080A; --s1:#0B0B0E; --s2:#141418;
@@ -12076,6 +12096,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    --hero:#E8EFF9;
    --chip-ink:#1E49B0; --chip-ink-solo:#A81448;
    --bar:rgba(255,255,255,0.86);
+   --scrim-bb:rgba(13,17,23,0.34); --bb-shadow:rgba(13,17,23,0.22);
    --sticky-shadow:0 8px 16px -10px rgba(13,17,23,0.22);
    --dock-shadow:0 18px 40px -14px rgba(13,17,23,0.26);
    --s0:#FFFFFF; --s1:#FFFFFF; --s2:#FFFFFF;
@@ -12373,6 +12394,20 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    width:38px;height:5px;border-radius:3px;background:var(--text3);
    margin:9px auto 2px;opacity:.75;}
  .pk-sheet,.gh-sheet{touch-action:pan-y;}
+ /* Browser-as-sheet. .pk-sheet is reused so the delegated drag-to-dismiss and the
+    grip come for free. bb-sheet only supplies height and fixes the scroller: .body
+    is normally sized by the app shell flex and has nothing to fill in here. */
+ .bb-scrim{position:fixed;inset:0;z-index:9000;background:var(--scrim-bb);
+   -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);
+   display:flex;flex-direction:column;justify-content:flex-end;
+   animation:bbFade .22s ease both;}
+ @keyframes bbFade{from{opacity:0}to{opacity:1}}
+ .bb-sheet{height:90dvh;max-height:90dvh;display:flex;flex-direction:column;overflow:hidden;
+   background:var(--bg);border-radius:26px 26px 0 0;margin:0;
+   border-top:0.5px solid var(--line);box-shadow:0 -18px 44px var(--bb-shadow);}
+ .bb-sheet .body{position:relative;flex:1;min-height:0;height:auto;inset:auto;
+   padding-top:0;padding-bottom:calc(24px + var(--sa-bot));}
+ @media (prefers-reduced-motion: reduce){ .bb-scrim{animation:none;} }
  .pk-sheet{border-radius:26px;margin-left:8px;margin-right:8px;
    margin-bottom:calc(8px + var(--sa-bot));
    border:0.5px solid rgba(var(--ink-rgb),0.12);
@@ -13198,7 +13233,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const _startLap = ()=>{ applyMode(true); setScreen("home"); setPkTour("lap"); setPkTourIdx(0); };
  const _openFork = ()=>{ setPkTour("fork"); setPkTourIdx(0); };
  const _lapNext = ()=>{ if(pkTourIdx+1 < PK_LAP.length) setPkTourIdx(pkTourIdx+1); else _openFork(); };
- const _startPick = ()=>{ applyMode(true); setBuildingSlip(true); setGridTargetSlot(null); setGridType("ml"); setGridPropSub("all"); setScreen("browser"); setPkTour("pick"); setPkTourIdx(0); };
+ const _startPick = ()=>{ applyMode(true); setBuildingSlip(true); setGridTargetSlot(null); setGridType("ml"); setGridPropSub("all"); openBrowser(); setPkTour("pick"); setPkTourIdx(0); };
  const _startLeague = ()=>{ pkTourEnd(); setScreen("leagues"); setShowNewLeague(true); setNewLeagueCreated(null); setNewLeagueSport(null); setNewLeagueName(""); setNewLeagueSize(8); setNewLeagueStep(0); };
  const _card = (inner)=>(
    <div style={{position:"fixed",inset:0,zIndex:99991,background:"rgba(2,3,6,0.8)",display:"flex",alignItems:"flex-end",fontFamily:"Barlow,sans-serif"}}>
@@ -15410,7 +15445,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        <div style={{margin:"6px 14px 0",borderRadius:RAD.lg,border:"0.5px dashed rgba(var(--ink-rgb),0.14)",padding:"34px 22px",textAlign:"center"}}>
          <div style={{fontSize:14,fontWeight:800,marginBottom:5}}>{"No ladders yet"}</div>
          <div style={{fontSize:12,color:"var(--text25)",lineHeight:1.5,marginBottom:14}}>{"Pick "+_need+" players. Each one carries a five-rung ladder and you bank every rung they clear."}</div>
-         <div onClick={()=>{ setBuildingSlip(true); setScreen("browser"); }} style={{display:"inline-block",borderRadius:RAD.md,padding:"12px 22px",fontSize:14,fontWeight:800,cursor:"pointer",background:IOS.blue,color:"var(--on-color)"}}>Open the board</div>
+         <div onClick={()=>{ setBuildingSlip(true); openBrowser(); }} style={{display:"inline-block",borderRadius:RAD.md,padding:"12px 22px",fontSize:14,fontWeight:800,cursor:"pointer",background:IOS.blue,color:"var(--on-color)"}}>Open the board</div>
        </div>
      )}
 
@@ -15468,7 +15503,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      })}
 
      {ladPicks.length>0 && ladPicks.length<_need && (
-       <div onClick={()=>{ setBuildingSlip(true); setScreen("browser"); }} style={{margin:"0 14px",borderRadius:RAD.lg,border:"0.5px dashed rgba(var(--accent-rgb),0.4)",padding:"15px",textAlign:"center",fontSize:13.5,fontWeight:800,color:IOS.blue,cursor:"pointer"}}>{"Add "+(_need-ladPicks.length)+" more ladder"+((_need-ladPicks.length)===1?"":"s")}</div>
+       <div onClick={()=>{ setBuildingSlip(true); openBrowser(); }} style={{margin:"0 14px",borderRadius:RAD.lg,border:"0.5px dashed rgba(var(--accent-rgb),0.4)",padding:"15px",textAlign:"center",fontSize:13.5,fontWeight:800,color:IOS.blue,cursor:"pointer"}}>{"Add "+(_need-ladPicks.length)+" more ladder"+((_need-ladPicks.length)===1?"":"s")}</div>
      )}
 
      <div style={{margin:"12px 16px 0",fontSize:11,color:"var(--text3)",fontWeight:600,lineHeight:1.5}}>{"Every ladder scores the rungs it clears, five rungs each. Multipliers run 1\u00d7 to "+_need+"\u00d7, one each."}</div>
@@ -15487,7 +15522,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  // Use separate state for solo mode vs league mode
  const activePicks = isSoloMode ? soloFlexPicks : flexPicks;
  const setActivePicks = isSoloMode ? setSoloFlexPicks : setFlexPicks;
- const openSlot=(i)=>{ if(isEliminated){ alert("Your league season is over \u2014 there's no matchup to score against. Switch to Solo and your picks still count toward your career stats."); return; } const s=activePicks[i]; if(s&&s.committed){ alert(slotGraded(s)?"This pick has already been graded — it can’t be changed.":slotStarted(s)?"That game has started — this pick is locked in.":"This pick is locked in. Tap Unlock first to change it."); return; } setBuildingSlip(true); setGridTargetSlot(i); setGridType((s&&s.category)?s.category:"ml"); setGridPropSub("all"); setScreen("browser"); };
+ const openSlot=(i)=>{ if(isEliminated){ alert("Your league season is over \u2014 there's no matchup to score against. Switch to Solo and your picks still count toward your career stats."); return; } const s=activePicks[i]; if(s&&s.committed){ alert(slotGraded(s)?"This pick has already been graded — it can’t be changed.":slotStarted(s)?"That game has started — this pick is locked in.":"This pick is locked in. Tap Unlock first to change it."); return; } setBuildingSlip(true); setGridTargetSlot(i); setGridType((s&&s.category)?s.category:"ml"); setGridPropSub("all"); openBrowser(); };
  const activeSubmitted = isSoloMode ? soloSubmitted : submitted;
  const activeSavedPicks = isSoloMode ? soloSavedPicks : savedPicks;
  const setActiveSavedPicks = isSoloMode ? setSoloSavedPicks : setSavedPicks;
@@ -15700,7 +15735,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {/* Category selector — show if not parlay and no category chosen yet */}
  {!activePicks[activeFlexSlot]?.isParlay && !flexCategory && (
  <div style={{padding:"12px 16px"}}>
- <div onClick={()=>{ const t=activeFlexSlot; setActiveFlexSlot(null); setFlexCategory(null); setGridTargetSlot(t); setGridType("ml"); setGridPropSub("all"); setScreen("browser"); }}
+ <div onClick={()=>{ const t=activeFlexSlot; setActiveFlexSlot(null); setFlexCategory(null); setGridTargetSlot(t); setGridType("ml"); setGridPropSub("all"); openBrowser(); }}
    style={{display:"flex",alignItems:"center",gap:14,padding:"12px 12px",marginBottom:6,borderRadius:RAD.md,cursor:"pointer",
      background:"linear-gradient(135deg,rgba(var(--accent-ios-rgb),0.16),rgba(var(--violet-rgb),0.10))",border:"0.5px solid rgba(var(--accent-ios-rgb),0.3)"}}>
    <div style={{width:40,height:40,borderRadius:RAD.md,background:"rgba(var(--accent-ios-rgb),0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
@@ -16444,7 +16479,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    const firstEmpty = activePicks.findIndex(p=>!p.isParlay && p.bet===null);
    const target = firstEmpty===-1 ? 0 : firstEmpty;
    return (
-   <div onClick={()=>{ setBuildingSlip(true); setGridTargetSlot(target); setGridType("ml"); setGridPropSub("all"); setScreen("browser"); }}
+   <div onClick={()=>{ setBuildingSlip(true); setGridTargetSlot(target); setGridType("ml"); setGridPropSub("all"); openBrowser(); }}
      style={{margin:"0 16px 12px",borderRadius:RAD.lg,padding:"13px 16px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",
        background:"linear-gradient(135deg,rgba(var(--accent-ios-rgb),0.16),rgba(var(--violet-rgb),0.10))",border:"0.5px solid rgba(var(--accent-ios-rgb),0.35)"}}>
      <div style={{display:"flex",alignItems:"center",gap:11}}>
@@ -16883,7 +16918,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
          <span style={{fontSize:9,fontWeight:800,letterSpacing:"0.14em",textTransform:"uppercase",color:IOS.label3}}>Add picks</span>
        </div>
        <div style={{display:"flex"}}>
-         <div onClick={()=>{ setBuildingSlip(true); setGridTargetSlot(null); setGridType("ml"); setGridPropSub("all"); setScreen("browser"); }}
+         <div onClick={()=>{ setBuildingSlip(true); setGridTargetSlot(null); setGridType("ml"); setGridPropSub("all"); openBrowser(); }}
            style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"15px 8px",fontSize:13.5,fontWeight:800,cursor:"pointer",color:IOS.blue,borderRight:"1px dashed rgba(var(--ink-rgb),0.16)"}}>
            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.3" strokeLinecap="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
            Browse games
@@ -16980,7 +17015,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
              : "Loading today's board\u2026";
            return (
            <div style={{padding:"20px 16px 18px"}}>
-             <div onClick={()=>{ setBuildingSlip(true); setGridTargetSlot(null); setGridType("ml"); setGridPropSub("all"); setScreen("browser"); }}
+             <div onClick={()=>{ setBuildingSlip(true); setGridTargetSlot(null); setGridType("ml"); setGridPropSub("all"); openBrowser(); }}
                style={{display:"flex",alignItems:"center",gap:13,padding:"16px 15px",borderRadius:13,cursor:"pointer",
                  background:"linear-gradient(120deg,var(--accent-ios),var(--violet))",boxShadow:"0 12px 30px -12px rgba(var(--accent-ios-rgb),0.85)"}}>
                <div style={{width:38,height:38,borderRadius:11,background:"rgba(var(--ink-rgb),0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
@@ -17023,7 +17058,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
            <span style={{fontSize:9,fontWeight:800,letterSpacing:"0.14em",textTransform:"uppercase",color:IOS.label3}}>Add picks</span>
          </div>
          <div style={{display:"flex"}}>
-           <div onClick={()=>{ setBuildingSlip(true); setGridTargetSlot(null); setGridType("ml"); setGridPropSub("all"); setScreen("browser"); }}
+           <div onClick={()=>{ setBuildingSlip(true); setGridTargetSlot(null); setGridType("ml"); setGridPropSub("all"); openBrowser(); }}
              style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"15px 8px",fontSize:13.5,fontWeight:800,cursor:"pointer",color:IOS.blue,borderRight:"1px dashed rgba(var(--ink-rgb),0.16)"}}>
              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.3" strokeLinecap="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
              Browse games
@@ -17099,7 +17134,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
              <span style={{fontSize:8.5,fontWeight:800,textTransform:"uppercase",color:IOS.label3,flexShrink:0}}>Multiplier</span>
              {[1,2,3,4,5].map(m=>{ const on=(soloParlay.mult||2)===m; return (<div key={m} onClick={()=>setSoloParlay(pv=>({...pv,mult:m}))} style={{flex:1,textAlign:"center",padding:"5px 0",borderRadius:RAD.sm,fontSize:11,fontWeight:800,cursor:"pointer",background:on?"rgba(var(--longshot-rgb),0.18)":"rgba(var(--ink-rgb),0.04)",border:"1px solid "+(on?IOS.pink:"rgba(var(--ink-rgb),0.08)"),color:on?IOS.pink:"rgba(var(--ink-rgb),0.4)"}}>{m+"x"}</div>); })}
            </div>
-           <button onClick={()=>{ setSoloParlayMode(true); setBuildingSlip(true); setGridTargetSlot(null); setGridPropSub("all"); setGridType("ml"); setScreen("browser"); }} style={{width:"100%",background:"rgba(var(--ink-rgb),0.06)",border:EDGE.hair3,borderRadius:RAD.md,padding:"12px",fontSize:14,fontWeight:800,color:"var(--text)",cursor:"pointer",marginBottom:8,fontFamily:"Barlow,sans-serif"}}>{legs.length?("Add more legs ("+legs.length+"/6)"):"Add legs"}</button>
+           <button onClick={()=>{ setSoloParlayMode(true); setBuildingSlip(true); setGridTargetSlot(null); setGridPropSub("all"); setGridType("ml"); openBrowser(); }} style={{width:"100%",background:"rgba(var(--ink-rgb),0.06)",border:EDGE.hair3,borderRadius:RAD.md,padding:"12px",fontSize:14,fontWeight:800,color:"var(--text)",cursor:"pointer",marginBottom:8,fontFamily:"Barlow,sans-serif"}}>{legs.length?("Add more legs ("+legs.length+"/6)"):"Add legs"}</button>
            <button onClick={addToSlip} disabled={legs.length<2} style={{width:"100%",background:legs.length<2?IOS.bg3:IOS.pink,border:"none",borderRadius:RAD.md,padding:"13px",fontSize:15,fontWeight:800,color:legs.length<2?IOS.label3:"var(--text)",cursor:legs.length<2?"default":"pointer",fontFamily:"Barlow,sans-serif"}}>{legs.length<2?"Add at least 2 legs":"Add parlay to slip"}</button>
            <button onClick={()=>{ setSoloParlay(null); setSoloParlayMode(false); }} style={{width:"100%",background:"transparent",border:"none",color:IOS.label3,fontSize:13,fontWeight:700,cursor:"pointer",marginTop:10,fontFamily:"Barlow,sans-serif"}}>Cancel</button>
          </div>
@@ -17446,7 +17481,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    </div>
    );
    })()}
- {screen==="browser"&&(()=>{ if(!_lgReady){ return leagueLoadingBody; } if(seasonNotStarted){ return notStartedBody; }
+ {(screen==="browser"||browserSheet)&&(()=>{
+   const _bbSheet = browserSheet && screen!=="browser";
+ const _bbInner = (()=>{ if(!_lgReady){ return leagueLoadingBody; } if(seasonNotStarted){ return notStartedBody; }
  const activePicks = isSoloMode ? soloFlexPicks : flexPicks;
  const setActivePicks = isSoloMode ? setSoloFlexPicks : setFlexPicks;
 
@@ -19597,6 +19634,11 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  })()}
  </div>
  );
+ })();
+ return _bbSheet ? (
+   <div className="bb-scrim" onClick={closeBrowserSheet}>
+     <div className="pk-sheet bb-sheet" onClick={(e)=>e.stopPropagation()}>{_bbInner}</div>
+   </div>) : _bbInner;
  })()
  }
 
@@ -20105,7 +20147,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div style={{padding:"0 10px 8px"}}>
  {matchRows.map(row=>{ const _t=row.type; const _c=_t?(catColors[_t]||IOS.blue):IOS.blue; const _sh=_t?(SLOT_SHORT[_t]||_t.toUpperCase()):null; return (
  <div key={row.key} style={{display:"grid",gridTemplateColumns:"1fr 34px 1fr",gap:4,marginBottom:5,alignItems:"start"}}>
- {renderCard(row.mine, true, "mexp-my-"+row.key, _t, row.mode==="slot", (()=>{ const sp=savedPicks?.flexPicks; if(sp) setFlexPicks(sp); setSavedPicks(null); setSubmitted(false); setBuildingSlip(true); if(row.mode==="slot"){ setGridTargetSlot(row.idx); setGridType(_t||"ml"); setGridPropSub("all"); setScreen("browser"); } else { setScreen("picks"); } }))}
+ {renderCard(row.mine, true, "mexp-my-"+row.key, _t, row.mode==="slot", (()=>{ const sp=savedPicks?.flexPicks; if(sp) setFlexPicks(sp); setSavedPicks(null); setSubmitted(false); setBuildingSlip(true); if(row.mode==="slot"){ setGridTargetSlot(row.idx); setGridType(_t||"ml"); setGridPropSub("all"); openBrowser(); } else { setScreen("picks"); } }))}
  <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",paddingTop:20,gap:3}}>
  {row.mode==="slot"
  ? <div style={{width:26,height:26,borderRadius:RAD.sm,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:800,background:"rgba(var(--ink-rgb),0.05)",border:EDGE.hair,color:"var(--text3)"}}>{_sh||"?"}</div>
@@ -24362,7 +24404,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    </div>
    ))}
    </div>
-   <div onClick={()=>{ setGameSheet(null); setBuildingSlip(true); setGridTargetSlot(null); setGridType("prop"); setGridPropSub("all"); setGridSearch(((tg&&tg.away)||away||"")); setScreen("browser"); }}
+   <div onClick={()=>{ setGameSheet(null); setBuildingSlip(true); setGridTargetSlot(null); setGridType("prop"); setGridPropSub("all"); setGridSearch(((tg&&tg.away)||away||"")); openBrowser(); }}
      style={{display:"flex",alignItems:"center",gap:10,marginTop:9,padding:"12px 14px",borderRadius:RAD.lg,cursor:"pointer",
        background:"rgba(var(--accent-ios-rgb),0.09)",border:"1px solid rgba(var(--accent-ios-rgb),0.32)"}}>
      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.3" strokeLinecap="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
@@ -24393,7 +24435,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 {gcTab==="od" && (<>
    {/* Footer CTA */}
    <div style={{padding:"16px 16px calc(20px + var(--sa-bot))"}}>
-   <div onClick={()=>{ setGameSheet(null); setBuildingSlip(true); setGridTargetSlot(null); setGridType("ml"); setGridPropSub("all"); setGridSearch(((tg&&tg.away)||away||"")); setScreen("browser"); }} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"linear-gradient(135deg,"+IOS.blue+",var(--violet))",borderRadius:RAD.lg,padding:14,fontWeight:800,fontSize:15,color:"var(--text)",cursor:"pointer",boxShadow:"0 10px 26px -8px rgba(var(--accent-ios-rgb),0.6)"}}>
+   <div onClick={()=>{ setGameSheet(null); setBuildingSlip(true); setGridTargetSlot(null); setGridType("ml"); setGridPropSub("all"); setGridSearch(((tg&&tg.away)||away||"")); openBrowser(); }} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"linear-gradient(135deg,"+IOS.blue+",var(--violet))",borderRadius:RAD.lg,padding:14,fontWeight:800,fontSize:15,color:"var(--text)",cursor:"pointer",boxShadow:"0 10px 26px -8px rgba(var(--accent-ios-rgb),0.6)"}}>
    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text)" strokeWidth="2.2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg> Add a pick from this game
    </div>
    </div>
