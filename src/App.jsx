@@ -12172,7 +12172,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  .gh-left{display:flex;align-items:center;min-width:0;flex-shrink:0;}
  .gh-center{flex:1;min-width:0;}
  .gh-right{display:flex;align-items:center;gap:9px;flex-shrink:0;}
- .gh-switch{display:flex;align-items:center;gap:6px;background:rgba(var(--accent-ios-rgb),0.12);border:0.5px solid rgba(var(--accent-ios-rgb),0.32);border-radius:10px;padding:7px 11px;cursor:pointer;max-width:200px;}
+ .gh-switch{display:flex;align-items:center;gap:6px;background:rgba(var(--accent-ios-rgb),0.12);border:0.5px solid rgba(var(--accent-ios-rgb),0.32);border-radius:10px;padding:7px 11px;cursor:pointer;max-width:150px;}
  .gh-switch.solo{background:rgba(var(--longshot-rgb),0.12);border-color:rgba(var(--longshot-rgb),0.32);}
  .gh-nm{font-size:13px;font-weight:700;color:var(--chip-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
  .gh-switch.solo .gh-nm{color:var(--chip-ink-solo);}
@@ -14032,6 +14032,16 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div className="gh-center"></div>
  <div className="gh-right">
             <div onClick={()=>{ if(!isPro){setShowPaywall("ai");return;} setScreen("ai"); }} aria-label="Plok" style={{display:"inline-flex",alignItems:"center",gap:5,height:34,padding:"0 11px",borderRadius:RAD.lg,background:`${fade(IOS.blue,0.122)}`,border:`1px solid ${fade(IOS.blue,0.227)}`,cursor:"pointer"}}><svg width="15" height="15" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg><span style={{fontSize:13,fontWeight:800,color:IOS.blue,letterSpacing:"-0.2px"}}>Plok</span></div>
+ {/* Global rank was a full-width card on Home carrying a single number. It is a
+     destination, not a widget, so it is an icon now: a podium, 1-2-3. .gh-icon
+     supplies the 44pt hit area and the themed fill. */}
+ <div className="gh-icon" onClick={()=>{ fetchLeaderboard("all"); setScreen("leaderboard"); }} aria-label="Global leaderboard">
+   <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--text)" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+     <rect x="9.5" y="4" width="5" height="16" rx="1"/>
+     <rect x="3" y="10" width="5" height="10" rx="1"/>
+     <rect x="16" y="13" width="5" height="7" rx="1"/>
+   </svg>
+ </div>
  {!isSoloMode && <div className="gh-icon" onClick={()=>setScreen("chat")}>
  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--text)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
  {unreadByLeague[activeLeagueId]>0 && <span className="gh-badge">{unreadByLeague[activeLeagueId]>9?"9+":unreadByLeague[activeLeagueId]}</span>}
@@ -14182,12 +14192,6 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
              </div>
              );
            })()}
- {(()=>{ const rows=lbCache["all"]; let rk=null,total=0; if(rows&&rows.length){ const sx=[...rows].sort((a,b)=>(Number(b.points)||0)-(Number(a.points)||0)); total=sx.length; const i=sx.findIndex(r=>String(r.user_id)===String(user?.id)); if(i>=0) rk=i+1; } const pct=(rk&&total)?Math.max(1,Math.round(rk/total*100)):null; return (
-           <div onClick={()=>{ fetchLeaderboard("all"); setScreen("leaderboard"); }} style={{display:"flex",alignItems:"center",gap:12,background:"linear-gradient(135deg,rgba(var(--accent-ios-rgb),0.12),rgba(var(--violet-rgb),0.05))",border:"0.5px solid rgba(var(--accent-ios-rgb),0.28)",borderRadius:RAD.lg,padding:"12px 14px",marginBottom:12,cursor:"pointer"}}>
-             <div style={{width:36,height:36,borderRadius:RAD.md,background:"rgba(var(--accent-ios-rgb),0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--accent-ios)" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M8 21V10M16 21V3M4 21v-6"/></svg></div>
-             <div style={{flex:1,minWidth:0}}><div style={{fontSize:9.5,fontWeight:800,letterSpacing:0.5,textTransform:"uppercase",color:"var(--text25)"}}>Global rank</div><div style={{fontSize:15,fontWeight:800,color:"var(--text)",marginTop:1}}>{rk?("#"+rk+(pct?(" · top "+pct+"%"):"")):"See where you rank"}</div></div>
-             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(var(--ink-rgb),0.4)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
-           </div>); })()}
            {(() => {
  const now = new Date();
  const _ls = activeLeague?.sports||(activeLeague?.sport?[activeLeague.sport]:[]);
