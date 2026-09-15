@@ -1464,7 +1464,7 @@ const Skel = ({w="100%",h=12,r=6,style,className}) => (<div className={"pk-sk"+(
 // Varied widths so a list of placeholders reads organic instead of ruled.
 const SK_W  = ["62%","48%","70%","55%","44%","66%"];
 const SK_W2 = ["34%","42%","28%","38%","30%","36%"];
-const SK_CARD = {background:"#131318",border:EDGE.hair,borderRadius:RAD.lg};
+const SK_CARD = {background:"var(--s2)",border:EDGE.hair,borderRadius:RAD.lg};
 
 // Row list — leaderboard, leagues, browse, past matchup, gamecast stats, lineup.
 const SkelRows = ({n=5,avatar=true,trail=true,sub=true,card=false,pad="0 16px"}) => (
@@ -1620,7 +1620,7 @@ function GameCard({ g, gi, prevTime: _prevTime, sportKey: _sportKey, sportOdds: 
     <div style={{fontSize:10.5,fontWeight:700,color:"rgba(var(--ink-rgb),0.28)",whiteSpace:"nowrap"}}>{new Date(g.time).toLocaleDateString([],{month:"short",day:"numeric"})}</div>
    </div>
   )}
-  <div onClick={()=>_onOpen({ g, away, home, espn, isLive, gameTime, odds:{ml:mlOdds,spread:spreadOdds,ou:ouOdds} })} style={{margin:"0 16px 10px",position:"relative",background:"#131318",borderRadius:RAD.lg,overflow:"hidden",cursor:"pointer",border:hasPick?"0.5px solid rgba(10,132,255,0.35)":"0.5px solid rgba(var(--ink-rgb),0.07)"}}>
+  <div onClick={()=>_onOpen({ g, away, home, espn, isLive, gameTime, odds:{ml:mlOdds,spread:spreadOdds,ou:ouOdds} })} style={{margin:"0 16px 10px",position:"relative",background:"var(--s2)",borderRadius:RAD.lg,overflow:"hidden",cursor:"pointer",border:hasPick?"0.5px solid rgba(10,132,255,0.35)":"0.5px solid rgba(var(--ink-rgb),0.07)"}}>
  <div style={{position:"absolute",inset:0,pointerEvents:"none",opacity:0.12,background:`linear-gradient(105deg,${_gAc} 0%,transparent 38%,transparent 62%,${_gHc} 100%)`}}/>
  <div style={{position:"relative",padding:"12px 14px 13px"}}>
  {/* header: time / live inning / final — MY PICK right */}
@@ -1714,7 +1714,7 @@ function HelpContent({onLegal, email, version, native}){
  const [open, setOpen] = useState(null);
  const diag = "PickLock "+version+" \nPlatform: "+(native?"iOS native":"web")+"\nAccount: "+(email||"not signed in");
  const SEC = (t)=>(<div style={{fontSize:10,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:IOS.label3,margin:"20px 0 8px"}}>{t}</div>);
- const CARD = {background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.md,overflow:"hidden"};
+ const CARD = {background:"linear-gradient(160deg,var(--s2),var(--s1) 80%)",border:EDGE.hair,borderRadius:RAD.md,overflow:"hidden"};
  const mailTo = (subject)=>{ try{ window.location.href = "mailto:"+SUPPORT_EMAIL+"?subject="+encodeURIComponent(subject)+"&body="+encodeURIComponent("\n\n\u2014\n"+diag); }catch(e){} };
  const ROW = (label, sub, onClick)=>(
   <div onClick={onClick} style={{display:"flex",alignItems:"center",gap:12,padding:"13px 14px",borderBottom:`0.5px solid ${IOS.sep}`,cursor:"pointer"}}>
@@ -1802,7 +1802,7 @@ function ProfileSheet({view, data, loading, onClose, myId, globalRank, onReport,
  const SEC = (t)=>(<div style={{fontSize:10,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:IOS.label3,margin:"18px 0 8px"}}>{t}</div>);
  return (
  <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:70,background:"rgba(0,0,0,0.55)",display:"flex",alignItems:"flex-end"}}>
- <div className="pk-sheet" onClick={(e)=>e.stopPropagation()} style={{position:"relative",width:"100%",maxWidth:480,margin:"0 auto",background:"#131316",maxHeight:"86%",overflowY:"auto",WebkitOverflowScrolling:"touch",overscrollBehavior:"contain",padding:"9px 16px calc(var(--sa-bot) + 22px)"}}>
+ <div className="pk-sheet" onClick={(e)=>e.stopPropagation()} style={{position:"relative",width:"100%",maxWidth:480,margin:"0 auto",background:"var(--s2)",maxHeight:"86%",overflowY:"auto",WebkitOverflowScrolling:"touch",overscrollBehavior:"contain",padding:"9px 16px calc(var(--sa-bot) + 22px)"}}>
  <div style={{width:36,height:5,borderRadius:3,background:"rgba(var(--ink-rgb),0.18)",margin:"0 auto 4px"}}/>
  {(loading&&!data) ? (
  <SkelGroup>
@@ -1830,7 +1830,7 @@ function ProfileSheet({view, data, loading, onClose, myId, globalRank, onReport,
  </div>
  {stats&&graded>0&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:7,marginTop:16}}>
  {[[pts.toLocaleString(),"Points"],[wins+"-"+losses,"Record"],[hit+"%","Hit rate"],[lsPts.toLocaleString(),"Longshot pts"]].map(([v,l])=>(
- <div key={l} style={{background:"linear-gradient(165deg,#1a1a1f,#141417)",border:EDGE.hair,borderRadius:RAD.md,padding:"10px 4px 9px",textAlign:"center"}}>
+ <div key={l} style={{background:"linear-gradient(165deg,var(--s3),var(--s2))",border:EDGE.hair,borderRadius:RAD.md,padding:"10px 4px 9px",textAlign:"center"}}>
  <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:20,lineHeight:1}}>{v}</div>
  <div style={{fontSize:9,fontWeight:800,letterSpacing:"0.5px",textTransform:"uppercase",color:IOS.label3,marginTop:5}}>{l}</div>
  </div>
@@ -1848,7 +1848,7 @@ function ProfileSheet({view, data, loading, onClose, myId, globalRank, onReport,
  {SEC("Badges \u00b7 "+badges.length)}
  <div style={{display:"flex",gap:8,overflowX:"auto",margin:"0 -16px",padding:"0 16px 4px"}}>
  {badges.map(b=>(
- <div key={b.id} style={{flexShrink:0,width:104,borderRadius:RAD.lg,padding:"12px 10px 11px",display:"flex",flexDirection:"column",alignItems:"center",textAlign:"center",background:"linear-gradient(165deg,#1a1a1f,#141417)",border:EDGE.hair}}>
+ <div key={b.id} style={{flexShrink:0,width:104,borderRadius:RAD.lg,padding:"12px 10px 11px",display:"flex",flexDirection:"column",alignItems:"center",textAlign:"center",background:"linear-gradient(165deg,var(--s3),var(--s2))",border:EDGE.hair}}>
  <div style={{width:38,height:38,borderRadius:"50%",background:fade(b.color,0.129),border:"0.5px solid "+fade(b.color,0.349),display:"flex",alignItems:"center",justifyContent:"center",marginBottom:8}}>{PROF_BIC[b.icon](b.color)}</div>
  <div style={{fontSize:11,fontWeight:800,lineHeight:1.25}}>{b.name}</div>
  <div style={{fontSize:9,fontWeight:700,color:IOS.label3,marginTop:3}}>{b.sub}</div>
@@ -1858,7 +1858,7 @@ function ProfileSheet({view, data, loading, onClose, myId, globalRank, onReport,
  </>}
  {h2h&&!isMe&&<>
  {SEC("Head to head vs you")}
- <div style={{background:"linear-gradient(135deg,rgba(59,111,224,0.10),#151519)",border:"0.5px solid rgba(59,111,224,0.3)",borderRadius:RAD.lg,padding:"13px 14px"}}>
+ <div style={{background:"linear-gradient(135deg,rgba(59,111,224,0.10),var(--s2))",border:"0.5px solid rgba(59,111,224,0.3)",borderRadius:RAD.lg,padding:"13px 14px"}}>
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
  <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,width:84}}>
  <div style={{fontSize:10.5,fontWeight:800,color:IOS.label2}}>YOU</div>
@@ -1876,7 +1876,7 @@ function ProfileSheet({view, data, loading, onClose, myId, globalRank, onReport,
  {shared.length>0&&<>
  {SEC(isMe?"Leagues":("Leagues with you \u00b7 "+shared.length))}
  {shared.map(l=>(
- <div key={l.id} style={{display:"flex",alignItems:"center",gap:11,padding:"10px 12px",borderRadius:RAD.md,marginBottom:6,background:"linear-gradient(165deg,#1a1a1f,#141417)",border:EDGE.hair}}>
+ <div key={l.id} style={{display:"flex",alignItems:"center",gap:11,padding:"10px 12px",borderRadius:RAD.md,marginBottom:6,background:"linear-gradient(165deg,var(--s3),var(--s2))",border:EDGE.hair}}>
  <div style={{width:34,height:34,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:13,flexShrink:0,background:"rgba(59,111,224,0.14)",border:"0.5px solid rgba(59,111,224,0.35)",color:"#7EA4F2"}}>{String(l.name||"?").slice(0,2).toUpperCase()}</div>
  <div style={{flex:1,minWidth:0}}>
  <div style={{fontSize:13,fontWeight:800,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.name}{l.is_champ?<span style={{color:IOS.yellow,fontSize:10,fontWeight:900,letterSpacing:"0.5px",marginLeft:6}}>CHAMP</span>:null}</div>
@@ -2221,7 +2221,7 @@ function Confetti({ show }){
     if(!show||!ref.current) return;
     const cv=ref.current, ctx=cv.getContext("2d");
     const W=cv.width=cv.offsetWidth||window.innerWidth, H=cv.height=cv.offsetHeight||window.innerHeight;
-    const colors=["var(--accent-ios)","var(--win)","var(--yellow)","var(--longshot)","var(--purple)","var(--cyan)"];
+    const colors=["#0A84FF","#30D158","#FFD60A","#FF375F","#BF5AF2","#64D2FF"];
     const parts=[];
     for(let i=0;i<100;i++) parts.push({x:W/2+(Math.random()-.5)*140, y:H*0.30, vx:(Math.random()-.5)*10, vy:Math.random()*-10-3, g:0.30+Math.random()*0.12, w:5+Math.random()*5, c:colors[i%colors.length], rot:Math.random()*6.28, vr:(Math.random()-.5)*.5});
     let raf, t0=performance.now();
@@ -2247,30 +2247,30 @@ function pcDrawCard(data){
   x.lineWidth=4; x.strokeStyle=AC; rr(7,7,W-14,H-14,38); x.stroke();
   x.textBaseline="top"; x.textAlign="left";
   x.fillStyle="#fff"; x.font="900 118px Barlow, system-ui, sans-serif"; x.fillText(String(data.ovr),46,34);
-  x.fillStyle="rgba(var(--ink-rgb),.85)"; x.font="800 22px Barlow, system-ui, sans-serif"; x.fillText("OVR",54,160);
+  x.fillStyle="rgba(255,255,255,.85)"; x.font="800 22px Barlow, system-ui, sans-serif"; x.fillText("OVR",54,160);
   x.textAlign="right"; x.fillStyle=AC; x.font="900 22px Barlow, system-ui, sans-serif"; x.fillText((data.tier||"").toUpperCase(),W-50,54);
   x.font="800 24px Barlow, system-ui, sans-serif"; x.fillText((data.arch||"").toUpperCase(),W-50,92);
-  x.beginPath(); x.arc(W/2,326,94,0,Math.PI*2); x.fillStyle="rgba(var(--ink-rgb),.1)"; x.fill(); x.lineWidth=2; x.strokeStyle="rgba(var(--ink-rgb),.3)"; x.stroke();
+  x.beginPath(); x.arc(W/2,326,94,0,Math.PI*2); x.fillStyle="rgba(255,255,255,.1)"; x.fill(); x.lineWidth=2; x.strokeStyle="rgba(255,255,255,.3)"; x.stroke();
   x.fillStyle="#fff"; x.textAlign="center"; x.font="900 74px Barlow, system-ui, sans-serif"; x.fillText(data.initials,W/2,290);
   x.font="900 48px Barlow, system-ui, sans-serif"; x.fillText((data.name||"").toUpperCase(),W/2,448);
-  x.fillStyle="rgba(var(--ink-rgb),.25)"; x.fillRect(82,532,W-164,2);
-  const stat=(lbl,val,cx)=>{ x.fillStyle="#fff"; x.font="900 38px Barlow, system-ui, sans-serif"; x.fillText(String(val),cx,560); x.fillStyle="rgba(var(--ink-rgb),.6)"; x.font="800 17px Barlow, system-ui, sans-serif"; x.fillText(lbl.toUpperCase(),cx,610); };
+  x.fillStyle="rgba(255,255,255,.25)"; x.fillRect(82,532,W-164,2);
+  const stat=(lbl,val,cx)=>{ x.fillStyle="#fff"; x.font="900 38px Barlow, system-ui, sans-serif"; x.fillText(String(val),cx,560); x.fillStyle="rgba(255,255,255,.6)"; x.font="800 17px Barlow, system-ui, sans-serif"; x.fillText(lbl.toUpperCase(),cx,610); };
   stat("Record",data.record,158); stat("Streak",(data.streak.count||0)+(data.streak.type||"W"),300); stat("Win",data.winPct,442);
-  x.textAlign="left"; x.fillStyle="rgba(var(--ink-rgb),.6)"; x.font="800 20px Barlow, system-ui, sans-serif"; x.fillText(data.serial,48,H-54);
+  x.textAlign="left"; x.fillStyle="rgba(255,255,255,.6)"; x.font="800 20px Barlow, system-ui, sans-serif"; x.fillText(data.serial,48,H-54);
   x.textAlign="right"; x.fillText("PICKLOCK · 2026 S1",W-48,H-54);
   return c;
 }
 function drawSlipCard(data){
   const W=600,H=900,c=document.createElement("canvas");c.width=W;c.height=H;
   const x=c.getContext("2d"); const P=44;
-  const BLUE="var(--accent-ios)",GREEN="var(--win)",RED="var(--loss)";
-  const TCOL={ml:"var(--accent-ios)",prop:"var(--yellow)",ou:"var(--live)",spread:"var(--win)",longshot:"var(--longshot)"};
+  const BLUE="#0A84FF",GREEN="#30D158",RED="#FF453A";
+  const TCOL={ml:"#0A84FF",prop:"#FFD60A",ou:"#FF9F0A",spread:"#30D158",longshot:"#FF375F"};
   const rr=(a,b,w,h,r)=>{ if(x.roundRect){x.beginPath();x.roundRect(a,b,w,h,r);} else {x.beginPath();x.moveTo(a+r,b);x.arcTo(a+w,b,a+w,b+h,r);x.arcTo(a+w,b+h,a,b+h,r);x.arcTo(a,b+h,a,b,r);x.arcTo(a,b,a+w,b,r);x.closePath();} };
   const hex=(h,a)=>{ const n=parseInt(h.slice(1),16); return "rgba("+((n>>16)&255)+","+((n>>8)&255)+","+(n&255)+","+a+")"; };
   const ell=(t,max)=>{ t=String(t||""); if(x.measureText(t).width<=max) return t; while(t.length>1 && x.measureText(t+"…").width>max) t=t.slice(0,-1); return t+"…"; };
   const g=x.createLinearGradient(0,0,W,H); g.addColorStop(0,"#12141b"); g.addColorStop(.62,"#0a0a0d"); g.addColorStop(1,"#0b0d12");
   rr(0,0,W,H,44); x.fillStyle=g; x.fill();
-  x.lineWidth=2; x.strokeStyle="rgba(var(--ink-rgb),.09)"; rr(6,6,W-12,H-12,40); x.stroke();
+  x.lineWidth=2; x.strokeStyle="rgba(255,255,255,.09)"; rr(6,6,W-12,H-12,40); x.stroke();
   const rad=x.createRadialGradient(W-120,80,10,W-120,80,250); rad.addColorStop(0,hex(BLUE,.26)); rad.addColorStop(1,"rgba(0,0,0,0)"); x.fillStyle=rad; x.fillRect(0,0,W,340);
   const tl=x.createLinearGradient(P,0,W-P,0); tl.addColorStop(0,"rgba(10,132,255,0)"); tl.addColorStop(.5,BLUE); tl.addColorStop(1,"rgba(10,132,255,0)"); x.fillStyle=tl; x.fillRect(P,0,W-2*P,4);
   x.textBaseline="alphabetic";
@@ -2278,22 +2278,22 @@ function drawSlipCard(data){
   x.strokeStyle="#fff"; x.lineWidth=2.4; x.lineCap="round"; rr(P+8,60,14,10,2.5); x.stroke(); x.beginPath(); x.arc(P+15,60,4.4,Math.PI,0); x.stroke();
   x.fillStyle="#fff"; x.textAlign="left"; x.font="900 24px Barlow, system-ui, sans-serif"; x.fillText("PICKLOCK",P+40,67);
   x.font="800 15px Barlow, system-ui, sans-serif"; const wkT=("WEEK "+data.week).toUpperCase(); const wkW=x.measureText(wkT).width;
-  rr(W-P-wkW-24,46,wkW+24,28,14); x.strokeStyle="rgba(var(--ink-rgb),.18)"; x.lineWidth=1.5; x.stroke(); x.fillStyle="rgba(var(--ink-rgb),.6)"; x.textAlign="center"; x.fillText(wkT,W-P-(wkW+24)/2,65);
+  rr(W-P-wkW-24,46,wkW+24,28,14); x.strokeStyle="rgba(255,255,255,.18)"; x.lineWidth=1.5; x.stroke(); x.fillStyle="rgba(255,255,255,.6)"; x.textAlign="center"; x.fillText(wkT,W-P-(wkW+24)/2,65);
   x.textAlign="left"; x.fillStyle="#fff"; x.font="800 40px 'Barlow Semi Condensed', Barlow, sans-serif"; x.fillText(ell(String(data.league||"").toUpperCase(),W-2*P),P,150);
   x.font="700 20px Barlow, system-ui, sans-serif"; x.fillStyle=BLUE; const handle="@"+String(data.handle||"you"); x.fillText(handle,P,188); const hW=x.measureText(handle).width;
   x.font="800 13px Barlow, system-ui, sans-serif"; const chT="LOCKED IN"; const chW=x.measureText(chT).width; const chX=P+hW+16;
   rr(chX,170,chW+40,24,12); x.fillStyle=hex(GREEN,.14); x.fill(); x.strokeStyle=hex(GREEN,.4); x.lineWidth=1; x.stroke();
   x.strokeStyle=GREEN; x.lineWidth=2; rr(chX+12,180,9,7,2); x.stroke(); x.beginPath(); x.arc(chX+16.5,180,3,Math.PI,0); x.stroke();
   x.fillStyle=GREEN; x.textAlign="left"; x.fillText(chT,chX+28,188);
-  const dv=x.createLinearGradient(P,0,W-P,0); dv.addColorStop(0,"rgba(var(--ink-rgb),0)"); dv.addColorStop(.5,"rgba(var(--ink-rgb),.14)"); dv.addColorStop(1,"rgba(var(--ink-rgb),0)"); x.fillStyle=dv; x.fillRect(P,214,W-2*P,1.5);
+  const dv=x.createLinearGradient(P,0,W-P,0); dv.addColorStop(0,"rgba(255,255,255,0)"); dv.addColorStop(.5,"rgba(255,255,255,.14)"); dv.addColorStop(1,"rgba(255,255,255,0)"); x.fillStyle=dv; x.fillRect(P,214,W-2*P,1.5);
   const picks=data.picks||[]; const n=Math.max(1,picks.length); const hasCombo=!!data.comboOdds;
   const areaTop=238, areaBot=hasCombo?770:840, gap=12;
   const rowH=Math.max(60,Math.min(150,(areaBot-areaTop-gap*(n-1))/n));
   picks.forEach((p,i)=>{
     const y=areaTop+i*(rowH+gap); const col=TCOL[p.type]||BLUE;
     const won=p.result==="W",lost=p.result==="L"; const strip=won?GREEN:lost?RED:col;
-    rr(P,y,W-2*P,rowH,16); x.fillStyle="rgba(var(--ink-rgb),.045)"; x.fill();
-    x.strokeStyle=won?hex(GREEN,.5):lost?hex(RED,.5):"rgba(var(--ink-rgb),.08)"; x.lineWidth=1; x.stroke();
+    rr(P,y,W-2*P,rowH,16); x.fillStyle="rgba(255,255,255,.045)"; x.fill();
+    x.strokeStyle=won?hex(GREEN,.5):lost?hex(RED,.5):"rgba(255,255,255,.08)"; x.lineWidth=1; x.stroke();
     rr(P,y,5,rowH,3); x.fillStyle=strip; x.fill();
     const padL=P+22,padR=W-P-20; const chipS=Math.min(40,rowH*0.44);
     rr(padL,y+16,chipS,chipS,11); x.fillStyle=hex(col,.15); x.fill();
@@ -2301,12 +2301,12 @@ function drawSlipCard(data){
     x.textAlign="left"; x.fillStyle=col; x.font="800 13px Barlow, system-ui, sans-serif"; x.fillText(String(p.typeLabel||"").toUpperCase(),padL+chipS+14,y+32);
     const oc=String(p.odds||"").trim().charAt(0)==="+"?GREEN:BLUE; x.textAlign="right"; x.fillStyle=won?GREEN:lost?RED:oc; x.font="800 22px 'Barlow Semi Condensed',Barlow,sans-serif"; x.fillText(won?"WON":lost?"LOST":String(p.odds||""),padR,y+36);
     x.textAlign="left"; x.fillStyle="#fff"; x.font="800 19px Barlow, system-ui, sans-serif"; x.fillText(ell(p.name,padR-(padL+chipS+14)),padL+chipS+14,y+56);
-    if(rowH>=76){ x.fillStyle="rgba(var(--ink-rgb),.4)"; x.font="500 13px Barlow, system-ui, sans-serif"; x.fillText(ell(p.game,padR-(padL+chipS+14)),padL+chipS+14,y+76); }
+    if(rowH>=76){ x.fillStyle="rgba(255,255,255,.4)"; x.font="500 13px Barlow, system-ui, sans-serif"; x.fillText(ell(p.game,padR-(padL+chipS+14)),padL+chipS+14,y+76); }
   });
   if(hasCombo){ const cy=786; rr(P,cy,W-2*P,54,14); x.fillStyle="rgba(10,132,255,.1)"; x.fill(); x.strokeStyle=hex(BLUE,.3); x.lineWidth=1; x.stroke();
-    x.textAlign="left"; x.fillStyle="rgba(var(--ink-rgb),.55)"; x.font="800 14px Barlow, system-ui, sans-serif"; x.fillText("IF IT ALL HITS",P+20,cy+33);
+    x.textAlign="left"; x.fillStyle="rgba(255,255,255,.55)"; x.font="800 14px Barlow, system-ui, sans-serif"; x.fillText("IF IT ALL HITS",P+20,cy+33);
     x.textAlign="right"; x.fillStyle=BLUE; x.font="900 30px 'Barlow Semi Condensed',Barlow,sans-serif"; x.fillText(String(data.comboOdds),W-P-20,cy+37); }
-  x.textAlign="left"; x.fillStyle="rgba(var(--ink-rgb),.5)"; x.font="700 16px Barlow, system-ui, sans-serif"; x.fillText("Think you can beat it?",P,874);
+  x.textAlign="left"; x.fillStyle="rgba(255,255,255,.5)"; x.font="700 16px Barlow, system-ui, sans-serif"; x.fillText("Think you can beat it?",P,874);
   x.textAlign="right"; x.fillStyle=BLUE; x.font="800 16px Barlow, system-ui, sans-serif"; x.fillText("picklockapp.com",W-P,874);
   return c;
 }
@@ -2514,15 +2514,15 @@ function wrecSuperlative(picks, wr, stats){
   const streak = (stats&&stats.currentStreak&&stats.currentStreak.type==="W") ? stats.currentStreak.count : 0;
   const avgMult = total ? picks.reduce((a,p)=>a+(parseFloat(p.multiplier)||1),0)/total : 1;
   const T=(title,desc,emblem,color)=>({title,desc,emblem,color});
-  if(total>=3 && lost.length===0) return T("Perfect Week","Flawless. "+won.length+"-0 on the week.",WREC_EMB.trophy,"var(--yellow)");
-  if(lsHits>=2) return T("Longshot Legend","You cashed "+lsHits+" longshots at +400 or better.",WREC_EMB.rocket,"var(--purple)");
-  if(wr&&wr.won&&margin>0&&margin<=8) return T("The Closer","You took it by "+margin.toFixed(1)+" in the clutch.",WREC_EMB.bolt,"var(--accent-ios)");
-  if(total>=4 && winRate>=0.75) return T("Sharpshooter",Math.round(winRate*100)+"% of your picks cashed.",WREC_EMB.target,"var(--win)");
+  if(total>=3 && lost.length===0) return T("Perfect Week","Flawless. "+won.length+"-0 on the week.",WREC_EMB.trophy,"#FFD60A");
+  if(lsHits>=2) return T("Longshot Legend","You cashed "+lsHits+" longshots at +400 or better.",WREC_EMB.rocket,"#BF5AF2");
+  if(wr&&wr.won&&margin>0&&margin<=8) return T("The Closer","You took it by "+margin.toFixed(1)+" in the clutch.",WREC_EMB.bolt,"#0A84FF");
+  if(total>=4 && winRate>=0.75) return T("Sharpshooter",Math.round(winRate*100)+"% of your picks cashed.",WREC_EMB.target,"#30D158");
   if(streak>=3) return T("On A Heater",streak+" weeks hot and climbing.",WREC_EMB.flame,"#FF6B35");
-  if(avgMult>=2.2) return T("Big Swing","You swung big — "+avgMult.toFixed(1)+"x average multiplier.",WREC_EMB.layers,"var(--yellow)");
-  if(total>=8) return T("Volume Shooter",total+" picks this week. Nobody grinds like you.",WREC_EMB.layers,"var(--accent-ios)");
+  if(avgMult>=2.2) return T("Big Swing","You swung big — "+avgMult.toFixed(1)+"x average multiplier.",WREC_EMB.layers,"#FFD60A");
+  if(total>=8) return T("Volume Shooter",total+" picks this week. Nobody grinds like you.",WREC_EMB.layers,"#0A84FF");
   if(total>0 && winRate<0.4) return T("Cold Week","Rough one — "+won.length+"-"+lost.length+". Next week's yours.",WREC_EMB.snow,"#8a9098");
-  return T("Mr. Consistent","Steady hand — "+won.length+"-"+lost.length+" on the week.",WREC_EMB.shield,"var(--accent-ios)");
+  return T("Mr. Consistent","Steady hand — "+won.length+"-"+lost.length+" on the week.",WREC_EMB.shield,"#0A84FF");
 }
 function WrecCount({ to, dur=900, dec=0, pre="", suf="" }){
   const [v,setV]=useState(0);
@@ -2538,20 +2538,20 @@ function wrecDrawCard(d){
   const g=x.createLinearGradient(0,0,W,H); g.addColorStop(0,"#15294f"); g.addColorStop(1,"#0a1230");
   rr(0,0,W,H,44); x.fillStyle=g; x.fill(); x.lineWidth=4; x.strokeStyle="#7aa8ff"; rr(7,7,W-14,H-14,38); x.stroke();
   x.textBaseline="top"; x.textAlign="left";
-  x.fillStyle="rgba(var(--ink-rgb),.6)"; x.font="800 24px Barlow, system-ui, sans-serif"; x.fillText("WEEK "+d.week+" RECAP",48,48);
+  x.fillStyle="rgba(255,255,255,.6)"; x.font="800 24px Barlow, system-ui, sans-serif"; x.fillText("WEEK "+d.week+" RECAP",48,48);
   x.fillStyle="#fff"; x.font="900 110px Barlow, system-ui, sans-serif"; x.fillText(d.record,46,92);
-  x.font="800 22px Barlow, system-ui, sans-serif"; x.fillStyle="rgba(var(--ink-rgb),.7)"; x.fillText("RECORD",52,214);
-  x.textAlign="right"; x.fillStyle="var(--win)"; x.font="900 84px Barlow, system-ui, sans-serif"; x.fillText((d.points>=0?"+":"")+d.points.toFixed(0),W-48,108);
-  x.fillStyle="rgba(var(--ink-rgb),.7)"; x.font="800 22px Barlow, system-ui, sans-serif"; x.fillText("POINTS",W-50,214);
-  x.textAlign="left"; x.fillStyle="rgba(var(--ink-rgb),.25)"; x.fillRect(48,300,W-96,2);
+  x.font="800 22px Barlow, system-ui, sans-serif"; x.fillStyle="rgba(255,255,255,.7)"; x.fillText("RECORD",52,214);
+  x.textAlign="right"; x.fillStyle="#30D158"; x.font="900 84px Barlow, system-ui, sans-serif"; x.fillText((d.points>=0?"+":"")+d.points.toFixed(0),W-48,108);
+  x.fillStyle="rgba(255,255,255,.7)"; x.font="800 22px Barlow, system-ui, sans-serif"; x.fillText("POINTS",W-50,214);
+  x.textAlign="left"; x.fillStyle="rgba(255,255,255,.25)"; x.fillRect(48,300,W-96,2);
   x.fillStyle=d.sup.color; x.font="900 26px Barlow, system-ui, sans-serif"; x.fillText(d.sup.title.toUpperCase(),48,340);
-  x.fillStyle="rgba(var(--ink-rgb),.6)"; x.font="600 22px Barlow, system-ui, sans-serif";
+  x.fillStyle="rgba(255,255,255,.6)"; x.font="600 22px Barlow, system-ui, sans-serif";
   const words=d.sup.desc.split(" "); let line="",yy=384;
   for(const w of words){ if((line+w).length>34){ x.fillText(line,48,yy); line=w+" "; yy+=30; } else line+=w+" "; }
   x.fillText(line,48,yy);
   x.fillStyle="#fff"; x.font="900 56px Barlow, system-ui, sans-serif"; x.fillText((d.name||"YOU").toUpperCase(),48,560);
-  x.fillStyle="rgba(var(--ink-rgb),.7)"; x.font="700 24px Barlow, system-ui, sans-serif"; x.fillText("League rank  #"+d.rank+"  ·  "+d.streakLabel,48,640);
-  x.fillStyle="rgba(var(--ink-rgb),.5)"; x.font="800 20px Barlow, system-ui, sans-serif"; x.fillText("PICKLOCK · WEEK "+d.week,48,H-56);
+  x.fillStyle="rgba(255,255,255,.7)"; x.font="700 24px Barlow, system-ui, sans-serif"; x.fillText("League rank  #"+d.rank+"  ·  "+d.streakLabel,48,640);
+  x.fillStyle="rgba(255,255,255,.5)"; x.font="800 20px Barlow, system-ui, sans-serif"; x.fillText("PICKLOCK · WEEK "+d.week,48,H-56);
   return c;
 }
 function soloDrawCard(d){
@@ -2565,7 +2565,7 @@ function soloDrawCard(d){
   x.textAlign="left"; x.fillStyle="#fff"; x.font="800 23px Barlow, system-ui, sans-serif"; x.fillText("PICKLOCK",P,54);
   x.fillStyle=AC; x.font="800 23px Barlow, system-ui, sans-serif"; x.fillText(".",P+116,54);
   if(d.name){ x.textAlign="right"; x.fillStyle=MUT; x.font="600 17px Barlow, system-ui, sans-serif"; x.fillText("@"+String(d.name).slice(0,18),W-P,58); }
-  x.fillStyle="rgba(var(--ink-rgb),.1)"; x.fillRect(P,92,W-2*P,1);
+  x.fillStyle="rgba(255,255,255,.1)"; x.fillRect(P,92,W-2*P,1);
   x.textAlign="left"; x.fillStyle=AC; x.font="800 15px Barlow, system-ui, sans-serif"; x.fillText(d.slate+"   ·   SOLO MODE",P,108);
   x.fillStyle=d.points>=0?GR:RD; x.font="900 128px Barlow, system-ui, sans-serif"; x.fillText((d.points>=0?"+":"")+Math.round(d.points),P-6,132);
   x.fillStyle=MUT; x.font="800 19px Barlow, system-ui, sans-serif"; x.fillText("POINTS THIS WEEK",P,278);
@@ -2573,7 +2573,7 @@ function soloDrawCard(d){
   if(d.topPct){
     rr(P,y,W-2*P,90,18); x.fillStyle="rgba(191,90,242,.12)"; x.fill(); x.lineWidth=1.5; x.strokeStyle="rgba(191,90,242,.55)"; rr(P,y,W-2*P,90,18); x.stroke();
     x.textAlign="left"; x.fillStyle=AC; x.font="900 46px Barlow, system-ui, sans-serif"; x.fillText("TOP "+d.topPct+"%",P+22,y+20);
-    x.textAlign="right"; x.fillStyle="rgba(var(--ink-rgb),.72)"; x.font="700 17px Barlow, system-ui, sans-serif"; x.fillText("OF ALL SOLO PICKERS",W-P-22,y+26);
+    x.textAlign="right"; x.fillStyle="rgba(255,255,255,.72)"; x.font="700 17px Barlow, system-ui, sans-serif"; x.fillText("OF ALL SOLO PICKERS",W-P-22,y+26);
     x.fillStyle=MUT2; x.font="600 13px Barlow, system-ui, sans-serif"; x.fillText("ranked by win rate",W-P-22,y+50);
     y+=116;
   }
@@ -2585,7 +2585,7 @@ function soloDrawCard(d){
   });
   y+=88;
   x.textAlign="left"; x.fillStyle=MUT; x.font="600 17px Barlow, system-ui, sans-serif"; x.fillText("All-time "+d.allTimeWinPct+"%   ·   "+d.picksN+" picks this slate",P,y);
-  y+=38; x.fillStyle="rgba(var(--ink-rgb),.1)"; x.fillRect(P,y,W-2*P,1); y+=34;
+  y+=38; x.fillStyle="rgba(255,255,255,.1)"; x.fillRect(P,y,W-2*P,1); y+=34;
   if(d.bestPick){
     x.fillStyle=AC; x.font="800 13px Barlow, system-ui, sans-serif"; x.fillText("PLAY OF THE SLATE",P,y);
     let nm=String(d.bestPick.name||""); if(nm.length>26) nm=nm.slice(0,25)+"…";
@@ -2623,7 +2623,7 @@ function seasonDrawCard(d){
   const sw=(W-P*2-24)/4;
   stats.forEach((st,i)=>{
     const sx=P+i*(sw+8);
-    rr(sx,300,sw,104,18); x.fillStyle="rgba(var(--ink-rgb),.05)"; x.fill();
+    rr(sx,300,sw,104,18); x.fillStyle="rgba(255,255,255,.05)"; x.fill();
     x.textAlign="center"; x.fillStyle=st[2]; x.font="800 34px 'Barlow Semi Condensed', Barlow, sans-serif";
     x.fillText(st[1], sx+sw/2, 320);
     x.fillStyle=MUT2; x.font="800 12px Barlow, system-ui, sans-serif"; x.fillText(st[0], sx+sw/2, 368);
@@ -2664,17 +2664,17 @@ function leagueDrawCard(d){
   rr(0,0,W,H,46); x.fillStyle=g; x.fill(); x.lineWidth=3; x.strokeStyle="rgba(122,168,255,.5)"; rr(8,8,W-16,H-16,40); x.stroke();
   x.textBaseline="top"; x.textAlign="left";
   x.fillStyle="#fff"; x.font="800 22px Barlow, system-ui, sans-serif"; x.fillText("PICKLOCK",P,52);
-  x.fillStyle="var(--accent-ios)"; x.font="800 22px Barlow, system-ui, sans-serif"; x.fillText(".",P+112,52);
+  x.fillStyle="#0A84FF"; x.font="800 22px Barlow, system-ui, sans-serif"; x.fillText(".",P+112,52);
   x.textAlign="right"; x.fillStyle=MUT; x.font="700 17px Barlow, system-ui, sans-serif"; x.fillText("WEEK "+d.week,W-P,56);
-  x.textAlign="left"; x.fillStyle="rgba(var(--ink-rgb),.1)"; x.fillRect(P,90,W-2*P,1);
+  x.textAlign="left"; x.fillStyle="rgba(255,255,255,.1)"; x.fillRect(P,90,W-2*P,1);
   x.fillStyle="#7aa8ff"; x.font="800 15px Barlow, system-ui, sans-serif"; x.fillText(tw(String(d.leagueName||"League").toUpperCase(),24),P,108);
   const h2h = d.mode==="h2h" && d.matchups && d.matchups.length;
-  x.fillStyle="var(--yellow)"; x.font="900 14px Barlow, system-ui, sans-serif"; x.fillText(h2h?"TOP SCORER":"WINNER OF THE WEEK",P,142);
+  x.fillStyle="#FFD60A"; x.font="900 14px Barlow, system-ui, sans-serif"; x.fillText(h2h?"TOP SCORER":"WINNER OF THE WEEK",P,142);
   let wn=String((d.winner&&d.winner.name)||"").toUpperCase(); if(wn.length>16) wn=wn.slice(0,15)+"…";
   x.fillStyle="#fff"; x.font="900 58px Barlow, system-ui, sans-serif"; x.fillText(wn,P-2,166);
   x.fillStyle=GR; x.font="900 40px Barlow, system-ui, sans-serif"; x.fillText("+"+(d.winner?d.winner.pts:0).toFixed(0)+" pts",P,234);
   x.fillStyle=MUT; x.font="700 18px Barlow, system-ui, sans-serif"; x.fillText((d.winner?d.winner.w:0)+"-"+(d.winner?d.winner.l:0)+" on the week",P,288);
-  x.fillStyle="rgba(var(--ink-rgb),.1)"; x.fillRect(P,320,W-2*P,1);
+  x.fillStyle="rgba(255,255,255,.1)"; x.fillRect(P,320,W-2*P,1);
   let y;
   if(h2h){
     x.fillStyle=MUT2; x.font="800 13px Barlow, system-ui, sans-serif"; x.fillText("MATCHUPS",P,342);
@@ -2692,14 +2692,14 @@ function leagueDrawCard(d){
     x.fillStyle=MUT2; x.font="800 13px Barlow, system-ui, sans-serif"; x.fillText("WEEKLY LEADERBOARD",P,342);
     y=378; const rows=(d.rows||[]).slice(0,5);
     rows.forEach((r,i)=>{
-      x.textAlign="left"; x.fillStyle=i===0?"var(--yellow)":MUT2; x.font="900 22px Barlow, system-ui, sans-serif"; x.fillText(String(i+1),P,y);
+      x.textAlign="left"; x.fillStyle=i===0?"#FFD60A":MUT2; x.font="900 22px Barlow, system-ui, sans-serif"; x.fillText(String(i+1),P,y);
       x.fillStyle="#fff"; x.font="700 24px Barlow, system-ui, sans-serif"; x.fillText(tw(r.name,18),P+42,y);
       x.textAlign="right"; x.fillStyle=MUT; x.font="600 16px Barlow, system-ui, sans-serif"; x.fillText(r.w+"-"+r.l,W-P-118,y+4);
       x.fillStyle=GR; x.font="800 24px Barlow, system-ui, sans-serif"; x.fillText((r.pts>=0?"+":"")+r.pts.toFixed(0),W-P,y);
       y+=60;
     });
   }
-  x.textAlign="left"; x.fillStyle="rgba(var(--ink-rgb),.1)"; x.fillRect(P,y+4,W-2*P,1);
+  x.textAlign="left"; x.fillStyle="rgba(255,255,255,.1)"; x.fillRect(P,y+4,W-2*P,1);
   x.fillStyle=MUT; x.font="600 18px Barlow, system-ui, sans-serif"; x.fillText("League hit "+d.hitPct+"%   ·   "+d.totalPicks+" picks this week",P,y+26);
   x.textBaseline="alphabetic"; x.fillStyle=MUT2; x.font="800 16px Barlow, system-ui, sans-serif"; x.fillText("PICKLOCK",P,H-42);
   x.textAlign="right"; x.fillStyle=MUT2; x.font="600 14px Barlow, system-ui, sans-serif"; x.fillText("app.picklockapp.com",W-P,H-44);
@@ -2709,11 +2709,11 @@ function drawCarnageCanvas(d){
   // 1080x1350 share card: pool name, week verdict, the dead, the remain count.
   const W=1080,H=1350,P=84;
   const c=document.createElement("canvas"); c.width=W; c.height=H; const x=c.getContext("2d");
-  const MUT="rgba(var(--ink-rgb),.55)", MUT2="rgba(var(--ink-rgb),.34)";
+  const MUT="rgba(255,255,255,.55)", MUT2="rgba(255,255,255,.34)";
   const g=x.createLinearGradient(0,0,W,H); g.addColorStop(0,"#101a33"); g.addColorStop(.65,"#07070c"); x.fillStyle=g; x.fillRect(0,0,W,H);
   const rg=x.createRadialGradient(W*.85,-.1*H,60,W*.85,-.1*H,W*.9); rg.addColorStop(0,"rgba(10,132,255,.32)"); rg.addColorStop(1,"rgba(10,132,255,0)"); x.fillStyle=rg; x.fillRect(0,0,W,H);
   x.textBaseline="alphabetic";
-  x.fillStyle="var(--cyan)"; x.font="900 34px Barlow, system-ui, sans-serif"; x.fillText("PICKLOCK",P,P+18);
+  x.fillStyle="#64D2FF"; x.font="900 34px Barlow, system-ui, sans-serif"; x.fillText("PICKLOCK",P,P+18);
   x.fillStyle=MUT2; x.font="800 24px Barlow, system-ui, sans-serif"; x.fillText((d.poolName||"SURVIVOR").toUpperCase()+"  \u00B7  SURVIVOR",P,P+62);
   x.fillStyle=MUT; x.font="800 26px Barlow, system-ui, sans-serif"; x.fillText("WEEK "+d.week+" \u00B7 FINAL",P,P+150);
   x.fillStyle="#fff"; x.font="900 92px Barlow, system-ui, sans-serif";
@@ -2726,12 +2726,12 @@ function drawCarnageCanvas(d){
     x.strokeStyle="rgba(255,55,95,.45)"; x.lineWidth=2; x.strokeRect(P,y,W-2*P,104);
     x.fillStyle="#fff"; x.font="800 38px Barlow, system-ui, sans-serif"; x.fillText(dd.name,P+34,y+46);
     x.fillStyle=MUT; x.font="600 26px Barlow, system-ui, sans-serif"; x.fillText(dd.rode,P+34,y+84);
-    x.textAlign="right"; x.fillStyle="var(--longshot)"; x.font="900 24px Barlow, system-ui, sans-serif"; x.fillText("ELIMINATED",W-P-30,y+58); x.textAlign="left";
+    x.textAlign="right"; x.fillStyle="#FF375F"; x.font="900 24px Barlow, system-ui, sans-serif"; x.fillText("ELIMINATED",W-P-30,y+58); x.textAlign="left";
     y+=124;
   }
   y=Math.max(y,H-360);
-  x.fillStyle="rgba(var(--ink-rgb),.1)"; x.fillRect(P,y,W-2*P,2);
-  x.fillStyle="var(--yellow)"; x.font="900 120px 'Barlow Semi Condensed', Barlow, system-ui, sans-serif"; x.fillText(String(d.remain),P,y+150);
+  x.fillStyle="rgba(255,255,255,.1)"; x.fillRect(P,y,W-2*P,2);
+  x.fillStyle="#FFD60A"; x.font="900 120px 'Barlow Semi Condensed', Barlow, system-ui, sans-serif"; x.fillText(String(d.remain),P,y+150);
   x.fillStyle=MUT; x.font="800 34px Barlow, system-ui, sans-serif"; x.fillText("REMAIN",P+((String(d.remain).length)*66)+26,y+150);
   x.fillStyle=MUT2; x.font="800 26px Barlow, system-ui, sans-serif"; x.fillText("Think you\u2019d still be alive?",P,y+214);
   x.textAlign="right"; x.fillStyle=MUT2; x.font="600 24px Barlow, system-ui, sans-serif"; x.fillText("app.picklockapp.com",W-P,H-60); x.textAlign="left";
@@ -2781,7 +2781,7 @@ function LeagueWeekRecap({ data, IOS, onClose }){
     );
   };
   return (
-    <div style={{position:"fixed",inset:0,zIndex:9000,background:"radial-gradient(120% 80% at 50% 12%,rgba(10,132,255,.34),#04060c 68%)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 18px"}} onClick={onClose}>
+    <div style={{position:"fixed",inset:0,zIndex:9000,background:"radial-gradient(120% 80% at 50% 12%,rgba(10,132,255,.34),var(--s0) 68%)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 18px"}} onClick={onClose}>
       <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:360,background:"linear-gradient(160deg,#16244d,#0a1024)",border:"1px solid rgba(122,168,255,.45)",borderRadius:RAD.xl,padding:"22px 20px",position:"relative",overflow:"hidden",boxShadow:"0 30px 80px -20px rgba(0,0,0,.8)"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{fontSize:15,fontWeight:800,color:"#fff"}}>PickLock<span style={{color:C.blue}}>.</span></div>
@@ -2846,14 +2846,14 @@ function WeeklyRecap({ data, picks, standings, league, stats, IOS, onClose, user
   const next=()=>setI(v=>Math.min(N-1,v+1));
   const prev=()=>setI(v=>Math.max(0,v-1));
   const C=IOS;
-  const BG=["radial-gradient(120% 80% at 50% 10%,rgba(10,132,255,.35),#04060c 65%)",
+  const BG=["radial-gradient(120% 80% at 50% 10%,rgba(10,132,255,.35),var(--s0) 65%)",
     won?"radial-gradient(120% 80% at 50% 20%,rgba(48,209,88,.4),#04140a 65%)":"radial-gradient(120% 80% at 50% 20%,rgba(255,69,58,.4),#140404 65%)",
     "radial-gradient(120% 80% at 50% 15%,rgba(10,132,255,.4),#05101f 70%)",
     "radial-gradient(120% 80% at 50% 15%,rgba(255,214,10,.32),#140f04 70%)",
-    "radial-gradient(120% 80% at 50% 15%,rgba(120,120,130,.3),#0c0c0e 70%)",
+    "radial-gradient(120% 80% at 50% 15%,rgba(120,120,130,.3),var(--s1) 70%)",
     "radial-gradient(120% 80% at 50% 15%,"+fade(sup.color,0.333)+",#140420 70%)",
-    "radial-gradient(120% 80% at 50% 15%,rgba(10,132,255,.34),#04060c 68%)",
-    "radial-gradient(120% 80% at 50% 0%,#11131c,#04060c 70%)"][i];
+    "radial-gradient(120% 80% at 50% 15%,rgba(10,132,255,.34),var(--s0) 68%)",
+    "radial-gradient(120% 80% at 50% 0%,#11131c,var(--s0) 70%)"][i];
   const shareCard=async()=>{
     try{
       if(document.fonts&&document.fonts.ready){ try{ await document.fonts.ready; }catch(e){} }
@@ -3042,7 +3042,7 @@ function SwipeRow({ onDelete, disabled, label="Delete", children, bg="transparen
       <div onTouchStart={start} onTouchMove={move} onTouchEnd={end} onTouchCancel={end}
         style={{position:"relative",transform:"translateX("+dx+"px)",
           transition:anim?"transform .24s cubic-bezier(.2,.8,.2,1)":"none",
-          touchAction:"pan-y",background:"#111116"}}>
+          touchAction:"pan-y",background:"var(--s2)"}}>
         {children}
       </div>
     </div>
@@ -3086,7 +3086,7 @@ function SeasonRecap({ league, me, total, arc, leader, topScorer, bestWk, hit, g
   return (
   <>
     <div className="pl-reveal" style={{position:"relative",overflow:"hidden",borderRadius:RAD.xl,padding:"16px 16px 12px",
-      background:"linear-gradient(160deg,rgba(255,159,10,0.10),transparent 58%),linear-gradient(180deg,#16161c,#0f0f14)",
+      background:"linear-gradient(160deg,rgba(255,159,10,0.10),transparent 58%),linear-gradient(180deg,var(--s2),var(--s1))",
       boxShadow:"inset 0 1px 0 rgba(var(--ink-rgb),0.06), 0 10px 30px rgba(0,0,0,0.45)"}}>
       <div style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.14em",color:"rgba(var(--ink-rgb),0.34)",textTransform:"uppercase"}}>{(league&&league.name)||"League"}{" \u00b7 Season recap"}</div>
       <div style={{display:"flex",alignItems:"baseline",gap:9,marginTop:5}}>
@@ -3126,7 +3126,7 @@ function SeasonRecap({ league, me, total, arc, leader, topScorer, bestWk, hit, g
 
     {(leader||topScorer||bestWk||champion) && (<>
       <div className="pl-reveal" style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.14em",color:"rgba(var(--ink-rgb),0.3)",textTransform:"uppercase",margin:"20px 0 8px 3px"}}>How the league finished</div>
-      <div className="pl-reveal" style={{borderRadius:RAD.lg,overflow:"hidden",background:"linear-gradient(180deg,#16161c,#111116)",boxShadow:"inset 0 1px 0 rgba(var(--ink-rgb),0.05), 0 5px 16px rgba(0,0,0,0.34)"}}>
+      <div className="pl-reveal" style={{borderRadius:RAD.lg,overflow:"hidden",background:"linear-gradient(180deg,var(--s2),var(--s2))",boxShadow:"inset 0 1px 0 rgba(var(--ink-rgb),0.05), 0 5px 16px rgba(0,0,0,0.34)"}}>
         {champion && (<div style={row}><span style={{color:"rgba(var(--ink-rgb),0.5)",fontWeight:600}}>Champion</span><span style={{fontWeight:800,color:IOS.yellow}}>{champion}</span></div>)}
         {leader && (<div style={{...row,borderTop:champion?"0.5px solid rgba(var(--ink-rgb),0.055)":"none"}}><span style={{color:"rgba(var(--ink-rgb),0.5)",fontWeight:600}}>Top seed</span><span style={{fontWeight:800}}>{leader.isYou?"You":leader.name}{" \u00b7 "}{leader.record}</span></div>)}
         {topScorer && (<div style={{...row,borderTop:"0.5px solid rgba(var(--ink-rgb),0.055)"}}><span style={{color:"rgba(var(--ink-rgb),0.5)",fontWeight:600}}>Most points</span><span style={{fontWeight:800}}>{topScorer.isYou?"You":topScorer.name}{" \u00b7 "}{topScorer.points}</span></div>)}
@@ -3474,23 +3474,23 @@ function brkDrawChampCard(name, leagueName){
   x.fillStyle=g; x.fillRect(0,0,W,H);
   x.strokeStyle="rgba(255,214,10,.55)"; x.lineWidth=3; x.strokeRect(16,16,W-32,H-32);
   // crown
-  x.fillStyle="var(--yellow)"; x.beginPath();
+  x.fillStyle="#FFD60A"; x.beginPath();
   const cx=W/2, cy=210, s=70;
   x.moveTo(cx-s, cy+s*0.6); x.lineTo(cx-s, cy-s*0.2); x.lineTo(cx-s*0.45, cy+s*0.15);
   x.lineTo(cx, cy-s*0.7); x.lineTo(cx+s*0.45, cy+s*0.15); x.lineTo(cx+s, cy-s*0.2);
   x.lineTo(cx+s, cy+s*0.6); x.closePath(); x.fill();
   x.fillStyle="#1a1500"; x.fillRect(cx-s, cy+s*0.42, s*2, s*0.18);
   // labels
-  x.textAlign="center"; x.fillStyle="var(--yellow)"; x.font="800 26px Barlow, sans-serif";
+  x.textAlign="center"; x.fillStyle="#FFD60A"; x.font="800 26px Barlow, sans-serif";
   x.fillText("L E A G U E   C H A M P I O N", cx, 360);
   x.fillStyle="#ffffff"; x.font="900 64px Barlow, sans-serif";
   x.fillText((name||"Champion").slice(0,16), cx, 440);
-  x.fillStyle="rgba(var(--ink-rgb),.55)"; x.font="700 22px Barlow, sans-serif";
+  x.fillStyle="rgba(255,255,255,.55)"; x.font="700 22px Barlow, sans-serif";
   x.fillText(((leagueName||"Tournament")+" · Champion").slice(0,40), cx, 486);
   // divider + footer
   x.strokeStyle="rgba(255,214,10,.3)"; x.lineWidth=2; x.beginPath(); x.moveTo(cx-120,560); x.lineTo(cx+120,560); x.stroke();
-  x.fillStyle="rgba(var(--ink-rgb),.4)"; x.font="800 20px Barlow, sans-serif"; x.fillText("PICKLOCK", cx, 660);
-  x.fillStyle="rgba(var(--ink-rgb),.28)"; x.font="600 15px Barlow, sans-serif"; x.fillText("single-elimination champion", cx, 690);
+  x.fillStyle="rgba(255,255,255,.4)"; x.font="800 20px Barlow, sans-serif"; x.fillText("PICKLOCK", cx, 660);
+  x.fillStyle="rgba(255,255,255,.28)"; x.font="600 15px Barlow, sans-serif"; x.fillText("single-elimination champion", cx, 690);
   return c;
 }
 async function champShare(name, leagueName){
@@ -3630,7 +3630,7 @@ function AiInsightBubble({ item, IOS, onAddToSlip }) {
     if (phase >= 1 && phase < 5) { const tm = setTimeout(() => setPhase(pp => pp + 1), 240); return () => clearTimeout(tm); }
   }, [phase]);
   const wrap = (children) => (
-    <div style={{alignSelf:"flex-start",width:"100%",background:"linear-gradient(160deg,#16161B,#0C0C0F)",border:"1px solid rgba(var(--ink-rgb),0.08)",borderRadius:"14px 14px 14px 4px",padding:"13px 14px"}}>
+    <div style={{alignSelf:"flex-start",width:"100%",background:"linear-gradient(160deg,var(--s2),var(--s1))",border:"1px solid rgba(var(--ink-rgb),0.08)",borderRadius:"14px 14px 14px 4px",padding:"13px 14px"}}>
       <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg>
         <span style={{fontSize:11,fontWeight:800,letterSpacing:"-0.2px",color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.label}</span>
@@ -5123,7 +5123,7 @@ function DailyLockCard({ user }){
   };
   const kick=(t,c,fold)=>(<div onClick={fold?toggleOpen:undefined} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,cursor:fold?"pointer":"default"}}><span style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.13em",textTransform:"uppercase",color:c}}>{t}</span><span style={{textAlign:"center",display:"flex",alignItems:"center",gap:8}}><span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:20,color:streak>0?IOS.orange:"rgba(var(--ink-rgb),0.35)",lineHeight:1}}>{streak}</span><span style={{fontSize:8,fontWeight:800,letterSpacing:"0.07em",color:"rgba(var(--ink-rgb),0.4)",marginLeft:4}}>DAY STREAK</span>{fold&&(<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(var(--ink-rgb),0.4)" strokeWidth="2.4" strokeLinecap="round" style={{transform:open?"rotate(180deg)":"none",transition:"transform .2s",flexShrink:0}}><path d="M6 9l6 6 6-6"/></svg>)}</span></div>);
   return (
-  <div className="pl-rise" style={{margin:"0 16px 12px",position:"relative",border:"0.5px solid rgba(255,159,10,0.3)",borderRadius:RAD.lg,overflow:"hidden",boxShadow:"0 10px 26px -14px rgba(0,0,0,0.8)",background:"radial-gradient(120% 90% at 80% -10%, rgba(255,159,10,0.16), transparent 55%), linear-gradient(160deg,#16130E,#0B0B10 75%)"}}>
+  <div className="pl-rise" style={{margin:"0 16px 12px",position:"relative",border:"0.5px solid rgba(255,159,10,0.3)",borderRadius:RAD.lg,overflow:"hidden",boxShadow:"0 10px 26px -14px rgba(0,0,0,0.8)",background:"radial-gradient(120% 90% at 80% -10%, rgba(255,159,10,0.16), transparent 55%), linear-gradient(160deg,var(--s2),var(--s1) 75%)"}}>
   <div style={{padding:"13px 14px"}}>
   {todays&&todays.result==="P"?(<>
   {kick("The Daily Lock · voided","rgba(var(--ink-rgb),0.45)")}
@@ -5148,7 +5148,7 @@ function DailyLockCard({ user }){
   <span style={{fontSize:11.5,fontWeight:800,color:dlOddsNum(b.odds)>0?IOS.green:"rgba(var(--ink-rgb),0.65)",flexShrink:0}}>{b.odds}</span>
   </div>); })}
   </div>
-  <div onClick={lock} style={{display:"block",textAlign:"center",background:sel?"linear-gradient(120deg,var(--live),#FF6B2C)":"rgba(var(--ink-rgb),0.06)",color:sel?"#141414":"rgba(var(--ink-rgb),0.35)",fontWeight:800,fontSize:13.5,padding:"11px",borderRadius:RAD.md,marginTop:10,cursor:sel?"pointer":"default",opacity:busy?0.6:1}}>{busy?"Locking…":(sel?("Lock "+sel.pick_name):"Pick one to lock")}</div>
+  <div onClick={lock} style={{display:"block",textAlign:"center",background:sel?"linear-gradient(120deg,var(--live),#FF6B2C)":"rgba(var(--ink-rgb),0.06)",color:sel?"var(--s2)":"rgba(var(--ink-rgb),0.35)",fontWeight:800,fontSize:13.5,padding:"11px",borderRadius:RAD.md,marginTop:10,cursor:sel?"pointer":"default",opacity:busy?0.6:1}}>{busy?"Locking…":(sel?("Lock "+sel.pick_name):"Pick one to lock")}</div>
   </>)}
   </>):(<>
   {kick("The Daily Lock",IOS.orange)}
@@ -5199,7 +5199,7 @@ function GauntletCard({ user, onEnter, onJoin }){
   const entrants=(st&&st.entrants)||0, alive=(st&&st.alive)||0;
   const out=mem&&mem.eliminated_week!=null;
   return (
-  <div className="pl-rise" style={{margin:"0 16px 12px",position:"relative",border:"0.5px solid rgba(191,90,242,0.28)",borderRadius:RAD.lg,overflow:"hidden",boxShadow:"0 10px 26px -14px rgba(0,0,0,0.8)",background:"radial-gradient(120% 90% at 85% -10%, rgba(191,90,242,0.2), transparent 55%), linear-gradient(160deg,#141018,#0B0B10 75%)"}}>
+  <div className="pl-rise" style={{margin:"0 16px 12px",position:"relative",border:"0.5px solid rgba(191,90,242,0.28)",borderRadius:RAD.lg,overflow:"hidden",boxShadow:"0 10px 26px -14px rgba(0,0,0,0.8)",background:"radial-gradient(120% 90% at 85% -10%, rgba(191,90,242,0.2), transparent 55%), linear-gradient(160deg,var(--s2),var(--s1) 75%)"}}>
   <div style={{padding:"13px 14px"}}>
   <div style={{display:"flex",alignItems:"center",gap:6,fontSize:9.5,fontWeight:800,letterSpacing:"0.13em",textTransform:"uppercase",color:"var(--purple)"}}>
   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3v6c0 3.3 2.7 6 6 6s6-2.7 6-6V3"/><path d="M6 5H3v2a4 4 0 0 0 3 3.9M18 5h3v2a4 4 0 0 1-3 3.9"/><path d="M12 15v4M8 21h8"/></svg>
@@ -5295,7 +5295,7 @@ function BotRaceCard({ user, isSolo }){
   const ranked=[{id:"me",pts:race.myPts,w:race.myW,l:race.myL},...race.rows].sort((a,b)=>b.pts-a.pts);
   const myRank=ranked.findIndex(r=>r.id==="me")+1;
   return (
-  <div style={{margin:"0 16px 12px",position:"relative",border:"0.5px solid rgba(120,150,255,0.16)",borderRadius:RAD.lg,overflow:"hidden",background:"linear-gradient(160deg,#15161E,#0B0B10 75%)",boxShadow:"0 10px 26px -14px rgba(0,0,0,0.8)"}}>
+  <div style={{margin:"0 16px 12px",position:"relative",border:"0.5px solid rgba(120,150,255,0.16)",borderRadius:RAD.lg,overflow:"hidden",background:"linear-gradient(160deg,#15161E,var(--s1) 75%)",boxShadow:"0 10px 26px -14px rgba(0,0,0,0.8)"}}>
   <div onClick={()=>setOpen(o=>!o)} style={{padding:"13px 14px",cursor:"pointer"}}>
   <div style={{display:"flex",alignItems:"center",gap:8}}>
   <span style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.13em",textTransform:"uppercase",color:"var(--cyan)",flex:1}}>You vs The Bots · this week</span>
@@ -5425,7 +5425,7 @@ function SoloHome({raceUser, gauntletSlot, soloWeeks, soloLoading, isPro, IOS, s
       {gauntletSlot ? <div style={{margin:"0 -16px 0"}}>{gauntletSlot}</div> : null}
       {/* Your week — the core of solo mode */}
       {/* This Week — expansive live tracker */}
-      <div style={{background:"linear-gradient(180deg,#15151a,#0e0e12)",border:EDGE.hair,borderRadius:14,overflow:"hidden",marginBottom:16}}>
+      <div style={{background:"linear-gradient(180deg,var(--s2),var(--s1))",border:EDGE.hair,borderRadius:14,overflow:"hidden",marginBottom:16}}>
         {weekHasPicks && (
         <div style={{padding:"15px 15px 13px",borderBottom:EDGE.hair}}>
           <div style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.14em",textTransform:"uppercase",color:IOS.label3}}>Riding on this week</div>
@@ -5451,7 +5451,7 @@ function SoloHome({raceUser, gauntletSlot, soloWeeks, soloLoading, isPro, IOS, s
           </div>}
         </div>
         {weekHasPicks && (
-          <div style={{height:5,background:"#1A1A1A",borderRadius:3,marginBottom:12,overflow:"hidden"}}>
+          <div style={{height:5,background:"var(--s3)",borderRadius:3,marginBottom:12,overflow:"hidden"}}>
             <div style={{width:`${Math.round(curGraded/Math.max(1,_cur.length)*100)}%`,height:"100%",background:curW>=curL?IOS.green:IOS.red,borderRadius:3,transition:"width .5s ease"}}/>
           </div>
         )}
@@ -5496,7 +5496,7 @@ function SoloHome({raceUser, gauntletSlot, soloWeeks, soloLoading, isPro, IOS, s
         </button>
         </div>
         {weekHasPicks && (<>
-          <div style={{height:14,margin:"0 -1px",background:"radial-gradient(circle at 7px 50%, #07070A 5px, transparent 5.5px) 0 0/14px 14px repeat-x"}}/>
+          <div style={{height:14,margin:"0 -1px",background:"radial-gradient(circle at 7px 50%, var(--s0) 5px, transparent 5.5px) 0 0/14px 14px repeat-x"}}/>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 15px"}}>
             <span style={{fontSize:10,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:IOS.label3}}>Settled so far</span>
             <span style={{display:"flex",alignItems:"baseline",gap:14}}>
@@ -5602,7 +5602,7 @@ function SoloHome({raceUser, gauntletSlot, soloWeeks, soloLoading, isPro, IOS, s
             const isBest=bestWeek && bestWeek.week===w.week && bestWeek.pts>0 && soloWeeks.length>1;
             const stamp=slateStamp(w);
             return (
-            <div key={w.week} style={{background:"linear-gradient(180deg,#15151a,#0e0e12)",border:EDGE.hair,borderRadius:14,marginBottom:9,overflow:"hidden"}}>
+            <div key={w.week} style={{background:"linear-gradient(180deg,var(--s2),var(--s1))",border:EDGE.hair,borderRadius:14,marginBottom:9,overflow:"hidden"}}>
               <div onClick={()=>setOpenSlate(isOpen?null:w.week)} style={{padding:"11px 14px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}}>
                 <div style={{minWidth:0}}>
                   <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:2,display:"flex",alignItems:"center",gap:7}}>{soloWeekRange(w.week)}{isBest&&<span style={{fontSize:8,fontWeight:800,color:"#08110a",background:IOS.gold,borderRadius:4,padding:"1px 5px",letterSpacing:.3}}>BEST</span>}</div>
@@ -5762,7 +5762,7 @@ const PERIOD_SUBS_BY_SPORT = {
 // ── MLB starting lineup (StatsAPI) — shown on game detail, under the mound ──
 const _lineupCache = {};   // "away|home|date" -> payload; survives pane remounts
 function LineupSection({ away, home, date, firstPitchLabel, IOS }) {
-  const BLUE=(IOS&&IOS.blue)||"var(--accent-ios)", GREEN=(IOS&&IOS.green)||"var(--win)", L3=(IOS&&IOS.label3)||"rgba(var(--ink-rgb),0.3)";
+  const BLUE=(IOS&&IOS.blue)||"#0A84FF", GREEN=(IOS&&IOS.green)||"#30D158", L3=(IOS&&IOS.label3)||"rgba(255,255,255,0.3)";
   const _ck=(away||"")+"|"+(home||"")+"|"+(date||"");
   const [data,setData]=useState(_lineupCache[_ck]||null);
   const [loading,setLoading]=useState(!_lineupCache[_ck]);
@@ -5779,7 +5779,7 @@ function LineupSection({ away, home, date, firstPitchLabel, IOS }) {
   const oppHand=data?(side==="away"?(data.home&&data.home.pitcherHand):(data.away&&data.away.pitcherHand)):"";
   const fav=(bat)=> bat==="S"||(!!oppHand&&!!bat&&bat!==oppHand);
   const nick=(t,fb)=>{ const st=String((t&&t.team)||fb||""); const p=st.trim().split(/\s+/); return p[p.length-1]||"Team"; };
-  const card={background:"linear-gradient(165deg,#212126,#161619)",border:EDGE.hair,borderRadius:RAD.lg,overflow:"hidden"};
+  const card={background:"linear-gradient(165deg,var(--s3),var(--s2))",border:EDGE.hair,borderRadius:RAD.lg,overflow:"hidden"};
   const colH={display:"grid",gridTemplateColumns:"22px 1fr 42px 34px 34px 44px",gap:6};
   const Tab=(id,label,sub)=>(<div key={id} onClick={()=>setSide(id)} style={{flex:1,padding:10,textAlign:"center",cursor:"pointer",fontSize:14,fontWeight:800,color:side===id?"#fff":"rgba(var(--ink-rgb),0.45)",borderBottom:"2px solid "+(side===id?BLUE:"transparent")}}>{label}<span style={{display:"block",fontSize:9,fontWeight:700,letterSpacing:"0.05em",color:L3,marginTop:2}}>{sub}</span></div>);
   return (
@@ -5849,7 +5849,7 @@ function StatTiles({ tiles, sport, away, home, date, aColor, hColor, IOS, mt }) 
   return (
   <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7,marginTop:mt}}>
   {rows.map((t,ti)=>(
-  <div key={ti} style={{background:"linear-gradient(160deg,#202026,#161619)",border:EDGE.hair,borderRadius:RAD.lg,padding:"9px 6px 10px",textAlign:"center"}}>
+  <div key={ti} style={{background:"linear-gradient(160deg,var(--s3),var(--s2))",border:EDGE.hair,borderRadius:RAD.lg,padding:"9px 6px 10px",textAlign:"center"}}>
   <div style={{fontSize:8,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:IOS.label3}}>{t.l}</div>
   <div style={{display:"flex",justifyContent:"center",gap:6,marginTop:6}}>
   <span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:aColor}}>{t.a}</span>
@@ -5980,7 +5980,7 @@ function ScoreChip({ pick, live, onOpen }){
 // Team accent colors for the gamecast hero. MLB only for now (that's the live sport);
 // falls back to the app blue so nothing breaks for NFL/NCAAF.
 const MLB_TEAM_COLOR = {
-  ARI:"#A71930", ATL:"#CE1141", BAL:"#DF4601", BOS:"#BD3039", CHC:"#0E3386", CWS:"#27251F",
+  ARI:"#A71930", ATL:"#CE1141", BAL:"#DF4601", BOS:"#BD3039", CHC:"#0E3386", CWS:"var(--s4)",
   CIN:"#C6011F", CLE:"#00385D", COL:"#333366", DET:"#0C2340", HOU:"#EB6E1F", KC:"#004687",
   LAA:"#BA0021", LAD:"#005A9C", MIA:"#00A3E0", MIL:"#FFC52F", MIN:"#002B5C", NYM:"#FF5910",
   NYY:"#0C2340", OAK:"#003831", ATH:"#003831", PHI:"#E81828", PIT:"#FDB827", SD:"#2F241D",
@@ -6101,7 +6101,7 @@ function PropHistorySheet({ ctx, onClose }){
   const emptyNfl=data&&tab&&grpOf(tab)==="nfl"&&!games.length;
   return (
   <div style={{position:"fixed",inset:0,zIndex:8500}}>
-  <style>{`.ph-veil{position:absolute;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);opacity:0;transition:opacity .28s ease;} .ph-veil.on{opacity:1;} .ph-sheet{position:absolute;left:0;right:0;bottom:0;background:#141418;border-radius:22px 22px 0 0;border:0.5px solid rgba(var(--ink-rgb),0.1);border-bottom:none;transform:translateY(104%);transition:transform .38s cubic-bezier(0.32,0.72,0.24,1);box-shadow:0 -18px 50px rgba(0,0,0,0.7);padding-bottom:calc(18px + var(--sa-bot,0px));} .ph-sheet.on{transform:translateY(0);} .ph-fade{opacity:0;transform:translateY(6px);transition:opacity .26s ease,transform .26s ease;} .ph-fade.in{opacity:1;transform:none;} .ph-fill{border-radius:5px 5px 2px 2px;transform-origin:bottom;transform:scaleY(0);transition:transform .45s cubic-bezier(0.34,1.3,0.5,1);} .ph-fill.go{transform:scaleY(1);} .ph-line{position:absolute;left:0;right:0;border-top:1.5px dashed rgba(255,214,10,0.65);z-index:2;transform-origin:left;transform:scaleX(0);transition:transform .5s cubic-bezier(0.32,0.72,0.24,1) .3s;} .ph-line.go{transform:scaleX(1);} @keyframes phPulse{0%,100%{opacity:0.35}50%{opacity:0.14}} .ph-skel{animation:phPulse 1.2s ease infinite;}`}</style>
+  <style>{`.ph-veil{position:absolute;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);opacity:0;transition:opacity .28s ease;} .ph-veil.on{opacity:1;} .ph-sheet{position:absolute;left:0;right:0;bottom:0;background:var(--s2);border-radius:22px 22px 0 0;border:0.5px solid rgba(var(--ink-rgb),0.1);border-bottom:none;transform:translateY(104%);transition:transform .38s cubic-bezier(0.32,0.72,0.24,1);box-shadow:0 -18px 50px rgba(0,0,0,0.7);padding-bottom:calc(18px + var(--sa-bot,0px));} .ph-sheet.on{transform:translateY(0);} .ph-fade{opacity:0;transform:translateY(6px);transition:opacity .26s ease,transform .26s ease;} .ph-fade.in{opacity:1;transform:none;} .ph-fill{border-radius:5px 5px 2px 2px;transform-origin:bottom;transform:scaleY(0);transition:transform .45s cubic-bezier(0.34,1.3,0.5,1);} .ph-fill.go{transform:scaleY(1);} .ph-line{position:absolute;left:0;right:0;border-top:1.5px dashed rgba(255,214,10,0.65);z-index:2;transform-origin:left;transform:scaleX(0);transition:transform .5s cubic-bezier(0.32,0.72,0.24,1) .3s;} .ph-line.go{transform:scaleX(1);} @keyframes phPulse{0%,100%{opacity:0.35}50%{opacity:0.14}} .ph-skel{animation:phPulse 1.2s ease infinite;}`}</style>
   <div className={"ph-veil"+(vis?" on":"")} onClick={doClose}/>
   <div className={"ph-sheet"+(vis?" on":"")}>
   <div onClick={doClose} style={{width:36,height:4,borderRadius:2,background:"rgba(var(--ink-rgb),0.2)",margin:"12px auto 0",cursor:"pointer"}}/>
@@ -6181,7 +6181,7 @@ function GamecastSheet({ game, pick, onClose }){
 
   return (
     <div onClick={onClose} style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.62)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:9200}}>
-      <div className="pk-sheet" onClick={(e)=>e.stopPropagation()} style={{width:"100%",maxWidth:480,background:"#131315",maxHeight:"90%",overflowY:"auto",WebkitOverflowScrolling:"touch",paddingBottom:"calc(20px + var(--sa-bot))"}}>
+      <div className="pk-sheet" onClick={(e)=>e.stopPropagation()} style={{width:"100%",maxWidth:480,background:"var(--s2)",maxHeight:"90%",overflowY:"auto",WebkitOverflowScrolling:"touch",paddingBottom:"calc(20px + var(--sa-bot))"}}>
         {/* ── scoreboard: crests + team-color hero, per the mockup ── */}
         {(()=>{
           const aLogo = teamLogo(game.sport||"mlb", game.away.name);
@@ -6326,21 +6326,21 @@ function GamecastSheet({ game, pick, onClose }){
         {baseball && !pre && (game.atBat || game.pitching || (game.decisions && game.decisions.winner)) && (
           <div style={{display:"flex",gap:8,margin:"10px 16px 0"}}>
             {live && game.atBat && (
-              <div style={{flex:1,minWidth:0,background:"#1C1C1E",border:"0.5px solid rgba(48,209,88,0.3)",borderRadius:RAD.md,padding:"9px 11px"}}>
+              <div style={{flex:1,minWidth:0,background:"var(--s3)",border:"0.5px solid rgba(48,209,88,0.3)",borderRadius:RAD.md,padding:"9px 11px"}}>
                 <div style={{fontSize:9,fontWeight:900,letterSpacing:"0.1em",color:"var(--win)"}}>AT BAT</div>
                 <div style={{fontSize:13,fontWeight:800,marginTop:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{game.atBat}</div>
                 {game.balls!=null && <div style={{fontSize:10.5,color:L3}}>{game.balls}-{game.strikes}{game.outs!=null?` · ${game.outs} out`:""}</div>}
               </div>
             )}
             {live && game.pitching && (
-              <div style={{flex:1,minWidth:0,background:"#1C1C1E",border:"0.5px solid rgba(48,209,88,0.3)",borderRadius:RAD.md,padding:"9px 11px"}}>
+              <div style={{flex:1,minWidth:0,background:"var(--s3)",border:"0.5px solid rgba(48,209,88,0.3)",borderRadius:RAD.md,padding:"9px 11px"}}>
                 <div style={{fontSize:9,fontWeight:900,letterSpacing:"0.1em",color:"var(--win)"}}>PITCHING</div>
                 <div style={{fontSize:13,fontWeight:800,marginTop:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{game.pitching}</div>
                 {game.onDeck && <div style={{fontSize:10.5,color:L3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>on deck: {game.onDeck}</div>}
               </div>
             )}
             {fin && game.decisions && game.decisions.winner && (
-              <div style={{flex:1,minWidth:0,background:"#1C1C1E",border:EDGE.hair,borderRadius:RAD.md,padding:"9px 11px"}}>
+              <div style={{flex:1,minWidth:0,background:"var(--s3)",border:EDGE.hair,borderRadius:RAD.md,padding:"9px 11px"}}>
                 <div style={{fontSize:9,fontWeight:900,letterSpacing:"0.1em",color:L3}}>WIN</div>
                 <div style={{fontSize:13,fontWeight:800,marginTop:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{game.decisions.winner}</div>
                 {box&&box.pitcherLines&&box.pitcherLines[game.decisions.winner]&&<div style={{fontSize:10.5,fontWeight:700,color:L2,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{box.pitcherLines[game.decisions.winner]}</div>}
@@ -6348,7 +6348,7 @@ function GamecastSheet({ game, pick, onClose }){
               </div>
             )}
             {fin && game.decisions && game.decisions.loser && (
-              <div style={{flex:1,minWidth:0,background:"#1C1C1E",border:EDGE.hair,borderRadius:RAD.md,padding:"9px 11px"}}>
+              <div style={{flex:1,minWidth:0,background:"var(--s3)",border:EDGE.hair,borderRadius:RAD.md,padding:"9px 11px"}}>
                 <div style={{fontSize:9,fontWeight:900,letterSpacing:"0.1em",color:L3}}>LOSS</div>
                 <div style={{fontSize:13,fontWeight:800,marginTop:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{game.decisions.loser}</div>
                 {box&&box.pitcherLines&&box.pitcherLines[game.decisions.loser]&&<div style={{fontSize:10.5,fontWeight:700,color:L2,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{box.pitcherLines[game.decisions.loser]}</div>}
@@ -6360,7 +6360,7 @@ function GamecastSheet({ game, pick, onClose }){
         {/* ── Top performers. The one thing that needs a box score. Renders only when it
             arrives — the sheet is fine without it. ── */}
         {box && ((box.hitters||[]).length>0 || (box.pitchers||[]).length>0) && (
-          <div style={{margin:"9px 16px 0",background:"#1C1C1E",border:EDGE.hair,borderRadius:RAD.md,padding:"10px 12px"}}>
+          <div style={{margin:"9px 16px 0",background:"var(--s3)",border:EDGE.hair,borderRadius:RAD.md,padding:"10px 12px"}}>
             <div style={{fontSize:9,fontWeight:900,letterSpacing:"0.1em",color:L3,marginBottom:2}}>{fin?"TOP PERFORMERS":"TODAY'S LEADERS"}</div>
             {[...(box.hitters||[]), ...(box.pitchers||[])].map((x,i)=>(
               <div key={i} style={{display:"flex",alignItems:"center",gap:9,padding:"6px 0",borderTop:i>0?"0.5px solid rgba(var(--ink-rgb),0.05)":"none"}}>
@@ -8488,7 +8488,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
     if(item.role==="user"){
       return (<div key={i} style={{alignSelf:"flex-end",maxWidth:"82%",background:IOS.blue,color:"#fff",borderRadius:"14px 14px 4px 14px",padding:"8px 12px",fontSize:13,fontWeight:600,marginLeft:"auto"}}>{item.text}</div>);
     }
-    return (<div key={i} style={{alignSelf:"flex-start",width:"100%",background:"linear-gradient(160deg,#16161B,#0C0C0F)",border:"1px solid rgba(var(--ink-rgb),0.08)",borderRadius:"14px 14px 14px 4px",padding:"13px 14px"}}>
+    return (<div key={i} style={{alignSelf:"flex-start",width:"100%",background:"linear-gradient(160deg,var(--s2),var(--s1))",border:"1px solid rgba(var(--ink-rgb),0.08)",borderRadius:"14px 14px 14px 4px",padding:"13px 14px"}}>
       <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg>
         <span style={{fontSize:11,fontWeight:800,letterSpacing:"-0.2px",color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.label}</span>
@@ -11811,6 +11811,11 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
       that were never moved to --accent. Kept at its exact value so this commit
       changes nothing; unifying the two blues is a design decision, not a sweep. */
    --accent-ios:#0A84FF; --accent-ios-rgb:10,132,255;
+   /* Surface scale. s1 is the app canvas, s2 a card, s3 a raised control, s4 a
+      chip or track, s5 a divider fill. In light these stop being darker greys and
+      become white with the elevation carried by the border instead. */
+   --s0:#08080A; --s1:#0B0B0E; --s2:#141418;
+   --s3:#1C1C1E; --s4:#2A2A2A; --s5:#3A3A3C;
    --side-opp:#3a3d47; --side-opp-rgb:58,61,71;
    --side-b:#31477A;   --side-b-rgb:49,71,122;
  }
@@ -11852,10 +11857,12 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    --cyan:#0E6F9E;       --cyan-rgb:14,111,158;
    --violet:#4340C9;     --violet-rgb:67,64,201;
    --accent-ios:#0B5FCC; --accent-ios-rgb:11,95,204;
+   --s0:#FFFFFF; --s1:#FFFFFF; --s2:#FFFFFF;
+   --s3:#F4F6F8; --s4:#E7ECF2; --s5:#D2D9E2;
    --side-opp:#AFBACA; --side-opp-rgb:175,186,202;
    --side-b:#8FA6C9;   --side-b-rgb:143,166,201;
  }
- html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;position:fixed;width:100%;top:0;left:0;background:#000;touch-action:manipulation;-webkit-text-size-adjust:100%;text-size-adjust:100%;} #root{height:100%;overflow:hidden;background:#000;} .phone{width:100%;max-width:480px;margin:0 auto;height:100vh;height:100dvh;max-height:100dvh;background:#000;position:relative;overflow:hidden;display:flex;flex-direction:column;font-family:'Barlow',system-ui,-apple-system,sans-serif;color:#fff;-webkit-font-smoothing:antialiased;padding-top:var(--sa-top);box-sizing:border-box;}
+ html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;position:fixed;width:100%;top:0;left:0;background:var(--bg);touch-action:manipulation;-webkit-text-size-adjust:100%;text-size-adjust:100%;} #root{height:100%;overflow:hidden;background:var(--bg);} .phone{width:100%;max-width:480px;margin:0 auto;height:100vh;height:100dvh;max-height:100dvh;background:var(--bg);position:relative;overflow:hidden;display:flex;flex-direction:column;font-family:'Barlow',system-ui,-apple-system,sans-serif;color:var(--text);-webkit-font-smoothing:antialiased;padding-top:var(--sa-top);box-sizing:border-box;}
 
  /* iOS Status Bar */
 
@@ -11865,7 +11872,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  .nav-header.large{padding-bottom:8px;}
  .nav-title-small{font-size:17px;font-weight:600;letter-spacing:-0.4px;color:#fff;text-align:center;padding:12px 0 8px;}
  .nav-title-large{font-size:34px;font-weight:700;letter-spacing:-0.5px;color:#fff;line-height:1.35;padding:1px 0;}
- .nt-tg{width:54px;height:32px;border-radius:16px;background:#3a3a40;position:relative;cursor:pointer;flex-shrink:0;overflow:hidden;transition:background .3s;}
+ .nt-tg{width:54px;height:32px;border-radius:16px;background:var(--s5);position:relative;cursor:pointer;flex-shrink:0;overflow:hidden;transition:background .3s;}
  .nt-fill{position:absolute;inset:0;border-radius:16px;background:linear-gradient(90deg,var(--accent-ios),#48a4ff);transform:scaleX(0);transform-origin:left center;transition:transform .42s cubic-bezier(.34,1.56,.64,1);}
  .nt-tg.on .nt-fill{transform:scaleX(1);}
  .nt-knob{position:absolute;top:3px;left:3px;width:26px;height:26px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.35);transition:transform .44s cubic-bezier(.34,1.56,.64,1);display:flex;align-items:center;justify-content:center;z-index:2;}
@@ -11917,7 +11924,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  /* Scrollable body */
  .body{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior-y:contain;position:relative;z-index:1;padding-top:0;padding-bottom:calc(92px + var(--sa-bot));overscroll-behavior:contain;overscroll-behavior-x:none;}
  .body-pad{padding-bottom:calc(100px + var(--sa-bot));}
- .app-header{flex-shrink:0;z-index:25;position:relative;display:flex;align-items:center;gap:8px;height:52px;padding:0 14px;background:linear-gradient(180deg,#10101a 0%,#0b0b0e 100%);border-bottom:0.5px solid rgba(var(--ink-rgb),0.08);box-shadow:0 6px 18px rgba(0,0,0,0.45);}
+ .app-header{flex-shrink:0;z-index:25;position:relative;display:flex;align-items:center;gap:8px;height:52px;padding:0 14px;background:linear-gradient(180deg,#10101a 0%,var(--s1) 100%);border-bottom:0.5px solid rgba(var(--ink-rgb),0.08);box-shadow:0 6px 18px rgba(0,0,0,0.45);}
  .gh-left{display:flex;align-items:center;min-width:0;flex-shrink:0;}
  .gh-center{flex:1;min-width:0;}
  .gh-right{display:flex;align-items:center;gap:9px;flex-shrink:0;}
@@ -11926,10 +11933,10 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  .gh-nm{font-size:13px;font-weight:700;color:#cfe4ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
  .gh-switch.solo .gh-nm{color:#ffc4d2;}
  .gh-icon{position:relative;width:34px;height:34px;border-radius:50%;background:rgba(var(--ink-rgb),0.08);display:flex;align-items:center;justify-content:center;cursor:pointer;}
- .gh-badge{position:absolute;top:-3px;right:-3px;min-width:16px;height:16px;border-radius:8px;background:${IOS.pink};color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 4px;border:1.5px solid #0b0b0e;}
+ .gh-badge{position:absolute;top:-3px;right:-3px;min-width:16px;height:16px;border-radius:8px;background:${IOS.pink};color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 4px;border:1.5px solid var(--s1);}
  .gh-avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,${IOS.blue},${IOS.indigo});display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;cursor:pointer;color:#fff;}
  .gh-sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9000;display:flex;flex-direction:column;justify-content:flex-end;}
- .gh-sheet{background:#0c0c10;border-top-left-radius:22px;border-top-right-radius:22px;border-top:0.5px solid rgba(var(--ink-rgb),0.09);padding:0 0 calc(14px + var(--sa-bot));max-height:75vh;overflow-y:auto;}
+ .gh-sheet{background:var(--s1);border-top-left-radius:22px;border-top-right-radius:22px;border-top:0.5px solid rgba(var(--ink-rgb),0.09);padding:0 0 calc(14px + var(--sa-bot));max-height:75vh;overflow-y:auto;}
  .gh-grip{width:38px;height:4px;border-radius:2px;background:rgba(var(--ink-rgb),0.2);margin:10px auto 6px;}
  .gh-sheet-h{font-size:12px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:rgba(var(--ink-rgb),0.4);padding:8px 20px 6px;}
  .gh-opt{display:flex;align-items:center;gap:12px;padding:13px 20px;cursor:pointer;}
@@ -12010,7 +12017,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 
  /* Mini standings */
  .mini-stand{display:flex;align-items:center;padding:12px 16px;position:relative;}
- .wr-hero{position:relative;overflow:hidden;border-radius:18px;margin:12px 0 0;padding:16px 16px 14px;background:linear-gradient(160deg,#0c1322,#0a0a0e);}
+ .wr-hero{position:relative;overflow:hidden;border-radius:18px;margin:12px 0 0;padding:16px 16px 14px;background:linear-gradient(160deg,#0c1322,var(--s1));}
  .wr-hero .wr-aurora{position:absolute;inset:-60% -25% auto -25%;height:240px;z-index:0;filter:blur(42px);opacity:.5;background:radial-gradient(40% 50% at 25% 30%,var(--accent-ios),transparent 70%),radial-gradient(40% 50% at 75% 40%,#7a4dff,transparent 70%),radial-gradient(35% 45% at 55% 75%,#00d0a0,transparent 70%);animation:wrDrift 14s ease-in-out infinite alternate;}
  @keyframes wrDrift{0%{transform:translate(0,0) scale(1);}100%{transform:translate(-6%,4%) scale(1.15);}}
  .wr-hero>*{position:relative;z-index:1;}
@@ -12028,7 +12035,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  .wr-carousel{display:flex;gap:10px;overflow-x:auto;padding:2px 16px 6px;}
  .wr-carousel::-webkit-scrollbar{display:none;}
  .wr-gc{flex-shrink:0;width:246px;position:relative;overflow:hidden;border:none;border-radius:15px;padding:11px 11px 11px 13px;cursor:pointer;
-   background:linear-gradient(115deg, color-mix(in srgb, var(--tc,#2a2a33) 26%, #101015) 0%, #0e0e13 62%);
+   background:linear-gradient(115deg, color-mix(in srgb, var(--tc,#2a2a33) 26%, var(--s2)) 0%, var(--s1) 62%);
    box-shadow:0 10px 24px -16px rgba(0,0,0,.85), inset 0 1px 0 rgba(var(--ink-rgb),.04);transition:transform .13s ease;}
  .wr-gc:active{transform:scale(0.97);}
  .wr-gc::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--tc,#2a2a33);opacity:.9;}
@@ -12064,7 +12071,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  .auth-beam{position:absolute;left:50%;top:-190px;width:520px;height:600px;transform:translateX(-50%);
    background:radial-gradient(closest-side,rgba(59,111,224,0.42),transparent 70%);filter:blur(16px);
    opacity:0;animation:pkScreenIn 1.3s .05s forwards;pointer-events:none;}
- .auth-veil{position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(7,7,12,0.10) 0%,rgba(7,7,12,0.55) 16%,rgba(7,7,12,0.94) 30%,#07070C 42%);}
+ .auth-veil{position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(7,7,12,0.10) 0%,rgba(7,7,12,0.55) 16%,rgba(7,7,12,0.94) 30%,var(--s0) 42%);}
  /* The lock closes: shackle drops and bounces, body seats, then it rings once. */
  .auth-lock{width:52px;height:59px;position:relative;}
  .auth-shackle{position:absolute;left:13px;top:0;width:26px;height:29px;border:4.5px solid var(--cyan);border-bottom:none;border-radius:13px 13px 0 0;animation:authShackle 1.05s cubic-bezier(0.34,1.56,0.64,1) .1s backwards;}
@@ -12253,7 +12260,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  .pc-btn.share{background:var(--accent-ios);color:#fff;box-shadow:0 8px 22px -8px rgba(10,132,255,.7);}
  .pc-btn.flip{background:rgba(var(--ink-rgb),.08);color:#fff;border:1px solid rgba(var(--ink-rgb),.12);}
  .pc-bsheet-bg{position:fixed;inset:0;z-index:99998;background:rgba(2,3,8,.6);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);display:flex;align-items:flex-end;justify-content:center;}
- .pc-bsheet{width:390px;max-width:100vw;background:#15151b;border-top-left-radius:20px;border-top-right-radius:20px;border:1px solid rgba(var(--ink-rgb),.1);border-bottom:none;padding:8px 20px calc(30px + var(--sa-bot));animation:pcSheetUp .25s cubic-bezier(.2,.8,.2,1);}
+ .pc-bsheet{width:390px;max-width:100vw;background:var(--s2);border-top-left-radius:20px;border-top-right-radius:20px;border:1px solid rgba(var(--ink-rgb),.1);border-bottom:none;padding:8px 20px calc(30px + var(--sa-bot));animation:pcSheetUp .25s cubic-bezier(.2,.8,.2,1);}
  @keyframes pcSheetUp{from{transform:translateY(40px);}to{transform:translateY(0);}}
  .pc-grip{width:38px;height:4px;border-radius:3px;background:rgba(var(--ink-rgb),.2);margin:6px auto 16px;}
  .pc-bs-top{display:flex;align-items:center;gap:14px;}
@@ -12264,13 +12271,13 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  .pc-bs-track{height:8px;border-radius:5px;background:rgba(var(--ink-rgb),.1);overflow:hidden;}
  .pc-bs-fill{height:100%;border-radius:5px;}
  .pc-bs-prog{display:flex;justify-content:space-between;font-size:11.5px;font-weight:800;margin-top:8px;color:#fff;}
- .pc-toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:#1c1c22;border:1px solid rgba(var(--ink-rgb),.15);border-radius:12px;padding:11px 18px;font-size:13px;font-weight:700;color:#fff;z-index:99999;}
+ .pc-toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:var(--s3);border:1px solid rgba(var(--ink-rgb),.15);border-radius:12px;padding:11px 18px;font-size:13px;font-weight:700;color:#fff;z-index:99999;}
  .brk-scroll{overflow-x:auto;overflow-y:hidden;padding:4px 2px 10px;-webkit-overflow-scrolling:touch;}
  .brk-tree{display:flex;gap:36px;width:max-content;height:500px;}
  .brk-round{display:flex;flex-direction:column;justify-content:space-around;min-width:150px;position:relative;padding-top:18px;}
  .brk-rhead{position:absolute;top:0;left:0;right:0;text-align:center;font-size:9.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:rgba(var(--ink-rgb),.4);}
  .brk-cell{position:relative;display:flex;align-items:center;}
- .brk-match{position:relative;width:100%;background:linear-gradient(160deg,#16161d,#0e0e13);border:1px solid rgba(var(--ink-rgb),.08);border-radius:11px;overflow:hidden;cursor:pointer;transition:transform .12s;}
+ .brk-match{position:relative;width:100%;background:linear-gradient(160deg,var(--s2),var(--s1));border:1px solid rgba(var(--ink-rgb),.08);border-radius:11px;overflow:hidden;cursor:pointer;transition:transform .12s;}
  .brk-match:active{transform:scale(.97);}
  .brk-match.you{border-color:rgba(10,132,255,.55);box-shadow:0 0 16px -6px rgba(10,132,255,.6);}
  .brk-match.dead{cursor:default;}
@@ -12289,7 +12296,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  .brk-connf{position:absolute;left:100%;top:50%;width:18px;height:2px;background:rgba(var(--ink-rgb),.16);}
  .brk-stub{position:absolute;right:100%;top:50%;width:18px;height:2px;background:rgba(var(--ink-rgb),.16);}
  .brk-champ{display:flex;flex-direction:column;justify-content:center;min-width:150px;position:relative;padding-top:18px;}
- .brk-cup{position:relative;border-radius:15px;padding:18px 12px;text-align:center;border:1.5px solid rgba(255,214,10,.5);background:linear-gradient(165deg,#2a230a,#12100a);box-shadow:0 0 30px -10px rgba(255,214,10,.5);}
+ .brk-cup{position:relative;border-radius:15px;padding:18px 12px;text-align:center;border:1.5px solid rgba(255,214,10,.5);background:linear-gradient(165deg,#2a230a,var(--s2));box-shadow:0 0 30px -10px rgba(255,214,10,.5);}
  .brk-cup .lab{font-size:9.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--yellow);margin-top:8px;}
  .brk-cup .cn{font-size:16px;font-weight:900;margin-top:5px;}
  .brk-cup .cn.tbd{color:rgba(var(--ink-rgb),.4);font-style:italic;}
@@ -12342,7 +12349,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  .brk-cup.live{cursor:pointer;animation:brkPop .5s both, brkCupGlow 2.2s ease-in-out infinite 1s;}
  @keyframes brkCupGlow{0%,100%{box-shadow:0 0 30px -10px rgba(255,214,10,.5);}50%{box-shadow:0 0 44px -6px rgba(255,214,10,.9);}}
  .brk-cup .tap{font-size:8px;font-weight:800;letter-spacing:.08em;color:rgba(255,214,10,.7);margin-top:7px;text-transform:uppercase;}
- .champ-bg{position:fixed;inset:0;z-index:9700;background:radial-gradient(120% 80% at 50% 0%,#241d06,#08060a 72%);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center;animation:bmdFade .3s;overflow:hidden;}
+ .champ-bg{position:fixed;inset:0;z-index:9700;background:radial-gradient(120% 80% at 50% 0%,#241d06,var(--s0) 72%);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center;animation:bmdFade .3s;overflow:hidden;}
  @keyframes bmdFade{from{opacity:0;}to{opacity:1;}}
  .champ-x{position:absolute;top:18px;right:18px;width:34px;height:34px;border-radius:50%;background:rgba(var(--ink-rgb),.1);display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2;}
  @keyframes champRise{from{opacity:0;transform:translateY(22px) scale(.7);}to{opacity:1;transform:none;}}
@@ -12353,7 +12360,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  .champ-share{margin-top:32px;background:linear-gradient(90deg,var(--yellow),#ffb800);color:#1a1500;font-size:15px;font-weight:900;border:none;border-radius:14px;padding:14px 32px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;animation:champRise .7s .42s both;}
  .app-grain{position:absolute;inset:0;pointer-events:none;z-index:60;opacity:.04;mix-blend-mode:overlay;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");}
  .app-glow{position:absolute;top:0;left:0;right:0;height:240px;pointer-events:none;z-index:0;background:radial-gradient(78% 150px at 50% -30px,rgba(10,132,255,0.12),transparent 72%);}
- .phone{background:radial-gradient(125% 72% at 50% -8%, #0c1426 0%, #060608 52%)!important;}
+ .phone{background:radial-gradient(125% 72% at 50% -8%, #0c1426 0%, var(--s0) 52%)!important;}
  .phone::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:46;opacity:.05;mix-blend-mode:overlay;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");background-size:170px 170px;}
  .mini-stand::after{content:'';position:absolute;bottom:0;left:16px;right:0;height:0.5px;background:${IOS.sep};}
  .mini-stand:last-child::after{display:none;}
@@ -12416,13 +12423,13 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 
  /* Sheet / Modal */
  .sheet-bg{position:absolute;inset:0;background:rgba(0,0,0,0.5);z-index:50;display:flex;flex-direction:column;justify-content:flex-end;backdrop-filter:blur(8px);}
- .sheet{background:#1C1C1E;border-radius:26px;max-height:72%;overflow-y:auto;margin:0 8px calc(8px + var(--sa-bot));border:0.5px solid rgba(var(--ink-rgb),0.12);box-shadow:0 24px 60px -16px rgba(0,0,0,0.88), inset 0 1px 0 rgba(var(--ink-rgb),0.08);}
+ .sheet{background:var(--s3);border-radius:26px;max-height:72%;overflow-y:auto;margin:0 8px calc(8px + var(--sa-bot));border:0.5px solid rgba(var(--ink-rgb),0.12);box-shadow:0 24px 60px -16px rgba(0,0,0,0.88), inset 0 1px 0 rgba(var(--ink-rgb),0.08);}
  .sheet-handle{width:36px;height:5px;border-radius:3px;background:rgba(var(--ink-rgb),0.2);margin:10px auto 0;}
- .sheet-hdr{padding:16px 20px 12px;display:flex;align-items:center;justify-content:space-between;border-bottom:0.5px solid ${IOS.sep};position:sticky;top:0;background:#1C1C1E;z-index:1;}
+ .sheet-hdr{padding:16px 20px 12px;display:flex;align-items:center;justify-content:space-between;border-bottom:0.5px solid ${IOS.sep};position:sticky;top:0;background:var(--s3);z-index:1;}
  .sheet-hdr-title{font-size:17px;font-weight:600;letter-spacing:-0.3px;}
  .sheet-hdr-sub{font-size:13px;color:${IOS.label3};margin-top:2px;}
  .sheet-done{font-size:17px;font-weight:600;color:${IOS.blue};cursor:pointer;padding:4px 0;}
- .sheet-search-wrap{padding:10px 16px;background:#1C1C1E;border-bottom:0.5px solid ${IOS.sep};position:sticky;top:60px;z-index:1;}
+ .sheet-search-wrap{padding:10px 16px;background:var(--s3);border-bottom:0.5px solid ${IOS.sep};position:sticky;top:60px;z-index:1;}
  .sheet-search{width:100%;background:rgba(var(--ink-rgb),0.08);border:none;border-radius:10px;padding:9px 14px 9px 40px;font-family:'Barlow',sans-serif;font-size:15px;color:#fff;outline:none;}
  .sheet-search::placeholder{color:rgba(var(--ink-rgb),0.3);}
  .sheet-search-icon{position:absolute;left:30px;top:50%;transform:translateY(-50%);font-size:13px;color:rgba(var(--ink-rgb),0.3);pointer-events:none;}
@@ -12460,7 +12467,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  @keyframes ticker-scroll{0%{transform:translateX(0%)}100%{transform:translateX(-50%)}}
  /* Ticker. In normal flow (sticky, not fixed): when a live score makes a tile
     two rows tall the strip grows and pushes the page down, never over it. */
- .ticker-wrap{overflow:hidden;background:linear-gradient(180deg,#0e1016,#08090c);border-top:0.5px solid rgba(var(--ink-rgb),0.06);border-bottom:0.5px solid rgba(var(--ink-rgb),0.07);min-height:42px;display:flex;align-items:center;margin:0 0 10px;padding:4px 0;}
+ .ticker-wrap{overflow:hidden;background:linear-gradient(180deg,var(--s2),var(--s0));border-top:0.5px solid rgba(var(--ink-rgb),0.06);border-bottom:0.5px solid rgba(var(--ink-rgb),0.07);min-height:42px;display:flex;align-items:center;margin:0 0 10px;padding:4px 0;}
  .ticker-track{display:flex;align-items:center;white-space:nowrap;animation:ticker-scroll 40s linear infinite;}
  .ticker-track:hover,.ticker-track:active{animation-play-state:paused;}
  .ticker-item{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 11px;margin:0 3px;border-radius:10px;background:rgba(var(--ink-rgb),0.04);border:0.5px solid rgba(var(--ink-rgb),0.07);font-size:12.5px;font-weight:600;color:rgba(var(--ink-rgb),0.5);letter-spacing:0.02em;font-family:'Barlow',sans-serif;cursor:pointer;-webkit-tap-highlight-color:rgba(var(--ink-rgb),0.1);user-select:none;}
@@ -12478,7 +12485,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  .ticker-item.ti-card .ti-ft{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:1px;line-height:1;}
  .ticker-sep{display:none;}
  .lh-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:rgba(var(--ink-rgb),0.06);border-radius:12px;overflow:hidden;}
- .lh-stat{background:#2C2C2E;padding:10px 6px;text-align:center;}
+ .lh-stat{background:var(--s4);padding:10px 6px;text-align:center;}
  .lh-stat-val{font-size:16px;font-weight:700;letter-spacing:-0.3px;line-height:1;margin-bottom:2px;}
  .lh-stat-lbl{font-size:10px;color:${IOS.label3};font-weight:500;}
 
@@ -12585,7 +12592,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 
  /* Power-up modal */
  .pu-modal-bg{position:absolute;inset:0;background:rgba(0,0,0,0.6);z-index:80;display:flex;flex-direction:column;justify-content:flex-end;backdrop-filter:blur(6px);}
- .pu-modal-sheet{background:#1C1C1E;border-radius:26px;padding:0 0 32px;margin:0 8px calc(8px + var(--sa-bot));border:0.5px solid rgba(var(--ink-rgb),0.12);box-shadow:0 24px 60px -16px rgba(0,0,0,0.88), inset 0 1px 0 rgba(var(--ink-rgb),0.08);}
+ .pu-modal-sheet{background:var(--s3);border-radius:26px;padding:0 0 32px;margin:0 8px calc(8px + var(--sa-bot));border:0.5px solid rgba(var(--ink-rgb),0.12);box-shadow:0 24px 60px -16px rgba(0,0,0,0.88), inset 0 1px 0 rgba(var(--ink-rgb),0.08);}
  .pu-modal-handle{width:36px;height:5px;border-radius:3px;background:rgba(var(--ink-rgb),0.2);margin:10px auto 0;}
  .pu-modal-hdr{padding:16px 20px 12px;border-bottom:0.5px solid rgba(var(--ink-rgb),0.08);}
  .pu-modal-title{font-size:17px;font-weight:700;letter-spacing:-0.3px;margin-bottom:3px;}
@@ -12643,7 +12650,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  [data-kb-stick]{will-change:transform;}
  /* Collapsible profile sections. max-height animates (height:auto cannot);
     620px clears the tallest body (4 notification rows) with room to spare. */
- .pf-sec{background:linear-gradient(160deg,#141418,#0B0B0E 80%);border-radius:14px;overflow:hidden;border:0.5px solid rgba(var(--ink-rgb),0.07);margin-bottom:12px;}
+ .pf-sec{background:linear-gradient(160deg,var(--s2),var(--s1) 80%);border-radius:14px;overflow:hidden;border:0.5px solid rgba(var(--ink-rgb),0.07);margin-bottom:12px;}
  .pf-head{display:flex;align-items:center;gap:12px;padding:15px 14px;cursor:pointer;user-select:none;-webkit-user-select:none;}
  .pf-head:active{background:rgba(var(--ink-rgb),0.03);}
  .pf-chev{margin-left:auto;flex:none;transition:transform .26s cubic-bezier(0.4,0,0.2,1);}
@@ -12760,17 +12767,17 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  .tab-bar.small .tab-lamp-sm{display:block;}
  @media (prefers-reduced-motion: reduce){ .tab-bar,.tab-item,.tab-label,.tab-grip,.tab-bar.small,.tab-bar.small .tab-item,.tab-bar.small .tab-label,.tab-bar.small .tab-grip{transition:none;} }
  .tab-lamp{position:absolute;top:4px;right:9px;width:5px;height:5px;border-radius:50%;background:var(--win);box-shadow:0 0 6px rgba(48,209,88,0.8);}
- .psb-bar{position:fixed;left:50%;transform:translateX(-50%) translateY(150%);bottom:calc(14px + var(--sa-bot));width:min(92%,440px);z-index:60;border-radius:22px;background:#fff;color:#0e0e12;box-shadow:0 20px 44px -12px rgba(0,0,0,0.85);display:flex;align-items:center;gap:11px;padding:13px 15px;cursor:pointer;transition:transform .38s cubic-bezier(0.34,1.3,0.4,1);}
+ .psb-bar{position:fixed;left:50%;transform:translateX(-50%) translateY(150%);bottom:calc(14px + var(--sa-bot));width:min(92%,440px);z-index:60;border-radius:22px;background:#fff;color:var(--s1);box-shadow:0 20px 44px -12px rgba(0,0,0,0.85);display:flex;align-items:center;gap:11px;padding:13px 15px;cursor:pointer;transition:transform .38s cubic-bezier(0.34,1.3,0.4,1);}
  .psb-bar.up{transform:translateX(-50%);}
  .psb-cnt{width:27px;height:27px;border-radius:50%;background:var(--win);color:#04220d;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;flex-shrink:0;}
  .psb-veil{position:fixed;inset:0;background:rgba(2,3,8,0.55);opacity:0;pointer-events:none;transition:opacity .25s ease;z-index:70;}
  .psb-veil.on{opacity:1;pointer-events:auto;}
- .psb-sheet{position:fixed;left:50%;transform:translateX(-50%) translateY(105%);bottom:0;width:min(100%,480px);z-index:80;background:#fff;color:#0e0e12;border-radius:22px 22px 0 0;box-shadow:0 -18px 50px -10px rgba(0,0,0,0.8);max-height:86%;display:flex;flex-direction:column;transition:transform .4s cubic-bezier(0.32,1.15,0.35,1);}
+ .psb-sheet{position:fixed;left:50%;transform:translateX(-50%) translateY(105%);bottom:0;width:min(100%,480px);z-index:80;background:#fff;color:var(--s1);border-radius:22px 22px 0 0;box-shadow:0 -18px 50px -10px rgba(0,0,0,0.8);max-height:86%;display:flex;flex-direction:column;transition:transform .4s cubic-bezier(0.32,1.15,0.35,1);}
  .psb-sheet.up{transform:translateX(-50%);}
  .psb-chip{font-size:9px;font-weight:900;letter-spacing:0.04em;color:var(--accent-ios);background:rgba(10,132,255,0.12);border:1px solid rgba(10,132,255,0.35);border-radius:5px;padding:2px 6px;cursor:pointer;display:inline-flex;align-items:center;gap:3px;}
  .psb-mpool{max-height:0;overflow:hidden;transition:max-height .26s ease;}
  .psb-mpool.open{max-height:110px;}
- .psb-mchip{padding:7px 13px;border-radius:9px;border:1px solid rgba(14,14,18,0.14);background:#f2f2f5;font-size:13px;font-weight:900;color:#0e0e12;cursor:pointer;}
+ .psb-mchip{padding:7px 13px;border-radius:9px;border:1px solid rgba(14,14,18,0.14);background:#f2f2f5;font-size:13px;font-weight:900;color:var(--s1);cursor:pointer;}
  .psb-mchip.mine{background:rgba(10,132,255,0.14);border-color:rgba(10,132,255,0.55);color:var(--accent-ios);}
  .psb-mchip.used{opacity:0.3;text-decoration:line-through;pointer-events:none;}
  .psb-toast{position:fixed;left:50%;transform:translateX(-50%) translateY(20px);bottom:calc(110px + var(--sa-bot));background:#0f2418;color:#7ef0a4;border:1px solid rgba(48,209,88,0.4);border-radius:12px;padding:10px 16px;font-size:12.5px;font-weight:800;opacity:0;transition:all .3s ease;z-index:95;pointer-events:none;}
@@ -12791,7 +12798,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
     other provider, in their own black/white styling. Google's likewise wants the
     white treatment with their mark. */
  .auth-oauth.apple{background:#fff;color:#000;border:none;}
- .auth-oauth.google{background:#fff;color:#1F1F1F;border:none;}
+ .auth-oauth.google{background:#fff;color:var(--s3);border:none;}
  .auth-cta{width:100%;border:none;border-radius:13px;padding:16px;font-size:16px;font-weight:800;cursor:pointer;font-family:'Barlow',sans-serif;color:#fff;background:linear-gradient(135deg,var(--accent-ios),var(--violet));box-shadow:0 8px 26px rgba(10,132,255,0.4);transition:transform .12s, box-shadow .2s;letter-spacing:0.2px;}
  .auth-cta:active{transform:scale(0.985);box-shadow:0 4px 16px rgba(10,132,255,0.3);}
  `;
@@ -12948,7 +12955,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const _startLeague = ()=>{ pkTourEnd(); setScreen("leagues"); setShowNewLeague(true); setNewLeagueCreated(null); setNewLeagueSport(null); setNewLeagueName(""); setNewLeagueSize(8); setNewLeagueStep(0); };
  const _card = (inner)=>(
    <div style={{position:"fixed",inset:0,zIndex:99991,background:"rgba(2,3,6,0.8)",display:"flex",alignItems:"flex-end",fontFamily:"Barlow,sans-serif"}}>
-     <div style={{width:"100%",background:"#131317",borderTopLeftRadius:22,borderTopRightRadius:22,borderTop:EDGE.hair2,padding:"10px 20px calc(30px + env(safe-area-inset-bottom))"}}>{inner}</div>
+     <div style={{width:"100%",background:"var(--s2)",borderTopLeftRadius:22,borderTopRightRadius:22,borderTop:EDGE.hair2,padding:"10px 20px calc(30px + env(safe-area-inset-bottom))"}}>{inner}</div>
    </div>
  );
  const _kicker = (txt)=>(<div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:10.5,letterSpacing:"0.14em",textTransform:"uppercase",color:IOS.blue,fontWeight:700,textAlign:"center",marginBottom:7}}>{txt}</div>);
@@ -13023,7 +13030,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
          : <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke={IOS.blue} strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v14M6 12l6 6 6-6"/></svg>}
      </div>
    )}
-   <div style={{position:"fixed",left:18,right:18,top:_tipTop!=null?_tipTop:"auto",bottom:_tipBot!=null?_tipBot:"auto",background:"#15161B",border:"0.5px solid rgba(59,111,224,0.4)",borderRadius:16,padding:"14px 15px 12px",boxShadow:"0 18px 44px rgba(0,0,0,0.6)",pointerEvents:"auto",transition:"all .3s ease"}}>
+   <div style={{position:"fixed",left:18,right:18,top:_tipTop!=null?_tipTop:"auto",bottom:_tipBot!=null?_tipBot:"auto",background:"var(--s2)",border:"0.5px solid rgba(59,111,224,0.4)",borderRadius:16,padding:"14px 15px 12px",boxShadow:"0 18px 44px rgba(0,0,0,0.6)",pointerEvents:"auto",transition:"all .3s ease"}}>
      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:10,letterSpacing:"0.14em",textTransform:"uppercase",color:IOS.blue,fontWeight:700,marginBottom:5}}>{(pkTour==="lap"?"The lap":"Do it live")+" \u00b7 "+(pkTourIdx+1)+" of "+_steps.length}</div>
      <div style={{fontSize:16,fontWeight:800,letterSpacing:"-0.3px",lineHeight:1.2}}>{_st.t}</div>
      <div style={{fontSize:12.5,color:IOS.label2,fontWeight:600,lineHeight:1.5,marginTop:5}}>{_st.b}</div>
@@ -13108,7 +13115,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      </div>
      <div style={{fontSize:28,fontWeight:800,color:"#fff",letterSpacing:-.5,marginBottom:12,lineHeight:1.15}}>Compete with your crew</div>
      <div style={{fontSize:14,color:"rgba(var(--ink-rgb),0.45)",lineHeight:1.7,marginBottom:28}}>Spin up a private league, join a public one, or run it solo. Standings every week — and a title on the line at the end.</div>
-     <div style={{width:"100%",background:"#111",border:"0.5px solid #1E1E1E",borderRadius:RAD.md,padding:"14px 16px",textAlign:"left"}}>
+     <div style={{width:"100%",background:"#111",border:"0.5px solid var(--s3)",borderRadius:RAD.md,padding:"14px 16px",textAlign:"left"}}>
        <div style={{fontSize:9,fontWeight:700,color:"rgba(var(--ink-rgb),0.3)",textTransform:"uppercase",letterSpacing:.5,marginBottom:12}}>Ways to play</div>
        <div style={{display:"flex",flexDirection:"column",gap:10}}>
          {[
@@ -13177,7 +13184,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 
  {/* ══ AUTH SCREEN ══ */}
  {!user && (
- <div style={{position:"relative",width:"100%",maxWidth:480,margin:"0 auto",boxSizing:"border-box",height:"100dvh",overflowY:"auto",overflowX:"hidden",WebkitOverflowScrolling:"touch",paddingBottom:"calc(24px + env(safe-area-inset-bottom))",background:"radial-gradient(120% 70% at 50% -10%, rgba(10,132,255,0.18), transparent 55%), radial-gradient(85% 50% at 85% 112%, rgba(94,92,230,0.16), transparent 60%), #07070C",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"calc(var(--sa-top) + 30px) 28px calc(var(--sa-bot) + 30px)",fontFamily:"'Barlow',sans-serif"}}>
+ <div style={{position:"relative",width:"100%",maxWidth:480,margin:"0 auto",boxSizing:"border-box",height:"100dvh",overflowY:"auto",overflowX:"hidden",WebkitOverflowScrolling:"touch",paddingBottom:"calc(24px + env(safe-area-inset-bottom))",background:"radial-gradient(120% 70% at 50% -10%, rgba(10,132,255,0.18), transparent 55%), radial-gradient(85% 50% at 85% 112%, rgba(94,92,230,0.16), transparent 60%), var(--s0)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"calc(var(--sa-top) + 30px) 28px calc(var(--sa-bot) + 30px)",fontFamily:"'Barlow',sans-serif"}}>
 
  {/* Grid floor \u2014 masked so it dissolves toward the edges. */}
  <div className="auth-grid"/>
@@ -13346,7 +13353,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
     <span style={{width:7,height:7,borderRadius:"50%",background:"var(--accent)"}}/>
     DEMO {"\u2014"} you{"'"}re viewing a sample league
    </div>
-   <button onClick={()=>setDemoGate("save your picks")} style={{background:"#fff",color:"#0b0c10",
+   <button onClick={()=>setDemoGate("save your picks")} style={{background:"#fff",color:"var(--s1)",
     border:"none",borderRadius:20,padding:"5px 12px",fontSize:11,fontWeight:900,
     fontFamily:"'Barlow',sans-serif",cursor:"pointer",whiteSpace:"nowrap"}}>Sign up free</button>
   </div>
@@ -13354,7 +13361,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {demoUpgrade && (
   <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",backdropFilter:"blur(4px)",
    display:"flex",alignItems:"center",justifyContent:"center",zIndex:9100,padding:22}}>
-   <div style={{width:"100%",maxWidth:380,background:"linear-gradient(180deg,#191b21,#0d0e12)",
+   <div style={{width:"100%",maxWidth:380,background:"linear-gradient(180deg,var(--s3),var(--s1))",
     border:"1px solid rgba(var(--ink-rgb),0.14)",borderRadius:20,padding:22}}>
     <div style={{fontSize:19,fontWeight:900,textAlign:"center"}}>Create your account</div>
     <div style={{fontSize:12,color:"rgba(var(--ink-rgb),0.5)",textAlign:"center",marginTop:6,marginBottom:16}}>
@@ -13398,7 +13405,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.72)",backdropFilter:"blur(3px)",
     display:"flex",alignItems:"flex-end",zIndex:9000}}>
    <div style={{width:"100%",maxWidth:480,margin:"0 auto",
-    background:"linear-gradient(180deg,#191b21,#0d0e12)",borderTopLeftRadius:24,
+    background:"linear-gradient(180deg,var(--s3),var(--s1))",borderTopLeftRadius:24,
     borderTopRightRadius:24,borderTop:"1px solid rgba(var(--ink-rgb),0.14)",
     padding:"10px 22px calc(env(safe-area-inset-bottom) + 30px)"}}>
     <div style={{width:38,height:4,borderRadius:3,background:"rgba(var(--ink-rgb),0.22)",margin:"0 auto 16px"}}/>
@@ -13682,7 +13689,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  onChange={e=>{setUsernamePromptInput(e.target.value);setUsernamePromptError("");}}
  placeholder="Choose a username..."
  autoFocus
- style={{width:"100%",background:"#1C1C1E",border:`1.5px solid ${usernamePromptError?IOS.red:IOS.blue}`,borderRadius:RAD.md,padding:"12px 14px",color:"#fff",fontSize:16,fontFamily:"Barlow,sans-serif",outline:"none",marginBottom:8,boxSizing:"border-box"}}
+ style={{width:"100%",background:"var(--s3)",border:`1.5px solid ${usernamePromptError?IOS.red:IOS.blue}`,borderRadius:RAD.md,padding:"12px 14px",color:"#fff",fontSize:16,fontFamily:"Barlow,sans-serif",outline:"none",marginBottom:8,boxSizing:"border-box"}}
  />
  {usernamePromptError && <div style={{fontSize:12,color:IOS.red,marginBottom:8}}>{usernamePromptError}</div>}
  <div style={{fontSize:11,color:IOS.label3,marginBottom:20}}>Letters, numbers, and underscores only. Min 3 characters.</div>
@@ -13833,7 +13840,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <>
  <div className="body" key={screen}>
            {plokRecord && plokRecord.lock && (
-             <div onClick={()=>setScreen("ai")} style={{display:"flex",alignItems:"center",gap:11,background:"linear-gradient(160deg,#0f171d,#0b0b0e 78%)",border:"0.5px solid rgba(100,210,255,0.32)",borderRadius:RAD.lg,padding:"11px 13px",marginBottom:12,cursor:"pointer"}}>
+             <div onClick={()=>setScreen("ai")} style={{display:"flex",alignItems:"center",gap:11,background:"linear-gradient(160deg,#0f171d,var(--s1) 78%)",border:"0.5px solid rgba(100,210,255,0.32)",borderRadius:RAD.lg,padding:"11px 13px",marginBottom:12,cursor:"pointer"}}>
                <div style={{flex:1,minWidth:0}}>
                  <div style={{fontSize:9.5,fontWeight:900,letterSpacing:"1.4px",textTransform:"uppercase",color:"var(--cyan)"}}>{"Plok's Lock of the Day"}</div>
                  <div style={{display:"flex",alignItems:"baseline",gap:7,marginTop:3,minWidth:0}}>
@@ -14080,7 +14087,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    const _dWk=activeLeague.current_week||activeLeague.week||1;
    const _dReady = membersFor===activeLeague.id && weekPicksFor===(activeLeague.id+":"+_dWk);
    if(!_dReady) return (
-     <div style={{position:"relative",border:"0.5px solid rgba(120,150,255,0.16)",borderRadius:RAD.xl,overflow:"hidden",margin:"0 0 10px",background:"linear-gradient(160deg,#15161E,#0B0B10 75%)",padding:"13px 14px"}}>
+     <div style={{position:"relative",border:"0.5px solid rgba(120,150,255,0.16)",borderRadius:RAD.xl,overflow:"hidden",margin:"0 0 10px",background:"linear-gradient(160deg,#15161E,var(--s1) 75%)",padding:"13px 14px"}}>
        <div style={{height:9,width:120,borderRadius:5,background:"rgba(var(--ink-rgb),0.07)"}}/>
        <div style={{display:"flex",alignItems:"center",gap:10,marginTop:14}}>
          <div style={{flex:1,display:"flex",alignItems:"center",gap:8}}><div style={{width:34,height:34,borderRadius:"50%",background:"rgba(var(--ink-rgb),0.06)"}}/><div style={{height:12,width:80,borderRadius:6,background:"rgba(var(--ink-rgb),0.06)"}}/></div>
@@ -14128,13 +14135,13 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    const _lampRow=(lamps,right)=>(<div style={{display:"flex",gap:3,marginTop:8,height:5,justifyContent:right?"flex-end":"flex-start"}}>{lamps.map((c,i)=>(<span key={i} style={{flex:"1 1 0",maxWidth:16,minWidth:4,borderRadius:3,background:c}}/>))}</div>);
    const _avSty=(mine)=>({width:34,height:34,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,flexShrink:0, background:mine?"rgba(10,132,255,0.18)":"rgba(var(--ink-rgb),0.08)", border:mine?"1px solid rgba(10,132,255,0.45)":"1px solid rgba(var(--ink-rgb),0.2)", color:mine?IOS.blue:"rgba(var(--ink-rgb),0.7)"});
    const _ctaSty={display:"block",textAlign:"center",background:IOS.blue,color:"#fff",fontWeight:800,fontSize:14,padding:"11px",borderRadius:RAD.md,marginTop:12,cursor:"pointer"};
-   const _cardSty=(gold)=>({position:"relative",border:gold?"0.5px solid rgba(255,214,10,0.28)":"0.5px solid rgba(120,150,255,0.16)",boxShadow:"0 14px 32px -18px rgba(0,0,0,0.8), inset 0 1px 0 rgba(var(--ink-rgb),0.06)",borderRadius:RAD.xl,overflow:"hidden",margin:"0 0 10px", background:"radial-gradient(120% 90% at 85% -10%, rgba(59,111,224,0.32), transparent 55%), radial-gradient(90% 70% at -10% 110%, rgba(94,92,230,0.16), transparent 60%), linear-gradient(160deg,#15161E,#0B0B10 75%)"});
+   const _cardSty=(gold)=>({position:"relative",border:gold?"0.5px solid rgba(255,214,10,0.28)":"0.5px solid rgba(120,150,255,0.16)",boxShadow:"0 14px 32px -18px rgba(0,0,0,0.8), inset 0 1px 0 rgba(var(--ink-rgb),0.06)",borderRadius:RAD.xl,overflow:"hidden",margin:"0 0 10px", background:"radial-gradient(120% 90% at 85% -10%, rgba(59,111,224,0.32), transparent 55%), radial-gradient(90% 70% at -10% 110%, rgba(94,92,230,0.16), transparent 60%), linear-gradient(160deg,#15161E,var(--s1) 75%)"});
    const _runBack=()=>prefillRunItBack(activeLeague);
    const _pendTop=(rows)=>{ const ps=rows.filter(r=>r.result==="pending").sort((a,b)=>(Number(b.multiplier)||0)-(Number(a.multiplier)||0)); return ps[0]||null; };
    const _beat=(()=>{ if(_myPts===_oppPts) return "dead even \u00B7 next cash takes the lead"; const trailMine=_myPts<_oppPts; const t=_pendTop(trailMine?_myRows:_oppRows); if(t) return (trailMine?("your "+t.pick_name+" could flip it"):("their "+t.pick_name+" could flip it")); return trailMine?"no live legs left on your side":"no live legs left on their side"; })();
    const _dagRow=(()=>{ const src=_iWin?_myRows:_oppRows; const w=src.filter(r=>r.result==="W").sort((a,b)=>parseFloat(b.points_earned||0)-parseFloat(a.points_earned||0))[0]; return w||null; })();
    const _dag=_dagRow?((_iWin?"your ":"their ")+(_dagRow.multiplier?(_dagRow.multiplier+"x "):"")+_dagRow.pick_name+(_iWin?" was the dagger":" did the damage")):null;
-   const _sideHdr=(mine)=>(<div style={{display:"flex",alignItems:"center",gap:8,justifyContent:mine?"flex-start":"flex-end"}}>{mine&&<div style={_dFinal&&_iWin?{..._avSty(true),background:"linear-gradient(135deg,var(--yellow),var(--live))",border:"none",color:"#1a1a1a"}:_avSty(true)}>{_ini(userProfile&&userProfile.username)}</div>}{!mine&&<div style={{textAlign:"right"}}><div style={{fontSize:9.5,letterSpacing:"0.12em",color:"rgba(var(--ink-rgb),0.3)",fontWeight:700,textTransform:"uppercase"}}>{_dOppName}</div><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:26,lineHeight:1,marginTop:4,color:_dFinal?(_oppWin?IOS.yellow:(_drawn?"#fff":"rgba(var(--ink-rgb),0.55)")):"#fff"}}>{_oppPts.toFixed(1)}</div></div>}{mine&&<div><div style={{fontSize:9.5,letterSpacing:"0.12em",color:_dFinal&&_iWin?IOS.yellow:"rgba(var(--ink-rgb),0.3)",fontWeight:700,textTransform:"uppercase"}}>{_dFinal&&_iWin?"Winner":"You"}</div><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:26,lineHeight:1,marginTop:4,color:_dFinal?(_iWin?IOS.yellow:(_drawn?"#fff":"rgba(var(--ink-rgb),0.55)")):(_myPts>=_oppPts?COL.win:"#fff")}}>{_myPts.toFixed(1)}</div></div>}{!mine&&<div style={_oppWin?{..._avSty(false),background:"linear-gradient(135deg,var(--yellow),var(--live))",border:"none",color:"#1a1a1a"}:_avSty(false)}>{_ini(_dOppName)}</div>}</div>);
+   const _sideHdr=(mine)=>(<div style={{display:"flex",alignItems:"center",gap:8,justifyContent:mine?"flex-start":"flex-end"}}>{mine&&<div style={_dFinal&&_iWin?{..._avSty(true),background:"linear-gradient(135deg,var(--yellow),var(--live))",border:"none",color:"var(--s3)"}:_avSty(true)}>{_ini(userProfile&&userProfile.username)}</div>}{!mine&&<div style={{textAlign:"right"}}><div style={{fontSize:9.5,letterSpacing:"0.12em",color:"rgba(var(--ink-rgb),0.3)",fontWeight:700,textTransform:"uppercase"}}>{_dOppName}</div><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:26,lineHeight:1,marginTop:4,color:_dFinal?(_oppWin?IOS.yellow:(_drawn?"#fff":"rgba(var(--ink-rgb),0.55)")):"#fff"}}>{_oppPts.toFixed(1)}</div></div>}{mine&&<div><div style={{fontSize:9.5,letterSpacing:"0.12em",color:_dFinal&&_iWin?IOS.yellow:"rgba(var(--ink-rgb),0.3)",fontWeight:700,textTransform:"uppercase"}}>{_dFinal&&_iWin?"Winner":"You"}</div><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:26,lineHeight:1,marginTop:4,color:_dFinal?(_iWin?IOS.yellow:(_drawn?"#fff":"rgba(var(--ink-rgb),0.55)")):(_myPts>=_oppPts?COL.win:"#fff")}}>{_myPts.toFixed(1)}</div></div>}{!mine&&<div style={_oppWin?{..._avSty(false),background:"linear-gradient(135deg,var(--yellow),var(--live))",border:"none",color:"var(--s3)"}:_avSty(false)}>{_ini(_dOppName)}</div>}</div>);
    if(!_dLive && !_dFinal){
    const _mineLockedAll=slotCount>0&&_myLockedSlots>=slotCount;
    const _oppLockedAll=slotCount>0&&_oppLockedSlots>=slotCount;
@@ -14180,12 +14187,12 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    </div>
    <div style={{fontSize:10,fontWeight:700,color:"rgba(var(--ink-rgb),0.45)",marginTop:11,textAlign:"center"}}>{_drawn?("Tied at "+_myPts.toFixed(1)+" \u00B7 every tiebreak came up even \u2014 run it back to settle it"):((_iWin?"Won by ":"Lost by ")+_gap+(_dag?(" \u00B7 "+_dag):""))}</div>
   {!_dStamped&&<div style={{fontSize:9,fontWeight:700,color:"rgba(var(--ink-rgb),0.28)",marginTop:5,textAlign:"center"}}>{"Every leg is in \u00B7 the trophy stamps at the window close"}</div>}
-   {activeLeague.isCommissioner&&<div onClick={_runBack} style={{..._ctaSty,background:"linear-gradient(120deg,var(--yellow),var(--live))",color:"#141414"}}>Run it back</div>}
+   {activeLeague.isCommissioner&&<div onClick={_runBack} style={{..._ctaSty,background:"linear-gradient(120deg,var(--yellow),var(--live))",color:"var(--s2)"}}>Run it back</div>}
    <div onClick={()=>setScreen("matchup")} style={{..._ctaSty,background:"rgba(var(--ink-rgb),0.05)",boxShadow:"inset 0 0 0 0.5px rgba(var(--ink-rgb),0.12)",color:"rgba(var(--ink-rgb),0.75)",fontSize:13,padding:"10px",marginTop:activeLeague.isCommissioner?8:12}}>See the full breakdown</div>
    </div></div>);
    }
    if(!isSoloMode && activeLeague.champion_id) return (
-     <div className="pl-reveal" style={{margin:"0 16px 14px",background:"linear-gradient(160deg,rgba(255,214,10,0.10),transparent 60%),linear-gradient(160deg,#141418,#0B0B0E 80%)",border:"0.5px solid rgba(255,214,10,0.28)",borderRadius:RAD.lg,padding:"16px"}}>
+     <div className="pl-reveal" style={{margin:"0 16px 14px",background:"linear-gradient(160deg,rgba(255,214,10,0.10),transparent 60%),linear-gradient(160deg,var(--s2),var(--s1) 80%)",border:"0.5px solid rgba(255,214,10,0.28)",borderRadius:RAD.lg,padding:"16px"}}>
        <div style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:IOS.yellow}}>Season complete</div>
        <div style={{fontSize:16,fontWeight:800,color:"#fff",marginTop:5}}>{activeLeague.name} is in the books</div>
        <div style={{fontSize:12,color:IOS.label2,marginTop:4,lineHeight:1.45}}>Every pick is graded and the standings are final.</div>
@@ -14195,7 +14202,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    /* Knocked out: no builder. The card states what is actually true \u2014 league scoring is
       done, but picks made in Solo still feed career stats, OVR and global rank. */
    if(isEliminated) return (
-     <div className="pl-reveal" style={{margin:"0 16px 14px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.lg,padding:"16px"}}>
+     <div className="pl-reveal" style={{margin:"0 16px 14px",background:"linear-gradient(160deg,var(--s2),var(--s1) 80%)",border:EDGE.hair,borderRadius:RAD.lg,padding:"16px"}}>
        <div style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:IOS.label3}}>Season over</div>
        <div style={{fontSize:16,fontWeight:800,color:"#fff",marginTop:5}}>You're out of the playoffs</div>
        <div style={{fontSize:12,color:IOS.label2,marginTop:4,lineHeight:1.45}}>No matchup this week, so there's nothing to score against in {activeLeague.name}. Your record and standing are locked in.</div>
@@ -14210,7 +14217,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    const _cta={marginLeft:"auto",display:"inline-flex",alignItems:"center",gap:7,background:"var(--accent-ios)",color:"#fff",fontWeight:700,fontSize:14,padding:"10px 15px",borderRadius:RAD.md,border:"none",cursor:"pointer"};
    return (
    <div className="pl-rise pl-d1" style={{position:"relative",border:"0.5px solid rgba(120,150,255,0.16)",boxShadow:"0 14px 32px -18px rgba(0,0,0,0.8), inset 0 1px 0 rgba(var(--ink-rgb),0.06)",borderRadius:RAD.xl,overflow:"hidden",margin:"0 0 10px",
-     background:"radial-gradient(120% 90% at 85% -10%, rgba(59,111,224,0.32), transparent 55%), radial-gradient(90% 70% at -10% 110%, rgba(94,92,230,0.16), transparent 60%), linear-gradient(160deg,#15161E,#0B0B10 75%)"}}>
+     background:"radial-gradient(120% 90% at 85% -10%, rgba(59,111,224,0.32), transparent 55%), radial-gradient(90% 70% at -10% 110%, rgba(94,92,230,0.16), transparent 60%), linear-gradient(160deg,#15161E,var(--s1) 75%)"}}>
    <div style={{position:"absolute",inset:0,backgroundImage:"repeating-linear-gradient(0deg,rgba(var(--ink-rgb),0.022) 0px,rgba(var(--ink-rgb),0.022) 1px,transparent 1px,transparent 4px)",pointerEvents:"none",opacity:0.5}}/>
    <div style={{position:"relative",padding:"13px 14px 12px"}}>
 
@@ -14289,7 +14296,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        <div style={{background:"rgba(0,0,0,0.4)",border:EDGE.hair,borderRadius:RAD.md,padding:13,marginBottom:12}}>
          <div style={{fontSize:8.5,fontWeight:900,letterSpacing:"0.1em",color:"rgba(var(--ink-rgb),0.3)",marginBottom:7}}>{_ml?"YOUR TEAM":"YOUR SCORER"}</div>
          <div style={{display:"flex",alignItems:"center",gap:11}}>
-           <div style={{width:38,height:38,borderRadius:10,background:"#1C1D22",border:EDGE.hair,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,color:"rgba(var(--ink-rgb),0.5)",flexShrink:0}}>{_ini}</div>
+           <div style={{width:38,height:38,borderRadius:10,background:"var(--s3)",border:EDGE.hair,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,color:"rgba(var(--ink-rgb),0.5)",flexShrink:0}}>{_ini}</div>
            <div style={{minWidth:0,flex:1}}>
              <div style={{fontSize:16.5,fontWeight:800,lineHeight:1.1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",textDecoration:_lost?"line-through":"none",textDecorationColor:"rgba(255,69,58,0.7)"}}>{_nm}</div>
              <div style={{fontSize:11,color:"rgba(var(--ink-rgb),0.42)",fontWeight:600,marginTop:3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{(_p.game||"")+(_kick?(" \u00B7 "+_at(_kick)):"")}</div>
@@ -14309,8 +14316,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        </div>
        {(()=>{ const _pr = svPoolRows(activeLeague, activeLeague.current_week||1); if(!_pr.rows.length) return null; const _in = _pr.rows.filter(r=>!r.out); const _show=_in.slice(0,8); return (
          <div style={{display:"flex",alignItems:"center",marginBottom:10}}>
-           {_show.map((r,i)=>(<span key={r.id||i} style={{width:24,height:24,borderRadius:"50%",background:r.hasPick?IOS.green:"rgba(255,159,10,0.18)",color:r.hasPick?"#000":IOS.orange,border:"2px solid #0d0f14",marginLeft:i?-7:0,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:7.5,fontWeight:800,flexShrink:0}}>{r.av}</span>))}
-           {_in.length>8 && <span style={{width:24,height:24,borderRadius:"50%",background:"#2a2f3a",border:"2px solid #0d0f14",marginLeft:-7,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:7.5,fontWeight:800,color:"rgba(var(--ink-rgb),0.7)"}}>{"+"+(_in.length-8)}</span>}
+           {_show.map((r,i)=>(<span key={r.id||i} style={{width:24,height:24,borderRadius:"50%",background:r.hasPick?IOS.green:"rgba(255,159,10,0.18)",color:r.hasPick?"#000":IOS.orange,border:"2px solid var(--s1)",marginLeft:i?-7:0,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:7.5,fontWeight:800,flexShrink:0}}>{r.av}</span>))}
+           {_in.length>8 && <span style={{width:24,height:24,borderRadius:"50%",background:"#2a2f3a",border:"2px solid var(--s1)",marginLeft:-7,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:7.5,fontWeight:800,color:"rgba(var(--ink-rgb),0.7)"}}>{"+"+(_in.length-8)}</span>}
            <span style={{fontSize:11,fontWeight:700,color:"rgba(var(--ink-rgb),0.5)",marginLeft:10}}><span style={{color:IOS.green}}>{_pr.locked+" locked"}</span>{" \u00B7 "}<span style={{color:IOS.orange}}>{_pr.deciding+" deciding"}</span></span>
          </div>
        ); })()}
@@ -14323,7 +14330,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        )}
        {(!_open&&_p)&&(
          <div onClick={()=>setScreen("matchup")} style={{cursor:"pointer",background:_rn>0?"rgba(191,90,242,0.07)":"rgba(48,209,88,0.07)",border:"0.5px solid "+(_rn>0?"rgba(191,90,242,0.28)":"rgba(48,209,88,0.28)"),borderRadius:RAD.md,padding:"11px 12px",display:"flex",alignItems:"center",gap:10}}>
-           {_rn>0&&<div style={{display:"flex",flexShrink:0}}>{_riders.slice(0,3).map((r,i)=>(<div key={i} style={{width:23,height:23,borderRadius:"50%",border:"1.5px solid #0A0A0D",marginLeft:i?-7:0,background:["var(--accent-ios)","var(--purple)","var(--live)"][i%3],display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:900,color:"#fff"}}>{String(_mem4(r.user_id)).slice(0,2).toUpperCase()}</div>))}</div>}
+           {_rn>0&&<div style={{display:"flex",flexShrink:0}}>{_riders.slice(0,3).map((r,i)=>(<div key={i} style={{width:23,height:23,borderRadius:"50%",border:"1.5px solid var(--s1)",marginLeft:i?-7:0,background:["var(--accent-ios)","var(--purple)","var(--live)"][i%3],display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:900,color:"#fff"}}>{String(_mem4(r.user_id)).slice(0,2).toUpperCase()}</div>))}</div>}
            <div style={{fontSize:12,fontWeight:700,color:"rgba(var(--ink-rgb),0.72)",lineHeight:1.3,minWidth:0}}>{_rn>0?<><span style={{color:"#fff",fontWeight:800}}>{_rn+(_rn===1?" other":" others")}</span>{" rode "+(_ml?("the "+_short):_short)}</>:<><span style={{color:"#fff",fontWeight:800}}>{"You\u2019re the only one"}</span>{" on "+(_ml?("the "+_short):_short)}</>}</div>
            <div style={{marginLeft:"auto",color:_rn>0?IOS.purple:IOS.green,fontSize:15,fontWeight:800,flexShrink:0}}>{"\u203A"}</div>
          </div>
@@ -14483,7 +14490,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      nobody could use (seen 2 Sep 2026 on a 6-person CFB league). Auto leagues render
      the normal home during that frame; the card is the manual/scheduled experience. */}
  {homeTab==='home' && showStartedCard && (
-   <div style={{margin:"6px 16px 16px",background:"linear-gradient(160deg,#0c1f38,#0b0d12)",border:"0.5px solid rgba(10,132,255,0.25)",borderRadius:RAD.xl,padding:"18px",textAlign:"center"}}>
+   <div style={{margin:"6px 16px 16px",background:"linear-gradient(160deg,#0c1f38,var(--s1))",border:"0.5px solid rgba(10,132,255,0.25)",borderRadius:RAD.xl,padding:"18px",textAlign:"center"}}>
      <div style={{display:"inline-flex",alignItems:"center",gap:5,background:"rgba(48,209,88,0.14)",border:"0.5px solid rgba(48,209,88,0.3)",borderRadius:RAD.pill,padding:"4px 11px",fontSize:11,fontWeight:800,letterSpacing:"0.06em",color:IOS.green}}><span className="wr-dot"/>SEASON LIVE</div>
      <div style={{fontSize:20,fontWeight:900,color:"#fff",marginTop:11,letterSpacing:-0.3}}>{"Roster\u2019s full. Week 1 is live."}</div>
      <div style={{fontSize:13,color:IOS.label2,lineHeight:1.5,marginTop:7}}>{"Everyone\u2019s in and picks are open. Lock yours before the first kickoff."}</div>
@@ -14494,7 +14501,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    </div>
  )}
  {homeTab==='home' && !isSoloMode && leagueAwaitingStart && ((activeLeague.start_mode)||"auto")!=="auto" && (activeLeague.isCommissioner ? (
-   <div style={{margin:"6px 16px 16px",background:"linear-gradient(160deg,#0c1f38,#0b0d12)",border:"0.5px solid rgba(10,132,255,0.25)",borderRadius:RAD.xl,padding:"18px",textAlign:"center"}}>
+   <div style={{margin:"6px 16px 16px",background:"linear-gradient(160deg,#0c1f38,var(--s1))",border:"0.5px solid rgba(10,132,255,0.25)",borderRadius:RAD.xl,padding:"18px",textAlign:"center"}}>
      <div style={{display:"inline-flex",alignItems:"center",gap:5,background:"rgba(48,209,88,0.14)",border:"0.5px solid rgba(48,209,88,0.3)",borderRadius:RAD.pill,padding:"4px 11px",fontSize:11,fontWeight:800,color:IOS.green}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>Roster full · {(activeLeague.memberCount||0)}/{_lgTarget}</div>
      <div style={{fontSize:20,fontWeight:900,color:"#fff",marginTop:11,letterSpacing:-0.3}}>Roster’s full</div>
      <div style={{fontSize:13,color:IOS.label2,lineHeight:1.5,marginTop:7}}>{seasonHasSlate ? "You chose manual start, so the season hasn’t begun. Start it whenever everyone’s signed and the slate looks right." : "The roster is full, but there are no games on the board for this sport yet. Starting now would open Week 1 with an empty slate and lock the roster — wait for the schedule."}</div>
@@ -14509,11 +14516,11 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      </div>
    </div>
    ) : (
-   <div style={{margin:"6px 16px 16px",background:"#141417",border:EDGE.hair,borderRadius:RAD.xl,padding:"24px 18px",textAlign:"center"}}>
+   <div style={{margin:"6px 16px 16px",background:"var(--s2)",border:EDGE.hair,borderRadius:RAD.xl,padding:"24px 18px",textAlign:"center"}}>
      <div style={{width:58,height:58,borderRadius:"50%",background:"rgba(255,159,10,0.12)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px"}}><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={IOS.orange} strokeWidth="2.2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
      <div style={{fontSize:20,fontWeight:900,color:"#fff",letterSpacing:-0.3}}>You’re in. League’s full.</div>
      <div style={{fontSize:13.5,color:IOS.label2,lineHeight:1.5,marginTop:8}}>Waiting for the commissioner to start the season. You’ll get a heads-up the moment Week 1 opens.</div>
-     <div style={{display:"flex",gap:9,alignItems:"flex-start",background:"#1c1c1e",border:EDGE.hair,borderRadius:RAD.md,padding:"13px",marginTop:18,textAlign:"left"}}>
+     <div style={{display:"flex",gap:9,alignItems:"flex-start",background:"var(--s3)",border:EDGE.hair,borderRadius:RAD.md,padding:"13px",marginTop:18,textAlign:"left"}}>
        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" strokeWidth="2" style={{flexShrink:0,marginTop:1}}><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg>
        <span style={{fontSize:12.5,color:IOS.label3,lineHeight:1.45}}>Picks stay locked until the season starts — so your first slate matches whatever week the league goes live.</span>
      </div>
@@ -14612,7 +14619,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        <span onClick={()=>setScreen("matchup")} style={{color:sport.color,fontSize:13,textTransform:"none",fontWeight:500,letterSpacing:0,cursor:"pointer"}}>The Field</span>
      </div>
    </div>
-   <div onClick={()=>setScreen("league")} style={{margin:"0 16px 10px",borderRadius:RAD.lg,padding:"16px",cursor:"pointer",position:"relative",overflow:"hidden",background:"linear-gradient(155deg,#10183a 0%,#0B0B0E 72%)",border:`1px solid ${fade(IOS.indigo,0.22)}`,boxShadow:"0 4px 16px rgba(0,0,0,0.4)"}}>
+   <div onClick={()=>setScreen("league")} style={{margin:"0 16px 10px",borderRadius:RAD.lg,padding:"16px",cursor:"pointer",position:"relative",overflow:"hidden",background:"linear-gradient(155deg,#10183a 0%,var(--s1) 72%)",border:`1px solid ${fade(IOS.indigo,0.22)}`,boxShadow:"0 4px 16px rgba(0,0,0,0.4)"}}>
      <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${IOS.blue},${IOS.indigo})`}}/>
      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
        <div>
@@ -14645,7 +14652,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      if(_cw<_sw) return null;
      const _in=(typeof myRank==="number")&&myRank<=playoffN;
      return (
-     <div onClick={()=>{setLeagueTab("playoff");setScreen("league");}} style={{margin:"0 16px 10px",borderRadius:RAD.lg,padding:"12px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:11,background:_in?"linear-gradient(135deg,#1A1606,#0B0B0E 72%)":"#141417",border:`1px solid ${_in?"rgba(255,214,10,0.35)":IOS.sep}`}}>
+     <div onClick={()=>{setLeagueTab("playoff");setScreen("league");}} style={{margin:"0 16px 10px",borderRadius:RAD.lg,padding:"12px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:11,background:_in?"linear-gradient(135deg,#1A1606,var(--s1) 72%)":"var(--s2)",border:`1px solid ${_in?"rgba(255,214,10,0.35)":IOS.sep}`}}>
        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={_in?IOS.yellow:IOS.label3} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
        <div style={{flex:1,minWidth:0}}>
          <div style={{fontSize:13,fontWeight:800,color:_in?"#fff":IOS.label2}}>{_in?"You're in the playoff":"Just missed the playoff"}</div>
@@ -14705,7 +14712,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    const _opInit=String(oppName||"?").slice(0,2).toUpperCase();
    return (
  <div onClick={()=>setScreen("matchup")} style={{margin:"0 16px 10px",borderRadius:RAD.lg,overflow:"hidden",cursor:"pointer",border:"0.5px solid rgba(var(--ink-rgb),0.07)",
-   background:"radial-gradient(110% 90% at 50% -20%, "+(isTied?"rgba(59,111,224,0.16)":isWinning?"rgba(48,209,88,0.14)":"rgba(255,69,58,0.12)")+", transparent 60%), linear-gradient(160deg,#14151C,#0B0B10 80%)"}}>
+   background:"radial-gradient(110% 90% at 50% -20%, "+(isTied?"rgba(59,111,224,0.16)":isWinning?"rgba(48,209,88,0.14)":"rgba(255,69,58,0.12)")+", transparent 60%), linear-gradient(160deg,var(--s2),var(--s1) 80%)"}}>
 
    {/* Faces, not text labels: an opponent with a name and an avatar is a person
        you are beating or losing to, which is the entire emotional point. */}
@@ -14717,7 +14724,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      </div>
      <div style={{fontSize:10,fontWeight:800,color:"rgba(var(--ink-rgb),0.3)",letterSpacing:"0.1em"}}>{"WK "+(activeLeague.current_week||activeLeague.week||1)}</div>
      <div onClick={(e)=>{ e.stopPropagation(); if(oppId) openUserProfile(oppId,{username:oppName}); }} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:5,cursor:oppId?"pointer":"default"}}>
-       <div style={{width:44,height:44,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800,background:"linear-gradient(140deg,#3A3A44,#26262E)",color:"rgba(var(--ink-rgb),0.8)"}}>{_opInit}</div>
+       <div style={{width:44,height:44,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800,background:"linear-gradient(140deg,#3A3A44,var(--s4))",color:"rgba(var(--ink-rgb),0.8)"}}>{_opInit}</div>
        <div style={{fontSize:11.5,fontWeight:800,color:"rgba(var(--ink-rgb),0.46)",maxWidth:100,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{oppName||"Opponent"}</div>
        <Roll value={oppTotal} size={26} color="#fff"/>
      </div>
@@ -14725,7 +14732,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 
    {/* Share bar. Deliberately NOT called win probability \u2014 there is no model behind
        it; it is the split of points scored so far. */}
-   <div style={{margin:"0 14px",height:7,borderRadius:4,background:"#2A2A32",overflow:"hidden",display:"flex"}}>
+   <div style={{margin:"0 14px",height:7,borderRadius:4,background:"var(--s4)",overflow:"hidden",display:"flex"}}>
      <div style={{width:_share+"%",background:isTied?"linear-gradient(90deg,#2E7CF6,var(--cyan))":isWinning?"linear-gradient(90deg,#28A84A,var(--win))":"linear-gradient(90deg,#C4342B,var(--loss))",transition:"width .5s cubic-bezier(0.4,0,0.2,1)"}}/>
    </div>
    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 14px 12px",fontSize:10.5,fontWeight:800,color:"rgba(var(--ink-rgb),0.5)"}}>
@@ -14799,7 +14806,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  );
  });
  card=(
- <div style={{margin:"0 16px 10px",background:"#131318",borderRadius:RAD.lg,overflow:"hidden",border:EDGE.hair}}>
+ <div style={{margin:"0 16px 10px",background:"var(--s2)",borderRadius:RAD.lg,overflow:"hidden",border:EDGE.hair}}>
  <div style={{padding:"12px 16px 8px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:`0.5px solid ${IOS.sep}`}}>
  <div style={{display:"flex",alignItems:"center",gap:7}}>
  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -14840,7 +14847,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  })()}
 
 {!leaguesLoading && realLeagues.length===0 && (
- <div style={{margin:"6px 16px 4px",borderRadius:RAD.xl,padding:"18px",position:"relative",overflow:"hidden",background:"radial-gradient(130% 120% at 10% -10%, rgba(10,132,255,0.32), rgba(94,92,230,0.12) 45%, rgba(12,12,16,0) 75%),linear-gradient(160deg,#10204a 0%,#0c0c12 78%)",border:"1px solid rgba(10,132,255,0.3)",boxShadow:"0 18px 50px -26px rgba(10,132,255,0.6)"}}>
+ <div style={{margin:"6px 16px 4px",borderRadius:RAD.xl,padding:"18px",position:"relative",overflow:"hidden",background:"radial-gradient(130% 120% at 10% -10%, rgba(10,132,255,0.32), rgba(94,92,230,0.12) 45%, rgba(12,12,16,0) 75%),linear-gradient(160deg,#10204a 0%,var(--s1) 78%)",border:"1px solid rgba(10,132,255,0.3)",boxShadow:"0 18px 50px -26px rgba(10,132,255,0.6)"}}>
    <div style={{fontSize:20,fontWeight:900,letterSpacing:-0.4,color:"#fff"}}>Get in a league</div>
    <div style={{fontSize:13,color:"rgba(var(--ink-rgb),0.72)",lineHeight:1.5,marginTop:6}}>You’re browsing games solo. Create or join a league to put your picks up against friends — weekly matchups, playoffs, bragging rights.</div>
    <button onClick={()=>{setScreen("leagues");setShowNewLeague(true);setNewLeagueStep(0);}} style={{marginTop:14,width:"100%",background:"linear-gradient(180deg,var(--accent-ios),#0066d6)",border:"none",borderRadius:RAD.md,padding:"14px",fontSize:15,fontWeight:800,color:"#fff",fontFamily:"Barlow,sans-serif",cursor:"pointer",boxShadow:"0 8px 24px -10px rgba(10,132,255,0.8)"}}>Create a league</button>
@@ -14906,7 +14913,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        const dead = m.eliminatedWeek!=null; const left = Math.max(0,_lives-(Number(m.strikes)||0));
        return (
        <div key={m.userId||i} style={{display:"flex",alignItems:"center",gap:12,background:m.isYou?"rgba(59,111,224,0.06)":"rgba(var(--ink-rgb),0.04)",border:"0.5px solid "+(m.isYou?"rgba(59,111,224,0.5)":"rgba(var(--ink-rgb),0.08)"),borderRadius:14,padding:"12px 14px",marginBottom:7,opacity:dead?0.5:1}}>
-         <div style={{width:34,height:34,borderRadius:"50%",background:m.isYou?"rgba(59,111,224,0.25)":"#2a2a30",color:m.isYou?"#7FA6FF":"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:13,flexShrink:0}}>{String(m.isYou?"You":(m.name||"?")).charAt(0).toUpperCase()}</div>
+         <div style={{width:34,height:34,borderRadius:"50%",background:m.isYou?"rgba(59,111,224,0.25)":"var(--s4)",color:m.isYou?"#7FA6FF":"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:13,flexShrink:0}}>{String(m.isYou?"You":(m.name||"?")).charAt(0).toUpperCase()}</div>
          <div style={{flex:1,minWidth:0}}>
            <div style={{fontSize:15,fontWeight:800,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{m.isYou?"You":m.name}</div>
            {dead && <div style={{fontSize:11,fontWeight:600,color:IOS.label3,marginTop:2}}>Out - Week {m.eliminatedWeek}</div>}
@@ -14929,7 +14936,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {/* Ownership, not emptiness. Previously an empty array rendered this skeleton
      unconditionally, so a league with no standings shimmered indefinitely. */}
  {(standingsFor !== (activeLeague && activeLeague.id) && baseStandings.length===0) ? (<SkelGroup>{[0,1,2].map(i=>(
- <div key={"sk"+i} style={{display:"flex",alignItems:"center",gap:11,padding:"0 13px",height:56,marginBottom:8,borderRadius:RAD.lg,background:"#131318",border:EDGE.hair}}>
+ <div key={"sk"+i} style={{display:"flex",alignItems:"center",gap:11,padding:"0 13px",height:56,marginBottom:8,borderRadius:RAD.lg,background:"var(--s2)",border:EDGE.hair}}>
  <Skel w={16} h={15}/><Skel w={32} h={32} r={16}/>
  <div style={{flex:1}}><Skel w="52%" h={13} style={{marginBottom:6}}/><Skel w="28%" h={9}/></div>
  <Skel w={46} h={16}/>
@@ -14948,7 +14955,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const st=(r.streak&&r.streak.count>=1)?`${r.streak.type}${r.streak.count}`:"";
  return (
  <div key={r.rank} onClick={()=>{ if(r.userId) openUserProfile(r.userId,{username:r.isYou?((userProfile&&userProfile.username)||"You"):(r.name)}); }} style={{cursor:"pointer",display:"flex",alignItems:"center",gap:11,padding:"0 13px",height:big?60:52,marginBottom:8,borderRadius:RAD.lg,
- background:"#131318",
+ background:"var(--s2)",
  border:`0.5px solid ${isMe?"rgba(10,132,255,0.30)":"rgba(var(--ink-rgb),0.07)"}`}}>
  <div style={{fontSize:big?18:15,fontWeight:800,width:24,textAlign:"center",flexShrink:0,color:isMe?IOS.blue:top?"#fff":"rgba(var(--ink-rgb),0.46)"}}>{i+1}</div>
  <div style={{width:big?36:30,height:big?36:30,borderRadius:"50%",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:big?13:11,fontWeight:800,
@@ -14981,7 +14988,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {(tickerGames||[]).filter(g=>{const _ls=activeLeague?.sports||(activeLeague?.sport?[activeLeague.sport]:[]);return !_ls.length||_ls.includes(g.sport);}).length === 0 ? (
  (!liveOdds[activeLeague?.sport] ? (
  <SkelGroup style={{padding:"0 16px"}}>{[0,1,2].map(i=>(
- <div key={i} style={{background:"#131318",border:EDGE.hair,borderRadius:RAD.lg,padding:"12px 14px",marginBottom:10}}>
+ <div key={i} style={{background:"var(--s2)",border:EDGE.hair,borderRadius:RAD.lg,padding:"12px 14px",marginBottom:10}}>
  <Skel w={110} h={12} style={{marginBottom:12}}/>
  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:9}}><Skel w={30} h={30} r={15}/><Skel w="55%" h={14}/><div style={{flex:1}}/><Skel w={44} h={13}/></div>
  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:11}}><Skel w={30} h={30} r={15}/><Skel w="50%" h={14}/><div style={{flex:1}}/><Skel w={44} h={13}/></div>
@@ -15025,7 +15032,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  // season instead, and a real way forward.
  if(isEliminated){ return (
    <div className="body" style={{paddingTop:18,paddingLeft:16,paddingRight:16}}>
-     <div className="pl-reveal" style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.lg,padding:"16px",marginBottom:14}}>
+     <div className="pl-reveal" style={{background:"linear-gradient(160deg,var(--s2),var(--s1) 80%)",border:EDGE.hair,borderRadius:RAD.lg,padding:"16px",marginBottom:14}}>
        <div style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:IOS.label3}}>Season over</div>
        <div style={{fontSize:16,fontWeight:800,color:"#fff",marginTop:5}}>No slip this week</div>
        <div style={{fontSize:12,color:IOS.label2,marginTop:4,lineHeight:1.45}}>You're out of the playoffs in {activeLeague.name}, so there's no matchup to score against. Solo picks still count toward your career stats and global rank.</div>
@@ -15038,7 +15045,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      <div style={{height:20}}/>
    </div>
  ); }
- if(!buildingSlip && picksLoading && !(savedPicks&&savedPicks.flexPicks)) return (<SkelGroup style={{padding:"18px 16px"}}><Skel w={150} h={24} r={8}/><div style={{display:"flex",gap:9,margin:"16px 0 18px"}}>{[0,1,2].map(i=><Skel key={i} h={62} r={13} style={{flex:1,width:"auto"}}/>)}</div>{[0,1,2].map(i=>(<div key={i} style={{background:"#131318",border:EDGE.hair,borderRadius:RAD.lg,padding:"14px 15px",marginBottom:10}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:11}}><Skel w={92} h={10}/><Skel w={46} h={14}/></div><Skel w="68%" h={16} style={{marginBottom:8}}/><Skel w="44%" h={11} style={{marginBottom:13}}/><div style={{display:"flex",gap:8}}><Skel w={31} h={24}/><Skel w={92} h={24}/></div></div>))}</SkelGroup>);
+ if(!buildingSlip && picksLoading && !(savedPicks&&savedPicks.flexPicks)) return (<SkelGroup style={{padding:"18px 16px"}}><Skel w={150} h={24} r={8}/><div style={{display:"flex",gap:9,margin:"16px 0 18px"}}>{[0,1,2].map(i=><Skel key={i} h={62} r={13} style={{flex:1,width:"auto"}}/>)}</div>{[0,1,2].map(i=>(<div key={i} style={{background:"var(--s2)",border:EDGE.hair,borderRadius:RAD.lg,padding:"14px 15px",marginBottom:10}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:11}}><Skel w={92} h={10}/><Skel w={46} h={14}/></div><Skel w="68%" h={16} style={{marginBottom:8}}/><Skel w="44%" h={11} style={{marginBottom:13}}/><div style={{display:"flex",gap:8}}><Skel w={31} h={24}/><Skel w={92} h={24}/></div></div>))}</SkelGroup>);
  // ─── LADDER: the slip ────────────────────────────────────────────────────────
  if(!isSoloMode && activeLeague && activeLeague.league_type==="ladder"){
    const _need = ladCount();
@@ -15093,9 +15100,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
          const need = nextI>-1 ? (Number(L.rungs[nextI].point) - (stat==null?0:stat)) : 0;
          const frac = (nextI>-1 && stat!=null) ? Math.max(0, Math.min(1, (stat-prevPt)/(Number(L.rungs[nextI].point)-prevPt))) : 0;
          return (
-         <div key={i} style={{margin:"0 14px 9px",borderRadius:RAD.lg,background:"linear-gradient(165deg,#161619,#111114)",border:EDGE.hair,overflow:"hidden"}}>
+         <div key={i} style={{margin:"0 14px 9px",borderRadius:RAD.lg,background:"linear-gradient(165deg,var(--s2),var(--s2))",border:EDGE.hair,overflow:"hidden"}}>
            <div style={{display:"flex",alignItems:"center",gap:10,padding:"11px 12px 9px"}}>
-             <div style={{width:34,height:34,borderRadius:RAD.sm+2,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:12,color:"#fff",background:(NFL_TEAM_COLORS[ab]||"#26262B"),border:EDGE.hair2,flexShrink:0}}>{ab||"?"}</div>
+             <div style={{width:34,height:34,borderRadius:RAD.sm+2,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:12,color:"#fff",background:(NFL_TEAM_COLORS[ab]||"var(--s4)"),border:EDGE.hair2,flexShrink:0}}>{ab||"?"}</div>
              <div style={{flex:1,minWidth:0}}>
                <div style={{fontSize:14.5,fontWeight:800,letterSpacing:"-0.3px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{L.player}</div>
                <div style={{fontSize:10.5,color:"rgba(var(--ink-rgb),0.6)",fontWeight:600,marginTop:2}}>{(LADDER_MARKETS.find(m=>m.key===L.market)||{}).label||L.market}{ab&&hb?(" \u00b7 "+ab+" @ "+hb):""}</div>
@@ -15165,9 +15172,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        const open=ladOpen===L.key;
        const mx=(L.rungs||[]).reduce((a,r)=>a+_ptsOf(r.px,m||1),0);
        return (
-       <div key={L.key} style={{margin:"0 14px 9px",borderRadius:RAD.lg,background:"linear-gradient(165deg,#161619,#111114)",border:EDGE.hair,overflow:"hidden"}}>
+       <div key={L.key} style={{margin:"0 14px 9px",borderRadius:RAD.lg,background:"linear-gradient(165deg,var(--s2),var(--s2))",border:EDGE.hair,overflow:"hidden"}}>
          <div style={{display:"flex",alignItems:"center",gap:10,padding:"11px 12px 9px"}}>
-           <div style={{width:34,height:34,borderRadius:RAD.sm+2,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:12,color:"#fff",background:(NFL_TEAM_COLORS[ab]||"#26262B"),border:EDGE.hair2,flexShrink:0}}>{ab||"?"}</div>
+           <div style={{width:34,height:34,borderRadius:RAD.sm+2,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:12,color:"#fff",background:(NFL_TEAM_COLORS[ab]||"var(--s4)"),border:EDGE.hair2,flexShrink:0}}>{ab||"?"}</div>
            <div style={{flex:1,minWidth:0}}>
              <div style={{fontSize:14.5,fontWeight:800,letterSpacing:"-0.3px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{L.player}</div>
              <div style={{fontSize:10.5,color:"rgba(var(--ink-rgb),0.6)",fontWeight:600,marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{L.label+(ab&&hb?(" \u00b7 "+ab+" @ "+hb):"")}</div>
@@ -15280,7 +15287,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    if(noRealLeague){
      return (
        <div className="body" style={{paddingTop:16,paddingLeft:16,paddingRight:16}}>
-         <div style={{background:"linear-gradient(160deg,#16181d,#0c0d10)",border:EDGE.hair,borderRadius:RAD.lg,padding:"24px 18px",textAlign:"center"}}>
+         <div style={{background:"linear-gradient(160deg,var(--s2),var(--s1))",border:EDGE.hair,borderRadius:RAD.lg,padding:"24px 18px",textAlign:"center"}}>
            <div style={{width:46,height:46,borderRadius:RAD.md,background:"rgba(10,132,255,0.14)",border:"0.5px solid rgba(10,132,255,0.3)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px"}}>
              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
            </div>
@@ -15302,7 +15309,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    if(leagueNotStarted){
    return (
      <div className="body" style={{paddingTop:16,paddingLeft:16,paddingRight:16}}>
-       <div style={{background:"linear-gradient(160deg,#16181d,#0c0d10)",border:EDGE.hair,borderRadius:RAD.lg,padding:"22px 18px",textAlign:"center"}}>
+       <div style={{background:"linear-gradient(160deg,var(--s2),var(--s1))",border:EDGE.hair,borderRadius:RAD.lg,padding:"22px 18px",textAlign:"center"}}>
          <div style={{width:46,height:46,borderRadius:RAD.md,background:"rgba(255,159,10,0.14)",border:"0.5px solid rgba(255,159,10,0.3)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px"}}>
            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={IOS.orange} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
          </div>
@@ -15316,7 +15323,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
          </div>)}
          {(activeLeague.invite_code||activeLeague.inviteCode) && <button onClick={()=>shareInvite(activeLeague.invite_code||activeLeague.inviteCode, activeLeague.name)} style={{marginTop:14,width:"100%",background:"rgba(var(--ink-rgb),0.08)",border:EDGE.hair3,color:"#fff",borderRadius:RAD.md,padding:"11px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Invite players</button>}
        </div>
-       <div style={{background:"linear-gradient(160deg,#161019,#0c0a12)",border:`0.5px solid ${(IOS.purple||"var(--purple)")}4d`,borderRadius:RAD.lg,padding:"18px",marginTop:12}}>
+       <div style={{background:"linear-gradient(160deg,#161019,var(--s1))",border:`0.5px solid ${(IOS.purple||"var(--purple)")}4d`,borderRadius:RAD.lg,padding:"18px",marginTop:12}}>
          <div style={{fontSize:14,fontWeight:800,color:"#fff"}}>Want to pick right now?</div>
          <div style={{fontSize:12.5,color:IOS.label3,marginTop:4,lineHeight:1.45}}>No need to wait for a full league. Solo Mode lets you build a slate against today's live lines right now.</div>
          <button onClick={async()=>{ setSoloModeWithRef(true); try{ const lid=await getOrCreateSoloLeague(); setActiveLeagueId(lid||"solo"); }catch(e){} setScreen("picks"); }} style={{marginTop:12,width:"100%",background:(IOS.purple||"var(--purple)"),color:"#fff",border:"none",borderRadius:RAD.md,padding:"12px",fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Make picks in Solo Mode</button>
@@ -15723,7 +15730,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 
  {/* Commish Pro: locked extra slot for non-pro users */}
  {!isPro && !activeSubmitted && (
-   <div onClick={()=>setShowPaywall("picks")} style={{margin:"0 16px 8px",background:"#0A0A0A",border:"0.5px dashed #333",borderRadius:RAD.lg,padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",opacity:0.8}}>
+   <div onClick={()=>setShowPaywall("picks")} style={{margin:"0 16px 8px",background:"var(--s1)",border:"0.5px dashed #333",borderRadius:RAD.lg,padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",opacity:0.8}}>
      <div style={{fontSize:13,color:"#555"}}>Add more picks</div>
      <div style={{display:"flex",alignItems:"center",gap:6,background:"rgba(10,132,255,0.1)",border:"0.5px solid rgba(10,132,255,0.25)",borderRadius:RAD.sm,padding:"3px 8px"}}>
        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -15775,7 +15782,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    else { const a=document.createElement("a"); a.href=canvas.toDataURL("image/png"); a.download="picklock-slip.png"; a.click(); try{ await navigator.clipboard.writeText(text); }catch(e){} }
  }catch(e){}};
  const Tile=({val,lbl,color})=>(
- <div style={{flex:1,background:"#131318",border:EDGE.hair,borderRadius:RAD.md,padding:"11px 8px",textAlign:"center"}}>
+ <div style={{flex:1,background:"var(--s2)",border:EDGE.hair,borderRadius:RAD.md,padding:"11px 8px",textAlign:"center"}}>
  <div style={{fontSize:19,fontWeight:800,letterSpacing:"-0.5px",color}}>{val}</div>
  <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"rgba(var(--ink-rgb),0.32)",marginTop:3}}>{lbl}</div>
  </div>
@@ -15803,7 +15810,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    const _statusCol = _out||_res==="L" ? IOS.red : _res==="W" ? IOS.green : _started ? "var(--cyan)" : IOS.green;
    const _short = _bet ? String(_bet.pick||"").replace(/\s*-\s*Anytime TD$/i,"") : "";
    return (
-   <div className="lsx-scroll" style={{position:"absolute",inset:0,zIndex:10,background:"#07070A",overflowY:"auto",WebkitOverflowScrolling:"touch",paddingTop:"calc(var(--sa-top) + 52px)",paddingBottom:"calc(var(--sa-bottom) + 120px)"}}>
+   <div className="lsx-scroll" style={{position:"absolute",inset:0,zIndex:10,background:"var(--s0)",overflowY:"auto",WebkitOverflowScrolling:"touch",paddingTop:"calc(var(--sa-top) + 52px)",paddingBottom:"calc(var(--sa-bottom) + 120px)"}}>
    <style>{`@keyframes lsxPulse{0%,100%{opacity:1}50%{opacity:.3}}`}</style>
    <div style={{padding:"22px 18px 6px",display:"flex",alignItems:"flex-start",justifyContent:"space-between"}}>
      <div>
@@ -15817,7 +15824,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    </div>
 
    {/* The pick */}
-   <div style={{margin:"12px 16px 0",background:"linear-gradient(160deg,#101219,#0A0A0E)",border:"0.5px solid rgba(var(--ink-rgb),0.09)",borderRadius:RAD.lg,padding:"16px",boxShadow:"0 10px 26px -14px rgba(0,0,0,0.8)"}}>
+   <div style={{margin:"12px 16px 0",background:"linear-gradient(160deg,#101219,var(--s1))",border:"0.5px solid rgba(var(--ink-rgb),0.09)",borderRadius:RAD.lg,padding:"16px",boxShadow:"0 10px 26px -14px rgba(0,0,0,0.8)"}}>
      <div style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:"rgba(var(--ink-rgb),0.35)"}}>{_ml?"Your team":"Your scorer"}</div>
      {_bet ? (<>
        <div style={{display:"flex",alignItems:"center",gap:12,marginTop:10}}>
@@ -15868,7 +15875,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    );
  }
  return (
- <div className="lsx-scroll" style={{position:"absolute",inset:0,zIndex:10,background:"#07070A",overflowY:"auto",WebkitOverflowScrolling:"touch",paddingTop:"calc(var(--sa-top) + 52px)",paddingBottom:"calc(var(--sa-bot) + 76px)"}}>
+ <div className="lsx-scroll" style={{position:"absolute",inset:0,zIndex:10,background:"var(--s0)",overflowY:"auto",WebkitOverflowScrolling:"touch",paddingTop:"calc(var(--sa-top) + 52px)",paddingBottom:"calc(var(--sa-bot) + 76px)"}}>
  <style>{`
  @keyframes lsxRise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
  @keyframes lsxPulse{0%,100%{opacity:1}50%{opacity:.3}}
@@ -15877,7 +15884,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  /* Slot card: elevation instead of an outline, wash instead of a flat fill, and a
     weight tier driven by the multiplier so a 7x slot physically outranks a 1x. */
  .pk-slot{border:none;transition:transform .13s ease;
-   background:linear-gradient(115deg, color-mix(in srgb, var(--tc,#2a2a33) 26%, #101015) 0%, #0e0e13 62%);}
+   background:linear-gradient(115deg, color-mix(in srgb, var(--tc,#2a2a33) 26%, var(--s2)) 0%, var(--s1) 62%);}
  .pk-slot:active{transform:scale(.985)}
  .pk-slot[data-w="1"]{box-shadow:inset 0 1px 0 rgba(var(--ink-rgb),.04), 0 2px 8px rgba(0,0,0,.28)}
  .pk-slot[data-w="2"]{box-shadow:inset 0 1px 0 rgba(var(--ink-rgb),.055),0 5px 16px rgba(0,0,0,.36)}
@@ -15893,7 +15900,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  .pk-pv{font-family:'Barlow Semi Condensed',sans-serif;font-weight:800;font-size:27px;line-height:.88;letter-spacing:-.02em;color:rgba(var(--ink-rgb),.95)}
  .pk-lb{font-size:7.5px;font-weight:800;letter-spacing:.13em;color:rgba(var(--ink-rgb),.26);text-transform:uppercase;margin-top:3px;text-align:center}
  .pk-tot{border-radius:16px;margin:14px 12px 0;padding:15px 17px;display:flex;align-items:flex-end;justify-content:space-between;
-   background:linear-gradient(150deg,rgba(48,209,88,0.10),transparent 62%),linear-gradient(180deg,#16161c,#111116);
+   background:linear-gradient(150deg,rgba(48,209,88,0.10),transparent 62%),linear-gradient(180deg,var(--s2),var(--s2));
    box-shadow:inset 0 1px 0 rgba(var(--ink-rgb),.06), 0 8px 24px rgba(0,0,0,.4)}
  .pk-tot-v{font-family:'Barlow Semi Condensed',sans-serif;font-size:38px;font-weight:800;line-height:.85;letter-spacing:-.02em}
  @media (prefers-reduced-motion:reduce){ .pk-slot{animation:none !important} }
@@ -15903,7 +15910,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  `}</style>
 
  {/* Hero */}
- <div style={{background:"#07070A",position:"relative",overflow:"hidden"}}>
+ <div style={{background:"var(--s0)",position:"relative",overflow:"hidden"}}>
  <div style={{padding:"22px 18px 14px",display:"flex",alignItems:"flex-start",justifyContent:"space-between",position:"relative"}}>
  <div>
  <div style={{fontSize:10.5,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(var(--ink-rgb),0.38)"}}>{activeLeague.name} · Week {wk}</div>
@@ -16135,7 +16142,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  )}
 
  {/* Status bar */}
- <div style={{margin:"0 16px 10px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.lg,padding:"12px 14px"}}>
+ <div style={{margin:"0 16px 10px",background:"linear-gradient(160deg,var(--s2),var(--s1) 80%)",border:EDGE.hair,borderRadius:RAD.lg,padding:"12px 14px"}}>
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
  <div style={{fontSize:12,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"rgba(var(--ink-rgb),0.4)"}}>Your Slip</div>
  <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -16171,13 +16178,13 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 
  {/* Multiplier pool — draft model */}
  {isCustomSlip && multPool.length>0 && !activeSubmitted && !_isSvSlip && (
- <div style={{margin:"0 16px 12px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.lg,padding:"11px 14px"}}>
+ <div style={{margin:"0 16px 12px",background:"linear-gradient(160deg,var(--s2),var(--s1) 80%)",border:EDGE.hair,borderRadius:RAD.lg,padding:"11px 14px"}}>
  <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",marginBottom:9}}>
  <div style={{fontSize:12,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"rgba(var(--ink-rgb),0.4)"}}>Your multipliers</div>
  <div style={{fontSize:11,fontWeight:700,color:IOS.label3}}><span style={{color:usedMults.length===multPool.length?IOS.green:"var(--cyan)"}}>{usedMults.length}</span> / {multPool.length} assigned</div>
  </div>
  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
- {(()=>{ const order=[...multPool].map((v,i)=>({v,i})).sort((a,b)=>a.v-b.v||a.i-b.i); const usedLeft={...poolUsedCounts}; return order.map((c,ci)=>{ let used=false; if((usedLeft[c.v]||0)>0){ used=true; usedLeft[c.v]--; } return (<div key={ci} style={{minWidth:40,height:34,borderRadius:RAD.sm,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,background:used?"#2a2a2c":"var(--cyan)",color:used?"#5a5a5e":"#06304a",opacity:used?0.5:1,transition:"all .15s"}}>{c.v}×</div>); }); })()}
+ {(()=>{ const order=[...multPool].map((v,i)=>({v,i})).sort((a,b)=>a.v-b.v||a.i-b.i); const usedLeft={...poolUsedCounts}; return order.map((c,ci)=>{ let used=false; if((usedLeft[c.v]||0)>0){ used=true; usedLeft[c.v]--; } return (<div key={ci} style={{minWidth:40,height:34,borderRadius:RAD.sm,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,background:used?"var(--s4)":"var(--cyan)",color:used?"#5a5a5e":"#06304a",opacity:used?0.5:1,transition:"all .15s"}}>{c.v}×</div>); }); })()}
  </div>
  <div style={{fontSize:10.5,color:IOS.label3,marginTop:8,lineHeight:1.4}}>Assign one to each pick below — each multiplier is used once. Tap a multiplier on a pick to set it.</div>
  </div>
@@ -16231,7 +16238,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const legRows = slot.isParlay ? slot.parlayLegs : slot.bet ? [slot.bet] : [];
 
  return (
- <div key={idx} style={{margin:"0 12px 8px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.lg,overflow:"hidden"}}>
+ <div key={idx} style={{margin:"0 12px 8px",background:"linear-gradient(160deg,var(--s2),var(--s1) 80%)",border:EDGE.hair,borderRadius:RAD.lg,overflow:"hidden"}}>
 
  {/* Main content row */}
  <div style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 13px 8px"}}>
@@ -16316,7 +16323,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  borderBottom:isLast?"none":"1px solid #222",
  }}>
  {/* Stat/Team badge */}
- <div style={{background:"#2a2a2a",borderRadius:5,padding:"2px 6px",fontSize:11,fontWeight:800,color:"#e0e0e0",letterSpacing:"0.04em",flexShrink:0,minWidth:28,textAlign:"center"}}>
+ <div style={{background:"var(--s4)",borderRadius:5,padding:"2px 6px",fontSize:11,fontWeight:800,color:"#e0e0e0",letterSpacing:"0.04em",flexShrink:0,minWidth:28,textAlign:"center"}}>
  {acronym}
  </div>
  {/* Threshold / detail */}
@@ -16338,10 +16345,10 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {slot.isParlay&&parlayOdds?parlayOdds.american:slot.bet?.odds||""}
  </div>
  <div style={{display:"flex",gap:5}}>
- {!slot.committed && <div onClick={()=>openSlot(idx)} style={{background:"#2a2a2a",borderRadius:RAD.sm,color:"#bbb",fontSize:11,fontWeight:600,padding:"4px 10px",cursor:"pointer"}}>
+ {!slot.committed && <div onClick={()=>openSlot(idx)} style={{background:"var(--s4)",borderRadius:RAD.sm,color:"#bbb",fontSize:11,fontWeight:600,padding:"4px 10px",cursor:"pointer"}}>
  {filled?"Edit":"+ Pick"}
  </div>}
- {filled&&!slot.committed&&<button onClick={e=>{e.stopPropagation();setActivePicks(prev=>prev.map((p,i)=>i===idx?(p.locked?{id:i,bet:null,mult:p.mult,category:(p.slotType||p.category),slotType:(p.slotType||p.category),market:p.market,isParlay:false,parlayLegs:[],locked:true}:{...EMPTY_FLEX[0],id:i}):p));}} style={{background:"#2a2a2a",border:"none",borderRadius:RAD.sm,color:"#555",fontSize:14,width:26,height:26,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>}
+ {filled&&!slot.committed&&<button onClick={e=>{e.stopPropagation();setActivePicks(prev=>prev.map((p,i)=>i===idx?(p.locked?{id:i,bet:null,mult:p.mult,category:(p.slotType||p.category),slotType:(p.slotType||p.category),market:p.market,isParlay:false,parlayLegs:[],locked:true}:{...EMPTY_FLEX[0],id:i}):p));}} style={{background:"var(--s4)",border:"none",borderRadius:RAD.sm,color:"#555",fontSize:14,width:26,height:26,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>}
  </div>
  </div>
  </div>
@@ -16375,19 +16382,19 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {/* Bottom bar: multipliers + pts if win */}
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(0,0,0,0.25)",borderTop:"0.5px solid rgba(var(--ink-rgb),0.06)",padding:"6px 13px",gap:8}}>
  <div style={{display:"flex",gap:5}}>
- {_isSvSlip ? null : slot.committed ? [(<div key="lk" style={{width:34,height:26,borderRadius:RAD.sm,display:"flex",alignItems:"center",justifyContent:"center",background:(multColors[slot.mult]||"#2a2a2a"),color:"#fff",fontSize:11,fontWeight:700}}>{slot.mult}×</div>)] : poolDistinct.map(m=>{
+ {_isSvSlip ? null : slot.committed ? [(<div key="lk" style={{width:34,height:26,borderRadius:RAD.sm,display:"flex",alignItems:"center",justifyContent:"center",background:(multColors[slot.mult]||"var(--s4)"),color:"#fff",fontSize:11,fontWeight:700}}>{slot.mult}×</div>)] : poolDistinct.map(m=>{
  const taken = multRemaining(m, slot.mult)<=0 && slot.mult!==m;
  const active = slot.mult===m;
  return (
  <div key={m} onClick={()=>{if(taken)return;setActivePicks(prev=>prev.map((p,i)=>i===idx?{...p,mult:active?null:m}:p));}}
  style={{position:"relative",width:34,height:26,borderRadius:RAD.sm,border:"none",display:"flex",alignItems:"center",justifyContent:"center",
- background:active?multColors[m]:taken?"#1a1a1c":"#2a2a2a",
+ background:active?multColors[m]:taken?"var(--s3)":"var(--s4)",
  color:active?"#fff":taken?"rgba(var(--ink-rgb),0.28)":"#8a8a8e",
  textDecoration:taken?"line-through":"none",textDecorationThickness:"1.5px",
  fontSize:11,fontWeight:700,cursor:taken?"not-allowed":"pointer",transition:"background 0.15s,color 0.15s",
  }}>
  {m}×
- {taken && <span style={{position:"absolute",top:-4,right:-4,width:12,height:12,borderRadius:"50%",background:"#3a3a3d",display:"flex",alignItems:"center",justifyContent:"center"}}><svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="rgba(var(--ink-rgb),0.6)" strokeWidth="3"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>}
+ {taken && <span style={{position:"absolute",top:-4,right:-4,width:12,height:12,borderRadius:"50%",background:"var(--s5)",display:"flex",alignItems:"center",justifyContent:"center"}}><svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="rgba(var(--ink-rgb),0.6)" strokeWidth="3"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>}
  </div>
  );
  })}
@@ -16414,7 +16421,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  </div>);
  }
  if(started) return (<span style={{fontSize:10,fontWeight:700,color:IOS.label3}}>Game started</span>);
- return (<button onClick={(e)=>{e.stopPropagation();lockSlot(idx);}} style={{fontFamily:"Barlow",display:"inline-flex",alignItems:"center",gap:5,fontSize:11,fontWeight:800,color:"#08080B",background:IOS.green,border:"none",borderRadius:RAD.sm,padding:"6px 12px",cursor:"pointer"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#08080B" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Lock</button>);
+ return (<button onClick={(e)=>{e.stopPropagation();lockSlot(idx);}} style={{fontFamily:"Barlow",display:"inline-flex",alignItems:"center",gap:5,fontSize:11,fontWeight:800,color:"var(--s0)",background:IOS.green,border:"none",borderRadius:RAD.sm,padding:"6px 12px",cursor:"pointer"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--s0)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Lock</button>);
  })()}
  {slot.mult&&filled&&slot.result!=="P"&&<div style={{fontSize:12,fontWeight:700,color:IOS.green,flexShrink:0}}>
  {isDouble?`+${pts} pts (doubled)`:isEnhance&&slot.bet?`+${pts} pts \u00B7 line moved ${appliedPU.tier!=null?"+"+appliedPU.tier:""}`:`+${pts} pts if win`}
@@ -16577,7 +16584,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
           deliberately matches the stepper's footprint so nothing shifts when a game
           starts while you are looking at it. Picks added after locking sit under a
           dashed band inside the same ticket rather than in a separate list. */}
-     <div className="pl-reveal" style={{background:"linear-gradient(180deg,#15151a,#0e0e12)",border:EDGE.hair,borderRadius:14,overflow:"hidden",marginBottom:12}}>
+     <div className="pl-reveal" style={{background:"linear-gradient(180deg,var(--s2),var(--s1))",border:EDGE.hair,borderRadius:14,overflow:"hidden",marginBottom:12}}>
 
        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"11px 15px",borderBottom:EDGE.hair}}>
          <span style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.14em",textTransform:"uppercase",color:IOS.label3}}>Your slate</span>
@@ -16641,7 +16648,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
          </div>
        </div>
 
-       <div style={{height:14,margin:"0 -1px",background:"radial-gradient(circle at 7px 50%, #07070A 5px, transparent 5.5px) 0 0/14px 14px repeat-x"}}/>
+       <div style={{height:14,margin:"0 -1px",background:"radial-gradient(circle at 7px 50%, var(--s0) 5px, transparent 5.5px) 0 0/14px 14px repeat-x"}}/>
        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 15px"}}>
          <span style={{fontSize:10,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:IOS.label3}}>If everything hits</span>
          <span style={{fontSize:27,fontWeight:800,fontFamily:"'Barlow Semi Condensed',sans-serif",color:"#fff"}}>{possTotal.toFixed(1)}</span>
@@ -16706,7 +16713,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
             the projected total sits below a tear line like a receipt total.
             Actions live ABOVE the lock button on purpose \u2014 they used to sit below it,
             and people stop scanning once they hit a terminal action. */}
-       <div style={{background:"linear-gradient(180deg,#15151a,#0e0e12)",border:EDGE.hair,borderRadius:14,overflow:"hidden",marginBottom:12}}>
+       <div style={{background:"linear-gradient(180deg,var(--s2),var(--s1))",border:EDGE.hair,borderRadius:14,overflow:"hidden",marginBottom:12}}>
 
          <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",padding:"12px 15px",borderBottom:EDGE.hair}}>
            <span style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.14em",textTransform:"uppercase",color:IOS.label3}}>Your slate</span>
@@ -16782,7 +16789,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
          </div>
 
          {/* Tear line: the receipt is about to total up. */}
-         <div style={{height:14,margin:"0 -1px",background:"radial-gradient(circle at 7px 50%, #07070A 5px, transparent 5.5px) 0 0/14px 14px repeat-x"}}/>
+         <div style={{height:14,margin:"0 -1px",background:"radial-gradient(circle at 7px 50%, var(--s0) 5px, transparent 5.5px) 0 0/14px 14px repeat-x"}}/>
          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 15px"}}>
            <span style={{fontSize:10,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:IOS.label3}}>If everything hits</span>
            <span style={{fontSize:27,fontWeight:800,fontFamily:"'Barlow Semi Condensed',sans-serif",color:"#fff"}}>{projTotal.toFixed(1)}</span>
@@ -16819,7 +16826,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        };
        return (
        <div style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.6)",display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>{ setSoloParlay(null); setSoloParlayMode(false); }}>
-         <div style={{background:"#0d0d12",borderTopLeftRadius:20,borderTopRightRadius:20,border:EDGE.hair2,padding:"18px 16px calc(var(--sa-bot) + 88px)",maxHeight:"82vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
+         <div style={{background:"var(--s1)",borderTopLeftRadius:20,borderTopRightRadius:20,border:EDGE.hair2,padding:"18px 16px calc(var(--sa-bot) + 88px)",maxHeight:"82vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
            <div style={{width:36,height:4,borderRadius:2,background:"rgba(var(--ink-rgb),0.2)",margin:"0 auto 14px"}}/>
            <div style={{textAlign:"center",marginBottom:4}}><span style={{fontSize:20,fontWeight:800,color:IOS.pink}}>New Parlay</span></div>
            <div style={{textAlign:"center",fontSize:12.5,color:IOS.label3,marginBottom:14}}>Add 2 to 6 legs. All must hit to score.</div>
@@ -16862,7 +16869,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const armed = String(delWord||"").trim().toUpperCase()==="DELETE";
  const back = ()=>{ haptic("select"); if(delStep>1){ setDelStep(delStep-1); setDelErr(""); } else { setScreen("profile"); } };
  const SEC = (t)=>(<div style={{fontSize:10,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:IOS.label3,margin:"20px 0 8px"}}>{t}</div>);
- const CARD = {background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.md,padding:"2px 14px"};
+ const CARD = {background:"linear-gradient(160deg,var(--s2),var(--s1) 80%)",border:EDGE.hair,borderRadius:RAD.md,padding:"2px 14px"};
  const CALLOUT = (tone,text)=>{ const c = tone==="dang"?"255,69,58":tone==="warn"?"255,159,10":"59,111,224";
    return (<div style={{background:`rgba(${c},0.09)`,border:`0.5px solid rgba(${c},0.26)`,borderRadius:RAD.md,padding:"12px 13px",fontSize:12.5,lineHeight:1.5,fontWeight:600,color:`rgba(${c},1)`,filter:"brightness(1.35)"}}>{text}</div>); };
  const IMP = (big,color,title,sub)=>(
@@ -16977,7 +16984,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const cur = Number(h.current_season)||1;
  const GOLD = "var(--yellow)";
  const SEC = (t)=>(<div style={{fontSize:10,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:IOS.label3,margin:"20px 0 8px"}}>{t}</div>);
- const CARD = {background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.md,overflow:"hidden"};
+ const CARD = {background:"linear-gradient(160deg,var(--s2),var(--s1) 80%)",border:EDGE.hair,borderRadius:RAD.md,overflow:"hidden"};
  // Career here spans every season: archived rows still count.
  const allStand = seasons.flatMap(x=>Array.isArray(x.standings)?x.standings:[]);
  const mine = allStand.filter(r=>String(r.user_id)===String(user&&user.id));
@@ -17127,12 +17134,12 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        </div>
        <div><div style={{fontSize:24,fontWeight:800,letterSpacing:-0.5}}>Leaderboard</div><div style={{fontSize:12,color:IOS.label3,fontWeight:600}}>{"Daily Lock streaks · "+sRows.length+" ranked"}</div></div>
      </div>
-     <div style={{display:"flex",gap:3,background:"#161619",border:EDGE.hair,borderRadius:RAD.md,padding:4,marginBottom:11}}>
+     <div style={{display:"flex",gap:3,background:"var(--s2)",border:EDGE.hair,borderRadius:RAD.md,padding:4,marginBottom:11}}>
        {[["points","Points"],["hit","Hit Rate"],["ls","Longshots"],["streaks","Streaks"]].map(([k,lab])=>(
          <div key={k} onClick={()=>{ setLbTab(k); if(k==="streaks"&&dlStreaks===null) fetchDlStreaks(); }} style={{flex:1,textAlign:"center",padding:"9px 4px",borderRadius:RAD.sm,fontSize:12.5,fontWeight:800,cursor:"pointer",background:lbTab===k?IOS.blue:"transparent",color:lbTab===k?"#fff":"rgba(var(--ink-rgb),0.38)"}}>{lab}</div>
        ))}
      </div>
-     {myS&&<div style={{marginBottom:14,background:"linear-gradient(135deg,rgba(255,159,10,0.14),#161619)",border:"0.5px solid rgba(255,159,10,0.4)",borderRadius:RAD.lg,padding:"11px 13px",display:"flex",alignItems:"center",gap:11}}>
+     {myS&&<div style={{marginBottom:14,background:"linear-gradient(135deg,rgba(255,159,10,0.14),var(--s2))",border:"0.5px solid rgba(255,159,10,0.4)",borderRadius:RAD.lg,padding:"11px 13px",display:"flex",alignItems:"center",gap:11}}>
        <div style={{flex:1,fontSize:12.5,fontWeight:800}}>Your streak</div>
        <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:20,color:IOS.orange}}>{myS.current_streak}</div>
        <div style={{fontSize:10,fontWeight:700,color:"rgba(var(--ink-rgb),0.45)"}}>{"best "+myS.longest_streak}</div>
@@ -17140,7 +17147,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      {dlStreaks===null?(<div style={{textAlign:"center",padding:"40px 20px",color:"rgba(var(--ink-rgb),0.4)",fontSize:12.5}}>Loading streaks…</div>)
      :!sRows.length?(<div style={{textAlign:"center",padding:"40px 20px",color:"rgba(var(--ink-rgb),0.45)",fontSize:12.5,lineHeight:1.6}}>{"Nobody’s on a run yet. Make today’s Lock and start one."}</div>)
      :sRows.map((r2,i)=>(
-     <div key={r2.user_id} style={{display:"flex",alignItems:"center",gap:11,padding:"10px 13px",borderRadius:RAD.md,marginBottom:6,background:String(r2.user_id)===String(user?.id)?"rgba(255,159,10,0.08)":"#131316",border:"0.5px solid "+(String(r2.user_id)===String(user?.id)?"rgba(255,159,10,0.35)":"rgba(var(--ink-rgb),0.06)")}}>
+     <div key={r2.user_id} style={{display:"flex",alignItems:"center",gap:11,padding:"10px 13px",borderRadius:RAD.md,marginBottom:6,background:String(r2.user_id)===String(user?.id)?"rgba(255,159,10,0.08)":"var(--s2)",border:"0.5px solid "+(String(r2.user_id)===String(user?.id)?"rgba(255,159,10,0.35)":"rgba(var(--ink-rgb),0.06)")}}>
        <div style={{width:26,textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:14,color:medalC(i+1)||"rgba(var(--ink-rgb),0.4)"}}>{i+1}</div>
        <div style={{flex:1,minWidth:0,fontSize:13,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r2.username||"Player"}</div>
        <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:17,color:r2.current_streak>0?IOS.orange:"rgba(var(--ink-rgb),0.35)"}}>{r2.current_streak}</div>
@@ -17156,17 +17163,17 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        </div>
        <div><div style={{fontSize:24,fontWeight:800,letterSpacing:-0.5}}>Leaderboard</div><div style={{fontSize:12,color:IOS.label3,fontWeight:600}}>{(lbTab==="hit"?"Qualified players":"Top players")+" · "+rows.length+" ranked"}</div></div>
      </div>
-     <div style={{display:"flex",gap:3,background:"#161619",border:EDGE.hair,borderRadius:RAD.md,padding:4,marginBottom:11}}>
+     <div style={{display:"flex",gap:3,background:"var(--s2)",border:EDGE.hair,borderRadius:RAD.md,padding:4,marginBottom:11}}>
        {[["points","Points"],["hit","Hit Rate"],["ls","Longshots"],["streaks","Streaks"]].map(([k,lab])=>(
          <div key={k} onClick={()=>{ setLbTab(k); if(k==="streaks"&&dlStreaks===null) fetchDlStreaks(); }} style={{flex:1,textAlign:"center",padding:"9px 4px",borderRadius:RAD.sm,fontSize:12.5,fontWeight:800,cursor:"pointer",background:lbTab===k?IOS.blue:"transparent",color:lbTab===k?"#fff":"rgba(var(--ink-rgb),0.38)"}}>{lab}</div>
        ))}
      </div>
      <div style={{display:"flex",gap:7,marginBottom:12}}>
        {[["all","All-time"],["month","Month"],["week","Week"]].map(([k,lab])=>(
-         <div key={k} onClick={()=>{ setLbTf(k); fetchLeaderboard(k); }} style={{fontSize:11.5,fontWeight:700,padding:"6px 13px",borderRadius:RAD.sm,cursor:"pointer",background:lbTf===k?"rgba(10,132,255,0.16)":"#1a1a1f",border:"1px solid "+(lbTf===k?"rgba(10,132,255,0.4)":"rgba(var(--ink-rgb),0.07)"),color:lbTf===k?IOS.blue:"rgba(var(--ink-rgb),0.55)"}}>{lab}</div>
+         <div key={k} onClick={()=>{ setLbTf(k); fetchLeaderboard(k); }} style={{fontSize:11.5,fontWeight:700,padding:"6px 13px",borderRadius:RAD.sm,cursor:"pointer",background:lbTf===k?"rgba(10,132,255,0.16)":"var(--s3)",border:"1px solid "+(lbTf===k?"rgba(10,132,255,0.4)":"rgba(var(--ink-rgb),0.07)"),color:lbTf===k?IOS.blue:"rgba(var(--ink-rgb),0.55)"}}>{lab}</div>
        ))}
      </div>
-     <div style={{marginBottom:14,background:"linear-gradient(135deg,rgba(10,132,255,0.16),#161619)",border:"0.5px solid rgba(10,132,255,0.4)",borderRadius:RAD.lg,padding:"11px 13px",display:"flex",alignItems:"center",gap:11}}>
+     <div style={{marginBottom:14,background:"linear-gradient(135deg,rgba(10,132,255,0.16),var(--s2))",border:"0.5px solid rgba(10,132,255,0.4)",borderRadius:RAD.lg,padding:"11px 13px",display:"flex",alignItems:"center",gap:11}}>
        <div style={{width:30,textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:16,color:IOS.blue}}>{me?("#"+(myIdx+1)):"—"}</div>
        <div style={{width:38,height:38,borderRadius:"50%",background:"linear-gradient(135deg,var(--accent-ios),var(--violet))",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:14,color:"#fff"}}>{ini(userProfile?.username||"You")}</div>
        <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:800,display:"flex",alignItems:"center",gap:5}}>You{userProfile?.is_founder && <svg width="11" height="11" viewBox="0 0 24 24" fill="var(--yellow)" stroke="none" style={{flexShrink:0}}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>}</div>
@@ -17179,7 +17186,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
       top.length===0 ? <div style={{textAlign:"center",padding:30,color:IOS.label3,fontSize:13,lineHeight:1.6}}>No ranked players yet — graded picks show up here.</div> :
       top.map((r,i)=>{ const rk=i+1; const mc=medalC(rk); const isMe=String(r.user_id)===String(user?.id); const c=PAL[i%PAL.length];
         return (
-        <div key={r.user_id} onClick={()=>openUserProfile(r.user_id,{username:r.username,is_founder:r.is_founder===true})} style={{cursor:"pointer",display:"flex",alignItems:"center",gap:11,padding:"9px 11px",borderRadius:RAD.md,marginBottom:6,background:isMe?"linear-gradient(135deg,rgba(10,132,255,0.13),#161619)":"linear-gradient(165deg,#1a1a1f,#141417)",border:"1px solid "+(isMe?"rgba(10,132,255,0.4)":"rgba(var(--ink-rgb),0.07)")}}>
+        <div key={r.user_id} onClick={()=>openUserProfile(r.user_id,{username:r.username,is_founder:r.is_founder===true})} style={{cursor:"pointer",display:"flex",alignItems:"center",gap:11,padding:"9px 11px",borderRadius:RAD.md,marginBottom:6,background:isMe?"linear-gradient(135deg,rgba(10,132,255,0.13),var(--s2))":"linear-gradient(165deg,var(--s3),var(--s2))",border:"1px solid "+(isMe?"rgba(10,132,255,0.4)":"rgba(var(--ink-rgb),0.07)")}}>
           {mc ? <div style={{width:26,height:26,borderRadius:"50%",background:mc,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:14,color:"#000",flexShrink:0}}>{rk}</div>
               : <div style={{width:26,textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:16,color:IOS.label3,flexShrink:0}}>{rk}</div>}
           <div style={{width:38,height:38,borderRadius:"50%",background:"linear-gradient(135deg,"+c+","+fade(c,0.6)+")",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:14,color:"#fff",border:"1px solid rgba(var(--ink-rgb),0.12)",flexShrink:0}}>{ini(r.username)}</div>
@@ -17654,7 +17661,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  return (
  <div key={bet.id} className="gbx-card" onClick={()=>addCard(bet)} style={{
  position:"relative", overflow:"hidden", cursor:"pointer", borderRadius:RAD.lg, padding:"13px 13px 12px",
- background:"linear-gradient(160deg,#17171B 0%,#0D0D10 100%)",
+ background:"linear-gradient(160deg,var(--s2) 0%,var(--s1) 100%)",
  border:`1px solid ${selected||added?acc:"rgba(var(--ink-rgb),0.07)"}`,
  boxShadow:selected||added?`0 0 0 1px ${acc}, 0 8px 24px ${fade(acc,0.133)}`:"0 4px 14px rgba(0,0,0,0.4)",
  animation:`gbxRise .35s ease ${Math.min(idx,8)*0.035}s both`,
@@ -17797,7 +17804,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    return (
    <div key={bet.id} onClick={()=>addCard(bet)} style={{position:"relative",display:"flex",alignItems:"center",gap:11,padding:"11px 13px",borderTop:isFirst?"none":"1px solid rgba(var(--ink-rgb),0.07)",cursor:"pointer",background:(selected||added)?(fade(acc,0.078)):"transparent",transition:"background .13s"}}>
    {showPlokTip && (
-   <div onClick={(e)=>{ e.stopPropagation(); markPlokTipSeen(); }} style={{position:"absolute",top:-30,left:8,zIndex:6,display:"flex",alignItems:"center",gap:7,whiteSpace:"nowrap",background:"#1e1e25",border:"1px solid rgba(10,132,255,0.45)",borderRadius:9,padding:"7px 10px",fontSize:10.5,fontWeight:700,color:"#fff",boxShadow:"0 8px 20px rgba(0,0,0,0.6)",cursor:"pointer"}}>
+   <div onClick={(e)=>{ e.stopPropagation(); markPlokTipSeen(); }} style={{position:"absolute",top:-30,left:8,zIndex:6,display:"flex",alignItems:"center",gap:7,whiteSpace:"nowrap",background:"var(--s3)",border:"1px solid rgba(10,132,255,0.45)",borderRadius:9,padding:"7px 10px",fontSize:10.5,fontWeight:700,color:"#fff",boxShadow:"0 8px 20px rgba(0,0,0,0.6)",cursor:"pointer"}}>
    <span><span style={{color:IOS.blue}}>{"Plok\u2019s AI read"}</span>{" \u2014 tap for a writeup on this pick"}</span>
    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(var(--ink-rgb),0.55)" strokeWidth="2.4" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
    </div>
@@ -17890,7 +17897,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    {keys.map((gk)=>{
    const bets=groups[gk]; const t=bets[0].gameTime;
    return (
-   <div key={gk} style={{border:"1px solid rgba(var(--ink-rgb),0.09)",borderRadius:RAD.lg,background:"linear-gradient(165deg,#15151A,#0B0B0E 80%)",overflow:"hidden",margin:"10px 0",boxShadow:"0 6px 18px rgba(0,0,0,0.35)"}}>
+   <div key={gk} style={{border:"1px solid rgba(var(--ink-rgb),0.09)",borderRadius:RAD.lg,background:"linear-gradient(165deg,var(--s2),var(--s1) 80%)",overflow:"hidden",margin:"10px 0",boxShadow:"0 6px 18px rgba(0,0,0,0.35)"}}>
    <div onClick={()=>setGridOpenGames(o=>({...o,[gk]:!o[gk]}))} style={{cursor:"pointer"}}>
    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 13px 5px"}}>
    <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.07em",textTransform:"uppercase",color:acc}}>{tag}</div>
@@ -18012,13 +18019,13 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  return (
  <div key={g.game} className={(isSoloMode&&gi===0)?"pk-t-firstbet":undefined}>
  {showHead && (
- <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 2px 7px",background:"#08080A"}}>
+ <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 2px 7px",background:"var(--s0)"}}>
  <span style={{width:6,height:6,borderRadius:"50%",background:headFirst?IOS.orange:"rgba(var(--ink-rgb),0.3)",boxShadow:headFirst?"0 0 7px "+IOS.orange:"none"}}/>
  <span style={{fontSize:12,fontWeight:800}}>{blk} block</span>
  <span style={{fontSize:10,color:"rgba(var(--ink-rgb),0.32)",fontWeight:700,marginLeft:"auto"}}>{blockCount} game{blockCount>1?"s":""}</span>
  </div>
  )}
- <div style={{border:"1px solid "+(isPlok?"rgba(255,214,10,0.4)":"rgba(var(--ink-rgb),0.09)"),borderRadius:RAD.lg,background:"linear-gradient(165deg,#15151A,#0B0B0E 80%)",overflow:"hidden",margin:"10px 0",boxShadow:isPlok?"0 0 0 1px rgba(255,214,10,0.15),0 10px 28px rgba(0,0,0,0.4)":"0 6px 18px rgba(0,0,0,0.35)"}}>
+ <div style={{border:"1px solid "+(isPlok?"rgba(255,214,10,0.4)":"rgba(var(--ink-rgb),0.09)"),borderRadius:RAD.lg,background:"linear-gradient(165deg,var(--s2),var(--s1) 80%)",overflow:"hidden",margin:"10px 0",boxShadow:isPlok?"0 0 0 1px rgba(255,214,10,0.15),0 10px 28px rgba(0,0,0,0.4)":"0 6px 18px rgba(0,0,0,0.35)"}}>
  {isPlok && (
  <div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 13px",background:"rgba(255,214,10,0.1)",borderBottom:"1px solid rgba(255,214,10,0.2)",fontSize:10,fontWeight:800,color:IOS.yellow}}>
  <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg>PLOK'S BEST · sharpest price on the board
@@ -18198,7 +18205,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    if(!_poolMap[k]) _poolMap[k]=new Set(); _poolMap[k].add(String(x.user_id)); });
  const _poolOf=(k)=>(_poolMap[k]?_poolMap[k].size:0);
  const _numOdds=(b)=> (b.impliedOdds!=null?Number(b.impliedOdds):Number(String(b.odds||"").replace("+","")))||0;
- const _tc=(ab)=> NFL_TEAM_COLORS[ab]||"#26262B";
+ const _tc=(ab)=> NFL_TEAM_COLORS[ab]||"var(--s4)";
  const _pcMl=(p)=> p>=72?IOS.green : p>=58?IOS.blue : p>=45?"rgba(var(--ink-rgb),0.72)" : IOS.orange;
  const _pcTd=(p)=> p>=50?IOS.green : p>=35?IOS.blue : p>=22?"rgba(var(--ink-rgb),0.72)" : IOS.longshot;
  const _bands = svMode==="ml"
@@ -18302,7 +18309,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  // ── ML row ──
  const SvMlRow = ({r}) => { const dead=!!r.burnedWk||r.lockedNow; const pc=_pcMl(r.pct);
    return (
-   <div style={{position:"relative",borderRadius:RAD.lg,marginBottom:7,overflow:"hidden",background:dead?"#0F0F12":"linear-gradient(165deg,#161619,#121215)",border:EDGE.hair,opacity:dead?0.42:1}}>
+   <div style={{position:"relative",borderRadius:RAD.lg,marginBottom:7,overflow:"hidden",background:dead?"var(--s1)":"linear-gradient(165deg,var(--s2),var(--s2))",border:EDGE.hair,opacity:dead?0.42:1}}>
      {_added(r.b)&&<SvAddedFlash/>}
      <div onClick={dead?undefined:()=>{ haptic("select"); addCard(r.b,"ml"); }} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 11px 9px",cursor:dead?"default":"pointer"}}>
        <SvBadge ab={r.ab}/>
@@ -18336,13 +18343,13 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    const label = r.isDst&&r.ab ? (r.ab+" D/ST") : r.player;
    const gameTag = r.ab ? ((r.home?"vs ":"at ")+r.oppAb) : (r.awayAb+" @ "+r.homeAb);
    return (
-   <div style={{position:"relative",borderRadius:RAD.lg,marginBottom:7,overflow:"hidden",background:dead?"#0F0F12":"linear-gradient(165deg,#161619,#121215)",border:EDGE.hair,opacity:dead?0.42:1}}>
+   <div style={{position:"relative",borderRadius:RAD.lg,marginBottom:7,overflow:"hidden",background:dead?"var(--s1)":"linear-gradient(165deg,var(--s2),var(--s2))",border:EDGE.hair,opacity:dead?0.42:1}}>
      {_added(r.b)&&<SvAddedFlash/>}
      <div onClick={dead?undefined:()=>{ haptic("select"); addCard(r.b,"prop"); }} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 11px 9px",cursor:dead?"default":"pointer"}}>
        {!dead&&<button onClick={(e)=>{ e.stopPropagation(); askFromBet(r.b,"prop"); }} aria-label="Plok AI read" style={{flexShrink:0,height:27,padding:"0 9px",borderRadius:RAD.sm,display:"inline-flex",alignItems:"center",gap:5,background:"rgba(59,111,224,0.1)",border:"1px solid rgba(59,111,224,0.2)",color:IOS.blue,cursor:"pointer",fontSize:10,fontWeight:800,letterSpacing:"0.02em",fontFamily:"Barlow,sans-serif"}}><svg width="11" height="11" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg><span>PLOK</span></button>}
        <div style={{position:"relative",flexShrink:0}}>
          <SvBadge ab={r.ab||"?"} size={34} round={!r.isDst}/>
-         <span style={{position:"absolute",bottom:-4,left:"50%",transform:"translateX(-50%)",fontFamily:"'Barlow Condensed',sans-serif",fontSize:8.5,fontWeight:700,letterSpacing:"0.06em",padding:"1px 4px",borderRadius:4,background:"#1C1C1E",border:EDGE.hair3,color:"rgba(var(--ink-rgb),0.6)",whiteSpace:"nowrap"}}>{r.isDst?"D/ST":(r.pos||"—")}</span>
+         <span style={{position:"absolute",bottom:-4,left:"50%",transform:"translateX(-50%)",fontFamily:"'Barlow Condensed',sans-serif",fontSize:8.5,fontWeight:700,letterSpacing:"0.06em",padding:"1px 4px",borderRadius:4,background:"var(--s3)",border:EDGE.hair3,color:"rgba(var(--ink-rgb),0.6)",whiteSpace:"nowrap"}}>{r.isDst?"D/ST":(r.pos||"—")}</span>
        </div>
        <div style={{flex:1,minWidth:0}}>
          <div style={{display:"flex",alignItems:"center",gap:6}}>
@@ -18393,12 +18400,12 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 
  const _sortSeg = (
    <div style={{display:"flex",alignItems:"center",gap:8,padding:"12px 16px 8px"}}>
-     <div style={{display:"flex",background:"#121216",border:EDGE.hair,borderRadius:RAD.sm+2,padding:2,flex:1}}>
+     <div style={{display:"flex",background:"var(--s2)",border:EDGE.hair,borderRadius:RAD.sm+2,padding:2,flex:1}}>
        {[["likely","Most likely"],["kick","Kickoff"],["least","Least used"]].map(x=>(
          <div key={x[0]} onClick={()=>setSvbSort(x[0])} style={{flex:1,textAlign:"center",fontSize:11.5,fontWeight:700,padding:"6px 4px",borderRadius:RAD.sm,color:svbSort===x[0]?IOS.blue:"rgba(var(--ink-rgb),0.3)",background:svbSort===x[0]?"rgba(59,111,224,0.18)":"transparent",cursor:"pointer",whiteSpace:"nowrap"}}>{x[1]}</div>
        ))}
      </div>
-     <div onClick={()=>setSvbHideBurned(v=>!v)} style={{flexShrink:0,display:"flex",alignItems:"center",gap:6,fontSize:11,fontWeight:700,color:svbHideBurned?IOS.blue:"rgba(var(--ink-rgb),0.3)",background:svbHideBurned?"rgba(59,111,224,0.12)":"#121216",border:"0.5px solid "+(svbHideBurned?"rgba(59,111,224,0.45)":"rgba(var(--ink-rgb),0.08)"),borderRadius:RAD.sm+2,padding:"7px 10px",cursor:"pointer",whiteSpace:"nowrap"}}>
+     <div onClick={()=>setSvbHideBurned(v=>!v)} style={{flexShrink:0,display:"flex",alignItems:"center",gap:6,fontSize:11,fontWeight:700,color:svbHideBurned?IOS.blue:"rgba(var(--ink-rgb),0.3)",background:svbHideBurned?"rgba(59,111,224,0.12)":"var(--s2)",border:"0.5px solid "+(svbHideBurned?"rgba(59,111,224,0.45)":"rgba(var(--ink-rgb),0.08)"),borderRadius:RAD.sm+2,padding:"7px 10px",cursor:"pointer",whiteSpace:"nowrap"}}>
        <span style={{width:12,height:12,borderRadius:3.5,border:"1.4px solid currentColor",display:"flex",alignItems:"center",justifyContent:"center"}}>{svbHideBurned&&<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>}</span>
        Hide burned
      </div>
@@ -18415,7 +18422,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        {_myBurns.map((x,i)=>{ const nm=_svTitle(x.outcome); const isDst=/\b(d\/st|defense|dst)\b/i.test(nm);
          const ab = svMode==="ml" ? getAcronym(nm,false) : (isDst?getAcronym(nm.replace(/\s*(D\/ST|Defense|DST)\s*$/i,"").trim(),false):(tdRows.find(r=>r.k===svbNorm(x.outcome))||{}).ab||null);
          return (
-         <div key={i} onClick={()=>{ if(ab&&NFL_TEAM_COLORS[ab]) _openSheet(ab, nm, null, x.week); }} style={{flexShrink:0,minWidth:92,background:"#1C1C1E",borderRadius:RAD.md,padding:"7px 9px",border:"0.5px solid "+(x.result==="W"?"rgba(48,209,88,0.35)":x.result==="L"?"rgba(255,69,58,0.35)":"rgba(255,159,10,0.35)"),cursor:(ab&&NFL_TEAM_COLORS[ab])?"pointer":"default"}}>
+         <div key={i} onClick={()=>{ if(ab&&NFL_TEAM_COLORS[ab]) _openSheet(ab, nm, null, x.week); }} style={{flexShrink:0,minWidth:92,background:"var(--s3)",borderRadius:RAD.md,padding:"7px 9px",border:"0.5px solid "+(x.result==="W"?"rgba(48,209,88,0.35)":x.result==="L"?"rgba(255,69,58,0.35)":"rgba(255,159,10,0.35)"),cursor:(ab&&NFL_TEAM_COLORS[ab])?"pointer":"default"}}>
            <div style={{fontSize:8.5,fontWeight:800,color:"rgba(var(--ink-rgb),0.3)",letterSpacing:"0.05em"}}>WK {x.week}</div>
            <div style={{fontSize:12,fontWeight:800,marginTop:2,whiteSpace:"nowrap"}}>{nm}</div>
            <div style={{fontSize:9.5,fontWeight:800,marginTop:2,color:_burnCol(x.result)}}>{_burnWord(x.result)}</div>
@@ -18445,7 +18452,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const _posPills = svMode==="anytd" && (
    <div className="gbx-scroll" style={{display:"flex",gap:7,overflowX:"auto",padding:"2px 16px 10px"}}>
      {[["all","All",_posLive.length]].concat(["RB","WR","TE","QB"].filter(p=>_posCounts[p]>0).map(p=>[p,p,_posCounts[p]])).concat(_dstN>0?[["DST","D/ST",_dstN]]:[]).concat(_unkN>0?[["unk","Unlisted",_unkN]]:[]).map(x=>(
-       <div key={x[0]} onClick={()=>setSvbPos(x[0])} style={{flexShrink:0,fontSize:12,fontWeight:700,padding:"7px 13px",borderRadius:RAD.sm+2,background:svbPos===x[0]?"rgba(59,111,224,0.16)":"#121216",border:"0.5px solid "+(svbPos===x[0]?"rgba(59,111,224,0.45)":"rgba(var(--ink-rgb),0.08)"),color:svbPos===x[0]?IOS.blue:"rgba(var(--ink-rgb),0.3)",cursor:"pointer",whiteSpace:"nowrap"}}>
+       <div key={x[0]} onClick={()=>setSvbPos(x[0])} style={{flexShrink:0,fontSize:12,fontWeight:700,padding:"7px 13px",borderRadius:RAD.sm+2,background:svbPos===x[0]?"rgba(59,111,224,0.16)":"var(--s2)",border:"0.5px solid "+(svbPos===x[0]?"rgba(59,111,224,0.45)":"rgba(var(--ink-rgb),0.08)"),color:svbPos===x[0]?IOS.blue:"rgba(var(--ink-rgb),0.3)",cursor:"pointer",whiteSpace:"nowrap"}}>
          {x[1]}{x[2]!=null&&<span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,opacity:0.75,marginLeft:4}}>{x[2]}</span>}
        </div>
      ))}
@@ -18468,7 +18475,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    return (
    <div style={{position:"fixed",inset:0,zIndex:99998}}>
      <div onClick={()=>setSvbSheet(null)} style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.66)",backdropFilter:"blur(3px)"}}/>
-     <div style={{position:"absolute",left:0,right:0,bottom:0,maxWidth:440,margin:"0 auto",background:"#131317",borderTopLeftRadius:RAD.xl+2,borderTopRightRadius:RAD.xl+2,borderTop:EDGE.hair2,padding:"8px 18px calc(20px + env(safe-area-inset-bottom))"}}>
+     <div style={{position:"absolute",left:0,right:0,bottom:0,maxWidth:440,margin:"0 auto",background:"var(--s2)",borderTopLeftRadius:RAD.xl+2,borderTopRightRadius:RAD.xl+2,borderTop:EDGE.hair2,padding:"8px 18px calc(20px + env(safe-area-inset-bottom))"}}>
        <div style={{width:34,height:4,borderRadius:3,background:"rgba(var(--ink-rgb),0.18)",margin:"0 auto 14px"}}/>
        <div style={{display:"flex",alignItems:"center",gap:11,marginBottom:4}}>
          <SvBadge ab={svbSheet.ab} size={38}/>
@@ -18516,9 +18523,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const _headSub = replaceCtx ? "Replacing your voided pick" : ((activeLeague.name||"Survivor pool")+" · "+_aliveN+" alive");
  const _mlLeft = 32 - Object.keys(_burnMap).filter(k=>_burnMap[k]>0).length;
  return (
- <div className="body" style={{background:"#08080A",zIndex:"auto"}}>
+ <div className="body" style={{background:"var(--s0)",zIndex:"auto"}}>
    <style>{`.gbx-scroll::-webkit-scrollbar{ display:none; }`}</style>
-   <div style={{position:"sticky",top:0,zIndex:10,background:"#08080A",boxShadow:"0 8px 16px -8px rgba(0,0,0,0.7)"}}>
+   <div style={{position:"sticky",top:0,zIndex:10,background:"var(--s0)",boxShadow:"0 8px 16px -8px rgba(0,0,0,0.7)"}}>
      <div style={{display:"flex",alignItems:"center",gap:11,padding:"10px 16px 8px"}}>
        <div onClick={()=>setScreen("picks")} style={{width:34,height:34,borderRadius:RAD.md,background:"rgba(var(--ink-rgb),0.06)",border:EDGE.hair2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:18,flexShrink:0}}>‹</div>
        <div style={{flex:1,minWidth:0}}>
@@ -18526,7 +18533,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
          <div style={{fontSize:11,color:"rgba(var(--ink-rgb),0.4)",marginTop:3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{_headSub}</div>
        </div>
        {svMode==="anytd"&&(
-         <div style={{display:"flex",background:"#121216",border:EDGE.hair,borderRadius:RAD.sm+2,padding:2,flexShrink:0}}>
+         <div style={{display:"flex",background:"var(--s2)",border:EDGE.hair,borderRadius:RAD.sm+2,padding:2,flexShrink:0}}>
            {[["board","Board"],["teams","By team"]].map(x=>(
              <div key={x[0]} onClick={()=>{ setSvbTab(x[0]); setSvbTeam(null); }} style={{fontSize:11.5,fontWeight:800,padding:"6px 11px",borderRadius:RAD.sm,color:svbTab===x[0]?IOS.blue:"rgba(var(--ink-rgb),0.3)",background:svbTab===x[0]?"rgba(59,111,224,0.18)":"transparent",cursor:"pointer"}}>{x[1]}</div>
            ))}
@@ -18554,7 +18561,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    </>)}
 
    {svMode==="anytd"&&svbTab==="board"&&(<>
-     <div style={{margin:"12px 14px 2px",background:"linear-gradient(150deg,rgba(59,111,224,0.15),#101014 72%)",border:"0.5px solid rgba(59,111,224,0.32)",borderRadius:RAD.lg,padding:"12px 14px"}}>
+     <div style={{margin:"12px 14px 2px",background:"linear-gradient(150deg,rgba(59,111,224,0.15),var(--s2) 72%)",border:"0.5px solid rgba(59,111,224,0.32)",borderRadius:RAD.lg,padding:"12px 14px"}}>
        <div style={{display:"flex",alignItems:"baseline",gap:9}}>
          <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:30,fontWeight:900,letterSpacing:"-1px",lineHeight:1}}>{_tdLeftTotal}</div>
          <div style={{fontSize:12,fontWeight:700,color:"rgba(var(--ink-rgb),0.6)",lineHeight:1.3}}>scorers left on this week’s board{_tdBurnedTotal>0&&(<span><br/><b style={{color:"#fff"}}>{_tdBurnedTotal}</b> already burned by you</span>)}</div>
@@ -18566,7 +18573,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      {_sortSeg}
      {_posPills}
      <div style={{padding:"0 12px 4px"}}>
-       <input value={gridSearch} onChange={(e)=>setGridSearch(e.target.value)} placeholder="Search a player or team" style={{width:"100%",boxSizing:"border-box",background:"#121216",border:EDGE.hair,borderRadius:RAD.sm+2,padding:"9px 12px",fontSize:13,fontWeight:600,color:"#fff",outline:"none",fontFamily:"Barlow,sans-serif"}}/>
+       <input value={gridSearch} onChange={(e)=>setGridSearch(e.target.value)} placeholder="Search a player or team" style={{width:"100%",boxSizing:"border-box",background:"var(--s2)",border:EDGE.hair,borderRadius:RAD.sm+2,padding:"9px 12px",fontSize:13,fontWeight:600,color:"#fff",outline:"none",fontFamily:"Barlow,sans-serif"}}/>
      </div>
      <div style={{padding:"0 12px 28px"}}>
        {tdRows.length===0 ? _emptyBoard : _renderSections(tdRows.filter(_posMatch), SvTdRow, {showTeam:true})}
@@ -18585,7 +18592,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
          const halves=[gi.awayAb,gi.homeAb];
          const totalLeft=halves.reduce((a,ab)=>a+_leftFor(ab),0)+loose;
          return (
-         <div key={g} style={{background:"linear-gradient(165deg,#161619,#111114)",border:EDGE.hair,borderRadius:RAD.lg-1,marginBottom:9,overflow:"hidden"}}>
+         <div key={g} style={{background:"linear-gradient(165deg,var(--s2),var(--s2))",border:EDGE.hair,borderRadius:RAD.lg-1,marginBottom:9,overflow:"hidden"}}>
            <div style={{display:"flex",alignItems:"center",gap:7,padding:"7px 12px",background:"rgba(var(--ink-rgb),0.03)",borderBottom:EDGE.hair}}>
              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(var(--ink-rgb),0.4)" strokeWidth="2.2" strokeLinecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
              <span style={{fontSize:10.5,fontWeight:700,color:"rgba(var(--ink-rgb),0.6)"}}>{(dayLabel(gi.time)+" "+clockLabel(gi.time)).trim()}</span>
@@ -18611,7 +18618,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      const _loose=tdRows.filter(r=>!r.ab&&(r.awayAb===svbTeam||r.homeAb===svbTeam));
      const sc=svbScheds[svbTeam];
      return (<>
-     <div style={{display:"flex",alignItems:"center",gap:11,margin:"12px 14px 2px",background:"linear-gradient(160deg,#17171B,#101013)",border:EDGE.hair,borderRadius:RAD.lg-1,padding:"11px 12px"}}>
+     <div style={{display:"flex",alignItems:"center",gap:11,margin:"12px 14px 2px",background:"linear-gradient(160deg,var(--s2),var(--s2))",border:EDGE.hair,borderRadius:RAD.lg-1,padding:"11px 12px"}}>
        <div onClick={()=>setSvbTeam(null)} style={{width:30,height:30,borderRadius:RAD.sm+1,background:"rgba(var(--ink-rgb),0.06)",border:EDGE.hair2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:16,flexShrink:0}}>‹</div>
        <SvBadge ab={svbTeam} size={34}/>
        <div style={{flex:1,minWidth:0}}>
@@ -18682,9 +18689,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  };
 
  return (
- <div className="body" style={{background:"#08080A",zIndex:"auto"}}>
+ <div className="body" style={{background:"var(--s0)",zIndex:"auto"}}>
    <style>{`.lad-scroll::-webkit-scrollbar{ display:none; }`}</style>
-   <div style={{position:"sticky",top:0,zIndex:10,background:"#08080A",boxShadow:"0 8px 16px -8px rgba(0,0,0,0.7)"}}>
+   <div style={{position:"sticky",top:0,zIndex:10,background:"var(--s0)",boxShadow:"0 8px 16px -8px rgba(0,0,0,0.7)"}}>
      <div style={{display:"flex",alignItems:"flex-end",gap:10,padding:"10px 16px 8px"}}>
        <div onClick={()=>setScreen("picks")} style={{width:34,height:34,borderRadius:RAD.md,background:"rgba(var(--ink-rgb),0.06)",border:EDGE.hair2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:18,flexShrink:0}}>{"\u2039"}</div>
        <div style={{flex:1,minWidth:0}}>
@@ -18698,11 +18705,11 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      </div>
      <div className="lad-scroll" style={{display:"flex",gap:6,overflowX:"auto",padding:"2px 16px 10px"}}>
        {LADDER_MARKETS.map(m=>{ const on=m.key===ladMkt; return (
-         <div key={m.key} onClick={()=>{ setLadMkt(m.key); setLadOpen(null); }} style={{flexShrink:0,padding:"7px 12px",borderRadius:RAD.pill,fontSize:11.5,fontWeight:700,whiteSpace:"nowrap",cursor:"pointer",background:on?"rgba(59,111,224,0.14)":"#121216",border:"1px solid "+(on?"rgba(59,111,224,0.55)":"rgba(var(--ink-rgb),0.1)"),color:on?IOS.blue:"rgba(var(--ink-rgb),0.3)"}}>{m.label}</div>
+         <div key={m.key} onClick={()=>{ setLadMkt(m.key); setLadOpen(null); }} style={{flexShrink:0,padding:"7px 12px",borderRadius:RAD.pill,fontSize:11.5,fontWeight:700,whiteSpace:"nowrap",cursor:"pointer",background:on?"rgba(59,111,224,0.14)":"var(--s2)",border:"1px solid "+(on?"rgba(59,111,224,0.55)":"rgba(var(--ink-rgb),0.1)"),color:on?IOS.blue:"rgba(var(--ink-rgb),0.3)"}}>{m.label}</div>
        );})}
      </div>
      <div style={{padding:"0 14px 8px"}}>
-       <input value={gridSearch} onChange={(e)=>setGridSearch(e.target.value)} placeholder="Search a player or team" style={{width:"100%",boxSizing:"border-box",background:"#121216",border:EDGE.hair,borderRadius:RAD.sm+2,padding:"9px 12px",fontSize:13,fontWeight:600,color:"#fff",outline:"none",fontFamily:"Barlow,sans-serif"}}/>
+       <input value={gridSearch} onChange={(e)=>setGridSearch(e.target.value)} placeholder="Search a player or team" style={{width:"100%",boxSizing:"border-box",background:"var(--s2)",border:EDGE.hair,borderRadius:RAD.sm+2,padding:"9px 12px",fontSize:13,fontWeight:600,color:"#fff",outline:"none",fontFamily:"Barlow,sans-serif"}}/>
      </div>
    </div>
 
@@ -18717,9 +18724,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        const c=ladCache[r.key]; const rungs=_rungsOf(r.key);
        const t=_teamOf(r);
        return (
-       <div key={r.key} style={{position:"relative",borderRadius:RAD.lg,marginBottom:7,overflow:"hidden",background:on?"linear-gradient(165deg,#141A28,#101318)":"linear-gradient(165deg,#161619,#121215)",border:"0.5px solid "+(on?"rgba(59,111,224,0.65)":"rgba(var(--ink-rgb),0.08)")}}>
+       <div key={r.key} style={{position:"relative",borderRadius:RAD.lg,marginBottom:7,overflow:"hidden",background:on?"linear-gradient(165deg,#141A28,var(--s2))":"linear-gradient(165deg,var(--s2),var(--s2))",border:"0.5px solid "+(on?"rgba(59,111,224,0.65)":"rgba(var(--ink-rgb),0.08)")}}>
          <div onClick={()=>_openRow(r)} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 11px",cursor:"pointer"}}>
-           <div style={{width:36,height:36,borderRadius:RAD.sm+2,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:12.5,color:"#fff",background:(NFL_TEAM_COLORS[t.a]||"#26262B"),border:EDGE.hair2,flexShrink:0}}>{t.a||"?"}</div>
+           <div style={{width:36,height:36,borderRadius:RAD.sm+2,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:12.5,color:"#fff",background:(NFL_TEAM_COLORS[t.a]||"var(--s4)"),border:EDGE.hair2,flexShrink:0}}>{t.a||"?"}</div>
            <div style={{flex:1,minWidth:0}}>
              <div style={{fontSize:14.5,fontWeight:800,letterSpacing:"-0.3px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.player}</div>
              <div style={{display:"flex",alignItems:"center",gap:5,marginTop:3,fontSize:10.5,fontWeight:600,color:"rgba(var(--ink-rgb),0.6)",whiteSpace:"nowrap",overflow:"hidden"}}>
@@ -18777,7 +18784,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const pillBase = {padding:"7px 13px",borderRadius:RAD.pill,fontSize:12,fontWeight:700,whiteSpace:"nowrap",cursor:"pointer",border:"1px solid",transition:"all .15s",flexShrink:0};
 
  return (
- <div className="body" style={{background:"#08080A",zIndex:"auto"}}>
+ <div className="body" style={{background:"var(--s0)",zIndex:"auto"}}>
  <style>{`
  @keyframes gbxRise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
  .gbx-card{ transition:transform .12s ease, border-color .15s ease, box-shadow .15s ease; will-change:transform; }
@@ -18786,7 +18793,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  `}</style>
 
  {/* Header */}
- <div style={{position:"sticky",top:0,zIndex:10,background:"#08080A",paddingBottom:6,boxShadow:"0 8px 16px -8px rgba(0,0,0,0.7)"}}>
+ <div style={{position:"sticky",top:0,zIndex:10,background:"var(--s0)",paddingBottom:6,boxShadow:"0 8px 16px -8px rgba(0,0,0,0.7)"}}>
  <div style={{display:"flex",alignItems:"center",gap:11,padding:"10px 16px 8px"}}>
  <div onClick={()=>setScreen("picks")} style={{width:34,height:34,borderRadius:RAD.md,background:"rgba(var(--ink-rgb),0.06)",border:EDGE.hair2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:acc,fontSize:18,flexShrink:0}} className="pk-t-back">‹</div>
  <div style={{flex:1,minWidth:0}}>
@@ -18811,7 +18818,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  </div>
  {showMultPick && (<>
  <div onClick={()=>setShowMultPick(false)} style={{position:"fixed",inset:0,zIndex:40}}/>
- <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,zIndex:41,width:212,background:"#15151c",border:"1px solid rgba(var(--ink-rgb),0.12)",borderRadius:RAD.lg,padding:6,boxShadow:"0 16px 40px rgba(0,0,0,0.6)"}}>
+ <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,zIndex:41,width:212,background:"var(--s2)",border:"1px solid rgba(var(--ink-rgb),0.12)",borderRadius:RAD.lg,padding:6,boxShadow:"0 16px 40px rgba(0,0,0,0.6)"}}>
  <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.08em",color:"rgba(var(--ink-rgb),0.35)",padding:"5px 8px 6px"}}>PICK A SLOT TO FILL</div>
  {slots.map(sl=>{
  const sc = ACC[sl.category] || acc;
@@ -18851,7 +18858,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  </div>
  {showMultPick && (<>
  <div onClick={()=>setShowMultPick(false)} style={{position:"fixed",inset:0,zIndex:40}}/>
- <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,zIndex:41,width:212,background:"#15151c",border:"1px solid rgba(var(--ink-rgb),0.12)",borderRadius:RAD.lg,padding:6,boxShadow:"0 16px 40px rgba(0,0,0,0.6)"}}>
+ <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,zIndex:41,width:212,background:"var(--s2)",border:"1px solid rgba(var(--ink-rgb),0.12)",borderRadius:RAD.lg,padding:6,boxShadow:"0 16px 40px rgba(0,0,0,0.6)"}}>
  <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.08em",color:"rgba(var(--ink-rgb),0.35)",padding:"5px 8px 6px"}}>CHOOSE A MULTIPLIER</div>
  {[1,2,3,4,5].map(M=>{
  const sc = MC[M] || "rgba(var(--ink-rgb),0.72)";   // no tier hue; neutral by default
@@ -18948,7 +18955,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
              <div style={{fontSize:8.5,fontWeight:900,letterSpacing:"0.08em",color:IOS.pink}}>{"PARLAY · "+_sl.length+" "+(_sl.length===1?"LEG":"LEGS")+(_ready?(" · "+_am):"")}</div>
              <div style={{fontSize:10.5,fontWeight:600,color:"rgba(var(--ink-rgb),0.5)",marginTop:1}}>{_ready?"Tap more to add, or a leg below to remove":"Tap picks below to add legs — need 2+"}</div>
            </div>
-           <div onClick={()=>{ setSoloParlayMode(false); setScreen("picks"); }} style={{fontFamily:"Barlow",fontSize:12,fontWeight:800,color:_ready?"#08080B":"rgba(var(--ink-rgb),0.4)",background:_ready?IOS.pink:"rgba(var(--ink-rgb),0.08)",borderRadius:RAD.sm,padding:"8px 14px",cursor:"pointer",flexShrink:0}}>Done</div>
+           <div onClick={()=>{ setSoloParlayMode(false); setScreen("picks"); }} style={{fontFamily:"Barlow",fontSize:12,fontWeight:800,color:_ready?"var(--s0)":"rgba(var(--ink-rgb),0.4)",background:_ready?IOS.pink:"rgba(var(--ink-rgb),0.08)",borderRadius:RAD.sm,padding:"8px 14px",cursor:"pointer",flexShrink:0}}>Done</div>
          </div>
          {_sl.length>0 && (
            <div className="gbx-scroll" style={{display:"flex",gap:6,marginTop:9,overflowX:"auto"}}>
@@ -19042,7 +19049,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div style={{fontSize:8.5,fontWeight:900,letterSpacing:"0.08em",color:IOS.pink}}>PARLAY · {parlayLegs.length} {parlayLegs.length===1?"LEG":"LEGS"}{ready?(" · "+am):""}</div>
  <div style={{fontSize:10.5,fontWeight:600,color:"rgba(var(--ink-rgb),0.5)",marginTop:1}}>{ready?"Tap more to add, or a leg below to remove":"Tap picks below to add legs — need 2+"}</div>
  </div>
- <div onClick={()=>setGridBuildMode(false)} style={{fontFamily:"Barlow",fontSize:12,fontWeight:800,color:ready?"#08080B":"rgba(var(--ink-rgb),0.4)",background:ready?IOS.pink:"rgba(var(--ink-rgb),0.08)",borderRadius:RAD.sm,padding:"8px 14px",cursor:"pointer",flexShrink:0}}>Done</div>
+ <div onClick={()=>setGridBuildMode(false)} style={{fontFamily:"Barlow",fontSize:12,fontWeight:800,color:ready?"var(--s0)":"rgba(var(--ink-rgb),0.4)",background:ready?IOS.pink:"rgba(var(--ink-rgb),0.08)",borderRadius:RAD.sm,padding:"8px 14px",cursor:"pointer",flexShrink:0}}>Done</div>
  </div>
  {parlayLegs.length>0 && (
  <div className="gbx-scroll" style={{display:"flex",gap:6,marginTop:9,overflowX:"auto"}}>
@@ -19074,7 +19081,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {gridType==="longshot" && !isSoloMode && (
  <div style={{margin:"10px 16px 0"}}>
  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
- <div style={{display:"inline-flex",alignItems:"center",gap:6,background:"#1c1c1e",border:EDGE.hair2,borderRadius:RAD.sm,padding:"7px 10px"}}>
+ <div style={{display:"inline-flex",alignItems:"center",gap:6,background:"var(--s3)",border:EDGE.hair2,borderRadius:RAD.sm,padding:"7px 10px"}}>
  <span style={{fontSize:10,color:IOS.label3,fontWeight:700}}>Sort</span>
  <select value={gridSort} onChange={e=>setGridSort(e.target.value)} style={{background:"transparent",border:"none",color:"#fff",fontFamily:"Barlow,sans-serif",fontSize:12,fontWeight:700,outline:"none"}}>
  <option value="long" style={{color:"#000"}}>Longest odds</option>
@@ -19111,8 +19118,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  )}
  {altSheet && (
  <div onClick={()=>setAltSheet(null)} style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"flex-end",zIndex:9000}}>
- <div onClick={(e)=>e.stopPropagation()} style={{width:"100%",maxHeight:"90%",background:"#0d0d10",borderTopLeftRadius:20,borderTopRightRadius:20,borderTop:"1px solid #26262a",display:"flex",flexDirection:"column",overflow:"hidden"}}>
- <div style={{width:36,height:4,borderRadius:2,background:"#33333a",margin:"9px auto 4px"}}/>
+ <div onClick={(e)=>e.stopPropagation()} style={{width:"100%",maxHeight:"90%",background:"var(--s1)",borderTopLeftRadius:20,borderTopRightRadius:20,borderTop:"1px solid var(--s4)",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+ <div style={{width:36,height:4,borderRadius:2,background:"var(--s5)",margin:"9px auto 4px"}}/>
  <div style={{padding:"6px 16px 4px"}}>
  <div style={{fontSize:16,fontWeight:800}}>{altSheet.isProp?(altSheet.player+" · "+altSheet.label):(altSheet.isSpread?((altSheet.bet.outcome||"")+" · "+(gSport==="mlb"?"Run Line":gSport==="nhl"?"Puck Line":"Spread")):"Game Total")}</div>
  <div style={{fontSize:11.5,color:"rgba(var(--ink-rgb),0.45)",marginTop:1}}>Pick a line — lower pays less, longer pays more</div>
@@ -19127,13 +19134,13 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  return (<>
  {!altSheet.isSpread && sideNames.length>1 && (
  <div style={{display:"flex",gap:7,padding:"12px 16px 6px"}}>
- {sideNames.map(sn=>{ const on=sn===activeSide; return (<div key={sn} onClick={()=>setAltSheet(x=>({...x,side:sn,sel:null}))} style={{flex:1,textAlign:"center",border:"1px solid "+(on?IOS.yellow:"#2c2c30"),background:on?"rgba(255,214,10,0.12)":"#17171b",color:on?IOS.yellow:"rgba(var(--ink-rgb),0.55)",fontWeight:800,fontSize:13,padding:9,borderRadius:RAD.md,cursor:"pointer"}}>{sn}</div>);})}
+ {sideNames.map(sn=>{ const on=sn===activeSide; return (<div key={sn} onClick={()=>setAltSheet(x=>({...x,side:sn,sel:null}))} style={{flex:1,textAlign:"center",border:"1px solid "+(on?IOS.yellow:"var(--s4)"),background:on?"rgba(255,214,10,0.12)":"var(--s2)",color:on?IOS.yellow:"rgba(var(--ink-rgb),0.55)",fontWeight:800,fontSize:13,padding:9,borderRadius:RAD.md,cursor:"pointer"}}>{sn}</div>);})}
  </div>
  )}
  <div style={{display:"flex",justifyContent:"space-between",padding:"8px 18px 2px",fontSize:10,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"rgba(var(--ink-rgb),0.32)"}}><span>Line</span><span>Odds</span><span>If it hits</span></div>
  <div style={{padding:"2px 14px 8px",overflowY:"auto",flex:1,minHeight:0,WebkitOverflowScrolling:"touch"}}>
  {lines.map((l,i)=>{ const pos=String(l.odds).charAt(0)==="+"; const on=(altSheet.sel===i)||(altSheet.sel==null && i===Math.floor(lines.length/2)); const _pts=calcPickPoints(1,l.impliedOdds,"W"); const ptStr=(l.point>=0?("+"+l.point):(""+l.point));
- return (<div key={i} onClick={()=>setAltSheet(x=>({...x,sel:i}))} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 13px",borderRadius:RAD.md,border:"1px solid "+(on?IOS.blue:"transparent"),background:on?"rgba(10,132,255,0.1)":"#131317",cursor:"pointer",marginBottom:6}}>
+ return (<div key={i} onClick={()=>setAltSheet(x=>({...x,sel:i}))} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 13px",borderRadius:RAD.md,border:"1px solid "+(on?IOS.blue:"transparent"),background:on?"rgba(10,132,255,0.1)":"var(--s2)",cursor:"pointer",marginBottom:6}}>
  <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:19,width:74}}>{altSheet.isSpread?ptStr:l.point}</div>
  <div style={{flex:1}}><span style={{fontWeight:800,fontSize:15,color:pos?IOS.green:"#fff"}}>{l.odds}</span><div style={{fontSize:9.5,fontWeight:800,color:"rgba(var(--ink-rgb),0.35)",marginTop:1}}>{altSheet.isSpread?((altSheet.bet.outcome||"")+" "+ptStr):(activeSide+" "+l.point)}</div></div>
  <div style={{textAlign:"right"}}><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:20,color:IOS.green}}>+{_pts}</div><div style={{fontSize:9,color:"rgba(var(--ink-rgb),0.4)",fontWeight:700}}>pts</div></div>
@@ -19350,7 +19357,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const playoffN = playoffFieldFor(activeLeague, total);
  // Avatars are neutral. Only you get the accent — recognition comes from position and
  // name, both of which are stable, unlike a hue keyed to row index.
- const AV_NEUTRAL = "#23242a";
+ const AV_NEUTRAL = "var(--s4)";
  return (
  <div className="body" key={screen}>
    <div style={{padding:"10px 20px 14px",background:"radial-gradient(120% 90% at 90% -10%, rgba(94,92,230,0.18), transparent 55%), linear-gradient(180deg,#0B1430 0%,#000 80%)"}}>
@@ -19369,9 +19376,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        return (
        <div key={sp.userId||i} onClick={()=>setFieldPlayer({...sp, rank:i+1, wkPicks, wkPts})} style={{position:"relative",borderRadius:RAD.xl,padding:13,cursor:"pointer",overflow:"hidden",background:"linear-gradient(160deg,rgba(var(--ink-rgb),0.05),rgba(var(--ink-rgb),0.015))",border:`0.5px solid ${sp.isYou?fade(IOS.blue,0.502):IOS.sep}`,boxShadow:sp.isYou?`0 10px 30px -12px ${fade(IOS.blue,0.4)}`:"none"}}>
          <div style={{position:"absolute",top:"-40%",left:"-10%",width:"70%",height:"80%",borderRadius:"50%",filter:"blur(30px)",opacity:.32,background:col}}/>
-         {playoff && <div style={{position:"absolute",top:9,right:9,fontSize:7.5,fontWeight:900,letterSpacing:.5,color:"#0c0c0e",background:IOS.yellow,borderRadius:4,padding:"2px 5px"}}>PLAYOFF</div>}
+         {playoff && <div style={{position:"absolute",top:9,right:9,fontSize:7.5,fontWeight:900,letterSpacing:.5,color:"var(--s1)",background:IOS.yellow,borderRadius:4,padding:"2px 5px"}}>PLAYOFF</div>}
          <div style={{display:"flex",alignItems:"center",gap:9,position:"relative"}}>
-           <div style={{width:38,height:38,borderRadius:RAD.md,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:"#0c0c0e",background:`linear-gradient(150deg,${col},${fade(col,0.733)})`,flexShrink:0}}>{initials}</div>
+           <div style={{width:38,height:38,borderRadius:RAD.md,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:"var(--s1)",background:`linear-gradient(150deg,${col},${fade(col,0.733)})`,flexShrink:0}}>{initials}</div>
            <div style={{minWidth:0}}>
              <div style={{fontSize:14,fontWeight:800,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:sp.isYou?IOS.blue:"#fff"}}>{sp.isYou?"You":sp.name}</div>
              <div style={{fontSize:10,color:IOS.label3,fontWeight:700}}>#{i+1} · {wkPicks.length} picks</div>
@@ -19391,10 +19398,10 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    <div style={{height:24}}/>
    {fieldPlayer && (
    <div onClick={()=>setFieldPlayer(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",backdropFilter:"blur(3px)",display:"flex",alignItems:"flex-end",zIndex:200}}>
-     <div className="pk-sheet" onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:440,margin:"0 auto",background:"#161618",borderTop:`0.5px solid ${IOS.sep}`,padding:"8px 16px 30px",maxHeight:"80%",overflow:"auto"}}>
+     <div className="pk-sheet" onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:440,margin:"0 auto",background:"var(--s2)",borderTop:`0.5px solid ${IOS.sep}`,padding:"8px 16px 30px",maxHeight:"80%",overflow:"auto"}}>
        <div style={{width:40,height:4,borderRadius:3,background:"rgba(var(--ink-rgb),0.18)",margin:"6px auto 14px"}}/>
        <div onClick={()=>{ if(fieldPlayer&&fieldPlayer.userId){ const fp=fieldPlayer; setFieldPlayer(null); openUserProfile(fp.userId,{username:fp.isYou?((userProfile&&userProfile.username)||"You"):fp.name}); } }} style={{display:"flex",alignItems:"center",gap:12,marginBottom:4,cursor:"pointer"}}>
-         <div style={{width:46,height:46,borderRadius:RAD.md,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:18,color:"#0c0c0e",background:`linear-gradient(150deg,${fieldPlayer.isYou?IOS.blue:IOS.indigo},${fieldPlayer.isYou?IOS.blue:IOS.indigo}bb)`}}>{fieldPlayer.isYou?"You":(fieldPlayer.name||"?").slice(0,2).toUpperCase()}</div>
+         <div style={{width:46,height:46,borderRadius:RAD.md,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:18,color:"var(--s1)",background:`linear-gradient(150deg,${fieldPlayer.isYou?IOS.blue:IOS.indigo},${fieldPlayer.isYou?IOS.blue:IOS.indigo}bb)`}}>{fieldPlayer.isYou?"You":(fieldPlayer.name||"?").slice(0,2).toUpperCase()}</div>
          <div style={{flex:1,minWidth:0}}>
            <div style={{fontSize:19,fontWeight:900,color:fieldPlayer.isYou?IOS.blue:"#fff"}}>{fieldPlayer.isYou?"You":fieldPlayer.name}</div>
            <div style={{fontSize:12,color:IOS.label2,fontWeight:600,marginTop:1}}>#{fieldPlayer.rank} · {fieldPlayer.record||"0-0"} picks · {fieldPlayer.points!=null?fieldPlayer.points:0} szn pts</div>
@@ -19461,8 +19468,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(var(--ink-rgb),0.5)" strokeWidth="2.4" strokeLinecap="round"><path d="M9 6l6 6-6 6"/></svg>
        </div>)}
      <div style={{display:"flex",background:IOS.bg2,borderRadius:RAD.md,padding:3,margin:"0 16px 8px"}}>
-       <div onClick={()=>setMatchupView("mine")} style={{flex:1,textAlign:"center",padding:"9px 0",borderRadius:RAD.sm,fontSize:14,fontWeight:800,cursor:"pointer",background:matchupView==="mine"?"#2d2d31":"transparent",color:matchupView==="mine"?"#fff":IOS.label2}}>My Matchup</div>
-       <div onClick={()=>{ setMatchupView("league"); setMWeek(mWeek||(activeLeague.current_week||1)); }} style={{flex:1,textAlign:"center",padding:"9px 0",borderRadius:RAD.sm,fontSize:14,fontWeight:800,cursor:"pointer",background:matchupView==="league"?"#2d2d31":"transparent",color:matchupView==="league"?"#fff":IOS.label2}}>League</div>
+       <div onClick={()=>setMatchupView("mine")} style={{flex:1,textAlign:"center",padding:"9px 0",borderRadius:RAD.sm,fontSize:14,fontWeight:800,cursor:"pointer",background:matchupView==="mine"?"var(--s4)":"transparent",color:matchupView==="mine"?"#fff":IOS.label2}}>My Matchup</div>
+       <div onClick={()=>{ setMatchupView("league"); setMWeek(mWeek||(activeLeague.current_week||1)); }} style={{flex:1,textAlign:"center",padding:"9px 0",borderRadius:RAD.sm,fontSize:14,fontWeight:800,cursor:"pointer",background:matchupView==="league"?"var(--s4)":"transparent",color:matchupView==="league"?"#fff":IOS.label2}}>League</div>
      </div>
      {matchupView==="league" && (
        <div style={{position:"fixed",left:0,right:0,top:0,bottom:0,background:"#000",zIndex:160,display:"flex",flexDirection:"column"}}>
@@ -19685,7 +19692,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const statusTxt = isTied?"You're Tied":isWinning?"You're Winning":"You're Trailing";
  return (
  <div style={{position:"sticky",top:0,zIndex:10,background:"#000",padding:"6px 0 8px"}}>
- <div style={{margin:"0 16px",borderRadius:RAD.lg,padding:"14px 16px",position:"relative",overflow:"hidden",background:"#131318",border:EDGE.hair}}>
+ <div style={{margin:"0 16px",borderRadius:RAD.lg,padding:"14px 16px",position:"relative",overflow:"hidden",background:"var(--s2)",border:EDGE.hair}}>
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
  <div style={{minWidth:0,flex:1}}>
  <div style={{fontSize:11,fontWeight:800,letterSpacing:"0.04em",textTransform:"uppercase",color:IOS.blue}}>You</div>
@@ -19744,9 +19751,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const _lab = slotType ? (slotLabels[slotType]||slotType) : "";
  const _tap = !!(isMe && onAdd);
  return (
- <div onClick={_tap?onAdd:undefined} style={{flex:1,borderRadius:RAD.md,minHeight:68,background:_tap?"#0B111C":"#09090B",border:_tap?("1px dashed "+fade(IOS.blue,0.333)):"1px dashed #24242C",display:"flex",flexDirection:"column",alignItems:isMe?"flex-start":"flex-end",justifyContent:"center",gap:4,padding:"0 12px",cursor:_tap?"pointer":"default"}}>
+ <div onClick={_tap?onAdd:undefined} style={{flex:1,borderRadius:RAD.md,minHeight:68,background:_tap?"#0B111C":"var(--s0)",border:_tap?("1px dashed "+fade(IOS.blue,0.333)):"1px dashed var(--s4)",display:"flex",flexDirection:"column",alignItems:isMe?"flex-start":"flex-end",justifyContent:"center",gap:4,padding:"0 12px",cursor:_tap?"pointer":"default"}}>
  {_lab&&<span style={{fontSize:8,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:_tap?IOS.blue:"#4a4a52"}}>{_lab}</span>}
- <span style={{fontSize:isMe?11:10,fontWeight:isMe?800:700,color:isMe?IOS.blue:"#3a3a40"}}>{isMe?(slotType?"+ Add "+_lab:"+ Add pick"):"Not locked yet"}</span>
+ <span style={{fontSize:isMe?11:10,fontWeight:isMe?800:700,color:isMe?IOS.blue:"var(--s5)"}}>{isMe?(slotType?"+ Add "+_lab:"+ Add pick"):"Not locked yet"}</span>
  </div>
  );
  }
@@ -19758,7 +19765,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const _graded=picks.some(p=>p.result&&p.result!=="pending");
  const _started=_graded || _earliest===0 || _earliest<=_now; // unknown start time -> reveal (never hide forever)
  if(!_started) return (
- <div style={{flex:1,borderRadius:RAD.md,minHeight:68,background:"#131318",border:EDGE.hair,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4}}>
+ <div style={{flex:1,borderRadius:RAD.md,minHeight:68,background:"var(--s2)",border:EDGE.hair,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4}}>
  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(var(--ink-rgb),0.4)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
  <span style={{fontSize:9.5,fontWeight:800,color:"rgba(var(--ink-rgb),0.55)",letterSpacing:0.4}}>LOCKED</span>
  <span style={{fontSize:8,fontWeight:600,color:"#666"}}>Reveals at game time</span>
@@ -19799,7 +19806,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const ptsLabel = voided?"voided":won?`+${pts} pts`:lost?"+0 pts":`+${potPts} pts if win`;
 
  return (
- <div style={{flex:1,position:"relative",overflow:"hidden",borderRadius:RAD.md,padding:"9px 10px 8px 12px",minHeight:68,background:"#131318",border:EDGE.hair,display:"flex",flexDirection:"column",justifyContent:"space-between",cursor:isParlay?"pointer":undefined}}
+ <div style={{flex:1,position:"relative",overflow:"hidden",borderRadius:RAD.md,padding:"9px 10px 8px 12px",minHeight:68,background:"var(--s2)",border:EDGE.hair,display:"flex",flexDirection:"column",justifyContent:"space-between",cursor:isParlay?"pointer":undefined}}
  onClick={isParlay?()=>{const el=document.getElementById(expandId);if(el)el.style.display=el.style.display==="block"?"none":"block";}:undefined}>
  <div style={{position:"absolute",top:0,left:0,bottom:0,width:3,borderRadius:"3px 0 0 3px",background:strip}}/>
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
@@ -19877,7 +19884,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
     than absolute so it is sized by the viewport (the old one left the standings
     showing under it), and above the dock rather than under it. Every entry point
     already sets screen="leagues", so closing lands back on the leagues tab. */
- <div style={{position:"fixed",inset:0,background:"#0A0A0C",zIndex:120,display:"flex",flexDirection:"column"}}>
+ <div style={{position:"fixed",inset:0,background:"var(--s1)",zIndex:120,display:"flex",flexDirection:"column"}}>
   <div style={{display:"flex",alignItems:"center",gap:11,padding:"calc(var(--sa-top) + 12px) 16px 8px",flexShrink:0}}>
    {!newLeagueCreated ? (
     <div onClick={()=>{ haptic("select");
@@ -19942,7 +19949,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div style={{padding:"20px 20px 0"}}>
  {/* Step indicator */}
  <div style={{display:"flex",gap:5,marginBottom:16}}>
-   {((newLeagueType==="survivor"||newLeagueType==="ladder")?[0,1]:[0,1,2]).map(i=><div key={i} style={{flex:1,height:3,borderRadius:2,background:newLeagueStep>=i?IOS.blue:"#1E1E1E",transition:"background .2s"}}/>)}
+   {((newLeagueType==="survivor"||newLeagueType==="ladder")?[0,1]:[0,1,2]).map(i=><div key={i} style={{flex:1,height:3,borderRadius:2,background:newLeagueStep>=i?IOS.blue:"var(--s3)",transition:"background .2s"}}/>)}
  </div>
 
  {/* ── STEP 0: League type ── */}
@@ -19975,9 +19982,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        borderRadius:RAD.md,padding:"16px 14px",
        marginBottom:8,cursor:"pointer",transition:"all .15s",
        background:newLeagueType===t.id?"rgba(10,132,255,0.08)":"#111",
-       border:`0.5px solid ${newLeagueType===t.id?"rgba(10,132,255,0.35)":"#1E1E1E"}`,
+       border:`0.5px solid ${newLeagueType===t.id?"rgba(10,132,255,0.35)":"var(--s3)"}`,
      }}>
-       <div style={{width:40,height:40,borderRadius:RAD.md,background:newLeagueType===t.id?"rgba(10,132,255,0.15)":"#1A1A1A",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:10,transition:"background .15s"}}>
+       <div style={{width:40,height:40,borderRadius:RAD.md,background:newLeagueType===t.id?"rgba(10,132,255,0.15)":"var(--s3)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:10,transition:"background .15s"}}>
          {t.id==="duel"&&<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={newLeagueType===t.id?IOS.blue:"#555"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4l16 16M20 4L4 20"/><path d="M4 4l4 1-1-4zM20 4l-4 1 1-4zM20 20l-4-1 1 4zM4 20l4-1-1 4z"/></svg>}
        {t.id==="ladder"&&<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={newLeagueType===t.id?IOS.blue:"#555"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M7 3v18M17 3v18"/><path d="M7 7h10M7 12h10M7 17h10"/></svg>}
        {t.id==="survivor"&&<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={newLeagueType===t.id?IOS.blue:"#555"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/></svg>}
@@ -19994,7 +20001,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        </div>
      </div>
      {t.id==="ladder"&&newLeagueType==="ladder"&&(
-     <div style={{marginBottom:8,borderRadius:RAD.md,padding:"12px 12px 10px",background:"#111",border:"0.5px solid #1E1E1E"}}>
+     <div style={{marginBottom:8,borderRadius:RAD.md,padding:"12px 12px 10px",background:"#111",border:"0.5px solid var(--s3)"}}>
        <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:3}}>
          <span style={{fontSize:13,fontWeight:800,color:"#fff"}}>Ladders per week</span>
          {!isPro&&<span style={{display:"inline-flex",alignItems:"center",background:"rgba(191,90,242,0.14)",border:"0.5px solid rgba(191,90,242,0.35)",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:800,color:IOS.purple}}>PRO</span>}
@@ -20002,7 +20009,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        <div style={{fontSize:10.5,color:"#555",lineHeight:1.45,marginBottom:10}}>{isPro?"How many players each member picks. Rushing, receiving, receptions, passing \u2014 whatever they post a ladder for. Multipliers run 1x through this number, one each.":"Free leagues run four ladders a week. Go Pro to size your own."}</div>
        <div style={{display:"flex",gap:6}}>
          {[3,4,5,6].map(n=>{ const on=newLadderCount===n; const locked=!isPro&&n!==4; return (
-         <div key={n} onClick={(e)=>{ e.stopPropagation(); if(locked){ setShowPaywall("settings"); return; } setNewLadderCount(n); }} style={{flex:1,borderRadius:RAD.sm+2,padding:"10px 4px",textAlign:"center",cursor:"pointer",transition:"all .15s",background:on?"rgba(10,132,255,0.1)":"#0C0C0C",border:"0.5px solid "+(on?"rgba(10,132,255,0.45)":"#1E1E1E"),opacity:locked?0.4:1}}>
+         <div key={n} onClick={(e)=>{ e.stopPropagation(); if(locked){ setShowPaywall("settings"); return; } setNewLadderCount(n); }} style={{flex:1,borderRadius:RAD.sm+2,padding:"10px 4px",textAlign:"center",cursor:"pointer",transition:"all .15s",background:on?"rgba(10,132,255,0.1)":"var(--s1)",border:"0.5px solid "+(on?"rgba(10,132,255,0.45)":"var(--s3)"),opacity:locked?0.4:1}}>
            <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:18,color:on?IOS.blue:"#888"}}>{n}</div>
            <div style={{fontSize:9,color:on?IOS.blue:"#555",fontWeight:700,marginTop:1}}>{"1x-"+n+"x"}</div>
          </div>
@@ -20016,7 +20023,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
          {id:"anytd",l:"TD Scorer",d:"Pick one player to score a touchdown each week.",r:"Never reuse a player"},
          {id:"ml",l:"Moneyline",d:"Pick one team to win outright each week.",r:"Never reuse a team"},
        ].map(m=>{ const on=newSvMode===m.id; return (
-       <div key={m.id} onClick={(e)=>{ e.stopPropagation(); setNewSvMode(m.id); }} style={{flex:1,borderRadius:RAD.md,padding:"12px 10px",cursor:"pointer",transition:"all .15s",textAlign:"left",background:on?"rgba(10,132,255,0.08)":"#111",border:`0.5px solid ${on?"rgba(10,132,255,0.45)":"#1E1E1E"}`}}>
+       <div key={m.id} onClick={(e)=>{ e.stopPropagation(); setNewSvMode(m.id); }} style={{flex:1,borderRadius:RAD.md,padding:"12px 10px",cursor:"pointer",transition:"all .15s",textAlign:"left",background:on?"rgba(10,132,255,0.08)":"#111",border:`0.5px solid ${on?"rgba(10,132,255,0.45)":"var(--s3)"}`}}>
          <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:6}}>
            {m.id==="anytd"
              ?<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={on?IOS.blue:"#555"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><ellipse cx="12" cy="12" rx="9" ry="6" transform="rotate(-30 12 12)"/><path d="M9.5 10l5 4M11 8.7l5 4M8 11.3l5 4"/></svg>
@@ -20024,7 +20031,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
            <span style={{fontSize:13,fontWeight:800,color:on?"#fff":"#888",transition:"color .15s"}}>{m.l}</span>
          </div>
          <div style={{fontSize:10.5,color:on?"rgba(var(--ink-rgb),0.55)":"#555",lineHeight:1.45,transition:"color .15s"}}>{m.d}</div>
-         <div style={{marginTop:7,fontSize:9,fontWeight:800,letterSpacing:"0.04em",textTransform:"uppercase",color:on?IOS.blue:"#3A3A3C",transition:"color .15s"}}>{m.r}</div>
+         <div style={{marginTop:7,fontSize:9,fontWeight:800,letterSpacing:"0.04em",textTransform:"uppercase",color:on?IOS.blue:"var(--s5)",transition:"color .15s"}}>{m.r}</div>
        </div>
        );})}
      </div>
@@ -20056,7 +20063,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div style={{color:"#555",fontSize:18}}>›</div>
  </div>
 
- <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"linear-gradient(160deg,#15151A,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.lg,padding:"13px 15px",marginBottom:14}}>
+ <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"linear-gradient(160deg,var(--s2),var(--s1) 80%)",border:EDGE.hair,borderRadius:RAD.lg,padding:"13px 15px",marginBottom:14}}>
  <div style={{fontSize:13,fontWeight:700,color:"#fff"}}>Picks per week<div style={{fontSize:11,color:"#555",fontWeight:600,marginTop:2}}>How many slots in the slip</div></div>
  <div style={{display:"flex",alignItems:"center",gap:12}}>
  <div onClick={()=>{setNewLeagueSlots(s=>s.length>1?s.slice(0,-1):s);setNewLeaguePool(p=>p.length>1?p.slice(0,-1):p);}} style={{width:32,height:32,borderRadius:RAD.sm,background:newLeagueSlots.length>1?"rgba(var(--ink-rgb),0.08)":"rgba(var(--ink-rgb),0.03)",display:"flex",alignItems:"center",justifyContent:"center",cursor:newLeagueSlots.length>1?"pointer":"default",fontSize:19,fontWeight:700,color:newLeagueSlots.length>1?"#fff":"#444"}}>−</div>
@@ -20072,7 +20079,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  </div>
 
  {newLeagueSlots.map((s,i)=>{const tt=SLOT_TYPES.find(x=>x.id===s.type);return (
- <div key={i} onClick={()=>setSlotSheetIdx(i)} style={{display:"flex",alignItems:"center",gap:11,background:"linear-gradient(160deg,#15151A,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.md,padding:"12px 12px",marginBottom:9,cursor:"pointer"}}>
+ <div key={i} onClick={()=>setSlotSheetIdx(i)} style={{display:"flex",alignItems:"center",gap:11,background:"linear-gradient(160deg,var(--s2),var(--s1) 80%)",border:EDGE.hair,borderRadius:RAD.md,padding:"12px 12px",marginBottom:9,cursor:"pointer"}}>
  <div style={{width:26,height:26,borderRadius:RAD.sm,background:"rgba(var(--ink-rgb),0.07)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:"rgba(var(--ink-rgb),0.55)",flexShrink:0}}>{i+1}</div>
  <div style={{flex:1,minWidth:0}}>
  <div style={{fontSize:15,fontWeight:800,color:tt?"#fff":"#666",display:"flex",alignItems:"center",gap:8}}>{tt&&<span style={{width:9,height:9,borderRadius:3,background:tt.color}}/>}{tt?tt.l:"Tap to choose type"}</div>
@@ -20083,14 +20090,14 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  </div>
  );})}
 
- <div style={{background:"#111114",border:EDGE.hair2,borderRadius:RAD.lg,padding:"13px 14px",marginBottom:12}}>
+ <div style={{background:"var(--s2)",border:EDGE.hair2,borderRadius:RAD.lg,padding:"13px 14px",marginBottom:12}}>
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:11}}>
  <div style={{fontSize:11,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:"rgba(var(--ink-rgb),0.5)"}}>Multiplier pool</div>
  <div style={{fontSize:11,fontWeight:600,color:"rgba(var(--ink-rgb),0.35)"}}>one used per pick</div>
  </div>
  <div style={{display:"flex",flexWrap:"wrap",gap:9}}>
  {newLeaguePool.map((v,i)=>(
- <div key={i} style={{width:58,borderRadius:RAD.md,border:EDGE.hair2,background:"#17171b",textAlign:"center",padding:"7px 0 5px"}}>
+ <div key={i} style={{width:58,borderRadius:RAD.md,border:EDGE.hair2,background:"var(--s2)",textAlign:"center",padding:"7px 0 5px"}}>
  <div style={{fontSize:21,fontWeight:900,color:"var(--cyan)",letterSpacing:"-0.5px"}}>{v}<span style={{fontSize:11,opacity:0.7}}>×</span></div>
  <div style={{display:"flex",borderTop:"0.5px solid rgba(var(--ink-rgb),0.1)",marginTop:5}}>
  <div onClick={()=>setNewLeaguePool(p=>p.map((x,j)=>j===i?Math.max(1,x-1):x))} style={{flex:1,borderRight:"0.5px solid rgba(var(--ink-rgb),0.1)",color:"rgba(var(--ink-rgb),0.5)",fontSize:14,fontWeight:800,padding:"3px 0",cursor:"pointer"}}>−</div>
@@ -20118,7 +20125,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {presetSheet&&(
  <div style={{position:"fixed",inset:0,zIndex:200,display:"flex",flexDirection:"column",justifyContent:"flex-end"}}>
  <div onClick={()=>setPresetSheet(false)} style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.6)"}}/>
- <div style={{position:"relative",background:"#0C0C10",borderTopLeftRadius:22,borderTopRightRadius:22,border:EDGE.hair,maxHeight:"80vh",display:"flex",flexDirection:"column"}}>
+ <div style={{position:"relative",background:"var(--s1)",borderTopLeftRadius:22,borderTopRightRadius:22,border:EDGE.hair,maxHeight:"80vh",display:"flex",flexDirection:"column"}}>
  <div style={{width:38,height:4,borderRadius:2,background:"rgba(var(--ink-rgb),0.2)",margin:"10px auto 4px"}}/>
  <div style={{padding:"6px 18px 12px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
  <div style={{fontSize:17,fontWeight:800,color:"#fff"}}>Slip layouts</div>
@@ -20126,7 +20133,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  </div>
  <div style={{overflowY:"auto",padding:"0 16px 26px"}}>
  {LAYOUT_PRESETS.filter(p=>!p.sports||p.sports.some(sp=>newLeagueSports.includes(sp))).map(p=>{const tot=p.slots.reduce((a,b)=>a+b.mult,0);return (
- <div key={p.id} onClick={()=>{ setNewLeagueSlots(p.slots.map(x=>({...x}))); setPresetSheet(false); }} style={{background:"linear-gradient(160deg,#15151A,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.md,padding:"13px 14px",marginBottom:9,cursor:"pointer"}}>
+ <div key={p.id} onClick={()=>{ setNewLeagueSlots(p.slots.map(x=>({...x}))); setPresetSheet(false); }} style={{background:"linear-gradient(160deg,var(--s2),var(--s1) 80%)",border:EDGE.hair,borderRadius:RAD.md,padding:"13px 14px",marginBottom:9,cursor:"pointer"}}>
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
  <div style={{fontSize:15,fontWeight:800,color:"#fff"}}>{p.name}</div>
  <div style={{fontSize:11,fontWeight:700,color:"#555"}}>{p.slots.length} picks · {tot}× max</div>
@@ -20151,7 +20158,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {marketSheet!==null&&(()=>{ const _opts=[{id:null,l:"Any prop"}, ...[...new Map(newLeagueSports.flatMap(sp=>(PROP_SUBS_BY_SPORT[sp]||[]).filter(x=>x.id!=="all").map(x=>[x.id,x]))).values()]]; return (
  <div style={{position:"fixed",inset:0,zIndex:210,display:"flex",flexDirection:"column",justifyContent:"flex-end"}}>
  <div onClick={()=>setMarketSheet(null)} style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.6)"}}/>
- <div style={{position:"relative",background:"#0C0C10",borderTopLeftRadius:22,borderTopRightRadius:22,border:EDGE.hair,maxHeight:"80vh",display:"flex",flexDirection:"column"}}>
+ <div style={{position:"relative",background:"var(--s1)",borderTopLeftRadius:22,borderTopRightRadius:22,border:EDGE.hair,maxHeight:"80vh",display:"flex",flexDirection:"column"}}>
  <div style={{width:38,height:4,borderRadius:2,background:"rgba(var(--ink-rgb),0.2)",margin:"10px auto 4px"}}/>
  <div style={{padding:"6px 18px 12px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
  <div style={{fontSize:17,fontWeight:800,color:"#fff"}}>Prop market</div>
@@ -20160,7 +20167,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div style={{fontSize:12,color:"rgba(var(--ink-rgb),0.5)",padding:"0 18px 12px",lineHeight:1.4}}>Lock this slot to a specific prop. Players only see that market when filling it.</div>
  <div style={{overflowY:"auto",padding:"0 16px 26px"}}>
  {_opts.map(o=>{ const sel=(newLeagueSlots[marketSheet]&&(newLeagueSlots[marketSheet].market||null))===o.id; return (
- <div key={o.id||"any"} onClick={()=>{ setNewLeagueSlots(arr=>arr.map((p,j)=>j===marketSheet?{...p,market:o.id}:p)); setMarketSheet(null); }} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:sel?"rgba(10,132,255,0.1)":"linear-gradient(160deg,#15151A,#0B0B0E 80%)",border:"0.5px solid "+(sel?"rgba(10,132,255,0.6)":"rgba(var(--ink-rgb),0.09)"),borderRadius:RAD.md,padding:"13px 14px",marginBottom:8,cursor:"pointer"}}>
+ <div key={o.id||"any"} onClick={()=>{ setNewLeagueSlots(arr=>arr.map((p,j)=>j===marketSheet?{...p,market:o.id}:p)); setMarketSheet(null); }} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:sel?"rgba(10,132,255,0.1)":"linear-gradient(160deg,var(--s2),var(--s1) 80%)",border:"0.5px solid "+(sel?"rgba(10,132,255,0.6)":"rgba(var(--ink-rgb),0.09)"),borderRadius:RAD.md,padding:"13px 14px",marginBottom:8,cursor:"pointer"}}>
  <span style={{fontSize:15,fontWeight:700,color:"#fff"}}>{o.l}</span>
  {sel&&<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
  </div>
@@ -20173,7 +20180,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {slotSheetIdx!==null&&(
  <div style={{position:"fixed",inset:0,zIndex:200,display:"flex",flexDirection:"column",justifyContent:"flex-end"}}>
  <div onClick={()=>setSlotSheetIdx(null)} style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.6)"}}/>
- <div style={{position:"relative",background:"#0C0C10",borderTopLeftRadius:22,borderTopRightRadius:22,border:EDGE.hair,maxHeight:"80vh",display:"flex",flexDirection:"column"}}>
+ <div style={{position:"relative",background:"var(--s1)",borderTopLeftRadius:22,borderTopRightRadius:22,border:EDGE.hair,maxHeight:"80vh",display:"flex",flexDirection:"column"}}>
  <div style={{width:38,height:4,borderRadius:2,background:"rgba(var(--ink-rgb),0.2)",margin:"10px auto 4px"}}/>
  <div style={{padding:"6px 18px 12px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
  <div style={{fontSize:17,fontWeight:800,color:"#fff"}}>{slotSheetIdx===-1?"Single-type league":"Slot "+(slotSheetIdx+1)+" · pick type"}</div>
@@ -20181,7 +20188,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  </div>
  <div style={{overflowY:"auto",padding:"0 16px 26px"}}>
  {slotSheetIdx===-1&&<div style={{fontSize:12,color:"rgba(var(--ink-rgb),0.5)",marginBottom:12,lineHeight:1.4}}>Pick one type and every slot becomes that type.</div>}
- <div style={{display:"flex",alignItems:"center",gap:8,background:"#16161a",border:EDGE.hair2,borderRadius:RAD.md,padding:"9px 12px",marginBottom:10}}>
+ <div style={{display:"flex",alignItems:"center",gap:8,background:"var(--s2)",border:EDGE.hair2,borderRadius:RAD.md,padding:"9px 12px",marginBottom:10}}>
  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(var(--ink-rgb),0.4)" strokeWidth="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
  <input value={slotSearch} onChange={e=>setSlotSearch(e.target.value)} placeholder="Search pick types" style={{flex:1,background:"transparent",border:0,outline:0,color:"#fff",fontFamily:"Barlow,sans-serif",fontSize:14}}/>
  </div>
@@ -20304,8 +20311,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      </div>
    </div>
    <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"rgba(var(--ink-rgb),0.6)",marginBottom:8}}>Duration</div>
-   <div style={{display:"flex",background:"#1c1c22",borderRadius:RAD.md,padding:3,marginBottom:10}}>
-     {["days","weeks"].map(m=>(<div key={m} onClick={()=>_setD({mode:m})} style={{flex:1,textAlign:"center",padding:"9px 0",borderRadius:9,fontSize:13,fontWeight:800,cursor:"pointer",transition:"background .18s,color .18s",background:_dd.mode===m?"#2d2d31":"transparent",color:_dd.mode===m?"#fff":"rgba(var(--ink-rgb),0.5)"}}>{m==="days"?"Days":"Weeks"}</div>))}
+   <div style={{display:"flex",background:"var(--s3)",borderRadius:RAD.md,padding:3,marginBottom:10}}>
+     {["days","weeks"].map(m=>(<div key={m} onClick={()=>_setD({mode:m})} style={{flex:1,textAlign:"center",padding:"9px 0",borderRadius:9,fontSize:13,fontWeight:800,cursor:"pointer",transition:"background .18s,color .18s",background:_dd.mode===m?"var(--s4)":"transparent",color:_dd.mode===m?"#fff":"rgba(var(--ink-rgb),0.5)"}}>{m==="days"?"Days":"Weeks"}</div>))}
    </div>
    {_dd.mode==="days"?(<>
    <div style={{display:"flex",gap:6}}>
@@ -20315,9 +20322,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    <div style={{fontSize:10.5,color:"rgba(var(--ink-rgb),0.38)",marginTop:9,marginBottom:16,paddingLeft:2}}>{"Ends "+_endPrev+" at 3:00 AM ET \u2014 late games on the last day still count."}</div>
    </>):(<>
    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(var(--ink-rgb),0.04)",border:"1px solid rgba(var(--ink-rgb),0.09)",borderRadius:RAD.md,padding:"10px 12px"}}>
-     <div onClick={()=>_setD({weeks:Math.max(1,(Number(_dd.weeks)||1)-1)})} style={{width:36,height:36,borderRadius:10,background:"#1c1c22",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:19,fontWeight:800,userSelect:"none"}}>{"\u2212"}</div>
+     <div onClick={()=>_setD({weeks:Math.max(1,(Number(_dd.weeks)||1)-1)})} style={{width:36,height:36,borderRadius:10,background:"var(--s3)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:19,fontWeight:800,userSelect:"none"}}>{"\u2212"}</div>
      <div style={{fontSize:17,fontWeight:900}}>{(Number(_dd.weeks)||1)}<span style={{fontSize:10,fontWeight:700,color:"rgba(var(--ink-rgb),0.4)",marginLeft:5}}>{(Number(_dd.weeks)||1)===1?"week":"weeks"}</span></div>
-     <div onClick={()=>_setD({weeks:Math.min(18,(Number(_dd.weeks)||1)+1)})} style={{width:36,height:36,borderRadius:10,background:"#1c1c22",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:19,fontWeight:800,userSelect:"none"}}>+</div>
+     <div onClick={()=>_setD({weeks:Math.min(18,(Number(_dd.weeks)||1)+1)})} style={{width:36,height:36,borderRadius:10,background:"var(--s3)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:19,fontWeight:800,userSelect:"none"}}>+</div>
    </div>
    <div style={{fontSize:10.5,color:"rgba(var(--ink-rgb),0.45)",marginTop:9,lineHeight:1.5,paddingLeft:2}}>{(Number(_dd.weeks)||1)===1?"One standard week \u2014 same as picking 7 days.":"One matchup per week. Win the week, take the point. Most weekly wins takes the duel."}</div>
    {(Number(_dd.weeks)||1)>1&&<div style={{fontSize:10,color:"rgba(var(--ink-rgb),0.32)",marginTop:5,marginBottom:16,lineHeight:1.5,paddingLeft:2}}>{"Split series? Total points across every week decides it. Still dead even after that: highest single week, then it\u2019s a draw \u2014 run it back."}</div>}
@@ -20341,7 +20348,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:6}}>
        {_weeks.map(w=>{ const on=w===_sel; return (
        <div key={w} onClick={()=>setNewStartWeek(w)} style={{flex:"1 1 62px",borderRadius:RAD.sm,padding:"9px 4px",textAlign:"center",cursor:"pointer",transition:"all .15s",
-         background:on?"rgba(10,132,255,0.1)":"#111",border:"0.5px solid "+(on?"rgba(10,132,255,0.45)":"#1E1E1E")}}>
+         background:on?"rgba(10,132,255,0.1)":"#111",border:"0.5px solid "+(on?"rgba(10,132,255,0.45)":"var(--s3)")}}>
          <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:16,color:on?IOS.blue:"#888"}}>{"Wk "+w}</div>
          <div style={{fontSize:9,color:on?IOS.blue:"#555",fontWeight:700,marginTop:1}}>{_fmt(w)}</div>
        </div>);})}
@@ -20356,9 +20363,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    {!isDuel&&newLeagueType==="survivor"&&<div style={{fontSize:11.5,color:"rgba(var(--ink-rgb),0.5)",lineHeight:1.45,marginBottom:14}}>{"No roster size. Anyone with the code can enter until the first Sunday 1:00 PM ET lock, then the pool runs with whoever is in."}</div>}
    {!isDuel&&newLeagueType!=="survivor"&&((newLeagueType==="points"||newLeagueType==="survivor"||newLeagueType==="ladder")?(
      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
-       <div onClick={()=>setNewLeagueSize(s=>Math.max(2,s-1))} style={{width:28,height:28,borderRadius:RAD.sm,background:"#1A1A1A",border:"0.5px solid #2A2A2A",color:"#ccc",fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>−</div>
+       <div onClick={()=>setNewLeagueSize(s=>Math.max(2,s-1))} style={{width:28,height:28,borderRadius:RAD.sm,background:"var(--s3)",border:"0.5px solid var(--s4)",color:"#ccc",fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>−</div>
        <div style={{fontSize:16,fontWeight:700,color:"#fff",minWidth:28,textAlign:"center"}}>{newLeagueSize}</div>
-       <div onClick={()=>setNewLeagueSize(s=>Math.min(100,s+1))} style={{width:28,height:28,borderRadius:RAD.sm,background:"#1A1A1A",border:"0.5px solid #2A2A2A",color:"#ccc",fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>+</div>
+       <div onClick={()=>setNewLeagueSize(s=>Math.min(100,s+1))} style={{width:28,height:28,borderRadius:RAD.sm,background:"var(--s3)",border:"0.5px solid var(--s4)",color:"#ccc",fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>+</div>
        <div style={{fontSize:12,color:"rgba(var(--ink-rgb),0.6)",marginLeft:4}}>players (2–100)</div>
      </div>
    ):(
@@ -20390,7 +20397,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      <>
      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4,marginTop:12}}>
        <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"rgba(var(--ink-rgb),0.6)"}}>Power-Ups</div>
-       <div onClick={()=>setNewLeaguePowerUps(v=>!v)} style={{width:44,height:26,borderRadius:RAD.md,background:newLeaguePowerUps?IOS.blue:"#2A2A2A",border:`1px solid ${newLeaguePowerUps?IOS.blue:"#3A3A3A"}`,position:"relative",cursor:"pointer",flexShrink:0}}>
+       <div onClick={()=>setNewLeaguePowerUps(v=>!v)} style={{width:44,height:26,borderRadius:RAD.md,background:newLeaguePowerUps?IOS.blue:"var(--s4)",border:`1px solid ${newLeaguePowerUps?IOS.blue:"var(--s5)"}`,position:"relative",cursor:"pointer",flexShrink:0}}>
          <div style={{position:"absolute",top:2,left:newLeaguePowerUps?18:2,width:22,height:22,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
        </div>
      </div>
@@ -20399,9 +20406,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      )}
      {!isDuel&&<div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"rgba(var(--ink-rgb),0.6)",marginBottom:8,marginTop:12}}>Season length</div>}
      {!isDuel&&<div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
-       <div onClick={()=>setNewLeagueWeeks(w=>Math.max(1,w-1))} style={{width:28,height:28,borderRadius:RAD.sm,background:"#1A1A1A",border:"0.5px solid #2A2A2A",color:"#ccc",fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>−</div>
+       <div onClick={()=>setNewLeagueWeeks(w=>Math.max(1,w-1))} style={{width:28,height:28,borderRadius:RAD.sm,background:"var(--s3)",border:"0.5px solid var(--s4)",color:"#ccc",fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>−</div>
        <div style={{fontSize:16,fontWeight:700,color:"#fff",minWidth:28,textAlign:"center"}}>{newLeagueWeeks}</div>
-       <div onClick={()=>setNewLeagueWeeks(w=>Math.min(weekCap.max>0?weekCap.max:30,w+1))} style={{width:28,height:28,borderRadius:RAD.sm,background:"#1A1A1A",border:"0.5px solid #2A2A2A",color:(weekCap.max>0&&newLeagueWeeks>=weekCap.max)?"#444":"#ccc",fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",cursor:(weekCap.max>0&&newLeagueWeeks>=weekCap.max)?"default":"pointer"}}>+</div>
+       <div onClick={()=>setNewLeagueWeeks(w=>Math.min(weekCap.max>0?weekCap.max:30,w+1))} style={{width:28,height:28,borderRadius:RAD.sm,background:"var(--s3)",border:"0.5px solid var(--s4)",color:(weekCap.max>0&&newLeagueWeeks>=weekCap.max)?"#444":"#ccc",fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",cursor:(weekCap.max>0&&newLeagueWeeks>=weekCap.max)?"default":"pointer"}}>+</div>
        <div style={{fontSize:12,color:"rgba(var(--ink-rgb),0.6)",marginLeft:4}}>weeks</div>
      </div>}
      <div style={{fontSize:11,color:"rgba(var(--ink-rgb),0.45)",marginBottom:16}}>{newLeagueType==="points"?"Ranked by total points at the end":"NFL regular season is 18 weeks"}</div>
@@ -20421,7 +20428,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      <>
      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8,marginTop:12}}>
        <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:"rgba(var(--ink-rgb),0.6)"}}>Playoffs</div>
-       <div onClick={()=>setNewLeaguePlayoffs(v=>!v)} style={{width:44,height:26,borderRadius:RAD.md,background:newLeaguePlayoffs?IOS.blue:"#2A2A2A",border:`1px solid ${newLeaguePlayoffs?IOS.blue:"#3A3A3A"}`,position:"relative",cursor:"pointer",transition:"background .2s"}}>
+       <div onClick={()=>setNewLeaguePlayoffs(v=>!v)} style={{width:44,height:26,borderRadius:RAD.md,background:newLeaguePlayoffs?IOS.blue:"var(--s4)",border:`1px solid ${newLeaguePlayoffs?IOS.blue:"var(--s5)"}`,position:"relative",cursor:"pointer",transition:"background .2s"}}>
          <div style={{position:"absolute",top:2,left:newLeaguePlayoffs?18:2,width:22,height:22,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
        </div>
      </div>
@@ -20458,9 +20465,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      <div style={{fontSize:11.5,fontWeight:800,color:"#FFB340",marginBottom:3}}>This season hasn’t started yet</div>
      <div style={{fontSize:11,color:"rgba(var(--ink-rgb),0.55)",lineHeight:1.45}}>No games on the board for this sport yet. Auto-start would open Week 1 with an empty slate and lock your roster so nobody else could join. Start it yourself once the schedule is live.</div>
    </div>}
-   {(newLeagueStartMode==="scheduled")&&<div style={{marginBottom:16,background:"#111114",border:"0.5px solid rgba(191,90,242,0.3)",borderRadius:RAD.md,padding:"12px 13px"}}>
+   {(newLeagueStartMode==="scheduled")&&<div style={{marginBottom:16,background:"var(--s2)",border:"0.5px solid rgba(191,90,242,0.3)",borderRadius:RAD.md,padding:"12px 13px"}}>
    <div style={{fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",color:"rgba(var(--ink-rgb),0.45)",marginBottom:8}}>Week 1 opens</div>
-   <input type="datetime-local" value={newLeagueStartAt} onChange={e=>setNewLeagueStartAt(e.target.value)} style={{width:"100%",background:"#17171b",border:"0.5px solid #2c2c30",borderRadius:RAD.sm,padding:"11px 12px",color:"#fff",fontFamily:"Barlow,sans-serif",fontSize:14,colorScheme:"dark"}}/>
+   <input type="datetime-local" value={newLeagueStartAt} onChange={e=>setNewLeagueStartAt(e.target.value)} style={{width:"100%",background:"var(--s2)",border:"0.5px solid var(--s4)",borderRadius:RAD.sm,padding:"11px 12px",color:"#fff",fontFamily:"Barlow,sans-serif",fontSize:14,colorScheme:"dark"}}/>
    {newLeagueStartAt&&<div style={{fontSize:11.5,color:IOS.green,marginTop:9,fontWeight:600}}>Everyone’s picks stay locked until then.</div>}
    </div>}
    {/* Visibility */}
@@ -20480,12 +20487,12 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    </div>
 
    {/* Commish Pro toggle */}
-   <div style={{background:"#111",borderRadius:RAD.md,padding:"11px 13px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",border:"0.5px solid #1E1E1E"}}>
+   <div style={{background:"#111",borderRadius:RAD.md,padding:"11px 13px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",border:"0.5px solid var(--s3)"}}>
      <div>
        <div style={{fontSize:13,fontWeight:600,color:"#fff"}}>Commish Pro</div>
        <div style={{fontSize:11,color:"rgba(var(--ink-rgb),0.6)",marginTop:2}}>Custom picks, multi-sport, power-ups</div>
      </div>
-     <div onClick={()=>isPro?setProStatus(false):setShowPaywall("settings")} style={{width:44,height:26,borderRadius:RAD.md,background:isPro?IOS.blue:"#2A2A2A",border:`1px solid ${isPro?IOS.blue:"#3A3A3A"}`,position:"relative",cursor:"pointer",transition:"background .2s"}}>
+     <div onClick={()=>isPro?setProStatus(false):setShowPaywall("settings")} style={{width:44,height:26,borderRadius:RAD.md,background:isPro?IOS.blue:"var(--s4)",border:`1px solid ${isPro?IOS.blue:"var(--s5)"}`,position:"relative",cursor:"pointer",transition:"background .2s"}}>
        <div style={{position:"absolute",top:2,left:isPro?18:2,width:22,height:22,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
      </div>
    </div>
@@ -20592,7 +20599,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    {/* Dropdown */}
    {lg ? (
    <>
-   <div onClick={()=>setLeagueSubTab(leagueSubTab==="dropdown"?"overview":"dropdown")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"linear-gradient(160deg,#16161A,#0C0C0F)",border:`0.5px solid ${leagueSubTab==="dropdown"?"rgba(10,132,255,0.4)":"rgba(var(--ink-rgb),0.1)"}`,borderRadius:RAD.md,padding:"12px 14px",cursor:"pointer",marginBottom:0,boxShadow:"0 4px 14px rgba(0,0,0,0.35)"}}>
+   <div onClick={()=>setLeagueSubTab(leagueSubTab==="dropdown"?"overview":"dropdown")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"linear-gradient(160deg,var(--s2),var(--s1))",border:`0.5px solid ${leagueSubTab==="dropdown"?"rgba(10,132,255,0.4)":"rgba(var(--ink-rgb),0.1)"}`,borderRadius:RAD.md,padding:"12px 14px",cursor:"pointer",marginBottom:0,boxShadow:"0 4px 14px rgba(0,0,0,0.35)"}}>
      <div>
        <div style={{fontSize:15,fontWeight:800,color:"#fff"}}>{lg.name}</div>
        <div style={{fontSize:10,color:IOS.label3,marginTop:2,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
@@ -20710,7 +20717,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        <div style={{fontSize:11,color:IOS.label3,marginTop:3}}>{lgEndedLabel(lg)}{" \u00B7 "}{Number(lg.season_weeks)||"?"}{" weeks"}</div>
        <div style={{display:"flex",alignItems:"center",gap:11,marginTop:12}}>
          <div style={{width:40,height:40,borderRadius:"50%",background:"linear-gradient(135deg,var(--yellow),var(--live))",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="6"/><path d="M9 13l-2 8 5-3 5 3-2-8"/></svg>
+           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--s3)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="6"/><path d="M9 13l-2 8 5-3 5 3-2-8"/></svg>
          </div>
          <div style={{minWidth:0}}>
            <div style={{fontSize:15,fontWeight:800,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{_nm}</div>
@@ -20748,7 +20755,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      const oppWkPts = currentMatchup?.oppPts||0;
      const pendingCount = myPicksThisWeek.filter(p=>p.result==="pending").length;
      return (
-     <div style={{position:"relative",overflow:"hidden",background:myWkPts>oppWkPts?"linear-gradient(155deg,#0A1606,#0B0B0E 72%)":myWkPts<oppWkPts?"linear-gradient(155deg,#160808,#0B0B0E 72%)":"linear-gradient(155deg,#0A1628,#0B0B0E 72%)",border:`0.5px solid ${myWkPts>oppWkPts?"rgba(48,209,88,0.35)":myWkPts<oppWkPts?"rgba(255,69,58,0.3)":"rgba(10,132,255,0.3)"}`,borderRadius:RAD.md,padding:"12px 14px",marginBottom:10,boxShadow:"0 4px 14px rgba(0,0,0,0.35)"}}>
+     <div style={{position:"relative",overflow:"hidden",background:myWkPts>oppWkPts?"linear-gradient(155deg,#0A1606,var(--s1) 72%)":myWkPts<oppWkPts?"linear-gradient(155deg,#160808,var(--s1) 72%)":"linear-gradient(155deg,#0A1628,var(--s1) 72%)",border:`0.5px solid ${myWkPts>oppWkPts?"rgba(48,209,88,0.35)":myWkPts<oppWkPts?"rgba(255,69,58,0.3)":"rgba(10,132,255,0.3)"}`,borderRadius:RAD.md,padding:"12px 14px",marginBottom:10,boxShadow:"0 4px 14px rgba(0,0,0,0.35)"}}>
        <div style={{fontSize:9,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Wk {currentWeekNum} Matchup</div>
        {!oppName ? (
          <div style={{textAlign:"center",padding:"8px 0",fontSize:12,color:IOS.label3}}>Fill up league to get a schedule!</div>
@@ -20769,12 +20776,12 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    {/* This week picks preview */}
    <div style={{fontSize:9,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>This week</div>
    {myPicksThisWeek.length===0 ? (
-     <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",borderRadius:RAD.md,padding:"12px 14px",marginBottom:10,border:EDGE.hair}}>
+     <div style={{background:"linear-gradient(160deg,var(--s2),var(--s1) 80%)",borderRadius:RAD.md,padding:"12px 14px",marginBottom:10,border:EDGE.hair}}>
        <div style={{fontSize:12,color:IOS.label3,textAlign:"center"}}>No picks locked yet</div>
        <button onClick={()=>setScreen("picks")} style={{width:"100%",background:`linear-gradient(135deg,${IOS.blue},${IOS.indigo})`,border:"none",borderRadius:RAD.sm,padding:"10px",fontFamily:"Barlow,sans-serif",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",marginTop:10,boxShadow:`0 4px 14px ${fade(IOS.blue,0.2)}`}}>Build My Slip</button>
      </div>
    ) : (
-   <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.md,overflow:"hidden",marginBottom:10}}>
+   <div style={{background:"linear-gradient(160deg,var(--s2),var(--s1) 80%)",border:EDGE.hair,borderRadius:RAD.md,overflow:"hidden",marginBottom:10}}>
      {myPicksThisWeek.slice(0,5).map((p,i)=>{
        const won=p.result==="W", lost=p.result==="L";
        return (
@@ -20793,7 +20800,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      <div style={{fontSize:9,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5}}>Standings</div>
      {_stand.length>0 && <button onClick={()=>openLeagueRecap()} disabled={leagueRecapLoading} style={{display:"flex",alignItems:"center",gap:5,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.3)",color:IOS.blue,fontSize:10,fontWeight:700,padding:"4px 9px",borderRadius:RAD.sm,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg>{leagueRecapLoading?"…":"Week recap"}</button>}
    </div>
-   <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.md,overflow:"hidden",marginBottom:10}}>
+   <div style={{background:"linear-gradient(160deg,var(--s2),var(--s1) 80%)",border:EDGE.hair,borderRadius:RAD.md,overflow:"hidden",marginBottom:10}}>
      {/* Same rows as the Standings tab — the preview is a slice of it, not a lookalike. */}
      <div style={{display:"flex",padding:"6px 12px",borderBottom:`0.5px solid ${IOS.sep}`}}>
        <div style={{width:24}}/>
@@ -20804,7 +20811,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      {_stand.slice(0,4).map((s,i)=>(
         <div key={s.userId||i} onClick={()=>{ if(s.userId) openUserProfile(s.userId,{username:s.isYou?((userProfile&&userProfile.username)||"You"):(s.name||s.username)}); }} className={"pk-strow"+(s.isYou?" me":"")} style={{cursor:"pointer",borderBottom:i<Math.min(_stand.length,4)-1?"0.5px solid rgba(var(--ink-rgb),0.05)":"none"}}>
           <span className="pk-stpos">{i+1}</span>
-          <span className="pk-stav" style={{background:s.isYou?IOS.blue:"#23242a",color:s.isYou?"#fff":"rgba(var(--ink-rgb),0.62)"}}>{String(s.isYou?"You":(s.name||s.username||"?")).slice(0,2).toUpperCase()}</span>
+          <span className="pk-stav" style={{background:s.isYou?IOS.blue:"var(--s4)",color:s.isYou?"#fff":"rgba(var(--ink-rgb),0.62)"}}>{String(s.isYou?"You":(s.name||s.username||"?")).slice(0,2).toUpperCase()}</span>
           <span className="pk-stnm">{s.isYou?"You":(s.name||s.username||"Unknown")}</span>
           {/* Bar scales against the FULL table so the preview matches the standings page. */}
           <span className="pk-stbar"><i style={{width:(()=>{ const m=Math.max.apply(null,[0,..._stand.map(x=>parseFloat(x.points)||0)]); return (m>0?Math.max(4,Math.round((parseFloat(s.points)||0)/m*100)):0)+"%"; })()}}/></span>
@@ -20831,12 +20838,12 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {lg && leagueSubTab==="standings" && lg.league_type==="survivor" && (
  <div style={{padding:"12px 16px 20px"}}>
    <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:10}}>The Pool</div>
-   <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.md,overflow:"hidden"}}>
+   <div style={{background:"linear-gradient(160deg,var(--s2),var(--s1) 80%)",border:EDGE.hair,borderRadius:RAD.md,overflow:"hidden"}}>
      {(leagueMembers||[]).length===0 ? (
        <div style={{padding:"20px",textAlign:"center",fontSize:12.5,color:IOS.label3}}>Nobody in the pool yet. Share the invite code.</div>
      ) : (leagueMembers||[]).slice().sort((a,b)=>{ const ax=a.eliminatedWeek==null?0:1, bx=b.eliminatedWeek==null?0:1; if(ax!==bx) return ax-bx; if(ax===1) return (b.eliminatedWeek||0)-(a.eliminatedWeek||0); return String(a.name).localeCompare(String(b.name)); }).map((m,i)=>{ const dead=m.eliminatedWeek!=null; return (
        <div key={m.userId||i} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 12px",borderBottom:`0.5px solid ${IOS.sep}`}}>
-         <div style={{width:26,height:26,borderRadius:"50%",background:m.isYou?IOS.blue:"#23242a",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9.5,fontWeight:800,color:m.isYou?"#fff":"rgba(var(--ink-rgb),0.62)",flexShrink:0}}>{String(m.name||"?").slice(0,2).toUpperCase()}</div>
+         <div style={{width:26,height:26,borderRadius:"50%",background:m.isYou?IOS.blue:"var(--s4)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9.5,fontWeight:800,color:m.isYou?"#fff":"rgba(var(--ink-rgb),0.62)",flexShrink:0}}>{String(m.name||"?").slice(0,2).toUpperCase()}</div>
          <div style={{flex:1,minWidth:0,fontSize:13,fontWeight:700,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",textDecoration:dead?"line-through":"none",textDecorationColor:"rgba(255,55,95,0.7)"}}>{m.isYou?"You":(m.name||"Unknown")}</div>
          <div style={{fontSize:9.5,fontWeight:900,letterSpacing:"0.08em",padding:"3px 9px",borderRadius:5,color:dead?IOS.red:IOS.green,border:`1px solid ${dead?"rgba(255,55,95,0.45)":"rgba(48,209,88,0.4)"}`,background:dead?"rgba(255,55,95,0.1)":"rgba(48,209,88,0.1)"}}>{dead?("OUT \u00B7 W"+m.eliminatedWeek):"ALIVE"}</div>
        </div>
@@ -20848,7 +20855,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {lg && leagueSubTab==="standings" && lg.league_type!=="survivor" && (
  <div style={{padding:"12px 16px 20px"}}>
    <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:10}}>Season Standings</div>
-   <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.md,overflow:"hidden"}}>
+   <div style={{background:"linear-gradient(160deg,var(--s2),var(--s1) 80%)",border:EDGE.hair,borderRadius:RAD.md,overflow:"hidden"}}>
      <div style={{display:"flex",padding:"6px 12px",borderBottom:`0.5px solid ${IOS.sep}`}}>
        <div style={{width:24}}/>
        <div style={{flex:1,fontSize:8,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.4}}>Player</div>
@@ -20858,7 +20865,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      {realStandings.map((s,i)=>(
         <div key={s.userId||i} onClick={()=>{ if(s.userId) openUserProfile(s.userId,{username:s.isYou?((userProfile&&userProfile.username)||"You"):(s.name||s.username)}); }} className={"pk-strow"+(s.isYou?" me":"")} style={{cursor:"pointer",borderBottom:i<realStandings.length-1?"0.5px solid rgba(var(--ink-rgb),0.05)":"none"}}>
           <span className="pk-stpos">{i+1}</span>
-          <span className="pk-stav" style={{background:s.isYou?IOS.blue:"#23242a",color:s.isYou?"#fff":"rgba(var(--ink-rgb),0.62)"}}>{String(s.isYou?"You":(s.name||s.username||"?")).slice(0,2).toUpperCase()}</span>
+          <span className="pk-stav" style={{background:s.isYou?IOS.blue:"var(--s4)",color:s.isYou?"#fff":"rgba(var(--ink-rgb),0.62)"}}>{String(s.isYou?"You":(s.name||s.username||"?")).slice(0,2).toUpperCase()}</span>
           <span className="pk-stnm">{s.isYou?"You":(s.name||s.username||"Unknown")}</span>
           {/* The bar shows the gap to the leader at a glance; four number columns do not. */}
           <span className="pk-stbar"><i style={{width:(()=>{ const m=Math.max.apply(null,[0,...realStandings.map(x=>parseFloat(x.points)||0)]); return (m>0?Math.max(4,Math.round((parseFloat(s.points)||0)/m*100)):0)+"%"; })()}}/></span>
@@ -20933,9 +20940,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div style={{padding:"12px 16px 20px"}}>
    <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:10}}>Season Schedule</div>
    {(!scheduleLoaded && liveSchedule.length===0) ? (
-     <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.md,padding:"20px",textAlign:"center",fontSize:12.5,color:IOS.label3}}>Loading schedule…</div>
+     <div style={{background:"linear-gradient(160deg,var(--s2),var(--s1) 80%)",border:EDGE.hair,borderRadius:RAD.md,padding:"20px",textAlign:"center",fontSize:12.5,color:IOS.label3}}>Loading schedule…</div>
    ) : liveSchedule.length===0 ? (
-     <div style={{background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.md,padding:"20px",textAlign:"center"}}>
+     <div style={{background:"linear-gradient(160deg,var(--s2),var(--s1) 80%)",border:EDGE.hair,borderRadius:RAD.md,padding:"20px",textAlign:"center"}}>
        <div style={{fontSize:13,color:"#fff",fontWeight:700,marginBottom:4}}>No schedule yet</div>
        {(()=>{
        // generateSchedule() DELETES every matchup in the league. It must be unreachable
@@ -21023,7 +21030,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    );
    return (
      <div style={{padding:"12px 16px 20px"}}>
-       <div style={{borderRadius:RAD.lg,padding:"16px",background:"linear-gradient(160deg,#19191e,#141417)",border:`0.5px solid ${IOS.sep}`,marginBottom:12}}>
+       <div style={{borderRadius:RAD.lg,padding:"16px",background:"linear-gradient(160deg,var(--s3),var(--s2))",border:`0.5px solid ${IOS.sep}`,marginBottom:12}}>
          <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:6}}>Playoff bracket</div>
          <div style={{fontSize:13,color:IOS.label2,lineHeight:1.55}}>Top {N} seeds make a {pWeeks}-week single-elimination playoff (Wk {startWeek}–{sw}). The bracket appears here once the regular season ends.</div>
        </div>
@@ -21137,7 +21144,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  </div>
 
  {weekPicksFor===((activeLeague&&activeLeague.id)+":"+(activeLeague&&(activeLeague.current_week||activeLeague.week||1))) && weekPicks.length===0&&(
- <div style={{margin:"0 16px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.lg,padding:"24px 16px",textAlign:"center",color:IOS.label3,fontSize:15}}>
+ <div style={{margin:"0 16px",background:"linear-gradient(160deg,var(--s2),var(--s1) 80%)",border:EDGE.hair,borderRadius:RAD.lg,padding:"24px 16px",textAlign:"center",color:IOS.label3,fontSize:15}}>
  No picks submitted yet this week
  </div>
  )}
@@ -21188,7 +21195,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const uid = activeMemberId;
  const memberData = activeMemberData;
  return (
- <div style={{margin:"0 16px 12px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",borderRadius:RAD.lg,overflow:"hidden",border:EDGE.hair,boxShadow:"0 4px 14px rgba(0,0,0,0.35)"}}>
+ <div style={{margin:"0 16px 12px",background:"linear-gradient(160deg,var(--s2),var(--s1) 80%)",borderRadius:RAD.lg,overflow:"hidden",border:EDGE.hair,boxShadow:"0 4px 14px rgba(0,0,0,0.35)"}}>
  <div style={{padding:"12px 14px",borderBottom:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(var(--ink-rgb),0.02)"}}>
  <div>
  <div style={{fontSize:15,fontWeight:700,color:isYou?IOS.blue:"#fff"}}>{memberData.name}{isYou?" (You)":""}</div>
@@ -21372,7 +21379,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div style={{fontSize:13,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",color:IOS.label3}}>{leagueMembers.length} / {activeLeague.max_members||activeLeague.settings?.maxMembers||8} members</div>
  
  </div>
- <div style={{margin:"0 16px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.lg,overflow:"hidden"}}>
+ <div style={{margin:"0 16px",background:"linear-gradient(160deg,var(--s2),var(--s1) 80%)",border:EDGE.hair,borderRadius:RAD.lg,overflow:"hidden"}}>
  {(leagueMembers.length ? leagueMembers : activeLeague.members||[]).map((m,i,arr)=>(
  <div key={i} style={{display:"flex",alignItems:"center",padding:"13px 16px",borderBottom:i<arr.length-1?`0.5px solid ${IOS.sep}`:"none"}}>
  <div style={{width:36,height:36,borderRadius:RAD.pill,background:m.isYou?`linear-gradient(135deg,${IOS.blue},${IOS.indigo})`:`linear-gradient(135deg,${IOS.bg3},${IOS.gray3})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#fff",marginRight:12,flexShrink:0}}>{(m.name||"?")[0]}</div>
@@ -21429,7 +21436,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    const _privacy=activeLeague.privacy||"private";
    const _code=activeLeague.invite_code||activeLeague.inviteCode||"";
    const _sportLbl=(SPORTS[activeLeague.sport]&&SPORTS[activeLeague.sport].label)||(activeLeague.sport?(""+activeLeague.sport).toUpperCase():"—");
-   const _panel={background:"#0B0B10",border:"1px solid rgba(var(--ink-rgb),0.08)",borderRadius:RAD.lg,overflow:"hidden",margin:"0 16px 12px"};
+   const _panel={background:"var(--s1)",border:"1px solid rgba(var(--ink-rgb),0.08)",borderRadius:RAD.lg,overflow:"hidden",margin:"0 16px 12px"};
    const _eye={fontSize:10,letterSpacing:"0.13em",color:"rgba(var(--ink-rgb),0.3)",fontWeight:700,textTransform:"uppercase",margin:"2px 18px 6px"};
    const _crow={padding:14,display:"flex",alignItems:"center",gap:12};
    const _ic={width:30,height:30,borderRadius:RAD.sm,border:"1px solid rgba(var(--ink-rgb),0.14)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"rgba(var(--ink-rgb),0.6)"};
@@ -21440,7 +21447,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    const _lbl9={fontSize:9,letterSpacing:"0.12em",color:"rgba(var(--ink-rgb),0.3)",fontWeight:700,textTransform:"uppercase"};
    return (
    <>
-   <div style={{position:"relative",border:"1px solid rgba(var(--ink-rgb),0.14)",borderRadius:RAD.lg,overflow:"hidden",margin:"0 16px 14px",background:"radial-gradient(120% 140% at 0% 0%, rgba(10,132,255,0.10), transparent 55%), #0B0B10"}}>
+   <div style={{position:"relative",border:"1px solid rgba(var(--ink-rgb),0.14)",borderRadius:RAD.lg,overflow:"hidden",margin:"0 16px 14px",background:"radial-gradient(120% 140% at 0% 0%, rgba(10,132,255,0.10), transparent 55%), var(--s1)"}}>
      <div style={{position:"absolute",left:0,top:0,right:0,bottom:0,backgroundImage:"repeating-linear-gradient(0deg,rgba(var(--ink-rgb),0.025) 0px,rgba(var(--ink-rgb),0.025) 1px,transparent 1px,transparent 4px)",pointerEvents:"none",opacity:0.5}}/>
      <div style={{position:"relative",display:"grid",gridTemplateColumns:"repeat(4,1fr)"}}>
        <div style={{padding:"13px 10px"}}><div style={_lbl9}>Week</div><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:700,fontSize:21,lineHeight:1,marginTop:6}}>{activeLeague.current_week||1}<span style={{color:"rgba(var(--ink-rgb),0.3)",fontSize:13}}> /{activeLeague.season_weeks||18}</span></div></div>
@@ -21488,7 +21495,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        <div style={_crow}>
          <div style={_ic}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16v5a8 8 0 0 1-16 0z"/><path d="M12 17v3M8 21h8"/></svg></div>
          <div style={{flex:1,minWidth:0}}><div style={_tt}>Playoffs</div><div style={_dd}>Bracket finale for the top seeds</div></div>
-         <div onClick={async()=>{ if(_isBracket) return; const newOn=!_poOn; if(!window.confirm((newOn?"Turn playoffs ON":"Turn playoffs OFF")+"? This wipes the current schedule and regenerates it when the league fills.")) return; const _sz=newOn?(_poSize>0?_poSize:([2,4,6,8].filter(v=>v<=_target).pop()||2)):0; await supabase.from("leagues").update({playoffs_enabled:newOn,playoff_size:_sz}).eq("id",activeLeague.id); await supabase.from("matchups").delete().eq("league_id",activeLeague.id); await fetchLeagues(user.id); }} style={{width:48,height:29,borderRadius:RAD.lg,background:_poOn?IOS.blue:"#2A2A2E",border:"1px solid "+(_poOn?IOS.blue:"#3A3A3E"),position:"relative",cursor:"pointer",flexShrink:0,transition:"background .2s"}}>
+         <div onClick={async()=>{ if(_isBracket) return; const newOn=!_poOn; if(!window.confirm((newOn?"Turn playoffs ON":"Turn playoffs OFF")+"? This wipes the current schedule and regenerates it when the league fills.")) return; const _sz=newOn?(_poSize>0?_poSize:([2,4,6,8].filter(v=>v<=_target).pop()||2)):0; await supabase.from("leagues").update({playoffs_enabled:newOn,playoff_size:_sz}).eq("id",activeLeague.id); await supabase.from("matchups").delete().eq("league_id",activeLeague.id); await fetchLeagues(user.id); }} style={{width:48,height:29,borderRadius:RAD.lg,background:_poOn?IOS.blue:"var(--s4)",border:"1px solid "+(_poOn?IOS.blue:"var(--s5)"),position:"relative",cursor:"pointer",flexShrink:0,transition:"background .2s"}}>
            <div style={{position:"absolute",top:3,left:_poOn?22:3,width:23,height:23,borderRadius:"50%",background:"#fff",transition:"left .2s",boxShadow:"0 1px 3px rgba(0,0,0,0.4)"}}/>
          </div>
        </div>
@@ -21732,7 +21739,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    </div>
 
    <div style={{...(_eye),color:IOS.red}}>Danger Zone</div>
-   <div style={{background:"#0B0B10",border:"1px solid rgba(255,69,58,0.25)",borderRadius:RAD.lg,overflow:"hidden",margin:"0 16px 24px"}}>
+   <div style={{background:"var(--s1)",border:"1px solid rgba(255,69,58,0.25)",borderRadius:RAD.lg,overflow:"hidden",margin:"0 16px 24px"}}>
      <div onClick={async()=>{
  if(!window.confirm(`Delete "${activeLeague.name}" permanently? This cannot be undone. All picks, matchups and members will be removed.`)) return;
  // Delete all related data first
@@ -21795,7 +21802,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  champName=champ.isYou?"You":(champ.name||champ.username||"Champion");
  }
  return (
- <div style={{margin:"0 16px 14px",borderRadius:RAD.lg,overflow:"hidden",position:"relative",background:"linear-gradient(135deg,#1A1606 0%,#0B0B0E 70%)",border:"0.5px solid rgba(255,193,7,0.35)",animation:"champGlow 3.2s ease-in-out infinite"}}>
+ <div style={{margin:"0 16px 14px",borderRadius:RAD.lg,overflow:"hidden",position:"relative",background:"linear-gradient(135deg,#1A1606 0%,var(--s1) 70%)",border:"0.5px solid rgba(255,193,7,0.35)",animation:"champGlow 3.2s ease-in-out infinite"}}>
  <div style={{position:"absolute",top:0,bottom:0,width:"45%",background:"linear-gradient(100deg,transparent,rgba(255,214,10,0.16),transparent)",animation:"champSweep 3.8s ease-in-out infinite",pointerEvents:"none"}}/>
  <div style={{position:"relative",display:"flex",alignItems:"center",gap:13,padding:"14px 16px"}}>
  <div style={{width:42,height:42,borderRadius:RAD.md,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",background:"radial-gradient(circle at 50% 35%,rgba(255,214,10,0.28),rgba(255,159,10,0.1))",border:"0.5px solid rgba(255,214,10,0.4)"}}>
@@ -21806,7 +21813,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div style={{fontSize:15,fontWeight:800,color:"#fff",lineHeight:1.15}}>{youWon?"You took the crown":(champName?champName+" wins the league":"Final standings are in")}</div>
  <div style={{fontSize:11,fontWeight:600,color:"rgba(var(--ink-rgb),0.45)",marginTop:2}}>{champ?champ.record+" · "+parseFloat(champ.points||0).toFixed(1)+" pts":"Tap Standings for the final board"}</div>
  </div>
- {youWon&&<div style={{fontSize:9,fontWeight:800,letterSpacing:"0.08em",color:"#0B0B0E",background:"linear-gradient(135deg,var(--yellow),var(--live))",borderRadius:RAD.sm,padding:"4px 8px",flexShrink:0}}>CHAMPION</div>}
+ {youWon&&<div style={{fontSize:9,fontWeight:800,letterSpacing:"0.08em",color:"var(--s1)",background:"linear-gradient(135deg,var(--yellow),var(--live))",borderRadius:RAD.sm,padding:"4px 8px",flexShrink:0}}>CHAMPION</div>}
  </div>
  {/* Final board — the season is over, so this is the record, not a live table. */}
  {(()=>{
@@ -21829,7 +21836,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
          <div key={r.userId||i} onClick={()=>{ if(r.userId) openUserProfile(r.userId,{username:r.isYou?((userProfile&&userProfile.username)||"You"):(r.name||r.username)}); }}
            style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",cursor:"pointer",borderBottom:i<_fin.length-1?`0.5px solid ${IOS.sep}`:"none",background:r.isYou?"rgba(10,132,255,0.09)":"transparent"}}>
            <div style={{width:18,textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:14,color:i===0?"var(--yellow)":IOS.label3,flexShrink:0}}>{i+1}</div>
-           <div style={{width:26,height:26,borderRadius:"50%",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9.5,fontWeight:800,background:r.isYou?IOS.blue:"#23242a",color:r.isYou?"#fff":"rgba(var(--ink-rgb),0.62)"}}>{String(r.isYou?"You":(r.name||r.username||"?")).slice(0,2).toUpperCase()}</div>
+           <div style={{width:26,height:26,borderRadius:"50%",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9.5,fontWeight:800,background:r.isYou?IOS.blue:"var(--s4)",color:r.isYou?"#fff":"rgba(var(--ink-rgb),0.62)"}}>{String(r.isYou?"You":(r.name||r.username||"?")).slice(0,2).toUpperCase()}</div>
            <div style={{flex:1,minWidth:0,fontSize:13,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.isYou?"You":(r.name||r.username||"Unknown")}</div>
            <div style={{width:36,textAlign:"right",fontSize:11,color:IOS.label3,fontWeight:700}}>{r.record}</div>
            <div style={{width:50,textAlign:"right",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:14.5,color:i===0?"var(--yellow)":"#fff"}}>{parseFloat(r.points||0).toFixed(1)}</div>
@@ -21844,7 +21851,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    <div onClick={()=>{ if(!rollBusy){ haptic("select"); rollSeason(); } }}
      style={{marginTop:11,padding:"11px 14px",borderRadius:RAD.md,textAlign:"center",cursor:rollBusy?"default":"pointer",
        background:rollBusy?"rgba(var(--ink-rgb),0.06)":"linear-gradient(135deg,var(--yellow),var(--live))",
-       color:rollBusy?IOS.label3:"#0B0B0E",fontSize:14,fontWeight:800,letterSpacing:"0.01em"}}>
+       color:rollBusy?IOS.label3:"var(--s1)",fontSize:14,fontWeight:800,letterSpacing:"0.01em"}}>
      {rollBusy?"Starting\u2026":("Run it back \u2014 start Season "+(Number(activeLeague.season_number||1)+1))}
    </div>
  )}
@@ -22006,7 +22013,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
         </div>
        );
       })()}
-       <div style={{borderRadius:RAD.lg,padding:"16px",background:"linear-gradient(160deg,#19191e,#141417)",border:`0.5px solid ${IOS.sep}`,marginBottom:12}}>
+       <div style={{borderRadius:RAD.lg,padding:"16px",background:"linear-gradient(160deg,var(--s3),var(--s2))",border:`0.5px solid ${IOS.sep}`,marginBottom:12}}>
          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
            <div style={{fontSize:17,fontWeight:800,color:"#fff"}}>Playoff bracket</div>
            <div style={{fontSize:10.5,fontWeight:800,letterSpacing:".4px",textTransform:"uppercase",color:regDone?IOS.green:IOS.label3,background:regDone?"rgba(48,209,88,.12)":"rgba(var(--ink-rgb),.05)",border:`0.5px solid ${regDone?"rgba(48,209,88,.35)":IOS.sep}`,borderRadius:RAD.pill,padding:"4px 10px"}}>{regDone?"Ready to seed":`Locks after Wk ${startWeek-1}`}</div>
@@ -22102,7 +22109,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const inPlayoff = playoffN>0 && typeof myRank==="number" && myRank<=playoffN;
  const gap = (linePts!=null && me.points!=null) ? Math.round((me.points - linePts)*10)/10 : null;
  return (<>
- <div style={{margin:"14px 16px 0",background:"linear-gradient(180deg,#19191e,#141417)",border:`0.5px solid ${IOS.sep}`,borderRadius:RAD.lg,padding:"14px 15px"}}>
+ <div style={{margin:"14px 16px 0",background:"linear-gradient(180deg,var(--s3),var(--s2))",border:`0.5px solid ${IOS.sep}`,borderRadius:RAD.lg,padding:"14px 15px"}}>
    <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:9}}>
      <div style={{fontSize:13,fontWeight:800}}>Regular season</div>
      <div style={{fontSize:11,color:IOS.label3,fontWeight:700}}>{playoffN>0?`Top ${playoffN} make the playoff`:"Most points wins"}</div>
@@ -22115,7 +22122,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      <span>Wk {cw} of {sw}</span>{playoffN>0 && <span style={{color:IOS.yellow,fontWeight:800}}>Playoff after Wk {sw}</span>}
    </div>
  </div>
- <div style={{position:"relative",margin:"14px 16px 0",borderRadius:RAD.xl,padding:18,overflow:"hidden",background:`radial-gradient(120% 120% at 50% -10%, ${fade(IOS.indigo,0.239)}, ${fade(IOS.blue,0.063)} 45%, rgba(20,20,22,0) 72%),linear-gradient(180deg,#1a1a1f,#141416)`,border:`1px solid ${fade(IOS.indigo,0.302)}`,boxShadow:`0 18px 50px -22px ${fade(IOS.indigo,0.6)}`}}>
+ <div style={{position:"relative",margin:"14px 16px 0",borderRadius:RAD.xl,padding:18,overflow:"hidden",background:`radial-gradient(120% 120% at 50% -10%, ${fade(IOS.indigo,0.239)}, ${fade(IOS.blue,0.063)} 45%, rgba(20,20,22,0) 72%),linear-gradient(180deg,var(--s3),var(--s2))`,border:`1px solid ${fade(IOS.indigo,0.302)}`,boxShadow:`0 18px 50px -22px ${fade(IOS.indigo,0.6)}`}}>
    <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${IOS.blue},${IOS.indigo},var(--cyan))`}}/>
    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,letterSpacing:.7,textTransform:"uppercase",fontSize:12,color:"var(--cyan)"}}>Your total</div>
    <div style={{display:"flex",alignItems:"flex-end",gap:13,marginTop:4}}>
@@ -22151,7 +22158,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        <div style={{display:"flex",alignItems:"center",gap:11,padding:"12px 14px",background:r.isYou?"rgba(10,132,255,0.10)":"transparent",borderBottom:i<_ms.length-1?`0.5px solid ${IOS.sep}`:"none",position:"relative"}}>
          {r.isYou && <div style={{position:"absolute",left:0,top:0,bottom:0,width:3,background:IOS.blue}}/>}
          <div style={{width:22,textAlign:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:15,color:i<3?col:IOS.label3}}>{i+1}</div>
-         <div style={{width:34,height:34,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:13,color:"#0c0c0e",background:`linear-gradient(150deg,${col},${fade(col,0.733)})`,flexShrink:0}}>{initials}</div>
+         <div style={{width:34,height:34,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:13,color:"var(--s1)",background:`linear-gradient(150deg,${col},${fade(col,0.733)})`,flexShrink:0}}>{initials}</div>
          <div style={{flex:1,minWidth:0}}>
            <div style={{fontSize:14,fontWeight:800,color:r.isYou?IOS.blue:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.isYou?"You":r.name}</div>
            <div style={{fontSize:10.5,color:IOS.label3,marginTop:1,fontWeight:600}}>{r.record||"0-0"} picks {"·"} {r.wpct||"0%"} hit</div>
@@ -22167,7 +22174,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  })() : (<>
  {/* Hero — your stats */}
       {/* Hero rank card */}
-      <div style={{position:"relative",margin:"0 16px 4px",borderRadius:RAD.xl,padding:"20px 18px 16px",overflow:"hidden",background:`radial-gradient(120% 120% at 50% -10%, ${fade(IOS.indigo,0.22)}, ${fade(IOS.blue,0.063)} 45%, rgba(20,20,22,0) 70%), linear-gradient(180deg,#1a1a1f,#141416)`,border:`1px solid ${fade(IOS.indigo,0.278)}`,boxShadow:`0 18px 50px -20px ${fade(IOS.indigo,0.502)}`}}>
+      <div style={{position:"relative",margin:"0 16px 4px",borderRadius:RAD.xl,padding:"20px 18px 16px",overflow:"hidden",background:`radial-gradient(120% 120% at 50% -10%, ${fade(IOS.indigo,0.22)}, ${fade(IOS.blue,0.063)} 45%, rgba(20,20,22,0) 70%), linear-gradient(180deg,var(--s3),var(--s2))`,border:`1px solid ${fade(IOS.indigo,0.278)}`,boxShadow:`0 18px 50px -20px ${fade(IOS.indigo,0.502)}`}}>
         <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${IOS.blue},${IOS.indigo},var(--cyan))`}}/>
         <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,letterSpacing:1,textTransform:"uppercase",fontSize:12,color:"var(--cyan)"}}>Your rank</div>
         <div style={{display:"flex",alignItems:"flex-end",gap:13,marginTop:4}}>
@@ -22193,7 +22200,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
           <div style={{display:"flex",alignItems:"flex-end",justifyContent:"center",gap:10}}>
             {[sorted[1],sorted[0],sorted[2]].map((p,idx)=>{ if(!p) return null; const place=idx===0?2:idx===1?1:3; const col=place===1?IOS.yellow:place===2?"#C7CBD1":"#E0915A"; const h=place===1?92:place===2?66:50; const av=place===1?64:52; const initials=(p.name==="You"?"You":(p.name||"?").slice(0,2)).toUpperCase(); return (
               <div key={idx} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
-                <div style={{position:"relative",width:av,height:av,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:place===1?22:18,color:"#0c0c0e",background:`linear-gradient(150deg,${col},${fade(col,0.733)})`,boxShadow:`0 0 22px ${fade(col,0.333)}`}}>
+                <div style={{position:"relative",width:av,height:av,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:place===1?22:18,color:"var(--s1)",background:`linear-gradient(150deg,${col},${fade(col,0.733)})`,boxShadow:`0 0 22px ${fade(col,0.333)}`}}>
                   {place===1 && <svg width="24" height="24" viewBox="0 0 24 24" fill={IOS.yellow} style={{position:"absolute",top:-17,left:"50%",transform:"translateX(-50%)"}}><path d="M3 7l4 4 5-7 5 7 4-4-2 12H5z"/></svg>}
                   {initials}
                 </div>
@@ -22207,7 +22214,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
       ) : sorted.length>0 ? (
         <div style={{padding:"16px 16px 0"}}>
           <div style={{borderRadius:RAD.lg,padding:"15px",background:`linear-gradient(135deg,${fade(IOS.yellow,0.102)},rgba(var(--ink-rgb),0.02))`,border:`0.5px solid ${fade(IOS.yellow,0.2)}`,display:"flex",alignItems:"center",gap:13}}>
-            <div style={{width:48,height:48,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:18,color:"#0c0c0e",background:`linear-gradient(150deg,${IOS.yellow},#FFB300)`,boxShadow:`0 0 20px ${fade(IOS.yellow,0.333)}`,flexShrink:0}}>{(sorted[0].name==="You"?"You":(sorted[0].name||"?").slice(0,2)).toUpperCase()}</div>
+            <div style={{width:48,height:48,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:18,color:"var(--s1)",background:`linear-gradient(150deg,${IOS.yellow},#FFB300)`,boxShadow:`0 0 20px ${fade(IOS.yellow,0.333)}`,flexShrink:0}}>{(sorted[0].name==="You"?"You":(sorted[0].name||"?").slice(0,2)).toUpperCase()}</div>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",color:IOS.yellow}}>League leader</div>
               <div style={{fontSize:17,fontWeight:800,color:sorted[0].isYou?IOS.blue:"#fff",marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{sorted[0].name}</div>
@@ -22669,7 +22676,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 
  {/* ══ CHAT ══ */}
  {screen==="ai"&&(
-          <div className="body" style={{display:"flex",flexDirection:"column",height:"100%",background:"#08080A",overflow:"hidden",position:"relative"}}>
+          <div className="body" style={{display:"flex",flexDirection:"column",height:"100%",background:"var(--s0)",overflow:"hidden",position:"relative"}}>
             <style>{`@keyframes aiRise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}} .ai-rise{animation:aiRise .28s ease both;} @keyframes aiBlink{0%,100%{opacity:1}50%{opacity:0}} .ai-caret{display:inline-block;width:2px;height:0.95em;background:var(--accent-ios);margin-left:2px;vertical-align:-1px;border-radius:1px;animation:aiBlink .8s steps(1) infinite;} @keyframes aiPulse{0%,100%{opacity:0.25;transform:translateY(0)}50%{opacity:1;transform:translateY(-2px)}} .ai-dot{width:6px;height:6px;border-radius:50%;background:rgba(var(--ink-rgb),0.6);display:inline-block;animation:aiPulse .9s ease-in-out infinite;}`}</style>
             <div style={{flexShrink:0,display:"flex",alignItems:"center",gap:11,padding:"12px 16px 10px",borderBottom:"0.5px solid rgba(var(--ink-rgb),0.08)"}}>
               <div onClick={()=>goBack("home")} style={{width:34,height:34,borderRadius:RAD.md,background:"rgba(var(--ink-rgb),0.06)",border:EDGE.hair2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:18,flexShrink:0}}>‹</div>
@@ -22692,7 +22699,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
             </div>
             <div className="gbx-scroll" style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:10,padding:"14px 14px 16px"}}>
               {aiThread.length===0 && plokRecord && plokRecord.lock && (
-                <div className="ai-rise" style={{background:"linear-gradient(160deg,#0f171d,#0b0b0e 78%)",border:"0.5px solid rgba(100,210,255,0.32)",borderRadius:RAD.lg,overflow:"hidden"}}>
+                <div className="ai-rise" style={{background:"linear-gradient(160deg,#0f171d,var(--s1) 78%)",border:"0.5px solid rgba(100,210,255,0.32)",borderRadius:RAD.lg,overflow:"hidden"}}>
                   <div style={{fontSize:10,fontWeight:900,letterSpacing:"1.6px",textTransform:"uppercase",color:"var(--cyan)",padding:"12px 14px 0"}}>{"Plok's Lock of the Day"}</div>
                   <div style={{fontSize:11.5,color:"rgba(var(--ink-rgb),0.35)",fontWeight:600,padding:"6px 14px 0"}}>{plokRecord.lock.game}</div>
                   <div style={{display:"flex",alignItems:"baseline",gap:8,padding:"2px 14px 0"}}>
@@ -22705,7 +22712,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
                   </div>
                   <div onClick={()=>{ if(!isPro){ setShowPaywall("ai"); return; } askInsight({ sport:plokRecord.lock.sport, betType:plokRecord.lock.betType, selection:plokRecord.lock.selection, game:plokRecord.lock.game, odds:plokRecord.lock.odds }, plokRecord.lock.selection); }} style={{display:"flex",alignItems:"center",justifyContent:"space-between",borderTop:"0.5px solid rgba(var(--ink-rgb),0.08)",padding:"10px 14px",cursor:"pointer"}}>
                     <span style={{fontSize:12.5,fontWeight:800,color:"var(--cyan)"}}>{"See Plok's full read"}</span>
-                    {!isPro && <span style={{fontSize:9,fontWeight:900,letterSpacing:"1px",color:"#0b0b0e",background:"linear-gradient(135deg,var(--yellow),var(--live))",borderRadius:5,padding:"2px 6px"}}>PRO</span>}
+                    {!isPro && <span style={{fontSize:9,fontWeight:900,letterSpacing:"1px",color:"var(--s1)",background:"linear-gradient(135deg,var(--yellow),var(--live))",borderRadius:5,padding:"2px 6px"}}>PRO</span>}
                   </div>
                 </div>
               )}
@@ -22785,7 +22792,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
                           const _C = 2*Math.PI*9;
                           const _pct = _f.tot ? _f.n/_f.tot : 0;
                           return (
-                            <div key={l.id} onClick={()=>{ applyMode(false,{leagueId:l.id}); }} style={{flexShrink:0,display:"flex",alignItems:"center",gap:7,padding:"7px 11px 7px 8px",borderRadius:RAD.md,cursor:"pointer",whiteSpace:"nowrap",background:_on?`${fade(IOS.blue,0.129)}`:"#141419",border:_on?`0.5px solid ${fade(IOS.blue,0.502)}`:"0.5px solid rgba(var(--ink-rgb),0.09)"}}>
+                            <div key={l.id} onClick={()=>{ applyMode(false,{leagueId:l.id}); }} style={{flexShrink:0,display:"flex",alignItems:"center",gap:7,padding:"7px 11px 7px 8px",borderRadius:RAD.md,cursor:"pointer",whiteSpace:"nowrap",background:_on?`${fade(IOS.blue,0.129)}`:"var(--s2)",border:_on?`0.5px solid ${fade(IOS.blue,0.502)}`:"0.5px solid rgba(var(--ink-rgb),0.09)"}}>
                               <svg width="22" height="22" style={{flexShrink:0,transform:"rotate(-90deg)"}}>
                                 <circle cx="11" cy="11" r="9" fill="none" stroke="rgba(var(--ink-rgb),0.1)" strokeWidth="2.5"/>
                                 <circle cx="11" cy="11" r="9" fill="none" stroke={_done?IOS.green:IOS.blue} strokeWidth="2.5" strokeLinecap="round" strokeDasharray={_C} strokeDashoffset={_C*(1-_pct)}/>
@@ -22797,7 +22804,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
                             </div>
                           );
                         })}
-                        <div onClick={()=>applyMode(true)} style={{flexShrink:0,display:"flex",alignItems:"center",gap:7,padding:"7px 11px 7px 8px",borderRadius:RAD.md,cursor:"pointer",whiteSpace:"nowrap",background:isSoloMode?`${fade(IOS.blue,0.129)}`:"#141419",border:isSoloMode?`0.5px solid ${fade(IOS.blue,0.502)}`:"0.5px solid rgba(var(--ink-rgb),0.09)"}}>
+                        <div onClick={()=>applyMode(true)} style={{flexShrink:0,display:"flex",alignItems:"center",gap:7,padding:"7px 11px 7px 8px",borderRadius:RAD.md,cursor:"pointer",whiteSpace:"nowrap",background:isSoloMode?`${fade(IOS.blue,0.129)}`:"var(--s2)",border:isSoloMode?`0.5px solid ${fade(IOS.blue,0.502)}`:"0.5px solid rgba(var(--ink-rgb),0.09)"}}>
                           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="rgba(var(--ink-rgb),0.45)" strokeWidth="2" strokeLinecap="round" style={{flexShrink:0}}><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6"/></svg>
                           <div>
                             <div style={{fontSize:12.5,fontWeight:800,lineHeight:1.1,color:isSoloMode?"#fff":"rgba(var(--ink-rgb),0.62)"}}>Solo</div>
@@ -22834,9 +22841,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
                         const _list = plokSortBets(_t, _pool);
                         const _mktLabel = (mk)=> (PROP_HIST_MAP[mk]&&PROP_HIST_MAP[mk].label) || String(mk||"").replace(/^(player_|batter_|pitcher_)/,"").replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
                         return (
-                          <div key={si} style={{background:_done?`linear-gradient(135deg,${fade(IOS.green,0.063)},rgba(var(--ink-rgb),0.015))`:"#141419",border:_done?`0.5px solid ${fade(IOS.green,0.302)}`:(_open?`0.5px solid ${fade(IOS.blue,0.451)}`:"0.5px solid rgba(var(--ink-rgb),0.07)"),borderRadius:RAD.md,marginBottom:8,overflow:"hidden"}}>
+                          <div key={si} style={{background:_done?`linear-gradient(135deg,${fade(IOS.green,0.063)},rgba(var(--ink-rgb),0.015))`:"var(--s2)",border:_done?`0.5px solid ${fade(IOS.green,0.302)}`:(_open?`0.5px solid ${fade(IOS.blue,0.451)}`:"0.5px solid rgba(var(--ink-rgb),0.07)"),borderRadius:RAD.md,marginBottom:8,overflow:"hidden"}}>
                             <div onClick={()=>{ if(_done) return; setPlokBrowseQ(""); setPlokSlot(plokOpenSlot===si ? -1 : si); }} style={{display:"flex",alignItems:"center",gap:9,padding:"10px 11px",cursor:_done?"default":"pointer"}}>
-                              <div style={{width:23,height:23,borderRadius:RAD.sm,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10.5,fontWeight:900,flexShrink:0,background:_done?`${fade(IOS.green,0.18)}`:"#1e1e25",color:_done?IOS.green:"rgba(var(--ink-rgb),0.4)"}}>
+                              <div style={{width:23,height:23,borderRadius:RAD.sm,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10.5,fontWeight:900,flexShrink:0,background:_done?`${fade(IOS.green,0.18)}`:"var(--s3)",color:_done?IOS.green:"rgba(var(--ink-rgb),0.4)"}}>
                                 {_done ? <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> : si+1}
                               </div>
                               <div style={{flex:1,minWidth:0}}>
@@ -22872,7 +22879,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
                                 {_list.length>0 ? (
                                   <div style={{padding:"0 10px",display:"flex",flexDirection:"column",gap:5,maxHeight:196,overflowY:"auto"}}>
                                     {_list.map((b,bi)=>(
-                                      <div key={bi} onClick={()=>askFromBet(b, PERIOD_MARKETS[_t] ? "period" : b.category)} style={{display:"flex",alignItems:"center",gap:9,background:"#1e1e25",border:EDGE.hair,borderRadius:RAD.md,padding:"8px 10px",cursor:"pointer"}}>
+                                      <div key={bi} onClick={()=>askFromBet(b, PERIOD_MARKETS[_t] ? "period" : b.category)} style={{display:"flex",alignItems:"center",gap:9,background:"var(--s3)",border:EDGE.hair,borderRadius:RAD.md,padding:"8px 10px",cursor:"pointer"}}>
                                         <div style={{width:2.5,alignSelf:"stretch",borderRadius:2,flexShrink:0,background:_col}}/>
                                         <div style={{flex:1,minWidth:0}}>
                                           <div style={{fontSize:12.5,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.pick || plokTypeLabel(_t)}</div>
@@ -22892,7 +22899,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
                                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg>
                                     {plokSlotBusy===si ? "Picking…" : "Plok picks this slot"}
                                   </button>
-                                  <button onClick={()=>{ setScreen("picks"); }} style={{flex:1,border:EDGE.hair2,borderRadius:RAD.sm,padding:8,fontFamily:"inherit",fontSize:11,fontWeight:800,cursor:"pointer",background:"#1e1e25",color:"rgba(var(--ink-rgb),0.62)"}}>Open in slip</button>
+                                  <button onClick={()=>{ setScreen("picks"); }} style={{flex:1,border:EDGE.hair2,borderRadius:RAD.sm,padding:8,fontFamily:"inherit",fontSize:11,fontWeight:800,cursor:"pointer",background:"var(--s3)",color:"rgba(var(--ink-rgb),0.62)"}}>Open in slip</button>
                                 </div>
                               </div>
                             )}
@@ -22912,7 +22919,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
                           if(!_n) return null;
                           const _on = plokFlatType===t;
                           return (
-                            <div key={t} onClick={()=>setPlokFlatType(t)} style={{flexShrink:0,display:"flex",alignItems:"center",gap:5,fontSize:12,fontWeight:800,padding:"7px 12px",borderRadius:RAD.xl,cursor:"pointer",whiteSpace:"nowrap",background:_on?`${fade(IOS.blue,0.141)}`:"#141419",border:_on?`0.5px solid ${fade(IOS.blue,0.502)}`:"0.5px solid rgba(var(--ink-rgb),0.1)",color:_on?"#fff":"rgba(var(--ink-rgb),0.62)"}}>
+                            <div key={t} onClick={()=>setPlokFlatType(t)} style={{flexShrink:0,display:"flex",alignItems:"center",gap:5,fontSize:12,fontWeight:800,padding:"7px 12px",borderRadius:RAD.xl,cursor:"pointer",whiteSpace:"nowrap",background:_on?`${fade(IOS.blue,0.141)}`:"var(--s2)",border:_on?`0.5px solid ${fade(IOS.blue,0.502)}`:"0.5px solid rgba(var(--ink-rgb),0.1)",color:_on?"#fff":"rgba(var(--ink-rgb),0.62)"}}>
                               {t!=="all" && <span style={{width:6,height:6,borderRadius:3,flexShrink:0,background:plokTypeColor(t)}}/>}
                               {t==="all" ? "All" : plokTypeLabel(t)}
                               <span style={{fontSize:9.5,fontWeight:700,color:"rgba(var(--ink-rgb),0.25)"}}>{_n}</span>
@@ -22922,7 +22929,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
                       </div>
                       <div style={{display:"flex",flexDirection:"column",gap:5}}>
                         {plokSortBets(plokFlatType, plokFlatType==="all" ? (ALL_BETS||[]) : (ALL_BETS||[]).filter(b=>b.category===plokFlatType)).map((b,bi)=>(
-                          <div key={bi} onClick={()=>askFromBet(b,b.category)} style={{display:"flex",alignItems:"center",gap:9,background:"#141419",border:EDGE.hair,borderRadius:RAD.md,padding:"10px 11px",cursor:"pointer"}}>
+                          <div key={bi} onClick={()=>askFromBet(b,b.category)} style={{display:"flex",alignItems:"center",gap:9,background:"var(--s2)",border:EDGE.hair,borderRadius:RAD.md,padding:"10px 11px",cursor:"pointer"}}>
                             <div style={{width:2.5,alignSelf:"stretch",borderRadius:2,flexShrink:0,background:plokTypeColor(b.category)}}/>
                             <div style={{flex:1,minWidth:0}}>
                               <div style={{fontSize:13,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.pick}</div>
@@ -22952,7 +22959,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
                 if(_n<MIN_CALLS){
                   const _bar = Math.min(100, Math.round(_n/MIN_CALLS*100));
                   return (
-                    <div className="ai-rise" style={{background:"linear-gradient(160deg,#141419,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.lg,padding:"13px 14px"}}>
+                    <div className="ai-rise" style={{background:"linear-gradient(160deg,var(--s2),var(--s1) 80%)",border:EDGE.hair,borderRadius:RAD.lg,padding:"13px 14px"}}>
                       <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",marginBottom:9}}>
                         <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:"rgba(var(--ink-rgb),0.5)"}}>Building track record</div>
                         <div style={{fontSize:9.5,fontWeight:700,color:"rgba(var(--ink-rgb),0.28)"}}>{_n} of {MIN_CALLS} calls</div>
@@ -22968,7 +22975,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
                 const _stk = plokRecord.streak || null;
                 const _stat = (val,lab,col)=>(<div><div style={{fontSize:23,fontWeight:900,color:col||"#fff",letterSpacing:-0.5,lineHeight:1,fontFamily:"'Barlow Semi Condensed',sans-serif"}}>{val}</div><div style={{fontSize:9,fontWeight:700,color:"rgba(var(--ink-rgb),0.4)",marginTop:3,textTransform:"uppercase",letterSpacing:"0.04em"}}>{lab}</div></div>);
                 return (
-                  <div className="ai-rise" style={{background:"linear-gradient(160deg,#0f171d,#0b0b0e 80%)",border:"0.5px solid rgba(100,210,255,0.32)",borderRadius:RAD.lg,padding:"13px 14px"}}>
+                  <div className="ai-rise" style={{background:"linear-gradient(160deg,#0f171d,var(--s1) 80%)",border:"0.5px solid rgba(100,210,255,0.32)",borderRadius:RAD.lg,padding:"13px 14px"}}>
                     <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",marginBottom:10}}>
                       <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--cyan)"}}>{"Plok's record \u2014 every call graded"}</div>
                       {plokRecord.since ? <div style={{fontSize:9.5,fontWeight:700,color:"rgba(var(--ink-rgb),0.3)"}}>since {plokRecord.since}</div> : null}
@@ -23015,12 +23022,12 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
                 </div>
               )}              {aiThread.map((item,i)=> item.role==="user"
                 ? (<div key={i} style={{alignSelf:"flex-end",maxWidth:"82%",background:IOS.blue,color:"#fff",borderRadius:"14px 14px 4px 14px",padding:"8px 12px",fontSize:13,fontWeight:600,marginLeft:"auto"}}>{item.text}</div>)
-                : (<ErrorBoundary key={i} fallback={<div style={{alignSelf:"flex-start",width:"100%",background:"linear-gradient(160deg,#16161B,#0C0C0F)",border:"1px solid rgba(var(--ink-rgb),0.08)",borderRadius:"14px 14px 14px 4px",padding:"13px 14px",fontSize:12.5,color:IOS.red,fontWeight:600}}>Couldn't load this read.</div>}><AiInsightBubble item={item} IOS={IOS} onAddToSlip={()=>{ if(aiAddToSlip(item.bet,item.category)){ setAiThread(prev=>prev.map(x=>x===item?{...x,added:true}:x)); } }} /></ErrorBoundary>)
+                : (<ErrorBoundary key={i} fallback={<div style={{alignSelf:"flex-start",width:"100%",background:"linear-gradient(160deg,var(--s2),var(--s1))",border:"1px solid rgba(var(--ink-rgb),0.08)",borderRadius:"14px 14px 14px 4px",padding:"13px 14px",fontSize:12.5,color:IOS.red,fontWeight:600}}>Couldn't load this read.</div>}><AiInsightBubble item={item} IOS={IOS} onAddToSlip={()=>{ if(aiAddToSlip(item.bet,item.category)){ setAiThread(prev=>prev.map(x=>x===item?{...x,added:true}:x)); } }} /></ErrorBoundary>)
               )}
             </div>
             {modelPicker && (
               <div onClick={()=>setModelPicker(false)} style={{position:"absolute",inset:0,zIndex:41,background:"rgba(0,0,0,0.55)",display:"flex",flexDirection:"column",justifyContent:"flex-end"}}>
-                <div onClick={(e)=>e.stopPropagation()} style={{background:"#101015",borderTopLeftRadius:18,borderTopRightRadius:18,borderTop:"0.5px solid rgba(var(--ink-rgb),0.12)",maxHeight:"80%",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+                <div onClick={(e)=>e.stopPropagation()} style={{background:"var(--s2)",borderTopLeftRadius:18,borderTopRightRadius:18,borderTop:"0.5px solid rgba(var(--ink-rgb),0.12)",maxHeight:"80%",display:"flex",flexDirection:"column",overflow:"hidden"}}>
                   <div style={{padding:"14px 16px 11px",flexShrink:0,borderBottom:"0.5px solid rgba(var(--ink-rgb),0.07)"}}>
                     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                       <div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Plok Models</div>
@@ -23030,7 +23037,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
                   </div>
                   <div style={{overflowY:"auto",padding:"10px 12px 16px"}}>
                     {PLOK_MODELS.map(m=>(
-                      <div key={m.id} onClick={()=>{ if(!m.ready) return; setPlokModel(m.id); setModelPicker(false); setFindBetOpen(true); }} style={{display:"flex",alignItems:"center",gap:12,background:m.ready?"linear-gradient(160deg,#15151A,#0B0B0E 80%)":"rgba(var(--ink-rgb),0.02)",border:"0.5px solid "+(m.ready?"rgba(var(--ink-rgb),0.09)":"rgba(var(--ink-rgb),0.05)"),borderRadius:RAD.md,padding:"13px 14px",marginBottom:9,cursor:m.ready?"pointer":"default",opacity:m.ready?1:0.6}}>
+                      <div key={m.id} onClick={()=>{ if(!m.ready) return; setPlokModel(m.id); setModelPicker(false); setFindBetOpen(true); }} style={{display:"flex",alignItems:"center",gap:12,background:m.ready?"linear-gradient(160deg,var(--s2),var(--s1) 80%)":"rgba(var(--ink-rgb),0.02)",border:"0.5px solid "+(m.ready?"rgba(var(--ink-rgb),0.09)":"rgba(var(--ink-rgb),0.05)"),borderRadius:RAD.md,padding:"13px 14px",marginBottom:9,cursor:m.ready?"pointer":"default",opacity:m.ready?1:0.6}}>
                         <div style={{width:38,height:38,borderRadius:RAD.md,background:fade(m.color,0.122),border:"0.5px solid "+fade(m.color,0.333),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{m.icon}</div>
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{display:"flex",alignItems:"center",gap:7}}><span style={{fontSize:15,fontWeight:800,color:"#fff"}}>{m.name}</span>{!m.ready && <span style={{fontSize:9,fontWeight:800,letterSpacing:"0.06em",color:m.color,background:fade(m.color,0.133),borderRadius:5,padding:"2px 6px"}}>SOON</span>}</div>
@@ -23045,7 +23052,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
             )}
             {findBetOpen && (
               <div onClick={()=>setFindBetOpen(false)} style={{position:"absolute",inset:0,zIndex:40,background:"rgba(0,0,0,0.55)",display:"flex",flexDirection:"column",justifyContent:"flex-end"}}>
-                <div onClick={(e)=>e.stopPropagation()} style={{background:"#101015",borderTopLeftRadius:18,borderTopRightRadius:18,borderTop:"0.5px solid rgba(var(--ink-rgb),0.12)",maxHeight:"70%",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+                <div onClick={(e)=>e.stopPropagation()} style={{background:"var(--s2)",borderTopLeftRadius:18,borderTopRightRadius:18,borderTop:"0.5px solid rgba(var(--ink-rgb),0.12)",maxHeight:"70%",display:"flex",flexDirection:"column",overflow:"hidden"}}>
                   <div style={{padding:"14px 16px 11px",flexShrink:0,borderBottom:"0.5px solid rgba(var(--ink-rgb),0.07)"}}>
                     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                       <div style={{fontSize:16,fontWeight:800,color:"#fff"}}>{(PLOK_MODELS.find(x=>x.id===plokModel)||{}).name||"Find a pick"} · pick a game</div>
@@ -23081,9 +23088,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
                 </div>
               </div>
             )}
-            <div data-kb-stick style={{flexShrink:0,position:"relative",borderTop:"0.5px solid rgba(var(--ink-rgb),0.08)",background:"#0B0B0E",padding:"10px 12px"}}>
+            <div data-kb-stick style={{flexShrink:0,position:"relative",borderTop:"0.5px solid rgba(var(--ink-rgb),0.08)",background:"var(--s1)",padding:"10px 12px"}}>
               {aiSuggestions.length>0 && (
-                <div style={{position:"absolute",left:12,right:12,bottom:"100%",marginBottom:8,background:"#15151A",border:EDGE.hair2,borderRadius:RAD.md,overflow:"hidden",boxShadow:"0 -8px 24px rgba(0,0,0,0.5)"}}>
+                <div style={{position:"absolute",left:12,right:12,bottom:"100%",marginBottom:8,background:"var(--s2)",border:EDGE.hair2,borderRadius:RAD.md,overflow:"hidden",boxShadow:"0 -8px 24px rgba(0,0,0,0.5)"}}>
                   {aiSuggestions.map((b,bi)=>(
                     <div key={bi} onClick={()=>{ setAiInput(""); askFromBet(b,b.category); }} style={{padding:"10px 13px",borderBottom:bi<aiSuggestions.length-1?"0.5px solid rgba(var(--ink-rgb),0.06)":"none",cursor:"pointer"}}>
                       <div style={{fontSize:13,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.pick}</div>
@@ -23137,7 +23144,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div className="msg-col" style={{position:"relative"}}>
  {!isMe&&<div className="msg-sender">{msg.username||"Unknown"}</div>}
  {reactFor===msg.id&&(
- <div className="pk-react-picker" style={{position:"absolute",top:-44,[isMe?"right":"left"]:0,zIndex:80,background:"#1B1B21",border:EDGE.hair3,borderRadius:RAD.xl,padding:"6px 8px",display:"flex",gap:2,boxShadow:"0 12px 34px rgba(0,0,0,0.6)"}}>
+ <div className="pk-react-picker" style={{position:"absolute",top:-44,[isMe?"right":"left"]:0,zIndex:80,background:"var(--s3)",border:EDGE.hair3,borderRadius:RAD.xl,padding:"6px 8px",display:"flex",gap:2,boxShadow:"0 12px 34px rgba(0,0,0,0.6)"}}>
  {REACTION_SET.map(em=>(<span key={em} onPointerUp={(e)=>{e.preventDefault();e.stopPropagation();toggleReaction(msg.id,em);}} onClick={(e)=>e.stopPropagation()} style={{fontSize:20,padding:"3px 5px",borderRadius:RAD.md,cursor:"pointer",userSelect:"none",WebkitUserSelect:"none",touchAction:"manipulation"}}>{em}</span>))}
                      {!isMe && <span onPointerUp={(e)=>{e.preventDefault();e.stopPropagation();setReactFor(null);reportMessage(msg);}} onClick={(e)=>e.stopPropagation()} style={{fontSize:11.5,fontWeight:800,letterSpacing:"0.3px",padding:"3px 8px",marginLeft:2,borderLeft:"0.5px solid rgba(var(--ink-rgb),0.12)",color:"#FF6961",cursor:"pointer",userSelect:"none",WebkitUserSelect:"none",touchAction:"manipulation",alignSelf:"center"}}>REPORT</span>}
  </div>
@@ -23163,7 +23170,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  </div>
  {gifOpen&&(
  <div onClick={()=>setGifOpen(false)} style={{position:"fixed",inset:0,zIndex:40,background:"rgba(0,0,0,0.45)"}}>
- <div className="pk-sheet" onClick={(e)=>e.stopPropagation()} style={{position:"absolute",left:0,right:0,bottom:0,background:"#131318",borderTop:"0.5px solid rgba(var(--ink-rgb),0.12)",padding:"10px 14px calc(var(--sa-bot) + 16px)",maxHeight:"62vh",display:"flex",flexDirection:"column",boxShadow:"0 -14px 40px rgba(0,0,0,0.55)"}}>
+ <div className="pk-sheet" onClick={(e)=>e.stopPropagation()} style={{position:"absolute",left:0,right:0,bottom:0,background:"var(--s2)",borderTop:"0.5px solid rgba(var(--ink-rgb),0.12)",padding:"10px 14px calc(var(--sa-bot) + 16px)",maxHeight:"62vh",display:"flex",flexDirection:"column",boxShadow:"0 -14px 40px rgba(0,0,0,0.55)"}}>
  <div style={{width:38,height:4,borderRadius:2,background:"rgba(var(--ink-rgb),0.22)",margin:"0 auto 12px"}}/>
  <input autoFocus value={gifQ} onChange={e=>onGifQ(e.target.value)} placeholder="Search KLIPY" style={{height:38,borderRadius:RAD.md,background:"rgba(var(--ink-rgb),0.06)",border:EDGE.hair,padding:"0 14px",fontSize:13.5,color:"#fff",outline:"none",fontFamily:"Barlow,sans-serif",marginBottom:12}}/>
  <div style={{flex:1,overflowY:"auto"}}>
@@ -23246,7 +23253,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div>
  <div style={{display:"flex",flexDirection:"column",gap:6}}>
  <input value={usernameInput} onChange={e=>{setUsernameInput(e.target.value);setUsernameError("");}} placeholder="Enter username" autoFocus
- style={{background:"#2C2C2E",border:`1px solid ${usernameError?IOS.red:IOS.blue}`,borderRadius:RAD.md,padding:"8px 12px",color:"#fff",fontSize:15,fontFamily:"'Barlow',sans-serif",outline:"none",width:180}}/>
+ style={{background:"var(--s4)",border:`1px solid ${usernameError?IOS.red:IOS.blue}`,borderRadius:RAD.md,padding:"8px 12px",color:"#fff",fontSize:15,fontFamily:"'Barlow',sans-serif",outline:"none",width:180}}/>
  {usernameError&&<div style={{fontSize:11,color:IOS.red}}>{usernameError}</div>}
  <div style={{display:"flex",gap:10}}>
  <div onClick={async()=>{
@@ -23299,7 +23306,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
       counters. public_profiles exposes username and is_pro; it does NOT expose a
       join date, so rows report Pro status instead of inventing one. */
    return (
-   <div className="pl-reveal" style={{margin:"2px 0 16px",background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.lg,overflow:"hidden"}}>
+   <div className="pl-reveal" style={{margin:"2px 0 16px",background:"linear-gradient(160deg,var(--s2),var(--s1) 80%)",border:EDGE.hair,borderRadius:RAD.lg,overflow:"hidden"}}>
 
      <div style={{padding:"15px 16px 13px",borderBottom:EDGE.hair,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
        <div style={{minWidth:0}}>
@@ -23365,7 +23372,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    const weeks = (s.byWeek||[]).slice(-8);   /* last 8 calendar weeks */
    const wkMax = weeks.length ? Math.max(...weeks.map(w=>w.pts||0)) : 0;
    const winPctNum = parseInt(s.winRate)||0;
-   const SURF = {background:"linear-gradient(160deg,#141418,#0B0B0E 80%)",border:EDGE.hair,borderRadius:RAD.lg};
+   const SURF = {background:"linear-gradient(160deg,var(--s2),var(--s1) 80%)",border:EDGE.hair,borderRadius:RAD.lg};
    const CELL = {padding:"13px 15px",borderBottom:EDGE.hair};
    const KEY  = {fontSize:9,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:IOS.label3};
    const VAL  = {fontSize:22,fontWeight:900,fontFamily:"'Barlow Semi Condensed',sans-serif",marginTop:5,letterSpacing:"-0.01em"};
@@ -23497,7 +23504,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {profTab==="power-ups"&&(
  <div style={{paddingBottom:24}}>
  {!isPro && (
-   <div style={{margin:"16px 16px 0",background:"#0A0A0A",border:"0.5px solid #1E1E1E",borderRadius:RAD.lg,padding:"24px 20px",textAlign:"center"}}>
+   <div style={{margin:"16px 16px 0",background:"var(--s1)",border:"0.5px solid var(--s3)",borderRadius:RAD.lg,padding:"24px 20px",textAlign:"center"}}>
      <div style={{width:48,height:48,borderRadius:RAD.md,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.25)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 12px"}}>
        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
      </div>
@@ -23602,7 +23609,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
     {trophyRows.map(r=>{
       const tier=r.isChamp?"gold":(r.rank===2?"silver":"plain");
       const bd=tier==="gold"?"rgba(255,214,10,0.4)":tier==="silver"?"rgba(199,203,209,0.3)":IOS.sep;
-      const bg=tier==="gold"?"linear-gradient(165deg,rgba(255,214,10,0.10),#0C0C0F 60%)":tier==="silver"?"linear-gradient(165deg,rgba(199,203,209,0.08),#0C0C0F 60%)":"linear-gradient(165deg,#17171B,#0C0C0F)";
+      const bg=tier==="gold"?"linear-gradient(165deg,rgba(255,214,10,0.10),var(--s1) 60%)":tier==="silver"?"linear-gradient(165deg,rgba(199,203,209,0.08),var(--s1) 60%)":"linear-gradient(165deg,var(--s2),var(--s1))";
       const pc=tier==="gold"?IOS.yellow:tier==="silver"?"#C7CBD1":IOS.label3;
       const place=r.isChamp?"CHAMPION":(r.rank?(ordinal(r.rank).toUpperCase()+" OF "+r.total):"FINAL");
       const spl=(Array.isArray(r.sports)&&r.sports.length?r.sports:[r.sport]).map(s=>(SPORTS[s]&&SPORTS[s].label)||String(s||"").toUpperCase()).join(" \u00B7 ");
@@ -23807,7 +23814,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {/* height, not maxHeight: a bottom-anchored sheet that resizes with its content makes
      the top edge jump on every tab switch. Fixed height keeps the frame still and lets
      only the pane move. */}
- <div className="pk-sheet" ref={gcScrollRef} onClick={e=>e.stopPropagation()} style={{position:"relative",background:"#1C1C1E",height:"85vh",flexShrink:0,overflowY:"auto",overscrollBehavior:"contain",paddingBottom:40}}>
+ <div className="pk-sheet" ref={gcScrollRef} onClick={e=>e.stopPropagation()} style={{position:"relative",background:"var(--s3)",height:"85vh",flexShrink:0,overflowY:"auto",overscrollBehavior:"contain",paddingBottom:40}}>
  {/* Close — always visible, clears the notch */}
  <div onClick={()=>setGameSheet(null)} style={{position:"absolute",top:12,right:14,zIndex:20,width:32,height:32,borderRadius:"50%",background:"rgba(var(--ink-rgb),0.14)",border:EDGE.hair3,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -23892,7 +23899,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    const leadA=_leadFor(awayAbbr), leadH=_leadFor(homeAbbr);
    const hasLeaders=(leadA.length>0||leadH.length>0);
    const hasWP=(probAway!=null&&probHome!=null);
-   const _card={background:"linear-gradient(165deg,#212126,#161619)",border:EDGE.hair,borderRadius:RAD.lg,overflow:"hidden"};
+   const _card={background:"linear-gradient(165deg,var(--s3),var(--s2))",border:EDGE.hair,borderRadius:RAD.lg,overflow:"hidden"};
    const _nick={fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:25,lineHeight:0.92,textTransform:"uppercase",letterSpacing:0.3,color:"#fff"};
    const Sec=({t})=>(<div style={{display:"flex",alignItems:"center",gap:11,margin:"22px 4px 11px"}}><span style={{fontSize:10.5,fontWeight:800,letterSpacing:"0.16em",textTransform:"uppercase",color:IOS.label3}}>{t}</span><span style={{flex:1,height:1,background:"rgba(var(--ink-rgb),0.07)"}}/></div>);
    // White disc + team-colour ring: navy/black logos (NYY et al) vanished on a team-colour disc.
@@ -23903,7 +23910,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    <div>
    {/* Hero */}
    <div style={{position:"relative",padding:"6px 18px 20px",overflow:"hidden"}}>
-   <div style={{position:"absolute",inset:0,background:"radial-gradient(120% 80% at 8% 0%,"+tint(awayColor,0.32)+" 0%,transparent 46%),radial-gradient(120% 80% at 92% 0%,"+tint(homeColor,0.32)+" 0%,transparent 46%),linear-gradient(180deg,transparent 40%,#1C1C1E 100%)"}}/>
+   <div style={{position:"absolute",inset:0,background:"radial-gradient(120% 80% at 8% 0%,"+tint(awayColor,0.32)+" 0%,transparent 46%),radial-gradient(120% 80% at 92% 0%,"+tint(homeColor,0.32)+" 0%,transparent 46%),linear-gradient(180deg,transparent 40%,var(--s3) 100%)"}}/>
    <div style={{position:"relative",display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:6,paddingTop:6}}>
    <div style={{flex:1,textAlign:"center"}}>
    <Crest logo={awayLogo} color={awayColor} abbr={awayAbbr}/>
@@ -24131,8 +24138,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {/* ══ SOLO SPORT PICKER ══ */}
  {showSoloSportPicker && (
  <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",zIndex:9999,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>setShowSoloSportPicker(false)}>
-   <div className="pk-sheet" style={{background:"#111",padding:"0 0 40px",border:"0.5px solid #1E1E1E"}} onClick={e=>e.stopPropagation()}>
-     <div style={{width:36,height:4,background:"#2A2A2A",borderRadius:2,margin:"12px auto 16px"}}/>
+   <div className="pk-sheet" style={{background:"#111",padding:"0 0 40px",border:"0.5px solid var(--s3)"}} onClick={e=>e.stopPropagation()}>
+     <div style={{width:36,height:4,background:"var(--s4)",borderRadius:2,margin:"12px auto 16px"}}/>
      <div style={{padding:"0 20px 20px"}}>
        <div style={{fontSize:22,fontWeight:800,letterSpacing:-0.5,color:"#fff",marginBottom:4}}>Pick a Sport</div>
        <div style={{fontSize:13,color:"rgba(var(--ink-rgb),0.4)",marginBottom:24}}>Your whole slip will be this sport. Upgrade to Pro for multi-sport slips.</div>
@@ -24156,7 +24163,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
            // Fetch odds for selected sport
            fetchLiveOdds(s.id);
            setScreen("picks");
-         }} style={{display:"flex",alignItems:"center",gap:14,padding:"16px",marginBottom:10,background:"#1A1A1A",borderRadius:RAD.lg,cursor:"pointer",border:`1px solid ${soloSport===s.id?fade(s.color,0.376):"rgba(var(--ink-rgb),0.06)"}`}}>
+         }} style={{display:"flex",alignItems:"center",gap:14,padding:"16px",marginBottom:10,background:"var(--s3)",borderRadius:RAD.lg,cursor:"pointer",border:`1px solid ${soloSport===s.id?fade(s.color,0.376):"rgba(var(--ink-rgb),0.06)"}`}}>
            <div style={{width:44,height:44,borderRadius:RAD.md,background:`${fade(s.color,0.094)}`,display:"flex",alignItems:"center",justifyContent:"center",color:s.color,flexShrink:0}}>{s.icon}</div>
            <div style={{flex:1}}>
              <div style={{fontSize:17,fontWeight:700,color:"#fff"}}>{s.label}</div>
@@ -24293,11 +24300,11 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {/* ══ BROWSE PUBLIC LEAGUES SHEET ══ */}
  {showBrowse&&(
  <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:9998,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>{ setShowBrowse(false); setBrowseCode(""); setBrowseExpanded(false); }}>
-   <div className="pk-sheet" style={{background:"#111",maxHeight:"85vh",display:"flex",flexDirection:"column",border:"0.5px solid #1E1E1E"}} onClick={e=>e.stopPropagation()}>
-     <div style={{width:36,height:4,background:"#2A2A2A",borderRadius:2,margin:"12px auto 0"}}/>
+   <div className="pk-sheet" style={{background:"#111",maxHeight:"85vh",display:"flex",flexDirection:"column",border:"0.5px solid var(--s3)"}} onClick={e=>e.stopPropagation()}>
+     <div style={{width:36,height:4,background:"var(--s4)",borderRadius:2,margin:"12px auto 0"}}/>
 
      {/* Header */}
-     <div style={{padding:"12px 20px 10px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"0.5px solid #1A1A1A",flexShrink:0}}>
+     <div style={{padding:"12px 20px 10px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"0.5px solid var(--s3)",flexShrink:0}}>
        <div style={{fontSize:17,fontWeight:700,color:"#fff"}}>Join a league</div>
        <div onClick={()=>{ setShowBrowse(false); setBrowseCode(""); setBrowseExpanded(false); }} style={{fontSize:13,fontWeight:600,color:IOS.blue,cursor:"pointer"}}>Done</div>
      </div>
@@ -24331,7 +24338,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      </div>
      {browseExpanded && (<>
      {/* Filters */}
-     <div style={{padding:"10px 16px 8px",borderBottom:"0.5px solid #1A1A1A",flexShrink:0}}>
+     <div style={{padding:"10px 16px 8px",borderBottom:"0.5px solid var(--s3)",flexShrink:0}}>
        <div className="pk-rail" style={{marginBottom:2}}>
          {/* Sport filter */}
          {[{id:"all",l:"All Sports"},{id:"nfl",l:"NFL"},{id:"ncaaf",l:"NCAAF"},{id:"nba",l:"NBA"},{id:"mlb",l:"MLB"}].map(f=>(
@@ -24396,7 +24403,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
                    <div style={{fontSize:15.5,fontWeight:800,color:"#fff"}}>{lg.name}</div>
                    <div style={{fontSize:11,color:IOS.label3,marginTop:2}}>{typeLabels[lg.league_type||"h2h"]||"H2H"} · {maxSize}-player · {sport.label}</div>
                  </div>
-                 <button onClick={()=>joinPublicLeague(lg)} disabled={isJoining} style={{alignSelf:"center",background:isJoining?"#1A1A1A":IOS.blue,border:"none",borderRadius:RAD.md,padding:"10px 17px",fontSize:13.5,fontWeight:800,color:isJoining?"#555":"#fff",cursor:isJoining?"default":"pointer",fontFamily:"Barlow,sans-serif",flexShrink:0,whiteSpace:"nowrap"}}>{isJoining?"Joining…":"Join"}</button>
+                 <button onClick={()=>joinPublicLeague(lg)} disabled={isJoining} style={{alignSelf:"center",background:isJoining?"var(--s3)":IOS.blue,border:"none",borderRadius:RAD.md,padding:"10px 17px",fontSize:13.5,fontWeight:800,color:isJoining?"#555":"#fff",cursor:isJoining?"default":"pointer",fontFamily:"Barlow,sans-serif",flexShrink:0,whiteSpace:"nowrap"}}>{isJoining?"Joining…":"Join"}</button>
                </div>
                <div style={{marginTop:12}}>
                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
@@ -24432,8 +24439,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    const _isDev = (()=>{ try{ return localStorage.getItem("picklock_dev")==="1"; }catch(e){ return false; } })();
    return (
      <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:9999,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>setShowPaywall(null)}>
-       <div className="pk-sheet" style={{background:"#111",padding:"0 0 40px",border:"0.5px solid #1E1E1E"}} onClick={e=>e.stopPropagation()}>
-         <div style={{width:36,height:4,background:"#2A2A2A",borderRadius:2,margin:"12px auto 20px"}}/>
+       <div className="pk-sheet" style={{background:"#111",padding:"0 0 40px",border:"0.5px solid var(--s3)"}} onClick={e=>e.stopPropagation()}>
+         <div style={{width:36,height:4,background:"var(--s4)",borderRadius:2,margin:"12px auto 20px"}}/>
          <div style={{padding:"0 20px"}}>
            <div style={{width:44,height:44,borderRadius:RAD.md,background:"rgba(10,132,255,0.12)",border:"0.5px solid rgba(10,132,255,0.25)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:12}}>
              {cfg.icon==="bolt"&&<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>}
@@ -24444,7 +24451,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
            <div style={{fontSize:18,fontWeight:700,color:"#fff",marginBottom:4}}>{cfg.title}</div>
            <div style={{fontSize:13,color:"#666",marginBottom:16,lineHeight:1.5}}>{cfg.sub}</div>
            {cfg.features.map((f,i)=>(
-             <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:"0.5px solid #1A1A1A"}}>
+             <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:"0.5px solid var(--s3)"}}>
                <div style={{width:6,height:6,borderRadius:"50%",background:IOS.blue,flexShrink:0}}/>
                <div style={{fontSize:13,color:"#ccc"}}>{f}</div>
              </div>
@@ -24463,7 +24470,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
           {/* Guideline 3.1.2 — auto-renewing subscription disclosure must be on the
               purchase screen itself: name, duration, price per period, renewal
               terms, and functional links to Terms of Use and Privacy Policy. */}
-          <div style={{marginTop:14,paddingTop:12,borderTop:"0.5px solid #1A1A1A"}}>
+          <div style={{marginTop:14,paddingTop:12,borderTop:"0.5px solid var(--s3)"}}>
              <div style={{fontSize:11,color:"#888",lineHeight:1.55}}>
                {((IS_NATIVE && nativePrices && (nativePrices.monthlyTrial||nativePrices.annualTrial)) || _webTrialOk) ? "Free for the first month; you will not be charged until the trial ends. Cancel any time before then and you pay nothing. " : ""}PickLock Pro is an auto-renewing subscription. Annual: {IS_NATIVE ? ((nativePrices&&nativePrices.annual)||"$59.99") : "$60.00"} per year. Monthly: {IS_NATIVE ? ((nativePrices&&nativePrices.monthly)||"$9.99") : "$10.00"} per month.
              </div>
@@ -24495,7 +24502,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {/* ══ POST LEAGUE UPSELL ══ */}
  {svReveal&&!isSoloMode&&activeLeague&&activeLeague.league_type==="survivor"&&(
  <div style={{position:"fixed",inset:0,zIndex:340,background:"rgba(0,0,0,0.78)",display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setSvReveal(null)}>
-  <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:480,maxHeight:"86dvh",overflowY:"auto",background:"#0C0C10",borderTopLeftRadius:22,borderTopRightRadius:22,border:"0.5px solid rgba(var(--ink-rgb),0.1)",padding:"12px 18px calc(28px + env(safe-area-inset-bottom))"}}>
+  <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:480,maxHeight:"86dvh",overflowY:"auto",background:"var(--s1)",borderTopLeftRadius:22,borderTopRightRadius:22,border:"0.5px solid rgba(var(--ink-rgb),0.1)",padding:"12px 18px calc(28px + env(safe-area-inset-bottom))"}}>
     <div style={{width:38,height:4,borderRadius:2,background:"rgba(var(--ink-rgb),0.2)",margin:"0 auto 16px"}}/>
     <div style={{textAlign:"center"}}>
       <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:IOS.label3}}>{"Week "+svReveal.week+" \u00B7 Final"}</div>
@@ -24503,14 +24510,14 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
       <div style={{fontSize:12.5,color:IOS.label2,marginTop:4}}>{svReveal.mode==="wipeout"?((activeLeague&&activeLeague.survivor_config==="ml")?"Every team lost. Nobody dies. The pool plays on.":"Every scorer whiffed. Nobody dies. The pool plays on."):svReveal.remain+" remain."}</div>
     </div>
     {svReveal.dead.map((dd,i)=>(
-    <div key={i} style={{position:"relative",overflow:"hidden",marginTop:12,borderRadius:14,border:"0.5px solid rgba(255,55,95,0.45)",background:"linear-gradient(160deg,rgba(255,55,95,0.13),#0C0C0F 62%)",padding:"13px 14px"}}>
+    <div key={i} style={{position:"relative",overflow:"hidden",marginTop:12,borderRadius:14,border:"0.5px solid rgba(255,55,95,0.45)",background:"linear-gradient(160deg,rgba(255,55,95,0.13),var(--s1) 62%)",padding:"13px 14px"}}>
       <div style={{position:"absolute",top:11,right:13,fontSize:9,fontWeight:900,letterSpacing:"0.12em",color:IOS.red,border:"1px solid rgba(255,55,95,0.5)",borderRadius:4,padding:"2px 7px",transform:"rotate(6deg)"}}>ELIMINATED</div>
       <div style={{fontSize:15.5,fontWeight:900,color:"#fff"}}>{dd.name}</div>
       <div style={{fontSize:11.5,color:IOS.label2,marginTop:4,lineHeight:1.45}}>{dd.rode}</div>
     </div>
     ))}
     {svReveal.myLine&&(
-    <div style={{display:"flex",alignItems:"center",gap:11,marginTop:12,borderRadius:14,border:"0.5px solid rgba(48,209,88,0.4)",background:"linear-gradient(160deg,rgba(48,209,88,0.12),#0C0C0F 62%)",padding:"12px 14px"}}>
+    <div style={{display:"flex",alignItems:"center",gap:11,marginTop:12,borderRadius:14,border:"0.5px solid rgba(48,209,88,0.4)",background:"linear-gradient(160deg,rgba(48,209,88,0.12),var(--s1) 62%)",padding:"12px 14px"}}>
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={IOS.green} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M20 6L9 17l-5-5"/></svg>
       <div style={{fontSize:13,fontWeight:800,color:"#fff"}}>{svReveal.myLine}</div>
     </div>
@@ -24526,8 +24533,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
     built; only the modal that triggers it was hidden. */}
 {showLeaguePaywall && (
    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:9999,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>setShowLeaguePaywall(null)}>
-     <div className="pk-sheet" style={{background:"#0d0d12",padding:"0 18px calc(var(--sa-bot) + 24px)",border:"0.5px solid #1E1E1E"}} onClick={e=>e.stopPropagation()}>
-       <div style={{width:36,height:4,background:"#2A2A2A",borderRadius:2,margin:"12px auto 16px"}}/>
+     <div className="pk-sheet" style={{background:"var(--s1)",padding:"0 18px calc(var(--sa-bot) + 24px)",border:"0.5px solid var(--s3)"}} onClick={e=>e.stopPropagation()}>
+       <div style={{width:36,height:4,background:"var(--s4)",borderRadius:2,margin:"12px auto 16px"}}/>
        <div style={{fontSize:21,fontWeight:800,textAlign:"center",letterSpacing:-0.4,color:"#fff"}}>Unlock your league</div>
        <div style={{fontSize:12.5,color:IOS.label3,textAlign:"center",margin:"3px 0 16px"}}>Your custom league is ready. Choose how to unlock it:</div>
        <div onClick={()=>startLeagueCheckout(showLeaguePaywall.leagueId)} style={{borderRadius:RAD.lg,padding:15,marginBottom:11,cursor:"pointer",background:"linear-gradient(135deg,rgba(255,55,95,0.12),rgba(191,90,242,0.06))",border:"1.5px solid rgba(255,55,95,0.4)"}}>
@@ -24546,18 +24553,18 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  )}
  {!IS_NATIVE && showPostLeagueUpsell && (
    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:9999,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>setShowPostLeagueUpsell(false)}>
-     <div className="pk-sheet" style={{background:"#111",padding:"0 0 40px",border:"0.5px solid #1E1E1E"}} onClick={e=>e.stopPropagation()}>
-       <div style={{width:36,height:4,background:"#2A2A2A",borderRadius:2,margin:"12px auto 20px"}}/>
+     <div className="pk-sheet" style={{background:"#111",padding:"0 0 40px",border:"0.5px solid var(--s3)"}} onClick={e=>e.stopPropagation()}>
+       <div style={{width:36,height:4,background:"var(--s4)",borderRadius:2,margin:"12px auto 20px"}}/>
        <div style={{padding:"0 20px"}}>
          <div style={{width:44,height:44,borderRadius:RAD.md,background:"rgba(48,209,88,0.12)",border:"0.5px solid rgba(48,209,88,0.25)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:12}}>
            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--win)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
          </div>
          <div style={{fontSize:18,fontWeight:700,color:"#fff",marginBottom:4}}>Your league is live</div>
          <div style={{fontSize:13,color:"#666",marginBottom:16,lineHeight:1.5}}>Want more control over how your league works?</div>
-         <div style={{background:"#0A0A0A",border:"0.5px solid #1E1E1E",borderRadius:RAD.sm,padding:"12px",marginBottom:16}}>
+         <div style={{background:"var(--s1)",border:"0.5px solid var(--s3)",borderRadius:RAD.sm,padding:"12px",marginBottom:16}}>
            <div style={{fontSize:10,fontWeight:700,color:IOS.blue,letterSpacing:.5,textTransform:"uppercase",marginBottom:10}}>Commish Pro unlocks</div>
            {["Set custom pick counts per week","Add NBA, MLB, or NHL picks","Unlock power-ups for your league"].map((f,i)=>(
-             <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:i<2?"0.5px solid #1A1A1A":"none"}}>
+             <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:i<2?"0.5px solid var(--s3)":"none"}}>
                <div style={{width:6,height:6,borderRadius:"50%",background:IOS.blue,flexShrink:0}}/>
                <div style={{fontSize:13,color:"#ccc"}}>{f}</div>
              </div>
@@ -24609,7 +24616,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      (()=>{ const u=sumUnits(soloWeeks.flatMap(w=>w.picks||[])); return {l:"Units",v:fmtUnits(u),c:u>=0?IOS.green:IOS.red}; })(),
      {l:"Points",v:soloWeeks.reduce((s,w)=>s+w.pts,0).toFixed(1),c:"#fff"},
    ].map((s,i)=>(
-   <div key={i} style={{flex:1,minWidth:0,background:"linear-gradient(180deg,#15151a,#0e0e12)",borderRadius:13,padding:"12px 5px",textAlign:"center",border:EDGE.hair}}>
+   <div key={i} style={{flex:1,minWidth:0,background:"linear-gradient(180deg,var(--s2),var(--s1))",borderRadius:13,padding:"12px 5px",textAlign:"center",border:EDGE.hair}}>
      <div style={{fontSize:21,fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,lineHeight:0.95,color:s.c,whiteSpace:"nowrap"}}>{s.v}</div>
      <div style={{fontSize:8,color:IOS.label3,textTransform:"uppercase",letterSpacing:"0.09em",fontWeight:800,marginTop:5}}>{s.l}</div>
    </div>
@@ -24626,7 +24633,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    const anyNeg=vals.some(v=>v<0);
    const best=histUnits ? Math.max(...soloWeeks.map(w=>sumUnits(w.picks||[]))) : Math.max(...soloWeeks.map(w=>w.pts||0));
    return (
-   <div style={{background:"linear-gradient(180deg,#15151a,#0e0e12)",border:EDGE.hair,borderRadius:13,padding:"13px 14px 11px",marginBottom:14}}>
+   <div style={{background:"linear-gradient(180deg,var(--s2),var(--s1))",border:EDGE.hair,borderRadius:13,padding:"13px 14px 11px",marginBottom:14}}>
      <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:10}}>
        <div style={{display:"flex",gap:5}}>
          {[["Units",true],["Points",false]].map(([lb,on])=>(
@@ -24668,7 +24675,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    const _hit = _g>0 ? Math.round((w.wins||0)/_g*100) : null;
    const _pending = (w.picks||[]).length - _g;
    return (
-   <div key={w.week} style={{background:"linear-gradient(180deg,#15151a,#0e0e12)",border:EDGE.hair,borderRadius:14,overflow:"hidden",marginBottom:11}}>
+   <div key={w.week} style={{background:"linear-gradient(180deg,var(--s2),var(--s1))",border:EDGE.hair,borderRadius:14,overflow:"hidden",marginBottom:11}}>
      <div onClick={()=>setHistOpenWeeks(o=>({...o,[w.week]:!((w.week in o)?o[w.week]:(i===0))}))} style={{display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",padding:"13px 15px"}}>
        <div style={{minWidth:0}}>
          <div style={{fontSize:15,fontWeight:800,color:"#fff",letterSpacing:"-0.2px"}}>{soloWeekRange(w.week)}</div>
@@ -24714,7 +24721,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        })}
      </div>
      )}
-     <div style={{height:14,margin:"0 -1px",background:"radial-gradient(circle at 7px 50%, #07070A 5px, transparent 5.5px) 0 0/14px 14px repeat-x"}}/>
+     <div style={{height:14,margin:"0 -1px",background:"radial-gradient(circle at 7px 50%, var(--s0) 5px, transparent 5.5px) 0 0/14px 14px repeat-x"}}/>
      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 15px"}}>
        <span style={{fontSize:10,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:IOS.label3}}>{_pending>0?"If everything hits":"Slate total"}</span>
        <span style={{display:"flex",alignItems:"baseline",gap:14}}>
@@ -24772,7 +24779,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {(screen==="solostats"||screen==="analytics")&&(()=>{
  const s = allMyStats||{};
  const CC={blue:"var(--accent)",green:"var(--win)",red:"var(--loss)",orange:"var(--live)",yellow:"var(--yellow)",pink:"var(--longshot)",purple:"var(--purple)",teal:"var(--cyan)",indigo:"var(--violet)",l3:"rgba(var(--ink-rgb),0.34)",l2:"rgba(var(--ink-rgb),0.55)"};
- const SURF={background:"linear-gradient(160deg,#15151A,#0B0B0E 78%)",border:EDGE.hair,borderRadius:RAD.xl,boxShadow:"0 6px 22px rgba(0,0,0,0.5)"};
+ const SURF={background:"linear-gradient(160deg,var(--s2),var(--s1) 78%)",border:EDGE.hair,borderRadius:RAD.xl,boxShadow:"0 6px 22px rgba(0,0,0,0.5)"};
  const byTypeArr=Object.values(s.byType||{}).filter(t=>t.wins+t.losses>0).sort((a,b)=>b.pts-a.pts);
  const bySportArr=Object.values(s.bySport||{}).filter(t=>t.wins+t.losses>0).sort((a,b)=>b.pts-a.pts);
  const byWeek=s.byWeek||[];
@@ -25158,7 +25165,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 // recovery screen instead of a white screen (the TDZ class of failure), and the error
 // reports through the same PostHog path Plok bubbles use.
 function CrashScreen(){ return (
- <div style={{position:"fixed",inset:0,background:"#07070A",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:13,padding:"0 38px",textAlign:"center",fontFamily:"Barlow,sans-serif"}}>
+ <div style={{position:"fixed",inset:0,background:"var(--s0)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:13,padding:"0 38px",textAlign:"center",fontFamily:"Barlow,sans-serif"}}>
   <div style={{width:58,height:58,borderRadius:"50%",background:"rgba(255,69,58,0.10)",border:"0.5px solid rgba(255,69,58,0.25)",display:"flex",alignItems:"center",justifyContent:"center"}}>
    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--loss)" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
   </div>
