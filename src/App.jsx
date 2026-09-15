@@ -17982,7 +17982,10 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    const openAltLines = async (bet, meta) => {
    if(!isPro){ if(setShowPaywall) setShowPaywall("alt"); return; }
    const mk = bet.marketKey||bet.market||""; if(!canAlt(mk)) return;
-   const isProp = mk.indexOf("batter_")===0 || mk.indexOf("pitcher_")===0;
+   // Any PLAYER market, not just MLB. player_* covers NFL and soccer; batter_*
+   // and pitcher_* cover MLB. Getting this wrong saves a pick with no player
+   // name on it, and a pick with no player name can never be graded.
+   const isProp = /^(player_|batter_|pitcher_)/.test(mk);
    const isSpread = mk==="spreads";
    const player = (meta&&meta.player)||"";
    const label = (meta&&meta.label)||"";
@@ -17999,6 +18002,11 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    };
    const addAltPick = () => {
    const a = altSheet; if(!a) return;
+   // A player prop with no player is ungradeable. Refuse rather than write it.
+   if(a.isProp && !String(a.player||"").trim()){
+     try{ console.warn("[altlines] blocked a player prop with no player", a.bet&&a.bet.marketKey); }catch(e){}
+     return;
+   }
    const sideNames = (a.sides||[]).map(x=>x.name);
    const activeSide = sideNames.indexOf(a.side)>-1 ? a.side : sideNames[0];
    const sideObj = (a.sides||[]).find(x=>x.name===activeSide) || (a.sides||[])[0];
