@@ -2,14 +2,20 @@
   "appId": "com.dacunto.picklock",
   "appName": "Picklock Fantasy",
   "webDir": "dist",
-  "backgroundColor": "#0A0A0E",
+  "backgroundColor": "#000000",
   "ios": {
-    "contentInset": "automatic",
-    "backgroundColor": "#0A0A0E"
+    "contentInset": "never",
+    "backgroundColor": "#000000",
+    "scrollEnabled": false
   },
   "plugins": {
     "CapacitorHttp": {
       "enabled": true
+    },
+    "StatusBar": {
+      "overlaysWebView": false,
+      "style": "DARK",
+      "backgroundColor": "#000000"
     }
   }
 }
