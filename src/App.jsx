@@ -12333,6 +12333,20 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  .auth-beam{position:absolute;left:50%;top:-190px;width:520px;height:600px;transform:translateX(-50%);
    background:radial-gradient(closest-side,rgba(var(--accent-rgb),0.42),transparent 70%);filter:blur(16px);
    opacity:0;animation:pkScreenIn 1.3s .05s forwards;pointer-events:none;}
+ /* The sign-in hero is a fixed dark composition: a beam, scrolling tickers and a
+    pale gradient wordmark. Pin the dark palette here so it renders the same in
+    either theme instead of half-dissolving on white. */
+ .auth-shell{
+   --bg:#000000; --s0:#08080A; --s1:#0B0B0E; --s2:#141418; --s3:#1C1C1E;
+   --fill:rgba(255,255,255,0.05); --fill2:rgba(255,255,255,0.08);
+   --line:rgba(255,255,255,0.10); --line2:rgba(255,255,255,0.17);
+   --edge:rgba(255,255,255,0.08); --edge2:rgba(255,255,255,0.12);
+   --ink-rgb:255,255,255;
+   --text:#FFFFFF; --text2:rgba(255,255,255,0.6); --text25:rgba(255,255,255,0.42);
+   --text3:rgba(255,255,255,0.3); --text4:rgba(255,255,255,0.18);
+   --hero:#0B1A2E; --bar:rgba(10,10,13,0.82);
+   background:#000000; color:#FFFFFF;
+ }
  .auth-veil{position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(7,7,12,0.10) 0%,rgba(7,7,12,0.55) 16%,rgba(7,7,12,0.94) 30%,var(--s0) 42%);}
  /* The lock closes: shackle drops and bounces, body seats, then it rings once. */
  .auth-lock{width:52px;height:59px;position:relative;}
@@ -13079,8 +13093,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  /* Apple's brand guidelines require their button be at least as prominent as any
     other provider, in their own black/white styling. Google's likewise wants the
     white treatment with their mark. */
- .auth-oauth.apple{background:#fff;color:var(--text4);border:none;}
- .auth-oauth.google{background:#fff;color:var(--s3);border:none;}
+ .auth-oauth.apple{background:#fff;color:#0D1117;border:none;}
+ .auth-oauth.google{background:#fff;color:#0D1117;border:none;}
  .auth-cta{width:100%;border:none;border-radius:13px;padding:16px;font-size:16px;font-weight:800;cursor:pointer;font-family:'Barlow',sans-serif;color:var(--text);background:linear-gradient(135deg,var(--accent-ios),var(--violet));box-shadow:0 8px 26px rgba(var(--accent-ios-rgb),0.4);transition:transform .12s, box-shadow .2s;letter-spacing:0.2px;}
  .auth-cta:active{transform:scale(0.985);box-shadow:0 4px 16px rgba(var(--accent-ios-rgb),0.3);}
  `;
@@ -13466,7 +13480,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 
  {/* ══ AUTH SCREEN ══ */}
  {!user && (
- <div style={{position:"relative",width:"100%",maxWidth:480,margin:"0 auto",boxSizing:"border-box",height:"100dvh",overflowY:"auto",overflowX:"hidden",WebkitOverflowScrolling:"touch",paddingBottom:"calc(24px + env(safe-area-inset-bottom))",background:"radial-gradient(120% 70% at 50% -10%, rgba(var(--accent-ios-rgb),0.18), transparent 55%), radial-gradient(85% 50% at 85% 112%, rgba(var(--violet-rgb),0.16), transparent 60%), var(--s0)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"calc(var(--sa-top) + 30px) 28px calc(var(--sa-bot) + 30px)",fontFamily:"'Barlow',sans-serif"}}>
+ <div className="auth-shell" style={{position:"relative",width:"100%",maxWidth:480,margin:"0 auto",boxSizing:"border-box",height:"100dvh",overflowY:"auto",overflowX:"hidden",WebkitOverflowScrolling:"touch",paddingBottom:"calc(24px + env(safe-area-inset-bottom))",background:"radial-gradient(120% 70% at 50% -10%, rgba(var(--accent-ios-rgb),0.18), transparent 55%), radial-gradient(85% 50% at 85% 112%, rgba(var(--violet-rgb),0.16), transparent 60%), var(--s0)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"calc(var(--sa-top) + 30px) 28px calc(var(--sa-bot) + 30px)",fontFamily:"'Barlow',sans-serif"}}>
 
  {/* Grid floor \u2014 masked so it dissolves toward the edges. */}
  <div className="auth-grid"/>
