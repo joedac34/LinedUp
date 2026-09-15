@@ -397,6 +397,14 @@ const fade = (c, a) => {
 // a single attribute on <html>, which every token in the stylesheet keys off.
 // Dark is the absence of the attribute, so a failure here leaves the app as it
 // shipped rather than half-themed.
+// The compact bar has z-index 34 and no layout height, so any other sticky at
+// top:0 slid underneath it -- that is what clipped the top of the matchup card.
+// Publishing its height lets every other sticky offset by exactly the right
+// amount, and by zero when the bar is not showing.
+function _setCbarH(px){
+  try { document.documentElement.style.setProperty("--cbar-h", px + "px"); } catch(e){}
+}
+
 const THEME_KEY = "pl_theme";
 const THEME_MODES = ["auto", "light", "dark"];
 function _themeMQ(){
@@ -1455,8 +1463,8 @@ try{ if(typeof document!=="undefined" && typeof window!=="undefined" && !window.
       const cb = el.querySelector(".pk-cbar");
       if(cb){
         const on = cb.classList.contains("on");
-        if(!on && y > 64) cb.classList.add("on");
-        else if(on && y < 44) cb.classList.remove("on");
+        if(!on && y > 64){ cb.classList.add("on"); _setCbarH(46); }
+        else if(on && y < 44){ cb.classList.remove("on"); _setCbarH(0); }
       }
     }catch(e){}
 
@@ -11900,8 +11908,14 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
       chip or track, s5 a divider fill. In light these stop being darker greys and
       become white with the elevation carried by the border instead. */
    --on-color:#FFFFFF;
+   /* Sticky geometry. --cbar-h is written from the scroll handler. */
+   --header-h:52px;
+   --cbar-h:0px;
    /* The wash behind the app header and the league hero. */
    --hero:#0B1A2E;
+   /* Sticky bars sit over scrolling content, so they are glass, not a fill. */
+   --bar:rgba(10,10,13,0.82);
+   --sticky-shadow:0 8px 16px -8px rgba(0,0,0,0.7);
    --s0:#08080A; --s1:#0B0B0E; --s2:#141418;
    --s3:#1C1C1E; --s4:#2A2A2A; --s5:#3A3A3C;
    --side-opp:#3a3d47; --side-opp-rgb:58,61,71;
@@ -11949,6 +11963,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    --accent-ios:#0B5FCC; --accent-ios-rgb:11,95,204;
    --on-color:#FFFFFF;
    --hero:#E8EFF9;
+   --bar:rgba(255,255,255,0.86);
+   --sticky-shadow:0 8px 16px -10px rgba(13,17,23,0.22);
    --s0:#FFFFFF; --s1:#FFFFFF; --s2:#FFFFFF;
    --s3:#F4F6F8; --s4:#E7ECF2; --s5:#D2D9E2;
    --side-opp:#AFBACA; --side-opp-rgb:175,186,202;
@@ -12254,7 +12270,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  @media (prefers-reduced-motion: reduce){ .so-bar{animation:none;} }
  .pk-cbar{position:sticky;top:0;z-index:34;display:flex;align-items:center;gap:9px;height:46px;
    margin-bottom:-46px;padding:0 18px;opacity:0;pointer-events:none;
-   background:rgba(10,10,13,0.78);-webkit-backdrop-filter:blur(22px) saturate(1.4);
+   background:var(--bar);-webkit-backdrop-filter:blur(22px) saturate(1.4);
    backdrop-filter:blur(22px) saturate(1.4);border-bottom:0.5px solid rgba(var(--ink-rgb),0.09);
    transition:opacity .22s ease;}
  .pk-cbar.on{opacity:1;pointer-events:auto;}
@@ -12970,7 +12986,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 {preAuthPage && (
 <div style={{position:"fixed",inset:0,zIndex:10001,background:"var(--s0)",overflowY:"auto",WebkitOverflowScrolling:"touch",fontFamily:"Barlow,sans-serif"}}>
   <div style={{maxWidth:480,margin:"0 auto"}}>
-   <div style={{display:"flex",alignItems:"center",gap:11,padding:"calc(var(--sa-top) + 14px) 16px 10px",position:"sticky",top:0,background:"var(--s0)",zIndex:2}}>
+   <div style={{display:"flex",alignItems:"center",gap:11,padding:"calc(var(--sa-top) + 14px) 16px 10px",position:"sticky",top:"var(--cbar-h)",background:"var(--s0)",zIndex:2}}>
     <div onClick={()=>setPreAuthPage(null)} style={{width:31,height:31,borderRadius:RAD.md,background:"rgba(var(--ink-rgb),0.06)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--text)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
     </div>
@@ -14046,7 +14062,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  }
  };
  return (
- <div className='ticker-wrap' style={{position:"sticky",top:0,zIndex:25,marginBottom:0}}>
+ <div className='ticker-wrap' style={{position:"sticky",top:"var(--cbar-h)",zIndex:25,marginBottom:0}}>
  <div className='ticker-track' style={{animationDuration: Math.max(12, items.length * 5) + 's'}}>
  {doubled.map((g, i) => (
  <span key={i} className={'ticker-item'+(g.card?' ti-card':'')+(g.hasPick?' ti-mine':'')}
@@ -18617,7 +18633,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  return (
  <div className="body" style={{background:"var(--s0)",zIndex:"auto"}}>
    <style>{`.gbx-scroll::-webkit-scrollbar{ display:none; }`}</style>
-   <div style={{position:"sticky",top:0,zIndex:10,background:"var(--s0)",boxShadow:"0 8px 16px -8px rgba(0,0,0,0.7)"}}>
+   <div style={{position:"sticky",top:"var(--cbar-h)",zIndex:10,background:"var(--s0)",boxShadow:"var(--sticky-shadow)"}}>
      <div style={{display:"flex",alignItems:"center",gap:11,padding:"10px 16px 8px"}}>
        <div onClick={()=>setScreen("picks")} style={{width:34,height:34,borderRadius:RAD.md,background:"rgba(var(--ink-rgb),0.06)",border:EDGE.hair2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:18,flexShrink:0}}>‹</div>
        <div style={{flex:1,minWidth:0}}>
@@ -18783,7 +18799,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  return (
  <div className="body" style={{background:"var(--s0)",zIndex:"auto"}}>
    <style>{`.lad-scroll::-webkit-scrollbar{ display:none; }`}</style>
-   <div style={{position:"sticky",top:0,zIndex:10,background:"var(--s0)",boxShadow:"0 8px 16px -8px rgba(0,0,0,0.7)"}}>
+   <div style={{position:"sticky",top:"var(--cbar-h)",zIndex:10,background:"var(--s0)",boxShadow:"var(--sticky-shadow)"}}>
      <div style={{display:"flex",alignItems:"flex-end",gap:10,padding:"10px 16px 8px"}}>
        <div onClick={()=>setScreen("picks")} style={{width:34,height:34,borderRadius:RAD.md,background:"rgba(var(--ink-rgb),0.06)",border:EDGE.hair2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:18,flexShrink:0}}>{"\u2039"}</div>
        <div style={{flex:1,minWidth:0}}>
@@ -18885,7 +18901,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  `}</style>
 
  {/* Header */}
- <div style={{position:"sticky",top:0,zIndex:10,background:"var(--s0)",paddingBottom:6,boxShadow:"0 8px 16px -8px rgba(0,0,0,0.7)"}}>
+ <div style={{position:"sticky",top:"var(--cbar-h)",zIndex:10,background:"var(--s0)",paddingBottom:6,boxShadow:"var(--sticky-shadow)"}}>
  <div style={{display:"flex",alignItems:"center",gap:11,padding:"10px 16px 8px"}}>
  <div onClick={()=>setScreen("picks")} style={{width:34,height:34,borderRadius:RAD.md,background:"rgba(var(--ink-rgb),0.06)",border:EDGE.hair2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:acc,fontSize:18,flexShrink:0}} className="pk-t-back">‹</div>
  <div style={{flex:1,minWidth:0}}>
@@ -19783,7 +19799,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const tint = isTied?"var(--s2)":isWinning?"var(--s2)":"var(--s1)";
  const statusTxt = isTied?"You're Tied":isWinning?"You're Winning":"You're Trailing";
  return (
- <div style={{position:"sticky",top:0,zIndex:10,background:"var(--s0)",padding:"6px 0 8px"}}>
+ <div style={{position:"sticky",top:"var(--cbar-h)",zIndex:10,background:"var(--s0)",padding:"6px 0 8px"}}>
  <div style={{margin:"0 16px",borderRadius:RAD.lg,padding:"14px 16px",position:"relative",overflow:"hidden",background:"var(--s2)",border:EDGE.hair}}>
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
  <div style={{minWidth:0,flex:1}}>
@@ -24053,7 +24069,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    ):null}
    </div>
 
-  <div style={{position:"sticky",top:0,zIndex:12,display:"flex",padding:"0 6px",background:"rgba(11,11,15,0.97)",backdropFilter:"blur(14px)",WebkitBackdropFilter:"blur(14px)",borderBottom:EDGE.hair,overflowX:"auto"}}>
+  <div style={{position:"sticky",top:"var(--cbar-h)",zIndex:12,display:"flex",padding:"0 6px",background:"var(--bar)",backdropFilter:"blur(14px)",WebkitBackdropFilter:"blur(14px)",borderBottom:EDGE.hair,overflowX:"auto"}}>
   {[["ov","Overview"],["lu","Lineups"],["od","Odds"],["pk","Plok"]].map(([k,lb])=>(
     <div key={k} onClick={()=>goGcTab(k)} style={{flex:"0 0 auto",padding:"12px 14px",fontSize:13,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap",position:"relative",color:gcTab===k?"var(--text)":IOS.label3}}>
       {lb}
@@ -25032,7 +25048,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
   </div>
 
   {/* Sticky category pills */}
-  <div style={{position:"sticky",top:0,zIndex:20,display:"flex",gap:7,overflowX:"auto",scrollbarWidth:"none",padding:"12px 16px",background:"rgba(5,5,7,0.82)",backdropFilter:"blur(14px)",WebkitBackdropFilter:"blur(14px)",borderBottom:"0.5px solid rgba(var(--ink-rgb),0.09)"}}>
+  <div style={{position:"sticky",top:"var(--cbar-h)",zIndex:20,display:"flex",gap:7,overflowX:"auto",scrollbarWidth:"none",padding:"12px 16px",background:"var(--bar)",backdropFilter:"blur(14px)",WebkitBackdropFilter:"blur(14px)",borderBottom:"0.5px solid rgba(var(--ink-rgb),0.09)"}}>
    {ATABS.map(t=>{const on=analyticsTab===t;return (
     <div key={t} onClick={()=>setAnalyticsTab(t)} style={{flex:"0 0 auto",display:"flex",alignItems:"center",gap:6,fontSize:13,fontWeight:800,whiteSpace:"nowrap",cursor:"pointer",color:on?"var(--text)":CC.l2,background:on?"linear-gradient(135deg,rgba(var(--accent-ios-rgb),0.28),rgba(var(--violet-rgb),0.18))":"rgba(var(--ink-rgb),0.05)",border:on?"0.5px solid rgba(var(--accent-ios-rgb),0.55)":"0.5px solid rgba(var(--ink-rgb),0.09)",borderRadius:RAD.pill,padding:"8px 14px",boxShadow:on?"0 3px 12px rgba(var(--accent-ios-rgb),0.25)":"none",transition:"all .18s"}}>
      <span style={{width:6,height:6,borderRadius:"50%",background:TDOT[t]}}/>{t}{!isPro&&t!=="Overview"&&<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={CC.purple} strokeWidth="2.5" strokeLinecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>}
