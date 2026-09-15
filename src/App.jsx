@@ -532,7 +532,15 @@ function applyTheme(mode){
     // Capacitor StatusBar: Style.Light means DARK text, for a light background.
     const cap = (typeof window !== "undefined") && window.Capacitor;
     const SB = cap && cap.Plugins && cap.Plugins.StatusBar;
-    if (SB && SB.setStyle) { try { SB.setStyle({ style: r === "light" ? "LIGHT" : "DARK" }); } catch(e){} }
+    if (SB) {
+      // iOS: Style.Light means DARK text, for a light background.
+      if (SB.setStyle) { try { SB.setStyle({ style: r === "light" ? "LIGHT" : "DARK" }); } catch(e){} }
+      // Android: the bar has its own fill, and setStyle does not touch it. Without
+      // this the app goes light and keeps a black strip along the top.
+      if (SB.setBackgroundColor) {
+        try { SB.setBackgroundColor({ color: r === "light" ? "#FFFFFF" : "#000000" }); } catch(e){}
+      }
+    }
   } catch(e){}
 }
 function setThemeMode(mode){
