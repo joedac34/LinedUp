@@ -401,6 +401,98 @@ const fade = (c, a) => {
 // top:0 slid underneath it -- that is what clipped the top of the matchup card.
 // Publishing its height lets every other sticky offset by exactly the right
 // amount, and by zero when the bar is not showing.
+function installSheetDrag(){
+  if (typeof document === "undefined" || document.__plSheetDrag) return;
+  document.__plSheetDrag = true;
+  var sheet=null, back=null, scroller=null, y0=0, dy=0, lastY=0, lastT=0, vel=0,
+      live=false, decided=false, H=1;
+
+  // The nearest scrolling ancestor INSIDE the sheet. If it is scrolled down, the
+  // finger belongs to that list, not to the sheet.
+  function scrollerFor(el, root){
+    while (el && el !== root.parentElement) {
+      if (el.scrollHeight - el.clientHeight > 4) {
+        var o = "";
+        try { o = getComputedStyle(el).overflowY; } catch(e){}
+        if (o === "auto" || o === "scroll") return el;
+      }
+      el = el.parentElement;
+    }
+    return null;
+  }
+
+  function start(e){
+    var p = e.touches ? e.touches[0] : e;
+    var s = (e.target && e.target.closest) ? e.target.closest(".pk-sheet, .gh-sheet") : null;
+    if (!s || !s.parentElement) return;
+    sheet = s; back = s.parentElement; scroller = scrollerFor(e.target, s);
+    y0 = lastY = p.clientY; lastT = Date.now(); dy = 0; vel = 0;
+    live = false; decided = false;
+    var r = s.getBoundingClientRect();
+    H = r.height || 1;
+    // The top strip is a handle no matter what is under the finger.
+    if (p.clientY - r.top < 72) { decided = true; live = true; }
+  }
+
+  function move(e){
+    if (!sheet) return;
+    var p = e.touches ? e.touches[0] : e;
+    var d = p.clientY - y0;
+    if (!decided) {
+      if (Math.abs(d) < 6) return;
+      // Claim the gesture only on a downward pull from an unscrolled list,
+      // otherwise hand it back so the list scrolls normally.
+      if (d > 0 && (!scroller || scroller.scrollTop <= 0)) { decided = true; live = true; }
+      else { decided = true; live = false; sheet = null; return; }
+    }
+    if (!live) return;
+    dy = d < 0 ? d * 0.22 : d;
+    var t = Date.now(), dt = t - lastT;
+    if (dt > 0) { vel = (p.clientY - lastY) / dt; lastY = p.clientY; lastT = t; }
+    sheet.style.transition = "none";
+    sheet.style.transform = "translateY(" + Math.max(0, dy) + "px)";
+    back.style.transition = "none";
+    back.style.opacity = String(Math.max(0, 1 - (dy / H) * 1.1));
+    if (e.cancelable) e.preventDefault();
+  }
+
+  function end(){
+    if (!sheet) return;
+    var s = sheet, b = back, d = dy, v = vel;
+    sheet = null;
+    if (!live) return;
+    var restore = function(){
+      s.style.transition = ""; s.style.transform = "";
+      b.style.transition = ""; b.style.opacity = "";
+    };
+    if (d > H * 0.25 || v > 0.55) {
+      s.style.transition = "transform .22s ease-out";
+      s.style.transform = "translateY(110%)";
+      b.style.transition = "opacity .22s ease-out";
+      b.style.opacity = "0";
+      setTimeout(function(){
+        try { b.click(); } catch(e){}
+        // If the backdrop had no close handler the sheet is still mounted, so
+        // put it back rather than leaving it parked off screen.
+        setTimeout(restore, 30);
+      }, 200);
+    } else {
+      s.style.transition = "transform .22s cubic-bezier(.2,.9,.25,1)";
+      s.style.transform = "translateY(0)";
+      b.style.transition = ""; b.style.opacity = "";
+      setTimeout(function(){ s.style.transition = ""; s.style.transform = ""; }, 230);
+    }
+  }
+
+  document.addEventListener("touchstart", start, {passive:true, capture:true});
+  document.addEventListener("touchmove", move, {passive:false, capture:true});
+  document.addEventListener("touchend", end, true);
+  document.addEventListener("touchcancel", end, true);
+  document.addEventListener("mousedown", start, true);
+  document.addEventListener("mousemove", move, true);
+  document.addEventListener("mouseup", end, true);
+}
+installSheetDrag();
 function _setCbarH(px){
   try { document.documentElement.style.setProperty("--cbar-h", px + "px"); } catch(e){}
 }
@@ -12238,6 +12330,12 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
     come from here so each sheet keeps its own background colour — this is a geometry
     change, not a repaint. Works for flex-end children and for absolutely positioned
     sheets alike, because the margins inset within left:0/right:0 either way. */
+ /* Drag handle. The gesture works anywhere in the top 72px, but people need to
+    see that it is draggable. */
+ .pk-sheet::before,.gh-sheet::before{content:"";display:block;flex:0 0 auto;
+   width:38px;height:5px;border-radius:3px;background:var(--text3);
+   margin:9px auto 2px;opacity:.75;}
+ .pk-sheet,.gh-sheet{touch-action:pan-y;}
  .pk-sheet{border-radius:26px;margin-left:8px;margin-right:8px;
    margin-bottom:calc(8px + var(--sa-bot));
    border:0.5px solid rgba(var(--ink-rgb),0.12);
