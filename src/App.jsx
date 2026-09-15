@@ -12456,8 +12456,16 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  @keyframes soGrow{from{height:0}to{height:var(--h);}}
  .so-bar{height:var(--h);animation:soGrow .62s cubic-bezier(0.34,1.16,0.42,1) both;}
  @media (prefers-reduced-motion: reduce){ .so-bar{animation:none;} }
- .pk-cbar{position:sticky;top:var(--header-h);z-index:34;display:flex;align-items:center;gap:9px;height:46px;
-   margin-bottom:-46px;padding:0 18px;opacity:0;pointer-events:none;
+ /* The compact bar is FIXED, not sticky. As a sticky element it sat after the page
+    content in the DOM, so it only pinned once its own natural position scrolled up
+    to the header -- but .on made it visible at scrollTop 64. Between those two
+    moments it floated mid-page with content showing above it, which is the gap
+    under the header. Fixed means it is always exactly below the header whenever it
+    is shown. Constrained to the phone column because .phone is a centred 480px. */
+ .pk-cbar{position:fixed;top:calc(var(--sa-top) + var(--header-h));z-index:34;
+   left:50%;transform:translateX(-50%);width:min(100%,480px);
+   display:flex;align-items:center;gap:9px;height:46px;
+   padding:0 18px;opacity:0;pointer-events:none;
    background:var(--bar);-webkit-backdrop-filter:blur(22px) saturate(1.4);
    backdrop-filter:blur(22px) saturate(1.4);border-bottom:0.5px solid rgba(var(--ink-rgb),0.09);
    transition:opacity .22s ease;}
