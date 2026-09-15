@@ -392,6 +392,89 @@ const fade = (c, a) => {
   return c;
 };
 
+// -- THEME ENGINE -------------------------------------------------------------
+// Three modes. "auto" follows the OS, the other two pin it. The resolved value is
+// a single attribute on <html>, which every token in the stylesheet keys off.
+// Dark is the absence of the attribute, so a failure here leaves the app as it
+// shipped rather than half-themed.
+const THEME_KEY = "pl_theme";
+const THEME_MODES = ["auto", "light", "dark"];
+function _themeMQ(){
+  try { return (typeof window !== "undefined" && window.matchMedia)
+    ? window.matchMedia("(prefers-color-scheme: light)") : null; } catch(e){ return null; }
+}
+function resolveTheme(mode){
+  if (mode === "light") return "light";
+  if (mode === "dark") return "dark";
+  const m = _themeMQ();
+  return (m && m.matches) ? "light" : "dark";
+}
+function getThemeMode(){
+  try {
+    const v = localStorage.getItem(THEME_KEY);
+    return THEME_MODES.indexOf(v) !== -1 ? v : "auto";
+  } catch(e){ return "auto"; }
+}
+function applyTheme(mode){
+  try {
+    const r = resolveTheme(mode);
+    const el = document.documentElement;
+    if (r === "light") el.setAttribute("data-theme", "light");
+    else el.removeAttribute("data-theme");
+    // Browser chrome and the PWA surround follow the page, not the other way round.
+    let m = document.querySelector('meta[name="theme-color"]');
+    if (!m) { m = document.createElement("meta"); m.setAttribute("name", "theme-color"); document.head.appendChild(m); }
+    m.setAttribute("content", r === "light" ? "#FFFFFF" : "#000000");
+    // Capacitor StatusBar: Style.Light means DARK text, for a light background.
+    const cap = (typeof window !== "undefined") && window.Capacitor;
+    const SB = cap && cap.Plugins && cap.Plugins.StatusBar;
+    if (SB && SB.setStyle) { try { SB.setStyle({ style: r === "light" ? "LIGHT" : "DARK" }); } catch(e){} }
+  } catch(e){}
+}
+function setThemeMode(mode){
+  if (THEME_MODES.indexOf(mode) === -1) mode = "auto";
+  try { localStorage.setItem(THEME_KEY, mode); } catch(e){}
+  applyTheme(mode);
+  return mode;
+}
+// Runs at module load, before the first React render, so the tree paints in the
+// right theme. The very first frame is still the background from index.html --
+// see the snippet in THEME_SETUP.md to kill that flash for good.
+applyTheme(getThemeMode());
+try {
+  const _m = _themeMQ();
+  if (_m) {
+    const _h = () => { if (getThemeMode() === "auto") applyTheme("auto"); };
+    if (_m.addEventListener) _m.addEventListener("change", _h);
+    else if (_m.addListener) _m.addListener(_h);
+  }
+} catch(e){}
+
+// The Appearance control. Its own component so the 25k-line screen below does not
+// need another hook, and so the segmented control owns its own state.
+function ThemePicker(){
+  const [mode, setMode] = useState(getThemeMode);
+  const pick = (m) => { setMode(setThemeMode(m)); try { haptic("select"); } catch(e){} };
+  const opts = [["auto", "Auto"], ["light", "Light"], ["dark", "Dark"]];
+  return (
+   <div style={{padding:"13px 16px"}}>
+    <div style={{display:"flex",gap:6,background:"var(--fill)",border:`1px solid ${IOS.sep}`,borderRadius:RAD.md,padding:4}}>
+     {opts.map(([k, lab]) => (
+      <div key={k} onClick={()=>pick(k)}
+       style={{flex:1,textAlign:"center",padding:"10px 0",borderRadius:RAD.sm,cursor:"pointer",
+        fontSize:13.5,fontWeight:mode===k?800:600,minHeight:44,display:"flex",alignItems:"center",justifyContent:"center",
+        background:mode===k?"var(--text)":"transparent",
+        color:mode===k?"var(--bg)":"var(--text2)",
+        transition:"background .18s ease, color .18s ease"}}>{lab}</div>
+     ))}
+    </div>
+    <div style={{fontSize:11.5,color:IOS.label3,marginTop:9,lineHeight:1.45}}>
+     {mode === "auto" ? "Following your device setting." : "Pinned to " + mode + " on this device."}
+    </div>
+   </div>
+  );
+}
+
 // ── Surface scale ───────────────────────────────────────────
 // 23 corner radii and 7 hairline alphas collapsed to 5 + 3. Ties round UP — a
 // larger radius reads softer, which is the direction the UI work is heading.
@@ -23705,6 +23788,21 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  );
  })}
     </>)}
+   </div></div>
+  </div>
+  <div className={"pf-sec"+(profSec==="appearance"?" open":"")}>
+   <div className="pf-head" onClick={()=>{ haptic("select"); setProfSec(profSec==="appearance"?null:"appearance"); }}>
+    <div style={{width:34,height:34,borderRadius:RAD.md,background:"rgba(var(--accent-ios-rgb),0.13)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/></svg>
+    </div>
+    <div style={{minWidth:0}}>
+     <div style={{fontSize:15.5,fontWeight:800,letterSpacing:-0.2,color:"var(--text)"}}>Appearance</div>
+     <div style={{fontSize:11.5,fontWeight:600,color:IOS.label3,marginTop:2}}>Light, dark, or follow your device</div>
+    </div>
+    <svg className="pf-chev" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="rgba(var(--ink-rgb),0.3)" strokeWidth="2.2" strokeLinecap="round"><path d="M9 6l6 6-6 6"/></svg>
+   </div>
+   <div className="pf-body"><div className="pf-inner">
+    <ThemePicker/>
    </div></div>
   </div>
   <div className={"pf-sec"+(profSec==="support"?" open":"")}>
