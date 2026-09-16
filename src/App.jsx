@@ -15502,7 +15502,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  )}
 
  {/* ══ PICKS ══ */}
- {screen==="picks"&&!isSoloMode&&_lgReady&&!lgCompleted(activeLeague)&&!seasonNotStarted&&activeLeague.league_type==="survivor"&&activeLeague.myEliminatedWeek==null&&survivorHeader}
+ {/* Not while the picker is open: the locked screen draws these itself, and the
+     builder should not inherit a stat row belonging to another screen. */}
+ {screen==="picks"&&!isSoloMode&&!buildingSlip&&_lgReady&&!lgCompleted(activeLeague)&&!seasonNotStarted&&activeLeague.league_type==="survivor"&&activeLeague.myEliminatedWeek==null&&survivorHeader}
  {screen==="picks"&&!isSoloMode&&(()=>{ if(!_lgReady){ return leagueLoadingBody; } if(lgCompleted(activeLeague)){ return seasonOverBody; } if(activeLeague.league_type==="survivor"&&activeLeague.myEliminatedWeek!=null){ return survivorDeadBody; } if(seasonNotStarted){ return activeLeague.league_type==="survivor" ? survivorAwaitBody : notStartedBody; }
  // Playoffs running and the bracket has not arrived yet: elimination is unknowable,
  // so render a skeleton rather than a builder we may have to yank away.
@@ -16293,6 +16295,11 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    const _statusTxt = _out ? "Eliminated" : _res==="W" ? "Survived" : _res==="L" ? "Eliminated" : _res==="P" ? "Void \u00B7 you survive" : _started ? "Live" : "Locked in";
    const _statusCol = _out||_res==="L" ? IOS.red : _res==="W" ? IOS.green : _started ? "var(--cyan)" : IOS.green;
    const _short = _bet ? String(_bet.pick||"").replace(/\s*-\s*Anytime TD$/i,"") : "";
+   // Teams still available to you. Voids do not burn a team, matching the rule
+   // addCard enforces when it blocks a duplicate.
+   const _svPool = _ml ? 32 : 0;
+   const _svBurnedN = (svBurned||[]).filter(x=>x && x.result!=="P").length;
+   const _svLeft = _ml ? Math.max(0, _svPool - _svBurnedN) : Math.max(0, _alive);
    return (
    <div className="lsx-scroll" style={{position:"absolute",inset:0,zIndex:10,background:"var(--s0)",overflowY:"auto",WebkitOverflowScrolling:"touch",paddingTop:"calc(var(--sa-top) + 52px)",paddingBottom:"calc(var(--sa-bottom) + 120px)"}}>
    <style>{`@keyframes lsxPulse{0%,100%{opacity:1}50%{opacity:.3}}`}</style>
@@ -16334,8 +16341,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    </div>
 
    {/* Pool */}
-   <div style={{margin:"10px 16px 0",display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-     {[[String(_alive)+(_tot?("/"+_tot):""),"Alive",IOS.green],[String(Math.max(0,_tot-_alive)),"Out","rgba(var(--ink-rgb),0.6)"],[String(wk),"Week","var(--text)"]].map(([v,l,c],i)=>(
+   <div style={{margin:"10px 16px 0",display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
+     {[[String(_alive)+(_tot?("/"+_tot):""),"Alive",IOS.green],[String(Math.max(0,_tot-_alive)),"Out","rgba(var(--ink-rgb),0.6)"],[String(wk),"Week","var(--text)"],[String(_svLeft),_ml?"Left":"Pool","var(--text)"]].map(([v,l,c],i)=>(
        <div key={i} style={{background:"rgba(var(--ink-rgb),0.04)",border:"0.5px solid rgba(var(--ink-rgb),0.08)",borderRadius:RAD.md,padding:"12px 8px",textAlign:"center"}}>
          <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:22,color:c,lineHeight:1}}>{v}</div>
          <div style={{fontSize:9,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:"var(--text25)",marginTop:5}}>{l}</div>
@@ -16353,7 +16360,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    <div style={{padding:"14px 16px 0"}}>
      {_canSwap && <button className="ios-btn" style={{background:IOS.blue,color:"var(--on-color)",marginTop:8}} onClick={()=>{ const sp=activeSavedPicks?.flexPicks; if(sp) setActivePicks(sp); setActiveSavedPicks(null); setActiveSubmitted(false); setBuildingSlip(true); }}>{_ml?"Change team":"Change scorer"}</button>}
      {!_bet && !isEliminated && <button className="ios-btn" style={{background:IOS.blue,color:"var(--on-color)",marginTop:8}} onClick={()=>{ setActiveSavedPicks(null); setActiveSubmitted(false); setBuildingSlip(true); }}>Make your pick</button>}
-     <button className="ios-btn" style={{background:"rgba(var(--ink-rgb),0.07)",color:IOS.blue,marginTop:8}} onClick={()=>{setScreen("home");}}>Back to Home</button>
+     
    </div>
    </div>
    );
@@ -16496,7 +16503,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  </div>
 
  {canEdit && <button className="ios-btn" style={{background:IOS.blue,color:"var(--on-color)",marginTop:8}} onClick={()=>{ const sp=activeSavedPicks?.flexPicks; if(sp) setActivePicks(sp); setActiveSavedPicks(null); setActiveSubmitted(false); setBuildingSlip(true); }}>{emptyLeft>0?("Add picks · "+emptyLeft+" left"):"Edit picks"}</button>}
- <button className="ios-btn" style={{background:"rgba(var(--ink-rgb),0.07)",color:IOS.blue,marginTop:8}} onClick={()=>{setScreen("home");}}>Back to Home</button>
+ 
  </div>
  );
  })()}
