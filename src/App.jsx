@@ -17897,7 +17897,15 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  // ── Folded parlay (flex leagues): one multiplier holds a parlay built right here ──
  const _parIdx = activePicks.findIndex(p=>p.isParlay);
  const parlayLegs = _parIdx!==-1 ? (activePicks[_parIdx].parlayLegs||[]) : [];
- const isLeg = (b)=> !!b && parlayLegs.some(l=>String(l.id)===String(b.id)||l.pick===b.pick);
+ // Leg identity. Match on id, which carries the event. Fall back to pick only
+ // for legacy legs saved without one, and require the event to agree there too,
+ // because pick strings repeat across games.
+ const sameLeg = (l, b) => {
+   if(!l || !b) return false;
+   if(l.id!=null && b.id!=null) return String(l.id)===String(b.id);
+   return l.pick===b.pick && (l.eventId||null)===(b.eventId||null);
+ };
+ const isLeg = (b)=> !!b && parlayLegs.some(l=>sameLeg(l,b));
  const flagParlay = (M)=>{
  const prior = activePicks.find(p=>p.isParlay);
  if(prior && prior.mult!==M && (prior.parlayLegs||[]).length>=2){
@@ -17914,11 +17922,10 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  });
  setGridParlayMult(M);
  if((gridFlexMult||1)===M){ const nm=[1,2,3,4,5].find(m=>m!==M); if(nm) setGridFlexMult(nm); }
- };
- const toggleLeg = (bet)=>{
+ }; const toggleLeg = (bet)=>{
  const _par = activePicks.find(p=>p.isParlay);
  const _curLegs = _par ? (_par.parlayLegs||[]) : [];
- const _already = _curLegs.some(l=>String(l.id)===String(bet.id)||l.pick===bet.pick);
+ const _already = _curLegs.some(l=>sameLeg(l,bet));
  const _cat = (bet && bet.category) || gridType;
  if(!_already){
   const _pc = parlayConflict({...bet, category:_cat}, _curLegs);
@@ -17931,8 +17938,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  if(!p.isParlay) return p;
  found=true;
  const legs=p.parlayLegs||[];
- const has=legs.some(l=>String(l.id)===String(bet.id)||l.pick===bet.pick);
- return {...p, parlayLegs: has ? legs.filter(l=>!(String(l.id)===String(bet.id)||l.pick===bet.pick)) : [...legs, leg]};
+ const has=legs.some(l=>sameLeg(l,bet));
+ return {...p, parlayLegs: has ? legs.filter(l=>!sameLeg(l,bet)) : [...legs, leg]};
  });
  if(!found){
  const M=gridParlayMult;
