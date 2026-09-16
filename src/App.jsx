@@ -497,6 +497,73 @@ installSheetDrag();
 // its own scroll handler says otherwise.
 function _resetCbarH(){ _setCbarH(0); }
 
+// -- PLOK BUBBLE -------------------------------------------------------------
+// A draggable launcher. It snaps to whichever edge it is closest to, is clamped
+// between the header and the dock so it can never cover either, remembers where
+// it was left, and fades once you stop touching it so it stops competing with the
+// page. A drag under 8px counts as a tap.
+const PLOK_POS = "plok_pos";
+const PLOK_SIZE = 54, PLOK_PAD = 10, PLOK_TOPGUARD = 96, PLOK_BOTGUARD = 96;
+function installPlokDrag(el, onTap){
+  if(!el || el.__plokInit) return;
+  el.__plokInit = true;
+  const host = el.parentElement || document.body;
+  let px=0, py=0, dragging=false, moved=0, sx=0, sy=0, ox=0, oy=0, restT=null;
+
+  const clampY = (y)=>{
+    const max = host.clientHeight - PLOK_BOTGUARD - PLOK_SIZE;
+    return Math.max(PLOK_TOPGUARD, Math.min(max, y));
+  };
+  const place = (x,y,anim)=>{
+    px=x; py=y;
+    el.style.transition = anim ? "" : "none";
+    el.style.left = x+"px"; el.style.top = y+"px";
+    if(!anim) requestAnimationFrame(()=>{ el.style.transition=""; });
+  };
+  const rest = ()=>{
+    clearTimeout(restT); el.classList.remove("resting");
+    restT = setTimeout(()=>el.classList.add("resting"), 2600);
+  };
+  const save = ()=>{ try{ localStorage.setItem(PLOK_POS, JSON.stringify({x:px,y:py})); }catch(e){} };
+  const snap = ()=>{
+    const x = (px + PLOK_SIZE/2 < host.clientWidth/2)
+      ? PLOK_PAD : host.clientWidth - PLOK_SIZE - PLOK_PAD;
+    place(x, clampY(py), true); save(); rest();
+  };
+  const down = (e)=>{
+    dragging=true; moved=0;
+    const p = e.touches ? e.touches[0] : e;
+    sx=p.clientX; sy=p.clientY; ox=px; oy=py;
+    el.classList.add("dragging"); el.classList.remove("resting");
+    if(e.cancelable) e.preventDefault();
+  };
+  const move = (e)=>{
+    if(!dragging) return;
+    const p = e.touches ? e.touches[0] : e;
+    const dx=p.clientX-sx, dy=p.clientY-sy;
+    moved = Math.max(moved, Math.abs(dx)+Math.abs(dy));
+    place(Math.max(-8, Math.min(host.clientWidth-PLOK_SIZE+8, ox+dx)), clampY(oy+dy), false);
+    if(e.cancelable) e.preventDefault();
+  };
+  const up = ()=>{
+    if(!dragging) return;
+    dragging=false; el.classList.remove("dragging");
+    if(moved < 8){ rest(); try{ onTap && onTap(); }catch(e){} }
+    else snap();
+  };
+  el.addEventListener("touchstart", down, {passive:false});
+  el.addEventListener("touchmove", move, {passive:false});
+  el.addEventListener("touchend", up);
+  el.addEventListener("touchcancel", up);
+  el.addEventListener("mousedown", down);
+  window.addEventListener("mousemove", move);
+  window.addEventListener("mouseup", up);
+  let saved=null;
+  try{ saved = JSON.parse(localStorage.getItem(PLOK_POS)); }catch(e){}
+  if(saved && typeof saved.x === "number"){ place(saved.x, clampY(saved.y), false); }
+  else { place(host.clientWidth - PLOK_SIZE - PLOK_PAD, host.clientHeight - PLOK_BOTGUARD - PLOK_SIZE, false); }
+  rest();
+}
 function _setCbarH(px){
   try { document.documentElement.style.setProperty("--cbar-h", px + "px"); } catch(e){}
 }
@@ -6706,6 +6773,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
      (PUSHED_SCREENS.indexOf(screen)!==-1 && h.length>1) ? "1" : "0"); }catch(e){}
    _resetCbarH();
    setBrowserSheet(false);
+   setPlokOpen(false);
  }, [screen]);
  // THE back. Pops navHist (the only thing that knows where the user came from)
  // and lands on the previous screen. Visible back buttons call goBack(fallback):
@@ -6725,6 +6793,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  const goBack = (fallback)=>{
    // A sheet is not a screen, so dismiss it before popping, or hardware back would
    // leave the picks screen with the browser still sitting on top of it.
+   if(plokOpen){ setPlokOpen(false); return; }
    if(browserSheet){ setBrowserSheet(false); return; }
    const h = navHist.current;
    if(h.length < 2){ if(fallback) setScreen(fallback); return; }
@@ -7685,6 +7754,9 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  // Open state for browser-as-sheet. screen stays "picks" throughout, so the slip
  // renders underneath and nothing is pushed onto navHist.
  const [browserSheet, setBrowserSheet] = useState(false);
+ // Plok sheet. Like the browser it is not a screen, so the page underneath stays
+ // put and Plok can say something about what you are actually looking at.
+ const [plokOpen, setPlokOpen] = useState(false);
  const [slipBarOpen, setSlipBarOpen] = useState(false); // DK-style slip sheet in the browser
  const [soloSlipOpen, setSoloSlipOpen] = useState(false); // solo equivalent (free-form picks)
  const [openLegs, setOpenLegs] = useState({});            // which parlay rows are expanded
@@ -12172,7 +12244,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  .gh-left{display:flex;align-items:center;min-width:0;flex-shrink:0;}
  .gh-center{flex:1;min-width:0;}
  .gh-right{display:flex;align-items:center;gap:9px;flex-shrink:0;}
- .gh-switch{display:flex;align-items:center;gap:6px;background:rgba(var(--accent-ios-rgb),0.12);border:0.5px solid rgba(var(--accent-ios-rgb),0.32);border-radius:10px;padding:7px 11px;cursor:pointer;max-width:150px;}
+ .gh-switch{display:flex;align-items:center;gap:6px;background:rgba(var(--accent-ios-rgb),0.12);border:0.5px solid rgba(var(--accent-ios-rgb),0.32);border-radius:10px;padding:7px 11px;cursor:pointer;max-width:200px;}
  .gh-switch.solo{background:rgba(var(--longshot-rgb),0.12);border-color:rgba(var(--longshot-rgb),0.32);}
  .gh-nm{font-size:13px;font-weight:700;color:var(--chip-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
  .gh-switch.solo .gh-nm{color:var(--chip-ink-solo);}
@@ -12411,6 +12483,32 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  /* Browser-as-sheet. .pk-sheet is reused so the delegated drag-to-dismiss and the
     grip come for free. bb-sheet only supplies height and fixes the scroller: .body
     is normally sized by the app shell flex and has nothing to fill in here. */
+ .plok-fab{position:absolute;width:54px;height:54px;border-radius:50%;z-index:8500;
+   background:linear-gradient(150deg,var(--accent),var(--indigo));
+   box-shadow:0 8px 22px var(--bb-shadow), 0 0 0 3px var(--bg);
+   display:flex;align-items:center;justify-content:center;touch-action:none;cursor:grab;
+   transition:transform .30s cubic-bezier(.2,.9,.25,1), opacity .25s ease;}
+ .plok-fab.dragging{cursor:grabbing;transition:none;transform:scale(1.08);}
+ /* Fades once you stop touching it so it stops competing with the page. */
+ .plok-fab.resting{opacity:.6;}
+ .plok-scrim{position:fixed;inset:0;z-index:9100;background:var(--scrim-bb);
+   -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);
+   display:flex;flex-direction:column;justify-content:flex-end;animation:bbFade .2s ease both;}
+ .plok-sheet{background:var(--bg);border-radius:26px 26px 0 0;margin:0;
+   border-top:0.5px solid var(--line);box-shadow:0 -18px 44px var(--bb-shadow);
+   padding-bottom:calc(16px + var(--sa-bot));}
+ .plok-head{display:flex;align-items:center;gap:11px;padding:6px 18px 14px;}
+ .plok-mark{width:36px;height:36px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;
+   background:linear-gradient(150deg,var(--accent),var(--indigo));}
+ .plok-t b{display:block;font-size:16px;font-weight:800;letter-spacing:-0.4px;color:var(--text);}
+ .plok-t span{font-size:12.5px;color:var(--text2);}
+ .plok-list{padding:0 18px;}
+ .plok-sg{display:flex;align-items:center;gap:11px;border:1px solid var(--line);background:var(--s2);
+   border-radius:13px;padding:14px;margin-bottom:9px;min-height:54px;cursor:pointer;}
+ .plok-sg:active{transform:scale(0.99);}
+ .plok-q{flex:1;font-size:13.5px;font-weight:600;letter-spacing:-0.15px;color:var(--text);}
+ .plok-foot{margin:6px 18px 0;min-height:52px;border-radius:13px;background:var(--ink);color:var(--onInk);
+   display:flex;align-items:center;justify-content:center;gap:9px;font-size:15px;font-weight:700;cursor:pointer;}
  .bb-scrim{position:fixed;inset:0;z-index:9000;background:var(--scrim-bb);
    -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);
    display:flex;flex-direction:column;justify-content:flex-end;
@@ -14031,7 +14129,6 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  </div>
  <div className="gh-center"></div>
  <div className="gh-right">
-            <div onClick={()=>{ if(!isPro){setShowPaywall("ai");return;} setScreen("ai"); }} aria-label="Plok" style={{display:"inline-flex",alignItems:"center",gap:5,height:34,padding:"0 11px",borderRadius:RAD.lg,background:`${fade(IOS.blue,0.122)}`,border:`1px solid ${fade(IOS.blue,0.227)}`,cursor:"pointer"}}><svg width="15" height="15" viewBox="0 0 24 24" fill={IOS.blue}><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 16.8 10.2 11.2 4.6 9.4 10.2 7.6z"/></svg><span style={{fontSize:13,fontWeight:800,color:IOS.blue,letterSpacing:"-0.2px"}}>Plok</span></div>
  {/* Global rank was a full-width card on Home carrying a single number. It is a
      destination, not a widget, so it is an icon now: a podium, 1-2-3. .gh-icon
      supplies the 44pt hit area and the themed fill. */}
@@ -25451,6 +25548,56 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 
  {gamecastSel && <GamecastSheet game={gamecastSel.game} pick={gamecastSel.pick} onClose={()=>setGamecastSel(null)}/>}
       {pickConflict && <div style={{position:"fixed",left:"50%",bottom:96,transform:"translateX(-50%)",maxWidth:"86%",background:"rgba(28,16,16,0.97)",border:"0.5px solid rgba(var(--loss-rgb),0.45)",borderRadius:RAD.md,padding:"11px 16px",fontSize:12.5,fontWeight:700,color:"var(--text)",zIndex:99999,boxShadow:"0 8px 30px rgba(0,0,0,0.5)",textAlign:"center",lineHeight:1.4}}>{pickConflict}</div>}
+ {/* Plok. The bubble is the only entry point now -- the header chip is gone, so
+     there is one way in rather than two. Free accounts SEE the suggestions and hit
+     the paywall on tap: showing someone the specific thing they are about to get
+     converts better than a locked icon. askPlok() already owns that gate. */}
+ {user && !plokOpen && !browserSheet && screen!=="ai" && (
+   <div className="plok-fab" ref={(el)=>installPlokDrag(el, ()=>{ haptic("select"); setPlokOpen(true); })} aria-label="Plok">
+     <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+       <path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6z"/>
+       <path d="M17.5 15.5l.7 1.9 1.9.7-1.9.7-.7 1.9-.7-1.9-1.9-.7 1.9-.7z"/>
+     </svg>
+   </div>
+ )}
+ {plokOpen && (()=>{
+   const _wk = (activeLeague && (activeLeague.current_week||activeLeague.week)) || 1;
+   const _lg = (activeLeague && activeLeague.name) || "your league";
+   const S = {
+     picks:   ["Looking at your Week "+_wk+" slip",
+               ["Which of my picks is shakiest?","Find me a longshot nobody else took","What did I get wrong last week?"]],
+     matchup: ["Looking at your matchup",
+               ["How am I doing in this matchup?","Where did they beat me?","What do I need to win?"]],
+     leagues: ["Looking at your leagues",
+               ["Which leagues still need picks?","Where am I closest to first?","Summarise my week"]],
+     profile: ["Looking at your record",
+               ["What is my best bet type?","Am I actually good at longshots?","How do I compare to my league?"]],
+   };
+   const _d = S[screen] || ["Looking at "+_lg,
+     ["What should I know about Week "+_wk+"?","Who is the toughest team on the board?","Summarise my week"]];
+   return (
+   <div className="plok-scrim" onClick={()=>setPlokOpen(false)}>
+     <div className="pk-sheet plok-sheet" onClick={(e)=>e.stopPropagation()}>
+       <div className="plok-head">
+         <div className="plok-mark">
+           <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6z"/></svg>
+         </div>
+         <div className="plok-t"><b>Plok</b><span>{_d[0]}</span></div>
+       </div>
+       <div className="plok-list">
+         {_d[1].map((q,i)=>(
+           <div key={i} className="plok-sg" onClick={()=>{ setPlokOpen(false); askPlok(q); }}>
+             <span className="plok-q">{q}</span>
+             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" strokeWidth="2.4" strokeLinecap="round"><path d="M9 6l6 6-6 6"/></svg>
+           </div>
+         ))}
+       </div>
+       <div className="plok-foot" onClick={()=>{ setPlokOpen(false); if(!isPro){ setShowPaywall("ai"); return; } setScreen("ai"); }}>
+         Ask Plok anything
+         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+       </div>
+     </div>
+   </div>); })()}
  <div className="tab-dock"><div className="tab-bar">
  {(homeMode==="solo" ? [
  {icon:"home",label:"Home",id:"home"},
