@@ -8176,6 +8176,14 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
   const [aiThread, setAiThread] = useState([]);
   const [aiInput, setAiInput] = useState("");
   const [aiBusy, setAiBusy] = useState(false);
+  // Keeps the Plok sheet scrolled to the newest turn. Lives here, below aiThread
+  // and aiBusy, because a deps array is evaluated at render and a const declared
+  // later in the same function is a ReferenceError, not undefined.
+  const plokThreadRef = useRef(null);
+  useEffect(()=>{
+    const el = plokThreadRef.current; if(!el || !plokOpen) return;
+    try{ el.scrollTop = el.scrollHeight; }catch(e){}
+  }, [plokOpen, aiThread.length, aiBusy]);
   const [plokRecord, setPlokRecord] = useState(null);
   const [plokLedger, setPlokLedger] = useState(null); // null=closed, {loading,rows}=sheet open
   const [plokPersona, setPlokPersona] = useState(null);
@@ -8734,10 +8742,12 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
       .catch(()=> setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, error:"Network error — try again"} : x)))
       .finally(()=> setAiBusy(false));
   };
-  const askPlok = (text) => {
+  // opts.stay: append to the thread without leaving the current screen. The Plok
+  // sheet uses this; every older caller still lands on the full ai screen.
+  const askPlok = (text, opts) => {
     const q = (text||"").trim(); if(!q) return;
     if(!isPro){ setShowPaywall("ai"); return; }
-    setScreen("ai");
+    if(!(opts && opts.stay)) setScreen("ai");
     const item = { role:"ai", label:"Plok", bet:null, category:null, loading:true };
     setAiThread(prev=>[...prev, { role:"user", text:q }, item]);
     setAiBusy(true);
@@ -12507,7 +12517,27 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    border-radius:13px;padding:14px;margin-bottom:9px;min-height:54px;cursor:pointer;}
  .plok-sg:active{transform:scale(0.99);}
  .plok-q{flex:1;font-size:13.5px;font-weight:600;letter-spacing:-0.15px;color:var(--text);}
- .plok-foot{margin:6px 18px 0;min-height:52px;border-radius:13px;background:var(--ink);color:var(--onInk);
+ /* The sheet grows when a conversation exists and the thread scrolls inside it,
+    so the input never leaves the bottom. */
+ .plok-sheet{display:flex;flex-direction:column;max-height:82dvh;}
+ .plok-thread{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
+   display:flex;flex-direction:column;gap:10px;padding:2px 18px 12px;}
+ .plok-me{align-self:flex-end;max-width:82%;background:var(--accent);color:var(--on-color);
+   border-radius:14px 14px 4px 14px;padding:8px 12px;font-size:13px;font-weight:600;margin-left:auto;}
+ .plok-err{align-self:flex-start;width:100%;background:var(--s2);border:1px solid var(--line);
+   border-radius:14px 14px 14px 4px;padding:13px 14px;font-size:12.5px;color:var(--loss);font-weight:600;}
+ .plok-ask{flex:none;display:flex;gap:9px;padding:10px 18px 0;}
+ .plok-in{flex:1;min-width:0;height:46px;border-radius:13px;background:var(--fill);border:1px solid var(--line);
+   padding:0 14px;font:inherit;font-size:14px;color:var(--text);outline:none;-webkit-appearance:none;}
+ .plok-in::placeholder{color:var(--text3);}
+ .plok-in:focus{border-color:var(--accent);}
+ .plok-send{width:46px;height:46px;border-radius:13px;flex:none;background:var(--ink);color:var(--onInk);
+   display:flex;align-items:center;justify-content:center;cursor:pointer;transition:opacity .15s ease;}
+ .plok-send.off{opacity:.35;pointer-events:none;}
+ .plok-more{flex:none;display:flex;justify-content:space-between;padding:10px 20px 0;
+   font-size:12.5px;font-weight:700;color:var(--accent);}
+ .plok-more span{cursor:pointer;}
+ .plok-foot{display:none;margin:6px 18px 0;min-height:52px;border-radius:13px;background:var(--ink);color:var(--onInk);
    display:flex;align-items:center;justify-content:center;gap:9px;font-size:15px;font-weight:700;cursor:pointer;}
  .bb-scrim{position:fixed;inset:0;z-index:9000;background:var(--scrim-bb);
    -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);
@@ -25584,18 +25614,40 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
          </div>
          <div className="plok-t"><b>Plok</b><span>{_d[0]}</span></div>
        </div>
-       <div className="plok-list">
-         {_d[1].map((q,i)=>(
-           <div key={i} className="plok-sg" onClick={()=>{ setPlokOpen(false); askPlok(q); }}>
-             <span className="plok-q">{q}</span>
-             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" strokeWidth="2.4" strokeLinecap="round"><path d="M9 6l6 6-6 6"/></svg>
-           </div>
-         ))}
+       {aiThread.length > 0 ? (
+         <div className="plok-thread" ref={plokThreadRef}>
+           {aiThread.map((item,i)=> item.role==="user"
+             ? (<div key={i} className="plok-me">{item.text}</div>)
+             : (<ErrorBoundary key={i} fallback={<div className="plok-err">Couldn't load this read.</div>}>
+                 <AiInsightBubble item={item} IOS={IOS} onAddToSlip={()=>{ if(aiAddToSlip(item.bet,item.category)){ setAiThread(prev=>prev.map(x=>x===item?{...x,added:true}:x)); } }} />
+               </ErrorBoundary>)
+           )}
+         </div>
+       ) : (
+         <div className="plok-list">
+           {_d[1].map((q,i)=>(
+             <div key={i} className="plok-sg" onClick={()=>askPlok(q,{stay:true})}>
+               <span className="plok-q">{q}</span>
+               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" strokeWidth="2.4" strokeLinecap="round"><path d="M9 6l6 6-6 6"/></svg>
+             </div>
+           ))}
+         </div>
+       )}
+       <div className="plok-ask">
+         <input className="plok-in" value={aiInput} onChange={(e)=>setAiInput(e.target.value)}
+           onKeyDown={(e)=>{ if(e.key==="Enter"){ const t=aiInput.trim(); if(t && !aiBusy){ setAiInput(""); askPlok(t,{stay:true}); } } }}
+           placeholder={aiThread.length ? "Reply to Plok" : "Ask Plok anything"} enterKeyHint="send" />
+         <div className={"plok-send"+((aiInput.trim() && !aiBusy)?"":" off")}
+           onClick={()=>{ const t=aiInput.trim(); if(!t || aiBusy) return; setAiInput(""); askPlok(t,{stay:true}); }}>
+           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+         </div>
        </div>
-       <div className="plok-foot" onClick={()=>{ setPlokOpen(false); if(!isPro){ setShowPaywall("ai"); return; } setScreen("ai"); }}>
-         Ask Plok anything
-         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-       </div>
+       {aiThread.length > 0 && (
+         <div className="plok-more">
+           <span onClick={()=>{ setAiThread([]); setAiInput(""); }}>New conversation</span>
+           <span onClick={()=>{ setPlokOpen(false); setScreen("ai"); }}>Open full screen</span>
+         </div>
+       )}
      </div>
    </div>); })()}
  <div className="tab-dock"><div className="tab-bar">
