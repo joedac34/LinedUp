@@ -11988,25 +11988,35 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    setPuChosenIdx(idx);
  };
 
+ // Guards the tap itself. The RPC is the real protection, but this stops the
+ // second tap ever reaching the network and keeps the UI honest.
+ const claimingPU = useRef(false);
  const claimPU=async()=>{
+ if(claimingPU.current) return;
  if(wonPU && user && activeLeague?.id) {
+ claimingPU.current = true;
  const week = activeLeague.current_week||activeLeague.week||1;
- // Save power-up to DB
- const {data:newPU} = await supabase.from("league_power_ups").insert({
- league_id: activeLeague.id,
- user_id: user.id,
- power_up_id: wonPU.id,
- week_earned: week,
- used: false,
- }).select().single();
- setMyPUs(p=>[...p, {...wonPU, dbId: newPU?.id}]);
- // Decrement wheel_spins in DB
- const newSpins = Math.max(0, wheelSpins-1);
- await supabase.from("league_members")
- .update({wheel_spins: newSpins})
- .eq("league_id", activeLeague.id)
- .eq("user_id", user.id);
- setWheelSpins(newSpins);
+ try{
+   // One transaction: decrement only if a spin is actually there, then award.
+   const {data, error} = await supabase.rpc("claim_wheel_spin", {
+     p_league_id: activeLeague.id,
+     p_power_up_id: wonPU.id,
+     p_week: week,
+   });
+   const row = Array.isArray(data) ? data[0] : data;
+   if(error || !row){
+     // no_spins_remaining means someone already claimed this one. Say so and
+     // award nothing rather than leaving a power-up the server never issued.
+     try{ console.warn("[wheel] claim refused", error && error.message); }catch(e){}
+     setPickConflict("That spin was already claimed"); setTimeout(()=>setPickConflict(""), 2800);
+   } else {
+     setMyPUs(p=>[...p, {...wonPU, dbId: row.power_up_row_id}]);
+     setWheelSpins(Math.max(0, Number(row.spins_left)||0));
+   }
+ } catch(e){
+   try{ console.warn("[wheel] claim failed", e); }catch(_){}
+   setPickConflict("Couldn't claim that spin \u2014 try again"); setTimeout(()=>setPickConflict(""), 2800);
+ } finally { claimingPU.current = false; }
  }
  setShowWin(false);setShowWheel(false);setWonPU(null);setPuChosenIdx(null);
  };
@@ -16534,11 +16544,11 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div style={{width:6,height:6,borderRadius:"50%",background:IOS.blue,animation:"pulse 1s infinite"}}/>
  <span style={{fontSize:11,fontWeight:600,color:IOS.blue}}>Loading odds</span>
  </div>}
- {!oddsLoading && isLiveOdds && <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:5,background:"rgba(var(--win-rgb),0.1)",borderRadius:RAD.sm,padding:"3px 8px",border:"1px solid rgba(var(--win-rgb),0.2)"}}>
+ {!oddsLoading && isLiveOdds && !_isSvSlip && <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:5,background:"rgba(var(--win-rgb),0.1)",borderRadius:RAD.sm,padding:"3px 8px",border:"1px solid rgba(var(--win-rgb),0.2)"}}>
  <div style={{width:6,height:6,borderRadius:"50%",background:IOS.green}}/>
  <span style={{fontSize:11,fontWeight:700,color:IOS.green,letterSpacing:0.5}}>Live odds</span>
  </div>}
- {!oddsLoading && oddsError && <div style={{marginLeft:"auto",fontSize:11,color:IOS.orange}}> Static odds</div>}
+ {!oddsLoading && oddsError && !_isSvSlip && <div style={{marginLeft:"auto",fontSize:11,color:IOS.orange}}> Static odds</div>}
  {savedPicks&&!oddsLoading&&<div style={{marginLeft:"auto",display:"flex",gap:14,alignItems:"center"}}>
  <div onClick={()=>{
  if(activeSavedPicks?.flexPicks) setActivePicks(activeSavedPicks.flexPicks);
@@ -16624,7 +16634,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div className="pk-cbar" style={{paddingLeft:20,paddingRight:20}}><div className="pk-cbar-t">{_isSvSlip ? "Your pick" : leagueSports.length > 1 ? "Multi-Sport Slip" : ((SPORTS[activeLeague.sport]?.label||"").toUpperCase()+" Slip")}</div></div>
  <div className="pk-hdr" style={{textAlign:"left",padding:"2px 20px 16px",background:"radial-gradient(120% 90% at 90% -10%, rgba(var(--accent-ios-rgb),0.18), transparent 55%), linear-gradient(180deg,var(--hero) 0%,var(--bg) 82%)"}}>
  <div className="pk-hdr-sub" style={{fontSize:11,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:"var(--text25)"}}>{activeLeague.name} · Wk {activeLeague.current_week||activeLeague.week||1}</div>
- <div style={{fontSize:30,fontWeight:800,letterSpacing:"-0.7px",color:"var(--text)",lineHeight:1.05,marginTop:2}}>{leagueSports.length > 1 ? "Multi-Sport Slip" : `${sport.label} Slip`}</div>
+ <div style={{fontSize:30,fontWeight:800,letterSpacing:"-0.7px",color:"var(--text)",lineHeight:1.05,marginTop:2}}>{_isSvSlip ? "Your pick" : leagueSports.length > 1 ? "Multi-Sport Slip" : `${sport.label} Slip`}</div>
  </div>
 
  {/* League filling banner */}
