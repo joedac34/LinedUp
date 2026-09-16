@@ -7757,6 +7757,25 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  // Plok sheet. Like the browser it is not a screen, so the page underneath stays
  // put and Plok can say something about what you are actually looking at.
  const [plokOpen, setPlokOpen] = useState(false);
+ useEffect(()=>{
+   const root = document.documentElement;
+   const vv = window.visualViewport;
+   if(!plokOpen || !vv){ root.style.setProperty("--kb-h", "0px"); return; }
+   const apply = ()=>{
+     // innerHeight is the layout viewport; vv.height is what is left after the
+     // keyboard. Ignore small deltas so the browser chrome does not read as a keyboard.
+     const kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+     root.style.setProperty("--kb-h", (kb > 80 ? kb : 0) + "px");
+   };
+   apply();
+   vv.addEventListener("resize", apply);
+   vv.addEventListener("scroll", apply);
+   return ()=>{
+     vv.removeEventListener("resize", apply);
+     vv.removeEventListener("scroll", apply);
+     root.style.setProperty("--kb-h", "0px");
+   };
+ }, [plokOpen]);
  const [slipBarOpen, setSlipBarOpen] = useState(false); // DK-style slip sheet in the browser
  const [soloSlipOpen, setSoloSlipOpen] = useState(false); // solo equivalent (free-form picks)
  const [openLegs, setOpenLegs] = useState({});            // which parlay rows are expanded
@@ -12501,7 +12520,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  .plok-fab.dragging{cursor:grabbing;transition:none;transform:scale(1.08);}
  /* Fades once you stop touching it so it stops competing with the page. */
  .plok-fab.resting{opacity:.6;}
- .plok-scrim{position:fixed;inset:0;z-index:9100;background:var(--scrim-bb);
+ .plok-scrim{position:fixed;top:0;left:0;right:0;bottom:var(--kb-h,0px);z-index:9100;background:var(--scrim-bb);transition:bottom .18s ease;
    -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);
    display:flex;flex-direction:column;justify-content:flex-end;animation:bbFade .2s ease both;}
  .plok-sheet{background:var(--bg);border-radius:26px 26px 0 0;margin:0;
@@ -12520,6 +12539,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  /* The sheet grows when a conversation exists and the thread scrolls inside it,
     so the input never leaves the bottom. */
  .plok-sheet{display:flex;flex-direction:column;max-height:82dvh;}
+ .plok-sheet{max-height:calc(100dvh - var(--kb-h,0px) - 40px);}
  .plok-thread{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
    display:flex;flex-direction:column;gap:10px;padding:2px 18px 12px;}
  .plok-me{align-self:flex-end;max-width:82%;background:var(--accent);color:var(--on-color);
@@ -14389,7 +14409,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  }
  };
  return (
- <div className='ticker-wrap' style={{position:"sticky",top:"calc(var(--header-h) + var(--cbar-h))",zIndex:25,marginBottom:0}}>
+ <div className='ticker-wrap' style={{position:"relative",marginBottom:0}}>
  <div className='ticker-track' style={{animationDuration: Math.max(12, items.length * 5) + 's'}}>
  {doubled.map((g, i) => (
  <span key={i} className={'ticker-item'+(g.card?' ti-card':'')+(g.hasPick?' ti-mine':'')}
