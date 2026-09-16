@@ -502,6 +502,9 @@ function _resetCbarH(){ _setCbarH(0); }
 // between the header and the dock so it can never cover either, remembers where
 // it was left, and fades once you stop touching it so it stops competing with the
 // page. A drag under 8px counts as a tap.
+// The Plok launcher artwork: the fox head from the logo, cropped tight, 108px
+// for 54px retina. Inlined so the button never waits on a request.
+const PLOK_MARK = "data:image/png;base64,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";
 const PLOK_POS = "plok_pos";
 const PLOK_SIZE = 54, PLOK_PAD = 10, PLOK_TOPGUARD = 96, PLOK_BOTGUARD = 96;
 function installPlokDrag(el, onTap){
@@ -7845,6 +7848,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  const [gridSortUser, setGridSort] = useState(null);
  const gridSort = gridSortUser || (gridType==="longshot" ? "short" : "long");
  const [gridLsMarket, setGridLsMarket] = useState("all");
+ const [gridLsBand, setGridLsBand] = useState("all");   // all | b400 | b800 | b1500
  useEffect(()=>{
  if(screen!=="browser"||isSoloMode){ if(gridBuildMode) setGridBuildMode(false); return; }
  const _cfg = parseSlotConfig(activeLeague&&activeLeague.slot_config);
@@ -8050,6 +8054,8 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  const [svbPos, setSvbPos] = useState("all");           // anytd: RB|WR|TE|QB|DST|unk|all
  const [svbSort, setSvbSort] = useState("likely");      // likely | kick | least
  const [svbHideBurned, setSvbHideBurned] = useState(false);
+ const [svbSearch, setSvbSearch] = useState("");
+ const [svbDiv, setSvbDiv] = useState("all");   // all | AFC | NFC | AFC East | ...
  const [svbSheet, setSvbSheet] = useState(null);        // {ab,title,sub,burnWk} schedule sheet
  const [svbScheds, setSvbScheds] = useState({});        // ab -> {rows,recW,recL} | {err}
  const [svbRosters, setSvbRosters] = useState({});      // ab -> {normName:pos} | {err}
@@ -12542,8 +12548,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
     grip come for free. bb-sheet only supplies height and fixes the scroller: .body
     is normally sized by the app shell flex and has nothing to fill in here. */
  .plok-fab{position:absolute;width:54px;height:54px;border-radius:50%;z-index:8500;
-   background:linear-gradient(150deg,var(--accent),var(--indigo));
-   box-shadow:0 8px 22px var(--bb-shadow), 0 0 0 3px var(--bg);
+   background:#000;overflow:hidden;
+   box-shadow:0 8px 22px var(--bb-shadow), 0 0 0 2px var(--accent);
    display:flex;align-items:center;justify-content:center;touch-action:none;cursor:grab;
    transition:transform .30s cubic-bezier(.2,.9,.25,1), opacity .25s ease;}
  .plok-fab.dragging{cursor:grabbing;transition:none;transform:scale(1.08);}
@@ -12556,8 +12562,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    border-top:0.5px solid var(--line);box-shadow:0 -18px 44px var(--bb-shadow);
    padding-bottom:calc(16px + var(--sa-bot));}
  .plok-head{display:flex;align-items:center;gap:11px;padding:6px 18px 14px;}
- .plok-mark{width:36px;height:36px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;
-   background:linear-gradient(150deg,var(--accent),var(--indigo));}
+ .plok-mark{width:36px;height:36px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;overflow:hidden;
+   background:#000;box-shadow:0 0 0 1.5px var(--accent);}
  .plok-t b{display:block;font-size:16px;font-weight:800;letter-spacing:-0.4px;color:var(--text);}
  .plok-t span{font-size:12.5px;color:var(--text2);}
  .plok-list{padding:0 18px;}
@@ -16511,6 +16517,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div className="body" key={screen}>
  <div style={{padding:"8px 16px 14px",display:"flex",alignItems:"center",gap:12}}>
  <button onClick={()=>{
+ // Survivor: the chevron cancels the change. The locked screen is right underneath.
+ if(_isSvSlip){ setBuildingSlip(false); return; }
  // If editing (no savedPicks) but localStorage has a locked slip, restore it
  if(!savedPicks) {
  try {
@@ -16521,7 +16529,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  setBuildingSlip(false);
  setScreen("home");
  }} style={{background:IOS.fill2,border:"none",borderRadius:RAD.md,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:17,flexShrink:0}}>‹</button>
- <div style={{fontSize:17,fontWeight:600,letterSpacing:-0.3}}>{savedPicks?"My Slip":"Build Your Slip"}</div>
+ <div style={{fontSize:17,fontWeight:600,letterSpacing:-0.3}}>{_isSvSlip ? (savedPicks?"Your pick":"Pick your team") : (savedPicks?"My Slip":"Build Your Slip")}</div>
  {oddsLoading && <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:5,background:"rgba(var(--accent-ios-rgb),0.1)",borderRadius:RAD.sm,padding:"3px 8px"}}>
  <div style={{width:6,height:6,borderRadius:"50%",background:IOS.blue,animation:"pulse 1s infinite"}}/>
  <span style={{fontSize:11,fontWeight:600,color:IOS.blue}}>Loading odds</span>
@@ -16613,7 +16621,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  </div>
  ) : (
  <>
- <div className="pk-cbar" style={{paddingLeft:20,paddingRight:20}}><div className="pk-cbar-t">{leagueSports.length > 1 ? "Multi-Sport Slip" : ((SPORTS[activeLeague.sport]?.label||"").toUpperCase()+" Slip")}</div></div>
+ <div className="pk-cbar" style={{paddingLeft:20,paddingRight:20}}><div className="pk-cbar-t">{_isSvSlip ? "Your pick" : leagueSports.length > 1 ? "Multi-Sport Slip" : ((SPORTS[activeLeague.sport]?.label||"").toUpperCase()+" Slip")}</div></div>
  <div className="pk-hdr" style={{textAlign:"left",padding:"2px 20px 16px",background:"radial-gradient(120% 90% at 90% -10%, rgba(var(--accent-ios-rgb),0.18), transparent 55%), linear-gradient(180deg,var(--hero) 0%,var(--bg) 82%)"}}>
  <div className="pk-hdr-sub" style={{fontSize:11,fontWeight:800,letterSpacing:"0.08em",textTransform:"uppercase",color:"var(--text25)"}}>{activeLeague.name} · Wk {activeLeague.current_week||activeLeague.week||1}</div>
  <div style={{fontSize:30,fontWeight:800,letterSpacing:"-0.7px",color:"var(--text)",lineHeight:1.05,marginTop:2}}>{leagueSports.length > 1 ? "Multi-Sport Slip" : `${sport.label} Slip`}</div>
@@ -16633,6 +16641,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  )}
 
  {/* Status bar */}
+ {!_isSvSlip && (
  <div style={{margin:"0 16px 10px",background:"linear-gradient(160deg,var(--s2),var(--s1) 80%)",border:EDGE.hair,borderRadius:RAD.lg,padding:"12px 14px"}}>
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
  <div style={{fontSize:12,fontWeight:800,letterSpacing:"0.05em",textTransform:"uppercase",color:"var(--text25)"}}>Your Slip</div>
@@ -16666,6 +16675,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  </div>
  {!hasParlay&&!isCustomSlip&&<div style={{fontSize:10.5,color:IOS.orange,marginTop:8,lineHeight:1.4}}>One pick must be a Longshot (+400 or better)</div>}
  </div>
+ )}
 
  {/* Multiplier pool — draft model */}
  {isCustomSlip && multPool.length>0 && !activeSubmitted && !_isSvSlip && (
@@ -16684,7 +16694,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {/* Grid Bet Browser entry. THE LEAK: this only checked !activeSubmitted, so an
      eliminated member walked straight past the gate into the browser and their picks
      landed in slots normally — and then into league standings and trophies. */}
- {!activeSubmitted && !isEliminated && (()=>{
+ {!activeSubmitted && !isEliminated && !_isSvSlip && (()=>{
    const firstEmpty = activePicks.findIndex(p=>!p.isParlay && p.bet===null);
    const target = firstEmpty===-1 ? 0 : firstEmpty;
    return (
@@ -17022,7 +17032,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  try{ posthog.capture('slip_locked', { league_id: activeLeague.id, week: weekNum, num_picks: activePicks.filter(p=>p.mult!=null&&(p.isParlay?(p.parlayLegs||[]).length>0:!!p.bet)).length, solo: isSoloMode }); }catch(e){}
  haptic("success");
  setLockRitual(true);
- }}> Lock Your Slip </button>
+ }}>{_isSvSlip ? " Lock it in " : " Lock Your Slip "}</button>
  : <button className="ios-btn disabled" disabled>
  {(!hasParlay&&!isCustomSlip) ? " Need a Longshot (+400 straight or +400 parlay)" : (activePicks.filter(p=>p.mult!==null&&(p.isParlay?p.parlayLegs.length>=2:p.bet!==null)).length + " / " + activePicks.length + " Slots Filled")}
  </button>;
@@ -17775,16 +17785,24 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  };
 
  // ─── Build the bet list for the selected sport + type ───
- let list = []; let lsChips = [];
+ let list = []; let lsChips = []; let lsBands = [];
  if(gridType==="longshot") {
  list = gridBuildMode ? (ALL_BETS||[]).filter(b=> gSport==="all"||b._sport===gSport) : (ALL_BETS||[]).filter(b=> (gSport==="all"||b._sport===gSport) && b.impliedOdds>=400);
- lsChips=[];
+ lsChips=[]; lsBands=[];
  if(gridType==="longshot"){
  const _seen=new Set();
  list.forEach(b=>{ const m=lsMarket(b); if(!_seen.has(m.key)){ _seen.add(m.key); lsChips.push(m); } });
  const _ord=k=>(({ml:0,spread:1,ou:2})[k]!=null?({ml:0,spread:1,ou:2})[k]:9);
  lsChips.sort((a,b)=>_ord(a.key)-_ord(b.key));
  if(gridLsMarket!=="all" && _seen.has(gridLsMarket)) list = list.filter(b=>lsMarket(b).key===gridLsMarket);
+ // Price bands, applied after the market filter so the counts match the list.
+ const _bandOf = (b)=>{ const n=plokAm(b.odds); return n>=1500?"b1500":n>=800?"b800":n>=400?"b400":null; };
+ lsBands = [{key:"all",label:"Any odds",n:list.length},
+   {key:"b400",label:"+400 to +795",n:list.filter(b=>_bandOf(b)==="b400").length},
+   {key:"b800",label:"+800 to +1495",n:list.filter(b=>_bandOf(b)==="b800").length},
+   {key:"b1500",label:"+1500 and up",n:list.filter(b=>_bandOf(b)==="b1500").length}]
+   .filter(c=>c.key==="all"||c.n>0);
+ if(gridLsBand!=="all" && lsBands.some(c=>c.key===gridLsBand)) list = list.filter(b=>_bandOf(b)===gridLsBand);
  }
  } else if(gridType==="period") {
  const _psub = gridPeriodSub || ((PERIOD_SUBS_BY_SPORT[gSport]||[])[0]||{}).id;
@@ -18775,6 +18793,32 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const _stateChip=(r)=> r.burnedWk
    ? <SvChip txt={"Burned wk "+r.burnedWk} col={IOS.red} bg="rgba(var(--loss-rgb),0.12)" bd="rgba(var(--loss-rgb),0.3)"/>
    : (r.lockedNow ? <SvChip txt={"Locked · wk "+_wk} col={IOS.blue} bg="rgba(var(--accent-rgb),0.14)" bd="rgba(var(--accent-rgb),0.4)"/> : null);
+ // Conference and division per team. Abbreviations match NFL_TEAM_COLORS.
+ const NFL_DIV = {
+   BUF:"AFC East", MIA:"AFC East", NE:"AFC East", NYJ:"AFC East",
+   BAL:"AFC North", CIN:"AFC North", CLE:"AFC North", PIT:"AFC North",
+   HOU:"AFC South", IND:"AFC South", JAX:"AFC South", TEN:"AFC South",
+   DEN:"AFC West", KC:"AFC West", LV:"AFC West", LAC:"AFC West",
+   DAL:"NFC East", NYG:"NFC East", PHI:"NFC East", WAS:"NFC East",
+   CHI:"NFC North", DET:"NFC North", GB:"NFC North", MIN:"NFC North",
+   ATL:"NFC South", CAR:"NFC South", NO:"NFC South", TB:"NFC South",
+   ARI:"NFC West", LAR:"NFC West", SF:"NFC West", SEA:"NFC West",
+ };
+ const svbMatch = (r) => {
+   const q = svbSearch.trim().toLowerCase();
+   if(q){
+     const hay = [r&&r.name, r&&r.ab, r&&r.pos, r&&r.b&&r.b.pick, r&&r.b&&r.b.game]
+       .filter(Boolean).join(" ").toLowerCase();
+     if(hay.indexOf(q) === -1) return false;
+   }
+   if(svbDiv !== "all"){
+     const d = NFL_DIV[String((r&&r.ab)||"").toUpperCase()] || "";
+     // "AFC" matches all four AFC divisions; "AFC East" matches only that one.
+     if(d.indexOf(svbDiv) !== 0) return false;
+   }
+   return true;
+ };
+
  const SvBand = ({n,c,count}) => (
    <div style={{display:"flex",alignItems:"center",gap:9,padding:"15px 4px 7px"}}>
      <span style={{width:3,height:12,borderRadius:2,background:c}}/>
@@ -18880,7 +18924,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 
  // ── Sections (bands + burned tail) ──
  const _renderSections=(rows, Row, rowProps)=>{
-   let live=rows.filter(r=>!r.burnedWk), burned=rows.filter(r=>!!r.burnedWk);
+   const _rows = (rows||[]).filter(svbMatch);
+   let live=_rows.filter(r=>!r.burnedWk), burned=_rows.filter(r=>!!r.burnedWk);
    if(svbHideBurned) burned=[];
    const out=[];
    if(svbSort==="likely"){
@@ -18898,6 +18943,29 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    }
    return out;
  };
+
+ const _svbFilters = (
+   <div style={{padding:"10px 16px 0"}}>
+     <div style={{display:"flex",alignItems:"center",gap:9,height:44,borderRadius:RAD.md,
+       background:"var(--fill)",border:EDGE.hair,padding:"0 13px"}}>
+       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" strokeWidth="2.2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+       <input value={svbSearch} onChange={(e)=>setSvbSearch(e.target.value)}
+         placeholder="Search a team" enterKeyHint="search"
+         style={{flex:1,minWidth:0,border:"none",background:"transparent",outline:"none",
+           font:"inherit",fontSize:14,color:"var(--text)"}}/>
+       {svbSearch && <span onClick={()=>setSvbSearch("")} style={{fontSize:16,fontWeight:700,color:"var(--text3)",cursor:"pointer",padding:"0 2px"}}>{"\u00d7"}</span>}
+     </div>
+     <div style={{display:"flex",gap:6,overflowX:"auto",scrollbarWidth:"none",marginTop:8,paddingBottom:2}}>
+       {["all","AFC","NFC","AFC East","AFC North","AFC South","AFC West","NFC East","NFC North","NFC South","NFC West"].map(d=>(
+         <div key={d} onClick={()=>setSvbDiv(d)} style={{flexShrink:0,padding:"7px 12px",borderRadius:RAD.sm+2,
+           fontSize:12,fontWeight:700,whiteSpace:"nowrap",cursor:"pointer",
+           background:svbDiv===d?"var(--text)":"transparent",
+           color:svbDiv===d?"var(--bg)":"var(--text2)",
+           border:svbDiv===d?"1.5px solid var(--text)":"1.5px solid var(--line2)"}}>{d==="all"?"All teams":d}</div>
+       ))}
+     </div>
+   </div>
+ );
 
  const _sortSeg = (
    <div style={{display:"flex",alignItems:"center",gap:8,padding:"12px 16px 8px"}}>
@@ -19055,7 +19123,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    {svMode==="ml"&&(<>
      {_burnRail}
      {_myBurns.length>0&&<div style={{padding:"6px 16px 0",fontSize:11.5,fontWeight:700,color:"var(--text2)",display:"flex",justifyContent:"flex-end"}}><span><b style={{color:IOS.green,fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:14}}>{_mlLeft}</b> teams still yours</span></div>}
-     {_sortSeg}
+     {_svbFilters}{_sortSeg}
      <div style={{padding:"0 12px 28px"}}>
        {mlRows.length===0 ? _emptyBoard : _renderSections(mlRows, SvMlRow, {})}
      </div>
@@ -19071,7 +19139,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        {_myBurns.length>0&&<div style={{fontSize:10.5,color:"var(--text3)",fontWeight:600,marginTop:8}}>{_myBurns.length} of {Number(activeLeague.season_weeks)||18} weeks spent</div>}
      </div>
      {_burnRail}
-     {_sortSeg}
+     {_svbFilters}{_sortSeg}
      {_posPills}
      <div style={{padding:"0 12px 4px"}}>
        <input value={gridSearch} onChange={(e)=>setGridSearch(e.target.value)} placeholder="Search a player or team" style={{width:"100%",boxSizing:"border-box",background:"var(--s2)",border:EDGE.hair,borderRadius:RAD.sm+2,padding:"9px 12px",fontSize:13,fontWeight:600,color:"var(--text)",outline:"none",fontFamily:"Barlow,sans-serif"}}/>
@@ -19128,7 +19196,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        </div>
        <div onClick={()=>_openSheet(svbTeam, svbTeam, null, null)} style={{flexShrink:0,display:"flex",alignItems:"center",gap:5,fontSize:10.5,fontWeight:800,color:IOS.blue,background:"rgba(var(--accent-rgb),0.1)",border:"0.5px solid rgba(var(--accent-rgb),0.28)",borderRadius:RAD.sm,padding:"6px 9px",cursor:"pointer"}}>Season</div>
      </div>
-     {_sortSeg}
+     {_svbFilters}{_sortSeg}
      {_posPills}
      <div style={{padding:"0 12px 28px"}}>
        {_tr.length===0&&_loose.length===0 && _emptyBoard}
@@ -19594,9 +19662,18 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  </div>
  <div className="pk-rail" style={{marginBottom:2}}>
  {[{key:"all",label:"All"},...lsChips].map(c=>(
- <div key={c.key} onClick={()=>setGridLsMarket(c.key)} className={"pk-chip"+(gridLsMarket===c.key?" on":"")}><span>{c.label}</span></div>
+ <div key={c.key} onClick={()=>{ setGridLsMarket(c.key); setGridLsBand("all"); }} className={"pk-chip"+(gridLsMarket===c.key?" on":"")}><span>{c.label}</span></div>
  ))}
  </div>
+ {lsBands && lsBands.length>1 && (
+ <div className="pk-rail" style={{marginBottom:2}}>
+   {lsBands.map(c=>(
+     <div key={c.key} onClick={()=>setGridLsBand(c.key)} className={"pk-chip"+(gridLsBand===c.key?" on":"")}>
+       <span>{c.label}</span>
+       {c.key!=="all" && <span style={{marginLeft:5,opacity:0.55,fontVariantNumeric:"tabular-nums"}}>{c.n}</span>}
+     </div>
+   ))}
+ </div>)}
  </div>
  )}
 
@@ -25640,10 +25717,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      converts better than a locked icon. askPlok() already owns that gate. */}
  {user && !plokOpen && !browserSheet && screen!=="ai" && (
    <div className="plok-fab" ref={(el)=>installPlokDrag(el, ()=>{ haptic("select"); setPlokOpen(true); })} aria-label="Plok">
-     <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-       <path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6z"/>
-       <path d="M17.5 15.5l.7 1.9 1.9.7-1.9.7-.7 1.9-.7-1.9-1.9-.7 1.9-.7z"/>
-     </svg>
+     <img src={PLOK_MARK} alt="" draggable={false} style={{width:50,height:50,display:"block",pointerEvents:"none"}}/>
    </div>
  )}
  {plokOpen && (()=>{
@@ -25666,7 +25740,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      <div className="pk-sheet plok-sheet" onClick={(e)=>e.stopPropagation()}>
        <div className="plok-head">
          <div className="plok-mark">
-           <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6z"/></svg>
+           <img src={PLOK_MARK} alt="" draggable={false} style={{width:34,height:34,display:"block"}}/>
          </div>
          <div className="plok-t"><b>Plok</b><span>{_d[0]}</span></div>
        </div>
