@@ -12204,7 +12204,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    --side-opp:#AFBACA; --side-opp-rgb:175,186,202;
    --side-b:#8FA6C9;   --side-b-rgb:143,166,201;
  }
- html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;position:fixed;width:100%;top:0;left:0;background:var(--bg);touch-action:manipulation;-webkit-text-size-adjust:100%;text-size-adjust:100%;} #root{height:100%;overflow:hidden;background:var(--bg);} .phone{width:100%;max-width:480px;margin:0 auto;height:100vh;height:100dvh;max-height:100dvh;background:var(--bg);position:relative;overflow:hidden;display:flex;flex-direction:column;font-family:'Barlow',system-ui,-apple-system,sans-serif;color:var(--text);-webkit-font-smoothing:antialiased;padding-top:var(--sa-top);box-sizing:border-box;}
+ html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;position:fixed;width:100%;top:0;left:0;background:var(--bg);touch-action:manipulation;-webkit-text-size-adjust:100%;text-size-adjust:100%;} #root{height:100%;overflow:hidden;background:var(--bg);} .phone{width:100%;max-width:480px;margin:0 auto;height:100vh;height:100dvh;max-height:100dvh;background:var(--bg);position:relative;overflow:hidden;display:flex;flex-direction:column;font-family:'Barlow',system-ui,-apple-system,sans-serif;color:var(--text);-webkit-font-smoothing:antialiased;padding-top:calc(var(--sa-top) + var(--header-h));box-sizing:border-box;}
 
  /* iOS Status Bar */
 
@@ -12264,15 +12264,13 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  .nav-subtitle{font-size:13px;color:${IOS.label3};margin-top:2px;}
 
  /* Scrollable body */
- /* Clears the glass header. A pseudo-element rather than padding, because nine
-    screens set their own inline paddingTop on .body and inline padding wins. */
- .body::before{content:"";display:block;flex:none;height:var(--header-h);}
- .bb-sheet .body::before{display:none;}
+ /* Header clearance lives on .phone (padding-top), so it applies to every child
+    including the ones some screens render outside .body. */
  /* No global header on pushed screens, so no reserved space and no sticky offset. */
  .phone:not(.has-hdr){--header-h:0px;}
  .body{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior-y:contain;position:relative;z-index:1;padding-top:0;padding-bottom:calc(92px + var(--sa-bot));overscroll-behavior:contain;overscroll-behavior-x:none;}
  .body-pad{padding-bottom:calc(100px + var(--sa-bot));}
- .app-header{position:absolute;top:0;left:0;right:0;z-index:25;display:flex;align-items:center;gap:8px;height:var(--header-h);padding:0 14px;background:var(--bar);-webkit-backdrop-filter:saturate(180%) blur(22px);backdrop-filter:saturate(180%) blur(22px);border-bottom:0.5px solid var(--edge);}
+ .app-header{position:absolute;top:var(--sa-top);left:0;right:0;z-index:25;display:flex;align-items:center;gap:8px;height:var(--header-h);padding:0 14px;background:var(--bar);-webkit-backdrop-filter:saturate(180%) blur(22px);backdrop-filter:saturate(180%) blur(22px);border-bottom:0.5px solid var(--edge);}
  .gh-left{display:flex;align-items:center;min-width:0;flex-shrink:0;}
  .gh-center{flex:1;min-width:0;}
  .gh-right{display:flex;align-items:center;gap:9px;flex-shrink:0;}
@@ -13333,7 +13331,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 {preAuthPage && (
 <div style={{position:"fixed",inset:0,zIndex:10001,background:"var(--s0)",overflowY:"auto",WebkitOverflowScrolling:"touch",fontFamily:"Barlow,sans-serif"}}>
   <div style={{maxWidth:480,margin:"0 auto"}}>
-   <div style={{display:"flex",alignItems:"center",gap:11,padding:"calc(var(--sa-top) + 14px) 16px 10px",position:"sticky",top:"var(--header-h)",background:"var(--s0)",zIndex:2}}>
+   <div style={{display:"flex",alignItems:"center",gap:11,padding:"calc(var(--sa-top) + 14px) 16px 10px",position:"sticky",top:0,background:"var(--s0)",zIndex:2}}>
     <div onClick={()=>setPreAuthPage(null)} style={{width:31,height:31,borderRadius:RAD.md,background:"rgba(var(--ink-rgb),0.06)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--text)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
     </div>
@@ -18993,7 +18991,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  return (
  <div className="body" style={{background:"var(--s0)",zIndex:"auto"}}>
    <style>{`.gbx-scroll::-webkit-scrollbar{ display:none; }`}</style>
-   <div style={{position:"sticky",top:"var(--header-h)",zIndex:10,background:"var(--s0)",boxShadow:"var(--sticky-shadow)"}}>
+   <div style={{position:"sticky",top:0,zIndex:10,background:"var(--s0)",boxShadow:"var(--sticky-shadow)"}}>
      <div style={{display:"flex",alignItems:"center",gap:11,padding:"10px 16px 8px"}}>
        <div onClick={()=>setScreen("picks")} style={{width:34,height:34,borderRadius:RAD.md,background:"rgba(var(--ink-rgb),0.06)",border:EDGE.hair2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:18,flexShrink:0}}>‹</div>
        <div style={{flex:1,minWidth:0}}>
@@ -19159,7 +19157,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  return (
  <div className="body" style={{background:"var(--s0)",zIndex:"auto"}}>
    <style>{`.lad-scroll::-webkit-scrollbar{ display:none; }`}</style>
-   <div style={{position:"sticky",top:"var(--header-h)",zIndex:10,background:"var(--s0)",boxShadow:"var(--sticky-shadow)"}}>
+   <div style={{position:"sticky",top:0,zIndex:10,background:"var(--s0)",boxShadow:"var(--sticky-shadow)"}}>
      <div style={{display:"flex",alignItems:"flex-end",gap:10,padding:"10px 16px 8px"}}>
        <div onClick={()=>setScreen("picks")} style={{width:34,height:34,borderRadius:RAD.md,background:"rgba(var(--ink-rgb),0.06)",border:EDGE.hair2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:18,flexShrink:0}}>{"\u2039"}</div>
        <div style={{flex:1,minWidth:0}}>
@@ -19261,7 +19259,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  `}</style>
 
  {/* Header */}
- <div style={{position:"sticky",top:"var(--header-h)",zIndex:10,background:"var(--s0)",paddingBottom:6,boxShadow:"var(--sticky-shadow)"}}>
+ <div style={{position:"sticky",top:0,zIndex:10,background:"var(--s0)",paddingBottom:6,boxShadow:"var(--sticky-shadow)"}}>
  <div style={{display:"flex",alignItems:"center",gap:11,padding:"10px 16px 8px"}}>
  <div onClick={()=>setScreen("picks")} style={{width:34,height:34,borderRadius:RAD.md,background:"rgba(var(--ink-rgb),0.06)",border:EDGE.hair2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:acc,fontSize:18,flexShrink:0}} className="pk-t-back">‹</div>
  <div style={{flex:1,minWidth:0}}>
@@ -20164,7 +20162,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const tint = isTied?"var(--s2)":isWinning?"var(--s2)":"var(--s1)";
  const statusTxt = isTied?"You're Tied":isWinning?"You're Winning":"You're Trailing";
  return (
- <div style={{position:"sticky",top:"var(--header-h)",zIndex:10,background:"var(--s0)",padding:"6px 0 8px"}}>
+ <div style={{position:"sticky",top:0,zIndex:10,background:"var(--s0)",padding:"6px 0 8px"}}>
  <div style={{margin:"0 16px",borderRadius:RAD.lg,padding:"14px 16px",position:"relative",overflow:"hidden",background:"var(--s2)",border:EDGE.hair}}>
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
  <div style={{minWidth:0,flex:1}}>
@@ -24434,7 +24432,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    ):null}
    </div>
 
-  <div style={{position:"sticky",top:"var(--header-h)",zIndex:12,display:"flex",padding:"0 6px",background:"var(--bar)",backdropFilter:"blur(14px)",WebkitBackdropFilter:"blur(14px)",borderBottom:EDGE.hair,overflowX:"auto"}}>
+  <div style={{position:"sticky",top:0,zIndex:12,display:"flex",padding:"0 6px",background:"var(--bar)",backdropFilter:"blur(14px)",WebkitBackdropFilter:"blur(14px)",borderBottom:EDGE.hair,overflowX:"auto"}}>
   {[["ov","Overview"],["lu","Lineups"],["od","Odds"],["pk","Plok"]].map(([k,lb])=>(
     <div key={k} onClick={()=>goGcTab(k)} style={{flex:"0 0 auto",padding:"12px 14px",fontSize:13,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap",position:"relative",color:gcTab===k?"var(--text)":IOS.label3}}>
       {lb}
@@ -25413,7 +25411,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
   </div>
 
   {/* Sticky category pills */}
-  <div style={{position:"sticky",top:"var(--header-h)",zIndex:20,display:"flex",gap:7,overflowX:"auto",scrollbarWidth:"none",padding:"12px 16px",background:"var(--bar)",backdropFilter:"blur(14px)",WebkitBackdropFilter:"blur(14px)",borderBottom:"0.5px solid rgba(var(--ink-rgb),0.09)"}}>
+  <div style={{position:"sticky",top:0,zIndex:20,display:"flex",gap:7,overflowX:"auto",scrollbarWidth:"none",padding:"12px 16px",background:"var(--bar)",backdropFilter:"blur(14px)",WebkitBackdropFilter:"blur(14px)",borderBottom:"0.5px solid rgba(var(--ink-rgb),0.09)"}}>
    {ATABS.map(t=>{const on=analyticsTab===t;return (
     <div key={t} onClick={()=>setAnalyticsTab(t)} style={{flex:"0 0 auto",display:"flex",alignItems:"center",gap:6,fontSize:13,fontWeight:800,whiteSpace:"nowrap",cursor:"pointer",color:on?"var(--text)":CC.l2,background:on?"linear-gradient(135deg,rgba(var(--accent-ios-rgb),0.28),rgba(var(--violet-rgb),0.18))":"rgba(var(--ink-rgb),0.05)",border:on?"0.5px solid rgba(var(--accent-ios-rgb),0.55)":"0.5px solid rgba(var(--ink-rgb),0.09)",borderRadius:RAD.pill,padding:"8px 14px",boxShadow:on?"0 3px 12px rgba(var(--accent-ios-rgb),0.25)":"none",transition:"all .18s"}}>
      <span style={{width:6,height:6,borderRadius:"50%",background:TDOT[t]}}/>{t}{!isPro&&t!=="Overview"&&<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={CC.purple} strokeWidth="2.5" strokeLinecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>}
