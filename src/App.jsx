@@ -8762,6 +8762,28 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
   };
   // opts.stay: append to the thread without leaving the current screen. The Plok
   // sheet uses this; every older caller still lands on the full ai screen.
+ // Which upcoming game is the person asking about, if any. Matches full names
+ // ("Detroit Lions"), nicknames ("Lions") and cities ("Detroit") as whole words.
+ const plokMatchGame = (text) => {
+   const q = " " + String(text||"").toLowerCase().replace(/[^a-z0-9 ]+/g, " ") + " ";
+   const hit = (name) => {
+     const n = String(name||"").toLowerCase().trim(); if(!n) return false;
+     const parts = n.split(/\s+/);
+     const nick = parts[parts.length-1];
+     const city = parts.slice(0,-1).join(" ");
+     return q.indexOf(" "+n+" ")>-1 || (nick.length>3 && q.indexOf(" "+nick+" ")>-1) || (city.length>4 && q.indexOf(" "+city+" ")>-1);
+   };
+   const now = Date.now(), horizon = now + 14*86400e3;
+   const games = (tickerGames||[]).filter(g=>{ const t=g&&g.time?new Date(g.time).getTime():0; return t>now-3*3600e3 && t<horizon; })
+     .sort((a,b)=>new Date(a.time)-new Date(b.time));
+   let one = null;
+   for(const g of games){
+     const a = hit(g.away), h = hit(g.home);
+     if(a && h) return g;
+     if((a || h) && !one) one = g;
+   }
+   return one;
+ };
   const askPlok = (text, opts) => {
     const q = (text||"").trim(); if(!q) return;
     if(!isPro){ setShowPaywall("ai"); return; }
@@ -8769,7 +8791,13 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
     const item = { role:"ai", label:"Plok", bet:null, category:null, loading:true };
     setAiThread(prev=>[...prev, { role:"user", text:q }, item]);
     setAiBusy(true);
-    authHeaders().then(_h=>fetch(API_BASE+"/api/insight", { method:"POST", headers:_h, body: JSON.stringify({ sport:(leagueSports[0]||"nfl"), sports:leagueSports, betType:"chat", selection:q, question:q, userId:user?.id, userStats:plokUserStats(), persona:plokPersona, leagueCtx:plokLeagueCtx() }) }))
+    // A question about a specific upcoming game goes to the value scan, which
+    // has the stats for that matchup. Everything else is open chat, which does not.
+    const _g = plokMatchGame(q);
+    if(_g){ setAiThread(prev=>prev.map(x=> x===item ? {...x, label:"Plok \u00b7 "+((_g.away||"").split(" ").pop())+" @ "+((_g.home||"").split(" ").pop())} : x)); }
+    authHeaders().then(_h=> _g
+      ? fetch(API_BASE+"/api/findbet", { method:"POST", headers:_h, body: JSON.stringify({ sport:(_g.sport||leagueSports[0]||"nfl"), game:(_g.away+" @ "+_g.home), question:q, userId:user?.id, userStats:plokUserStats(), persona:plokPersona, leagueCtx:plokLeagueCtx() }) })
+      : fetch(API_BASE+"/api/insight", { method:"POST", headers:_h, body: JSON.stringify({ sport:(leagueSports[0]||"nfl"), sports:leagueSports, betType:"chat", selection:q, question:q, userId:user?.id, userStats:plokUserStats(), persona:plokPersona, leagueCtx:plokLeagueCtx() }) }))
       .then(async r=>{ const data=await r.json(); setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, data:r.ok?data:null, error:r.ok?null:(data.error||"Couldn't reach Plok")} : x)); })
       .catch(()=> setAiThread(prev=>prev.map(x=> x===item ? {...x, loading:false, error:"Network error — try again"} : x)))
       .finally(()=> setAiBusy(false));
