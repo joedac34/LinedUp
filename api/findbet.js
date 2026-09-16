@@ -401,7 +401,9 @@ const PLOK_SYSTEM =
   "Return: summary (rank the best value candidates with their EV%, lead with the strongest, explain why that price looks soft; if the best is thin or negative, say so honestly; end with the screening-not-advice caveat); " +
   "keyStats (up to 4 figures FROM DATA for the top pick — e.g. EV%, projection vs line, best price+book, books surveyed); " +
   "trends (short value notes or empty); bullCase (the case for the flagged value); bearCase (why it may be noise — few books, line may have moved, model uncalibrated, small sample). " +
-  "Always end summary with: lines may have moved — verify the current price; this is screening, not betting advice.";
+  "Always end summary with: lines may have moved — verify the current price; this is screening, not betting advice. " +
+  "If a USER QUESTION is present, open the summary by answering that question directly and specifically, using only the DATA candidates, then give the ranked screen. " +
+  "If the question asks for something the DATA cannot support (an injury, a weather call, a stat not listed), say plainly that it is outside what you have and stay on the value read.";
 
 const SCHEMA = {
   type: "object", additionalProperties: false,
@@ -423,9 +425,12 @@ function fmtCand(c) {
   }
   return `- ${c.label} [LINE]: EV ${sign}${c.evPct}% | fair ${c.fairPct}% | best ${c.bestOdds} | ${c.books} books${c.suspicious ? " | FLAG >6%" : ""}`;
 }
-async function generate(game, cands) {
+async function generate(game, cands, question) {
   const dataBlock = cands.length ? cands.map(fmtCand).join("\n") : "(no side cleared the value threshold across books)";
-  const user = `GAME: ${game}\n\nDATA (value candidates — EV computed in code)\n${dataBlock}`;
+  // A question from Plok chat rides along so the screen answers what was asked,
+  // not just what the code ranked. Capped so a pasted essay cannot bloat the prompt.
+  const q = String(question || "").trim().slice(0, 400);
+  const user = `GAME: ${game}\n\nDATA (value candidates — EV computed in code)\n${dataBlock}` + (q ? `\n\nUSER QUESTION\n${q}` : "");
   const r = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${OPENAI}`, "Content-Type": "application/json" },
@@ -568,7 +573,8 @@ export default async function handler(req, res) {
     const model = (ctx.model || "ev").toLowerCase();
 
     const day = new Date().toISOString().slice(0, 10);
-    const key = hashKey(["findbet", ctx.sport, ctx.game, model, day].join("|"));
+    const qKey = ctx.question ? String(ctx.question).trim().toLowerCase().slice(0, 400) : "";
+    const key = hashKey(["findbet", ctx.sport, ctx.game, model, day, qKey].join("|"));
     const cached = await getCached(key);
     if (cached) return res.status(200).json({ ...cached, cached: true });
     // Cache miss = real OpenAI + Odds API spend from here down. Cap it per user.
@@ -612,7 +618,7 @@ export default async function handler(req, res) {
       cands = [...lineCands, ...propCands].sort((a, b) => b.evPct - a.evPct).slice(0, 8);
     }
 
-    const out = await generate(ctx.game, cands);
+    const out = await generate(ctx.game, cands, ctx.question);
     if (matchup) out.matchup = matchup;
     await storeCache(key, out);
     return res.status(200).json({ ...out, cached: false });
