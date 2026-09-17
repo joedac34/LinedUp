@@ -6727,6 +6727,7 @@ function App() {
  // back-map: "where did I come from" is the correct answer for a back gesture, and the
  // league screen alone has three different entry points.
  const navHist = useRef(["home"]);
+ const _navDepth = useRef(1); // previous navHist depth, for transition direction
  // THE single source of a pick row's sport. A row with sport=null cannot grade:
  // grade.js maps sport -> ESPN endpoint, so a null lands on whatever the league
  // defaults to. A Clemson ML pick inserted with sport=null on 5 Sep 2026 and only
@@ -6774,6 +6775,15 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
    if(h[h.length-1] !== screen){ h.push(screen); if(h.length>25) h.shift(); }
    try{ document.documentElement.setAttribute("data-pk-back",
      (PUSHED_SCREENS.indexOf(screen)!==-1 && h.length>1) ? "1" : "0"); }catch(e){}
+   // Direction for the screen transition. Depth grew = pushed, shrank = popped,
+   // unchanged = switched tabs. Written before paint so the class is on the
+   // element the moment it mounts.
+   try{
+     const _d = (navHist.current||[]).length;
+     const _p = _navDepth.current;
+     _navDepth.current = _d;
+     document.documentElement.setAttribute("data-nav", _d > _p ? "push" : (_d < _p ? "pop" : "swap"));
+   }catch(e){}
    _resetCbarH();
    setBrowserSheet(false);
    setPlokOpen(false);
@@ -12216,7 +12226,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    --gray4:#C7CED7;    --gray4-rgb:199,206,215;
    --gray5:#E7ECF2;    --gray5-rgb:231,236,242;
    --gray6:#F1F4F7;    --gray6-rgb:241,244,247;
-   --bg:#FFFFFF;       --bg-rgb:255,255,255;
+   --bg:#F4F5F7;       --bg-rgb:255,255,255;
    --bg2:#F4F6F8;      --bg2-rgb:244,246,248;
    --bg3:#E7ECF2;      --bg3-rgb:231,236,242;
    --text:#0D1117;     --text-rgb:13,17,23;
@@ -12224,12 +12234,12 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    --text25:#5B6572;
    --text3:#6E7884;    --text3-rgb:110,120,132;
    --text4:#8A929D;    --text4-rgb:170,178,188;
-   --line:#E3E8EE;     --line-rgb:227,232,238;
+   --line:#D9DFE7; --line2:#C3CBD5;     --line-rgb:227,232,238;
    --fill:#F1F4F7;     --fill-rgb:241,244,247;
    --fill2:#E7ECF2;    --fill2-rgb:231,236,242;
    --fill3:#DDE4EC;    --fill3-rgb:221,228,236;
-   --edge:#E3E8EE;
-   --edge2:#D2D9E2;
+   --edge:#D9DFE7;
+   --edge2:#C3CBD5;
    --edge3:#C7CED7;
    --ink-rgb:13,17,23;
    --cyan:#0E6F9E;       --cyan-rgb:14,111,158;
@@ -12244,7 +12254,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    --sticky-shadow:0 8px 16px -10px rgba(13,17,23,0.22);
    --dock-shadow:0 18px 40px -14px rgba(13,17,23,0.26);
    --s0:#FFFFFF; --s1:#FFFFFF; --s2:#FFFFFF;
-   --s3:#F4F6F8; --s4:#E7ECF2; --s5:#D2D9E2;
+   --s3:#EDF0F4; --s4:#E2E7EE; --s5:#CDD5DF;
    --side-opp:#AFBACA; --side-opp-rgb:175,186,202;
    --side-b:#8FA6C9;   --side-b-rgb:143,166,201;
  }
@@ -12312,6 +12322,28 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
     including the ones some screens render outside .body. */
  /* No global header on pushed screens, so no reserved space and no sticky offset. */
  .phone:not(.has-hdr){--header-h:0px;}
+ /* Light mode: the canvas is off-white and cards are white, so a card edge
+    reads on its own. This adds a whisper of lift under the summary/pick
+    cards that use the hairline token; dark stays flat as before. */
+ [data-theme="light"] .pk-card,
+ [data-theme="light"] .mu-card,
+ [data-theme="light"] .slot-card{box-shadow:0 1px 2px rgba(13,17,23,0.05), 0 4px 14px -8px rgba(13,17,23,0.10);}
+ /* Screen transitions. A push comes in from the right, a pop from the left, a
+    tab switch just fades -- tabs are siblings, not a stack. Deliberately no
+    fill mode: the transform must resolve back to none when the animation ends,
+    because .pk-cbar is position:fixed inside .body and an ancestor transform
+    would re-anchor it to .body instead of the viewport. */
+ @keyframes pkPush{from{opacity:0;transform:translate3d(22px,0,0)}to{opacity:1;transform:translate3d(0,0,0)}}
+ @keyframes pkPop{from{opacity:0;transform:translate3d(-22px,0,0)}to{opacity:1;transform:translate3d(0,0,0)}}
+ @keyframes pkSwap{from{opacity:0}to{opacity:1}}
+ [data-nav="push"] .body{animation:pkPush .26s cubic-bezier(.32,.72,0,1);}
+ [data-nav="pop"]  .body{animation:pkPop  .26s cubic-bezier(.32,.72,0,1);}
+ [data-nav="swap"] .body{animation:pkSwap .16s ease-out;}
+ /* The sheets have their own entrances; do not animate their inner body. */
+ .bb-sheet .body{animation:none !important;}
+ @media (prefers-reduced-motion: reduce){
+   [data-nav="push"] .body,[data-nav="pop"] .body,[data-nav="swap"] .body{animation:none;}
+ }
  .body{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior-y:contain;position:relative;z-index:1;padding-top:0;padding-bottom:calc(92px + var(--sa-bot));overscroll-behavior:contain;overscroll-behavior-x:none;}
  .body-pad{padding-bottom:calc(100px + var(--sa-bot));}
  .app-header{position:absolute;top:var(--sa-top);left:0;right:0;z-index:25;display:flex;align-items:center;gap:8px;height:var(--header-h);padding:0 14px;background:var(--bar);-webkit-backdrop-filter:saturate(180%) blur(22px);backdrop-filter:saturate(180%) blur(22px);border-bottom:0.5px solid var(--edge);}
@@ -12568,7 +12600,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  .plok-scrim{position:fixed;top:0;left:0;right:0;bottom:var(--kb-h,0px);z-index:9100;background:var(--scrim-bb);transition:bottom .18s ease;
    -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);
    display:flex;flex-direction:column;justify-content:flex-end;animation:bbFade .2s ease both;}
- .plok-sheet{background:var(--bg);border-radius:26px 26px 0 0;margin:0;
+ .plok-sheet{background:var(--s1);border-radius:26px 26px 0 0;margin:0;
    border-top:0.5px solid var(--line);box-shadow:0 -18px 44px var(--bb-shadow);
    padding-bottom:calc(16px + var(--sa-bot));}
  .plok-head{display:flex;align-items:center;gap:11px;padding:6px 18px 14px;}
@@ -12610,7 +12642,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    animation:bbFade .22s ease both;}
  @keyframes bbFade{from{opacity:0}to{opacity:1}}
  .bb-sheet{height:90dvh;max-height:90dvh;display:flex;flex-direction:column;overflow:hidden;
-   background:var(--bg);border-radius:26px 26px 0 0;margin:0;
+   background:var(--s1);border-radius:26px 26px 0 0;margin:0;
    border-top:0.5px solid var(--line);box-shadow:0 -18px 44px var(--bb-shadow);}
  .bb-sheet .body{position:relative;flex:1;min-height:0;height:auto;inset:auto;--header-h:0px;--cbar-h:0px;
    padding-top:0;padding-bottom:calc(24px + var(--sa-bot));}
@@ -13264,17 +13296,17 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  .tab-bar.small .tab-lamp-sm{display:block;}
  @media (prefers-reduced-motion: reduce){ .tab-bar,.tab-item,.tab-label,.tab-grip,.tab-bar.small,.tab-bar.small .tab-item,.tab-bar.small .tab-label,.tab-bar.small .tab-grip{transition:none;} }
  .tab-lamp{position:absolute;top:4px;right:9px;width:5px;height:5px;border-radius:50%;background:var(--win);box-shadow:0 0 6px rgba(var(--win-rgb),0.8);}
- .psb-bar{position:fixed;left:50%;transform:translateX(-50%) translateY(150%);bottom:calc(14px + var(--sa-bot));width:min(92%,440px);z-index:60;border-radius:22px;background:#fff;color:var(--s1);box-shadow:0 20px 44px -12px rgba(0,0,0,0.85);display:flex;align-items:center;gap:11px;padding:13px 15px;cursor:pointer;transition:transform .38s cubic-bezier(0.34,1.3,0.4,1);}
+ .psb-bar{position:fixed;left:50%;transform:translateX(-50%) translateY(150%);bottom:calc(14px + var(--sa-bot));width:min(92%,440px);z-index:60;border-radius:22px;background:#fff;color:#0D1117;box-shadow:0 20px 44px -12px rgba(0,0,0,0.85);display:flex;align-items:center;gap:11px;padding:13px 15px;cursor:pointer;transition:transform .38s cubic-bezier(0.34,1.3,0.4,1);}
  .psb-bar.up{transform:translateX(-50%);}
  .psb-cnt{width:27px;height:27px;border-radius:50%;background:var(--win);color:#04220d;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;flex-shrink:0;}
  .psb-veil{position:fixed;inset:0;background:rgba(2,3,8,0.55);opacity:0;pointer-events:none;transition:opacity .25s ease;z-index:70;}
  .psb-veil.on{opacity:1;pointer-events:auto;}
- .psb-sheet{position:fixed;left:50%;transform:translateX(-50%) translateY(105%);bottom:0;width:min(100%,480px);z-index:80;background:#fff;color:var(--s1);border-radius:22px 22px 0 0;box-shadow:0 -18px 50px -10px rgba(0,0,0,0.8);max-height:86%;display:flex;flex-direction:column;transition:transform .4s cubic-bezier(0.32,1.15,0.35,1);}
+ .psb-sheet{position:fixed;left:50%;transform:translateX(-50%) translateY(105%);bottom:0;width:min(100%,480px);z-index:80;background:#fff;color:#0D1117;border-radius:22px 22px 0 0;box-shadow:0 -18px 50px -10px rgba(0,0,0,0.8);max-height:86%;display:flex;flex-direction:column;transition:transform .4s cubic-bezier(0.32,1.15,0.35,1);}
  .psb-sheet.up{transform:translateX(-50%);}
  .psb-chip{font-size:9px;font-weight:900;letter-spacing:0.04em;color:var(--accent-ios);background:rgba(var(--accent-ios-rgb),0.12);border:1px solid rgba(var(--accent-ios-rgb),0.35);border-radius:5px;padding:2px 6px;cursor:pointer;display:inline-flex;align-items:center;gap:3px;}
  .psb-mpool{max-height:0;overflow:hidden;transition:max-height .26s ease;}
  .psb-mpool.open{max-height:110px;}
- .psb-mchip{padding:7px 13px;border-radius:9px;border:1px solid rgba(14,14,18,0.14);background:#f2f2f5;font-size:13px;font-weight:900;color:var(--s1);cursor:pointer;}
+ .psb-mchip{padding:7px 13px;border-radius:9px;border:1px solid rgba(14,14,18,0.14);background:#f2f2f5;font-size:13px;font-weight:900;color:#0D1117;cursor:pointer;}
  .psb-mchip.mine{background:rgba(var(--accent-ios-rgb),0.14);border-color:rgba(var(--accent-ios-rgb),0.55);color:var(--accent-ios);}
  .psb-mchip.used{opacity:0.3;text-decoration:line-through;pointer-events:none;}
  .psb-toast{position:fixed;left:50%;transform:translateX(-50%) translateY(20px);bottom:calc(110px + var(--sa-bot));background:var(--s3);color:#7ef0a4;border:1px solid rgba(var(--win-rgb),0.4);border-radius:12px;padding:10px 16px;font-size:12.5px;font-weight:800;opacity:0;transition:all .3s ease;z-index:95;pointer-events:none;}
