@@ -5339,6 +5339,7 @@ function DailyLockCard({ user }){
   const [board,setBoard]=useState(null);  // server-curated options for today
   const [sel,setSel]=useState(null);
   const [busy,setBusy]=useState(false);
+  const [dlErr,setDlErr]=useState("");  // rollback reason, shown in place of the CTA
   // Collapsed by default: a long board was pushing the whole solo home down. A
   // locked pick stays visible in the collapsed state; only the board folds.
   const [open,setOpen]=useState(()=>{ try{ return localStorage.getItem("picklock_dl_open")==="1"; }catch(e){ return false; } });
@@ -5372,6 +5373,19 @@ function DailyLockCard({ user }){
   const live=(board||[]).filter(b=>b.game_date && new Date(b.game_date).getTime()>Date.now());
   const lock=async()=>{
     if(!sel||busy) return; setBusy(true);
+    // Optimistic: show it locked on the tap. _ghost is tagged so it can be found
+    // again whatever else lands in `mine` while the request is in flight.
+    const _picked = sel;
+    const _ghost = { week:today, slot:"daily", multiplier:1, result:"pending", points_earned:0,
+      pick_name:_picked.pick_name, game:_picked.game, odds:_picked.odds,
+      game_date:_picked.game_date, sport:_picked.sport, _optimistic:true };
+    setMine(prev=>[_ghost, ...(prev||[])]);
+    setSel(null);
+    const _revert=(msg)=>{
+      setMine(prev=>(prev||[]).filter(r=>!r._optimistic));
+      setSel(_picked);
+      setDlErr(msg); setTimeout(()=>setDlErr(""), 3200);
+    };
     try{
       // Membership first (picks insert RLS requires it); 23505 = already a member.
       const {error:me}=await supabase.from("league_members").insert({league_id:DAILY_LOCK_ID,user_id:user.id,is_commissioner:false});
@@ -5382,13 +5396,20 @@ function DailyLockCard({ user }){
         odds:sel.odds, implied_odds:sel.implied_odds, game_date:sel.game_date, event_id:sel.event_id,
         market_key:sel.market_key, outcome:sel.outcome, outcome_point:sel.outcome_point,
         sel_key:sel.sel_key, result:"pending", points_earned:0 });
-      if(error&&error.code==="23505"){ await load(); setBusy(false); return; }   // raced a second device
-      if(error){ alert("Couldn’t lock it — try again."); setBusy(false); return; }
-      try{ posthog.capture("daily_lock_made",{ odds:sel.odds, market:sel.market_key, sport:sel.sport }); }catch(e2){}
-      setSel(null); await load();
-    }catch(e){}
+      // Raced another device: their row is the real one, so keep the lock on
+      // screen and let the refetch replace the ghost.
+      if(error&&error.code==="23505"){ await load(); setBusy(false); return; }
+      if(error){ _revert("Couldn’t lock that pick — try again"); setBusy(false); return; }
+      try{ posthog.capture("daily_lock_made",{ odds:_picked.odds, market:_picked.market_key, sport:_picked.sport }); }catch(e2){}
+      await load();   // swaps the ghost for the real row, with its id
+    }catch(e){ _revert("Couldn’t reach the server — try again"); }
     setBusy(false);
   };
+  // A revert that says nothing is worse than never showing the pick.
+  const dlErrBar = dlErr ? (
+    <div style={{margin:"0 0 9px",borderRadius:RAD.md,padding:"10px 12px",fontSize:12,fontWeight:700,
+      background:"rgba(var(--loss-rgb),0.12)",color:"var(--loss)"}}>{dlErr}</div>
+  ) : null;
   const kick=(t,c,fold)=>(<div onClick={fold?toggleOpen:undefined} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,cursor:fold?"pointer":"default"}}><span style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.13em",textTransform:"uppercase",color:c}}>{t}</span><span style={{textAlign:"center",display:"flex",alignItems:"center",gap:8}}><span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:20,color:streak>0?IOS.orange:"rgba(var(--ink-rgb),0.35)",lineHeight:1}}>{streak}</span><span style={{fontSize:8,fontWeight:800,letterSpacing:"0.07em",color:"var(--text25)",marginLeft:4}}>DAY STREAK</span>{fold&&(<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(var(--ink-rgb),0.4)" strokeWidth="2.4" strokeLinecap="round" style={{transform:open?"rotate(180deg)":"none",transition:"transform .2s",flexShrink:0}}><path d="M6 9l6 6 6-6"/></svg>)}</span></div>);
   return (
   <div className="pl-rise" style={{margin:"0 16px 12px",position:"relative",border:"0.5px solid rgba(var(--live-rgb),0.3)",borderRadius:RAD.lg,overflow:"hidden",boxShadow:"0 10px 26px -14px rgba(0,0,0,0.8)",background:"radial-gradient(120% 90% at 80% -10%, rgba(var(--live-rgb),0.16), transparent 55%), linear-gradient(160deg,var(--s2),var(--s1) 75%)"}}>
@@ -5416,6 +5437,7 @@ function DailyLockCard({ user }){
   <span style={{fontSize:11.5,fontWeight:800,color:dlOddsNum(b.odds)>0?IOS.green:"rgba(var(--ink-rgb),0.65)",flexShrink:0}}>{b.odds}</span>
   </div>); })}
   </div>
+  {dlErrBar}
   <div onClick={lock} style={{display:"block",textAlign:"center",background:sel?"linear-gradient(120deg,var(--live),#FF6B2C)":"rgba(var(--ink-rgb),0.06)",color:sel?"var(--s2)":"rgba(var(--ink-rgb),0.35)",fontWeight:800,fontSize:13.5,padding:"11px",borderRadius:RAD.md,marginTop:10,cursor:sel?"pointer":"default",opacity:busy?0.6:1}}>{busy?"Locking…":(sel?("Lock "+sel.pick_name):"Pick one to lock")}</div>
   </>)}
   </>):(<>
