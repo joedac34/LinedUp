@@ -7147,7 +7147,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
    <div style={{width:56,height:56,borderRadius:"50%",background:"rgba(var(--yellow-rgb),0.12)",display:"flex",alignItems:"center",justifyContent:"center"}}>
      <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke={IOS.yellow} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="6"/><path d="M9 13l-2 8 5-3 5 3-2-8"/></svg>
    </div>
-   <div style={{fontSize:18,fontWeight:800,color:"var(--text)"}}>{((activeLeague&&activeLeague.name)||"This league")+" is in the books"}</div>
+   <div style={{fontSize:18,fontWeight:800,color:"var(--text)"}}>{((activeLeague&&activeLeague.name)||"This league")+" is final"}</div>
    <div style={{fontSize:13.5,color:IOS.label2,lineHeight:1.5,maxWidth:260}}>{"The season is final \u2014 standings, slips and chat are all still browsable from the league page."}</div>
    <button onClick={()=>{ setLeagueSubTab("overview"); setScreen("leagues"); }} style={{marginTop:8,background:"linear-gradient(90deg,var(--accent-ios),var(--violet))",border:"none",color:"var(--text)",borderRadius:RAD.md,padding:"12px 24px",fontSize:13.5,fontWeight:800,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>View season recap</button>
    <button onClick={()=>setScreen("profile")} style={{background:"rgba(var(--ink-rgb),0.05)",border:"0.5px solid rgba(var(--ink-rgb),0.12)",color:"var(--text)",borderRadius:RAD.md,padding:"10px 22px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"Barlow,sans-serif"}}>Trophy case</button>
@@ -7733,12 +7733,12 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
      // after a partial failure can never double-bank a rung.
      await supabase.from("picks").delete().eq("league_id",activeLeague.id).eq("user_id",user.id).eq("week",_wk).like("slot","ladder\\_%");
      const {error} = await supabase.from("picks").insert(rows);
-     if(error){ alert("Could not lock your ladders: "+error.message); setLadLocking(false); return; }
+     if(error){ alert("Couldn’t lock your ladders: "+error.message); setLadLocking(false); return; }
      haptic("success");
      try{ posthog.capture("slip_locked", {league_id:activeLeague.id, type:"ladder", ladders:picks.length, rungs:rows.length}); }catch(e){}
      setLadPicks([]); setLadMult({}); setLadOpen(null);
      await loadLadders(activeLeague.id, _wk);
-   } catch(e){ alert("Could not lock your ladders."); }
+   } catch(e){ alert("Couldn’t lock your ladders."); }
    setLadLocking(false);
  };
  const [altSheet, setAltSheet] = useState(null);
@@ -9460,7 +9460,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
      const m = String((e && (e.message || e.error)) || e || "");
      if(!/cancel|1001|popup_closed|user_cancel/i.test(m)){
        try{ console.error("[picklock] oauth " + provider, e); }catch(_){}
-       alert("Could not sign in with " + (provider==="apple"?"Apple":"Google") + ": " + m);
+       alert("Couldn’t sign in with " + (provider==="apple"?"Apple":"Google") + ": " + m);
      }
    }finally{ setOauthBusy(""); }
  };
@@ -9989,7 +9989,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
      rows.push({ league_id: lgId, user_id: user.id, week: _w, sport: _pickSport(b, null), slot: `${b.category||"ml"}_${_si}`, multiplier: b.mult||1, pick_name: b.pick, game: b.game||"", odds: b.odds, implied_odds: b.impliedOdds, game_date: b.gameTime||null, event_id: b.eventId||null, market_key: b.marketKey||null, outcome: b.outcome||null, outcome_point: (b.point!=null?b.point:null), sel_key: b.selKey||null, result: "pending", points_earned: 0 });
    } });
  const { error } = await supabase.from("picks").insert(rows);
- if(error){ alert("Error saving picks: " + error.message); return; }
+ if(error){ alert("Couldn\u2019t save your picks: " + error.message); return; }
  try{ await supabase.from("leagues").update({sport: soloSport}).eq("id", lgId); }catch(e){}
  // Snapshot reflects THIS week only; future-week picks live in their own bucket and surface in Upcoming.
  const _curNew = soloFreePicks.filter(b=>_weekOf(b)===week);
@@ -10519,7 +10519,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
   mkT("whale","The Whale","Most total points",IOS.green,byPoints,(u)=>stats[u]?stats[u].points:0,"pts"),
   mkT("sharp","Sharpshooter","Highest win rate (10+ picks)",IOS.yellow,byWinRate,winRate,"pct","Needs 10 picks"),
   mkT("hot","Hot Hand","Longest win streak",IOS.orange,byStreak,(u)=>stats[u]?stats[u].maxStreak:0,"int"),   /* maxStreak here is win-only, see loop above */
-  mkT("longshot","Longshot King","Most points from longshots",IOS.pink,byLongshot,(u)=>stats[u]?stats[u].longshotPts:0,"pts"),
+  mkT("longshot","Longshot Legend","Most points from longshots",IOS.pink,byLongshot,(u)=>stats[u]?stats[u].longshotPts:0,"pts"),
  ];
  if(trophiesReqRef.current !== leagueId) return;
  setLeagueTrophies(trophies);
@@ -10563,7 +10563,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
      const r=await fetch(API_BASE+"/api/export-data",{method:"POST",
        headers:{"Content-Type":"application/json","Authorization":"Bearer "+tok},
        body:JSON.stringify({format:"html"})});
-     if(!r.ok){ let m="Could not build your export."; try{ const j=await r.json(); if(j.error) m=j.error; }catch(e){}
+     if(!r.ok){ let m="Couldn’t build your export."; try{ const j=await r.json(); if(j.error) m=j.error; }catch(e){}
        setExpBusy(false); setExpMsg(m); return; }
      const text=await r.text();
      const name="picklock-data-"+new Date().toISOString().slice(0,10)+".html";
@@ -10582,7 +10582,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
        setTimeout(()=>{ try{ URL.revokeObjectURL(url); }catch(e){} },1000);
      }
      setExpBusy(false); setExpMsg("Saved "+name);
-   }catch(e){ setExpBusy(false); setExpMsg("Could not reach the server. Try again."); }
+   }catch(e){ setExpBusy(false); setExpMsg("Couldn’t reach the server. Try again."); }
  };
 
  // Opening a game sheet is identical from either board; GameCard calls this.
@@ -10631,7 +10631,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
      const { data, error } = await supabase.rpc("roll_league_season", { target_league: activeLeague.id, new_name: null });
      if(error || !data || data.ok !== true){
        setRollBusy(false);
-       alert((data && data.error) || errText(error) || "Could not start the new season.");
+       alert((data && data.error) || errText(error) || "Couldn’t start the new season.");
        return;
      }
      haptic("success");
@@ -10643,7 +10643,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
      await fetchLeagues(user.id);
      setRollBusy(false); setLeagueTab("standings");
      alert("Season "+_next+" is live. Season "+data.archived_season+" is saved in league history.");
-   }catch(e){ setRollBusy(false); alert("Could not reach the server. Please try again."); }
+   }catch(e){ setRollBusy(false); alert("Couldn’t reach the server. Please try again."); }
  };
 
  const fetchBlocks = async (uid) => {
@@ -10676,14 +10676,14 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
  const reportUser = async (targetId, targetName) => {
    if(!window.confirm("Report "+(targetName||"this player")+" to PickLock? We review reports within 24 hours.")) return;
    const ok = await submitReport({ kind:"profile", reportedUserId:targetId, snapshot:targetName });
-   alert(ok ? "Thanks — this has been reported and will be reviewed within 24 hours." : "Could not submit that report. Please try again.");
+   alert(ok ? "Thanks — this has been reported and will be reviewed within 24 hours." : "Couldn’t submit that report. Please try again.");
  };
 
  const reportMessage = async (msg) => {
    if(!msg) return;
    if(!window.confirm("Report this message to PickLock? We review reports within 24 hours.")) return;
    const ok = await submitReport({ kind:"message", reportedUserId:msg.user_id, messageId:msg.id, leagueId:(activeLeague&&isUuid(activeLeague.id))?activeLeague.id:null, snapshot:msg.message||msg.text||null });
-   alert(ok ? "Thanks — this has been reported and will be reviewed within 24 hours." : "Could not submit that report. Please try again.");
+   alert(ok ? "Thanks — this has been reported and will be reviewed within 24 hours." : "Couldn’t submit that report. Please try again.");
  };
 
  const toggleBlock = async (targetId, targetName, currentlyBlocked) => {
@@ -10694,7 +10694,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
      try{
        await supabase.from("user_blocks").delete().eq("blocker_id",user.id).eq("blocked_id",targetId);
        setBlockedIds(prev=>{ const n=new Set(prev); n.delete(String(targetId)); return n; });
-     }catch(e){ alert("Could not unblock. Please try again."); }
+     }catch(e){ alert("Couldn’t unblock. Please try again."); }
      return;
    }
    if(!window.confirm("Block "+label+"? You will no longer see their messages.")) return;
@@ -10702,7 +10702,7 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
      const {error} = await supabase.from("user_blocks").insert({ blocker_id:user.id, blocked_id:targetId });
      if(error) throw error;
      setBlockedIds(prev=>{ const n=new Set(prev); n.add(String(targetId)); return n; });
-   }catch(e){ alert("Could not block. Please try again."); }
+   }catch(e){ alert("Couldn’t block. Please try again."); }
  };
 
  const openUserProfile = async (userId, seed) => {
@@ -13378,7 +13378,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
       if(a<MIN_AGE){ setDobErr("PickLock is 18+. Your account will be closed \u2014 email joe@picklockapp.com with any questions."); return; }
       setDobBusy(true); setDobErr("");
       const {error}=await supabase.from("users").update({birth_date:v}).eq("id",user.id);
-      if(error){ setDobBusy(false); setDobErr(errText(error)||"Could not save that. Please try again."); return; }
+      if(error){ setDobBusy(false); setDobErr(errText(error)||"Couldn’t save that. Please try again."); return; }
       setUserProfile(prev=>({...prev, birth_date:v}));
       haptic("success"); setDobBusy(false);
     }}>{dobBusy?"Saving…":"Continue"}</button>
@@ -13418,7 +13418,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        const {error:reauth}=await supabase.auth.signInWithPassword({email,password:cur});
        if(reauth){ setPwBusy(false); setPwErr("That current password is not right."); return; }
        const {error}=await supabase.auth.updateUser({password:p1});
-       if(error){ setPwBusy(false); setPwErr(errText(error)||"Could not update your password."); return; }
+       if(error){ setPwBusy(false); setPwErr(errText(error)||"Couldn’t update your password."); return; }
        haptic("success"); setPwBusy(false); setPwDone(true);
      }}>{pwBusy?"Updating…":"Update password"}</button>
      <div onClick={()=>{ if(!pwBusy){ setPwOpen(false); setPwErr(""); } }} style={{textAlign:"center",fontSize:13,fontWeight:600,color:IOS.blue,cursor:"pointer",marginTop:16}}>Cancel</div>
@@ -14694,7 +14694,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    const _pendTop=(rows)=>{ const ps=rows.filter(r=>r.result==="pending").sort((a,b)=>(Number(b.multiplier)||0)-(Number(a.multiplier)||0)); return ps[0]||null; };
    const _beat=(()=>{ if(_myPts===_oppPts) return "dead even \u00B7 next cash takes the lead"; const trailMine=_myPts<_oppPts; const t=_pendTop(trailMine?_myRows:_oppRows); if(t) return (trailMine?("your "+t.pick_name+" could flip it"):("their "+t.pick_name+" could flip it")); return trailMine?"no live legs left on your side":"no live legs left on their side"; })();
    const _dagRow=(()=>{ const src=_iWin?_myRows:_oppRows; const w=src.filter(r=>r.result==="W").sort((a,b)=>parseFloat(b.points_earned||0)-parseFloat(a.points_earned||0))[0]; return w||null; })();
-   const _dag=_dagRow?((_iWin?"your ":"their ")+(_dagRow.multiplier?(_dagRow.multiplier+"x "):"")+_dagRow.pick_name+(_iWin?" was the dagger":" did the damage")):null;
+   const _dag=_dagRow?((_iWin?"your ":"their ")+(_dagRow.multiplier?(_dagRow.multiplier+"x "):"")+_dagRow.pick_name+(_iWin?" won it":" was the difference")):null;
    const _sideHdr=(mine)=>(<div style={{display:"flex",alignItems:"center",gap:8,justifyContent:mine?"flex-start":"flex-end"}}>{mine&&<div style={_dFinal&&_iWin?{..._avSty(true),background:"linear-gradient(135deg,var(--yellow),var(--live))",border:"none",color:"var(--s3)"}:_avSty(true)}>{_ini(userProfile&&userProfile.username)}</div>}{!mine&&<div style={{textAlign:"right"}}><div style={{fontSize:9.5,letterSpacing:"0.12em",color:"var(--text3)",fontWeight:700,textTransform:"uppercase"}}>{_dOppName}</div><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:26,lineHeight:1,marginTop:4,color:_dFinal?(_oppWin?IOS.yellow:(_drawn?"var(--text)":"rgba(var(--ink-rgb),0.55)")):"var(--text)"}}>{_oppPts.toFixed(1)}</div></div>}{mine&&<div><div style={{fontSize:9.5,letterSpacing:"0.12em",color:_dFinal&&_iWin?IOS.yellow:"rgba(var(--ink-rgb),0.3)",fontWeight:700,textTransform:"uppercase"}}>{_dFinal&&_iWin?"Winner":"You"}</div><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:26,lineHeight:1,marginTop:4,color:_dFinal?(_iWin?IOS.yellow:(_drawn?"var(--text)":"rgba(var(--ink-rgb),0.55)")):(_myPts>=_oppPts?COL.win:"#fff")}}>{_myPts.toFixed(1)}</div></div>}{!mine&&<div style={_oppWin?{..._avSty(false),background:"linear-gradient(135deg,var(--yellow),var(--live))",border:"none",color:"var(--s3)"}:_avSty(false)}>{_ini(_dOppName)}</div>}</div>);
    if(!_dLive && !_dFinal){
    const _mineLockedAll=slotCount>0&&_myLockedSlots>=slotCount;
@@ -14709,7 +14709,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    <div style={{textAlign:"center",flexShrink:0}}><div style={{fontSize:11,fontWeight:900,letterSpacing:"0.16em",color:"var(--text25)"}}>VS</div></div>
    <div style={{flex:1,minWidth:0}}><div style={{display:"flex",alignItems:"center",gap:8,justifyContent:"flex-end"}}><div style={{textAlign:"right"}}><div style={{fontSize:9.5,letterSpacing:"0.12em",color:"var(--text3)",fontWeight:700,textTransform:"uppercase"}}>Them</div><div style={{fontSize:13,fontWeight:800,marginTop:3}}>{_dOppName}</div></div><div style={_avSty(false)}>{_ini(_dOppName)}</div></div><div style={{marginTop:8,textAlign:"right"}}><span style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.06em",borderRadius:6,padding:"3px 8px",display:"inline-block",color:_oppLockedAll?COL.win:IOS.orange,background:_oppLockedAll?"rgba(var(--win-rgb),0.12)":"rgba(var(--live-rgb),0.1)",border:_oppLockedAll?"1px solid rgba(var(--win-rgb),0.3)":"1px solid rgba(var(--live-rgb),0.3)"}}>{_oppLockedAll?"SLIP LOCKED":(_oppLockedSlots+"/"+slotCount+" LOCKED")}</span></div></div>
    </div>
-   <div style={{fontSize:10,fontWeight:700,color:"var(--text25)",marginTop:11,textAlign:"center"}}>{(_oppLockedAll&&!_mineLockedAll)?("They\u2019re locked and waiting. "+(openSlots===1?"One slot left on your slip.":(openSlots+" slots left on your slip."))):(_mineLockedAll?"You\u2019re locked in. Waiting on them.":"Both slips still open. Lock yours first and apply the pressure.")}</div>
+   <div style={{fontSize:10,fontWeight:700,color:"var(--text25)",marginTop:11,textAlign:"center"}}>{(_oppLockedAll&&!_mineLockedAll)?("They\u2019re locked and waiting. "+(openSlots===1?"One slot left on your slip.":(openSlots+" slots left on your slip."))):(_mineLockedAll?"You\u2019re locked in. Waiting on them.":"Both slips still open. Lock yours first.")}</div>
    <div onClick={()=>{ if(_mineLockedAll){ setScreen("matchup"); } else { setBuildingSlip(true); setScreen("picks"); } }} style={_ctaSty}>{_mineLockedAll?"Scout the matchup":("Finish your slip"+(openSlots>0?(" \u00B7 "+openSlots+" left"):""))}</div>
    </div></div>);
    }
@@ -14740,7 +14740,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    <div style={{flex:1,minWidth:0}}>{_sideHdr(false)}{_lampRow(_oppLamps,true)}</div>
    </div>
    <div style={{fontSize:10,fontWeight:700,color:"var(--text25)",marginTop:11,textAlign:"center"}}>{_drawn?("Tied at "+_myPts.toFixed(1)+" \u00B7 every tiebreak came up even \u2014 run it back to settle it"):((_iWin?"Won by ":"Lost by ")+_gap+(_dag?(" \u00B7 "+_dag):""))}</div>
-  {!_dStamped&&<div style={{fontSize:9,fontWeight:700,color:"var(--text3)",marginTop:5,textAlign:"center"}}>{"Every leg is in \u00B7 the trophy stamps at the window close"}</div>}
+  {!_dStamped&&<div style={{fontSize:9,fontWeight:700,color:"var(--text3)",marginTop:5,textAlign:"center"}}>{"Every leg is in \u00B7 the result is final once the week closes"}</div>}
    {activeLeague.isCommissioner&&<div onClick={_runBack} style={{..._ctaSty,background:"linear-gradient(120deg,var(--yellow),var(--live))",color:"var(--s2)"}}>Run it back</div>}
    <div onClick={()=>setScreen("matchup")} style={{..._ctaSty,background:"rgba(var(--ink-rgb),0.05)",boxShadow:"inset 0 0 0 0.5px rgba(var(--ink-rgb),0.12)",color:"var(--text)",fontSize:13,padding:"10px",marginTop:activeLeague.isCommissioner?8:12}}>See the full breakdown</div>
    </div></div>);
@@ -14748,7 +14748,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    if(!isSoloMode && activeLeague.champion_id) return (
      <div className="pl-reveal" style={{margin:"0 16px 14px",background:"linear-gradient(160deg,rgba(var(--yellow-rgb),0.10),transparent 60%),linear-gradient(160deg,var(--s2),var(--s1) 80%)",border:"0.5px solid rgba(var(--yellow-rgb),0.28)",borderRadius:RAD.lg,padding:"16px"}}>
        <div style={{fontSize:9.5,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:IOS.yellow}}>Season complete</div>
-       <div style={{fontSize:16,fontWeight:800,color:"var(--text)",marginTop:5}}>{activeLeague.name} is in the books</div>
+       <div style={{fontSize:16,fontWeight:800,color:"var(--text)",marginTop:5}}>{activeLeague.name} is final</div>
        <div style={{fontSize:12,color:IOS.label2,marginTop:4,lineHeight:1.45}}>Every pick is graded and the standings are final.</div>
        <div onClick={()=>setScreen("recap")} style={{marginTop:13,borderRadius:RAD.md,padding:"12px",textAlign:"center",fontSize:14,fontWeight:800,cursor:"pointer",color:"var(--text)",background:"linear-gradient(120deg,var(--accent-ios),var(--violet))"}}>Check out your season recap</div>
      </div>
@@ -14892,7 +14892,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        {_p&&(
          <div style={{marginTop:12,display:"flex",alignItems:"center",gap:9,fontSize:12.5,color:"var(--text2)",fontWeight:600}}>
            <span style={{width:7,height:7,borderRadius:"50%",flexShrink:0,background:_won?IOS.green:_lost?IOS.red:_live?"var(--cyan)":IOS.label2,boxShadow:"0 0 8px "+(_won?IOS.green:_lost?IOS.red:_live?"var(--cyan)":"transparent")}}/>
-           {_won?(_ml?("The "+_short+" got the win"):(_short+" found the end zone")):_lost?(_ml?("The "+_short+" lost"):(_short+" never got there")):_void?"Voided \u2014 you survive and get "+(_ml?"the team":"the player")+" back":_live?("Your pick is live"+(_settle?(" \u00B7 settles ~"+_at(_settle)):"")):(_canEdit?"Swap any time before Sunday 1:00 PM ET":"Locked in")}
+           {_won?(_ml?("The "+_short+" got the win"):(_short+" found the end zone")):_lost?(_ml?("The "+_short+" lost"):(_short+" didn\u2019t score")):_void?"Voided \u2014 you survive and get "+(_ml?"the team":"the player")+" back":_live?("Your pick is live"+(_settle?(" \u00B7 settles ~"+_at(_settle)):"")):(_canEdit?"Swap any time before Sunday 1:00 PM ET":"Locked in")}
          </div>
        )}
        {!_p&&(
@@ -14977,10 +14977,10 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {/* Leagueless home order: pinned build-a-league banner → Daily Lock → Gauntlet → solo content */}
  {screen==="home" && homeMode==="solo" && (
  <div style={{margin:"0 16px 10px",background:"rgba(var(--accent-rgb),0.08)",border:"0.5px dashed rgba(var(--accent-rgb),0.4)",borderRadius:RAD.md,padding:"10px 12px"}}>
-   <div style={{fontSize:11.5,fontWeight:800}}>This app peaks with your group.</div>
+   <div style={{fontSize:11.5,fontWeight:800}}>PickLock is better with friends.</div>
    <div style={{fontSize:11,color:"var(--text25)",marginTop:2}}>{"Start one and send a link, or jump into someone else\u2019s."}</div>
    <div style={{display:"flex",gap:7,marginTop:9}}>
-     <div className="pk-t-create" onClick={()=>{ setScreen("leagues"); setNewLeagueStep(0); setShowNewLeague(true); }} style={{flex:1,textAlign:"center",background:IOS.blue,borderRadius:8,padding:"9px 12px",fontSize:12,fontWeight:800,cursor:"pointer",color:"var(--on-color)"}}>Start a league</div>
+     <div className="pk-t-create" onClick={()=>{ setScreen("leagues"); setNewLeagueStep(0); setShowNewLeague(true); }} style={{flex:1,textAlign:"center",background:IOS.blue,borderRadius:8,padding:"9px 12px",fontSize:12,fontWeight:800,cursor:"pointer",color:"var(--on-color)"}}>Create a league</div>
      <div className="pk-t-join" onClick={()=>{ try{ fetchPublicLeagues(); }catch(e){} setShowBrowse(true); }} style={{flex:1,textAlign:"center",background:"rgba(var(--ink-rgb),0.06)",boxShadow:"inset 0 0 0 0.5px rgba(var(--ink-rgb),0.16)",borderRadius:8,padding:"9px 12px",fontSize:12,fontWeight:800,cursor:"pointer",color:"var(--text)"}}>Join a league</div>
    </div>
  </div>)}
@@ -14999,7 +14999,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
          return (
          <div style={{padding:"4px 16px 8px"}}>
            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",margin:"4px 0 11px"}}>
-             <div style={{fontSize:11,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:IOS.label3}}>Games on the board</div>
+             <div style={{fontSize:11,fontWeight:800,letterSpacing:"0.06em",textTransform:"uppercase",color:IOS.label3}}>This week</div>
              {games.length>4 && <div onClick={()=>setSoloGamesAll(v=>!v)} style={{fontSize:12,fontWeight:800,color:IOS.blue,cursor:"pointer"}}>{soloGamesAll?"Show less":("See all "+games.length+" \u203a")}</div>}
            </div>
            <div className="pk-rail" style={{marginBottom:12}}>
@@ -15692,7 +15692,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
              <span style={{minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                {nextI>-1 && stat!=null && need>0
                  ? (need+" "+unit+" to rung "+(nextI+1)+" (+"+(Math.round(calcPickPoints(L.mult||1, L.rungs[nextI].px, "W")*10)/10)+")")
-                 : (nextI===-1 ? "Ladder topped out" : (cleared+" of "+(L.rungs||[]).length+" rungs"))}
+                 : (nextI===-1 ? "You cleared every rung" : (cleared+" of "+(L.rungs||[]).length+" rungs"))}
              </span>
              <span style={{marginLeft:"auto",flexShrink:0,fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:16,fontWeight:900,color:bank>0?IOS.green:"rgba(var(--ink-rgb),0.25)"}}>{bank>0?("+"+(Math.round(bank*10)/10)):"0.0"}</span>
            </div>
@@ -15796,7 +15796,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  // Use separate state for solo mode vs league mode
  const activePicks = isSoloMode ? soloFlexPicks : flexPicks;
  const setActivePicks = isSoloMode ? setSoloFlexPicks : setFlexPicks;
- const openSlot=(i)=>{ if(isEliminated){ alert("Your league season is over \u2014 there's no matchup to score against. Switch to Solo and your picks still count toward your career stats."); return; } const s=activePicks[i]; if(s&&s.committed){ alert(slotGraded(s)?"This pick has already been graded — it can’t be changed.":slotStarted(s)?"That game has started — this pick is locked in.":"This pick is locked in. Tap Unlock first to change it."); return; } setBuildingSlip(true); setGridTargetSlot(i); setGridType((s&&s.category)?s.category:"ml"); setGridPropSub("all"); openBrowser(); };
+ const openSlot=(i)=>{ if(isEliminated){ alert("Your league season is over \u2014 there's no matchup to score against. Switch to Solo and your picks still count toward your career stats."); return; } const s=activePicks[i]; if(s&&s.committed){ alert(slotGraded(s)?"That pick is already graded \u2014 it can\u2019t be changed.":slotStarted(s)?"That game has started \u2014 the pick is locked in.":"This pick is locked in. Tap Unlock first to change it."); return; } setBuildingSlip(true); setGridTargetSlot(i); setGridType((s&&s.category)?s.category:"ml"); setGridPropSub("all"); openBrowser(); };
  const activeSubmitted = isSoloMode ? soloSubmitted : submitted;
  const activeSavedPicks = isSoloMode ? soloSavedPicks : savedPicks;
  const setActiveSavedPicks = isSoloMode ? setSoloSavedPicks : setSavedPicks;
@@ -15908,7 +15908,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  if(!isSoloMode && lgCompleted(activeLeague)){ alert("This season is complete \u2014 the league is read-only."); return; }
  if(seasonNotStarted){ alert("Your league hasn\u2019t started yet. You can make picks in Solo Mode until then."); return; }
  if(slot.isParlay ? (slot.parlayLegs||[]).length<2 : !slot.bet) return;
- if(slotStarted(slot)){ alert("That game has already started — this pick can no longer be locked."); return; }
+ if(slotStarted(slot)){ alert("That game has started \u2014 the pick is locked in."); return; }
  if(!user){ alert("Sign in to lock picks."); return; }
  if(demoBlock("lock this pick")) return;
  if(activeLeague && Number(activeLeague.duration_days)){ const _de=duelEndMs(activeLeague); if(_de && Date.now()>=_de){ alert("This duel\u2019s window has closed \u2014 no new picks."); return; } }
@@ -15930,15 +15930,15 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const unlockSlot = async (idx)=>{
  const slot = activePicks[idx];
  if(!slot||!slot.committed) return;
- if(slotLocked(slot)){ alert(slotGraded(slot)?"This pick has already been graded — it can’t be changed.":"That game has started — this pick is locked in."); return; }
+ if(slotLocked(slot)){ alert(slotGraded(slot)?"That pick is already graded \u2014 it can\u2019t be changed.":"That game has started \u2014 the pick is locked in."); return; }
  // Survivor: the pool locks at Sunday 1:00 PM ET regardless of kickoff. Unlocking
  // deletes the row, and survivorBlocked would refuse the re-lock, leaving no pick.
  if(!isSoloMode && activeLeague && activeLeague.league_type==="survivor"){ const _lk=svWeekLockMs(activeLeague,_weekNum); if(_lk!=null && Date.now()>=_lk){ alert("Week "+_weekNum+" locked at 1:00 PM ET Sunday. Picks are final."); return; } }
  const ids = slot.commitIds||[];
  if(ids.length){
    const { data:_chk } = await supabase.from("picks").select("result").in("id", ids);
-   if((_chk||[]).some(r=>r.result==="W"||r.result==="L"||r.result==="P")){ alert("This pick has already been graded — it can’t be changed."); return; }
-   const { error } = await supabase.from("picks").delete().in("id", ids); if(error){ alert("Couldn’t unlock: "+error.message); return; }
+   if((_chk||[]).some(r=>r.result==="W"||r.result==="L"||r.result==="P")){ alert("That pick is already graded \u2014 it can\u2019t be changed."); return; }
+   const { error } = await supabase.from("picks").delete().in("id", ids); if(error){ alert("Couldn’t unlock that pick: "+error.message); return; }
  } else {
    // Safety net: committed with NO commitIds is the poisoned-snapshot state. Skipping
    // the server delete here left a ghost row that blocked every re-lock on this slot
@@ -15948,7 +15948,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    let _q = supabase.from("picks").delete().eq("league_id",activeLeague.id).eq("user_id",user.id).eq("week",_weekNum).eq("result","pending");
    if(slot.isParlay){ _q = _isC ? _q.like("slot","longshot_"+idx+"_%") : _q.like("slot","longshot_%"); }
    else { _q = _q.eq("slot", _isC ? ((slot.category||"ml")+"_"+idx) : (slot.category||"ml")); }
-   const { error } = await _q; if(error){ alert("Couldn’t unlock: "+error.message); return; }
+   const { error } = await _q; if(error){ alert("Couldn’t unlock that pick: "+error.message); return; }
  }
  setActivePicks(prev=>prev.map((p,i)=> i===idx ? {...p, committed:false, commitIds:[]} : p));
  try{ fetchWeekPicks(activeLeague.id, _weekNum); }catch(e){}
@@ -15971,7 +15971,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div className="sheet-hdr">
  <div>
  <div className="sheet-hdr-title">
- {activePicks[activeFlexSlot]?.isParlay ? "Parlay Legs" : flexCategory ? ["Moneyline","Prop","Over/Under","Spread","Longshot"][["ml","prop","ou","spread","longshot"].indexOf(flexCategory)] : "Choose a Pick"}
+ {activePicks[activeFlexSlot]?.isParlay ? "Parlay Legs" : flexCategory ? ["Moneyline","Prop","Over/Under","Spread","Longshot"][["ml","prop","ou","spread","longshot"].indexOf(flexCategory)] : "Choose a pick"}
  </div>
  <div className="sheet-hdr-sub">
  {activePicks[activeFlexSlot]?.isParlay
@@ -16032,7 +16032,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {id:"prop", label:"Prop", icon:"", color:IOS.yellow, desc:"Player or game prop"},
  {id:"ou", label:"Over/Under", icon:"", color:IOS.orange, desc:"Total points scored"},
  {id:"spread", label:"Spread", icon:"", color:IOS.green, desc:"Beat the point spread"},
- {id:"longshot",label:"Longshot", icon:"", color:IOS.pink, desc:"High odds single pick"},
+ {id:"longshot",label:"Longshot", icon:"", color:IOS.pink, desc:"+400 or better, or a parlay"},
  ].map(cat=>{
  const taken = usedCats.includes(cat.id);
  return (
@@ -16094,7 +16094,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  nba: [
  {id:"all", label:"All"},
  {id:"points", label:"Points"},
- {id:"rebounds", label:"Boards"},
+ {id:"rebounds", label:"Rebounds"},
  {id:"assists", label:"Assists"},
  {id:"threes", label:"3-Pointers"},
  ],
@@ -16164,7 +16164,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {(flexCategory || activePicks[activeFlexSlot]?.isParlay) && (
  <div className="sheet-search-wrap" style={{top:0,position:"relative"}}>
  <div style={{position:"relative"}}>
- <input className="sheet-search" placeholder="Search..." value={pickSearch} onChange={e=>setPickSearch(e.target.value)} autoFocus={false} style={{paddingLeft:14}}/>
+ <input className="sheet-search" placeholder="Search players or teams" value={pickSearch} onChange={e=>setPickSearch(e.target.value)} autoFocus={false} style={{paddingLeft:14}}/>
  {pickSearch&&<span onClick={()=>setPickSearch("")} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",fontSize:14,color:"var(--text25)",cursor:"pointer"}}></span>}
  </div>
  </div>
@@ -16235,7 +16235,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      </div>
      <div style={{fontSize:12,color:"var(--text4)",lineHeight:1.5}}>
        {flexCategory==="prop"
-         ? "Player props usually go live 2-3 days before game time. Check back closer to game time."
+         ? "Player props usually go live 2-3 days before kickoff. Check back closer to the game."
          : "Check back when games are scheduled."}
      </div>
    </div>
@@ -16398,7 +16398,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        </div>
        <div style={{marginTop:14,display:"flex",alignItems:"center",justifyContent:"space-between",background:"var(--s3)",borderRadius:12,padding:"11px 12px"}}>
          <div style={{fontSize:12,fontWeight:700,color:"var(--text2)"}}>
-           {_res ? (_res==="W" ? (_ml?"They won. You live.":"Found the end zone. You live.") : _res==="L" ? (_ml?"They lost.":"Never got there.") : "Voided \u2014 no strike.")
+           {_res ? (_res==="W" ? (_ml?"They won \u2014 you\u2019re through.":"They scored \u2014 you\u2019re through.") : _res==="L" ? (_ml?"They lost \u2014 you\u2019re out.":"No score \u2014 you\u2019re out.") : "Voided \u2014 no strike.")
              : _started ? "Kicked off \u00B7 pick is final"
              : _canSwap ? ("Swap until "+(!isNaN(_lockMs)?_fmtD(_lockMs):"kickoff"))
              : "Locked"}
@@ -16485,7 +16485,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div style={{display:"flex",gap:8,padding:"0 16px 16px",position:"relative"}}>
  {graded
  ? <><Tile val={`${wins}-${losses}`} lbl="Record" color="var(--text)"/><Tile val={`+${wonTotal.toFixed(1)}`} lbl="Pts Won" color={IOS.green}/><Tile val={hitRate} lbl="Hit rate" color="var(--text)"/></>
- : <><Tile val={`${slots.length}/${allSlots.length||5}`} lbl="Picks" color="var(--text)"/><Tile val={`+${projTotal.toFixed(1)}`} lbl="Proj. Pts" color={IOS.green}/><Tile val={`${lockedCt}/${slots.length||0}`} lbl="Locked" color="var(--text)"/></>
+ : <><Tile val={`${slots.length}/${allSlots.length||5}`} lbl="Picks" color="var(--text)"/><Tile val={`+${projTotal.toFixed(1)}`} lbl="Projected" color={IOS.green}/><Tile val={`${lockedCt}/${slots.length||0}`} lbl="Locked" color="var(--text)"/></>
  }
  </div>
  </div>
@@ -17068,7 +17068,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const {data:ins, error:insertError} = await supabase.from("picks").insert(picksToSave).select("id,slot,multiplier");
  if(insertError) {
  if(String(insertError.code)==="23505"){ alert("Your slip was out of sync with your locked picks \u2014 reloading them now."); try{ await fetchMyPicks(activeLeague.id, week, user.id, activeLeague); fetchWeekPicks(activeLeague.id, week); }catch(e){} return; }
- alert("Error saving picks: " + insertError.message); return; }
+ alert("Couldn\u2019t save your picks: " + insertError.message); return; }
  if(!isSoloMode){
  // Match inserted rows back to slots by SLOT NAME (+mult for the bare-name flex
  // format), consuming each row once. Matching by multiplier alone cross-wired
@@ -17489,7 +17489,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
     <div style={CARD}>
      {comm.length>0 ? IMP(comm.length,IOS.orange,comm.length===1?"League you commission":"Leagues you commission",
         comm.map(c=>c.name).join(", ")+" — the longest-standing member takes over automatically.") : null}
-     {Number(imp.live_matchups)>0 ? IMP(Number(imp.live_matchups),IOS.orange,"Live matchups","Your opponents get a walkover for the rest of the season") : null}
+     {Number(imp.live_matchups)>0 ? IMP(Number(imp.live_matchups),IOS.orange,"Live matchups","Your opponents win by forfeit for the rest of the season") : null}
      {imp.is_founder ? IMP("#"+(imp.founder_number||"?"),IOS.yellow,"Founding member","Your founder number is released and cannot be reclaimed") : null}
      {Number(imp.graded_picks)>0 ? IMP(Number(imp.graded_picks),IOS.label3,"Graded picks","Kept anonymised so league history stays correct") : null}
      {(comm.length===0&&!Number(imp.live_matchups)&&!imp.is_founder&&!Number(imp.graded_picks))
@@ -17497,7 +17497,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
     </div>
     {SEC("Did you mean one of these instead?")}
     <div style={{...CARD,padding:0,overflow:"hidden"}}>
-     {[["Turn off all notifications","Keep the account, go quiet",()=>{ setScreen("profile"); }],
+     {[["Turn off all notifications","Keep the account, mute everything",()=>{ setScreen("profile"); }],
        ...(imp.is_pro&&!IS_NATIVE?[["Cancel Pro only","Keep playing on the free tier",()=>{ openBillingPortal(); }]]:[]),
       ].map(([t,sub,fn])=>(
       <div key={t} onClick={()=>{ haptic("select"); fn(); }} style={{display:"flex",alignItems:"center",gap:12,padding:"13px 14px",borderBottom:`0.5px solid ${IOS.sep}`,cursor:"pointer"}}>
@@ -17525,14 +17525,14 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
           headers:{"Content-Type":"application/json","Authorization":"Bearer "+tok},
           body:JSON.stringify({confirm:"DELETE"})});
         const j=await r.json().catch(()=>({}));
-        if(!r.ok){ setDelBusy(false); setDelErr(j.error||"Could not delete your account. Nothing was changed — please try again."); return; }
+        if(!r.ok){ setDelBusy(false); setDelErr(j.error||"Couldn’t delete your account. Nothing was changed — please try again."); return; }
         // Gone. Drop the session and every trace of it in memory.
         try{ posthog.reset(); }catch(e){}
         await supabase.auth.signOut();
         setUser(null); setUserProfile(null); setRealLeagues([]); setActiveLeagueId(null);
         setSavedPicks(null); setFlexPicks(freshSlots()); setDelStep(1); setDelWord("");
         setDelImpact(null); setDelBusy(false); setScreen("home");
-      }catch(e){ setDelBusy(false); setDelErr("Could not reach the server. Nothing was deleted — please try again."); }
+      }catch(e){ setDelBusy(false); setDelErr("Couldn’t reach the server. Nothing was deleted — please try again."); }
     },!armed||delBusy)}
     {BTN("Cancel","grey",()=>{ haptic("select"); setScreen("profile"); },delBusy)}
    </>)}
@@ -17700,7 +17700,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        <div><div style={{fontSize:24,fontWeight:800,letterSpacing:-0.5}}>Leaderboard</div><div style={{fontSize:12,color:IOS.label3,fontWeight:600}}>{"Daily Lock streaks · "+sRows.length+" ranked"}</div></div>
      </div>
      <div style={{display:"flex",gap:3,background:"var(--s2)",border:EDGE.hair,borderRadius:RAD.md,padding:4,marginBottom:11}}>
-       {[["points","Points"],["hit","Hit Rate"],["ls","Longshots"],["streaks","Streaks"]].map(([k,lab])=>(
+       {[["points","Points"],["hit","Hit rate"],["ls","Longshots"],["streaks","Streaks"]].map(([k,lab])=>(
          <div key={k} onClick={()=>{ setLbTab(k); if(k==="streaks"&&dlStreaks===null) fetchDlStreaks(); }} style={{flex:1,textAlign:"center",padding:"9px 4px",borderRadius:RAD.sm,fontSize:12.5,fontWeight:800,cursor:"pointer",background:lbTab===k?IOS.blue:"transparent",color:lbTab===k?"var(--text)":"rgba(var(--ink-rgb),0.38)"}}>{lab}</div>
        ))}
      </div>
@@ -17726,10 +17726,10 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        <div onClick={()=>goBack("home")} style={{cursor:"pointer",width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:RAD.md,background:"rgba(var(--ink-rgb),0.06)"}}>
          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
        </div>
-       <div><div style={{fontSize:24,fontWeight:800,letterSpacing:-0.5}}>Leaderboard</div><div style={{fontSize:12,color:IOS.label3,fontWeight:600}}>{(lbTab==="hit"?"Qualified players":"Top players")+" · "+rows.length+" ranked"}</div></div>
+       <div><div style={{fontSize:24,fontWeight:800,letterSpacing:-0.5}}>Leaderboard</div><div style={{fontSize:12,color:IOS.label3,fontWeight:600}}>{(lbTab==="hit"?(THRESH[lbTf]+"+ picks"):"Top players")+" · "+rows.length+" ranked"}</div></div>
      </div>
      <div style={{display:"flex",gap:3,background:"var(--s2)",border:EDGE.hair,borderRadius:RAD.md,padding:4,marginBottom:11}}>
-       {[["points","Points"],["hit","Hit Rate"],["ls","Longshots"],["streaks","Streaks"]].map(([k,lab])=>(
+       {[["points","Points"],["hit","Hit rate"],["ls","Longshots"],["streaks","Streaks"]].map(([k,lab])=>(
          <div key={k} onClick={()=>{ setLbTab(k); if(k==="streaks"&&dlStreaks===null) fetchDlStreaks(); }} style={{flex:1,textAlign:"center",padding:"9px 4px",borderRadius:RAD.sm,fontSize:12.5,fontWeight:800,cursor:"pointer",background:lbTab===k?IOS.blue:"transparent",color:lbTab===k?"var(--text)":"rgba(var(--ink-rgb),0.38)"}}>{lab}</div>
        ))}
      </div>
@@ -17746,7 +17746,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        </div>
        <div style={{textAlign:"right",fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:19}}>{me?valFor(me):"—"}</div>
      </div>
-     {lbTab==="hit" && <div style={{display:"flex",alignItems:"center",gap:8,background:"rgba(var(--live-rgb),0.09)",border:"0.5px solid rgba(var(--live-rgb),0.22)",borderRadius:RAD.md,padding:"9px 13px",marginBottom:12,fontSize:11.5,color:IOS.label2,fontWeight:600}}>Hit Rate ranks anyone with {THRESH[lbTf]}+ graded picks {TFLABEL[lbTf]}.</div>}
+     {lbTab==="hit" && <div style={{display:"flex",alignItems:"center",gap:8,background:"rgba(var(--live-rgb),0.09)",border:"0.5px solid rgba(var(--live-rgb),0.22)",borderRadius:RAD.md,padding:"9px 13px",marginBottom:12,fontSize:11.5,color:IOS.label2,fontWeight:600}}>Hit rate ranks anyone with {THRESH[lbTf]}+ graded picks {TFLABEL[lbTf]}.</div>}
      {(lbLoading && top.length===0) ? <SkelRows n={8} pad="6px 0"/> :
       top.length===0 ? <div style={{textAlign:"center",padding:30,color:IOS.label3,fontSize:13,lineHeight:1.6}}>No ranked players yet — graded picks show up here.</div> :
       top.map((r,i)=>{ const rk=i+1; const mc=medalC(rk); const isMe=String(r.user_id)===String(user?.id); const c=PAL[i%PAL.length];
@@ -17809,12 +17809,12 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  if(pct>=62) return {t:"Strong lean",c:IOS.green};
  if(pct>=52) return {t:"Slight lean",c:acc};
  if(pct>=48) return {t:"Coin flip",c:IOS.label2};
- return {t:"Long odds",c:IOS.orange};
+ return {t:"Long shot",c:IOS.orange};
  }
  if(pct>=70) return {t:"Heavy favorite",c:IOS.green};
  if(pct>=58) return {t:"Favored",c:acc};
- if(pct>=50) return {t:"Slight edge",c:IOS.label2};
- if(pct>=42) return {t:"Slight dog",c:IOS.orange};
+ if(pct>=50) return {t:"Slight favorite",c:IOS.label2};
+ if(pct>=42) return {t:"Slight underdog",c:IOS.orange};
  return {t:"Underdog",c:IOS.pink};
  };
 
@@ -18068,7 +18068,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  if(!isSoloMode && activeLeague && activeLeague.league_type==="survivor" && cat!=="longshot" && activePicks[0] && activePicks[0].committed){
    const _s0 = activePicks[0];
    const _weekNum = activeLeague.current_week||activeLeague.week||1;
-   if(slotLocked(_s0)){ setPickConflict(slotGraded(_s0) ? "That pick has already been graded." : "That game has started \u2014 your pick is locked in."); setTimeout(()=>setPickConflict(""),2600); setGridJustAdded(null); return; }
+   if(slotLocked(_s0)){ setPickConflict(slotGraded(_s0) ? "That pick is already graded \u2014 it can\u2019t be changed." : "That game has started \u2014 the pick is locked in."); setTimeout(()=>setPickConflict(""),2600); setGridJustAdded(null); return; }
    { const _lk=svWeekLockMs(activeLeague,_weekNum); if(_lk!=null && Date.now()>=_lk){ setPickConflict("Week "+_weekNum+" locked at 1:00 PM ET Sunday. Picks are final."); setTimeout(()=>setPickConflict(""),2600); setGridJustAdded(null); return; } }
    (async()=>{
      const _ids = _s0.commitIds||[];
@@ -18076,7 +18076,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      _q = _ids.length ? _q.in("id", _ids) : _q.eq("league_id",activeLeague.id).eq("user_id",user.id).eq("week",_weekNum);
      const { data:_gone, error } = await _q.select("id");
      if(error){ setPickConflict("Couldn\u2019t swap: "+error.message); setTimeout(()=>setPickConflict(""),2600); setGridJustAdded(null); return; }
-     if(_ids.length && !(_gone||[]).length){ setPickConflict("That pick has already been graded."); setTimeout(()=>setPickConflict(""),2600); setGridJustAdded(null); return; }
+     if(_ids.length && !(_gone||[]).length){ setPickConflict("That pick is already graded \u2014 it can\u2019t be changed."); setTimeout(()=>setPickConflict(""),2600); setGridJustAdded(null); return; }
      setActivePicks(prev=>prev.map((p,i)=> i===0 ? {...p, committed:false, commitIds:[], bet, category:cat, isParlay:false, parlayLegs:[], mult:1} : p));
      try{ fetchWeekPicks(activeLeague.id, _weekNum); }catch(e){}
      try{ posthog.capture("pick_added", { league_id: activeLeague.id, category: cat, market_key: (bet&&bet.marketKey)||null, swap:true }); }catch(e){}
@@ -19021,7 +19021,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        background:"var(--fill)",border:EDGE.hair,padding:"0 13px"}}>
        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" strokeWidth="2.2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
        <input value={svbSearch} onChange={(e)=>setSvbSearch(e.target.value)}
-         placeholder="Search a team" enterKeyHint="search"
+         placeholder="Search players or teams" enterKeyHint="search"
          style={{flex:1,minWidth:0,border:"none",background:"transparent",outline:"none",
            font:"inherit",fontSize:14,color:"var(--text)"}}/>
        {svbSearch && <span onClick={()=>setSvbSearch("")} style={{fontSize:16,fontWeight:700,color:"var(--text3)",cursor:"pointer",padding:"0 2px"}}>{"\u00d7"}</span>}
@@ -19135,7 +19135,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        </div>)}
        <div className="gbx-scroll" style={{maxHeight:"44vh",overflowY:"auto",WebkitOverflowScrolling:"touch"}}>
          {!sc&&<div style={{textAlign:"center",padding:"26px 0",color:"var(--text3)",fontSize:12.5,fontWeight:600}}>Loading the season…</div>}
-         {sc&&sc.err&&<div style={{textAlign:"center",padding:"26px 0",color:"var(--text3)",fontSize:12.5,fontWeight:600,lineHeight:1.6}}>Couldn’t load the schedule right now.<br/>The pick screen works without it.</div>}
+         {sc&&sc.err&&<div style={{textAlign:"center",padding:"26px 0",color:"var(--text3)",fontSize:12.5,fontWeight:600,lineHeight:1.6}}>Couldn’t load the schedule right now.<br/>You can still make picks.</div>}
          {sc&&!sc.err&&Array.from({length:18},(_,i)=>i+1).map(w=>{ const x=rowsBy[w];
            if(!x) return (<div key={w} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 10px",borderRadius:RAD.md-1,border:EDGE.hair,background:"rgba(var(--ink-rgb),0.025)",marginBottom:5,opacity:0.5}}><div style={{width:34,flexShrink:0,fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:800,color:"var(--text3)"}}>{w}</div><div style={{flex:1,fontSize:13,fontWeight:700}}>Bye week</div></div>);
            const isNext=x.wk===nextWk&&!x.res;
@@ -19148,7 +19148,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
                <span style={{display:"block",fontSize:10,color:"var(--text3)",fontWeight:600,marginTop:2}}>{x.res?"Final":(x.dateMs?(new Date(x.dateMs).toLocaleDateString([],{weekday:"short",month:"short",day:"numeric"})+" · "+new Date(x.dateMs).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})):"")}</span>
              </div>
              <div style={{flexShrink:0,display:"flex",alignItems:"center",gap:7}}>
-               {rode&&<SvChip txt="You rode them" col={IOS.orange} bg="rgba(var(--live-rgb),0.12)" bd="rgba(var(--live-rgb),0.3)"/>}
+               {rode&&<SvChip txt="You picked them too" col={IOS.orange} bg="rgba(var(--live-rgb),0.12)" bd="rgba(var(--live-rgb),0.3)"/>}
                {x.res
                  ? (<span style={{display:"flex",alignItems:"center",gap:7}}><span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:12,fontWeight:800,width:19,height:19,borderRadius:5,display:"flex",alignItems:"center",justifyContent:"center",background:x.res==="W"?"rgba(var(--win-rgb),0.18)":"rgba(var(--loss-rgb),0.14)",color:x.res==="W"?IOS.green:IOS.red}}>{x.res}</span><span style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:12.5,fontWeight:700,color:"var(--text2)",minWidth:42,textAlign:"right"}}>{x.score||""}</span></span>)
                  : (isNext?<SvChip txt="Next up" col={IOS.blue} bg="rgba(var(--accent-rgb),0.14)" bd="rgba(var(--accent-rgb),0.34)"/>:<span style={{fontSize:12.5,fontWeight:700,color:"var(--text3)"}}>—</span>)}
@@ -19213,7 +19213,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      {_svbFilters}{_sortSeg}
      {_posPills}
      <div style={{padding:"0 12px 4px"}}>
-       <input value={gridSearch} onChange={(e)=>setGridSearch(e.target.value)} placeholder="Search a player or team" style={{width:"100%",boxSizing:"border-box",background:"var(--s2)",border:EDGE.hair,borderRadius:RAD.sm+2,padding:"9px 12px",fontSize:13,fontWeight:600,color:"var(--text)",outline:"none",fontFamily:"Barlow,sans-serif"}}/>
+       <input value={gridSearch} onChange={(e)=>setGridSearch(e.target.value)} placeholder="Search players or teams" style={{width:"100%",boxSizing:"border-box",background:"var(--s2)",border:EDGE.hair,borderRadius:RAD.sm+2,padding:"9px 12px",fontSize:13,fontWeight:600,color:"var(--text)",outline:"none",fontFamily:"Barlow,sans-serif"}}/>
      </div>
      <div style={{padding:"0 12px 28px"}}>
        {tdRows.length===0 ? _emptyBoard : _renderSections(tdRows.filter(_posMatch), SvTdRow, {showTeam:true})}
@@ -19273,7 +19273,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        {_tr.length===0&&_loose.length===0 && _emptyBoard}
        {_renderSections(_tr.filter(_posMatch), SvTdRow, {showTeam:false})}
        {_loose.length>0&&svbPos!=="DST"&&(<>
-         <SvBand n="In this game — couldn’t place on a roster" c={IOS.orange} count={_loose.length}/>
+         <SvBand n="Already in this game — no open slot takes it" c={IOS.orange} count={_loose.length}/>
          {_sortRows(_loose.filter(r=>!r.burnedWk)).map(r=><SvTdRow key={r.b.id} r={r} showTeam={false}/>)}
        </>)}
      </div>
@@ -19349,7 +19349,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        );})}
      </div>
      <div style={{padding:"0 14px 8px"}}>
-       <input value={gridSearch} onChange={(e)=>setGridSearch(e.target.value)} placeholder="Search a player or team" style={{width:"100%",boxSizing:"border-box",background:"var(--s2)",border:EDGE.hair,borderRadius:RAD.sm+2,padding:"9px 12px",fontSize:13,fontWeight:600,color:"var(--text)",outline:"none",fontFamily:"Barlow,sans-serif"}}/>
+       <input value={gridSearch} onChange={(e)=>setGridSearch(e.target.value)} placeholder="Search players or teams" style={{width:"100%",boxSizing:"border-box",background:"var(--s2)",border:EDGE.hair,borderRadius:RAD.sm+2,padding:"9px 12px",fontSize:13,fontWeight:600,color:"var(--text)",outline:"none",fontFamily:"Barlow,sans-serif"}}/>
      </div>
    </div>
 
@@ -19459,7 +19459,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {showMultPick && (<>
  <div onClick={()=>setShowMultPick(false)} style={{position:"fixed",inset:0,zIndex:40}}/>
  <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,zIndex:41,width:212,background:"var(--s2)",border:"1px solid rgba(var(--ink-rgb),0.12)",borderRadius:RAD.lg,padding:6,boxShadow:"0 16px 40px rgba(0,0,0,0.6)"}}>
- <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.08em",color:"var(--text25)",padding:"5px 8px 6px"}}>PICK A SLOT TO FILL</div>
+ <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.08em",color:"var(--text25)",padding:"5px 8px 6px"}}>Pick a slot to fill</div>
  {slots.map(sl=>{
  const sc = ACC[sl.category] || acc;
  const isT = sl.i===target;
@@ -19499,7 +19499,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {showMultPick && (<>
  <div onClick={()=>setShowMultPick(false)} style={{position:"fixed",inset:0,zIndex:40}}/>
  <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,zIndex:41,width:212,background:"var(--s2)",border:"1px solid rgba(var(--ink-rgb),0.12)",borderRadius:RAD.lg,padding:6,boxShadow:"0 16px 40px rgba(0,0,0,0.6)"}}>
- <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.08em",color:"var(--text25)",padding:"5px 8px 6px"}}>CHOOSE A MULTIPLIER</div>
+ <div style={{fontSize:8.5,fontWeight:800,letterSpacing:"0.08em",color:"var(--text25)",padding:"5px 8px 6px"}}>Choose a multiplier</div>
  {[1,2,3,4,5].map(M=>{
  const sc = MC[M] || "rgba(var(--ink-rgb),0.72)";   // no tier hue; neutral by default
  if(M===gridParlayMult){
@@ -19579,7 +19579,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  </div>
  )}
 
- {replaceCtx && (<div style={{margin:"0 16px 9px",padding:"9px 12px",borderRadius:RAD.md,background:"rgba(var(--accent-ios-rgb),0.12)",border:"0.5px solid rgba(var(--accent-ios-rgb),0.35)",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}><div style={{fontSize:11.5,fontWeight:700,color:"var(--text)",minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{replaceCooked ? ("No open "+String(gSport).toUpperCase()+" games left this week — switch sport or cancel") : ("Replacing voided "+String(replaceCtx.type).toUpperCase()+" · "+replaceCtx.mult+"× — same week only")}</div><div onClick={()=>{ setReplaceCtx(null); setScreen("home"); }} style={{fontSize:11,fontWeight:800,color:IOS.blue,cursor:"pointer",flexShrink:0}}>Cancel</div></div>)}
+ {replaceCtx && (<div style={{margin:"0 16px 9px",padding:"9px 12px",borderRadius:RAD.md,background:"rgba(var(--accent-ios-rgb),0.12)",border:"0.5px solid rgba(var(--accent-ios-rgb),0.35)",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}><div style={{fontSize:11.5,fontWeight:700,color:"var(--text)",minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{replaceCooked ? ("No open "+String(gSport).toUpperCase()+" games left this week — switch sport or cancel") : ("Replacing your voided "+String(replaceCtx.type).toUpperCase()+" · "+replaceCtx.mult+"× — same week only")}</div><div onClick={()=>{ setReplaceCtx(null); setScreen("home"); }} style={{fontSize:11,fontWeight:800,color:IOS.blue,cursor:"pointer",flexShrink:0}}>Cancel</div></div>)}
  {soloParlayMode && (()=>{
        const _sl = (soloParlay && soloParlay.legs) || [];
        const _lsd = _sl.length>=2 ? calcLS(_sl) : null;
@@ -19624,7 +19624,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div style={{padding:"0 16px 9px"}}>
  <div style={{display:"flex",alignItems:"center",gap:8,background:"rgba(var(--ink-rgb),0.05)",border:"1px solid rgba(var(--ink-rgb),0.1)",borderRadius:RAD.md,padding:"9px 12px"}}>
  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(var(--ink-rgb),0.4)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
- <input value={gridSearch} onChange={e=>setGridSearch(e.target.value)} placeholder="Search teams, players, picks" style={{flex:1,background:"none",border:"none",outline:"none",color:"var(--text)",fontSize:13,fontFamily:"Barlow,sans-serif"}}/>
+ <input value={gridSearch} onChange={e=>setGridSearch(e.target.value)} placeholder="Search players or teams" style={{flex:1,background:"none",border:"none",outline:"none",color:"var(--text)",fontSize:13,fontFamily:"Barlow,sans-serif"}}/>
  {gridSearch&&<div onClick={()=>setGridSearch("")} style={{color:"var(--text25)",fontSize:16,cursor:"pointer",lineHeight:1}}>×</div>}
  </div>
 </div>
@@ -20041,7 +20041,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
          <div style={{display:"flex",justifyContent:"space-between",marginTop:12,position:"relative"}}>
            <div><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:17}}>{sp.record||"0-0"}</div><div style={{fontSize:8.5,color:IOS.label3,textTransform:"uppercase",letterSpacing:.3,fontWeight:700}}>W-L</div></div>
            <div style={{textAlign:"center"}}><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:17,color:IOS.green}}>{wkPts}</div><div style={{fontSize:8.5,color:IOS.label3,textTransform:"uppercase",letterSpacing:.3,fontWeight:700}}>Wk pts</div></div>
-           <div style={{textAlign:"right"}}><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:17,color:IOS.blue}}>{sp.points!=null?sp.points:0}</div><div style={{fontSize:8.5,color:IOS.label3,textTransform:"uppercase",letterSpacing:.3,fontWeight:700}}>Szn pts</div></div>
+           <div style={{textAlign:"right"}}><div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:800,fontSize:17,color:IOS.blue}}>{sp.points!=null?sp.points:0}</div><div style={{fontSize:8.5,color:IOS.label3,textTransform:"uppercase",letterSpacing:.3,fontWeight:700}}>Season pts</div></div>
          </div>
          <div style={{fontSize:9.5,color:IOS.label3,marginTop:9,fontWeight:600,position:"relative",display:"flex",alignItems:"center",justifyContent:"space-between"}}><span>Tap to view picks</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={IOS.label3} strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg></div>
        </div>
@@ -20118,7 +20118,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      {_mOver && activeLeague.isCommissioner && (
        <div onClick={()=>prefillRunItBack(activeLeague)} style={{margin:"0 16px 8px",display:"flex",alignItems:"center",gap:10,background:"linear-gradient(120deg,rgba(var(--yellow-rgb),0.14),rgba(var(--live-rgb),0.08))",border:"0.5px solid rgba(var(--yellow-rgb),0.35)",borderRadius:RAD.md,padding:"11px 13px",cursor:"pointer"}}>
          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--yellow)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
-         <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:800,color:"var(--text)"}}>Run it back</div><div style={{fontSize:10.5,color:"var(--text25)",marginTop:1}}>{"This duel is done \u2014 same shape, same opponent, new week."}</div></div>
+         <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:800,color:"var(--text)"}}>Run it back</div><div style={{fontSize:10.5,color:"var(--text25)",marginTop:1}}>{"This duel is done \u2014 same settings, same opponent, new week."}</div></div>
          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(var(--ink-rgb),0.5)" strokeWidth="2.4" strokeLinecap="round"><path d="M9 6l6 6-6 6"/></svg>
        </div>)}
      <div style={{display:"flex",background:IOS.bg2,borderRadius:RAD.md,padding:3,margin:"0 16px 8px"}}>
@@ -20194,7 +20194,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  if(!leagueIsFull) return (
  <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"60px 24px",textAlign:"center",gap:12}}>
  <div style={{fontSize:56,marginBottom:4}}></div>
- <div style={{fontSize:24,fontWeight:800,letterSpacing:-0.5,color:"var(--text)",lineHeight:1.2}}>Matchups Locked Until League is Full</div>
+ <div style={{fontSize:24,fontWeight:800,letterSpacing:-0.5,color:"var(--text)",lineHeight:1.2}}>Matchups start when the league fills</div>
  <div style={{fontSize:14,color:IOS.label3,lineHeight:1.6,maxWidth:280,marginTop:4}}>
  Once {targetSize} members join, the schedule auto-generates and your Week 1 matchup goes live.
  </div>
@@ -20232,7 +20232,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  if(!hasOpponent) return (
  <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"60px 32px",textAlign:"center",gap:16}}>
  <div style={{fontSize:56}}></div>
- <div style={{fontSize:22,fontWeight:700,letterSpacing:-0.5,color:"var(--text)"}}>No Matchup Yet</div>
+ <div style={{fontSize:22,fontWeight:700,letterSpacing:-0.5,color:"var(--text)"}}>No matchup yet</div>
  <div style={{fontSize:15,color:IOS.label3,lineHeight:1.6}}>You need at least one other member in {activeLeague.name} to have a matchup.</div>
  <div onClick={()=>setScreen("commissioner")} style={{marginTop:8,background:IOS.blue,borderRadius:RAD.md,padding:"12px 24px",fontSize:15,fontWeight:600,color:"var(--on-color)",cursor:"pointer"}}>
  Invite Members →
@@ -20256,7 +20256,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  // does not stop us rendering the WRONG SCREEN while the data is in flight. With
  // allMatchups empty or still holding another league's rows, the condition below is
  // false, so this fell straight through to the live "vs opponent" view for ~130ms
- // before the recap replaced it. "No rows yet" and "loaded, no rows" are different
+ // before the recap replaced it. "Nobody has locked a pick yet" and "loaded, no rows" are different
  // states and only the ownership flags can tell them apart.
  const _sDataReady = (matchupsFor === (activeLeague && activeLeague.id))
                   && (standingsFor === (activeLeague && activeLeague.id));
@@ -20335,7 +20335,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const slotLabels = {ml:"Moneyline", prop:"Prop", ou:"Over/Under", spread:"Spread", longshot:"Longshot"};
  const catColors = {ml:IOS.blue, prop:IOS.yellow, ou:IOS.orange, spread:IOS.green, longshot:IOS.pink, wildcard:IOS.purple, lines:IOS.blue};
  const rColor = r=>r==="W"?IOS.green:r==="L"?IOS.red:IOS.label3;
- const rLabel = r=>r==="W"?" Win":r==="L"?" Loss":"● Pending";
+ const rLabel = r=>r==="W"?"● Win":r==="L"?"● Loss":"● Pending";
 
  return (
  <>
@@ -20343,7 +20343,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {(()=>{
  const accent = isTied?IOS.blue:isWinning?IOS.green:IOS.red;
  const tint = isTied?"var(--s2)":isWinning?"var(--s2)":"var(--s1)";
- const statusTxt = isTied?"You're Tied":isWinning?"You're Winning":"You're Trailing";
+ const statusTxt = isTied?"You're tied":isWinning?"You're winning":"You're trailing";
  return (
  <div style={{position:"sticky",top:0,zIndex:10,background:"var(--s0)",padding:"6px 0 8px"}}>
  <div style={{margin:"0 16px",borderRadius:RAD.lg,padding:"14px 16px",position:"relative",overflow:"hidden",background:"var(--s2)",border:EDGE.hair}}>
@@ -20475,7 +20475,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  </div>
  {!isParlay && picks[0] && (liveMatch(picks[0], liveGames) || (picks[0].away_score!=null && picks[0].home_score!=null)) && <div style={{marginTop:4}} onClick={(e)=>e.stopPropagation()}><ScoreChip pick={picks[0]} live={liveMatch(picks[0], liveGames)} onOpen={()=>openGamecast(picks[0])}/></div>}
  {isMe && !isParlay && result==="pending" && myPUs.some(p=>p.id==="second") && (
- <button onClick={(e)=>{e.stopPropagation(); setSecondSwap({pick:picks[0], category:(picks[0].slot||"ml").split("_")[0]});}} style={{marginTop:5,width:"100%",padding:"4px",borderRadius:RAD.sm,border:`1px solid ${fade(IOS.orange,0.333)}`,background:`${fade(IOS.orange,0.102)}`,color:IOS.orange,fontSize:8.5,fontWeight:800,letterSpacing:0.3,cursor:"pointer"}}>SECOND CHANCE</button>
+ <button onClick={(e)=>{e.stopPropagation(); setSecondSwap({pick:picks[0], category:(picks[0].slot||"ml").split("_")[0]});}} style={{marginTop:5,width:"100%",padding:"4px",borderRadius:RAD.sm,border:`1px solid ${fade(IOS.orange,0.333)}`,background:`${fade(IOS.orange,0.102)}`,color:IOS.orange,fontSize:8.5,fontWeight:800,letterSpacing:0.3,cursor:"pointer"}}>Second chance</button>
  )}
  {isParlay&&<div style={{fontSize:8,color:"var(--text25)",marginTop:3}}>▾ tap to see legs</div>}
  {isParlay&&(
@@ -20771,7 +20771,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div style={{textAlign:"center",fontSize:11,color:"var(--text3)",fontWeight:600,margin:"6px 0 9px"}}>{newLeagueSlots.length} picks · {tot} max multiplier{uniq===1&&newLeagueSlots.length>1?" · single-type league":""}</div>
  <button disabled={!ready} onClick={()=>{if(ready)createLeague(newLeagueName.trim(), newLeagueSports[0]);}} style={{width:"100%",background:ready?IOS.blue:"rgba(var(--ink-rgb),0.08)",border:"none",borderRadius:RAD.md,padding:"15px",fontFamily:"Barlow,sans-serif",fontSize:16,fontWeight:800,color:ready?"var(--text)":"rgba(var(--ink-rgb),0.25)",cursor:ready?"pointer":"default",marginBottom:4}}>{(()=>{ if(creatingLeague) return "Creating...";
    const _cl = newLeagueSlots.length===DEFAULT_SLOTS.length && newLeagueSlots.every((s,i)=>s.type===DEFAULT_SLOTS[i].type&&!s.market) && newLeaguePool.length===DEFAULT_SLOTS.length && newLeaguePool.every((m,i)=>Number(m)===i+1);
-   if(isPro||(_cl && Number(newLeagueWeeks)<=FREE_WEEKS_MAX)) return "Create League";
+   if(isPro||(_cl && Number(newLeagueWeeks)<=FREE_WEEKS_MAX)) return "Create league";
    if(IS_NATIVE) return nativeLeaguePrice ? ("Create \u00B7 "+nativeLeaguePrice+" to unlock (or go Pro)") : "Create \u00B7 unlock or go Pro";
    return "Create \u00B7 $"+leaguePrice(newLeagueWeeks, newLeagueSlots.length)+" to unlock (or go Pro)"; })()}</button>
  </>);})()}
@@ -21204,7 +21204,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const targetSize = league.target_size||league.max_members||8;
  if(currentMembers && currentMembers.length >= targetSize){alert(`This league is already full (${targetSize}/${targetSize} members).`);return;}
  const {error:joinError}=await supabase.from("league_members").insert({league_id:league.id,user_id:user.id,is_commissioner:false});
- if(joinError){alert("Error joining. You may already be a member.");return;}
+ if(joinError){alert("Couldn’t join — you may already be a member.");return;}
  const {data:allMembers}=await supabase.from("league_members").select("user_id").eq("league_id",league.id);
  if(allMembers && allMembers.length === targetSize) {
  const memberIds = allMembers.map(m=>m.user_id);
@@ -21240,7 +21240,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {/* Dropdown league switcher */}
  <div style={{padding:"12px 16px 0"}}>
    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-     <div style={{fontSize:11,fontWeight:700,color:IOS.label3,letterSpacing:.5,textTransform:"uppercase"}}>Switch League</div>
+     <div style={{fontSize:11,fontWeight:700,color:IOS.label3,letterSpacing:.5,textTransform:"uppercase"}}>Switch league</div>
      <div style={{display:"flex",gap:6}}>
        <div onClick={()=>{setShowBrowse(true);fetchPublicLeagues();}} style={{width:28,height:28,borderRadius:RAD.sm,background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
@@ -21412,7 +21412,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      <div style={{position:"relative",overflow:"hidden",background:myWkPts>oppWkPts?"linear-gradient(155deg,var(--s2),var(--s1) 72%)":myWkPts<oppWkPts?"linear-gradient(155deg,var(--s1),var(--s1) 72%)":"linear-gradient(155deg,var(--s2),var(--s1) 72%)",border:`0.5px solid ${myWkPts>oppWkPts?"rgba(var(--win-rgb),0.35)":myWkPts<oppWkPts?"rgba(var(--loss-rgb),0.3)":"rgba(var(--accent-ios-rgb),0.3)"}`,borderRadius:RAD.md,padding:"12px 14px",marginBottom:10,boxShadow:"0 4px 14px rgba(0,0,0,0.35)"}}>
        <div style={{fontSize:9,fontWeight:700,color:IOS.label3,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Wk {currentWeekNum} Matchup</div>
        {!oppName ? (
-         <div style={{textAlign:"center",padding:"8px 0",fontSize:12,color:IOS.label3}}>Fill up league to get a schedule!</div>
+         <div style={{textAlign:"center",padding:"8px 0",fontSize:12,color:IOS.label3}}>Fill the league to generate the schedule</div>
        ) : (
        <>
        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
@@ -21432,7 +21432,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    {myPicksThisWeek.length===0 ? (
      <div style={{background:"linear-gradient(160deg,var(--s2),var(--s1) 80%)",borderRadius:RAD.md,padding:"12px 14px",marginBottom:10,border:EDGE.hair}}>
        <div style={{fontSize:12,color:IOS.label3,textAlign:"center"}}>No picks locked yet</div>
-       <button onClick={()=>setScreen("picks")} style={{width:"100%",background:`linear-gradient(135deg,${IOS.blue},${IOS.indigo})`,border:"none",borderRadius:RAD.sm,padding:"10px",fontFamily:"Barlow,sans-serif",fontSize:12,fontWeight:700,color:"var(--text)",cursor:"pointer",marginTop:10,boxShadow:`0 4px 14px ${fade(IOS.blue,0.2)}`}}>Build My Slip</button>
+       <button onClick={()=>setScreen("picks")} style={{width:"100%",background:`linear-gradient(135deg,${IOS.blue},${IOS.indigo})`,border:"none",borderRadius:RAD.sm,padding:"10px",fontFamily:"Barlow,sans-serif",fontSize:12,fontWeight:700,color:"var(--text)",cursor:"pointer",marginTop:10,boxShadow:`0 4px 14px ${fade(IOS.blue,0.2)}`}}>Build my slip</button>
      </div>
    ) : (
    <div style={{background:"linear-gradient(160deg,var(--s2),var(--s1) 80%)",border:EDGE.hair,borderRadius:RAD.md,overflow:"hidden",marginBottom:10}}>
@@ -21483,7 +21483,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    {/* Quick actions */}
    <div style={{display:"flex",gap:8}}>
      <button onClick={()=>setScreen("picks")} style={{flex:1,background:`linear-gradient(135deg,${IOS.blue},${IOS.indigo})`,border:"none",borderRadius:RAD.md,padding:"11px",fontFamily:"Barlow,sans-serif",fontSize:12,fontWeight:700,color:"var(--text)",cursor:"pointer",boxShadow:`0 4px 14px ${fade(IOS.blue,0.2)}`}}>My Picks</button>
-     <button onClick={e=>{e.stopPropagation();setActiveLeagueId(lg.id);setScreen(lg.isCommissioner?"commissioner":"league");}} style={{flex:1,background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:RAD.sm,padding:"10px",fontFamily:"Barlow,sans-serif",fontSize:12,fontWeight:700,color:IOS.blue,cursor:"pointer"}}>{lg.isCommissioner?"Commish Panel":"League Detail"}</button>
+     <button onClick={e=>{e.stopPropagation();setActiveLeagueId(lg.id);setScreen(lg.isCommissioner?"commissioner":"league");}} style={{flex:1,background:IOS.bg2,border:`0.5px solid ${IOS.sep}`,borderRadius:RAD.sm,padding:"10px",fontFamily:"Barlow,sans-serif",fontSize:12,fontWeight:700,color:IOS.blue,cursor:"pointer"}}>{lg.isCommissioner?"Commish panel":"League detail"}</button>
    </div>
  </div>
  )}
@@ -21592,7 +21592,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {/* ── SCHEDULE TAB ── */}
  {lg && lg.league_type!=="survivor" && (leagueSubTab==="schedule"||leagueSubTab==="bracket") && (
  <div style={{padding:"12px 16px 20px"}}>
-   <div style={{fontSize:13,fontWeight:700,color:"var(--text)",marginBottom:10}}>Season Schedule</div>
+   <div style={{fontSize:13,fontWeight:700,color:"var(--text)",marginBottom:10}}>Season schedule</div>
    {(!scheduleLoaded && liveSchedule.length===0) ? (
      <div style={{background:"linear-gradient(160deg,var(--s2),var(--s1) 80%)",border:EDGE.hair,borderRadius:RAD.md,padding:"20px",textAlign:"center",fontSize:12.5,color:IOS.label3}}>Loading schedule…</div>
    ) : liveSchedule.length===0 ? (
@@ -21609,7 +21609,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        const _started = !_mReady || (allMatchups||[]).length>0 || Number((activeLeague&&activeLeague.current_week)||1)>1;
        const _cm=!_started && !!(activeLeague&&activeLeague.isCommissioner)&&((activeLeague&&activeLeague.league_type)||"h2h")==="h2h"&&leagueMembers.length>=2; return (
        <>
-       <div style={{fontSize:11,color:IOS.label3,marginBottom:_cm?12:0}}>{_cm?"Generate the regular-season matchups now — playoff weeks are reserved automatically.":"Fill up the league to generate the schedule"}</div>
+       <div style={{fontSize:11,color:IOS.label3,marginBottom:_cm?12:0}}>{_cm?"Generate the regular-season matchups now — playoff weeks are reserved automatically.":"Fill the league to generate the schedule"}</div>
        {_cm && (
        <button onClick={async()=>{
          const memberIds=leagueMembers.map(m=>m.userId).filter(Boolean);
@@ -21742,7 +21742,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      if(currentMems&&currentMems.length>=targetSize){alert("League is full.");return;}
      if(league.league_type==="survivor" && league.season_start && (Number(league.current_week)||1)>1){ alert("This survivor pool is past week 1 \u2014 entries are closed."); return; }
      const {error:joinError}=await supabase.from("league_members").insert({league_id:league.id,user_id:user.id,is_commissioner:false});
-     if(joinError){alert("Error joining.");return;}
+     if(joinError){alert("Couldn’t join this league.");return;}
      const {data:allMems2}=await supabase.from("league_members").select("user_id").eq("league_id",league.id);
      if(allMems2 && allMems2.length >= targetSize) {
        const memberIds = allMems2.map(m=>m.user_id);
@@ -21784,7 +21784,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 
  {/* Commish tabs */}
  <div style={{display:"flex",background:IOS.bg3,borderRadius:RAD.md,padding:2,margin:"0 16px 16px",gap:2}}>
- {[{id:"grade",l:"Grade Slips"},{id:"members",l:"Members"},{id:"settings",l:"Settings"}].map(t=>(
+ {[{id:"grade",l:"Grade slips"},{id:"members",l:"Members"},{id:"settings",l:"Settings"}].map(t=>(
  <div key={t.id} onClick={()=>setCommishTab(t.id)} style={{flex:1,textAlign:"center",padding:"8px 4px",borderRadius:RAD.md,fontSize:12,fontWeight:700,cursor:"pointer",transition:"all .15s",background:commishTab===t.id?IOS.bg2:"transparent",color:commishTab===t.id?"var(--text)":IOS.label3,boxShadow:commishTab===t.id?"0 1px 3px rgba(0,0,0,0.4)":"none"}}>{t.l}</div>
  ))}
  </div>
@@ -22122,7 +22122,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      <div style={{fontSize:12,color:IOS.label3,marginBottom:12}}>Generate the regular-season matchups — playoff weeks are reserved automatically.</div>
      <button onClick={async()=>{
        const memberIds = leagueMembers.map(m=>m.userId).filter(Boolean);
-       if(memberIds.length === 0) { alert("Could not load member IDs. Try refreshing."); return; }
+       if(memberIds.length === 0) { alert("Couldn’t load member IDs. Try refreshing."); return; }
        await generateSchedule(activeLeague.id, memberIds, regularSeasonWeeksFor(activeLeague, memberIds.length));
        await fetchSchedule(activeLeague.id, user.id);
        await fetchStandings(activeLeague.id);
@@ -22276,9 +22276,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  await fetchStandings(activeLeague.id);
  alert(`Auto-grade: graded ${d.graded}, skipped ${d.skipped}\n\nReasons: ${JSON.stringify(d.reasons||{})}\n\nCompleted games seen (${d.debug?.scoresTotal||0} total): ${(d.debug?.scoresCompleted||[]).join(" | ")||"NONE"}\n\nPlayers indexed: ${d.debug?.indexedPlayers??0}\n\n${(d.samples||[]).map(s=>`${s.slot} "${s.name}" [${s.game}] -> ${s.reason}`).join("\n")}`);
  } else {
- alert("Grade error: " + (d.error||"Unknown"));
+ alert("Couldn’t grade those slips: " + (d.error||"Unknown"));
  }
- } catch(e) { alert("Failed to reach grade API: " + e.message); }
+ } catch(e) { alert("Couldn’t reach the grader: " + e.message); }
  }} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"rgba(var(--accent-ios-rgb),0.12)",border:"1px solid rgba(var(--accent-ios-rgb),0.3)",borderRadius:RAD.md,padding:12,fontFamily:"Barlow,sans-serif",fontSize:14,fontWeight:700,color:IOS.blue,cursor:"pointer",marginBottom:12}}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>Run grading now</button>
        <div style={{display:"flex",alignItems:"flex-start",gap:9,fontSize:12,color:"var(--text3)",lineHeight:1.45,marginBottom:11}}>
          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" strokeWidth="2" style={{flexShrink:0,marginTop:1}}><path d="M5 4l8 8-8 8M14 4l6 8-6 8"/></svg>
@@ -22403,7 +22403,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  await supabase.from("league_power_ups").delete().eq("league_id", activeLeague.id);
  // Delete the league itself
  const {error} = await supabase.from("leagues").delete().eq("id", activeLeague.id);
- if(error){ alert("Error deleting league: " + error.message); return; }
+ if(error){ alert("Couldn’t delete that league: " + error.message); return; }
  // Reset local state
  setRealLeagues(prev => prev.filter(l => l.id !== activeLeague.id));
  setActiveLeagueId(null);
@@ -22552,7 +22552,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const isFull = leagueMembers.length >= targetSize;
  if(!isFull) return (
  <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:RAD.lg,padding:"36px 24px",textAlign:"center"}}>
- <div style={{fontSize:18,fontWeight:700,color:"var(--text)",marginBottom:8}}>Bracket Locks When Full</div>
+ <div style={{fontSize:18,fontWeight:700,color:"var(--text)",marginBottom:8}}>Bracket locks when full</div>
  <div style={{fontSize:14,color:IOS.label3,lineHeight:1.6,marginBottom:20}}>The tournament bracket generates once you reach {targetSize} players.</div>
  <div style={{background:"rgba(var(--ink-rgb),0.08)",borderRadius:RAD.sm,height:8,overflow:"hidden",marginBottom:10}}>
  <div style={{height:"100%",borderRadius:RAD.sm,background:`linear-gradient(90deg,${IOS.blue},${IOS.purple})`,width:`${(leagueMembers.length/targetSize)*100}%`,transition:"width .4s"}}/>
@@ -22629,7 +22629,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
          border:`1px solid ${fade(accent,0.278)}`}}>
          <div style={{position:"absolute",top:0,left:0,right:0,height:2.5,background:`linear-gradient(90deg,${accent},${IOS.orange})`}}/>
          <div style={{textAlign:"center",fontSize:11,fontWeight:800,letterSpacing:"0.14em",textTransform:"uppercase",color:accent,marginBottom:10}}>
-          {myRank==null ? "Playoff picture" : inField ? "You're in the field" : "You're on the outside"}
+          {myRank==null ? "Playoff picture" : inField ? "In the playoff field" : "Outside the playoff field"}
          </div>
          <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
           <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:62,fontWeight:900,lineHeight:0.85,letterSpacing:-2,color:accent}}>
@@ -22641,7 +22641,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
            </div>
            <div style={{fontSize:12.5,color:IOS.label3,marginTop:3,maxWidth:180,lineHeight:1.35}}>
             {myRank==null ? "Grade some picks to appear in the seeding."
-             : inField ? (ms[N] ? `${f1(gap)} clear of ${N+1}${ord(N+1)}.` : "Holding a spot.")
+             : inField ? (ms[N] ? `${f1(gap)} clear of ${N+1}${ord(N+1)}.` : "In the playoff field.")
              : `${f1(gap)} from the ${N} seed.`}
            </div>
           </div>
@@ -22783,7 +22783,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontWeight:900,fontSize:58,lineHeight:.85,color:"var(--text)",textShadow:`0 0 36px ${fade(IOS.blue,0.4)}`}}>{me.points!=null?me.points:0}<span style={{fontSize:19,color:IOS.label3,fontWeight:700}}> pts</span></div>
      <div style={{paddingBottom:6}}>
        <div style={{fontSize:21,fontWeight:900,lineHeight:1}}>You {"·"} #{myRank}</div>
-       <div style={{fontSize:12,color:inPlayoff?IOS.green:IOS.label2,fontWeight:700,marginTop:5}}>{playoffN<=0?"Most points wins":inPlayoff?(gap!=null?`In the hunt · +${gap} above the line`:"In playoff position"):(gap!=null?`${Math.abs(gap)} pts back of the line`:"Chasing the playoff")}</div>
+       <div style={{fontSize:12,color:inPlayoff?IOS.green:IOS.label2,fontWeight:700,marginTop:5}}>{playoffN<=0?"Most points wins":inPlayoff?(gap!=null?`In the hunt · +${gap} above the line`:"In the playoff field"):(gap!=null?`${Math.abs(gap)} pts back of the line`:"Outside the playoff field")}</div>
      </div>
    </div>
    <div style={{display:"flex",marginTop:16,background:"rgba(var(--ink-rgb),0.03)",border:`0.5px solid ${IOS.sep}`,borderRadius:RAD.md,overflow:"hidden"}}>
@@ -23069,7 +23069,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
          </div>
          <div style={{textAlign:"left"}}>
           <div style={{fontSize:24,fontWeight:900,lineHeight:1,color:"var(--text)"}}>{mine.length===0?"Nothing.":mine.length===leagueTrophies.length?"Everything.":(mine.length===1?"One.":mine.length+" of them.")}</div>
-          <div style={{fontSize:12.5,color:IOS.label3,marginTop:3}}>{mine.length===0?(steal?"Yet. One's within reach.":"Yet."):"Hold them."}</div>
+          <div style={{fontSize:12.5,color:IOS.label3,marginTop:3}}>{mine.length===0?(steal?"None yet — one is within reach.":"None yet."):"Defend them."}</div>
          </div>
         </div>
         {board.length>1 && (
@@ -23095,7 +23095,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
         </div>
        )}
 
-       <div style={{textAlign:"center",fontSize:17,fontWeight:900,color:"var(--text)",margin:"4px 0 12px"}}>The case</div>
+       <div style={{textAlign:"center",fontSize:17,fontWeight:900,color:"var(--text)",margin:"4px 0 12px"}}>Trophy case</div>
 
        {leagueTrophies.map(t=>{
         const pct = t.lead>0 ? Math.max(0,Math.min(1, t.mine/t.lead)) : 0;
@@ -23183,7 +23183,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  if(!isFull) return (
  <div style={{margin:"0 16px",background:IOS.bg2,borderRadius:RAD.lg,padding:"36px 24px",textAlign:"center"}}>
  <div style={{fontSize:44,marginBottom:12}}></div>
- <div style={{fontSize:18,fontWeight:700,color:"var(--text)",marginBottom:8}}>Fill the League to See Your Schedule!</div>
+ <div style={{fontSize:18,fontWeight:700,color:"var(--text)",marginBottom:8}}>Fill the league to generate the schedule</div>
  <div style={{fontSize:14,color:IOS.label3,lineHeight:1.6,marginBottom:20}}>
  Schedule auto-generates when you reach {targetSize} members.
  </div>
@@ -23255,7 +23255,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {liveSchedule.length === 0 ? (
  <div style={{padding:"32px 24px",textAlign:"center",color:IOS.label3}}>
  <div style={{fontSize:32,marginBottom:10}}></div>
- <div style={{fontSize:15,fontWeight:600,color:"var(--text)",marginBottom:6}}>Schedule Coming Soon</div>
+ <div style={{fontSize:15,fontWeight:600,color:"var(--text)",marginBottom:6}}>Schedule coming soon</div>
  <div style={{fontSize:13}}>Join a full league to auto-generate your schedule.</div>
  </div>
  ) : (()=>{ const _sw=Number(activeLeague.season_weeks)||18; const _N=playoffFieldFor(activeLeague, leagueMembers.length||0); const _start=_N>=2?Math.max(1,_sw-playoffWeeksFor(_N)+1):(_sw+1); return Array.from({length:_sw},(_,_i)=>_i+1).map(_wknum=>{ const wk=liveSchedule.find(w=>w.week===_wknum); const _isPO=_wknum>=_start; if(!wk){ return (<div key={"ph"+_wknum} className="sch-item" style={{opacity:0.7}}><div className="sch-wk">W{_wknum}</div><div className="sch-opp up" style={_isPO?{color:(IOS.purple||"var(--purple)"),fontWeight:700}:{}}>{_isPO?"Playoffs":"Bye week"}</div><div className="sch-score" style={{width:70,fontSize:12}}>—</div><div style={{display:"flex",alignItems:"center",gap:6}}><div className="sch-badge up">{_isPO?"TBD":"BYE"}</div></div></div>); }
@@ -23511,7 +23511,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
                               <div style={{borderTop:"0.5px solid rgba(var(--ink-rgb),0.07)",padding:"9px 0 10px"}}>
                                 <div style={{position:"relative",margin:"0 10px 8px"}}>
                                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(var(--ink-rgb),0.35)" strokeWidth="2.6" strokeLinecap="round" style={{position:"absolute",left:11,top:"50%",transform:"translateY(-50%)"}}><circle cx="11" cy="11" r="7"/><line x1="20" y1="20" x2="16.7" y2="16.7"/></svg>
-                                  <input value={plokBrowseQ} onChange={e=>setPlokBrowseQ(e.target.value)} placeholder={_isProp?"Search a player or team...":"Search a team or game..."} style={{width:"100%",boxSizing:"border-box",background:"rgba(var(--ink-rgb),0.06)",border:"0.5px solid rgba(var(--ink-rgb),0.1)",borderRadius:10,padding:"9px 30px 9px 30px",fontFamily:"Barlow,sans-serif",fontSize:12.5,color:"var(--text)",outline:"none"}}/>
+                                  <input value={plokBrowseQ} onChange={e=>setPlokBrowseQ(e.target.value)} placeholder="Search players or teams" style={{width:"100%",boxSizing:"border-box",background:"rgba(var(--ink-rgb),0.06)",border:"0.5px solid rgba(var(--ink-rgb),0.1)",borderRadius:10,padding:"9px 30px 9px 30px",fontFamily:"Barlow,sans-serif",fontSize:12.5,color:"var(--text)",outline:"none"}}/>
                                   {plokBrowseQ && <span onClick={()=>setPlokBrowseQ("")} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:13,color:"var(--text25)",cursor:"pointer"}}>{"\u00d7"}</span>}
                                 </div>
                                 {_mkts.length>1 && (
@@ -23655,7 +23655,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
                   <div className="gh-sheet">
                     <div className="gh-grip"/>
                     <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",padding:"4px 20px 4px"}}>
-                      <div style={{fontSize:17,fontWeight:900,color:"var(--text)"}}>The Ledger</div>
+                      <div style={{fontSize:17,fontWeight:900,color:"var(--text)"}}>The ledger</div>
                       {plokRecord && <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:13,fontWeight:900,color:"var(--cyan)"}}>{plokRecord.wins}-{plokRecord.losses} {"\u00b7"} {Math.round(plokRecord.wins/Math.max(1,plokRecord.wins+plokRecord.losses)*100)}%</div>}
                     </div>
                     <div style={{fontSize:11,color:"var(--text25)",padding:"0 20px 10px",lineHeight:1.45}}>Every call Plok makes is graded by the <b style={{color:"var(--text2)"}}>same engine that grades your picks</b> {"\u2014"} wins and losses both stay on the sheet.</div>
@@ -23893,12 +23893,12 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  const serial="#"+String(1000+Math.round(st.points||0)).slice(-4);
  const badges=[
  {id:"hot",name:"Hot Hand",short:"Hot Hand",desc:"Win 5 picks in a row.",svg:'<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.4-.5-2-1-3-1.1-2.1-.2-4 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.2.4-2.3 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>',cur:cs.type==="W"?cs.count:0,goal:5,unlocked:cs.type==="W"&&cs.count>=5},
- {id:"long",name:"Longshot King",short:"Longshot",desc:"Hit 5 longshot bets (+400 or better).",svg:'<path d="M4.5 16.5c-1.5 1.3-2 5-2 5s3.7-.5 5-2c.7-.8.7-2.1-.1-2.9a2.18 2.18 0 0 0-2.9-.1z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.9 12.9 0 0 1 22 2c0 2.7-.8 7.5-6 11a22 22 0 0 1-4 2z"/><path d="M9 12H4s.6-3 2-4c1.6-1.1 5 0 5 0"/>',cur:lsW,goal:5,unlocked:lsW>=5},
+ {id:"long",name:"Longshot Legend",short:"Longshot",desc:"Hit 5 longshot bets (+400 or better).",svg:'<path d="M4.5 16.5c-1.5 1.3-2 5-2 5s3.7-.5 5-2c.7-.8.7-2.1-.1-2.9a2.18 2.18 0 0 0-2.9-.1z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.9 12.9 0 0 1 22 2c0 2.7-.8 7.5-6 11a22 22 0 0 1-4 2z"/><path d="M9 12H4s.6-3 2-4c1.6-1.1 5 0 5 0"/>',cur:lsW,goal:5,unlocked:lsW>=5},
  {id:"sharp",name:"Sharp",short:"Sharp",desc:"Hold a 60%+ win rate over 40+ graded picks.",svg:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/>',cur:Math.round(winFrac*100),goal:60,suffix:"%",unlocked:winFrac>=0.6&&total>=40},
  {id:"cent",name:"Centurion",short:"Centurion",desc:"Lock in 100 career picks.",svg:'<circle cx="12" cy="8" r="6"/><path d="M15.5 12.9 17 22l-5-3-5 3 1.5-9.1"/>',cur:total,goal:100,unlocked:total>=100},
  {id:"iron",name:"Unstoppable",short:"Unstoppable",desc:"Build a 10-pick win streak.",svg:'<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',cur:mx,goal:10,unlocked:mx>=10},
  ];
- const backRows=[["Playstyle",arch],["Win rate",st.winRate||"0%"],["Total picks",total],["Longshot rate",Math.round(lsRate*100)+"%"],["Longest streak","W"+mx],["Season points",Math.round(st.points||0)],["Best pick",(st.bestBet&&st.bestBet.pick_name)||"—"]];
+ const backRows=[["Archetype",arch],["Win rate",st.winRate||"0%"],["Total picks",total],["Longshot rate",Math.round(lsRate*100)+"%"],["Longest streak","W"+mx],["Season points",Math.round(st.points||0)],["Best pick",(st.bestBet&&st.bestBet.pick_name)||"—"]];
  const cardData={ovr,tier,arch,record:wins+"-"+losses,winPct:st.winRate||"0%",streak:cs,name:uname,initials,serial,badges,backRows};
  if(editingUsername){
  return (
@@ -23998,7 +23998,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        <div style={{width:32,height:32,borderRadius:"50%",background:"rgba(var(--ink-rgb),0.05)",border:"1px dashed rgba(var(--ink-rgb),0.16)",flexShrink:0}}/>
        <div style={{flex:1,minWidth:0}}>
          <div style={{fontSize:13.5,fontWeight:700,color:"var(--text25)"}}>Open slot</div>
-         <div style={{fontSize:10.5,color:IOS.label3,marginTop:1}}>{code?"Share your code to fill it":"Your code appears here once your profile loads"}</div>
+         <div style={{fontSize:10.5,color:IOS.label3,marginTop:1}}>{code?"Share your code to fill it":"Your invite code will appear here"}</div>
        </div>
      </div>
 
@@ -24132,7 +24132,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 15px"}}>
          <div style={{flex:1,minWidth:0}}>
            <div style={{fontSize:13,fontWeight:700,color:"var(--text)"}}>Average odds</div>
-           <div style={{fontSize:10.5,color:IOS.label3,marginTop:1}}>Straight picks only</div>
+           <div style={{fontSize:10.5,color:IOS.label3,marginTop:1}}>Parlays not counted</div>
          </div>
          <div style={{fontSize:16,fontWeight:900,fontFamily:"'Barlow Semi Condensed',sans-serif",color:"var(--text)",flexShrink:0}}>{s.avgOdds?(s.avgOdds>0?"+"+s.avgOdds:String(s.avgOdds)):"\u2014"}</div>
        </div>
@@ -24143,7 +24143,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  })()}
  <div onClick={()=>setScreen("analytics")} style={{margin:"0 16px",background:isPro?"rgba(var(--accent-ios-rgb),0.1)":"rgba(var(--purple-rgb),0.08)",border:`0.5px solid ${isPro?"rgba(var(--accent-ios-rgb),0.3)":"rgba(var(--purple-rgb),0.3)"}`,borderRadius:RAD.lg,padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}}>
    <div>
-     <div style={{fontSize:14,fontWeight:700,color:"var(--text)",marginBottom:2}}>Full Analytics</div>
+     <div style={{fontSize:14,fontWeight:700,color:"var(--text)",marginBottom:2}}>Full analytics</div>
      <div style={{fontSize:11,color:IOS.label3}}>{isPro?"Pick types, sports, longshot, season recap":"5 analytics tabs — unlock with Pro"}</div>
    </div>
    <div style={{display:"flex",alignItems:"center",gap:6}}>
@@ -24230,7 +24230,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  </>
  );
  })()}
- <div style={{padding:"14px 20px 8px"}}><div style={{fontSize:13,fontWeight:600,color:IOS.label3,textTransform:"uppercase",letterSpacing:0.5}}>All Power-Ups</div></div>
+ <div style={{padding:"14px 20px 8px"}}><div style={{fontSize:13,fontWeight:600,color:IOS.label3,textTransform:"uppercase",letterSpacing:0.5}}>All power-ups</div></div>
  {POWER_UPS.map(pu=>(
  <div key={pu.id} style={{display:"flex",alignItems:"center",padding:"12px 16px",margin:"0 16px 6px",background:IOS.bg2,borderRadius:RAD.md,gap:12}}>
  <div style={{width:38,height:38,borderRadius:RAD.md,background:`${fade(pu.color,0.082)}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{puSVG(pu.id,pu.color)}</div>
@@ -24319,10 +24319,10 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      <div style={{padding:16,fontSize:12.5,fontWeight:600,color:IOS.label3,lineHeight:1.5,textAlign:"center"}}>Push is off, so nothing will be sent.<br/>Turn it on above to choose which alerts you get.</div>
     ) : (<>
  {[
- {key:"notif_results", label:"Weekly Results", sub:"When your week is graded", emblem:'<path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/>'},
- {key:"notif_grades", label:"Picks Graded", sub:"When a pick result comes in", emblem:'<polyline points="20 6 9 17 4 12"/>'},
- {key:"notif_reminder", label:"Pick Reminder", sub:"Reminder before slip locks", emblem:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'},
- {key:"notif_league", label:"League Activity", sub:"New members, chat messages", emblem:'<circle cx="9" cy="7" r="3"/><path d="M2 21v-2a5 5 0 0 1 10 0v2"/><circle cx="17" cy="9" r="2.5"/>'},
+ {key:"notif_results", label:"Weekly results", sub:"When your week is graded", emblem:'<path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/>'},
+ {key:"notif_grades", label:"Picks graded", sub:"When a pick result comes in", emblem:'<polyline points="20 6 9 17 4 12"/>'},
+ {key:"notif_reminder", label:"Pick reminder", sub:"An hour before your slip locks", emblem:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'},
+ {key:"notif_league", label:"League activity", sub:"New members, chat messages", emblem:'<circle cx="9" cy="7" r="3"/><path d="M2 21v-2a5 5 0 0 1 10 0v2"/><circle cx="17" cy="9" r="2.5"/>'},
  ].map((pref,i,arr)=>{
  const val = userProfile?.[pref.key] !== false; // default true
  return (
@@ -24405,7 +24405,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
     <div style={{width:36,height:36,borderRadius:RAD.md,background:"rgba(var(--accent-ios-rgb),0.14)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={IOS.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
     </div>
-    <div style={{flex:1}}><div style={{fontSize:14.5,fontWeight:800}}>How to Play</div>
+    <div style={{flex:1}}><div style={{fontSize:14.5,fontWeight:800}}>How to play</div>
     <div style={{fontSize:11.5,color:IOS.label3,marginTop:1}}>Pick types, sports, longshot, season recap</div></div>
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(var(--ink-rgb),0.28)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
    </div>
@@ -25273,7 +25273,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div style={{textAlign:"center",padding:"40px 20px",background:IOS.bg2,borderRadius:RAD.md,border:EDGE.hair}}>
    <div style={{fontSize:14,fontWeight:700,color:"var(--text)",marginBottom:6}}>No history yet</div>
    <div style={{fontSize:12,color:IOS.label3}}>Lock in your first solo slip to start building your record.</div>
-   <button onClick={()=>setScreen("picks")} style={{marginTop:14,background:IOS.blue,border:"none",borderRadius:RAD.sm,padding:"10px 24px",fontFamily:"Barlow,sans-serif",fontSize:13,fontWeight:700,color:"var(--on-color)",cursor:"pointer"}}>Build First Slip</button>
+   <button onClick={()=>setScreen("picks")} style={{marginTop:14,background:IOS.blue,border:"none",borderRadius:RAD.sm,padding:"10px 24px",fontFamily:"Barlow,sans-serif",fontSize:13,fontWeight:700,color:"var(--on-color)",cursor:"pointer"}}>Build first slip</button>
  </div>
  ) : (
  <>
@@ -25766,7 +25766,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        </div>
        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:12}}>
         <div style={{...SURF,borderRadius:RAD.lg,padding:"13px 14px"}}><div style={{fontSize:20,fontWeight:800,color:CC.pink,fontVariantNumeric:"tabular-nums"}}>{ls?(ls.pts>=0?"+":"")+ls.pts:"—"}</div><div style={{fontSize:10,color:CC.l3,textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:700,marginTop:4}}>Longshot Pts</div></div>
-        <div style={{...SURF,borderRadius:RAD.lg,padding:"13px 14px"}}><div style={{fontSize:20,fontWeight:800,color:CC.yellow}}>{ls?ls.pct+"%":"—"}</div><div style={{fontSize:10,color:CC.l3,textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:700,marginTop:4}}>Longshot Hit Rate</div></div>
+        <div style={{...SURF,borderRadius:RAD.lg,padding:"13px 14px"}}><div style={{fontSize:20,fontWeight:800,color:CC.yellow}}>{ls?ls.pct+"%":"—"}</div><div style={{fontSize:10,color:CC.l3,textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:700,marginTop:4}}>Longshot hit rate</div></div>
         <div style={{...SURF,borderRadius:RAD.lg,padding:"13px 14px"}}><div style={{fontSize:20,fontWeight:800,color:CC.green,fontVariantNumeric:"tabular-nums"}}>{s.bestBet?"+"+parseFloat(s.bestBet.points_earned||0).toFixed(1):"—"}</div><div style={{fontSize:10,color:CC.l3,textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:700,marginTop:4}}>Biggest Single Hit</div></div>
         <div style={{...SURF,borderRadius:RAD.lg,padding:"13px 14px"}}><div style={{fontSize:20,fontWeight:800,color:CC.teal}}>{s.bestBet&&s.bestBet.odds?s.bestBet.odds:fmtOdds(s.avgOdds)}</div><div style={{fontSize:10,color:CC.l3,textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:700,marginTop:4}}>Best Pick Odds</div></div>
        </div>
