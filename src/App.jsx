@@ -6824,6 +6824,9 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
    else { setScreen("browser"); }
  };
  const closeBrowserSheet = ()=>setBrowserSheet(false);
+ // Leaving the browser means different things in its two presentations: close
+ // the sheet, or navigate back to picks. Every exit inside the browser uses this.
+ const leaveBrowser = ()=>{ if(browserSheet){ setBrowserSheet(false); } else { setScreen("picks"); } };
 
  const goBack = (fallback)=>{
    // A sheet is not a screen, so dismiss it before popping, or hardware back would
@@ -8846,6 +8849,9 @@ const PUSHED_SCREENS = ALL_SCREENS.filter(s=>!ROOT_TABS.includes(s));
     else { setAiInput(""); askPlok(t); }
   };
   useEffect(() => {
+    // Native builds resize the WebView through @capacitor/keyboard. Doing it
+    // here as well shrinks the layout twice on the same keyboard event.
+    try{ const c = window.Capacitor; if(c && c.isNativePlatform && c.isNativePlatform()) return; }catch(e){}
     const vv = window.visualViewport; if(!vv) return;
     const apply = () => {
       const kb = window.innerHeight - vv.height; // approximate keyboard height
@@ -12289,7 +12295,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  .nav-header{padding:var(--sa-top) 20px 12px;position:relative;z-index:5;background:var(--bg);}
  .nav-header.large{padding-bottom:8px;}
  .nav-title-small{font-size:17px;font-weight:600;letter-spacing:-0.4px;color:var(--text);text-align:center;padding:12px 0 8px;}
- .nav-title-large{font-size:34px;font-weight:700;letter-spacing:-0.5px;color:var(--text);line-height:1.35;padding:1px 0;}
+ .nav-title-large{font-family:'Barlow Semi Condensed','Barlow',system-ui,sans-serif;font-size:36px;font-weight:800;
+  letter-spacing:-0.6px;color:var(--text);line-height:1.15;padding:1px 0;text-transform:uppercase;}
+.nav-title-large .wm-lock{color:var(--accent);}
  .nt-tg{width:54px;height:32px;border-radius:16px;background:var(--s5);position:relative;cursor:pointer;flex-shrink:0;overflow:hidden;transition:background .3s;}
  .nt-fill{position:absolute;inset:0;border-radius:16px;background:linear-gradient(90deg,var(--accent-ios),#48a4ff);transform:scaleX(0);transform-origin:left center;transition:transform .42s cubic-bezier(.34,1.56,.64,1);}
  .nt-tg.on .nt-fill{transform:scaleX(1);}
@@ -14535,7 +14543,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div className="pk-cbar" style={{paddingLeft:20,paddingRight:20}}><div className="pk-cbar-t">PickLock</div></div>
  <div className="nav-header large pk-hdr" style={{textAlign:"left",padding:"6px 20px 16px",background:"radial-gradient(130% 90% at 88% -10%, rgba(var(--accent-ios-rgb),0.20), transparent 55%), linear-gradient(180deg,var(--hero) 0%,var(--bg) 80%)"}}>
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
- <div className="nav-title-large">PICKLOCK</div>
+ <div className="nav-title-large">PICK<span className="wm-lock">LOCK</span></div>
  <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
  <div className="pk-t-mode" style={{display:"flex",background:"rgba(var(--ink-rgb),0.08)",borderRadius:RAD.sm,padding:2}}>
  {[{id:"leagues",label:"Leagues"},{id:"solo",label:"Solo"}].map(m=>(
@@ -14618,6 +14626,11 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    const settleMs=_ends.length?Math.max.apply(null,_ends):null;
    const _ups=(tickerGames||[]).filter(g=>g.sport===(activeLeague&&activeLeague.sport)).map(g=>new Date(g.time).getTime()).filter(t=>t>_now).sort((a,b)=>a-b);
    const nextLockMs=_ups.length?_ups[0]:null;
+   // Last kickoff of THIS week. Bounded to six days past the first upcoming
+   // game so a slate that already includes next week does not stretch it.
+   const _wkEnd=_ups.length?_ups[0]+6*86400000:null;
+   const _thisWk=_wkEnd?_ups.filter(t=>t<=_wkEnd):[];
+   const weekCloseMs=_thisWk.length?_thisWk[_thisWk.length-1]:nextLockMs;
    const fmtCd=(ms)=>{const dd=Math.max(0,ms-_now);const hh=Math.floor(dd/3600000);const mm=Math.floor((dd%3600000)/60000);return hh>0?(hh+"h "+mm+"m"):(mm+"m");};
    const fmtClk=(ms)=>new Date(ms).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
    const COL={win:"var(--win)",loss:"var(--loss)",pend:"var(--live)",idle:"rgba(var(--ink-rgb),0.16)"};
@@ -14945,13 +14958,13 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
 
      {/* Lock bar. The countdown is the whole point: nothing on the old home said
          WHEN. Only shown when there is something to do and a game to do it before. */}
-     {(openSlots>0&&nextLockMs)&&(()=>{ const d=Math.max(0,nextLockMs-nowTick);
+     {(openSlots>0&&weekCloseMs)&&(()=>{ const d=Math.max(0,weekCloseMs-nowTick);
        const hh=Math.floor(d/3600000), mm=Math.floor((d%3600000)/60000), ss=Math.floor((d%60000)/1000);
        const urgent=d<3600000;
        return (
        <div style={{marginTop:13,background:"var(--s3)",border:"0.5px solid rgba(var(--ink-rgb),0.08)",borderRadius:RAD.md,padding:"10px 12px",display:"flex",alignItems:"center",gap:10}}>
          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={urgent?IOS.red:IOS.yellow} strokeWidth="2.1" strokeLinecap="round" style={{flexShrink:0}}><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
-         <div style={{fontSize:12,fontWeight:700,color:"var(--text2)",minWidth:0}}><span style={{color:"var(--text)"}}>{_openLabel}</span>{" \u2014 first lock in"}</div>
+         <div style={{fontSize:12,fontWeight:700,color:"var(--text2)",minWidth:0}}><span style={{color:"var(--text)"}}>{_openLabel}</span>{" \u00b7 week closes in"}</div>
          <div style={{marginLeft:"auto",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:17,fontWeight:800,color:urgent?IOS.red:IOS.yellow,fontVariantNumeric:"tabular-nums",letterSpacing:"0.03em"}}>
            {hh>0?(hh+":"+String(mm).padStart(2,"0")+":"+String(ss).padStart(2,"0")):(mm+":"+String(ss).padStart(2,"0"))}
          </div>
@@ -14985,10 +14998,10 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    </div>
  </div>)}
  {/* The Gauntlet — global survivor pool, both home modes */}
- {screen==="home" && homeMode!=="solo" && activeLeagueId!==GAUNTLET_ID && <GauntletCard user={user} onEnter={()=>{ applyMode(false); setActiveLeagueId(GAUNTLET_ID); setScreen("picks"); }} onJoin={async()=>{ if(user){ await fetchLeagues(user.id); } applyMode(false); setActiveLeagueId(GAUNTLET_ID); }}/>}
+ {/* Gauntlet card removed from Home (18 Sep). Still in Leagues and the switcher. */}
 
  {/* ══ SOLO MODE HOME SCREEN ══ */}
- {homeMode==="solo" && <SoloHome raceUser={user} gauntletSlot={screen==="home" ? <GauntletCard user={user} onEnter={()=>{ applyMode(false); setActiveLeagueId(GAUNTLET_ID); setScreen("picks"); }} onJoin={async()=>{ if(user){ await fetchLeagues(user.id); } applyMode(false); setActiveLeagueId(GAUNTLET_ID); }}/> : null} soloWeeks={soloWeeks} soloLoading={soloLoading} isPro={isPro} IOS={IOS} setScreen={setScreen} setShowNewLeague={setShowNewLeague} setNewLeagueStep={setNewLeagueStep} setShowBrowse={setShowBrowse} fetchPublicLeagues={fetchPublicLeagues} setIsSoloMode={applyMode} setActiveLeagueId={setActiveLeagueId} getOrCreateSoloLeague={getOrCreateSoloLeague} soloSavedPicks={soloSavedPicks} setSoloSavedPicks={setSoloSavedPicks} soloFlexPicks={soloFlexPicks} setSoloFlexPicks={setSoloFlexPicks} soloSport={soloSport} setSoloSport={setSoloSportPersist} setShowSoloSportPicker={setShowSoloSportPicker} soloSubmitted={soloSubmitted} setSoloSubmitted={setSoloSubmitted} username={userProfile?.username||""} soloTopPct={soloTopPct} onDeleteSlate={deleteSoloSlate} onJoinCode={handleJoinCode} setShowPaywall={setShowPaywall} tickerGames={tickerGames} espnGames={espnGames} globalRank={(()=>{ const rows=lbCache["all"]; if(!rows||!rows.length) return null; const sx=[...rows].sort((a,b)=>(Number(b.points)||0)-(Number(a.points)||0)); const i=sx.findIndex(r=>String(r.user_id)===String(user?.id)); return i>=0?{rank:i+1,total:sx.length}:null; })()} onOpenLeaderboard={()=>{ fetchLeaderboard("all"); setScreen("leaderboard"); }} liveGames={liveGames} onOpenGamecast={openGamecast} onReplace={startReplace}/>}
+ {homeMode==="solo" && <SoloHome raceUser={user} gauntletSlot={null} soloWeeks={soloWeeks} soloLoading={soloLoading} isPro={isPro} IOS={IOS} setScreen={setScreen} setShowNewLeague={setShowNewLeague} setNewLeagueStep={setNewLeagueStep} setShowBrowse={setShowBrowse} fetchPublicLeagues={fetchPublicLeagues} setIsSoloMode={applyMode} setActiveLeagueId={setActiveLeagueId} getOrCreateSoloLeague={getOrCreateSoloLeague} soloSavedPicks={soloSavedPicks} setSoloSavedPicks={setSoloSavedPicks} soloFlexPicks={soloFlexPicks} setSoloFlexPicks={setSoloFlexPicks} soloSport={soloSport} setSoloSport={setSoloSportPersist} setShowSoloSportPicker={setShowSoloSportPicker} soloSubmitted={soloSubmitted} setSoloSubmitted={setSoloSubmitted} username={userProfile?.username||""} soloTopPct={soloTopPct} onDeleteSlate={deleteSoloSlate} onJoinCode={handleJoinCode} setShowPaywall={setShowPaywall} tickerGames={tickerGames} espnGames={espnGames} globalRank={(()=>{ const rows=lbCache["all"]; if(!rows||!rows.length) return null; const sx=[...rows].sort((a,b)=>(Number(b.points)||0)-(Number(a.points)||0)); const i=sx.findIndex(r=>String(r.user_id)===String(user?.id)); return i>=0?{rank:i+1,total:sx.length}:null; })()} onOpenLeaderboard={()=>{ fetchLeaderboard("all"); setScreen("leaderboard"); }} liveGames={liveGames} onOpenGamecast={openGamecast} onReplace={startReplace}/>}
  {/* Daily Lock sits under the solo content; collapsible so a deep board never pushes the week down */}
  {screen==="home" && homeMode==="solo" && <DailyLockCard user={user}/>}
        {homeMode==="solo" && screen==="home" && (()=>{
@@ -18081,7 +18094,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      try{ fetchWeekPicks(activeLeague.id, _weekNum); }catch(e){}
      try{ posthog.capture("pick_added", { league_id: activeLeague.id, category: cat, market_key: (bet&&bet.marketKey)||null, swap:true }); }catch(e){}
      setGridJustAdded(bet.id);
-     setTimeout(()=>{ setScreen("picks"); setGridJustAdded(null); }, 480);
+     setTimeout(()=>{ leaveBrowser(); setGridJustAdded(null); }, 480);
    })();
    return;
  }
@@ -18177,8 +18190,8 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  setTimeout(()=>{
  if(flexMode){
  if(nextMult!=null){ setGridFlexMult(nextMult); if(nextEmpty!==-1) setGridTargetSlot(nextEmpty); }
- else { setScreen("picks"); }
- } else if(nextEmpty===-1){ setScreen("picks"); }
+ else { leaveBrowser(); }
+ } else if(nextEmpty===-1){ leaveBrowser(); }
  else { setGridTargetSlot(nextEmpty); }
  setGridJustAdded(null);
  }, 480);
@@ -19167,7 +19180,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    <style>{`.gbx-scroll::-webkit-scrollbar{ display:none; }`}</style>
    <div style={{position:"sticky",top:0,zIndex:10,background:"var(--s0)",boxShadow:"var(--sticky-shadow)"}}>
      <div style={{display:"flex",alignItems:"center",gap:11,padding:"10px 16px 8px"}}>
-       <div onClick={()=>setScreen("picks")} style={{width:34,height:34,borderRadius:RAD.md,background:"rgba(var(--ink-rgb),0.06)",border:EDGE.hair2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:18,flexShrink:0}}>‹</div>
+       <div onClick={()=>leaveBrowser()} style={{width:34,height:34,borderRadius:RAD.md,background:"rgba(var(--ink-rgb),0.06)",border:EDGE.hair2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:18,flexShrink:0}}>‹</div>
        <div style={{flex:1,minWidth:0}}>
          <div style={{fontSize:21,fontWeight:800,letterSpacing:"-0.6px",color:"var(--text)",lineHeight:1}}>Week {_wk} pick</div>
          <div style={{fontSize:11,color:"var(--text25)",marginTop:3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{_headSub}</div>
@@ -19333,7 +19346,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
    <style>{`.lad-scroll::-webkit-scrollbar{ display:none; }`}</style>
    <div style={{position:"sticky",top:0,zIndex:10,background:"var(--s0)",boxShadow:"var(--sticky-shadow)"}}>
      <div style={{display:"flex",alignItems:"flex-end",gap:10,padding:"10px 16px 8px"}}>
-       <div onClick={()=>setScreen("picks")} style={{width:34,height:34,borderRadius:RAD.md,background:"rgba(var(--ink-rgb),0.06)",border:EDGE.hair2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:18,flexShrink:0}}>{"\u2039"}</div>
+       <div onClick={()=>leaveBrowser()} style={{width:34,height:34,borderRadius:RAD.md,background:"rgba(var(--ink-rgb),0.06)",border:EDGE.hair2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:IOS.blue,fontSize:18,flexShrink:0}}>{"\u2039"}</div>
        <div style={{flex:1,minWidth:0}}>
          <div style={{fontSize:21,fontWeight:800,letterSpacing:"-0.6px",lineHeight:1}}>Ladders</div>
          <div style={{fontSize:11,color:"var(--text25)",marginTop:3}}>{"Week "+(activeLeague.current_week||1)+" \u00b7 pick "+_need+" players"}</div>
@@ -19415,7 +19428,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
        <div style={{fontSize:13.5,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{ladPicks.length===0?("Pick "+_need+" ladders"):(ladPicks.length+" of "+_need+" picked")}</div>
        <div style={{fontSize:10.5,color:"var(--text2)",fontWeight:600,marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{ladPicks.length?ladPicks.map(p=>p.player.split(" ").slice(-1)[0]).join(" \u00b7 "):"Tap a player to see their rungs"}</div>
      </div>
-     <div onClick={()=>{ if(ladPicks.length===_need) setScreen("picks"); }} style={{marginLeft:"auto",flexShrink:0,borderRadius:RAD.md-1,padding:"11px 17px",fontSize:13.5,fontWeight:900,cursor:ladPicks.length===_need?"pointer":"default",background:ladPicks.length===_need?IOS.blue:"rgba(var(--ink-rgb),0.07)",color:ladPicks.length===_need?"var(--text)":"rgba(var(--ink-rgb),0.3)"}}>Review</div>
+     <div onClick={()=>{ if(ladPicks.length===_need) leaveBrowser(); }} style={{marginLeft:"auto",flexShrink:0,borderRadius:RAD.md-1,padding:"11px 17px",fontSize:13.5,fontWeight:900,cursor:ladPicks.length===_need?"pointer":"default",background:ladPicks.length===_need?IOS.blue:"rgba(var(--ink-rgb),0.07)",color:ladPicks.length===_need?"var(--text)":"rgba(var(--ink-rgb),0.3)"}}>Review</div>
    </div>
  </div>
  );
@@ -19435,7 +19448,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  {/* Header */}
  <div style={{position:"sticky",top:0,zIndex:10,background:"var(--s0)",paddingBottom:6,boxShadow:"var(--sticky-shadow)"}}>
  <div style={{display:"flex",alignItems:"center",gap:11,padding:"10px 16px 8px"}}>
- <div onClick={()=>setScreen("picks")} style={{width:34,height:34,borderRadius:RAD.md,background:"rgba(var(--ink-rgb),0.06)",border:EDGE.hair2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:acc,fontSize:18,flexShrink:0}} className="pk-t-back">‹</div>
+ <div onClick={()=>leaveBrowser()} style={{width:34,height:34,borderRadius:RAD.md,background:"rgba(var(--ink-rgb),0.06)",border:EDGE.hair2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:acc,fontSize:18,flexShrink:0}} className="pk-t-back">‹</div>
  <div style={{flex:1,minWidth:0}}>
  <div style={{fontSize:21,fontWeight:800,letterSpacing:"-0.6px",color:"var(--text)",lineHeight:1}}>Pick Browser</div>
  <div style={{fontSize:11,color:"var(--text25)",marginTop:3,display:"flex",alignItems:"center",gap:5}}>
@@ -19595,7 +19608,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
              <div style={{fontSize:8.5,fontWeight:900,letterSpacing:"0.08em",color:IOS.pink}}>{"PARLAY · "+_sl.length+" "+(_sl.length===1?"LEG":"LEGS")+(_ready?(" · "+_am):"")}</div>
              <div style={{fontSize:10.5,fontWeight:600,color:"var(--text25)",marginTop:1}}>{_ready?"Tap more to add, or a leg below to remove":"Tap picks below to add legs — need 2+"}</div>
            </div>
-           <div onClick={()=>{ setSoloParlayMode(false); setScreen("picks"); }} style={{fontFamily:"Barlow",fontSize:12,fontWeight:800,color:_ready?"var(--s0)":"rgba(var(--ink-rgb),0.4)",background:_ready?IOS.pink:"rgba(var(--ink-rgb),0.08)",borderRadius:RAD.sm,padding:"8px 14px",cursor:"pointer",flexShrink:0}}>Done</div>
+           <div onClick={()=>{ setSoloParlayMode(false); leaveBrowser(); }} style={{fontFamily:"Barlow",fontSize:12,fontWeight:800,color:_ready?"var(--s0)":"rgba(var(--ink-rgb),0.4)",background:_ready?IOS.pink:"rgba(var(--ink-rgb),0.08)",borderRadius:RAD.sm,padding:"8px 14px",cursor:"pointer",flexShrink:0}}>Done</div>
          </div>
          {_sl.length>0 && (
            <div className="gbx-scroll" style={{display:"flex",gap:6,marginTop:9,overflowX:"auto"}}>
@@ -19981,7 +19994,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
            <span style={{fontSize:12,fontWeight:700,color:"rgba(14,14,18,0.45)"}}>{st.length} pick{st.length!==1?"s":""}</span>
            <span style={{fontSize:22,fontWeight:900,fontFamily:"'Barlow Semi Condensed',sans-serif"}}>{tot.toFixed(1)}<span style={{fontSize:11,fontWeight:700,color:"rgba(14,14,18,0.4)"}}> pts if all hit</span></span>
          </div>
-         <button onClick={()=>{ setSoloSlipOpen(false); setBuildingSlip(false); setScreen("picks"); }}
+         <button onClick={()=>{ setSoloSlipOpen(false); setBuildingSlip(false); leaveBrowser(); }}
            style={{width:"100%",border:"none",borderRadius:13,padding:"14px",fontSize:15.5,fontWeight:800,color:"var(--text)",fontFamily:"Barlow,sans-serif",cursor:"pointer",background:"linear-gradient(120deg,var(--accent-ios),var(--violet))"}}>
            Review slate
          </button>
