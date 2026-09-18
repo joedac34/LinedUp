@@ -12297,7 +12297,14 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  .nav-title-small{font-size:17px;font-weight:600;letter-spacing:-0.4px;color:var(--text);text-align:center;padding:12px 0 8px;}
  .nav-title-large{font-family:'Barlow Semi Condensed','Barlow',system-ui,sans-serif;font-size:36px;font-weight:800;
   letter-spacing:-0.6px;color:var(--text);line-height:1.15;padding:1px 0;text-transform:uppercase;}
-.nav-title-large .wm-lock{color:var(--accent);}
+/* The wordmark only. An SVG is a replaced element, so its baseline is its
+   bottom edge -- align-items:baseline puts the lock's foot on the text
+   baseline. The viewBox is cropped tight to the lock so nothing under the
+   body lifts it, and the negative bearings close the gap the icon's own
+   side spacing would otherwise add on top of the letter spacing. */
+.nav-title-large.wm{display:flex;align-items:baseline;white-space:nowrap;}
+.nav-title-large.wm svg{display:block;height:0.725em;width:auto;margin:0 -0.08em;
+  align-self:baseline;}
  .nt-tg{width:54px;height:32px;border-radius:16px;background:var(--s5);position:relative;cursor:pointer;flex-shrink:0;overflow:hidden;transition:background .3s;}
  .nt-fill{position:absolute;inset:0;border-radius:16px;background:linear-gradient(90deg,var(--accent-ios),#48a4ff);transform:scaleX(0);transform-origin:left center;transition:transform .42s cubic-bezier(.34,1.56,.64,1);}
  .nt-tg.on .nt-fill{transform:scaleX(1);}
@@ -14543,7 +14550,9 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
  <div className="pk-cbar" style={{paddingLeft:20,paddingRight:20}}><div className="pk-cbar-t">PickLock</div></div>
  <div className="nav-header large pk-hdr" style={{textAlign:"left",padding:"6px 20px 16px",background:"radial-gradient(130% 90% at 88% -10%, rgba(var(--accent-ios-rgb),0.20), transparent 55%), linear-gradient(180deg,var(--hero) 0%,var(--bg) 80%)"}}>
  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
- <div className="nav-title-large">PICK<span className="wm-lock">LOCK</span></div>
+ <div className="nav-title-large wm">PICKL
+   <svg viewBox="0 0 24 24.3" aria-hidden="true"><path d="M7.6 9.3V6.2a4.4 4.4 0 0 1 8.8 0V9.3" stroke="var(--accent)" strokeWidth="3.6" fill="none" strokeLinecap="round"/><rect x="3.6" y="9.3" width="16.8" height="15" rx="2.8" fill="var(--accent)"/><circle cx="12" cy="16.1" r="2.4" fill="var(--bg)"/></svg>
+ CK</div>
  <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
  <div className="pk-t-mode" style={{display:"flex",background:"rgba(var(--ink-rgb),0.08)",borderRadius:RAD.sm,padding:2}}>
  {[{id:"leagues",label:"Leagues"},{id:"solo",label:"Solo"}].map(m=>(
