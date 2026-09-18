@@ -13777,7 +13777,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      <div style={{fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:52,fontWeight:900,letterSpacing:-1.5,lineHeight:1,
        backgroundImage:"linear-gradient(92deg,#8FC4FF,#ffffff 45%,#A9B6FF)",WebkitBackgroundClip:"text",backgroundClip:"text",WebkitTextFillColor:"transparent"}}>PICKLOCK</div>
    </div>
-   <div style={{fontSize:13.5,color:"var(--text2)",fontWeight:600,marginTop:10}}>Real lines. Real bragging rights.</div>
+   <div style={{fontSize:13.5,color:"var(--text2)",fontWeight:600,marginTop:10}}>Fantasy sports, reimagined.</div>
  </div>
 
  {/* Glass form card */}
@@ -13791,7 +13791,7 @@ const _firstLive=(mapped.find(l=>!lgPast(l))||mapped[0]);
      lower than other third-party options. Both sit ABOVE the email form so the
      one-tap paths lead. */}
  <button className="auth-oauth apple" disabled={!!oauthBusy} onClick={()=>{ haptic("select"); oauthSignIn("apple"); }} style={{marginBottom:9}}>
-   <svg width="16" height="16" viewBox="0 0 24 24" fill="var(--text4)" aria-hidden="true"><path d="M16.4 12.8c0-2.4 2-3.6 2.1-3.6-1.1-1.7-2.9-1.9-3.5-1.9-1.5-.2-2.9.9-3.6.9-.8 0-1.9-.9-3.1-.8-1.6 0-3 .9-3.8 2.3-1.7 2.9-.4 7.1 1.2 9.5.8 1.1 1.7 2.4 3 2.4 1.2 0 1.6-.8 3.1-.8s1.8.8 3.1.7c1.3 0 2.1-1.2 2.9-2.3.9-1.3 1.3-2.6 1.3-2.7-.1 0-2.6-1-2.7-3.7zM14 5.4c.7-.8 1.1-1.9 1-3-.9 0-2.1.6-2.8 1.4-.6.7-1.1 1.9-1 3 1 .1 2.1-.5 2.8-1.4z"/></svg>
+   <svg width="16" height="16" viewBox="0 0 24 24" fill="#0D1117" aria-hidden="true"><path d="M16.4 12.8c0-2.4 2-3.6 2.1-3.6-1.1-1.7-2.9-1.9-3.5-1.9-1.5-.2-2.9.9-3.6.9-.8 0-1.9-.9-3.1-.8-1.6 0-3 .9-3.8 2.3-1.7 2.9-.4 7.1 1.2 9.5.8 1.1 1.7 2.4 3 2.4 1.2 0 1.6-.8 3.1-.8s1.8.8 3.1.7c1.3 0 2.1-1.2 2.9-2.3.9-1.3 1.3-2.6 1.3-2.7-.1 0-2.6-1-2.7-3.7zM14 5.4c.7-.8 1.1-1.9 1-3-.9 0-2.1.6-2.8 1.4-.6.7-1.1 1.9-1 3 1 .1 2.1-.5 2.8-1.4z"/></svg>
    {oauthBusy==="apple"?"Signing in\u2026":"Continue with Apple"}
  </button>
  <button className="auth-oauth google" disabled={!!oauthBusy} onClick={()=>{ haptic("select"); oauthSignIn("google"); }} style={{marginBottom:14}}>
